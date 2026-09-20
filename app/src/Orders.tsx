@@ -317,7 +317,7 @@ function FetchReceipt({
         last checked {whenWord(receipt.previous.at, now)}
         {/* A comparison this press cannot honestly make says so, rather than going quiet. The
             two figures are counts of different questions and subtracting them is nonsense. */}
-        {sameScope(receipt.previous.statuses, receipt.asked) ? null : ' · different statuses'}
+        {sameScope(receipt.previous.statuses, receipt.asked) ? null : ' (different statuses)'}
       </span>,
     )
   } else {
@@ -374,7 +374,7 @@ function FetchReceipt({
       <div className="orders-receipt-part">
         <p className="orders-receipt-head">
           <Icon name="search" size={15} />
-          Checked TCGplayer <span className="orders-receipt-when">· {whenWord(receipt.at, now)}</span>
+          Checked TCGplayer <span className="orders-receipt-when">{whenWord(receipt.at, now)}</span>
         </p>
         <p className="orders-receipt-line">{checked}</p>
         {/* TICKED, AND THE WINDOW HELD NONE OF IT. The alternative was to drop these strings on
@@ -737,7 +737,7 @@ function indexClaims(answers: ReadonlyMap<string, ResolvedOrder>): Claims {
 
 /** The counts a line carries beside its reason, every part drawn including the zeros. */
 function breakdownOf(line: ResolvedLine): string {
-  return [`${line.on_hand} on hand`, `${line.sold} sold`, `${line.retired} retired`, `${line.pooled} pooled`].join(' · ')
+  return [`${line.on_hand} on hand`, `${line.sold} sold`, `${line.retired} retired`, `${line.pooled} pooled`].join(', ')
 }
 
 /** Relative time in the product's one vocabulary — the strings `RunsStage.whenLabel` draws
@@ -804,7 +804,7 @@ function feedName(raw: string): FeedName {
       name = one.slice(colon + 2)
     } else name = one
   }
-  return { game, set, name, number, condition: tail.length === 0 ? null : tail.join(' · ') }
+  return { game, set, name, number, condition: tail.length === 0 ? null : tail.join(', ') }
 }
 
 type Headline = { readonly name: string; readonly detail: string[]; readonly raw: string | null; readonly condition: string | null }
@@ -932,7 +932,7 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
     toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
   } catch (err) {
     const trouble = describeFailure(err)
-    toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} · ${trouble.code}` })
+    toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} (${trouble.code})` })
   } finally {
     /* Clear `lastPull` only if this is still the pull it names — a later pull may already
        have replaced it, and undoing THIS one must not erase THAT one's own way back. */
@@ -1782,7 +1782,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           kind: 'receipt',
           icon: 'hand',
           title: `Marked sold: ${name}`,
-          body: `from ${place} · order ${order.number}`,
+          body: `from ${place}, order ${order.number}`,
           ttlMs: UNDO_WINDOW_MS,
           action: { label: 'Undo', onPress: () => void undoFromToast(target, place, name) },
         })
@@ -1830,7 +1830,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         kind: 'receipt',
         icon: 'hand',
         title: `Marked sold: ${name}`,
-        body: buyer ? `from ${resolvedPlace} · for ${buyer}` : `from ${resolvedPlace}`,
+        body: buyer ? `from ${resolvedPlace}, for ${buyer}` : `from ${resolvedPlace}`,
         ttlMs: UNDO_WINDOW_MS,
         action: { label: 'Undo', onPress: () => void undoFromToast(target, resolvedPlace, name) },
       })
@@ -1860,7 +1860,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       return { ok: true, refreshed: done.refreshed ?? [] }
     } catch (err) {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} · ${trouble.code}` })
+      toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} (${trouble.code})` })
       return { ok: false }
     } finally {
       setHub((current) => ({ busy: null, lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull }))
@@ -1889,7 +1889,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           kind: 'receipt',
           icon: 'hand',
           title: `Closed ${plural(done.moved, 'copy', 'copies')} of ${name}`,
-          body: `by hand · ${reason === 'sealed' ? 'not a single' : 'not photographed here'} · order ${order.number}`,
+          body: `by hand: ${reason === 'sealed' ? 'not a single' : 'not photographed here'}, order ${order.number}`,
           ttlMs: UNDO_WINDOW_MS,
           /* The reversal names a COUNT and not a copy, because the fill never held one. It
              reverses exactly what this press recorded — `done.moved` — rather than the line's
@@ -1962,7 +1962,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           kind: 'receipt',
           icon: 'check',
           title: `Stood down ${plural(done.moved, 'order', 'orders')}`,
-          body: `${done.still_open} still open · nothing was marked sold`,
+          body: `${done.still_open} still open. Nothing was marked sold.`,
           ttlMs: UNDO_WINDOW_MS,
           action: {
             label: 'Undo',
@@ -2007,7 +2007,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           kind: 'receipt',
           icon: 'check',
           title: `Stood down ${done.moved} ${plural(done.moved, 'order', 'orders')}`,
-          body: `${done.still_open} still open · nothing was marked sold`,
+          body: `${done.still_open} still open. Nothing was marked sold.`,
           ttlMs: UNDO_WINDOW_MS,
           action: {
             label: 'Undo',
@@ -2918,6 +2918,17 @@ function PullStage({
      `groups` holds something (or `?buyer=`, which needs no group lookup at all and is applied
      the moment the effect first runs). */
   const linkHandled = useRef(false)
+  /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass over
+   *  the wide layout has to cross the whole buyer rail — search, filters, every row — before
+   *  it reaches the selected buyer's own cards, which sit in `.browse-side` after all of it in
+   *  DOM order. The shell's own jump grammar (`,` then a letter, `App.tsx`'s `SHORTCUTS`) moves
+   *  between SCREENS, not between regions of one screen, so it does not reach this; a
+   *  tabindex change on every rail control was rejected as the bandaid it would be, since it
+   *  would not shorten the rail, only make it feel arbitrary to reorder. A skip link — focus a
+   *  landmark that is already there — is the standard fix for exactly this complaint and needs
+   *  no new keybinding to document in the reference sheet, because it rides the browser's own
+   *  Tab order rather than adding one. */
+  const paneRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (linkHandled.current) return
     const buyerWanted = buyerParam()
@@ -3230,7 +3241,7 @@ function PullStage({
           <span className="orders-resort-slot">
             {staleSentence === null ? null : (
               <Chip icon="refresh" className="orders-resort" title="Sorted before this changed." onClick={onReSort}>
-                {staleSentence} · re-sort
+                {staleSentence}, re-sort
               </Chip>
             )}
           </span>
@@ -3273,7 +3284,7 @@ function PullStage({
         {earlierGroups.length === 0 ? null : (
           <details className="orders-earlier">
             <summary>
-              Earlier · {earlierGroups.length} {plural(earlierGroups.length, 'buyer', 'buyers')}
+              Earlier: {earlierGroups.length} {plural(earlierGroups.length, 'buyer', 'buyers')}
             </summary>
             <ol className="orders-index">
               {earlierGroups.map((group) => (
@@ -3443,6 +3454,10 @@ function PullStage({
             <Icon name="chevronDown" size={14} className="browse-boxchip-chev" />
           </button>
         </div>
+      ) : !phone && shownGroups.length > 0 ? (
+        <button type="button" className="orders-skip-link" onClick={() => paneRef.current?.focus()}>
+          Skip to cards
+        </button>
       ) : null}
 
       <div className="browse-body" data-rail={railCollapsed && !phone ? 'collapsed' : undefined}>
@@ -3454,7 +3469,7 @@ function PullStage({
             own CSS already hides it, and now there is nothing duplicated underneath for that
             CSS to be hiding. */}
         {phone ? null : railCollapsed ? miniRail : <div className="browse-map">{rail}</div>}
-        <div className="browse-side">
+        <div className="browse-side" ref={paneRef} tabIndex={-1}>
           <WalkMainPane walk={walk} phone={phone} listings={listings} />
           {why}
         </div>
@@ -3581,9 +3596,10 @@ function buyerMiniLabel(group: BuyerGroup): string {
 }
 
 /** The buyer's index row and phone accordion head — replaces `OrderSummaryRow`
- *  (`D193`). A nameless buyer draws "No name · #<number>"; a buyer with
- *  more than one order draws an `N orders` pill and a chip per open order, so a two-order
- *  buyer is visibly one that needs both counted rather than a single order in disguise. */
+ *  (`D193`). A nameless buyer draws `unnamedBuyerLabel`'s own short id/date tail, never a
+ *  literal "No name"; a buyer with more than one order draws an `N orders` pill and a chip
+ *  per open order, so a two-order buyer is visibly one that needs both counted rather than a
+ *  single order in disguise. */
 function BuyerRow({
   group,
   answers,
@@ -3601,7 +3617,6 @@ function BuyerRow({
   const unnamed = group.name === null
   const heading = group.name ?? unnamedBuyerLabel(group)
   const status = worstStatus(group, answers)
-  const placed = whenLabel(group.latest)
   const pct = group.wanted > 0 ? Math.min(100, Math.round((group.recorded / group.wanted) * 100)) : 0
   const ref = useRef<HTMLButtonElement>(null)
 
@@ -3620,6 +3635,7 @@ function BuyerRow({
       title={heading}
     >
       <span className={`orders-index-dot orders-index-dot-${STATUS_DOT[status]}`} aria-hidden="true" />
+      <span className="bn-sr">{STATUS_PILL[status].label}</span>
       <span className="orders-index-main">
         <span className={`orders-index-number${unnamed ? ' bn-mono' : ''}`}>{heading}</span>
         <span className="orders-index-meta">
@@ -3631,7 +3647,8 @@ function BuyerRow({
               {group.orders.length} orders
             </Pill>
           ) : null}
-          {placed === null ? null : <time>placed {placed}</time>}
+          {/* THE DATE IS THE PANEL'S OWN FACT NOW (nits review): drawn once, in `OrderPanel`,
+              rather than here and there at once for whichever buyer is selected. */}
           {group.open.map((order) => {
             const orderStatus = statusOf(order, answers.get(order.key) ?? null)
             if (orderStatus === 'ready') return null
@@ -4178,7 +4195,7 @@ function OrderLineRow({
           </span>
         </div>
         <LineFigureView figure={figure} />
-        <code className="orders-tag orders-line-sku" title={head.raw === null ? 'SKU' : `SKU · ${head.raw}`}>
+        <code className="orders-tag orders-line-sku" title={head.raw === null ? 'SKU' : `SKU: ${head.raw}`}>
           {line.sku}
         </code>
       </div>
@@ -4491,7 +4508,7 @@ function PickLine({
 }) {
   const target = aimOf(line, pick)
   const pressing = target !== null && busy === `${line.order_key}/${line.sku}/${target.capture_id}`
-  const full = `${pick.card_name ?? line.line.name ?? line.sku}${pick.condition === null ? '' : ` · ${pick.condition}`}`
+  const full = `${pick.card_name ?? line.line.name ?? line.sku}${pick.condition === null ? '' : ` (${pick.condition})`}`
   return (
     <li
       className={`orders-pick${pick.held_by !== null ? ' orders-pick-is-held' : ''}`}
@@ -4509,7 +4526,7 @@ function PickLine({
           /* A POOLED COPY HAS NO POSITION AND SAYS SO (D24). */
           <span className="orders-pick-pooled">
             <Icon name="layers" size={14} />
-            {text(pick.place.game_display) ? `${pick.place.game_display} · pooled` : 'Pooled'}
+            {text(pick.place.game_display) ? `${pick.place.game_display}, pooled` : 'Pooled'}
           </span>
         ) : (
           /* The place is a way into the box: `#/inventory?box=` is what the inventory reads. */

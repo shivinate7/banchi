@@ -45,15 +45,16 @@ TWO MODES:
                                                      one is wrong.
 
 SCOPE. This does not attempt every mutation-tested guard in `make check` — the brief that built
-this file named five in priority order and this covers exactly those five: `guard-shell.py` (8
-clauses), `silent-write-guard.py`, `reap.py`, `primary_sync.py`, `revert-audit.py`. Each guard's
+this file named five in priority order and this covers those five plus one: `guard-shell.py` (9
+clauses), `silent-write-guard.py`, `reap.py`, `primary_sync.py`, `revert-audit.py`, and since
+2026-09-20 `merge-pr.py`, whose suite is `claim-selftest.py` rather than a `.sh` beside it. Each guard's
 mutation list writes at least one arm per RULE that guard enforces, following the parent
 model's own comment ("Each one breaks exactly one rule. One mutation per rule at least"). A
 guard this file does NOT cover is not listed here at all — reporting a guard as "0 arms, not
 really tested" would read as coverage, which is worse than naming nothing (the brief's own
 words). See the wrap-up report for which guards were left out and why.
 
-HOW A MUTATED GUARD'S OWN SUITE IS RUN. Three of these five guards ship a `.sh` selftest that
+HOW A MUTATED GUARD'S OWN SUITE IS RUN. Three of these guards ship a `.sh` selftest that
 resolves its subject (`GUARD="$HERE/guard-shell.py"`) relative to ITS OWN location — so the
 sweep copies the WHOLE `scripts/` directory into a throwaway tree, writes the mutated guard
 into the copy, and runs the copied `.sh` selftest from there. `primary_sync.py`'s selftest
@@ -63,7 +64,10 @@ into the copy, and runs the copied `.sh` selftest from there. `primary_sync.py`'
 `<tmp>/server/`) and mutating the copy IN PLACE is what makes that copy step pick up the
 mutation. `revert-audit.py` needs none of this: it is a single, dependency-free file with its
 own `selftest` subcommand, so the runner copies just that file and calls
-`python3 <copy> selftest`.
+`python3 <copy> selftest`. `merge-pr.py` takes the whole-directory copy the `.sh` guards take,
+with one addition: it imports `scripts/primary_sync.py`, which imports `server.ports` off its
+OWN `parents[1]`, so the fixture mirrors that package too. Without it every mutant dies of a
+`ModuleNotFoundError` and reads as caught, which is a survivor this file could not see.
 
 Stdlib only.
 """
@@ -137,6 +141,34 @@ def _sh_suite_runner(guard_filename: str, selftest_filename: str):
         copy_dir = _copy_scripts_dir(work)
         _write_mutated(copy_dir / guard_filename, mutated_source)
         return _run(["bash", str(copy_dir / selftest_filename)], cwd=copy_dir, timeout=600.0)
+
+    return run
+
+
+def _py_suite_runner(guard_filename: str, selftest_filename: str):
+    """The same as `_sh_suite_runner` for a suite that is a `python3` beside it in `scripts/`.
+
+    `claim-selftest.py` derives its subject as `ROOT/scripts/merge-pr.py` with `ROOT` two
+    levels up from itself, so the whole-directory copy puts the mutated file exactly where
+    that derivation lands — no different from the `.sh` case, one interpreter along.
+    """
+
+    def run(work: Path, mutated_source: str) -> SuiteResult:
+        copy_dir = _copy_scripts_dir(work)
+        _write_mutated(copy_dir / guard_filename, mutated_source)
+        # `merge-pr.py` imports `scripts/primary_sync.py`, which imports `server.ports` off
+        # ITS OWN `parents[1]` — so the fixture needs that package too, or every mutant dies
+        # of a ModuleNotFoundError and reads as caught. A red for the wrong reason is a
+        # survivor this file cannot see, and it is also the cry-wolf shape the house rule
+        # names: a mutation sweep that goes red whatever you do proves nothing at all.
+        server = work / "server"
+        server.mkdir(parents=True, exist_ok=True)
+        for name in ("__init__.py", "ports.py"):
+            source = ROOT / "server" / name
+            if source.exists():
+                shutil.copy2(source, server / name)
+        return _run([sys.executable, str(copy_dir / selftest_filename)], cwd=copy_dir,
+                    timeout=900.0)
 
     return run
 
@@ -230,6 +262,23 @@ GUARD_SHELL_MUTATIONS: Tuple[Mutation, ...] = (
         '_RESET_DISCARDING_MODES = {"--hard", "--merge", "--keep"}',
         '_RESET_DISCARDING_MODES = set()',
     ),
+    Mutation(
+        "narrate clause: a truncating filter is no longer one",
+        '_TRUNCATING = {"tail", "head"}',
+        '_TRUNCATING = set()',
+    ),
+    Mutation(
+        "narrate clause: never recognise the command that narrates",
+        '        for name, goal, _, _ in NARRATORS:\n            if goal in goals:\n'
+        '                return name',
+        '        for name, goal, _, _ in NARRATORS:\n            if False:\n'
+        '                return name',
+    ),
+    Mutation(
+        "narrate clause: a PREVIEW is refused too — the cry-wolf half",
+        '    if not any("--confirm" in word for word in argv):\n        return ""',
+        '    if False:\n        return ""',
+    ),
 )
 
 SILENT_WRITE_GUARD = SCRIPTS / "silent-write-guard.py"
@@ -266,6 +315,11 @@ SILENT_WRITE_MUTATIONS: Tuple[Mutation, ...] = (
         "`make merge` is never recognised as a write",
         '        if "merge" in goals:\n            return "make merge"',
         '        if False:\n            return "make merge"',
+    ),
+    Mutation(
+        "the advice for a BLOCKING verb becomes the pipe the neighbouring guard refuses",
+        '_NARRATED = frozenset({"make merge"})',
+        '_NARRATED = frozenset()',
     ),
     Mutation(
         "`gh pr merge` is never recognised as a write",
@@ -372,6 +426,32 @@ REVERT_AUDIT_MUTATIONS: Tuple[Mutation, ...] = (
     ),
 )
 
+MERGE_PR = SCRIPTS / "merge-pr.py"
+
+# THE CLAIM COMMIT'S WAIT, and specifically its two-sided reading of mergeability. It is here
+# rather than in a sentence because the second arm is the dangerous one: reading `UNKNOWN` as
+# a conflict aborts EVERY merge this repo makes, and it is the natural way to write this
+# wrong. See the wait's own section header in `scripts/merge-pr.py`.
+MERGE_PR_MUTATIONS: Tuple[Mutation, ...] = (
+    Mutation(
+        "the wait never notices a branch that stopped being mergeable (PR #436, 2026-09-20)",
+        '            if state == "CONFLICTING":',
+        '            if False:',
+    ),
+    Mutation(
+        "`UNKNOWN` is read as conflicted — which would abort every merge",
+        '            if state == "CONFLICTING":',
+        '            if state != "MERGEABLE":',
+    ),
+    Mutation(
+        "an unreadable mergeability answer is read as a conflict",
+        '            except Exception:                                 # noqa: BLE001 — no news\n'
+        '                state = ""',
+        '            except Exception:                                 # noqa: BLE001 — no news\n'
+        '                state = "CONFLICTING"',
+    ),
+)
+
 GUARDS: Tuple[GuardSpec, ...] = (
     GuardSpec("guard-shell-selftest", GUARD_SHELL, GUARD_SHELL_MUTATIONS,
               _sh_suite_runner("guard-shell.py", "guard-shell-selftest.sh")),
@@ -382,6 +462,8 @@ GUARDS: Tuple[GuardSpec, ...] = (
     GuardSpec("sync-selftest", PRIMARY_SYNC, PRIMARY_SYNC_MUTATIONS, _sync_suite_runner()),
     GuardSpec("revert-selftest", REVERT_AUDIT, REVERT_AUDIT_MUTATIONS,
               _revert_audit_suite_runner()),
+    GuardSpec("claim-selftest", MERGE_PR, MERGE_PR_MUTATIONS,
+              _py_suite_runner("merge-pr.py", "claim-selftest.py")),
 )
 
 

@@ -3036,6 +3036,42 @@ test('Orders and Inventory draw the SAME strings for the identical card — the 
   await page.route(/\/pipeline\/runs$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs": []}' }),
   )
+  /* `CopiesFor`'s own read on mount (`Inventory.tsx:708`) — `skuOrName` hands it this card's
+     SKU and it fires `GET /search?q=<SKU>` with no debounce gate on the first ask. Unstubbed,
+     that request escapes past every route above straight to the real capture server, and
+     under CPU contention it can land before the test ends and fail `sealCapture`'s "reads
+     reached the capture server" assertion — reproduces on a clean checkout of 42d671ea, not
+     introduced here. One group, matching this row's own key and SKU. */
+  await page.route(/\/search\?/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: SKU,
+        groups: [
+          {
+            sku: SKU,
+            names: ['Volcanion'],
+            number: '025',
+            printed_total: '219',
+            number_display: '025',
+            set_hint: null,
+            set: null,
+            rarity: 'Rare',
+            condition: 'Near Mint',
+            listed: { pushed: 5, staged: 0, live: 5 },
+            sold_here: 0,
+            live_as_of: PARITY_AT,
+            on_hand: 1,
+            listable: 1,
+            copies: [
+              { key: '3/21', state: 'listed', state_at: null, has_photo: true, capture_id: 'cap-a', cid: null, place: place() },
+            ],
+          },
+        ],
+      }),
+    }),
+  )
 
   await page.goto('/#/inventory')
   await expect(page.locator('main.inventory')).toBeVisible()

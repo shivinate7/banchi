@@ -992,6 +992,111 @@ allows "\`--hard\` over a genuinely clean tree — nothing to lose" "$tmp/main" 
 (cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\nfive\n' > work.py)
 
 echo ""
+echo "  9. a narrated wait with nobody watching it"
+
+# ------------------------------------------- 9a. the incident, performed in the fixture
+# A REAL NARRATOR, A REAL PIPE, A REAL `tail`. `make merge` prints a heartbeat line a minute
+# while it waits four to five minutes for the claim commit's checks; this is the same shape in
+# miniature — five lines over a second — and it measures BOTH halves of what the pipe does:
+# nothing has reached the sink while the command is still running, and most of it is gone by
+# the time it has. No loop and no poll: one bounded sleep and a `wait` on a job this script
+# started, which is the sanctioned shape clause 5 itself recommends.
+cat > "$tmp/narrator.py" <<'NAR'
+import sys, time
+for i in range(1, 6):
+    print("%dm - waiting on check runs (%d of 5)" % (i, i))
+    time.sleep(0.2)
+NAR
+
+: > "$tmp/piped.txt"
+( python3 "$tmp/narrator.py" | tail -2 > "$tmp/piped.txt" ) &
+narrator_job=$!
+sleep 0.6
+mid="$(wc -c < "$tmp/piped.txt" | tr -d ' ')"
+wait "$narrator_job" 2>/dev/null
+kept="$(wc -l < "$tmp/piped.txt" | tr -d ' ')"
+plain="$(python3 "$tmp/narrator.py" | wc -l | tr -d ' ')"
+
+if [ "$mid" = "0" ]; then
+  ok "MID-RUN THE PIPE HAD DELIVERED NOTHING — 0 bytes at the sink while the narrator was still going, which is why correct waiting reads as a hang"
+else
+  bad "the buffering half did not reproduce: $mid bytes had already arrived mid-run"
+fi
+if [ "$plain" = "5" ] && [ "$kept" = "2" ]; then
+  ok "and \`tail -2\` kept 2 of the 5 heartbeat lines the same command prints in full when nothing follows it"
+else
+  bad "the truncation half did not reproduce: $plain lines plain, $kept through the pipe"
+fi
+
+echo ""
+echo "  the guard refuses it"
+
+refuses "the 2026-09-20 command" "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tail -18"
+refuses "\`| head\`, the same loss from the other end" "$tmp/main" "make merge ARGS=\"437 --confirm\" | head -20"
+refuses "stdout to /dev/null" "$tmp/main" "make merge ARGS=\"437 --confirm\" >/dev/null"
+refuses "into a file nothing in the command reads back" "$tmp/main" "make merge ARGS=\"437 --confirm\" > merge.log"
+refuses "\`tail\` with no count" "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tail"
+refuses "the script run directly, which is the same act" "$tmp/main" "python3 scripts/merge-pr.py 437 --confirm | tail -5"
+refuses "buried mid-script behind a \`&&\`" "$tmp/main" "git fetch origin && make merge ARGS=\"437 --confirm\" | tail -30"
+refuses "an env prefix does not launder it" "$tmp/main" "PKMNSCAN_MAIN=off make merge ARGS=\"437 --confirm\" | tail -5"
+
+judge "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tail -18"
+case "$out" in *"PKMNSCAN_NARRATE=off"*) ok "the refusal prints its escape hatch" ;;
+  *) bad "the refusal does not name PKMNSCAN_NARRATE=off" ;; esac
+case "$out" in *"four to"*) ok "the refusal says the wait is CORRECT and how long it takes, so nobody 'fixes' the waiting" ;;
+  *) bad "the refusal does not defend the wait itself" ;; esac
+case "$out" in *"no pipe"*) ok "and it names the remedy: run it with nothing after it" ;;
+  *) bad "the refusal does not say what to do instead" ;; esac
+# THE HOUSE RULE: a refusal's printed remedy never names the forbidden target. A remedy that
+# spelled out the piped form would be handing back the command it just refused.
+case "$out" in *"| tail"*) bad "the refusal's own text spells out the forbidden pipe" ;;
+  *) ok "and the remedy never spells the forbidden form back at the reader" ;; esac
+
+# THE ROSTER IS RECONCILED RATHER THAN TRUSTED. This clause names commands instead of
+# resolving them, so the one thing that can be checked mechanically IS checked: every command
+# it names still carries a heartbeat in the file that runs it. An entry that stops narrating
+# stops being this clause's business, and this is where that is noticed.
+python3 - "$GUARD" "$HERE" <<'ROSTER'
+import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location("guard_shell", sys.argv[1])
+guard = importlib.util.module_from_spec(spec); spec.loader.exec_module(guard)
+here = pathlib.Path(sys.argv[2]).parent
+bad = 0
+for name, goal, path, constant in guard.NARRATORS:
+    source = here / path
+    if not source.exists():
+        print("MISSING %s, named by the narrate clause for %s" % (path, name)); bad = 1
+    elif constant not in source.read_text(encoding="utf-8"):
+        print("%s no longer carries %s — %s may not narrate any more" % (path, constant, name)); bad = 1
+sys.exit(bad)
+ROSTER
+if [ $? -eq 0 ]; then ok "every command the narrate clause names still carries a heartbeat constant in the file that runs it"
+else bad "the narrate roster names a command that no longer narrates"; fi
+
+echo ""
+echo "  what clause 9 must NEVER refuse"
+# THIS IS THE HALF THAT DECIDES WHETHER THE CLAUSE SURVIVES. A guard that fires on `git log |
+# tail` is a guard nobody keeps. Every line here is one this repo types.
+
+for case in \
+  'make merge ARGS="437 --confirm"' \
+  'make merge ARGS=437' \
+  'make merge ARGS=437 | tail -20' \
+  'make merge-selftest | tail -5' \
+  'make check 2>&1 | tail -40' \
+  'make harness | tail -20' \
+  'make docs-audit >/dev/null' \
+  'git log --oneline -20 | head -5' \
+  'make claim-stale | tail -3' \
+  'make design-check ARGS=--wait | tail -5' \
+  'gh pr view 437 --json mergeable | head -1' \
+; do
+  allows "never this clause's business: \`$case\`" "$tmp/main" "$case"
+done
+allows "\`| tee\` keeps every byte, so it is not refused" "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tee $tmp/merge.log"
+allows "a file the same command reads back is not a discard" "$tmp/main" "make merge ARGS=\"437 --confirm\" > $tmp/m.log 2>&1; cat $tmp/m.log"
+
+echo ""
 echo "  the repo's own lines, swept and pinned"
 
 # EVERY `git`, `gh` AND `ln` LINE THIS REPO'S OWN TOOLING TYPES. The sweep that produced this
@@ -1041,6 +1146,7 @@ allows "push, inline"    "$tmp/main" "PKMNSCAN_PUSH=off git push origin HEAD"
 
 allows "stash, inline"   "$tmp/main" "PKMNSCAN_STASH=off git stash pop"
 allows "reset, inline"   "$tmp/main" "PKMNSCAN_RESET=off git reset --hard"
+allows "narrate, inline" "$tmp/main" "PKMNSCAN_NARRATE=off make merge ARGS=\"437 --confirm\" | tail -5"
 
 hatch_env() {   # hatch_env <name> <cwd> <command>
   out="$(printf '%s' "$3" \
@@ -1055,6 +1161,7 @@ hatch_env PKMNSCAN_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
 hatch_env PKMNSCAN_PUSH     "$tmp/main" "git push origin HEAD"
 hatch_env PKMNSCAN_STASH    "$tmp/main" "git stash pop"
 hatch_env PKMNSCAN_RESET    "$tmp/main" "git reset --hard"
+hatch_env PKMNSCAN_NARRATE  "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 out="$(CWD="$WT" TARGET="$tmp/main/work.py" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
@@ -1064,8 +1171,8 @@ if [ $? -eq 0 ]; then ok "PKMNSCAN_TREE=off in the environment"; else bad "PKMNS
 # EVERY CLAUSE HAS A HATCH AND EVERY HATCH IS PRINTED. The table is read rather than retyped,
 # so a seventh clause added without one fails here instead of shipping unescapable.
 count="$(python3 "$GUARD" --clauses | wc -l | tr -d ' ')"
-if [ "$count" = "8" ]; then ok "eight clauses, eight hatches, read from the guard's own table"
-else bad "the clause table has $count rows; this file scores eight"; fi
+if [ "$count" = "9" ]; then ok "nine clauses, nine hatches, read from the guard's own table"
+else bad "the clause table has $count rows; this file scores nine"; fi
 if python3 "$GUARD" --clauses | grep -qv "PKMNSCAN_.*=off"; then
   bad "a clause in the table names no escape hatch"
 else

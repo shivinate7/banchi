@@ -715,9 +715,66 @@ def _roster(runs: Sequence[Tuple[str, str, str]]) -> List[str]:
             for name, status, conclusion in runs]
 
 
+# ------------------------------------------------ and whether it can still merge at all
+#
+# THE LOOP ABOVE WATCHES CHECK RUNS AND NOTHING ELSE, AND THAT IS HALF A QUESTION. This repo
+# runs many concurrent sessions against one main. A branch that was MERGEABLE when the claim
+# was pushed goes DIRTY the moment another session merges something that touches the same
+# lines — and the claim commit's own checks are unaffected by that, so they go on turning
+# green over a merge that can no longer happen. Observed on PR #436, 2026-09-20: the wait sat
+# for over 17 minutes while `gh pr view 436` reported OPEN / DIRTY, and the 45-minute deadline
+# was the only thing that would ever have ended it.
+#
+# `mergeable_half` ALREADY ASKS THIS QUESTION ONCE, BEFORE THE CLAIM, and its own comment says
+# in as many words that a gate there does not close the race: "The claim's own CI wait is
+# minutes long; a merge that lands during it turns a MERGEABLE answer stale while this is
+# standing still." This is that sentence's other half — the same question, asked again while
+# the waiting is happening — and it is deliberately not a second mechanism: a conflict found
+# here returns NOT GREEN, which is the path `claim_half` already has, so the claim is backed
+# out by `rollback_claim` exactly as it is for a red check. D228's loser-backs-itself-out is
+# unchanged; this only makes the loser notice sooner.
+#
+# `UNKNOWN` IS NEVER READ AS CONFLICTED, and that is the arm to be careful of. GitHub computes
+# mergeability asynchronously and answers `UNKNOWN` while it does — routinely, for a few
+# seconds after any push to the base. Reading `UNKNOWN` as a conflict would abort every merge
+# this repo makes, which is the obvious way to get this wrong and is mutation-tested for in
+# `scripts/claim-selftest.py`. ONLY THE WORD `CONFLICTING` ABORTS. An unreadable answer, a
+# `gh` that failed, an answer that is not JSON and an exception in the reader are all
+# "no news", and the wait continues — absence is not evidence here any more than it is on the
+# check runs.
+#
+# IT IS ASKED NO OFTENER THAN THE CHECK POLL, and in fact far less: six times the poll. The
+# subject changes only when somebody else's merge lands, which is a minutes-scale event, and
+# every reading is a `gh pr view` against somebody's rate limit.
+
+MERGEABILITY_RECHECK_SECONDS = 60.0
+
+
+def mergeability_reader(number: int, read=None):
+    """A callable answering `mergeable` for one pull request, or `""` when it cannot.
+
+    NEVER RAISES, because its caller is a wait that must not die of a network blip: an
+    unreadable answer is "no news" and the wait goes on, which is the same asymmetry
+    `read_check_runs` already carries one function up.
+    """
+    read = read or pr_state
+
+    def ask() -> str:
+        try:
+            data, _ = read(number)
+        except Exception:                                     # noqa: BLE001 — no news
+            return ""
+        if not isinstance(data, dict):
+            return ""
+        return str(data.get("mergeable") or "UNKNOWN")
+
+    return ask
+
+
 def wait_for_checks(sha: str, number: int, floor: int = 0,
                     read=None, sleep=None, now=None,
-                    required: Optional[Sequence[str]] = None) -> Tuple[bool, List[str]]:
+                    required: Optional[Sequence[str]] = None,
+                    mergeability=None) -> Tuple[bool, List[str]]:
     """Poll ONE COMMIT's check runs until the SUBJECT set is complete — or say why not.
 
     The subject is every check run when `required` is `None` (the old, unnarrowed
@@ -726,6 +783,10 @@ def wait_for_checks(sha: str, number: int, floor: int = 0,
     RUN THAT IS ALREADY VISIBLE AND RED REFUSES, required or not: narrowing what is WAITED
     FOR is not the same as narrowing what is WATCHED FOR, and a known red is never something
     to merge past.
+
+    `mergeability` is an optional callable answering whether the pull request can still
+    merge; see the section header above. `None` means the question is not asked at all,
+    which is what every caller that only wants the check arithmetic passes.
 
     Returns (green, lines to print). Never raises, and never reports green off a reading it
     could not make, could not fill, or has not seen twice.
@@ -737,6 +798,7 @@ def wait_for_checks(sha: str, number: int, floor: int = 0,
 
     started = now()
     spoke = started
+    asked_mergeable = started        # `mergeable_half` read it moments ago; wait one interval
     stable = 0
     seen: Optional[Tuple[Tuple[str, str, str], ...]] = None
     unreadable = ""
@@ -810,6 +872,31 @@ def wait_for_checks(sha: str, number: int, floor: int = 0,
                         "there lands on main's own run and is fixed forward (owner's ruling "
                         "2026-09-19).")
                 return True, lines
+
+        # CAN IT STILL MERGE AT ALL? Asked at most once per `MERGEABILITY_RECHECK_SECONDS`,
+        # and ONLY `CONFLICTING` ends the wait. `UNKNOWN`, an unreadable answer and a reader
+        # that threw are all no news. See the section header above `mergeability_reader`.
+        if mergeability is not None and now() - asked_mergeable >= MERGEABILITY_RECHECK_SECONDS:
+            asked_mergeable = now()
+            try:
+                state = mergeability()
+            except Exception:                                 # noqa: BLE001 — no news
+                state = ""
+            if state == "CONFLICTING":
+                return False, [
+                    "  PR #{0} stopped being mergeable while this was waiting — mergeable "
+                    "CONFLICTING.".format(number),
+                    "  Main moved underneath the branch: another session merged something "
+                    "that touches",
+                    "  the same lines. The claim commit's own checks are unaffected by that "
+                    "and can go on",
+                    "  passing, which is why this wait would otherwise have spent the whole "
+                    "deadline on a",
+                    "  merge that can no longer happen.",
+                    "",
+                    "  Bring `origin/main` into the branch, resolve the conflict, push, and "
+                    "run this again.",
+                ]
 
         spent = now() - started
         if spent >= CHECK_DEADLINE_SECONDS:
@@ -948,7 +1035,12 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
                 parent[:9], floor, "required check runs" if required else "check runs"),
             "  on this commit means GitHub is still attaching them.", "")
 
-    green, lines = wait_for_checks(sha, number, floor, required=required)
+    say("  and it watches one more thing while it waits: whether this pull request can",
+        "  still merge at all. Another session's merge can turn this branch DIRTY while",
+        "  the claim commit's own checks go on passing.", "")
+
+    green, lines = wait_for_checks(sha, number, floor, required=required,
+                                   mergeability=mergeability_reader(number))
     say(*lines)
     if not green:
         return refuse(
