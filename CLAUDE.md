@@ -274,10 +274,11 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 ### The screens
 
-**The app has thirteen screens and thirteen routes — twelve the owner's, one the Fulfiller's.**
-Two routes are off-nav (the `aside` group — Kit and Cards to pull), so the nav itself draws
-eleven rows. `app/src/App.tsx`'s `ROUTES` table is the count. Recount from the table, never a
-sentence (see "the census" below).
+**The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
+Three routes are off-nav (the `aside` group — Kit, Cards to pull, and the per-product view
+D226 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
+`ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
+below).
 
 ```
 #/             Home           one ranked sentence of what the store is waiting on (D121),
@@ -304,6 +305,8 @@ sentence (see "the census" below).
 #/codes        Codes          code-card track: QR ledger, lanes, hand-off
 #/fulfillment  Cards to pull  the Fulfiller's whole product. NO shell (D5)
 #/gallery      Kit            the component sheet, rendered by the build
+#/product      Product history one product's market history and the owner's own sales on
+                              it, by SKU. Off-nav, deep-linked (D226)
 ```
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
@@ -313,8 +316,10 @@ stages, not two unrelated views.
 **`#/inventory` is the one owner-side view of stored cards** (D31). `#/boxes` and `#/pull` are
 not routes. Box operations live in its Manage box sheet.
 
-**Two routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen and the
-kit. Both stay registered routes, reachable from elsewhere.
+**Three routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
+kit, and `#/product`, the per-product view (D226). It is a deep link reached
+by SKU, never a destination anyone browses to cold. All three stay registered routes,
+reachable from elsewhere.
 
 **The census.** Every route or screen count in this file, README.md and docs/map.py is
 reconciled against `ROUTES` by `make docs-audit`'s `route census` row, and every spec's pinned
@@ -392,7 +397,7 @@ read off a declared class.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the shell: thirteen hash routes, no routing
+`App.tsx` is a hand-written hash router and the shell: fourteen hash routes, no routing
 library, one table. It renders for every screen except the Fulfiller's (`persona: 'fulfiller'`,
 not rendered — not focusable, not reachable by a screen reader).
 
@@ -916,6 +921,7 @@ D223 Sold value goes first, and sealed product is a named gap
 D224 The preview costs nothing, and the press commits as it goes
 D225 Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
 D226 A prose ratchet gets a reader, and bytes are not the ruler
+D227 A route, not a lens, and never one line for two kinds of observation
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
@@ -955,8 +961,10 @@ adopting some and deferring others (D99 sits where it does because main took D90
   one screen (the orders list IS the selection, no mode strip, no `PullMode`, no `WalkSelect`),
   and section 9a's findings 1-4. The walk carries real positional facts and refreshes them on a
   pull, §8's 2026-09-19 ruling: RANKING is frozen for the pass, where a card physically sits is
-  not. STILL OPEN, all recorded in the spec: the filter strip's place at 390, D96's lost pass
-  figure, and which order a press records against when one card serves several buyers.
+  not. STILL OPEN, recorded in the spec: D96's lost pass figure. The filter strip is a native
+  dropdown since 2026-09-19, which settled its place at 390. Which order a press records
+  against is ANSWERED. D212 rules every copy fungible, so a sale records against an owing
+  order, and D220 built it.
 - `docs/specs/stable-card-id.md` — SPECIFIED, NOT BUILT (D172). No store carries `cards.cid`
   yet. The measurement — 2,535 of 2,535 digests match — is real.
 - `docs/specs/capture-app.md` — step 7. 7a and 7b are both built. Gate B ran them 2026-08-22.

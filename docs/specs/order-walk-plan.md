@@ -987,7 +987,7 @@ and while a pass runs. The walk fills the column beside the list. The mode strip
 as many words. `app/tests/orders.spec.ts` asserts both directions, and that case was proved red
 against the intersection build before it was kept.
 
-**Findings 1 to 4 of section 9a are still open**, deferred behind this on the owner's ruling.
+**Findings 1 to 4 of section 9a were superseded by section 13**, the ruling of 2026-09-19.
 
 ### The positional facts, built 2026-09-19
 

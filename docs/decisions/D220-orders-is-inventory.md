@@ -37,4 +37,4 @@ One pane means one place where a card's copies, position and details are drawn. 
 
 ### What is still open
 
-Which order a press records against when one card serves several buyers is answered by D212. No order claims a copy, and the write is the only refusal. The filter strip's place at 390 and D96's lost pass figure stay open in the spec. The selected order's text in the pane's top-right corner is the owner's next feedback item.
+Which order a press records against when one card serves several buyers is answered by D212. No order claims a copy, and the write is the only refusal. D96's lost pass figure stays open in the spec. Amended 2026-09-19: the filter strip became a native dropdown on the owner's word, and its place at 390 is discharged with it. The selected order's text in the pane's top-right corner was dropped by the owner the same day.
