@@ -1311,7 +1311,7 @@ design-check-quiet:
 # is the exact output a binary-less machine produced. One `if` keeps the run inside the
 # branch that only exists once the guard has already passed.
 vale:
-	@echo "NOT A GATE: prose style is reported and never blocks (D74). --no-exit swallows"
+	@echo "NOT A GATE: prose style is reported and never blocks (D18). --no-exit swallows"
 	@echo "  the status, and a missing binary reports and exits 0 — so this slot in"
 	@echo "  \`make check\` cannot fail, and a reader of a green run should not count it"
 	@echo "  among the ones that can. \`make docs-audit\`'s \`check registry\` row pairs this"

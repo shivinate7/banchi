@@ -1060,6 +1060,24 @@ COMPONENTS = [
                                         "lose everything BEFORE the chunked fix is proven to "
                                         "keep what it already committed, and a resumed pass "
                                         "proven to never re-ask for an already-fresh SKU."},
+            # THE PER-PRODUCT VIEW'S OWN READ (D227). Archive-first,
+            # live-fallback only when `store/pricearchive.py` has never seen the SKU at all.
+            # Never writes — a sweep is still a press, never this route.
+            "productview.py": {"does": "`row_for_sku` looks up one SKU's export-shaped row "
+                                       "without walking the whole `cards` table. "
+                                       "`archive_payload` reads `store/pricearchive.py` for "
+                                       "every range it holds for that SKU, per-bucket "
+                                       "low/high carried through untouched, or `None` when "
+                                       "the archive has never seen it — the caller's signal "
+                                       "to fall back to `pipeline/pricehistory.py:Market`'s "
+                                       "live read. `history_begins` computes the date the "
+                                       "chart states its own history starts from, off the "
+                                       "buckets actually read, never the 357-day constant.",
+                                "governed_by": ["D62", "D219",
+                                                "D227"],
+                                "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
+                                        "and by `app/tests/product-history.spec.ts`. No "
+                                        "network call in the archive-hit path."},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -2384,6 +2402,20 @@ COMPONENTS = [
                                 "D223", "D222",
                                 "D62", "D18"],
             },
+            "product-history-selftest.py": {
+                "does": "proves pipeline/productview.py and "
+                        "server/pipeline_routes.py:do_product_history against a throwaway "
+                        "store (D227). Three arms, each broken to prove "
+                        "the guard first: an unknown SKU refuses `sku_unknown`; a `misc` SKU "
+                        "refuses `not_catalogued`; a SKU the archive has already swept "
+                        "answers `source: archive` with per-bucket spread carried through, "
+                        "asserted by pointing an `ExplodingMarket` at the route and proving "
+                        "it is never called; a SKU the archive has never swept reaches a "
+                        "`FakeMarket` and answers `source: live`. Nine assertions, all "
+                        "passing. Not wired into `make check` — the same precedent this "
+                        "file's own sibling above sets.",
+                "governed_by": ["D227", "D62", "D18", "D22"],
+            },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
                         "throwaway checkout, a throwaway sibling standing in for "
@@ -2458,7 +2490,11 @@ COMPONENTS = [
                         "`echo`'s `>/dev/null` lands on a `git commit`; a regular expression "
                         "cannot tell an operator from a quoted STRING; a heredoc BODY is a "
                         "document, and the message announcing a guard quotes the command it "
-                        "refuses; `#` eats to end of input, so lines are fed one at a time. "
+                        "refuses; and a LINE is an unquoted newline's worth, because a multi-line "
+                        "`node -e '…'` fed to shlex one line at a time read a regex "
+                        "literal as a redirection target (2026-09-19). Three pieces are "
+                        "LIFTED from the parent's hooks/guard.py and not re-derived: "
+                        "`split_segments`, `resolve_command`, `strip_heredoc_bodies`. "
                         "It holds the tokenizer, the fd walk (in ORDER, because the shell "
                         "does), the pipeline split, git's global-option step-over and "
                         "`git -C`'s directory — and DECIDES NOTHING: no verb roster, no "
@@ -2677,7 +2713,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113", "D134",
                                 "D159", "D165", "D167", "D168", "D174", "D189", "D192", "D193",
-                                "D203", "D210", "D225"],
+                                "D203", "D210", "D225", "D227"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -2793,6 +2829,49 @@ COMPONENTS = [
                         "interpunct` row only reads it, since that row sits on the commit "
                         "path (D18).",
                 "governed_by": ["D18", "D194", "D218"]},
+            "ste/ste_lint.py": {
+                "does": "the STE ratchet's linter, VENDORED verbatim from $HOME/.claude/"
+                        "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
+                        "COPY, never a symlink (D47): a fresh clone, a CI runner and this "
+                        "repo's own git history all lack $HOME/.claude, so a gate here cannot "
+                        "point at a path outside its own tree. Stdlib-only Python, unlike "
+                        "Vale's third-party Go binary, so the bare-`python3` pre-commit hook "
+                        "can run it with nothing new installed. Its rules are not edited — "
+                        "only a provenance header was added on top of the vendored file.",
+                "governed_by": ["D18", "D47", "D226"]},
+            "ste/LICENSE-ste_lint": {
+                "does": "the vendored linter's MIT license and notice, copied unmodified "
+                        "beside it — the license's one condition for reuse.",
+                "governed_by": ["D226"]},
+            "ste_measure.py": {
+                "does": "the STE ratchet's ONE measurer, called by both "
+                        "`scripts/docs-audit.py`'s `ste ratchet` row (read-only) and "
+                        "`scripts/ste-ratchet-pin.py --pin` (the writer, D18) — no counting "
+                        "logic is duplicated between them. Runs the vendored linter's four "
+                        "ERROR-severity rules over caller-supplied (path, text) pairs, drops "
+                        "findings a named `EXEMPTIONS` recognizer proves are an artifact of "
+                        "the text's shape (a table cell, a verbatim quotation, a decision "
+                        "citation, the literal \"VS Code\") rather than its prose, and reports "
+                        "the total, the per-code counts, and errors-per-1,000-PLAIN-words "
+                        "(matching `wc -w`, not `ste_lint.py`'s own STE-adjusted count) per "
+                        "directory bucket and repo-wide. Never touches disk itself.",
+                "governed_by": ["D18", "D218", "D226"]},
+            "ste-ratchet-pin.py": {
+                "does": "`python3 scripts/ste-ratchet-pin.py --pin` re-measures every tracked "
+                        "markdown file via `ste_measure.py:measure()` — the same function the "
+                        "row itself calls — and rewrites `scripts/ste-ratchet.json`. Contains "
+                        "no counting logic of its own. D18: a generator may write, on no "
+                        "`make` target and no hook; `git diff scripts/ste-ratchet.json` is "
+                        "the receipt, mirroring `copy-budget.mjs` and "
+                        "`typed-interpunct-pin.mjs`'s own discipline exactly.",
+                "governed_by": ["D18", "D194", "D218", "D226"]},
+            "ste-ratchet.json": {
+                "does": "the ratchet's pinned ceiling: `total`, `by_code` (the four "
+                        "ERROR-severity rule counts, post-exemption), and "
+                        "`ratio_per_1k_words` (per bucket and repo-wide). Written only by "
+                        "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
+                        "row only reads it, since that row sits on the commit path (D18).",
+                "governed_by": ["D18", "D226"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -2868,7 +2947,7 @@ COMPONENTS = [
                                 "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
                                 "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
                                 "D185", "D191", "D192", "D194", "D196", "D210", "D213",
-                                "D215", "D218"],
+                                "D215", "D218", "D226"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3862,7 +3941,7 @@ COMPONENTS = [
                         "(D43) — a tracked file cannot name a port derived from one "
                         "directory's path — and screenshot.sh substitutes a worktree's own "
                         "before rendering.",
-                # D5 is what the list is for: EIGHT owner screens and the Fulfiller's, which
+                # D5 is what the list is for: NINE owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,
                 # orders and shipping by D69) and the count beside them was not, the same
@@ -3882,7 +3961,8 @@ COMPONENTS = [
                 # rather than the screen. D86 is the same drift on the `pricing` line — the
                 # corpus made that screen's default the full cross-run worklist, and the
                 # paragraph beside it still described a run picker that draws nothing.
-                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86"],
+                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86",
+                                "D227"],
             },
         },
     },
@@ -4033,7 +4113,7 @@ COMPONENTS = [
                                 "D115", "D116", "D132", "D134", "D137", "D138", "D145", "D159",
                                 "D165", "D168", "D172", "D174", "D183", "D189", "D191", "D192",
                                 "D193", "D203", "D212", "D213", "D219",
-                                "D225"],
+                                "D225", "D227"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4199,7 +4279,7 @@ COMPONENTS = [
                                 "D89", "D100", "D103", "D105", "D134", "D137", "D145", "D147",
                                 "D156", "D159", "D163", "D165", "D166", "D168", "D170", "D172",
                                 "D174", "D180", "D188", "D189", "D216", "D219",
-                                "D225"],
+                                "D225", "D227"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4315,8 +4395,8 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "does": "the web app, REBUILT AS BANCHI in 2026-09: a new shell, a shared kit, two "
-                "themes, and every screen redrawn against it. THIRTEEN routes behind a "
-                "hand-written hash router, TWELVE of them the owner's — home, which took the "
+                "themes, and every screen redrawn against it. FOURTEEN routes behind a "
+                "hand-written hash router, THIRTEEN of them the owner's — home, which took the "
                 "root hash and is where the six-stage spine is drawn; the capture screen that "
                 "Gate B runs on, now at `#/capture`; the runs screen the pipeline lives on; the "
                 "review queue; the pricing worklist; the order screen and the shipping lane "
@@ -4740,7 +4820,7 @@ COMPONENTS = [
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
                                             "D95", "D100", "D105", "D109", "D120", "D134",
-                                            "D159", "D207"]},
+                                            "D159", "D207", "D227"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -4853,8 +4933,8 @@ COMPONENTS = [
                                               "D87", "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
-                                              "D192", "D193", "D203", "D207", "D213",
-                                              "D219", "D225"]},
+                                              "D192", "D193", "D203", "D207", "D213", "D219",
+                                              "D225", "D227"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -4946,7 +5026,8 @@ COMPONENTS = [
                                              "D91", "D92", "D93", "D97", "D100", "D103", "D104",
                                              "D113", "D114", "D115", "D116", "D132", "D134", "D142",
                                              "D145", "D147", "D156", "D159", "D165", "D166", "D168",
-                                             "D172", "D174", "D180", "D183", "D193", "D212", "D213"]},
+                                             "D172", "D174", "D180", "D183", "D193", "D212", "D213",
+                                             "D227"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6255,6 +6336,39 @@ COMPONENTS = [
                                             "(D85) — read by three declarations and set by "
                                             "nothing from D54 until then.",
                                      "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62", "D85"]},
+            # THE PER-PRODUCT VIEW (D227). Off-nav, deep-linked by SKU. Never
+            # links from #/revenue -- that file was being edited by another branch when this
+            # route was built, and the decision entry argues the deferral in full.
+            "src/ProductHistory.tsx": {"does": "`#/product`: one product's market history, "
+                                               "with the owner's own sales marked on it. "
+                                               "`getProductHistory` reads the archive first "
+                                               "and falls back to a live read only for a SKU "
+                                               "the archive has never swept -- read-only, never "
+                                               "a sweep from the screen. The market series and "
+                                               "the owner's own fills (read off `getOrders`, "
+                                               "filtered by SKU -- D212's grain) are drawn as a "
+                                               "broken polyline and separate diamond marks, "
+                                               "never one line, with a legend. A per-bucket "
+                                               "spread tick is carried rather than discarded. "
+                                               "`history_begins` states where the source's own "
+                                               "data starts; a fill older than that is listed "
+                                               "separately as having no market data at all, "
+                                               "never plotted.",
+                                       "governed_by": ["D227", "D62",
+                                                       "D219", "D212",
+                                                       "D196", "D50"],
+                                       "note": "No harness test -- a Playwright spec would be "
+                                               "the honest coverage and none exists yet, named "
+                                               "rather than silently absent."},
+            "src/ProductHistory.css": {"does": "the chart at `--bn-*` tokens only. The market "
+                                               "line and the per-bucket spread tick are both "
+                                               "ink, never accent -- accent is reserved for the "
+                                               "owner's own fill marks, the one thing on this "
+                                               "screen that is a fact rather than a reading, "
+                                               "and never a color standing in for beat-or-miss "
+                                               "(D62: direction is a sign and a word).",
+                                       "governed_by": ["D227", "D62", "D94",
+                                                       "D41", "D218"]},
             # D79 is the batched half of D62, and D62 is why this file is separate from
             # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
             # has and the strip draws a shape and a sign, which are two answers to two
@@ -7046,7 +7160,10 @@ COMPONENTS = [
             },
             "tests/routes.ts": {
                 "does": "one helper, `routesFromNav`, which harvests the owner's route roster "
-                        "off `.bn-side a.bn-nav-link` and names `#/gallery` beside it. Moved "
+                        "off `.bn-side a.bn-nav-link` and names `#/gallery` beside it, joined "
+                        "by `#/product` for the identical reason (D227): "
+                        "off-nav, so undiscoverable, but still an owner screen D194's ratchet "
+                        "must reach. Moved "
                         "out of `cursor.spec.ts` on 2026-09-07 when `wide.spec.ts` needed the "
                         "same roster at the other end of the width ladder (D118), and put "
                         "beside `fontsReady.ts` rather than into `shell.ts`, whose one argument "
@@ -7056,7 +7173,8 @@ COMPONENTS = [
                         "second copy of an anti-vacuity contract is a copy that drifts. It "
                         "cannot run below 768: the sidebar is `display: none` there, which is "
                         "why the phone sweep harvests its own.",
-                "governed_by": ["D31", "D50", "D69", "D70", "D95", "D123"]},
+                "governed_by": ["D31", "D50", "D69", "D70", "D95", "D123", "D194",
+                                "D227"]},
             "tests/wide.spec.ts": {
                 "does": "the owner's screens ABOVE the desk, which nothing in this suite had "
                         "ever rendered. Of twenty-one specs, ten cases set 1440x900 and none "
@@ -7464,7 +7582,7 @@ COMPONENTS = [
                                                      "D58", "D63", "D69", "D73", "D90", "D91",
                                                      "D93", "D96", "D103", "D113", "D114", "D118",
                                                      "D123", "D132", "D181", "D193", "D194", "D196",
-                                                     "D203", "D209", "D212", "D218"]},
+                                                     "D203", "D209", "D212", "D218", "D220"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -7556,6 +7674,20 @@ COMPONENTS = [
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
                                 "D217", "D225"],
+            },
+            "tests/product-history.spec.ts": {
+                "does": "`#/product`'s own hard rule (D227): the market "
+                        "series and the owner's own fills draw as two different SVG shapes, "
+                        "never one line — counted by class name, a `<polyline>` for a market "
+                        "run and a `<path>` for a fill. Proved to fail: relabelling a fill's "
+                        "class as the market line's own drops the fill count to zero. A "
+                        "second case proves a sale older than `history_begins` is listed as "
+                        "having no market data and never reaches either chart locator. Two "
+                        "requests are intercepted (the product history and the orders "
+                        "payload); no real request is made and no store is touched. Not a "
+                        "harness test; `make design-check` runs it.",
+                "governed_by": ["D227", "D62", "D212",
+                                 "D219"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "

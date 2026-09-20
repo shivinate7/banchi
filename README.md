@@ -37,10 +37,10 @@ store/                     the master store: inventory, cache, standing queues, 
                            ledger and the history — one SQLite file since D88
 server/                    capture server: /capture, /status, /photo, inventory state,
                            and the pipeline seam — the one place a route can spend money
-app/                       Banchi. Vite + React 19 + TS. Thirteen screens — home, capture,
+app/                       Banchi. Vite + React 19 + TS. Fourteen screens — home, capture,
                            runs, review, pricing, orders, shipping, revenue, inventory,
-                           graveyard, codes, cards to pull, kit — all thirteen routed. See
-                           "The app" below.
+                           graveyard, codes, cards to pull, kit, product history — all
+                           fourteen routed. See "The app" below.
 app/src/tokens.css         the design system: --bn-* tokens, light and dark
 app/src/kit.css, kit/      the component kit every screen is built from
 harness/                   T1-T9. The Stop hook runs `make harness` at every turn end.
@@ -185,9 +185,9 @@ without recounting fails the commit.
 stored cards, with the box walk as its spine and search narrowing it rather than replacing it
 (D31; `#/boxes` and `#/pull` are gone and do not come back).
 
-All thirteen open at a hash, and the Fulfiller's view opens **without the shell** the other
-twelve carry — its row in `docs/DESIGN.md`'s constraints table requires no route out of it, and a
-strip of links to the capture screen's hard-delete undo is exactly the route it forbids. Not
+All fourteen open at a hash. The Fulfiller's view opens **without the shell** the other
+thirteen carry. Its row in `docs/DESIGN.md`'s constraints table requires no route out of it.
+A strip of links to the capture screen's hard-delete undo is exactly the route it forbids. Not
 hidden: not rendered, so it is not focusable, not reachable by a screen reader, and not one
 specificity change from coming back.
 

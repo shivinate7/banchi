@@ -1774,7 +1774,7 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
   await expect(earlier).toContainText('Grace Hopper')
@@ -1864,6 +1864,57 @@ test('the default ordering puts Ready to Ship first, newest within', async ({ pa
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
 })
 
+/** Enough buyers that `.orders-index` must scroll inside `.browse-boxes`'s own 264px band
+ *  (`BoxBrowse.css`) rather than draw every row flat — the shape Task 2's own case needs. */
+function manyBuyerPayload(n: number): OrdersPayload {
+  const rows = Array.from({ length: n }, (_, i) => {
+    const num = `BUYER-${String(i).padStart(3, '0')}`
+    return order({
+      key: `TCGplayer:${num}`,
+      number: num,
+      buyer: `Buyer ${i}`,
+      lines: [line({ order: num, order_key: `TCGplayer:${num}` }).line],
+    })
+  })
+  const resolved = rows.map((one) => ({
+    key: one.key,
+    number: one.number,
+    complete: false,
+    outstanding: 1,
+    lines: [line({ order: one.number, order_key: one.key })],
+  }))
+  return payloadOf(rows, resolved)
+}
+
+/* THE ORDERS-FOLLOWUPS FIX, TASK 2: `.orders-index` (the buyer list) shrinks to fit inside
+ * `.browse-boxes`'s 264px band and scrolls internally — that half already worked. What did
+ * not: `.orders-index` carries `padding: 3px; margin: -3px` so a row's own hover shadow (which
+ * bleeds 3px past its border box, `--bn-shadow-1`'s own reach) is not clipped by the list's
+ * `overflow-y: auto` — and that same negative margin bleeds the list's OWN box 3px past its
+ * flow position on every side, including the bottom, where `.orders-index-hint` (the
+ * "step through the buyers" line, `.browse-boxes` declares no `gap` at all) sits immediately
+ * after it. Measured at 820 with 20 buyers scrolled to the end, before this fix: the list's
+ * own box bottom sat 3px BELOW the hint's own top — the last visible row's bottom padding is
+ * what that 3px reached into. */
+test('at 820, the last buyer row clears the step-through hint rather than sitting under it', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1180 })
+  await open(page, { orders: manyBuyerPayload(20) })
+
+  await page.locator('.orders-index').evaluate((el) => {
+    el.scrollTop = el.scrollHeight
+  })
+  const hint = await page.locator('.orders-index-hint').boundingBox()
+  const items = page.locator('.orders-index-item')
+  const count = await items.count()
+  const last = await items.nth(count - 1).boundingBox()
+  if (hint === null || last === null) throw new Error('the hint or the last buyer row did not lay out')
+
+  expect(
+    Math.round(last.y + last.height),
+    `the last buyer row (bottom=${last.y + last.height}) sits under the hint (top=${hint.y})`,
+  ).toBeLessThanOrEqual(Math.round(hint.y))
+})
+
 test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const options = page.locator('.orders-status-select option')
@@ -1890,6 +1941,52 @@ test('each control narrows; they compose', async ({ page }) => {
   await select.selectOption('Ready to Ship')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
+})
+
+/* THE REASON FILTER IS A DROPDOWN, NOT PILLS (owner's ruling, 2026-09-19: "make this a
+ *  dropdown not pills"). `.orders-filter-select` replaced the six `.orders-chip` buttons;
+ *  this proves the select narrows exactly as each removed chip used to, option by option, and
+ *  clears the 40px thumb floor at phone width. */
+test('the filter select carries the same options and labels the removed chips drew', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  const options = page.locator('.orders-filter-select option')
+  await expect(options).toHaveCount(5)
+  await expect(options).toContainText(['All open (3)', 'Every copy found (1)', 'Short (1)', 'Never seen (1)', 'Done (0)'])
+})
+
+test('each filter option narrows the buyer list exactly as the chip it replaced did', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  const select = page.locator('.orders-filter-select')
+  await expect(select).toHaveValue('all')
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+
+  await select.selectOption('resolved')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Alice')
+
+  await select.selectOption('short')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
+
+  await select.selectOption('sku_unseen')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Carol')
+
+  /* NONE OF THE THREE IS DONE — the empty state under `done` is the one no chip's count ever
+     showed on this fixture, and it is the same sentence the chip's empty state used to draw. */
+  await select.selectOption('done')
+  await expect(page.locator('.orders-index-row')).toHaveCount(0)
+  await expect(page.locator('main.orders')).toContainText('Nothing fulfilled yet')
+
+  await select.selectOption('all')
+  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+})
+
+test('the filter select clears the 40px thumb floor at phone width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await open(page, { orders: threeBuyerPayload() })
+  const box = await page.locator('.orders-filter-select').boundingBox()
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
 test('a changed filter reorders immediately', async ({ page }) => {
@@ -2112,7 +2209,7 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
   await page.locator('.orders-search-input').fill('hopper')
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
@@ -2153,7 +2250,7 @@ function terminalOwingOrder(over: Partial<OrderRow> = {}): OrderRow {
 test('a done order with nothing owed still draws nothing — unchanged from before this fix', async ({ page }) => {
   const closed = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
   await open(page, { orders: payloadOf([closed], []) })
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
   await expect(page.locator('main.orders')).toContainText('Done')
   await expect(page.locator('.orders-lines')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
@@ -2164,7 +2261,7 @@ test('a terminal order that still owes copies, with no answer yet, shows a way t
 }) => {
   const owing = terminalOwingOrder()
   await open(page, { orders: payloadOf([owing], []) })
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
+  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
   /* RE-AIMED: `OrderDetail`'s own body — where this sentence lives — moved into the Manage
      sheet with the rest of the per-order controls (§13). */
   await openManage(page)
@@ -2410,8 +2507,15 @@ test('the walk pane is inventory\'s own card pane: the same header, photo, copie
   /* "EVERY COPY OF THIS CARD" — `CardLocations`, unmodified. */
   await expect(pane.locator('.card-locations-title')).toHaveText('Every copy of this card')
   await expect(pane.getByRole('button', { name: 'Mark sold' })).toBeVisible()
-  /* DETAILS — `CardDetailsSection`, moved whole from `BoxBrowse.tsx`. */
-  await expect(pane.locator('.browse-details .browse-details-hint')).toHaveText('identity claims provenance')
+  /* DETAILS — `CardDetailsSection`, moved whole from `BoxBrowse.tsx`, and — since the
+     orders-followups fix — a SIBLING of `pane` (`.orders-walk-card`) rather than a child of
+     it, mirroring `BoxBrowse.tsx`'s own `</section>` / `<CardDetailsSection .../>` pair
+     exactly: nesting it inside the section let the section's `.bn-panel` `overflow: hidden`
+     clip it into the same box as an overflowing copies list (D118, D220). Read off `page`
+     rather than `pane` for that reason; it is still the one `.browse-details` this screen
+     draws. The text itself is D218's fix (CardHero.tsx, shared by every screen that draws
+     it): the separator is drawn by CSS, never typed. */
+  await expect(page.locator('.browse-details .browse-details-hint')).toHaveText('identity claims provenance')
 
   /* AND NONE OF INVENTORY'S OWN EDITING ACTIONS: no Card actions menu, no Retire, no re-shoot —
      left out by name (§13's override): retire, move and re-shoot are Inventory-only. */
@@ -2429,7 +2533,8 @@ test('D218: the reused card pane\'s Details hint draws the separator, never type
      `capturedText`/`marketText` (documented, left for the sweep D218's own audit row names as
      a known gap — a helper's return reaching a screen through a variable, invisible to the
      extractor `make docs-audit`'s `typed interpunct` row walks), so a whole-pane assertion
-     cannot pass until those land. */
+     cannot pass until those land. Read off `page`, not `pane`, because the orders-followups
+     fix moved Details to a sibling of `.orders-walk-card` (see the case below this one). */
   await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
   await open(page, {
     orders: oneOpenOrder(),
@@ -2439,9 +2544,66 @@ test('D218: the reused card pane\'s Details hint draws the separator, never type
 
   const pane = page.locator('.orders-walk-card')
   await expect(pane.locator('.browse-hero-head .browse-hero-name')).toContainText('Volcanion')
-  const hint = pane.locator('.browse-details-hint')
+  const hint = page.locator('.browse-details .browse-details-hint')
   await expect(hint).toBeVisible()
   expect(await hint.innerText()).not.toMatch(/[·•]/)
+})
+
+/* THE ORDERS-FOLLOWUPS FIX: `.inventory-detail` reached `.card-locations` only through
+ * `.inventory-copies > .card-locations { flex: 1 1 auto; min-height: 0 }` (`Inventory.css`),
+ * and `WalkMainPane` skipped the `.inventory-copies` wrapper `CopiesPanel` always draws. With
+ * enough copies for a card, `.card-locations` kept its block default (`min-height: auto`,
+ * sized to its OWN content) instead of shrinking to `.browse-band`'s fixed height (D118), so
+ * the list grew past the band and `Details` — a child of `.orders-walk-card` at the time,
+ * drawn right after `.browse-band` closed — landed inside the overflow rather than below it.
+ * Measured at 1440 with 9 copies, before this fix: band 313.6-933.6, Details.y 933.6 (flush
+ * with the band's OWN box, never accounting for the 1600px the list actually wanted), rows
+ * `scrollHeight === clientHeight === 1600` (no internal scroll at all). This case is that
+ * measurement, as an assertion, over a plan built for it (`viewport(1440, 900)` is this
+ * file's own default, restated here because the case cares which height 720/620/520 the
+ * `min(720px, max(520px, calc(100dvh - 280px)))` band rule lands on). */
+test('the copies list scrolls inside the band, and Details never lands inside the overflow (D118, D220)', async ({ page }) => {
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  const n = 9
+  const copies: WalkPlanCopy[] = Array.from({ length: n }, (_, i) =>
+    walkPlanCopy({ index: 21 + i, card: 17 + i, capture_id: `cap-${i}`, label: `Box 3 · Section 2 · Card ${17 + i}` }),
+  )
+  const cards: Record<string, InventoryCard> = {}
+  for (let i = 0; i < n; i++) {
+    cards[`3/${21 + i}`] = inventoryCard({ index: 21 + i, card: 17 + i, label: `Box 3 · Section 2 · Card ${17 + i}` })
+  }
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, {
+    orders: oneOpenOrder(),
+    /* `open()`'s own `walkPlan`, never `stubWalkPlan` after it — the sole buyer selects itself
+       on landing (§13), so the plan has to be this screen's FIRST answer. */
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies })] })]),
+    inventoryCards: cards,
+  })
+
+  const band = page.locator('.browse-band')
+  const details = page.locator('.browse-details')
+  await expect(details).toBeVisible()
+  const bandBox = await band.boundingBox()
+  const detailsBox = await details.boundingBox()
+  if (bandBox === null || detailsBox === null) throw new Error('band or Details did not lay out')
+
+  /* THE OVERLAP ITSELF: `Details`' own top may never sit above the band's own bottom edge —
+     that gap, not the DOM position, is what an owner actually sees. */
+  expect(
+    Math.round(detailsBox.y),
+    `Details (y=${detailsBox.y}) sits inside the band (bottom=${bandBox.y + bandBox.height}), not below it`,
+  ).toBeGreaterThanOrEqual(Math.round(bandBox.y + bandBox.height))
+
+  /* THE LIST IS WHAT GIVES (D118): with more copies than the band can show at once, the rows
+     list scrolls INSIDE its own box rather than growing past it. */
+  const rowsScroll = await page.locator('.card-locations-rows').evaluate((el) => ({
+    scrollHeight: el.scrollHeight,
+    clientHeight: el.clientHeight,
+  }))
+  expect(rowsScroll.scrollHeight, 'the copies list grew past what the band can show, uncontained').toBeGreaterThan(
+    rowsScroll.clientHeight,
+  )
 })
 
 /* --------------------------------------------------------------------------------- Mark sold */

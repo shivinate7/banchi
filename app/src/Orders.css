@@ -76,53 +76,11 @@
   white-space: nowrap;
 }
 
-.orders-chips { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
-.orders-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 var(--bn-3) 0 10px;
-  border-radius: var(--bn-r-full);
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-1);
-  font-size: var(--bn-fs-sm);
-  font-weight: 600;
-  color: var(--bn-ink-2);
-  white-space: nowrap;
-  transition:
-    background-color var(--bn-t-fast) var(--bn-ease),
-    color var(--bn-t-fast) var(--bn-ease),
-    box-shadow var(--bn-t-fast) var(--bn-ease),
-    transform var(--bn-t-fast) var(--bn-ease);
-}
-.orders-chip:hover { background: var(--bn-surface-3); color: var(--bn-ink); transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
-.orders-chip:active { transform: translateY(0) scale(0.98); }
-.orders-chip .bn-icon { color: var(--bn-ink-3); }
-.orders-chip-ok .bn-icon { color: var(--bn-ok); }
-.orders-chip-warn .bn-icon { color: var(--bn-warn); }
-.orders-chip-danger .bn-icon { color: var(--bn-danger); }
-.orders-chip-info .bn-icon { color: var(--bn-accent); }
-/* Selected is accent tint + accent ink, as every other selected state in the product. */
-.orders-chip[aria-pressed='true'] {
-  background: var(--bn-accent-tint);
-  color: var(--bn-accent);
-  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
-}
-.orders-chip[aria-pressed='true'] .bn-icon { color: inherit; }
-.orders-chip-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: var(--bn-r-full);
-  background: var(--bn-surface-2);
-  font-size: var(--bn-fs-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--bn-ink);
-}
-.orders-chip[aria-pressed='true'] .orders-chip-count { background: var(--bn-accent-tint-2); color: inherit; }
+/* The filter is a native select (owner's ruling, 2026-09-19: "make this a dropdown not
+   pills"), sized like `.orders-status-select` beside it. `--bn-control-h` alone already
+   clears the 40px thumb floor below 768px (tokens.css), so no phone-only override is needed
+   here. */
+.orders-filter-select { min-height: var(--bn-control-h-sm); font-size: var(--bn-fs-sm); width: auto; min-width: 160px; }
 
 /* ---- layout: the buyer list beside the walk (or the open buyer) ---------------- */
 /* THE LADDER IS `.browse-body`'s, DELIBERATELY — `#/inventory` and `#/orders` are the two
@@ -175,8 +133,18 @@
      shadow's reach on the top back down to 2px. 3px on every side covers the worst of those
      with room rather than a fitted-per-edge value that breaks the next time `--bn-shadow-1`
      changes. If that token's offset or blur grows, raise this to match. */
-  padding: 3px;
+  padding: 3px 3px 18px;
   margin: -3px;
+  /* THE FOOT, `#/inventory`'s OWN `.browse-list` PATTERN (`BoxBrowse.css`): 18px of padding
+     below the rows, ONLY 3px of which the negative margin above cancels back out (the shadow
+     bleed, unchanged on every other side) — so this list keeps 15px of real, uncancelled room
+     below its last row. Without it, the list's own flex-shrunk box ends flush against
+     `.orders-index-hint` with no gap at all (`.browse-boxes`, the shared rail panel this list
+     sits in, declares none): at 820 with a buyer list long enough to scroll, measured before
+     this fix, `.orders-index`'s own box bottom sat 3px BELOW `.orders-index-hint`'s top — the
+     3px shadow bleed this rule's negative margin buys back on every other side, reaching into
+     the hint on this one because nothing here made room for it. The last visible buyer row's
+     own bottom padding is what that 3px cut into. */
 }
 .orders-index > li { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
 /* THE TICK SITS BESIDE THE ROW, NOT INSIDE IT — `BuyerRow` is a `<button>` and a checkbox
@@ -1025,7 +993,7 @@
 /* ---- skeleton ------------------------------------------------------------------ */
 .orders-skeleton { gap: var(--bn-4); }
 .orders-skel-line { height: 20px; width: min(520px, 100%); }
-.orders-skel-chips { height: 30px; width: min(380px, 100%); border-radius: var(--bn-r-full); }
+.orders-skel-filter { height: 30px; width: min(200px, 100%); border-radius: var(--bn-r); }
 .orders-skel-card { height: 150px; border-radius: var(--bn-r-lg); }
 
 /* ---- phones ------------------------------------------------------------------- */
@@ -1038,13 +1006,9 @@
      where the bottom bar carries no Shipping entry. */
   .orders-tabs .orders-tab { height: var(--bn-control-h-sm); }
   /* `nowrap` is load-bearing: a WRAPPING column flex container sizes its line to the widest
-     item's max-content, which made the segmented (496px) and the chip row (528px) push the
-     document 138px wider than a 390px phone. */
+     item's max-content, which made the segmented (496px) push the document wider than a
+     390px phone. */
   .orders-toolbar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--bn-2); min-width: 0; }
-  /* One row of chips that scrolls sideways, each one thumb-sized. */
-  .orders-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--bn-4)); padding: 2px var(--bn-4); }
-  .orders-chips::-webkit-scrollbar { display: none; }
-  .orders-chip { flex: none; height: auto; min-height: var(--bn-control-h-sm); }
   .orders-acc > .orders-index-row { padding: var(--bn-3); }
   .orders-acc-body { padding: var(--bn-3); }
   .orders-order { padding: var(--bn-4); }
@@ -1156,8 +1120,8 @@
 
 /* The control's own OFF state is the kit's default button; this is the ON state — the
    operator has narrowed something, and the button says so without a second badge beside it.
-   Accent tint, exactly as every other engaged control in the product (see `.orders-chip`
-   pressed, and the segmented control). */
+   Accent tint, exactly as every other engaged control in the product (see the segmented
+   control's own selected state). */
 .orders-status-btn-on {
   background: var(--bn-accent-tint);
   color: var(--bn-accent);
@@ -1271,37 +1235,12 @@
    figure on it counts what the ticks above add up to. */
 .orders-statuses-confirm { display: flex; }
 
-/* THE THUMB FLOOR (D117). This sheet's phone block is width-only and neither of these was in
-   it: the status chips were 30px and the fetch panel's native checkboxes 16 x 16. An iPad in
-   portrait is 820px wide and all thumb, so the arm is on the POINTER as well as the width. */
+/* THE THUMB FLOOR (D117). This sheet's phone block is width-only and this was not in it: the
+   fetch panel's native checkboxes are 16 x 16. An iPad in portrait is 820px wide and all
+   thumb, so the arm is on the POINTER as well as the width. The filter select and the status
+   select both clear the floor already — `--bn-control-h` itself raises below 768px
+   (tokens.css) — so neither needs a rule here. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .orders-chip { height: var(--bn-control-h-sm); }
   /* the box keeps its drawn size; the label that wraps it takes the tap */
   .orders-status { min-height: var(--bn-control-h-sm); }
-}
-
-/* ---- THE SCROLLING CHIP ROW SAYS SO (D117) ----------------------------------------------------
-   Both of these rows scroll horizontally on a phone with `scrollbar-width: none`, so the third
-   chip was cut mid-word with nothing on screen to suggest a swipe would reach it. The fade is a
-   mask driven by the row's OWN scroll progress, so it says which way there is more: right edge
-   only at the start, left edge only at the end, both in the middle.
-   `scroll()` IS WHAT MAKES IT HONEST. A static fade would sit on a row that does not overflow and
-   read as a rendering fault; a scroll-progress timeline whose scroller has no overflow is INACTIVE,
-   and an inactive timeline applies no effect at all. So a short row gets nothing, with no
-   measurement and no class to keep in step. Behind `@supports` because the fallback — no fade,
-   which is today — is the correct one. */
-@supports (animation-timeline: scroll()) {
-  /* `black` IS AN ALPHA HERE, NOT PAINT, which is why no token is read for it. A mask uses only
-     the alpha channel of what it is given: `black` means "keep this pixel" and `transparent`
-     means "drop it", and neither has anything to do with the theme. `raw color` reads this sheet
-     for hex literals on the premise that a color must follow the theme; the premise does not
-     hold for a mask, and the keyword rather than `#000` is what says so at the call site. */
-  @keyframes bn-edgefade {
-    from { mask-image: linear-gradient(90deg, black 0, black calc(100% - 28px), transparent 100%); }
-    50% { mask-image: linear-gradient(90deg, transparent 0, black 28px, black calc(100% - 28px), transparent 100%); }
-    to { mask-image: linear-gradient(90deg, transparent 0, black 28px, black 100%); }
-  }
-  @media (max-width: 767px) {
-    .orders-chips { animation: bn-edgefade linear both; animation-timeline: scroll(self inline); }
-  }
 }

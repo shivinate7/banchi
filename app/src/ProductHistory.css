@@ -1,0 +1,167 @@
+/* `#/product` — the per-product view (D227). Every color is a `--bn-*`
+   token; the market series and the owner's own fills are drawn with deliberately different
+   marks (a line versus a diamond), never a shared color standing in for the distinction. */
+
+.producthistory {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-5);
+  padding-bottom: var(--bn-8);
+}
+
+.producthistory-search {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+.producthistory-search label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+}
+.producthistory-search input {
+  min-width: 220px;
+}
+
+.producthistory-product {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+}
+.producthistory-product h2 {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-2xl);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-tight);
+  color: var(--bn-ink);
+  margin: 0;
+}
+.producthistory-product-meta {
+  display: flex;
+  gap: var(--bn-2);
+  flex-wrap: wrap;
+}
+
+.producthistory-begins {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}
+
+.producthistory-legend {
+  display: flex;
+  gap: var(--bn-5);
+  flex-wrap: wrap;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+}
+.producthistory-legend span { display: inline-flex; align-items: center; gap: var(--bn-2); }
+.producthistory-legend-line {
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+  background: var(--bn-ink-2);
+}
+.producthistory-legend-diamond { color: var(--bn-accent); transform: rotate(45deg); }
+
+.producthistory-range {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  padding: var(--bn-4);
+  border-radius: var(--bn-r);
+  border: 1px solid var(--bn-border);
+  background: var(--bn-surface);
+}
+.producthistory-range-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--bn-2);
+}
+.producthistory-range-head h3 {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 700;
+  color: var(--bn-ink);
+  margin: 0;
+}
+.producthistory-machine {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  margin-left: var(--bn-2);
+}
+.producthistory-span {
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+/* THE SEPARATOR IS DRAWN, NEVER TYPED (D41, D218). A screen may SHOW a middle dot between the
+   span and the bucket-width caption; no string in ProductHistory.tsx types one. */
+.producthistory-bucket-width::before {
+  content: '·';
+  margin: 0 4px;
+  color: var(--bn-ink-3);
+}
+
+.producthistory-chart {
+  width: 100%;
+  height: 160px;
+  display: block;
+}
+.producthistory-chart-empty {
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-sm);
+}
+
+/* THE MARKET LINE — an aggregate. Ink, never accent: accent is reserved for "needs a
+   decision", and this is a reading. */
+.producthistory-market-line {
+  fill: none;
+  stroke: var(--bn-ink-2);
+  stroke-width: 1.5;
+}
+
+/* THE PER-BUCKET SPREAD — a thin tick, muted, never the same weight as the market line
+   itself: it is a sanity check, not a peer figure (D62). */
+.producthistory-spread {
+  stroke: var(--bn-ink-3);
+  stroke-width: 1;
+  opacity: 0.45;
+}
+
+/* THE OWNER'S OWN FILLS — a distinct mark (a diamond) in the one accent this design system
+   allows, and never a color standing in for "beat" or "missed" the market (D62: direction is
+   a sign and a word, never a color, and this is not even a direction — it is a fact). */
+.producthistory-fill-mark {
+  fill: var(--bn-accent);
+  stroke: var(--bn-surface);
+  stroke-width: 1;
+}
+
+.producthistory-note {
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  margin: 0;
+}
+
+.producthistory-outside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+}
+.producthistory-outside h3 {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 700;
+  color: var(--bn-ink);
+  margin: 0;
+}

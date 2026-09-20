@@ -152,6 +152,7 @@ from server import tcg_import  # noqa: E402
 # the handler for exactly that reason: D32 puts the imports inside `crop-preview`
 # because Pillow may genuinely be absent, and there is no equivalent risk here.
 from pipeline import pricehistory  # noqa: E402
+from pipeline import productview  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
 # reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
 # in it, so this costs one stdlib module. The command module could not be imported for them:
@@ -5432,6 +5433,97 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     directory = _open_run(name)
     wanted = _wanted_sku(sku)
     return _history_for_entry(_history_row(directory, wanted), wanted, {"run": directory.name})
+
+
+def do_product_history(sku: str) -> dict:
+    """`GET /pipeline/products/<sku>/history` — one SKU's market history, addressed by the
+    product rather than by a run (D227).
+
+    ARCHIVE FIRST. `pipeline/productview.py:archive_payload` reads `store/pricearchive.py`
+    for every range this store has ever swept for this SKU. When it has anything at all, that
+    is the whole answer and NOTHING LEAVES THIS MACHINE — the archive never deletes a row
+    (`store/pricearchive.py`'s own docstring), so a SKU already swept needs no live read to
+    answer this route.
+
+    LIVE, ONLY WHEN THE ARCHIVE HAS NEVER SEEN THIS SKU. Then this reaches
+    `pipeline/pricehistory.py:Market` exactly the way `_history_for_entry` already does for
+    `#/pricing`'s panel — same cache, same refusal vocabulary — and answers a `Series`-shaped
+    payload with the vwap/bound/momentum that live reading actually carries. NEITHER PATH
+    EVER WRITES: not to the archive, not to the corpus. `pkmnscan archive sweep` is the one
+    press that folds a live read back into the table, and it stays a press.
+
+    `not_catalogued` is refused before either path runs — the same D22 permanent state
+    `_history_for_entry` already names for `misc`.
+    """
+    wanted = _wanted_sku(sku)
+    snapshot = Store().read()
+    try:
+        row = productview.row_for_sku(snapshot, wanted)
+    except productview.ProductNotFound:
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "sku_unknown",
+            f"No card in this store has ever carried SKU {wanted}.",
+        ) from None
+
+    if not pricehistory.catalogued_row(row):
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "not_catalogued",
+            f"{row.get(tcgcsv.NAME_COLUMN) or wanted} is not in a catalogued product line, "
+            f"so there is no product to look a history up by. D22 makes that the permanent "
+            f"state for `misc` rather than a missing export.",
+        )
+
+    base = {
+        "sku": wanted,
+        "product_id": None,
+        "name": row.get(tcgcsv.NAME_COLUMN),
+        "set_name": row.get(tcgcsv.SET_COLUMN),
+        "condition": row.get(tcgcsv.CONDITION_COLUMN),
+    }
+
+    archived = productview.archive_payload(snapshot.archive, wanted)
+    if archived is not None:
+        return {
+            **base,
+            "source": "archive",
+            "ranges": archived,
+            "history_begins": productview.history_begins(archived),
+            "never_sold": all(r["buckets"] == 0 for r in archived),
+        }
+
+    # THE ARCHIVE HAS NEVER SWEPT THIS SKU — the one case this route reaches out for itself.
+    market = pricehistory.Market(cache_dir=market_cache_dir(), user_agent=_history_user_agent())
+    try:
+        reading = market.reading_for_row(row)
+    except pricehistory.Blocked as exc:
+        raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, "history_blocked", str(exc)) from None
+    except pricehistory.Unreachable as exc:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_GATEWAY,
+            "history_unreachable",
+            f"{exc} Nothing is wrong with this card — a public mirror did not answer, and "
+            f"the reading is the only thing lost. Try again.",
+        ) from None
+    except pricehistory.NotResolvable as exc:
+        raise PipelineRefusal(HTTPStatus.CONFLICT, "history_unresolved", str(exc)) from None
+
+    ranges = [
+        _history_series(reading.series[r])
+        for r in pricehistory.DEFAULT_RANGES
+        if r in reading.series
+    ]
+    return {
+        **base,
+        "product_id": reading.product_id,
+        "source": "live",
+        "ranges": ranges,
+        "history_begins": productview.history_begins(
+            [{"from": r["from"]} for r in ranges]
+        ),
+        "never_sold": not reading.series,
+    }
 
 
 def _wanted_sku(sku: str) -> str:

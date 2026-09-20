@@ -21,6 +21,7 @@ import { Orders } from './Orders'
 import { Shipping } from './Shipping'
 import { Codes } from './Codes'
 import { Revenue } from './Revenue'
+import { ProductHistory } from './ProductHistory'
 import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
@@ -91,6 +92,15 @@ export const ROUTES: readonly Route[] = [
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box' },
   { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside' },
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside' },
+  /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D227). It is a deep link,
+   * not a destination anyone browses to cold — reached from a SKU typed or pasted into its
+   * own search field, or from a link another screen builds. `app/src/Revenue.tsx` is being
+   * edited by another branch at the moment this route was added, so this table carries NO
+   * link into it from that screen; the route's own SKU field is the control a person who
+   * lands here with no query string actually finds. `OFF_NAV` below is what keeps this from
+   * reading as an omission to `route rosters` and `route census`. No hotkey: a route with no
+   * nav entry earns no chord, per `App.tsx`'s own rule for `#/fulfillment` and `#/gallery`. */
+  { path: '/product', label: 'Product history', icon: 'history', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
 ]
 
 const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] = [
@@ -102,7 +112,7 @@ const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] =
 
 /* THE GROUPS THE NAV DELIBERATELY DOES NOT DRAW, declared rather than implied.
  *
- * `aside` holds the two routes reached from somewhere other than the nav list: the
+ * `aside` holds the routes reached from somewhere other than the nav list: the
  * Fulfiller's screen, which sits in the sidebar foot because it opens in its own tab and is
  * not one of the owner's screens, and the component kit, which is reachable from the command
  * palette only. Both are registered routes and both must stay reachable — they are simply not
