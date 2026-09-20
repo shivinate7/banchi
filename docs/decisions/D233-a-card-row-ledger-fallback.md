@@ -1,4 +1,4 @@
-## D-a-card-row-ledger-fallback — A card row that refuses retries the ledger's own row
+## D233 — A card row that refuses retries the ledger's own row
 
 `pipeline/pricearchive.py:rows_from_store` prefers the `cards` row over the order
 ledger's row whenever a SKU has both. That default is right. The card row carries the

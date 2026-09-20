@@ -237,6 +237,7 @@
     "D228-a-claim-race-order.md",
     "D229-a-ratchet-per-file.md",
     "D230-a-archive-resume-window.md",
-    "D231-a-sealed-ledger-archive-subjects.md"
+    "D231-a-sealed-ledger-archive-subjects.md",
+    "D233-a-card-row-ledger-fallback.md"
   ]
 }

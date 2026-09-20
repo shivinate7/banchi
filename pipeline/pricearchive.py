@@ -269,7 +269,7 @@ def _ledger_export_rows(
     ledger, skus: Iterable[str], market: _MarketLike
 ) -> Tuple[Dict[str, dict], Dict[str, str]]:
     """The shared machinery behind `ledger_subject_rows` and the
-    `D-a-card-row-ledger-fallback` card-row fallback: for EXACTLY the SKUs named in `skus`
+    `D233` card-row fallback: for EXACTLY the SKUs named in `skus`
     (no exclusion of any kind — that is the caller's job), find the order line that priced
     each one, parse its `name` into an export-shaped row, and answer `(rows, refusals)`.
 
@@ -349,7 +349,7 @@ def ledger_subject_rows(
     THIN WRAPPER OVER `_ledger_export_rows`. That function does the actual parsing; this
     one only computes which SKUs are still open — every SKU the ledger ever priced, minus
     `known_skus` — and hands that set down. `rows_from_store`'s own card-row fallback
-    (`D-a-card-row-ledger-fallback`) calls `_ledger_export_rows` directly, over the
+    (`D233`) calls `_ledger_export_rows` directly, over the
     OPPOSITE set — SKUs `known_skus` already covers — because it wants a fallback row for a
     SKU that has both, not a wider subject set.
     """
@@ -429,7 +429,7 @@ def rows_from_store(
 
     `fallback_rows`, WHEN GIVEN AND `market` IS ALSO GIVEN, IS FILLED WITH A SECOND,
     LEDGER-DERIVED ROW FOR EVERY CARD-COVERED SKU THE LEDGER CAN ALSO ANSWER FOR
-    (`D-a-card-row-ledger-fallback`). `cards` still wins as the PRIMARY row for the return
+    (`D233`). `cards` still wins as the PRIMARY row for the return
     value below — that is unchanged. This is a candidate the CALLER (`sweep`) may retry
     with, and only when the primary card-derived row fails to resolve against the mirror.
     Built the same way `ledger_subject_rows` builds the ledger's second SOURCE (its own
@@ -514,7 +514,7 @@ def sweep(
     the endpoint unreachable or blocked — carrying `Market`'s own message, never dropped.
 
     A CARD-DERIVED ROW THAT REFUSES RETRIES ONCE, AGAINST THE LEDGER'S OWN ROW
-    (`D-a-card-row-ledger-fallback`, `rows_from_store`'s `fallback_rows` out-parameter).
+    (`D233`, `rows_from_store`'s `fallback_rows` out-parameter).
     `cards` stays the PREFERRED source — this only fires for a SKU `readings_for_rows`
     could not resolve on its first attempt, and only when `fallback_rows` names a
     different, ledger-derived row for that same SKU to try instead. A SKU with no fallback

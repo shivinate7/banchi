@@ -507,7 +507,7 @@ COMPONENTS = [
                                                     "D62", "D86", "D43", "D88",
                                                     "D231",
                                                     "D230",
-                                                    "D-a-card-row-ledger-fallback"],
+                                                    "D233"],
                                     "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
@@ -1072,7 +1072,7 @@ COMPONENTS = [
                                                 "D231",
                                                 "D230",
                                                 "D21", "D22",
-                                                "D-a-card-row-ledger-fallback"],
+                                                "D233"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
                                         "`make check` — no network call. A FakeMarket and a "
                                         "RecordingMarket stand in for the network; 48 "
@@ -2473,7 +2473,7 @@ COMPONENTS = [
                         "`pipeline/games.py` but present in the mirror resolves, one absent "
                         "from the mirror refuses with the mirror's own reason, and the old "
                         "games.py gate is reinstated inline and shown to refuse it again. "
-                        "Proves `D-a-card-row-ledger-fallback`: sweep() retries a "
+                        "Proves `D233`: sweep() retries a "
                         "card-derived row's own refusal against a ledger-derived row, over "
                         "both measured real shapes (a bare number missing its denominator, "
                         "a number carrying a typed separator), against a resolver built on "
@@ -2486,7 +2486,7 @@ COMPONENTS = [
                                 "D231",
                                 "D230",
                                 "D21", "D35",
-                                "D-a-card-row-ledger-fallback"],
+                                "D233"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

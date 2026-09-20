@@ -567,7 +567,7 @@ def main() -> int:
 
         # ---------------------------------- card row refuses -> retry the ledger's own row
         print("\n-- pipeline/pricearchive.py: sweep() retries the ledger row when the card "
-              "row refuses (D-a-card-row-ledger-fallback) --")
+              "row refuses (D233) --")
 
         class ResolvingMarket:
             """Resolves EXACTLY the way `pipeline/pricehistory.py:Market.readings_for_rows`
