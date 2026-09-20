@@ -863,6 +863,26 @@ CHECKS = (
         "gates": True,
         "governed_by": ("D18", "D135", "D173", "D178"),
     },
+    {
+        "target": "guard-scope-selftest",
+        "runs": "python3 scripts/guard-scope.py selftest",
+        "asserts": "the SECOND path gate: for each of the fifteen guard self-tests in "
+                   "`guard-scope.py:ROSTER`, that a subject is derived from its own source "
+                   "and every derived subject exists on disk, that the Makefile's wiring "
+                   "and the roster name each other in both directions, that a fresh import "
+                   "added to a fixture is picked up with no edit to this file, that a "
+                   "sub-chain (`ROOT / \"scripts\"` alone) never surfaces as a false subject, "
+                   "and the fail-open cases: an unscoped target, `PKMNSCAN_GUARD_SCOPE=off`, "
+                   "and a nonexistent head commit all RUN.",
+        "needs": ("python3", "git"),
+        "writes": "two throwaway fixture files under `tempfile.TemporaryDirectory()`, to "
+                  "prove a subject is re-derived rather than cached.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — same standing as serve-scope-selftest's own row, "
+                               "which this one is the sibling of.",
+        "gates": True,
+        "governed_by": ("D18", "D-guard-self-test-scope"),
+    },
 )
 
 
