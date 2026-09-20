@@ -1270,11 +1270,19 @@ async function cardRow(page: Page, name: string): Promise<Locator> {
  *  have seen it, and its cards would then be missing from a walk that is in fact complete. So
  *  the opening and the reading are one retried block rather than an opening followed by a
  *  web-first assertion that can only wait for the second half. */
+/** D218: the seam between `PlaceText`'s parts is CSS now (`.ff-place-elem::before`), which
+ *  `allTextContents` never sees — generated content is not part of an element's `textContent`.
+ *  `expected` keeps the server's own spelling, dot and all, because that is still what a caller
+ *  reads and what `aria-label` would carry; this strips the same seam from it before comparing,
+ *  so the assertion is about which PARTS are drawn and in what order, not about a character this
+ *  component was told to stop typing. */
 async function expectWalk(page: Page, expected: readonly string[]): Promise<void> {
   await expect(async () => {
     await openEveryBox(page)
     const drawn = await view(page).locator('.fulfillment-row .fulfillment-place').allTextContents()
-    expect(drawn.map((one) => one.replace(/\s+/g, ' ').trim())).toEqual([...expected])
+    expect(drawn.map((one) => one.replace(/\s+/g, ' ').trim())).toEqual(
+      expected.map((one) => one.replace(/\s*·\s*/g, '')),
+    )
   }).toPass({ timeout: 20_000 })
 }
 
@@ -1391,8 +1399,12 @@ async function sellOpenCard(page: Page): Promise<void> {
 /** The receipt panel for one card, found by the position it names. Scoped, because two sales
  *  standing at once put two Undo buttons on screen and a bare role lookup is ambiguous
  *  exactly when the thing under test is that both of them are there. */
+/** D218: `hasText` matches literal `textContent`, which no longer carries the seam between
+ *  `.ff-receipt-place`'s own parts (`.ff-receipt-place > span::before`) — every caller here
+ *  still passes the server's own spelling, dot and all, so it reads like the label everywhere
+ *  else in this file; this is the one place that strips it before the match. */
 function receiptFor(page: Page, place: string): Locator {
-  return view(page).locator('.fulfillment-panel', { hasText: place })
+  return view(page).locator('.fulfillment-panel', { hasText: place.replace(/\s*·\s*/g, '') })
 }
 
 // ------------------------------------------------------------------------------ the table
@@ -1461,7 +1473,10 @@ test('the cards for sale are listed in box-walk order, and nothing else is liste
   // order too, so opening all of them leaves the rows in exactly the order he walks them.
   await expectWalk(page, WALK)
   // Captured, not for sale, and therefore not his to sell.
-  await expect(page.getByText('Box 2 · Section 1 · Card 4')).toHaveCount(0)
+  // D218: `getByText` matches literal `textContent`, which no longer carries the seam — a dot
+  // in this call would go vacuous (every place string looks like this to a raw substring match)
+  // rather than red the moment the sold card leaked back in.
+  await expect(page.getByText('Box 2Section 1Card 4')).toHaveCount(0)
   // For sale but unplaced: counted on screen, never dropped in silence.
   await expect(view(page)).toContainText('1 card for sale is not shown here')
 })
@@ -1486,7 +1501,8 @@ test('a card an order is waiting for is drawn under that order, and the floors h
   /* The copy is on screen WITHOUT opening a box: an order's cards are the list, and the boxes
      below it are the other way in. */
   const order = view(page).locator('.ff-order', { hasText: ORDER_BUYER })
-  await expect(order.locator('.fulfillment-place')).toHaveText(['Box 3 · Section 1 · Card 7'])
+  // D218: the seam is CSS now (`.ff-place-elem::before`), never part of `textContent`.
+  await expect(order.locator('.fulfillment-place')).toHaveText(['Box 3Section 1Card 7'])
   // D193: the buyer's name leads, and the raw order id never stands alone -- it is present,
   // but only ever paired with the name that made this one findable.
   await expect(order.locator('.ff-order-title')).toContainText(ORDER_BUYER)
@@ -1718,7 +1734,8 @@ test('the longest label the store can emit does not wrap to three lines at 820px
   await openList(page, [], { orders: maxLabelOrder })
   await view(page).getByRole('button', { name: 'Charizard ex' }).click()
   const place = view(page).locator('.fulfillment-place-large')
-  await expect(place).toHaveText(MAX_LABEL)
+  // D218: the seam is CSS now (`.ff-place-elem::before`), never part of `textContent`.
+  await expect(place).toHaveText(MAX_LABEL.replace(/\s*·\s*/g, ''))
   const lines = await place.evaluate((node) => {
     const style = window.getComputedStyle(node)
     const lineHeight = parseFloat(style.lineHeight)
@@ -2200,7 +2217,8 @@ test('the screen when the photo is missing is his too', async ({ page }) => {
   // The photo is gone and the card is not, so the screen says where it still is.
   await expect(view(page)).toContainText('The photo is missing. The card is still in the place shown here.')
   await expect(view(page).locator('.fulfillment-photo')).toHaveCount(0)
-  await expect(view(page)).toContainText('Box 3 · Section 1 · Card 7')
+  // D218: the seam is CSS now (`.ff-place-elem::before`), never part of `textContent`.
+  await expect(view(page)).toContainText('Box 3Section 1Card 7')
   await battery(page, 'photo missing')
 })
 

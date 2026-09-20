@@ -154,6 +154,10 @@
 
 /* ---- the store key a label may end on (D68) ---- */
 .position-plain { display: flex; flex-direction: column; min-width: 0; }
+/* D218: the server's own `' · '` is never retyped. `PositionLabel.tsx:whole()` hands this one
+   span per part; the seam between them is drawn here, on every part but the first, in the same
+   register `CardLocations.css`'s `.card-locations-cond` already uses for the same mark. */
+.position-plain-parts > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .position-storekey {
   font-family: var(--bn-font-mono);
   font-size: clamp(var(--pos-path, 11px), 0.295em, 13px);

@@ -122,9 +122,11 @@ function laneOf(entry: CodeEntry): LaneFilter {
   return entry.premium ? 'premium' : 'bulk'
 }
 
+/* D218: this renders inside a native `<option>`, which is plain text only — no element can
+   carry the seam, so this is a real sentence (a comma list) rather than a typed dot. */
 function boxLabel(box: BoxRecord): string {
   const held = box.on_hand ?? box.cards
-  return `Box ${box.box}${box.name ? ` · ${box.name}` : ''} · ${plural(held, 'card')}`
+  return `Box ${box.box}${box.name ? `, ${box.name}` : ''}, ${plural(held, 'card')}`
 }
 
 /** `Box 3 · RB Epics`, or `Box 3` alone where the box has no name (D20/D56). The registry read
@@ -1001,7 +1003,11 @@ export function Codes() {
                                 className="codes-dup-link"
                                 aria-label={`Open the photograph at box ${p.box}, index ${p.index}`}
                               >
-                                <Icon name="image" size={13} /> Box {p.box} · index <span className="codes-index">{p.index}</span>
+                                <Icon name="image" size={13} />
+                                <span>Box {p.box}</span>
+                                <span>
+                                  index <span className="codes-index">{p.index}</span>
+                                </span>
                               </a>
                             ),
                           )}
@@ -1055,7 +1061,13 @@ export function Codes() {
                         return (
                           <li key={row.box} className="codes-fix-row">
                             <div className="codes-fix-where">
-                              <span className="codes-fix-box">{boxTitle(row.box, boxes)}</span>
+                              <span className="codes-fix-box">
+                                {boxTitle(row.box, boxes)
+                                  .split(' · ')
+                                  .map((part, at) => (
+                                    <span key={at}>{part}</span>
+                                  ))}
+                              </span>
                               <span className="codes-fix-n">{plural(row.indices.length, 'unclaimed code')}</span>
                               {row.company === null ? null : (
                                 <span className="codes-fix-company">
@@ -1130,7 +1142,10 @@ export function Codes() {
                   <Icon name="layers" size={16} /> The pile
                 </span>
                 <span className="codes-pile-sum">
-                  <strong>{plural(held, 'code')}</strong> on hand · {ledger.total.toLocaleString()} on file
+                  <span>
+                    <strong>{plural(held, 'code')}</strong> on hand
+                  </span>
+                  <span>{ledger.total.toLocaleString()} on file</span>
                 </span>
               </div>
               <div className="codes-stats">
@@ -1157,7 +1172,9 @@ export function Codes() {
                           key={s.key}
                           className={`codes-lanebar-seg is-${s.key}`}
                           style={{ flexGrow: s.n, animationDelay: `${120 + i * 90}ms` }}
-                          title={`${s.label} · ${s.n.toLocaleString()}`}
+                          // D218: a `title=` attribute cannot hold elements, so this is a
+                          // sentence — count then label — rather than a typed separator.
+                          title={`${s.n.toLocaleString()} ${s.label.toLowerCase()}`}
                         />
                       ))
                   )}
@@ -1228,7 +1245,12 @@ export function Codes() {
               icon="hand"
               title="Hand codes to a buyer"
               body="Reserve a lane's codes to an order."
-              meta={`Premium\u00a0${ledger.lanes.premium.toLocaleString()} · Bulk\u00a0${ledger.lanes.bulk.toLocaleString()}`}
+              meta={
+                <>
+                  <span>{`Premium\u00a0${ledger.lanes.premium.toLocaleString()}`}</span>
+                  <span>{`Bulk\u00a0${ledger.lanes.bulk.toLocaleString()}`}</span>
+                </>
+              }
               tone="warn"
               delay={50}
               onOpen={() => openSheet('hand')}
@@ -1390,7 +1412,12 @@ export function Codes() {
                                     <span className="bn-faint">—</span>
                                   ) : (
                                     <span className="codes-where">
-                                      Box {e.box} · index <span className="codes-index">{e.index}</span>
+                                      <span className="codes-where-parts">
+                                        <span>Box {e.box}</span>
+                                        <span>
+                                          index <span className="codes-index">{e.index}</span>
+                                        </span>
+                                      </span>
                                       {e.duplicate_positions.length > 0 ? <Pill tone="danger">Read twice</Pill> : null}
                                     </span>
                                   )}
@@ -1531,8 +1558,24 @@ export function Codes() {
               label="Lane"
               value={lane}
               options={[
-                { value: 'premium', label: `Premium · ${ledger.lanes.premium.toLocaleString()}` },
-                { value: 'bulk', label: `Bulk · ${ledger.lanes.bulk.toLocaleString()}` },
+                {
+                  value: 'premium',
+                  label: (
+                    <>
+                      <span>Premium</span>
+                      <span className="codes-seg-n">{ledger.lanes.premium.toLocaleString()}</span>
+                    </>
+                  ),
+                },
+                {
+                  value: 'bulk',
+                  label: (
+                    <>
+                      <span>Bulk</span>
+                      <span className="codes-seg-n">{ledger.lanes.bulk.toLocaleString()}</span>
+                    </>
+                  ),
+                },
               ]}
               onChange={(next) => {
                 setLane(next)
@@ -1666,7 +1709,19 @@ export function Codes() {
           {lotPlan === null ? null : (
             <div className="codes-result bn-anim-in">
               <div className="codes-result-head">
-                <Figure n={lotPlan.count} label={<>{lotPlan.count === 1 ? 'code' : 'codes'}{lotPlan.box === null ? '' : ` in box ${lotPlan.box}`} · {venueLabel(lotPlan.venue)} · {deliveryLabel(lotPlan.delivery)}</>} />
+                <Figure
+                  n={lotPlan.count}
+                  label={
+                    <>
+                      <span>
+                        {lotPlan.count === 1 ? 'code' : 'codes'}
+                        {lotPlan.box === null ? '' : ` in box ${lotPlan.box}`}
+                      </span>
+                      <span>{venueLabel(lotPlan.venue)}</span>
+                      <span>{deliveryLabel(lotPlan.delivery)}</span>
+                    </>
+                  }
+                />
               </div>
               <p className="codes-result-note">{lotPlan.note}</p>
               {lotPlan.premium_in_lot > 0 ? (
@@ -1680,7 +1735,8 @@ export function Codes() {
                 <div className="codes-sets">
                   {lotPlan.sets.map((s) => (
                     <Pill key={s.set} mono>
-                      {s.set} · {s.count}
+                      <span>{s.set}</span>
+                      <span className="codes-set-count">{s.count}</span>
                     </Pill>
                   ))}
                 </div>
@@ -1772,7 +1828,7 @@ function TaskCard({
   readonly icon: IconName
   readonly title: string
   readonly body: string
-  readonly meta: string
+  readonly meta: ReactNode
   readonly tone: 'accent' | 'warn' | 'ok'
   readonly delay: number
   readonly onOpen: () => void
