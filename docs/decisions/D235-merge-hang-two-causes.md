@@ -1,4 +1,4 @@
-## D-merge-hang-two-causes — The heartbeat is refused a pipe, and the wait learns the other half of its own question
+## D235 — The heartbeat is refused a pipe, and the wait learns the other half of its own question
 
 `make merge` looked like it hung. It did that twice on 2026-09-20, and to more than one
 session. It was not stuck. Two separate causes produced one appearance.
