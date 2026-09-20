@@ -59,6 +59,42 @@ fires only with real evidence of success, never before it. The owner's next
 `archive sweep --write` will report the actual measured pace in its own output. That is the
 number this entry deliberately does not invent.
 
+### THREE LIVE RUNS NOW HOLD THAT NUMBER (amended 2026-09-20)
+
+This is the measurement the section above declined to make up.
+
+- **Run 1, 2026-09-19.** Throttled. 206 of 914 SKUs read at the naive 0.15s pace.
+- **Run 2, 2026-09-20 05:37.** Throttled after 876 requests over 360.7s. This press backed
+  off from 0.15s to 0.82s mid-pass, exactly as this entry designed. It was refused again
+  on the very next chunk, at the new pace. It stopped cleanly, per "One backoff, then a
+  clean stop" above. It saved `0.8234922189146416` to `throttle-pace.json`.
+- **Run 3, 2026-09-20, after D231 widened the subjects.** 1,110 of 1,195 SKUs read.
+  102,702 buckets written, over 4,000+ requests. **NOT THROTTLED ONCE.** It started at the
+  0.82s pace run 2 had measured and saved.
+
+**THE WRONG CONCLUSION TO WARN A FUTURE SESSION OFF, REACHED HERE FIRST AND WRONG.** Run 2
+alone reads as a time-based lockout. It reads as: wait out some recovery interval, then
+try again. That reading is false. There is no recovery interval. Run 3 ran within hours of
+run 2, against the same host. It completed 4,000+ requests with zero throttles. Not
+because time had passed. Because it never repeated run 2's mistake of starting at a pace
+already proven too fast.
+
+**THE FINDING TO WRITE DOWN: THE THROTTLE YIELDS TO PACE, NOT TO TIME.** A mid-pass
+backoff does not rescue the pass that triggered it. Once the burst that gets a session
+blocked has been counted, slowing down inside that same pass is too late. That is exactly
+what run 2 observed. The backoff computed the right next pace. The very next chunk was
+still refused. The requests already sent at the old pace were already counted against this
+session. But the next pass, started fresh at the measured pace from its first request,
+runs to completion. `save_pace`/`load_pace` carrying that measurement across presses is
+not a nicety on top of the mechanism. It is the mechanism. The in-pass backoff's own job
+is only to stop a pass that cannot be saved. The pace itself is what a resumed press
+actually runs on.
+
+**What a future session must not do.** Do not re-derive "wait N minutes before
+re-running" from run 2 alone. Run 3 is the disproof, in this same entry. Do not read the
+backoff's mid-pass failure as proof the mechanism does not work. It worked as designed. It
+stopped a pass it could not rescue. The rescue is the next press.
+
 ### What this does not touch
 
 `pipeline/pricehistory.py:Blocked` and its message are unchanged. This entry only

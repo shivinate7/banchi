@@ -506,7 +506,8 @@ COMPONENTS = [
                                                     "D222",
                                                     "D62", "D86", "D43", "D88",
                                                     "D231",
-                                                    "D230"],
+                                                    "D230",
+                                                    "D-a-card-row-ledger-fallback"],
                                     "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
@@ -1069,7 +1070,9 @@ COMPONENTS = [
                                                 "D223",
                                                 "D222",
                                                 "D231",
-                                                "D230"],
+                                                "D230",
+                                                "D21", "D22",
+                                                "D-a-card-row-ledger-fallback"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
                                         "`make check` — no network call. A FakeMarket and a "
                                         "RecordingMarket stand in for the network; 48 "
@@ -2465,12 +2468,25 @@ COMPONENTS = [
                         "ledger name is a named refusal, the naive first-colon group split "
                         "fails before the longest-prefix match is shown to succeed, and the "
                         "OLD one-hour resume window is shown stale before the NEW six-day "
-                        "one is shown fresh over the same bucket. 73 assertions.",
+                        "one is shown fresh over the same bucket. Proves the D231 amendment "
+                        "(D35 embedded-number naming): a product line absent from "
+                        "`pipeline/games.py` but present in the mirror resolves, one absent "
+                        "from the mirror refuses with the mirror's own reason, and the old "
+                        "games.py gate is reinstated inline and shown to refuse it again. "
+                        "Proves `D-a-card-row-ledger-fallback`: sweep() retries a "
+                        "card-derived row's own refusal against a ledger-derived row, over "
+                        "both measured real shapes (a bare number missing its denominator, "
+                        "a number carrying a typed separator), against a resolver built on "
+                        "the real ProductIndex/number_index_key/name_index_key, "
+                        "mutation-tested by removing the fallback. Proves format_refusals "
+                        "never truncates, grouped by reason. 87 assertions.",
                 "governed_by": ["D219", "D224",
                                 "D223", "D222",
                                 "D62", "D18",
                                 "D231",
-                                "D230"],
+                                "D230",
+                                "D21", "D35",
+                                "D-a-card-row-ledger-fallback"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

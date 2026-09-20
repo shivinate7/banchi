@@ -88,6 +88,52 @@ same store, and only `ledger_subject_rows` was called, never `sweep`. 287 SKUs i
 ledger carry no `cards` row today (D223's own count of 270 was taken a day earlier, over a
 store that has since sold more). 281 of the 287 resolve to a row. The remaining 6 all
 share one reason: an uncatalogued product line this repo does not track at all — `YuGiOh`,
-`Card Sleeves`, `Playmats`. Every one of those is a real refusal, not a bug — this repo has
-no Yu-Gi-Oh! or supply taxonomy to resolve against, and D22's own registry does not claim
-one.
+`Card Sleeves`, `Playmats`.
+
+### THAT LAST SENTENCE WAS WRONG, AND THE WRONG PART WAS THE AUTHORITY THIS ASKED (amended
+2026-09-20)
+
+*"Every one of those is a real refusal, not a bug"* was checked against the wrong list.
+`parse_ledger_name` gated a ledger line's product name against `pipeline/games.py`. That
+registry answers which games THIS REPO can photograph, join and list (D21, D22). It is the
+right authority for capture and listing. `parse_ledger_name` only needed one different
+question answered: does the mirror this archive reads carry a price history for this line
+at all.
+
+The owner probed the mirror directly. All three refused lines are real tcgcsv categories:
+
+```
+YuGiOh       -> categoryId 2
+Card Sleeves -> categoryId 31
+Playmats     -> categoryId 35
+```
+
+So all six SKUs this entry called a real refusal were archivable the whole time. They
+carry $1,094.41 of the owner's own sold history.
+
+**THE FIX GATES ON WHAT THE MIRROR CARRIES, NOT ON WHAT THE REPO CAN CAPTURE.**
+`ledger_subject_rows` already asks the right authority one hop earlier. It calls
+`Market.category_id(product_line)`, a real mirror lookup that raises and names itself when
+the mirror has no such category. `parse_ledger_name`'s own second, redundant check against
+`games.py` is deleted. A product line the mirror does not carry is still a refusal, named
+exactly as before. Only the wrong extra gate is gone.
+
+**DO NOT ADD YUGIOH TO `pipeline/games.py` TO "FIX" THIS.** That is the obvious-looking
+move for a future reader who finds this refusal. It would be wrong. Adding a game to that
+registry claims this repo can photograph, join and list it (D21, D22). That is a much
+larger act with its own audit. This change is archive-only. It does not touch capture, the
+join key, a taxonomy, pricing, or listing for YuGiOh, Card Sleeves, or Playmats.
+
+**THE DEFERRAL, RECORDED RATHER THAN BUILT.** The owner's own words: *"archive only, with
+an expansion note to get capture and such going (full fledged)."* Full YuGiOh support is
+wanted later: capture, a join key, a taxonomy, pricing, listing. It is deliberately not
+part of this change. What exists now is archive price-history resolution alone, over a
+product line the mirror carries. What does not exist is everything else D21/D22 govern for
+a catalogued game. The archive resolving a line is not evidence that line is supported. It
+only means tcgcsv answers a category query for it.
+
+**WHAT PROVES IT.** `scripts/pricearchive-selftest.py` proves a product line absent from
+`games.py` but present in the mirror resolves. It proves one absent from the mirror
+refuses, with the mirror's own reason. It is mutation-tested: the old `games.py` gate is
+reinstated inline and shown to refuse the same YuGiOh line again. The fix above is then
+shown to resolve it.
