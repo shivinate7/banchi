@@ -150,7 +150,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
-                    #   sync-selftest + verdict-selftest + js-breakpoints-selftest,
+                    #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
+                    #   subagent-override-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.

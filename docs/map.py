@@ -2657,6 +2657,42 @@ COMPONENTS = [
                         "the exemption it feeds — eleven caught and three equivalent mutants.",
                 "governed_by": ["D179", "D18", "D43", "D127", "D171", "D173"],
             },
+            "subagent-override-selftest.py": {
+                "does": "proves `make docs-audit`'s `subagent override` row (the "
+                        "`check_subagent_override` row in docs-audit.py) by violating it in "
+                        "a real throwaway git repository with a REAL nested worktree — the "
+                        "shape `.claude/worktrees/<name>/` is, and the exact place a "
+                        "2026-09-19 forgotten `CLAUDE_CODE_SUBAGENT_MODEL`/"
+                        "`CLAUDE_CODE_SUBAGENT_MODEL_FORCE` override sat, undiscovered for "
+                        "hours. A clean tree is green; the override in the checkout's own "
+                        "settings.local.json, with no expiry, is red and named; the same "
+                        "override in the NESTED WORKTREE's own settings.local.json is red "
+                        "and named by ITS OWN PATH — the case a root-only reader would have "
+                        "missed entirely; an expiry already in the past is red; an expiry "
+                        "inside the row's 24-hour lookahead ceiling is GREEN, which is the "
+                        "case that proves this is not a bare forbid — the same file, the "
+                        "same mechanism, quiet while the override is current and loud once "
+                        "it is not; an expiry past the ceiling is red again, read as a "
+                        "standing exemption rather than one task's own end; and the override "
+                        "in the TRACKED settings.json is red regardless of expiry, because "
+                        "no expiry excuses committing it. Imports docs-audit.py by path "
+                        "(`importlib`, not `import`, since it is a sibling script and not "
+                        "project code being audited) and patches its `ROOT` and clears "
+                        "`nested_worktrees()`'s cache per case, the same seam "
+                        "`--self-test`'s own `_TCG_IMPORT_PATH`-style fixtures use.",
+                "governed_by": ["D18", "D135", "D161", "D173", "D178"],
+                "note": "THE ROOT-RESOLUTION TRAP THIS SELFTEST'S OWN FIRST DRAFT HIT: "
+                        "`nested_worktrees()` reports paths through `Path.resolve()` (git "
+                        "resolves symlinks in its own porcelain output), and on macOS "
+                        "`/tmp` is itself a symlink to `/private/tmp` — pointing `ROOT` at "
+                        "an UNRESOLVED fixture directory made `rel()` fail its own "
+                        "`relative_to()` and silently fall back to printing the absolute "
+                        "path instead of the short one, on every nested-worktree finding. "
+                        "The fix is `.resolve()` on the fixture root, matching the real "
+                        "`ROOT = Path(__file__).resolve().parent.parent` exactly — proof "
+                        "that a guard's own test fixture can reproduce the class of bug the "
+                        "guard exists to catch.",
+            },
             "mutate-guards.py": {
                 "does": "a mutation runner over five of this repo's guards "
                         "(guard-shell.py, silent-write-guard.py, reap.py, primary_sync.py, "
@@ -3742,8 +3778,8 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48",
                                 "D53", "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80",
                                 "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
-                                "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D149",
-                                "D158", "D160", "D171", "D172", "D173", "D176", "D189", "D215"],
+                                "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141", "D149",
+                                "D158", "D160", "D171", "D172", "D173", "D176", "D178", "D189", "D215"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -117,6 +117,10 @@ help:
 	@echo "  make js-breakpoints-selftest  a JS media query's viewport width against what"
 	@echo "                    the stylesheets declare (D123), proved by violating it then"
 	@echo "                    fixing it. python3 only, no browser."
+	@echo "  make subagent-override-selftest  the subagent-model override row, proved in a"
+	@echo "                    real throwaway git repo with a real nested worktree: an"
+	@echo "                    undated override is red, a currently-dated one is green,"
+	@echo "                    an expired or too-far-dated one is red again."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
 	@echo "                    PATH GATED (the only one): skipped when nothing in the branch"
@@ -164,7 +168,7 @@ help:
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
 	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
-	@echo "                    js-breakpoints-selftest"
+	@echo "                    js-breakpoints-selftest + subagent-override-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -521,6 +525,7 @@ check:
 	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory js-breakpoints-selftest
+	@$(MAKE) --no-print-directory subagent-override-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -569,6 +574,7 @@ ci-check:
 	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory js-breakpoints-selftest
+	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -1259,6 +1265,13 @@ browser-scope-selftest:
 # tree. Reads only; nothing here writes, so it sits beside the other guard selftests.
 js-breakpoints-selftest:
 	@python3 scripts/js-breakpoints.py selftest
+
+# `make docs-audit`'s `subagent override` row, proved by violating it in a real throwaway git
+# repository with a REAL nested worktree — the exact shape `.claude/worktrees/<name>/` is, and
+# the exact place the 2026-09-19 forgotten-override incident sat. D18: it writes a temp
+# repository, so it is not in the git hook; the row it proves runs on every commit regardless.
+subagent-override-selftest:
+	@python3 scripts/subagent-override-selftest.py
 
 # The same run with the 450-line progress stream dropped — same tests, same assertions,
 # same `.serve/design-check.json`. The progress is only useful to a human watching live,
