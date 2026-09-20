@@ -462,6 +462,68 @@ def report_stale(stale: Sequence[Stale], ref: str) -> None:
         "  main as it stands now.")
 
 
+# ----------------------------------------------------- one number, worn twice in this tree
+
+# `stale_claims` GOES BLIND AT EXACTLY THE MOMENT THE ROUTINE SAYS TO MERGE MAIN IN, and this
+# is the reader that does not. That check is a DIFFERENCE — ids the branch adds since the
+# merge base, against ids the ref has taken. Merge `origin/main` into the branch and the base
+# MOVES TO IT: main's colliding entry is now on both sides, the branch "adds" nothing at that
+# number, and the collision it was refusing five minutes earlier reports clean. Measured in
+# the fixture that reproduces the 2026-09-19 race, which is the incident this whole section
+# was written for: `--stale` said `nothing has gone stale` over a tree holding two entries
+# under one number.
+#
+# IT NEEDS NO REF AND NO BASE, WHICH IS WHY IT CANNOT BE BLINDED. Two headings carrying one
+# id is wrong on its own terms, however the tree got that way — `docs-audit`'s `decision ids`
+# row says exactly that and blocks the commit for it. This asks the same question in the one
+# place that is EARLY: `make merge` reads the staleness half before it claims anything, so a
+# branch that merged main in and lost a race is refused here, by name, with the remedy that
+# now runs, rather than by CI after the claim has been pushed.
+#
+# IT IS A SECOND READER OF ONE RULE AND NOT A SECOND RULE. `decision ids` stays the gate; it
+# is loud, late, and paid by whoever merges second. This is the cheap early warning, the same
+# division of labour `stale_claims`' own docstring sets out.
+
+
+def duplicate_numbers(root: Path) -> List[Tuple[str, int]]:
+    """`(token, how many headings carry it)` for every id this tree declares more than once."""
+    out: List[Tuple[str, int]] = []
+    for kind, path, pattern, shape in KINDS:
+        text = corpus_text(root) if kind == "decision" else (
+            read(root / path) if (root / path).exists() else "")
+        counts: Dict[int, int] = {}
+        for found in pattern.findall(text):
+            if str(found).lstrip("-").isdigit():
+                counts[int(found)] = counts.get(int(found), 0) + 1
+        for number in sorted(n for n, c in counts.items() if c > 1):
+            out.append((shape.format(number), counts[number]))
+    return out
+
+
+def report_duplicate_numbers(doubled: Sequence[Tuple[str, int]], ref: str) -> None:
+    """Name every id worn twice, and the one command that puts this branch's own back."""
+    say(f"REFUSED: {len(doubled)} id(s) are declared twice in this tree.", "")
+    for token, count in doubled:
+        say(f"  {token}  has {count} headings")
+    say("",
+        "  THIS IS A LOST RACE WITH main ALREADY MERGED IN. The number was allocated against",
+        f"  a `{ref}` that did not hold it, `{ref}` took it for a different entry, and the",
+        "  merge brought that entry here beside this branch's own. `--stale` cannot see it:",
+        "  the merge moved the base it measures from, so neither copy reads as added.",
+        "",
+        "  Put THIS branch's own back to slug form and let a fresh plan allocate it:",
+        "")
+    for token, _ in doubled:
+        if token.startswith("D"):
+            say(f"    python3 scripts/claim-ids.py --unclaim {token} --write")
+        else:
+            say(f"    python3 scripts/claim-ids.py --unclaim '{token}' "
+                "--to-slug <the-original-slug> --write")
+    say("",
+        f"  It reads `{ref}` to tell the two apart — whichever entry `{ref}` carries is",
+        f"  `{ref}`'s, and every line `{ref}` already has is left alone.")
+
+
 # ------------------------------------------- an unclaimed file main has already claimed once
 
 # `stale_claims` ANSWERS "A NUMBER THIS BRANCH TOOK, TAKEN AGAIN" — it needs the branch to have
@@ -897,30 +959,78 @@ def parse_claimed_ident(ident: str) -> Tuple[str, int]:
         f"slug, since a slug is already unclaimed.")
 
 
-def find_decision_file(root: Path, number: int) -> Tuple[Optional[Path], str]:
+def entries_at(ref: str, number: int, cwd: Optional[str] = None) -> Set[str]:
+    """The FILENAMES `ref` itself carries at this decision number. Empty when it carries none.
+
+    THE ONE FACT THAT TELLS TWO COLLIDING ENTRIES APART, and the branch is the side that
+    knows it: a file `ref` has is `ref`'s, and the entry this branch is holding is the one
+    `ref` does not have. Nothing here reads content — a name is enough, because the collision
+    is two DIFFERENT slugs wearing one number and the tail after the number is the slug.
+    """
+    prefix = f"{DECISIONS_DIR}/D{number:03d}-"
+    listing = git("ls-tree", "-r", "--name-only", ref, DECISIONS_DIR, cwd=cwd)
+    return {line.split("/")[-1] for line in listing.splitlines() if line.startswith(prefix)}
+
+
+def find_decision_file(root: Path, number: int, ref: Optional[str] = None,
+                       cwd: Optional[str] = None) -> Tuple[Optional[Path], str]:
     """The claimed entry's own file, and the slug tail its filename still carries.
 
     THE FILENAME IS THE ONE SURVIVING RECORD. `rename_claimed_entries` renames the slug-named
     file to `D<n>-<tail>.md` rather than deleting it, so the tail after the number is exactly
     the descriptive half of the original slug — no guessing, the same fact `plan_unclaim`'s
-    docstring above spells out. `None` when there is not exactly one match: zero is "not
-    claimed here", and more than one is refused rather than picked from.
+    docstring above spells out.
+
+    TWO FILES AT ONE NUMBER IS THE STATE THIS COMMAND EXISTS FOR, NOT A REASON TO GIVE UP.
+    Until 2026-09-19 a second match refused outright — `no single D<n>-*.md file in this
+    tree` — and the state that produces it is the documented pre-merge routine: a branch that
+    lost a race for its number fetches `origin/main` and MERGES IT IN, and now holds both its
+    own entry and main's under one number. That is exactly the incident `--unclaim` was built
+    to answer, and it was the one input it could not read. Measured that evening: a claim
+    allocated, pushed, and refused at the GitHub half, with the remedy the refusal itself
+    named unable to run.
+
+    SO THE REF DECIDES, AND ONLY WHEN IT HAS TO. One match is answered without asking git
+    anything. Two or more are filtered by `entries_at`: whatever `ref` carries is `ref`'s, and
+    one survivor is this branch's own. `None` still when the answer is not a single file —
+    zero matches is "not claimed here", and an unresolvable several is refused rather than
+    picked from.
     """
     prefix = f"D{number:03d}-"
     matches = sorted((root / DECISIONS_DIR).glob(prefix + "*.md"))
+    if len(matches) > 1 and ref:
+        theirs = entries_at(ref, number, cwd=cwd)
+        mine = [path for path in matches if path.name not in theirs]
+        if len(mine) == 1:
+            matches = mine
     if len(matches) != 1:
         return None, ""
     path = matches[0]
     return path, path.stem[len(prefix):]
 
 
-def plan_unclaim(root: Path, ident: str, to_slug: Optional[str]) -> Unclaim:
-    """The single reverse claim for an already-claimed id. Raises ValueError to refuse."""
+def plan_unclaim(root: Path, ident: str, to_slug: Optional[str], ref: Optional[str] = None,
+                 cwd: Optional[str] = None) -> Unclaim:
+    """The single reverse claim for an already-claimed id. Raises ValueError to refuse.
+
+    `ref` IS PASSED IN RATHER THAN LOOKED UP, and it is resolved by the caller BEFORE this
+    runs. `find_decision_file` needs it to tell this branch's entry from the one a merge of
+    `ref` brought in, and a plan built without it would refuse the collision state outright —
+    which is what this command did until 2026-09-19.
+    """
     kind, number = parse_claimed_ident(ident)
 
     if kind == "decision":
-        path, tail = find_decision_file(root, number)
+        path, tail = find_decision_file(root, number, ref=ref, cwd=cwd)
         if path is None:
+            held = sorted(x.name for x in (root / DECISIONS_DIR).glob(f"D{number:03d}-*.md"))
+            if len(held) > 1:
+                raise ValueError(
+                    f"{len(held)} files in {DECISIONS_DIR} carry D{number:03d} — "
+                    + ", ".join(held)
+                    + f" — and `{ref}` accounts for none of them or for all but one of them "
+                    f"in a way this cannot read. Exactly one of these is this branch's own; "
+                    f"the rest belong to `{ref}`. Nothing is guessed here.")
             raise ValueError(
                 f"no single {DECISIONS_DIR}/D{number:03d}-*.md file in this tree — `{ident}` "
                 f"is not a claimed decision this checkout holds.")
@@ -1002,8 +1112,11 @@ def local_heading(root: Path, u: Unclaim) -> str:
     went missing between planning and this read.
     """
     if u.kind == "decision":
-        path, _ = find_decision_file(root, u.number)
-        return read(path).split("\n", 1)[0] if path else ""
+        # THE PLAN ALREADY RESOLVED WHICH FILE IS OURS, so this reads that answer rather than
+        # asking the question a second time — a second glob would be a second chance to pick
+        # the wrong one of two files sharing a number, with no ref in hand to tell them apart.
+        path = root / DECISIONS_DIR / u.old_name if u.old_name else None
+        return read(path).split("\n", 1)[0] if path and path.exists() else ""
     if u.kind == "codes":
         path = root / CODES_DECISIONS
         if not path.exists():
@@ -1156,7 +1269,52 @@ def unsettle_manifest(root: Path, u: Unclaim, write: bool) -> List[str]:
     return moved
 
 
-def perform_unclaim(root: Path, u: Unclaim, write: bool) -> Dict[str, int]:
+def is_index_line(line: str, u: Unclaim) -> bool:
+    """`unindex`'s own test, one line at a time — see that function for why it exists."""
+    return u.kind == "decision" and bool(re.match(r"^" + re.escape(u.token) + r"\s", line))
+
+
+def protected_lines(ref: str, u: Unclaim, cwd: Optional[str] = None) -> Dict[str, Set[str]]:
+    """Every line `ref` ITSELF carries that spells this id, keyed by the file it sits in.
+
+    THE OTHER ENTRY'S CITATIONS ARE NOT THIS BRANCH'S TO REVERT, and until 2026-09-19 nothing
+    here knew the difference. The substitution is keyed on the TOKEN, so in the
+    collision state it rewrites main's own entry's heading, main's index line and main's
+    prose citations into this branch's slug, silently, in the same pass that correctly
+    reverts this branch's own. A half-reversed claim is worse than an unreversed one, and
+    this is the half that would have been wrong.
+
+    A LINE `ref` ALREADY HAS IS `ref`'S. The same fact `find_decision_file` uses one level
+    up, at line granularity rather than file granularity: this branch's own citations were
+    written by this branch and are not in `ref`'s copy of anything. Every transform in
+    `perform_unclaim` is line-local — anchored with `re.M`, or bounded by
+    `(?<![-\w])...(?![-\w])` — so a line is the right unit and no multi-line construct is
+    cut in half by working one at a time.
+
+    IT IS EMPTY UNLESS THE NUMBERS COLLIDED, AND THAT IS WHY THIS IS NOT A BEHAVIOUR CHANGE
+    IN THE ORDINARY CASE. `run_unclaim` asks for it only when `ref` carries a DIFFERENT entry
+    at this number. In every other state `ref` does not spell the token at all, the set is
+    empty by construction, and `perform_unclaim` takes the identical path it always took —
+    which the round-trip arm of `claim-selftest` asserts byte for byte.
+
+    ONE `git grep` RATHER THAN ONE `git show` PER FILE. The token is matched fixed-string
+    here and bounded properly later; over-collecting a line that merely contains `D2223` only
+    ever protects a line this command had no business rewriting anyway.
+    """
+    out: Dict[str, Set[str]] = {}
+    found = git("grep", "-F", "-n", "--no-color", u.token, ref, "--", ".", cwd=cwd)
+    for row in found.splitlines():
+        # `<ref>:<path>:<lineno>:<content>` — the ref half is ours, so split from the left
+        # past it, and never past the content, which can hold any number of colons.
+        parts = row.split(":", 3)
+        if len(parts) != 4:
+            continue
+        out.setdefault(parts[1], set()).add(parts[3])
+    return out
+
+
+def perform_unclaim(root: Path, u: Unclaim, write: bool,
+                    guard: Optional[Dict[str, Set[str]]] = None) -> Dict[str, int]:
     """Substitute the reverse claim across the tree. Returns path -> replacements.
 
     SAME SHAPE AS `perform()`, IN THE SAME ORDER: every per-file special case runs BEFORE the
@@ -1171,18 +1329,41 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool) -> Dict[str, int]:
     touched: Dict[str, int] = {}
     manifest_path = root / DECISIONS_MANIFEST
     claude_path = root / "CLAUDE.md"
+    guard = guard or {}
     for path in text_files(root):
         if path == manifest_path:
             continue
+        rel = str(path.relative_to(root))
         before = read(path)
-        after = before
-        if path == root / GATES:
-            after = unrenumber_gates(after, u)
-        if path == root / MAP:
-            after = unrenumber_map(after, u)
-        if path == claude_path:
-            after = unindex(after, u)
-        after, hits = apply_unclaim_to_text(after, u)
+        keep = guard.get(rel) or set()
+        if keep:
+            # THE GUARDED PATH, LINE BY LINE. Identical transforms in the identical order,
+            # applied to every line `ref` does not already carry and to no line it does. It
+            # runs only where `protected_lines` found something, so the whole-text path below
+            # stays the one the round-trip is proved on.
+            kept: List[str] = []
+            hits = 0
+            for line in before.split("\n"):
+                if line in keep:
+                    kept.append(line)
+                    continue
+                if path == claude_path and is_index_line(line, u):
+                    continue
+                line = unrenumber_gates(line, u) if path == root / GATES else line
+                line = unrenumber_map(line, u) if path == root / MAP else line
+                line, got = apply_unclaim_to_text(line, u)
+                hits += got
+                kept.append(line)
+            after = "\n".join(kept)
+        else:
+            after = before
+            if path == root / GATES:
+                after = unrenumber_gates(after, u)
+            if path == root / MAP:
+                after = unrenumber_map(after, u)
+            if path == claude_path:
+                after = unindex(after, u)
+            after, hits = apply_unclaim_to_text(after, u)
         if after == before:
             continue
         touched[str(path.relative_to(root))] = hits or 1
@@ -1204,12 +1385,9 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool) -> Dict[str, int]:
 
 def run_unclaim(root: Path, ident: str, to_slug: Optional[str], ref: str, write: bool) -> int:
     """`--unclaim`'s whole body: plan, check it is safe, then perform or preview it."""
-    try:
-        u = plan_unclaim(root, ident, to_slug)
-    except ValueError as exc:
-        say(f"REFUSED: {exc}")
-        return 2
-
+    # THE REF IS RESOLVED FIRST, BEFORE THE PLAN, AND THAT ORDER IS NOT COSMETIC. The plan
+    # itself needs the ref now: two entry files can share one number in this tree, and which
+    # of them is this branch's is a question only `ref` can answer (`find_decision_file`).
     resolved = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", cwd=str(root)).strip()
     if not resolved:
         say(f"REFUSED: `{ref}` does not name a commit in {root}.",
@@ -1219,8 +1397,15 @@ def run_unclaim(root: Path, ident: str, to_slug: Optional[str], ref: str, write:
             "  to prevent — same rule as the allocation itself.")
         return 2
 
+    try:
+        u = plan_unclaim(root, ident, to_slug, ref=ref, cwd=str(root))
+    except ValueError as exc:
+        say(f"REFUSED: {exc}")
+        return 2
+
     taken = ids_at(ref, cwd=str(root))
     note: List[str] = []
+    guard: Dict[str, Set[str]] = {}
     if u.number in taken[u.kind]:
         if same_entry_on_ref(root, ref, u, cwd=str(root)):
             say(f"REFUSED: {u.token} on `{ref}` IS this entry.",
@@ -1239,10 +1424,18 @@ def run_unclaim(root: Path, ident: str, to_slug: Optional[str], ref: str, write:
         # same next free number, and this branch's own copy is the one that lost the race.
         # Unclaiming touches only THIS branch's own file; `ref`'s entry is untouched by name
         # or by number.
+        # AND `ONLY THIS BRANCH'S OWN COPY IS TOUCHED` IS NOW TRUE. It was a claim this
+        # function made and nothing enforced: the substitution is keyed on the token, so
+        # every citation of the OTHER entry was rewritten too wherever this tree could see
+        # one. It could not see any until a branch merged `ref` in — and that merge is the
+        # documented pre-merge step, so the state where the sentence was false is the state
+        # a branch reaches by following the routine. `protected_lines` is what makes it hold.
+        guard = protected_lines(ref, u, cwd=str(root))
         note = [
             f"  NOTE: `{ref}` also carries {u.token}, but for a DIFFERENT entry — this is",
             "  the collision this command exists to fix, not a reason to refuse. Only this",
-            f"  branch's own copy is touched; the one on `{ref}` keeps its number.",
+            f"  branch's own copy is touched; every line `{ref}` itself carries is left",
+            "  exactly as it is, so the other entry keeps its number AND its citations.",
             "",
         ]
 
@@ -1250,7 +1443,7 @@ def run_unclaim(root: Path, ident: str, to_slug: Optional[str], ref: str, write:
     say("=" * 72, "")
     if note:
         say(*note)
-    touched = perform_unclaim(root, u, write)
+    touched = perform_unclaim(root, u, write, guard=guard)
     for name in sorted(touched):
         say(f"  {'rewrote' if write else 'would rewrite'}  {name}")
     say("", f"  1 id, {len(touched)} file(s).")
@@ -1371,10 +1564,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     stale = stale_claims(root, args.ref, base, cwd=str(root))
     dupes = duplicate_pending(root, args.ref, cwd=str(root))
+    doubled = duplicate_numbers(root)
 
     if args.stale:
         say(f"PKMNSCAN — ids this branch adds, checked against {args.ref}")
         say("=" * 72, "")
+        if doubled:
+            report_duplicate_numbers(doubled, args.ref)
+            return 3
         if dupes:
             report_duplicate(dupes, args.ref)
             return 3
@@ -1390,6 +1587,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # CHECKED BEFORE ANYTHING IS WRITTEN. A tree carrying a collision is one no merge may
     # proceed on, and performing the claim beside it would commit a fresh number and a stale
     # one together — leaving the branch worse off than the run that refused.
+    if doubled:
+        report_duplicate_numbers(doubled, args.ref)
+        return 3
     if dupes:
         report_duplicate(dupes, args.ref)
         return 3

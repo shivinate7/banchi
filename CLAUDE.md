@@ -589,7 +589,7 @@ not rendered — not focusable, not reachable by a screen reader).
   Bash and on Write/Edit, armed in both rosters (D135). Each clause resolves what a command
   would DO rather than matching what it says, carries its own escape hatch, and fails open on
   its own bugs: `PKMNSCAN_CHECKOUT` (a `git checkout`/`restore` over a modified file),
-  `PKMNSCAN_TREE` (a write outside this checkout), `PKMNSCAN_GH` (`gh api -f` with no method),
+  `PKMNSCAN_TREE` (a write outside this checkout, or a `cd` into another one), `PKMNSCAN_GH` (`gh api -f` with no method),
   `PKMNSCAN_LINK` (`ln -s` at an existing path), `PKMNSCAN_WAIT` (a polling loop),
   `PKMNSCAN_PUSH` (a push to a differently-named upstream), `PKMNSCAN_STASH` (a bare
   `git stash`, or a `pop`/`clear`/`drop` OVER A NON-EMPTY STACK — the stack is shared by
@@ -922,6 +922,7 @@ D224 The preview costs nothing, and the press commits as it goes
 D225 Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
 D226 A prose ratchet gets a reader, and bytes are not the ruler
 D227 A route, not a lens, and never one line for two kinds of observation
+D228 The claim is spent only on a merge that can happen, and the loser of a race backs itself out
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

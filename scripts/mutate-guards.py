@@ -188,8 +188,8 @@ GUARD_SHELL_MUTATIONS: Tuple[Mutation, ...] = (
     ),
     Mutation(
         "tree clause (Bash half): never flag a write outside the checkout",
-        '        verdict = _outside(target, cwd, root)\n        if verdict:',
-        '        verdict = _outside(target, cwd, root)\n        if False:',
+        '        verdict = _outside(write.target, write.cwd, root)\n        if verdict:',
+        '        verdict = _outside(write.target, write.cwd, root)\n        if False:',
     ),
     Mutation(
         "tree clause (Write|Edit half): never flag a write outside the checkout",
