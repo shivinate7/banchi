@@ -183,7 +183,7 @@ export function ClearPrices({
       >
         <header className="clearprices-top">
           <div className="clearprices-heading">
-            <span className="bn-eyebrow">Pricing · removes answers</span>
+            <span className="bn-eyebrow">Removes pricing answers</span>
             <h2 className="clearprices-head" id="clearprices-head">
               Clear typed prices
             </h2>
@@ -200,8 +200,9 @@ export function ClearPrices({
           </p>
 
           <section className="clearprices-step" aria-labelledby="clearprices-scope">
-            <h3 className="bn-section-title" id="clearprices-scope">
-              1 · Which answers
+            <h3 className="bn-section-title bn-dotline" id="clearprices-scope">
+              <span>1</span>
+              <span>Which answers</span>
             </h3>
             {/* THE BLAST RADIUS IS THE FIRST THING ASKED AND THE NARROW ONE IS SELECTED.
                 `inventory/prices.json` is one file for the whole store (D86), so "everywhere"
@@ -211,8 +212,26 @@ export function ClearPrices({
               label="Which answers to clear"
               value={scope}
               options={[
-                { value: 'worklist', label: `On this worklist · ${worklistTotal}`, icon: 'layers' },
-                { value: 'store', label: `Everywhere · ${storeTotal}`, icon: 'grid' },
+                {
+                  value: 'worklist',
+                  label: (
+                    <span className="bn-dotline">
+                      <span>On this worklist</span>
+                      <span>{worklistTotal}</span>
+                    </span>
+                  ),
+                  icon: 'layers',
+                },
+                {
+                  value: 'store',
+                  label: (
+                    <span className="bn-dotline">
+                      <span>Everywhere</span>
+                      <span>{storeTotal}</span>
+                    </span>
+                  ),
+                  icon: 'grid',
+                },
               ]}
               onChange={(next) => setScope(next)}
             />
@@ -230,8 +249,9 @@ export function ClearPrices({
           </section>
 
           <section className="clearprices-step" aria-labelledby="clearprices-age">
-            <h3 className="bn-section-title" id="clearprices-age">
-              2 · How old
+            <h3 className="bn-section-title bn-dotline" id="clearprices-age">
+              <span>2</span>
+              <span>How old</span>
             </h3>
             <div className="clearprices-ages" role="group" aria-label="How old an answer must be">
               {WINDOWS.map((window) => {

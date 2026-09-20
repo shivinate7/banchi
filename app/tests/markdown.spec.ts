@@ -401,6 +401,19 @@ test('the worklist control does not exist until the preview has answered', async
   await expect(worklistPress(page)).toBeVisible()
 })
 
+/* NO TYPED MIDDLE DOT OR BULLET REACHES THE SHEET (D218). The eyebrow, the four numbered
+ * steps and the worklist step's heading are all drawn by CSS now (`.bn-dotline`'s `::after`),
+ * never typed into a string. `pickExport` is what reveals step 2, the furthest this sweep's
+ * sites reach without a live write. */
+test('no typed middle dot or bullet reaches the markdown sheet (D218)', async ({ page }) => {
+  await open(page)
+  await pickExport(page)
+  await expect(worklistPress(page)).toBeVisible()
+
+  const text = await sheet(page).innerText()
+  expect(text).not.toMatch(/[·•]/)
+})
+
 test('the worklist press sends the same bytes the preview read', async ({ page }) => {
   const wire = await open(page)
   await pickExport(page)
@@ -873,7 +886,7 @@ test('the live export is fetched in one press, and the survey follows it', async
      be able to build one. */
   expect(survey.export).toBeUndefined()
 
-  await expect(page.getByText('441 listings live · 1140 copies')).toBeVisible()
+  await expect(page.getByText('441 listings live 1140 copies')).toBeVisible()
 })
 
 /* THE REQUEST TAKES NO SCOPE, SO THERE IS NOTHING IT COULD HAVE LEFT OUT (D104).
@@ -885,7 +898,7 @@ test('the live export is fetched in one press, and the survey follows it', async
 test('the fetch reports every product line and offers no caveat', async ({ page }) => {
   await open(page)
   await page.getByRole('button', { name: 'Fetch my live listings' }).click()
-  await expect(page.getByText('441 listings live · 1140 copies')).toBeVisible()
+  await expect(page.getByText('441 listings live 1140 copies')).toBeVisible()
   await expect(page.getByText('across every product line')).toBeVisible()
 })
 

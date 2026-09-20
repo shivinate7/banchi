@@ -476,3 +476,21 @@ test('the export crosses the wire as exactly a name and a body', async ({ page }
      of it. */
   expect(Object.keys(posted?.body as Record<string, unknown>).sort()).toEqual(['content', 'name'])
 })
+
+/* -------------------------------------------------------------------------------------- 10 */
+
+/* D218: NO DOT IS TYPED. `threeKinds()` puts a real batch on screen — a shipment count, an
+ * expiry note and a parcel count on the download button — which is what actually reaches
+ * `.shipping-file-meta` and `.shipping-download`; an empty batch (`before any file is read`,
+ * above) never draws either element at all. */
+test('no dot is typed on the file card or the download button (D218)', async ({ page }) => {
+  await open(page, { batch: threeKinds() })
+  await readExport(page)
+
+  await expect(page.locator('.shipping-file-meta')).toContainText('order')
+  await expect(page.locator('.shipping-download')).toContainText('order')
+
+  const typedDot = /[·•]/
+  await expect(page.locator('.shipping-file-meta')).not.toContainText(typedDot)
+  await expect(page.locator('.shipping-download')).not.toContainText(typedDot)
+})

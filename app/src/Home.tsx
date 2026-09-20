@@ -319,12 +319,12 @@ function HistoryFoot({
             {since === null ? null : ` since ${since}`}
           </>
         )}
-        <i>·</i>
+        <i aria-hidden="true" />
         {/* `on_hand` is nullable BECAUSE a box could not be counted. A sum with a null in it is
             not a sum, so the clause degrades and the sentence does not. */}
         <b>{onHand.toLocaleString()}</b> on hand
         {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
-        {everSold === null || everSold === 0 ? null : <><i>·</i><b>{everSold.toLocaleString()}</b> sold</>}
+        {everSold === null || everSold === 0 ? null : <><i aria-hidden="true" /><b>{everSold.toLocaleString()}</b> sold</>}
       </p>
       {plot === null ? null : <Ribbon plot={plot} live={live} />}
       {newest === null ? null : (
@@ -478,7 +478,7 @@ export function Home() {
       icon: 'camera',
       label: 'Capture',
       figure: lastBox ? `Box ${lastBox.box}` : '—',
-      note: lastBox ? `${plural(lastBox.cards, 'card')}${lastBox.name ? ` · ${lastBox.name}` : ''}` : 'no boxes yet',
+      note: lastBox ? `${plural(lastBox.cards, 'card')}${lastBox.name ? ` in ${lastBox.name}` : ''}` : 'no boxes yet',
     },
     {
       path: '/runs',
@@ -497,7 +497,7 @@ export function Home() {
         review === 0 && parked === 0
           ? 'nothing waiting'
           : parked !== null && parked > 0
-            ? `${review} to answer · ${parked} parked`
+            ? `${review} to answer and ${parked} parked`
             : 'to answer',
       tone: review === 0 && parked === 0 ? 'ok' : reviewTotal !== null && reviewTotal > 0 ? 'warn' : undefined,
     },
@@ -513,7 +513,7 @@ export function Home() {
             : 'reading the worklist…'
           : runsToPrice === 0
             ? unsentCopies !== null && unsentCopies > 0
-              ? `nothing to price · ${plural(unsentCopies, 'copy', 'copies')} unsent`
+              ? `nothing to price and ${plural(unsentCopies, 'copy', 'copies')} unsent`
               : 'nothing to price'
             : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
       tone: runsToPrice ? 'warn' : runsToPrice === 0 ? 'ok' : undefined,
@@ -531,8 +531,8 @@ export function Home() {
           : openOrders === 0
             ? 'no open orders'
             : toPull
-              ? `${plural(toPull, 'copy', 'copies')} to pull${unfindable ? ` · ${unfindable} not found` : ''}`
-              : `open · every copy pulled${unfindable ? ` · ${unfindable} not found` : ''}`,
+              ? `${plural(toPull, 'copy', 'copies')} to pull${unfindable ? ` and ${unfindable} not found` : ''}`
+              : `open and every copy pulled${unfindable ? ` and ${unfindable} not found` : ''}`,
       tone: toPull ? 'warn' : openOrders === 0 ? 'ok' : undefined,
     },
     {
@@ -541,7 +541,7 @@ export function Home() {
       label: 'Shipping',
       figure: batch ? String(batch.shipments) : '—',
       quiet: !batch,
-      note: batch ? `${batch.shipments === 1 ? 'shipment' : 'shipments'} in lanes · ${batch.name}` : 'no export read yet',
+      note: batch ? `${batch.name}: ${batch.shipments} ${batch.shipments === 1 ? 'shipment' : 'shipments'} in lanes` : 'no export read yet',
     },
   ]
 
@@ -617,7 +617,9 @@ export function Home() {
                           <div className="home-deck-meta">
                             {[one.card.number_display ?? one.card.number, finishOf(one.card)]
                               .filter((part): part is string => typeof part === 'string' && part !== '')
-                              .join(' · ')}
+                              .map((part, at) => (
+                                <span key={at}>{part}</span>
+                              ))}
                           </div>
                         </>
                       ) : null}
@@ -627,13 +629,21 @@ export function Home() {
               <div className="home-deck-address" aria-hidden="true">
                 <Icon name="pin" size={14} />
                 {frontCard?.place?.label != null ? (
-                  <span className="home-deck-card-no">{frontCard.place.label}</span>
+                  // D218: found beyond the reader's own list — this badge draws
+                  // `Position.label` raw, off a variable rather than a literal, so the count
+                  // above never saw it. Same server string, same aria-hidden badge; the seam
+                  // between its parts is CSS now (`.home-deck-card-no > span::before`).
+                  <span className="home-deck-card-no">
+                    {frontCard.place.label.split(' · ').map((part, at) => (
+                      <span key={at}>{part}</span>
+                    ))}
+                  </span>
                 ) : (
                   <>
                     <span>Box {deckBox.box}</span>
                     {deckBox.name === null ? null : (
                       <>
-                        <span className="home-deck-sep">·</span>
+                        <span className="home-deck-sep" aria-hidden="true" />
                         <span className="home-deck-card-no">{deckBox.name}</span>
                       </>
                     )}
@@ -696,7 +706,9 @@ export function Home() {
                         {name}
                       </span>
                       <span className="home-box-meta">
-                        {held.toLocaleString()} on hand · {box.sold} sold{box.state === 'closed' ? ' · sealed' : ''}
+                        <span>{held.toLocaleString()} on hand</span>
+                        <span>{box.sold} sold</span>
+                        {box.state === 'closed' ? <span>sealed</span> : null}
                       </span>
                     </span>
                     <span className="home-box-bar" title={`${pct}% on hand`}>
@@ -736,8 +748,15 @@ export function Home() {
                 return (
                   <a key={run.run} className="home-run" href={`#/runs?run=${encodeURIComponent(run.run)}`}>
                     <span className="home-run-text">
-                      <span className="home-run-box" title={boxLabel}>
-                        {boxLabel}
+                      {/* D218: found beyond the reader's own list — `runScope.ts:boxLabel`
+                          composes `Box N · Name` off a template literal, so the reader's
+                          plain-string scan never saw it. That composer is shared and stays
+                          untouched (same rule as `Position.label`); only the render splits it.
+                          `title` cannot hold elements, so it gets the comma-joined form. */}
+                      <span className="home-run-box" title={boxLabel.replace(/ · /g, ', ')}>
+                        {boxLabel.split(' · ').map((part, at) => (
+                          <span key={at}>{part}</span>
+                        ))}
                       </span>
                       <span className="home-run-name bn-mono">{run.run}</span>
                     </span>

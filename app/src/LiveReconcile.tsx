@@ -105,7 +105,10 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
       >
         <header className="livecheck-top">
           <div className="livecheck-heading">
-            <span className="bn-eyebrow">Store-wide · free</span>
+            <span className="bn-eyebrow">
+              <span>Store-wide</span>
+              <span>free</span>
+            </span>
             <h2 className="livecheck-head" id="livecheck-head">
               Reconcile the whole store
             </h2>

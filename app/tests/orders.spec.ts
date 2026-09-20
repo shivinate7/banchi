@@ -2513,13 +2513,40 @@ test('the walk pane is inventory\'s own card pane: the same header, photo, copie
      exactly: nesting it inside the section let the section's `.bn-panel` `overflow: hidden`
      clip it into the same box as an overflowing copies list (D118, D220). Read off `page`
      rather than `pane` for that reason; it is still the one `.browse-details` this screen
-     draws. */
-  await expect(page.locator('.browse-details .browse-details-hint')).toHaveText('identity · claims · provenance')
+     draws. The text itself is D218's fix (CardHero.tsx, shared by every screen that draws
+     it): the separator is drawn by CSS, never typed. */
+  await expect(page.locator('.browse-details .browse-details-hint')).toHaveText('identity claims provenance')
 
   /* AND NONE OF INVENTORY'S OWN EDITING ACTIONS: no Card actions menu, no Retire, no re-shoot —
      left out by name (§13's override): retire, move and re-shoot are Inventory-only. */
   await expect(pane.getByRole('button', { name: 'Card actions' })).toHaveCount(0)
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
+})
+
+test('D218: the reused card pane\'s Details hint draws the separator, never types it', async ({
+  page,
+}) => {
+  /* `CardHero.tsx` draws in both `#/inventory` and here, unchanged (§13), so its D218 fix is
+     asserted from this side too — a typed dot here is the same defect whichever screen reads
+     it. SCOPED TO `.browse-details-hint`, not the whole pane: the pane also draws `PositionBar`
+     (a different lane's file, still typing one in `.position-bar-text`) and this file's own
+     `capturedText`/`marketText` (documented, left for the sweep D218's own audit row names as
+     a known gap — a helper's return reaching a screen through a variable, invisible to the
+     extractor `make docs-audit`'s `typed interpunct` row walks), so a whole-pane assertion
+     cannot pass until those land. Read off `page`, not `pane`, because the orders-followups
+     fix moved Details to a sibling of `.orders-walk-card` (see the case below this one). */
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard() },
+  })
+
+  const pane = page.locator('.orders-walk-card')
+  await expect(pane.locator('.browse-hero-head .browse-hero-name')).toContainText('Volcanion')
+  const hint = page.locator('.browse-details .browse-details-hint')
+  await expect(hint).toBeVisible()
+  expect(await hint.innerText()).not.toMatch(/[·•]/)
 })
 
 /* THE ORDERS-FOLLOWUPS FIX: `.inventory-detail` reached `.card-locations` only through

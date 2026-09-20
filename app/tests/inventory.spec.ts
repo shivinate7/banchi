@@ -1307,9 +1307,9 @@ test('selecting a card shows every copy of it, each with both doors out of inven
      against a ceiling of two leaves room for ONE, where a screen reading the bare cap of 4
      would offer room for three. */
   await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('1')
-  await expect(page.locator('.card-locations-counts')).toHaveText(
-    'Pushed 0 · Staged 2 · Room for 1 more live',
-  )
+  // D218: pushed/staged/headroom are sibling spans now; the seam is CSS
+  // (`.card-locations-counts > span::before`), never part of `textContent`.
+  await expect(page.locator('.card-locations-counts')).toHaveText('Pushed 0Staged 2Room for 1 more live')
 
   /* AND THE CARD'S NAME IS DRAWN ONCE ON THIS SCREEN. This header carried an `<h3>` with the same
      name the band's first fact row prints a few hundred pixels above — invisible while the two
@@ -1406,13 +1406,13 @@ test('a copy sold here since the reading is drawn beside it, and headroom follow
   await expect(page.locator('.card-locations-owner')).toBeVisible()
 
   await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('0')
-  await expect(page.locator('.card-locations-since')).toHaveText('1 when read · 1 sold here since')
+  // D218: the seam is CSS now (`.card-locations-since > span::before`), never `textContent`.
+  await expect(page.locator('.card-locations-since')).toHaveText('1 when read1 sold here since')
   /* AND HEADROOM MOVES WITH IT. Computing off the raw reading would say `Room for 1 more live`
      here and refuse a relist the shelf can support — the one-line bug the change would
      otherwise have left behind. */
-  await expect(page.locator('.card-locations-counts')).toHaveText(
-    'Pushed 0 · Staged 2 · Room for 2 more live',
-  )
+  // D218: the seam is CSS now (`.card-locations-counts > span::before`), never `textContent`.
+  await expect(page.locator('.card-locations-counts')).toHaveText('Pushed 0Staged 2Room for 2 more live')
 })
 
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {
@@ -2540,11 +2540,11 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(first.nth(0)).toHaveText('#1 of 5')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week. */
-  await expect(first.nth(1)).toHaveText('Section 1 · card 1 of 3 slots')
+  await expect(first.nth(1)).toHaveText('Section 1card 1 of 3 slots')
 
   const second = bars.nth(1).locator('.position-bar-text')
   await expect(second.nth(0)).toHaveText('#3 of 5')
-  await expect(second.nth(1)).toHaveText('Section 1 · card 3 of 3 slots')
+  await expect(second.nth(1)).toHaveText('Section 1card 3 of 3 slots')
 
   /* The section track carries no dividers of its own — a section is not divided by anything,
      and that absence is one of the three cues telling the two scales apart at a glance. */
@@ -2574,7 +2574,7 @@ test('the last section of an open box counts what is in it, and the box line dro
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#5 of 5')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2 · card 2 of 2')
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2card 2 of 2')
 
   /* One accessible name carrying both, because `role="img"` hides every descendant — a screen
      reader is told the second scale here or not at all. */
@@ -2601,7 +2601,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#2 of 5')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1 · card 2 of 3 slots')
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1card 2 of 3 slots')
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
    * the lone-copy branch and asserted only the two bars, so the label beside them went on being
@@ -3143,10 +3143,11 @@ test('a set-valued finish claim renders as its members, never as an array coerce
   await page.locator('.browse-row').nth(1).click()
   const finish = page.locator('.browse-fact', { hasText: 'Finish' }).locator('dd')
   /* THE MEMBERS, EACH DRAWN AS A WORD — which is what this case is about: `normal,reverse_holo`
-     is what JavaScript's coercion of an array looks like, and no separator and no capital would
-     save it. The labels are the human ones the owner ruled for; the failure this guards against
-     is the comma. */
-  await expect(finish).toHaveText('Normal · Reverse Holo')
+     is what JavaScript's coercion of an array looks like, lowercase and comma-packed with no
+     space. `claimText` joins a real list with `, ` (D218: a list of members is a real list,
+     never a typed bullet) — capitalized and spaced, which a coercion never produces. The
+     failure this guards against is the bare, unspaced, lowercase comma. */
+  await expect(finish).toHaveText('Normal, Reverse Holo')
 
   /* And a record written BEFORE the amendment still reads. There is no migration — a bare
      string is a one-member claim — so this is the shape most of the store still holds. */
@@ -3720,7 +3721,7 @@ test('the reclaim names the count and the bytes, sends confirm, and both presses
 
   /* The receipt names the keys, which is the only evidence left: the bytes are gone. */
   await expect(page.locator('.boxops-receipt')).toContainText('Reclaimed 2 photographs from box 2')
-  await expect(page.locator('.boxops-receipt')).toContainText('2/3 · 2/7')
+  await expect(page.locator('.boxops-receipt')).toContainText('2/3, 2/7')
 })
 
 test('a reclaimed photograph is drawn as reclaimed, not as a photo the store lost', async ({
@@ -3801,7 +3802,7 @@ test('the plan names what each SKU gives up, what it keeps, and which box holds 
   /* THE BUDGET, VISIBLE. The owner's ruling of 2026-08-24: each SKU gives up at most the
      copies this box holds, so a release reached from box 2 can never give up what only box
      7's copies could account for. The line says both halves. */
-  await expect(panel).toContainText('8937370 · 2 staged · keeps 3 staged · also box 7 (3)')
+  await expect(panel).toContainText('8937370 2 staged keeps 3 staged also box 7 (3)')
 
   /* AND THE OUTCOME A PERSON WOULD OTHERWISE READ AS A BUG. A shared SKU leaves a remainder,
      a remainder keeps the card listing-held, so the box stays refused after a release that
@@ -5055,10 +5056,10 @@ test('the two claims the correction button can overwrite are both on the panel',
      set on 543 of 543 real records, so this was live rather than latent. */
   await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
 
-  /* `Common · Uncommon` and never `Common,Uncommon` — the array-coercion guard, identical in kind
+  /* `Common, Uncommon` and never `common,uncommon` — the array-coercion guard, identical in kind
      to the finish case above, and the reason both rows go through one renderer. */
   const rarity = page.locator('.browse-fact', { hasText: 'Rarity' }).locator('dd')
-  await expect(rarity).toHaveText('Common · Uncommon')
+  await expect(rarity).toHaveText('Common, Uncommon')
 
   const note = page.locator('.browse-fact', { hasText: 'Note' }).locator('dd')
   await expect(note).toHaveText('japanese, no english print')
@@ -5300,7 +5301,7 @@ test('a card with an open question in the queue says so, and says whether it can
      already on this panel. `POST /review/<box>/<index>/answer` refuses such an entry outright. */
   await expect(block).toContainText('cannot be answered')
   await expect(block.locator('.bn-notice-code')).toHaveText(
-    'no_catalog_row · review · candidates 0',
+    'no_catalog_row, review, 0 candidates',
   )
 })
 
@@ -5825,7 +5826,7 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await expandAll(page)
   await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1 · Rares · #1–#3')
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1 · Rares · card 1 of 3 slots')
+  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1Rarescard 1 of 3 slots')
   await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1Rares')
 
   /* AND THE NAME IS WRITTEN FROM THE MANAGE SHEET, keyed by the section's number. */
@@ -7009,5 +7010,32 @@ test('the re-rank control clears the thumb floor on a phone', async ({ page }) =
   await expect(chip).toBeVisible()
   const box = await chip.boundingBox()
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
+})
+
+/* ----------------------------------------------------------------------------------- D218 */
+
+test('D218: this lane\'s own facts draw the separator, never type it', async ({ page }) => {
+  /* A typed `·` (U+00B7) or `•` (U+2022) is a separator baked into a string; D218's rule is
+     that a screen may only SHOW one, drawn by CSS beside a fact that is its own element
+     (`.bn-facts` in `app/src/kit.css`) — never type one into text a component holds.
+
+     SCOPED TO WHAT THIS LANE (`BoxOps.tsx`, `BoxBrowse.tsx`, `Inventory.tsx`, `BoxRuns.tsx`,
+     `CardHero.tsx`) DRAWS, never the whole `.bn-view`: this route's own `.position-bar-text`
+     (`PositionBar.tsx`, D41's accessible-name territory, a different file this sweep does not
+     touch) still types one today, so a blanket assertion cannot pass until every lane on this
+     route has landed. `.browse-census` is the page header's store-wide pill (BoxBrowse.tsx);
+     `.boxops-sheet` is the Manage sheet in full, including the Name-sections editor's example
+     text and its own per-section Field labels (BoxOps.tsx) — both self-contained to this
+     lane's components. */
+  await open(page)
+
+  const census = page.locator('.browse-census')
+  await expect(census).toBeVisible()
+  expect(await census.innerText()).not.toMatch(/[·•]/)
+
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Name sections/ }).click()
+  const sheet = page.locator('.boxops-sheet')
+  expect(await sheet.innerText()).not.toMatch(/[·•]/)
 })
 
