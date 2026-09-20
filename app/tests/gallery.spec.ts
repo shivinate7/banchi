@@ -257,3 +257,74 @@ test('every photograph on the sheet is its own specimen, not a stored capture', 
   )
   for (const width of natural) expect(width).toBeGreaterThan(0)
 })
+
+/* ================================================================================
+   THE SIDEBAR REVIEW'S SHARED-KIT ITEMS (2026-09-20): `.bn-stat`, `.bn-progress` and
+   `.bn-seg` each shipped able to serve only one call site's own ratio or size, so Orders and
+   Inventory hand-rolled their own. These cases prove the ADDED capability on the sheet — none
+   of them touch Orders.tsx, Orders.css, orderView.ts, OrdersWalkPane.tsx or how Inventory
+   itself draws today; #/orders and #/inventory's own specs, unchanged and still green (see
+   inventory.spec.ts's own review of `.browse-boxcell`'s aria-label, S16, next to this file),
+   ARE the proof that no screen's current output moved.
+   ================================================================================ */
+
+test('stat sm and xs read Orders\' and Inventory\'s own ratios (S9)', async ({ page }) => {
+  const spec = page.locator('[data-specimen="stat-sizes"]')
+  const base = spec.locator('.bn-stat').nth(0)
+  const sm = spec.locator('.bn-stat').nth(1)
+  const xs = spec.locator('.bn-stat').nth(2)
+
+  /* The base size is untouched: every existing <Stat> in the product keeps reading 22:12. */
+  await expect(base.locator('.bn-stat-value')).toHaveCSS('font-size', '22px')
+  await expect(base.locator('.bn-stat-label')).toHaveCSS('font-size', '12px')
+
+  /* `-sm` reads Orders' own two tokens: `--bn-fs-base` (14px) over `--bn-fs-xs` (11px),
+     `.orders-index-figure b` / `.orders-index-figure`'s own measured pair. */
+  await expect(sm.locator('.bn-stat-value')).toHaveCSS('font-size', '14px')
+  await expect(sm.locator('.bn-stat-label')).toHaveCSS('font-size', '11px')
+
+  /* `-xs` reads Inventory's own single token for both: `.browse-boxcell-count` beside
+     `.browse-boxcell-meta`, both `--bn-fs-xs` (11px), value un-bolded (weight 600, not 800). */
+  await expect(xs.locator('.bn-stat-value')).toHaveCSS('font-size', '11px')
+  await expect(xs.locator('.bn-stat-value')).toHaveCSS('font-weight', '600')
+  await expect(xs.locator('.bn-stat-label')).toHaveCSS('font-size', '11px')
+})
+
+test('progress-sm composes with -ok, which Inventory\'s own bar cannot (S9)', async ({ page }) => {
+  const spec = page.locator('[data-specimen="progress-sm-done"]')
+  const bars = spec.locator('.bn-progress')
+  await expect(bars).toHaveCount(2)
+
+  /* Both bars are the small height Inventory's own hand-rolled `.browse-boxcell-bar` (44x5)
+     carries, which the kit's base 6px size never matched. */
+  for (const bar of await bars.all()) await expect(bar).toHaveCSS('height', '5px')
+
+  /* The first is mid-fill and reads the accent color; the second is at 100% and, because it
+     composes `bn-progress-ok`, reads the ok color instead — the exact combination
+     Inventory's own bar (no `-ok` modifier at all) can never draw. */
+  const accent = await bars.nth(0).locator('span').evaluate((el) => getComputedStyle(el).backgroundColor)
+  const done = await bars.nth(1).locator('span').evaluate((el) => getComputedStyle(el).backgroundColor)
+  expect(done).not.toBe(accent)
+  await expect(bars.nth(1).locator('span')).toHaveCSS('width', '44px')
+})
+
+test('segmented sm totals 28px, flush with a 28px button beside it (S10)', async ({ page }) => {
+  const spec = page.locator('[data-specimen="seg-sm"]')
+  const seg = spec.locator('.bn-seg')
+  const btn = spec.locator('.bn-btn')
+  const segBox = await seg.evaluate((el) => el.getBoundingClientRect().height)
+  const btnBox = await btn.evaluate((el) => el.getBoundingClientRect().height)
+  expect(Math.round(segBox)).toBe(28)
+  expect(Math.round(btnBox)).toBe(28)
+})
+
+test('bn-truncate clips a name too long for its row (S13)', async ({ page }) => {
+  const el = page.locator('[data-specimen="truncate"] .bn-truncate')
+  await expect(el).toHaveCSS('text-overflow', 'ellipsis')
+  await expect(el).toHaveCSS('overflow-x', 'hidden')
+  const [scrollWidth, clientWidth] = await el.evaluate((node) => [node.scrollWidth, node.clientWidth])
+  /* The text is wider than the box it sits in — proof the ellipsis is actually doing
+     something and not merely declared and unreachable, which `min-width: 0` is what makes
+     possible inside this spec's flex row. */
+  expect(scrollWidth).toBeGreaterThan(clientWidth)
+})

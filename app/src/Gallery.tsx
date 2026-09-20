@@ -784,6 +784,24 @@ export function Gallery() {
                   label="Mode"
                 />
               </Spec>
+              {/* S10: `.bn-seg`'s 3px padding put it at 34px beside 28px search/select
+                  controls in the same row. `size="sm"` totals 28px (2px padding + a 24px
+                  item), shown here beside a 28px `Button` so the two bottoms line up. */}
+              <Spec name="seg-sm" label="segmented, sm, beside a 28px control">
+                <div className="kit-row" style={{ alignItems: 'center' }}>
+                  <Segmented
+                    value="new"
+                    onChange={noop}
+                    options={[
+                      { value: 'new', label: 'Newest' },
+                      { value: 'old', label: 'Oldest' },
+                    ]}
+                    label="Sort"
+                    size="sm"
+                  />
+                  <Button size="sm" icon="search">Search</Button>
+                </div>
+              </Spec>
               <Spec label="tabs">
                 <div className="bn-tabs">
                   <button type="button" className="bn-tab" aria-selected="true">
@@ -921,6 +939,28 @@ export function Gallery() {
                   <Stat value="2" label="closed" />
                 </div>
               </Spec>
+              {/* S9: Inventory's own bar (`.browse-boxcell-bar`, 44x5, accent only) never
+                  composes `-ok`, so it can never turn green at 100%. `bn-progress-sm` is the
+                  same 5px height at the kit level, and it composes with `-ok` exactly like
+                  the base size — proving the capability Inventory's hand-rolled bar lacks. */}
+              <Spec name="progress-sm-done" label="progress, sm, at done">
+                <div className="bn-progress bn-progress-sm" style={{ width: 44 }}>
+                  <span style={{ width: '60%' }} />
+                </div>
+                <div className="bn-progress bn-progress-sm bn-progress-ok" style={{ width: 44 }}>
+                  <span style={{ width: '100%' }} />
+                </div>
+              </Spec>
+              {/* S9: the tile shipped one ratio, 22:12. `-sm` reads Orders' own 14:11
+                  (`.orders-index-figure`); `-xs` reads Inventory's own 11:11, un-bolded
+                  (`.browse-boxcell-count` beside `.browse-boxcell-meta`). */}
+              <Spec name="stat-sizes" label="stat, sm and xs">
+                <div className="kit-row kit-row-wrap">
+                  <Stat value="16" label="answered" />
+                  <Stat value="4" label="left" size="sm" />
+                  <Stat value="662" label="on hand" size="xs" />
+                </div>
+              </Spec>
             </div>
           </Section>
 
@@ -937,6 +977,19 @@ export function Gallery() {
                   <dt>Confidence</dt>
                   <dd>High</dd>
                 </dl>
+              </Spec>
+              {/* S13: `.bn-truncate` was never used anywhere — 10 hand copies of the same
+                  three properties exist instead, four of which also had to add their own
+                  `min-width: 0` because a flex item's default refuses to shrink below its
+                  content. `.bn-truncate` now carries that itself (see kit.css's own note),
+                  proved here in a flex row narrow enough to force the ellipsis. */}
+              <Spec name="truncate" label="truncate, in a flex row">
+                <div className="kit-row" style={{ width: 160 }}>
+                  <Icon name="box" size={16} />
+                  <span className="bn-truncate" style={{ flex: '1 1 auto' }}>
+                    A name much longer than the row beside it
+                  </span>
+                </div>
               </Spec>
               <Spec label="table" wide>
                 <div className="bn-panel">
