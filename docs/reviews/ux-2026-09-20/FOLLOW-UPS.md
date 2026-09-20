@@ -90,8 +90,12 @@ override` row, which blocks EVERY commit in that worktree. Removing the two keys
 work: the runtime rewrites the file back within the same Bash call. Verified twice. The
 auto-mode classifier also refuses the edit outright as self-modification.
 
-**Cost:** several rounds, and ultimately two commits made through the hook's own
+**Cost:** several rounds, and every commit in that worktree made through the hook's own
 `PKMNSCAN_DOCS=off` hatch rather than with a passing gate.
+
+**Not a cost:** the orchestrator twice told the owner this meant subagents were running on
+Opus rather than Sonnet. That was inferred from the file and never observed. The owner
+confirmed the agents were on Sonnet throughout. The problem here is only the gate.
 
 **Would close it:** the audit row reading the file's mtime or the session's own start
 time, so a live session's own override is not indicted as forgotten.
