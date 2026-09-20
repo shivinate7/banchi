@@ -149,7 +149,8 @@ CLAUSES = (
     Clause("checkout", "PKMNSCAN_CHECKOUT",
            "never `git checkout <path>` or `git restore <path>` over a modified file"),
     Clause("tree", "PKMNSCAN_TREE",
-           "never write outside the checkout this session is standing in"),
+           "never write outside the checkout this session is standing in, and never `cd` "
+           "into another one"),
     Clause("gh", "PKMNSCAN_GH",
            "never pass -f/-F to `gh api` without naming the method"),
     Clause("link", "PKMNSCAN_LINK",
@@ -550,8 +551,44 @@ def _porcelain(status: str) -> str:
 
 # ------------------------------------------------------------ 2. a write outside this tree
 
-def _write_targets(reading: "shell_parse.Reading") -> List[str]:
-    """Every path this command would WRITE, as far as a parse can say.
+def _absolute(where: str, shell_cwd: str) -> str:
+    """Expand and absolutize one directory taken from a command.
+
+    LIFTED from the parent's `hooks/guard.py:_absolute`, minus its Git Bash drive-letter
+    branch, which has no subject on this machine.
+    """
+    where = os.path.expandvars(os.path.expanduser(where))
+    if not os.path.isabs(where) and shell_cwd:
+        where = os.path.join(shell_cwd, where)
+    return where
+
+
+def _cd_operand(argv: Sequence[str]) -> Optional[str]:
+    """The directory a `cd` stage moves to, or None when this stage is not a resolvable `cd`.
+
+    `cd` alone goes home and `cd -` goes back: both are somewhere this parse cannot name, and
+    they return `""` so the caller stops resolving relative targets rather than resolving
+    them against the wrong directory. A flag (`cd -P dir`) is stepped over.
+    """
+    words = shell_parse.strip_prefixes(argv)
+    if not words or words[0] != "cd":
+        return None
+    operands = [word for word in words[1:] if not word.startswith("-") or word == "-"]
+    if not operands or operands[0] == "-":
+        return ""
+    target = operands[0]
+    if "$" in target or "*" in target or "?" in target or "`" in target:
+        return ""                          # unexpanded by this parse; no honest answer
+    return target
+
+
+class Write(NamedTuple):
+    target: str
+    cwd: str            # what a relative target is relative to; `""` when that is unknown
+
+
+def _write_targets(reading: "shell_parse.Reading", cwd: str) -> Tuple[List[Write], List[str]]:
+    """Every path this command would WRITE, as far as a parse can say, and every `cd`.
 
     TWO POSITIONS AND A DECLARED GAP. A redirection target is unambiguous, and `tee`'s
     operands are its whole purpose. `cp`, `mv`, `install`, `rsync` and `sed -i` are NOT read
@@ -559,17 +596,33 @@ def _write_targets(reading: "shell_parse.Reading") -> List[str]:
     that guessed wrong would refuse an ordinary copy. The Write|Edit half of this clause needs
     no parsing at all, which is why it is the half that cannot be skirted, and
     D179 names this gap rather than leaving it to be discovered.
+
+    THE STAGES ARE WALKED IN ORDER AND A `cd` MOVES THE DIRECTORY EVERY LATER RELATIVE TARGET
+    RESOLVES AGAINST. The 2026-09-06 incident this clause exists for was spelled
+    `cd <main checkout> && …`, with every write after it RELATIVE — and until 2026-09-19 a
+    relative target was resolved against the session's own cwd, so that exact shape passed.
+    The parent's `hooks/guard.py:_run_dir` reads the last `cd` with a regular expression; this
+    reads it off the parsed stage instead, because a regex over the raw string would find a
+    `cd` inside a quoted script body, which is the defect this same change fixes.
     """
-    targets: List[str] = []
+    writes: List[Write] = []
+    moves: List[str] = []
+    here: str = cwd
     for placed in reading.placed:
         stage = placed.stage
+        moved = _cd_operand(stage.argv)
+        if moved is not None:
+            here = _absolute(moved, here) if moved and here else ""
+            if here:
+                moves.append(here)
+            continue
         for redirect in (stage.fd1, stage.fd2):
             if redirect.kind == shell_parse.FILE and redirect.path:
-                targets.append(redirect.path)
+                writes.append(Write(redirect.path, here))
         argv = shell_parse.strip_prefixes(stage.argv)
         if argv and (argv[0] == "tee" or argv[0].endswith("/tee")):
-            targets.extend(word for word in argv[1:] if not word.startswith("-"))
-    return targets
+            writes.extend(Write(word, here) for word in argv[1:] if not word.startswith("-"))
+    return writes, moves
 
 
 def _resolve_target(target: str, cwd: str) -> str:
@@ -583,6 +636,8 @@ def _outside(target: str, cwd: str, root: str) -> Optional[Tuple[str, str]]:
     """(resolved target, why it is outside) — or None when the write is in bounds."""
     if "$" in target or "*" in target or "?" in target:
         return None                        # unexpanded by this parse; no honest answer
+    if not cwd and not os.path.isabs(target):
+        return None                        # relative to a directory this parse cannot name
     resolved = _resolve_target(target, cwd)
     if _under(resolved, root):
         return None
@@ -591,7 +646,9 @@ def _outside(target: str, cwd: str, root: str) -> Optional[Tuple[str, str]]:
     return resolved, ""
 
 
-def _tree_refusal(resolved: str, root: str, how: str) -> Refusal:
+def _tree_refusal(resolved: str, root: str, how: str,
+                  heading: str = "BLOCKED: this would write outside the checkout this session "
+                                 "is standing in.") -> Refusal:
     return Refusal("tree", [
         "  {0}".format(how),
         "      resolves to  {0}".format(resolved),
@@ -612,7 +669,7 @@ def _tree_refusal(resolved: str, root: str, how: str) -> Refusal:
         "it.",
         "  When you genuinely need another checkout, keep it READ-ONLY: `git show`,",
         "  `sqlite3 -readonly`, `git -C <tree> log`.",
-    ], "BLOCKED: this would write outside the checkout this session is standing in.")
+    ], heading)
 
 
 def clause_tree_bash(reading: "shell_parse.Reading", cwd: str, root: str) -> Verdict:
@@ -620,10 +677,37 @@ def clause_tree_bash(reading: "shell_parse.Reading", cwd: str, root: str) -> Ver
         return Verdict([], ["this guard could not resolve a checkout root for {0}, so it has "
                             "no opinion about where a write lands".format(cwd)])
     refusals: List[Refusal] = []
-    for target in _write_targets(reading):
-        verdict = _outside(target, cwd, root)
+    writes, moves = _write_targets(reading, cwd)
+    for write in writes:
+        verdict = _outside(write.target, write.cwd, root)
         if verdict:
-            refusals.append(_tree_refusal(verdict[0], root, "`{0}`".format(target)))
+            refusals.append(_tree_refusal(verdict[0], root, "`{0}`".format(write.target)))
+    # A `cd` INTO ANOTHER CHECKOUT IS THE INCIDENT'S FIRST WORD, and it is refused as an act
+    # rather than as a prefix: the Bash tool's working directory persists between calls, so a
+    # bare `cd <other tree>` leaves the session standing there for every command after it,
+    # and `cd <other tree> && npm run build` writes that tree's `app/dist/` with no `>` for
+    # the redirect reader to see. The predicate is resolution — `git rev-parse` at the target
+    # — so a temp directory, `~/.claude` and a plain directory that is no checkout all pass,
+    # and only a DIFFERENT checkout is refused. The read-only forms the refusal recommends
+    # (`git -C <tree> log`, `git show`) never needed the `cd`.
+    for moved in moves:
+        resolved = _real(moved)
+        if _under(resolved, root) or not os.path.isdir(resolved):
+            continue
+        # `_sanctioned_outside` and `_repo_holding` ask about a FILE's parent, so a directory
+        # is posed as `<dir>/.` — otherwise a temp checkout's own root would read as "a temp
+        # directory that belongs to no checkout", and this clause's own fixture could not pose
+        # its case (D157, one register up).
+        probe = os.path.join(resolved, ".")
+        if _sanctioned_outside(probe):
+            continue
+        other = _repo_holding(probe)
+        if not other or other == root:
+            continue
+        refusals.append(_tree_refusal(
+            resolved, root, "`cd {0}` stands this session in another checkout".format(moved),
+            "BLOCKED: this would stand in another checkout, and everything after the `cd` "
+            "runs there."))
     return Verdict(refusals, [])
 
 
@@ -1472,7 +1556,7 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     # and let the four-hour runaway through. Measured as a failing case in the self-test
     # before this line existed.
     if not detached(command, backgrounded) and not any(word in command for word in
-                                ("git", "gh ", "ln ", "tee", "while", "until", ">")):
+                                ("git", "gh ", "ln ", "tee", "while", "until", ">", "cd")):
         return Verdict([], [])
 
     reading = shell_parse.read(command)
