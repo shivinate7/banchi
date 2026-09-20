@@ -1915,6 +1915,47 @@ test('at 820, the last buyer row clears the step-through hint rather than sittin
   ).toBeLessThanOrEqual(Math.round(hint.y))
 })
 
+/* THE ORDERS-FOLLOWUPS FIX, DEFECT 1: the two-column layout used to be picked in JavaScript
+ * (`const wide = useMediaQuery('(min-width: 1024px)')`), which stacked `#/orders` into one
+ * column everywhere between 768 and 1023 while `#/inventory`'s identical `.browse-body` CSS
+ * stayed two columns at that width. `.browse-body`'s own breakpoints (`BoxBrowse.css:12-26`)
+ * now do the whole job, with no JS reader left to disagree with them. */
+test('at 820, the buyer rail sits beside the walk pane rather than stacking above it', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  await open(page, { orders: threeBuyerPayload() })
+
+  const rail = await page.locator('.browse-map').boundingBox()
+  const pane = await page.locator('.browse-side').boundingBox()
+  if (rail === null || pane === null) throw new Error('the rail or the pane did not lay out')
+
+  expect(pane.x, 'the pane does not sit to the right of the rail').toBeGreaterThan(rail.x + rail.width)
+  const overlap = Math.min(rail.y + rail.height, pane.y + pane.height) - Math.max(rail.y, pane.y)
+  expect(overlap, 'the rail and the pane share no vertical band — they stacked instead of sitting side by side').toBeGreaterThan(0)
+})
+
+/* DEFECT 2: below 768px `.browse-body > .browse-map` is hidden by that same CSS, so once
+ * defect 1 is fixed the buyer picker needs its own way onto the screen — the chip and bottom
+ * sheet this asserts, reusing `.browse-railsheet` rather than a second stylesheet. */
+test('at 390, the buyer picker is reachable through the chip and its bottom sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { orders: threeBuyerPayload() })
+
+  await expect(page.locator('.browse-map')).toBeHidden()
+  const chip = page.locator('.browse-boxchip')
+  await expect(chip).toBeVisible()
+  await expect(page.locator('.browse-railsheet')).toHaveCount(0)
+
+  await chip.click()
+  const sheet = page.locator('.browse-railsheet')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.locator('.orders-index-row')).toHaveCount(3)
+  await expect(sheet).toContainText('Bob')
+
+  await sheet.locator('.orders-index-row', { hasText: 'Bob' }).click()
+  await expect(sheet).toBeHidden()
+  await expect(page.locator('.browse-boxchip-text')).toContainText('Bob')
+})
+
 test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const options = page.locator('.orders-status-select option')
@@ -1985,7 +2026,11 @@ test('each filter option narrows the buyer list exactly as the chip it replaced 
 test('the filter select clears the 40px thumb floor at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 })
   await open(page, { orders: threeBuyerPayload() })
-  const box = await page.locator('.orders-filter-select').boundingBox()
+  /* THE ORDERS-FOLLOWUPS FIX, DEFECT 2: the filter select lives in `searchSlot`, part of the
+   * rail — below 768px the rail is the chip's bottom sheet, not the inline column this case
+   * used to read directly. Open it the same way an operator would. */
+  await page.locator('.browse-boxchip').click()
+  const box = await page.locator('.browse-railsheet .orders-filter-select').boundingBox()
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 

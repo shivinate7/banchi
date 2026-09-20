@@ -1312,7 +1312,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const live = useRef(true)
   const pasteBox = useRef<HTMLTextAreaElement>(null)
   const phone = useMediaQuery('(max-width: 767px)')
-  const wide = useMediaQuery('(min-width: 1024px)')
 
   useEffect(() => {
     live.current = true
@@ -2265,7 +2264,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           busy={busy}
           filter={hub.filter}
           selected={hub.selected}
-          wide={wide}
+          phone={phone}
           well={wellOf(true)}
           emptyWell={wellOf(false)}
           /* The empty state draws its own primary Fetch, so it needs the narrowing beside it —
@@ -2468,7 +2467,7 @@ function PullStage({
   busy,
   filter,
   selected,
-  wide,
+  phone,
   well,
   emptyWell,
   receipt,
@@ -2498,7 +2497,7 @@ function PullStage({
   readonly busy: string | null
   readonly filter: PullFilter
   readonly selected: string | null
-  readonly wide: boolean
+  readonly phone: boolean
   readonly well: ReactNode
   readonly emptyWell: ReactNode
   /** The last fetch's receipt, or null before one has been pressed. */
@@ -2758,6 +2757,14 @@ function PullStage({
    *  other slot for them; this is the same move for the ledger. */
   const [manageOpen, setManageOpen] = useState(false)
 
+  /** THE PHONE RAIL SHEET (defect fix, this pass) — `BoxBrowse.tsx`'s own `railOpen`, over the
+   *  buyer picker rather than the box list. Below 768px `.browse-body > .browse-map` is hidden
+   *  by `BoxBrowse.css` (already imported here), so the search slot, the select bar and the
+   *  buyer list — otherwise part of that column — would have no way onto the screen at all.
+   *  This chip and bottom sheet are that way back in, exactly `BoxBrowse.css`'s
+   *  `.browse-railsheet` styling, not a second stylesheet for the same shape. */
+  const [railOpen, setRailOpen] = useState(false)
+
   /** Hide sold (D132) — `#/inventory`'s own persisted `banchi.inventory.hide-sold`, on the
    *  owner's word: same preference, same screen family, one key. No new key. */
   const [hideSold, setHideSoldState] = useState<boolean>(() => storedHideSold())
@@ -2934,7 +2941,7 @@ function PullStage({
    *  answer to the same bare letters. `↑`/`↓` keep doing what `J`/`K` used to for buyers; the
    *  reference sheet (`App.tsx`'s `SHORTCUTS`) says so. */
   useEffect(() => {
-    if (!wide || shownGroups.length === 0) return
+    if (phone || shownGroups.length === 0) return
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
@@ -2949,7 +2956,7 @@ function PullStage({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [wide, shownGroups, selectedKey])
+  }, [phone, shownGroups, selectedKey])
 
   /* `J`/`K` STEP THE WALK LIST (§13). Same guard rules as the buyer list's own arrows. */
   useEffect(() => {
@@ -2968,7 +2975,12 @@ function PullStage({
   }, [walk])
 
   const setFilter = (next: PullFilter) => setHub({ filter: next })
-  const select = (key: string) => setHub({ selected: key })
+  /* The phone's rail sheet closes once a buyer is chosen (`BoxBrowse.tsx`'s own `pickRow`) —
+   *  picking a buyer is this sheet's one job, unlike the box picker it mirrors. */
+  const select = (key: string) => {
+    setHub({ selected: key })
+    if (phone) setRailOpen(false)
+  }
 
   if (failure !== null && payload === null) {
     return (
@@ -3149,8 +3161,8 @@ function PullStage({
   )
 
   /** THE RAIL'S SEARCH/STATUS/SORT SLOT (§13, point 1) — exactly section 12's own controls,
-   *  restated as a fragment so both the wide rail and the phone layout below draw the same
-   *  markup rather than two hand-kept copies. */
+   *  restated as a fragment so both the rail and the phone rail sheet draw the same markup
+   *  rather than two hand-kept copies. */
   const searchSlot = (
     <div className="orders-toolbar orders-rail-toolbar">
       {chips}
@@ -3306,34 +3318,58 @@ function PullStage({
       {/* `#/orders` TAKES INVENTORY'S EXACT SKELETON (§13): `.browse-body`'s rail and pane, the
           same widths and breakpoints `BoxBrowse.css` already gives `#/inventory`. The rail is
           orders where inventory has boxes; the pane is the selected card's `CardLocations`,
-          reused rather than rebuilt (`OrdersWalkPane.tsx`). */}
-      {wide ? (
-        <div className="browse-body">
-          <div className="browse-map">
-            {searchSlot}
-            <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
-              {selectBar}
-              {ordersList}
-            </div>
-            {railWalkPanel}
-          </div>
-          <div className="browse-side">
-            <WalkMainPane walk={walk} phone={!wide} />
-            {why}
-          </div>
+          reused rather than rebuilt (`OrdersWalkPane.tsx`).
+
+          ONE STRUCTURE, ALWAYS — never a second branch picked in JavaScript (D123: a screen
+          asks its column, browser zoom is not the lever). `.browse-body`'s own breakpoints
+          (`BoxBrowse.css:12-26`, already imported here) collapse the rail below 768px; there is
+          no 1024px reader left in this file to disagree with them. */}
+      {/* THE PHONE RAIL CHIP — below 768px `.browse-body > .browse-map` below is hidden by
+          that same CSS, so the buyer picker needs its own way onto the screen: the chip
+          `BoxBrowse.tsx`'s own `.browse-mobilebar` opens its rail sheet from, sibling to
+          `.browse-body` for the same reason theirs is (the chip's sticky-top and bleed
+          margin read the page's own padding, not a grid column's). */}
+      {phone ? (
+        <div className="browse-mobilebar">
+          <button
+            type="button"
+            className="browse-boxchip"
+            aria-haspopup="dialog"
+            onClick={() => setRailOpen(true)}
+          >
+            <Icon name="list" size={16} />
+            <span className="browse-boxchip-text">
+              {selectedGroup === null ? 'Choose a buyer' : selectedGroup.name ?? `No name · #${selectedGroup.number}`}
+            </span>
+            <Icon name="chevronDown" size={14} className="browse-boxchip-chev" />
+          </button>
         </div>
-      ) : (
-        <>
+      ) : null}
+
+      <div className="browse-body">
+        <div className="browse-map">
           {searchSlot}
           <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
             {selectBar}
             {ordersList}
           </div>
           {railWalkPanel}
-          <WalkMainPane walk={walk} phone={!wide} />
+        </div>
+        <div className="browse-side">
+          <WalkMainPane walk={walk} phone={phone} />
           {why}
-        </>
-      )}
+        </div>
+      </div>
+
+      {phone && railOpen ? (
+        <Overlay kind="bottom" label="Choose a buyer" onClose={() => setRailOpen(false)} passKeys className="browse-railsheet">
+          {searchSlot}
+          <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
+            {selectBar}
+            {ordersList}
+          </div>
+        </Overlay>
+      ) : null}
 
       {!manageOpen ? null : (
         <Overlay kind="sheet" label="Manage orders" onClose={() => setManageOpen(false)} className="orders-manage-sheet">
