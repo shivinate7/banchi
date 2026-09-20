@@ -33,6 +33,7 @@ import { describeFailure, getOrders, getProductHistory, type Failure } from './s
 import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange } from './types'
 import { Button, EmptyState, Notice, PageHeader, Pill } from './kit'
 import { money } from './money'
+import { saleDate } from './dates'
 import { sparkSegments } from './PriceHistory'
 import './ProductHistory.css'
 
@@ -187,7 +188,7 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
           className="producthistory-fill-mark"
           d={diamond(x(f.at.getTime()), y(f.unitPrice), 5)}
         >
-          <title>{`${f.at.toLocaleDateString()} — ${f.quantity} sold at ${money(f.unitPrice)}`}</title>
+          <title>{`${saleDate(f.at)} — ${f.quantity} sold at ${money(f.unitPrice)}`}</title>
         </path>
       ))}
     </svg>
@@ -386,7 +387,7 @@ export function ProductHistory() {
                 <tbody>
                   {beforeHistory.map((f, i) => (
                     <tr key={i}>
-                      <td>{f.at.toLocaleDateString()}</td>
+                      <td>{saleDate(f.at)}</td>
                       <td><span className="bn-mono">{f.orderNumber}</span></td>
                       <td className="num">{f.quantity}</td>
                       <td className="num"><span className="bn-money">{money(f.unitPrice)}</span></td>

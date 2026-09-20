@@ -7127,6 +7127,16 @@ COMPONENTS = [
                                      "different sentences.",
                              # D33 is the money gate, whose receipt this now carries.
                              "governed_by": ["D33"]},
+            "src/dates.ts": {"does": "A SALE DATE, SAID THE SAME WAY EVERYWHERE — `saleDate`. "
+                                     "Extracted 2026-09-20, a UX review follow-up: Revenue.tsx "
+                                     "had padded its own 'Last sold' column against a jittering "
+                                     "un-padded `toLocaleDateString()`, and ProductHistory.tsx "
+                                     "was left calling that identical bare form — the same "
+                                     "defect, uncaught, in a sibling file, which is exactly the "
+                                     "drift money.ts's own header names as the reason a second "
+                                     "copy is never the fix. Both month and day are asked for "
+                                     "`2-digit`, so `Sep 09, 2026` and `Sep 13, 2026` take the "
+                                     "same width."},
             "src/pricingSource.ts": {"does": "WHERE `#/pricing`'s ROWS CAME FROM, AND WHAT MAY "
                                              "BE ASKED ABOUT THEM (D103). One type, two "
                                              "builders, the hash parsing, and the adapter that "

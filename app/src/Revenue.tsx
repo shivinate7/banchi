@@ -4,6 +4,7 @@ import { describeFailure, getOrders, getSoldPrices, type Failure, type SoldPrice
 import type { OrderLineWire, OrderRow } from './types'
 import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented } from './kit'
 import { money, moneyGrouped } from './money'
+import { saleDate } from './dates'
 import { sparkSegments } from './PriceHistory'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
@@ -225,14 +226,6 @@ function weekLabel(start: Date, end: Date): string {
 function formatShort(iso: string): string {
   const d = parseIsoDate(iso)
   return d === null ? iso : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-/** `Sep 9, 2026` for a sale date, reusing `formatShort`'s own padded convention rather than
- *  a bare `toLocaleDateString()` (defect fix, UX review 2026-09-20). The un-padded form
- *  (`5/2/2026` vs `12/13/2026`) was the only date treatment in this screen, and this slice,
- *  not expressed through a shared formatter — its column width jittered row to row for it. */
-function formatLastSold(d: Date): string {
-  return formatShort(isoDate(d))
 }
 
 function sum(sales: readonly Sale[]): number {
@@ -974,7 +967,7 @@ export function Revenue() {
                           comma's reason to exist. Left plain, this cell disagreed with the
                           Copies column on the same row about whether a big number gets one. */}
                       <td className="num"><span className="bn-money">{moneyGrouped(row.gross)}</span></td>
-                      <td>{formatLastSold(row.last)}</td>
+                      <td>{saleDate(row.last)}</td>
                       {prices === null ? null : (
                         <td className="revenue-market">
                           {compare === null ? (
@@ -1006,7 +999,7 @@ export function Revenue() {
                             <tbody>
                               {lines.map((s, i) => (
                                 <tr key={`${s.order}-${i}`}>
-                                  <td>{formatLastSold(s.at)}</td>
+                                  <td>{saleDate(s.at)}</td>
                                   <td><span className="bn-mono">{s.orderNumber}</span></td>
                                   <td className="num">{s.quantity.toLocaleString()}</td>
                                   <td className="num"><span className="bn-money">{money(s.unitPrice)}</span></td>
