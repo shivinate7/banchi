@@ -57,6 +57,7 @@ import type {
   IngestResult,
   Inventory,
   InventoryCard,
+  Listing,
   NamesResult,
   OrderCloseReason,
   OrderFillReason,
@@ -646,6 +647,11 @@ function aimOf(line: ResolvedLine, pick: PickRow): PullTarget | null {
  * `Inventory.tsx:wantedOf` are the same sentence in TypeScript. Held against the owner's real
  * store, this reproduces the server's own `on_hand` figure on all 59 lines, exactly. */
 const GONE = new Set(['sold', 'retired', 'moved'])
+
+/** `BoxBrowse.tsx`'s own `NO_LISTINGS` — one shared empty object rather than a fresh `{}`
+ *  on every render with nothing to show, so a consumer keyed on identity never re-renders
+ *  for no reason. */
+const NO_LISTINGS: Readonly<Record<string, Listing>> = {}
 
 /** The store's on-hand copies keyed by sku, each already shaped as the pick it would have been —
  *  so nothing downstream can tell a resolver's copy from the store's. */
@@ -1252,6 +1258,11 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
    *  names (`skusOf`), which is always a superset of what a walk over open orders can stand
    *  on. */
   const [rawCards, setRawCards] = useState<ReadonlyMap<string, InventoryCard>>(new Map())
+  /** THE SAME READ'S THIRD FACE — `POST /inventory/copies`' own `listings`, narrowed
+   *  server-side to the SKUs any open order names, same as `BoxBrowse.tsx`'s own `listings`
+   *  is narrowed to one box's SKUs. Reused whole by the walk pane's `CardDetailsSection`
+   *  (`market-and-listings parity`, queued after D220) — never a second fetch. */
+  const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
   const [storeFailed, setStoreFailed] = useState(false)
   const [localBusy, setBusy] = useState<string | null>(null)
   /* A write pressed here locks from inside; an undo pressed on a toast locks from outside, through
@@ -1367,6 +1378,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       if (live.current) {
         setStore(indexStore({ cards: {} }))
         setRawCards(new Map())
+        setListings(NO_LISTINGS)
         setStoreFailed(false)
       }
       return
@@ -1376,6 +1388,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       if (!live.current) return
       setStore(indexStore(inventory))
       setRawCards(new Map(Object.values(inventory.cards).map((card) => [`${card.box}/${card.index}`, card])))
+      setListings(inventory.listings ?? NO_LISTINGS)
       setStoreFailed(false)
     } catch {
       if (!live.current) return
@@ -1384,6 +1397,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          map that is quietly narrow. */
       setStore(null)
       setRawCards(new Map())
+      setListings(NO_LISTINGS)
       setStoreFailed(true)
     }
   }, [])
@@ -2235,6 +2249,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           payload={payload}
           store={store}
           rawCards={rawCards}
+          listings={listings}
           storeFailed={storeFailed}
           onRereadStore={() => void rereadStore()}
           failure={failure}
@@ -2438,6 +2453,7 @@ function PullStage({
   payload,
   store,
   rawCards,
+  listings,
   storeFailed,
   onRereadStore,
   failure,
@@ -2468,6 +2484,9 @@ function PullStage({
   /** The same read, whole — `InventoryCard` by `box/index`, for the walk pane's own
    *  `CardHeroHead`/`CardDetailsSection` (§13: inventory's card pane, unchanged). */
   readonly rawCards: ReadonlyMap<string, InventoryCard>
+  /** The same read's third face — `POST /inventory/copies`' own `listings`, for
+   *  `CardDetailsSection`'s "Listed" fact (market-and-listings parity, queued after D220). */
+  readonly listings: Readonly<Record<string, Listing>>
   readonly storeFailed: boolean
   readonly onRereadStore: () => void
   readonly failure: Failure | null
@@ -3436,7 +3455,7 @@ function PullStage({
             CSS to be hiding. */}
         {phone ? null : railCollapsed ? miniRail : <div className="browse-map">{rail}</div>}
         <div className="browse-side">
-          <WalkMainPane walk={walk} phone={phone} />
+          <WalkMainPane walk={walk} phone={phone} listings={listings} />
           {why}
         </div>
       </div>

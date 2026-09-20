@@ -61,6 +61,7 @@ import contextlib
 import csv
 import io
 import json
+from datetime import datetime, timedelta, timezone
 import os
 import re
 import shutil
@@ -5602,6 +5603,261 @@ def check_hatch_state(report: Report) -> None:
         f"{len(roster)} hatches in the roster, none set in this environment or in "
         f".claude/settings.json",
         scanned=len(roster),
+    )
+
+
+# -------------------------------------------------- subagent-model override, live vs forgotten
+
+# The owner's global rule (~/Developer/claude-settings/CLAUDE.md, "roles-opus-override-guarded")
+# names these two keys verbatim as the pair that raises the subagent worker-model cap above
+# Sonnet: `CLAUDE_CODE_SUBAGENT_MODEL` to `opus`, `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` to `1`,
+# written into a checkout's `.claude/settings.local.json` "on my word", removed "when the work
+# is done". THERE IS NO CONSTANT IN THIS REPO TO POINT AN ALLOW-LIST AT — the rule that names
+# these two strings lives one directory up, in a file this repo does not own, commit, or read
+# as code. Naming them here, literally, is the nearest this file can come to
+# `building-allow-list-is-the-constant` when the thing defining the constant is the harness
+# itself and not this tree: an in-repo copy would still be a copy, so this comment is the
+# citation instead, and a name change up there is a name this row has to be told about by hand.
+_SUBAGENT_MODEL_KEY = "CLAUDE_CODE_SUBAGENT_MODEL"
+_SUBAGENT_FORCE_KEY = "CLAUDE_CODE_SUBAGENT_MODEL_FORCE"
+_SUBAGENT_OVERRIDE_KEYS = (_SUBAGENT_MODEL_KEY, _SUBAGENT_FORCE_KEY)
+
+# THE LINE THIS ROW DRAWS. `hatch state` above cannot tell a one-shot hatch from a standing
+# one because an environment variable carries no metadata about who set it or why — so it is
+# ADVISORY, permanently, by argument rather than by oversight. A settings FILE is not an
+# environment variable: it is a persistent artifact this repo can require to carry its own
+# proof of currency, the way D178 requires a `+` marker to be a claim WITH AN EXPIRY rather
+# than a bare assertion. So the override is legitimate exactly when it names the moment it
+# stops being current, and this is the sibling key that states it — read from the same `env`
+# block, alongside the two keys it governs.
+_SUBAGENT_UNTIL_KEY = "CLAUDE_CODE_SUBAGENT_MODEL_UNTIL"
+
+# Opus-shaped work is the parent rule's own phrase for what earns this override:
+# "long-horizon, whole-codebase, or many-hour autonomous work" — hours, named as hours, never
+# days. An expiry further out than this reads as a standing exemption wearing a timestamp,
+# which is the exact shape D178's own entry rejected an allowlist line for ("meant to be
+# unresolvable FOREVER" is a different claim from "not yet"). THIS NUMBER IS A JUDGEMENT, NOT
+# A MEASUREMENT, and it is the one part of this row the owner may want to move — say so in the
+# same commit that moves it, on `outcomes-stale-decision-protocol`'s own terms.
+_SUBAGENT_OVERRIDE_MAX_LOOKAHEAD = timedelta(hours=24)
+
+# The two filenames Claude Code actually writes under `.claude/`. Not a bare `settings*.json`
+# glob: D178's own lesson about a broken path applies in reverse here — a loose glob would
+# also match a future `settings.local.json.bak` or an editor swap file and report a stranger's
+# JSON as this repo's problem. Named one at a time, the same discipline `PATH_INDEX_FILES`
+# above already keeps.
+_SUBAGENT_SETTINGS_NAMES = ("settings.json", "settings.local.json")
+
+
+def _parse_subagent_until(value: object) -> Optional[datetime]:
+    """`CLAUDE_CODE_SUBAGENT_MODEL_UNTIL`'s value as an aware UTC datetime, or None.
+
+    `None` covers both "absent" and "present but unreadable" on purpose — the caller reports
+    them differently, but this function's only job is "can this be trusted as a clock
+    reading," and a string that does not parse trusts exactly as much as no string at all.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _subagent_override_findings(
+    settings_paths: Sequence[Path],
+    now: Optional[datetime] = None,
+) -> List[Finding]:
+    """The pure half of `check_subagent_override`: given real settings files, name every
+    live override that cannot prove it is current.
+
+    TAKES PATHS AND A CLOCK AS ARGUMENTS rather than reading `ROOT`, `nested_worktrees()` or
+    `datetime.now()` itself, on this file's own `--self-test` reasoning (see `_TCG_IMPORT_PATH`
+    and its neighbours) — so `scripts/subagent-override-selftest.py` can hand it a fixture
+    file list and a fixed instant instead of a real clock racing a real filesystem.
+
+    READS THE DISK DIRECTLY, NEVER THROUGH `exists()`/`read()`. Those two honor `--staged`
+    mode by redirecting to the git INDEX, which is correct for markdown claims about committed
+    code and actively wrong here: `.claude/settings.local.json` and `.claude/worktrees/` are
+    both gitignored (D135's own tracking note), so they are NEVER in the index, in ANY mode,
+    by design. Reading them through the staged-mode helpers would make this row report "found
+    nothing" on every single commit — the one place this defect actually has to be caught,
+    since the file that sat forgotten for hours was never going to be staged either. This is
+    `check_hatch_state`'s own choice, applied to a file instead of `os.environ`: that row reads
+    live environment variables directly for the same reason.
+
+    A file that does not exist, is not valid JSON, or has no `env` object is silently passed —
+    each of those is empty of an override, not evidence of one, and an unparsable
+    `.claude/settings.json` is `hatch state`'s finding to report, not this row's to repeat.
+    """
+    now = now or datetime.now(timezone.utc)
+    findings: List[Finding] = []
+    for path in settings_paths:
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        except ValueError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        env = data.get("env")
+        if not isinstance(env, dict):
+            continue
+        present = {key: env[key] for key in _SUBAGENT_OVERRIDE_KEYS if key in env}
+        if not present:
+            continue
+
+        where = rel(path)
+        detail = ", ".join(f"{key}={value!r}" for key, value in present.items())
+
+        if path.name == "settings.json":
+            # TRACKED. Every clone and every CI run inherits this, forever, with no
+            # session's word behind it and no removal step anyone will ever run — the
+            # opposite of "on my word... removed when the work is done." No expiry
+            # excuses this; the file it belongs in is the untracked one beside it.
+            findings.append(Finding(
+                where,
+                f"its `env` block sets {detail}. This file is TRACKED, so this raises the "
+                f"subagent cap for every session that ever checks this repo out, committed "
+                f"to git. The owner's rule puts this override only in the untracked "
+                f"`settings.local.json` beside it — move it there, or drop it.",
+            ))
+            continue
+
+        until_raw = env.get(_SUBAGENT_UNTIL_KEY)
+        until = _parse_subagent_until(until_raw)
+        if until_raw is None:
+            findings.append(Finding(
+                where,
+                f"its `env` block sets {detail} with no `{_SUBAGENT_UNTIL_KEY}`.\n"
+                f"  An override with no stated expiry cannot be told apart from a forgotten "
+                f"one — which is exactly what sat here for hours on 2026-09-19. State when "
+                f"it stops being current (an ISO-8601 UTC timestamp), or remove the file.",
+            ))
+            continue
+        if until is None:
+            findings.append(Finding(
+                where,
+                f"its `{_SUBAGENT_UNTIL_KEY}` is {until_raw!r}, which does not read as an "
+                f"ISO-8601 timestamp. Treated the same as no expiry at all: it proves "
+                f"nothing about when this stops being current.",
+            ))
+            continue
+        if until <= now:
+            findings.append(Finding(
+                where,
+                f"its `env` block sets {detail}; `{_SUBAGENT_UNTIL_KEY}` was "
+                f"{until.isoformat()}, which is in the past. The task this was for is over "
+                f"and the file was not removed. Remove it, or set a new expiry with a fresh "
+                f"reason.",
+            ))
+            continue
+        if until - now > _SUBAGENT_OVERRIDE_MAX_LOOKAHEAD:
+            findings.append(Finding(
+                where,
+                f"its `env` block sets {detail}; `{_SUBAGENT_UNTIL_KEY}` is "
+                f"{until.isoformat()}, more than {_SUBAGENT_OVERRIDE_MAX_LOOKAHEAD} away. "
+                f"Opus-shaped work is hours, not days — an expiry this far out reads as a "
+                f"standing exemption, not one task's own end.",
+            ))
+            continue
+        # Present, dated, ahead of `now`, inside the lookahead ceiling: set on purpose,
+        # right now. Quiet — the whole argument for building this instead of a bare
+        # forbid, and the reason it is MECHANICAL rather than ADVISORY like `hatch state`:
+        # this row can actually tell current from forgotten, so it does not have to ask.
+
+    return findings
+
+
+def _subagent_settings_candidates() -> List[Path]:
+    """Every settings file this checkout can see: its own two, and one apiece for every
+    nested git worktree `nested_worktrees()` finds — CHECKING WHETHER THE PRIMITIVE ALREADY
+    EXISTS FIRST, this repo's own standing instruction. `nested_worktrees()` already asks git
+    for the exact case this row exists to catch (`.claude/worktrees/<name>/`, "the case that
+    was actually observed breaking a commit," in its own docstring) and, unlike a name-based
+    glob, also finds a worktree made by hand anywhere else under this tree — which is exactly
+    the gap a root-only reader has and this row is built not to.
+    """
+    roots = (ROOT,) + nested_worktrees()
+    return [root / ".claude" / name for root in roots for name in _SUBAGENT_SETTINGS_NAMES]
+
+
+def check_subagent_override(report: Report) -> None:
+    """A subagent-model override that outlived the work it was for, wherever it is sitting.
+
+    THE INCIDENT. 2026-09-19: a session raised the subagent cap by writing
+    `CLAUDE_CODE_SUBAGENT_MODEL=opus` and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` into a
+    checkout's `.claude/settings.local.json`. The owner's rule allows that only on their
+    explicit word, and requires the file be removed when the work is done — it was not, and
+    it sat for hours in `.claude/worktrees/<name>/`, a worktree nobody was standing in, found
+    only because a different hook kept complaining about something else. `hatch state` above
+    reads `.claude/settings.json` and the live environment; neither is this file, and neither
+    looks inside a nested worktree. THE SECOND HALF OF THE RULE — "removed when the work is
+    done" — had no reader anywhere in this repo until this row.
+
+    THE DESIGN QUESTION, ARGUED RATHER THAN ASSUMED. Setting the override is legitimate
+    while an Opus-shaped task is actually running (`roles-opus-shaped-say-so`), so a row that
+    simply forbade it would be exactly the `verification-cry-wolf-guard-is-spent` guard this
+    repo already rules against: a session doing exactly what the owner's word authorized
+    would sit red until it hand-removed the file, learn to expect this row to be noise, and
+    stop reading it the day it means something. The whole task here was drawing the line
+    between "set on purpose, right now" and "forgotten" — three candidates, one taken:
+
+    REJECTED: an escape hatch, `PKMNSCAN_<NAME>=off` in the shape every other clause in this
+    repo's shell guard carries. That pattern is deliberately not spelled out as a real name
+    here — inventing one would make `env names` demand it be documented as if it existed.
+    Every clause in this repo's shell guard carries one, but a hatch answers "should this row
+    run at all," never "is what it would find still true." Typing the hatch is a second thing
+    to forget alongside removing the file — it does not shrink the forgetting surface, it
+    doubles it, and a hatch left standing is `hatch state`'s own defect one level up.
+
+    REJECTED: refusing only on the commit path. `.claude/settings.local.json` and
+    `.claude/worktrees/` are BOTH gitignored (D135's tracking note, and see `SKIP_DIRS`
+    above) — they can never be staged, so a check gated to "about to be committed" would never
+    fire on the one artifact this whole task is about. The 2026-09-19 file was never going to
+    reach a commit either; that is exactly why nothing caught it. This candidate does not
+    narrow the guard's timing, it deletes its only reason to exist.
+
+    TAKEN: a required, self-stated expiry, on D178's own idiom — "a marker that could be left
+    on would turn every proposal into a permanent exemption," read here for a settings key
+    instead of a `+` in a document. `CLAUDE_CODE_SUBAGENT_MODEL_UNTIL` alongside the override
+    states when it stops being current; this row reads it, compares it to now, and stays quiet
+    exactly while the stated window holds. A file with the override and no expiry, an expiry
+    already past, an expiry that fails to parse, or an expiry so far out it reads as standing
+    rather than task-shaped (`_SUBAGENT_OVERRIDE_MAX_LOOKAHEAD`) — each of those is what this
+    row calls forgotten, and each is MECHANICAL rather than `hatch state`'s ADVISORY: unlike a
+    bare environment variable, a dated settings key is a claim this row can actually check
+    rather than merely ask about, so it does not have to hedge.
+
+    WHAT THE OWNER IS BEING ASKED TO DECIDE. Whether the expiry-key convention is the right
+    shape at all (a session must remember to write the additional key, not only the two the
+    parent rule already names); whether 24 hours is the right ceiling for "Opus-shaped"; and
+    whether this belongs beside `hatch state` as one row or stays separate, as built, because
+    the two differ in exactly one way — one of them CAN tell current from forgotten and the
+    other structurally cannot.
+
+    D18 applies to this row the way it applies to every check in this file: it gates and it
+    writes nothing. `scripts/subagent-override-selftest.py` proves it by violation — a nested
+    worktree's own settings file with an undated, an expired and a too-far-dated override each
+    made red and named, a currently-dated one made quiet, and a tree with no override at all
+    made green — the way `guard-shell-selftest` proves each of its clauses.
+    """
+    candidates = _subagent_settings_candidates()
+    findings = _subagent_override_findings(candidates)
+    report.add(
+        "subagent override",
+        MECHANICAL,
+        findings,
+        f"{len(candidates)} settings files reachable from this checkout (its own and every "
+        f"nested worktree's), none carrying an undated, expired, or too-far-dated override",
+        scanned=len(candidates),
     )
 
 
@@ -18988,6 +19244,7 @@ def audit(staged_only: bool) -> Report:
     check_env_vars(report, docs, allowed)
     check_env_names(report)
     check_hatch_state(report)
+    check_subagent_override(report)
     check_claim_decode(report)
     check_claim_clients(report)
     check_detector_standing(report)
