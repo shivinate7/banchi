@@ -1,7 +1,7 @@
-## D-a-archive-press-priority — Sold value goes first, and sealed product is a named gap
+## D223 — Sold value goes first, and sealed product is a named gap
 
 **MEASURED AGAINST THE OWNER'S REAL STORE, 2026-09-19.** An unranked `archive sweep` over
-914 SKUs answered for 206 of them before the host throttled it (D-a-archive-press-pace).
+914 SKUs answered for 206 of them before the host throttled it (D222).
 Only 37 of those 206 were SKUs the owner had ever actually sold. The owner's ten biggest
 sellers by revenue answered zero out of ten. Every one of the ten is sealed product.
 Together they total over $26,000, against $66,335 gross excluding canceled orders.
@@ -60,7 +60,7 @@ press's own accounting (`archive show`) will report the true number the first ti
 against the real store.
 
 Within the reachable set, the ranking's own claim is stronger. Every single-card SKU with
-sold revenue sorts before every SKU that has only ever sat on hand. D-a-archive-press-pace
+sold revenue sorts before every SKU that has only ever sat on hand. D222
 measures the host tolerating a few hundred requests before a throttle. That budget
 comfortably covers every revenue-bearing single first, given the owner's store holds 914
 subjects and only a small fraction have ever sold.

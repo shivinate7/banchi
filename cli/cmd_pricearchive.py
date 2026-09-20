@@ -1,6 +1,6 @@
 """`pkmnscan archive` — the price-history archive: sweep the live endpoint into it, or look
-at what it holds (D219, D-a-archive-press-resume, D-a-archive-press-priority,
-D-a-archive-press-pace).
+at what it holds (D219, D224, D223,
+D222).
 
 WHY THIS COMMAND EXISTS. `pipeline/pricehistory.py`'s history endpoint has a hard ceiling of
 357 days; everything older is already gone, and everything not captured from here ages out on
@@ -38,13 +38,13 @@ number that module already argues is short enough nobody reads a stale figure an
 enough that re-running a pass in one sitting costs no requests.
 
 THE SUBJECT ORDER IS SOLD VALUE FIRST, NOT WHATEVER `cards.select` RETURNED
-(`pipeline.pricearchive.rows_from_store`/`rank_by_revenue`, D-a-archive-press-priority).
+(`pipeline.pricearchive.rows_from_store`/`rank_by_revenue`, D223).
 Measured 2026-09-19: an unranked pass answered for 206 of 914 SKUs before the host throttled
 it, and only 37 of those 206 were SKUs the owner had ever actually sold. A pass that gets cut
 off should have spent its requests on what earns.
 
 THE HOST THROTTLES THIS SESSION, AND THAT IS THE NORMAL CASE, NOT AN EXCEPTION
-(D-a-archive-press-pace). Measured 2026-09-19 with a working `PKMNSCAN_TCG_USER_AGENT`: the
+(D222). Measured 2026-09-19 with a working `PKMNSCAN_TCG_USER_AGENT`: the
 same product answered HTTP 200 minutes into a run and HTTP 403 later in the same session,
 with nothing about the request different but the volume already sent. `_sweep` paces itself
 on a measured interval (`pipeline.pricearchive.measured_pace`, persisted by `load_pace` /

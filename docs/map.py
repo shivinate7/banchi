@@ -474,7 +474,7 @@ COMPONENTS = [
                                              "D213"],
                              "tested_by": ["T7"]},
             # THE PRESS `pkmnscan archive sweep` RUNS (D219,
-            # D-a-archive-press-resume, D-a-archive-press-priority, D-a-archive-press-pace).
+            # D224, D223, D222).
             # Argument parsing, the network-free preview, the chunked commit-as-you-go
             # write, and the throttle backoff; the walk itself is
             # `pipeline/pricearchive.py`, proved independently by `make pricearchive-selftest`.
@@ -498,9 +498,9 @@ COMPONENTS = [
                                             "press. `archive show [--sku]` reads the table "
                                             "and writes nothing.",
                                     "governed_by": ["D219",
-                                                    "D-a-archive-press-resume",
-                                                    "D-a-archive-press-priority",
-                                                    "D-a-archive-press-pace",
+                                                    "D224",
+                                                    "D223",
+                                                    "D222",
                                                     "D62", "D86", "D43", "D88"],
                                     "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
@@ -1019,7 +1019,7 @@ COMPONENTS = [
                                     "citation nothing backs — `check_readings_adopt_cli` in "
                                     "T7 exercises it only through the CLI dispatch."},
             # THE SWEEP `pkmnscan archive sweep` RUNS (D219,
-            # D-a-archive-press-resume, D-a-archive-press-priority, D-a-archive-press-pace).
+            # D224, D223, D222).
             # Reads `pipeline/pricehistory.py`'s live endpoint for every SKU
             # `rows_from_store` names and hands `store/pricearchive.py` what came back,
             # keyed so D62's overlapping ranges never collide.
@@ -1049,9 +1049,9 @@ COMPONENTS = [
                                         "press's pace, persisted on disk.",
                                 "governed_by": ["D62", "D26", "D134", "D9", "D214", "D216",
                                                 "D219",
-                                                "D-a-archive-press-resume",
-                                                "D-a-archive-press-priority",
-                                                "D-a-archive-press-pace"],
+                                                "D224",
+                                                "D223",
+                                                "D222"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
                                         "`make check` — no network call. A FakeMarket and a "
                                         "RecordingMarket stand in for the network; 48 "
@@ -2368,20 +2368,20 @@ COMPONENTS = [
                         "for the same calendar day read from `semiannual` and `annual`, and "
                         "a width-only key is shown, in the same run, to collapse them into "
                         "one. Proves the never-delete rule. Proves ranking "
-                        "(D-a-archive-press-priority): `revenue_by_sku` excludes canceled "
+                        "(D223): `revenue_by_sku` excludes canceled "
                         "orders, `rank_by_revenue` sorts sold value first. Proves resume "
-                        "(D-a-archive-press-resume): `freshness_index`/`split_by_freshness` "
+                        "(D224): `freshness_index`/`split_by_freshness` "
                         "skip a fresh SKU, and — proven to fail FIRST — a one-shot `sweep()` "
                         "over every row loses everything to a mid-pass exception while a "
                         "chunked, commit-per-chunk walk keeps every chunk read before the "
                         "drop and a resumed pass never re-asks for what survived. Proves "
-                        "pacing (D-a-archive-press-pace): `classify_refusals` rewrites a 403 "
+                        "pacing (D222): `classify_refusals` rewrites a 403 "
                         "only with evidence of an earlier success this pass, and "
                         "`measured_pace`/`load_pace`/`save_pace` are exercised directly. "
                         "Forty-eight assertions, all passing. Not wired into `make check` — "
                         "`make catalog-index-selftest`'s own precedent.",
-                "governed_by": ["D219", "D-a-archive-press-resume",
-                                "D-a-archive-press-priority", "D-a-archive-press-pace",
+                "governed_by": ["D219", "D224",
+                                "D223", "D222",
                                 "D62", "D18"],
             },
             "reap-selftest.sh": {

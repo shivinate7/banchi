@@ -34,8 +34,8 @@ network call in a test" rule, without this module importing anything from `unitt
 
 --------------------------------------------------------------------------------------
 FOUR THINGS `cli/cmd_pricearchive.py` LAYERS ON TOP OF `sweep`, ALL IN THIS FILE AS PURE,
-TESTABLE FUNCTIONS SO THE CLI ITSELF STAYS A THIN DRIVER (D-a-archive-press-priority,
-D-a-archive-press-pace):
+TESTABLE FUNCTIONS SO THE CLI ITSELF STAYS A THIN DRIVER (D223,
+D222):
 
   1. RANKED SUBJECTS. `rows_from_store` orders its answer by what the ledger says that SKU
      has actually earned, sold value first (`revenue_by_sku`, `rank_by_revenue`) — a pass
@@ -70,7 +70,7 @@ from store.session import Store
 
 # How many subject SKUs one `sweep()` call and one Store commit cover — chosen so an
 # interrupt between two commits loses at most this many SKUs' worth of reads, never the
-# whole pass (D-a-archive-press-pace). Not tuned to network throughput; `measured_pace`
+# whole pass (D222). Not tuned to network throughput; `measured_pace`
 # below is what answers "how fast", this only answers "how much unwritten work at once".
 CHUNK_SKUS = 20
 
@@ -81,7 +81,7 @@ CHUNK_SKUS = 20
 DEFAULT_COURTESY_DELAY_SECONDS = 0.15
 
 # How much slower than the rate that just got a session blocked the next attempt goes.
-# ARGUED, NOT PROVEN OPTIMAL (D-a-archive-press-pace): doubling the interval a run
+# ARGUED, NOT PROVEN OPTIMAL (D222): doubling the interval a run
 # demonstrably survived only PART of is a conservative first correction, not a claim about
 # the host's real limit — which this module has no way to learn except by trying and is
 # never going to get from a constant somebody typed.
@@ -142,7 +142,7 @@ def revenue_by_sku(ledger) -> Dict[str, Decimal]:
     Calendar's fulfilment record. A sealed SKU's revenue is computed here anyway, because
     `rank_by_revenue` is handed EVERY key this function can answer for, not only the ones
     `rows_from_store`'s own subject set happens to contain — the gap between the two is
-    exactly the reachability limit `docs/decisions/D-a-archive-press-priority.md` argues
+    exactly the reachability limit D223 argues
     about and does not solve.
 
     A LINE WITH NO READABLE `unit_price` CONTRIBUTES NOTHING AND IS NEVER AN ERROR — D9's
@@ -170,9 +170,9 @@ def revenue_by_sku(ledger) -> Dict[str, Decimal]:
 
 
 def rank_by_revenue(skus: Iterable[str], revenue: Dict[str, Decimal]) -> List[str]:
-    """Every SKU in `skus`, sold value first (D-a-archive-press-priority).
+    """Every SKU in `skus`, sold value first (D223).
 
-    A pass that gets cut off partway — D-a-archive-press-pace's whole subject, and the
+    A pass that gets cut off partway — D222's whole subject, and the
     NORMAL case measured 2026-09-19, not the exception — should have spent its requests on
     what the owner has actually sold, never on whatever order `cards.select` returned. A
     SKU this ledger never sold reads as zero and sorts last, among itself in SKU order —
@@ -185,7 +185,7 @@ def rank_by_revenue(skus: Iterable[str], revenue: Dict[str, Decimal]) -> List[st
 def rows_from_store(snapshot=None) -> Dict[str, dict]:
     """`sku -> export-shaped row`, one per distinct SKU the `cards` table has ever named,
     ORDERED BY WHAT THAT SKU HAS ACTUALLY SOLD FOR
-    (`rank_by_revenue`, D-a-archive-press-priority) — a plain `dict` preserves the order it
+    (`rank_by_revenue`, D223) — a plain `dict` preserves the order it
     is built in, so a caller that chunks or iterates this in order walks the highest-value
     subjects first with no second sort.
 
@@ -312,7 +312,7 @@ def split_by_freshness(
     now: int,
     ttl_seconds: int,
 ) -> Tuple[Dict[str, dict], List[str]]:
-    """`(needs_fetch, already_fresh_skus)` (D-a-archive-press-resume).
+    """`(needs_fetch, already_fresh_skus)` (D224).
 
     A SKU IS FRESH ONLY WHEN EVERY RANGE THIS PASS ASKS ABOUT ALREADY HAS A BUCKET READ
     WITHIN `ttl_seconds` OF `now`. `Market.readings_for_rows` fetches every range for a
@@ -346,7 +346,7 @@ def split_by_freshness(
 def chunk_rows(rows: Dict[str, dict], size: int) -> List[Dict[str, dict]]:
     """`rows` split into ordered pieces of at most `size`, IN THE CALLER'S OWN ORDER —
     never re-sorted here. `rows_from_store` orders by sold revenue
-    (D-a-archive-press-priority); re-sorting alphabetically in this function would silently
+    (D223); re-sorting alphabetically in this function would silently
     undo that ranking, which is exactly the kind of defect `CLAUDE.md` asks to be named
     rather than reintroduced by a "helper" three lines away from the decision it defeats.
     """
@@ -361,7 +361,7 @@ def classify_refusals(
     refusals: Dict[str, str], had_earlier_success: bool
 ) -> Tuple[Dict[str, str], int]:
     """Rewrite a chunk's refusal messages, and answer how many were the host BLOCKING this
-    session outright (D-a-archive-press-pace).
+    session outright (D222).
 
     A 403 THAT ARRIVES AFTER THIS PASS HAS ALREADY READ AT LEAST ONE SKU SUCCESSFULLY IS A
     THROTTLE, NEVER AN AUTHORIZATION PROBLEM — measured 2026-09-19: product 652771 answered
@@ -398,7 +398,7 @@ def measured_pace(
     requests_made: int, elapsed_seconds: float, floor: float = DEFAULT_COURTESY_DELAY_SECONDS
 ) -> float:
     """Seconds to wait between requests, derived from what THIS pass actually measured
-    before the host cut it off — never a guessed number (D-a-archive-press-pace).
+    before the host cut it off — never a guessed number (D222).
 
     `requests_made` and `elapsed_seconds` are this pass's own count and clock up to the
     moment a throttle was first seen, so `elapsed_seconds / requests_made` is the average

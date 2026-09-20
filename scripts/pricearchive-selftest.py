@@ -91,11 +91,11 @@ class FakeMarket:
 class RecordingMarket:
     """Answers every SKU it is asked about out of `script`, and REMEMBERS every SKU it was
     ever asked about — the proof surface for "a resumed sweep must not re-fetch what it
-    already holds from this same pass" (D-a-archive-press-resume). A test hands this the
+    already holds from this same pass" (D224). A test hands this the
     SKUs a chunk is supposed to skip and asserts they never appear in `.asked`.
 
     ONE CALL RAISES ON PURPOSE, IF `raise_on` NAMES A SKU. This is the stand-in for a
-    dropped connection or a Ctrl-C mid-chunk (D-a-archive-press-resume's other half): the
+    dropped connection or a Ctrl-C mid-chunk (D224's other half): the
     exception is a plain `RuntimeError`, never a `pipeline.pricehistory.PriceHistoryError`,
     so it propagates PAST `readings_for_rows`'s own per-product `except` the same way a
     `KeyboardInterrupt` would — this class is not exercising that internal catch, it is
@@ -292,7 +292,7 @@ def main() -> int:
 
         # ---------------------------------------------------- ranking: sold value first
         print("\n-- pipeline/pricearchive.py: revenue_by_sku and rank_by_revenue "
-              "(D-a-archive-press-priority) --")
+              "(D223) --")
         with Store().write() as snapshot:
             # "444" sells for $10.00 once (a real reading). "555" never sells (already
             # sold=state above, but no ORDER line — on-hand-or-sold is not the same fact as
@@ -323,7 +323,7 @@ def main() -> int:
            "rows_from_store itself walks sold-value-first, with no second sort needed by "
            "its caller", list(ranked_rows))
 
-        # -------------------------------------- resuming: freshness (D-a-archive-press-resume)
+        # -------------------------------------- resuming: freshness (D224)
         print("\n-- pipeline/pricearchive.py: freshness_index and split_by_freshness --")
         existing = [
             Bucket(sku="AAA", product_id=1, range="month", width_days=1, start="2026-01-01",
@@ -359,7 +359,7 @@ def main() -> int:
         ok([list(c) for c in chunks] == [["0", "1"], ["2", "3"], ["4"]],
            "chunks are ordered pieces, never re-sorted", chunks)
 
-        # ------------------------------------------------- pacing (D-a-archive-press-pace)
+        # ------------------------------------------------- pacing (D222)
         print("\n-- pipeline/pricearchive.py: classify_refusals and measured_pace --")
         blocked_message = (
             "https://infinite-api.tcgplayer.com/price/history/652771/detailed?range=month "
@@ -445,7 +445,7 @@ def main() -> int:
             ok(after_old == {},
                "the OLD one-transaction-at-the-end shape has nothing to commit when the "
                "call that would have produced it never returned — this is the bug "
-               "D-a-archive-press-resume's chunking fixes", after_old)
+               "D224's chunking fixes", after_old)
         finally:
             shutil.rmtree(os.environ[files.HOME_ENV], ignore_errors=True)
             os.environ[files.HOME_ENV] = str(home)

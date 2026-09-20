@@ -1,4 +1,4 @@
-## D-a-archive-press-pace — The press paces itself on a measurement, and names a throttle
+## D222 — The press paces itself on a measurement, and names a throttle
 
 **MEASURED AGAINST THE OWNER'S REAL STORE, 2026-09-19, WITH A WORKING USER-AGENT.** 914
 SKUs, 4 ranges, 28,350 buckets written. Only 206 of 914 SKUs answered. The other 689 were
@@ -9,7 +9,7 @@ Nothing about the request changed. Only the volume already sent did.
 
 This is the NORMAL case for this press, not an exception. A throttle after roughly 800
 requests is close to certain over a 3,656-request pass at the old pace. Resuming without
-re-fetching (D-a-archive-press-resume) is the difference between finishing and never
+re-fetching (D224) is the difference between finishing and never
 finishing.
 
 ### A 403 after success this pass is named for what it is
@@ -46,7 +46,7 @@ On the first throttle signal this pass, `cli/cmd_pricearchive.py:_sweep` rebuild
 `Market` at the newly measured pace. It keeps going. If the very next chunk is also
 throttled, the press stops there. It does not hammer a host that has already refused it
 twice at two paces. Every chunk already committed stays committed
-(D-a-archive-press-resume). The measured pace is saved to `throttle-pace.json`, beside the
+(D224). The measured pace is saved to `throttle-pace.json`, beside the
 market cache. The next press starts from real evidence, not the naive constant.
 
 ### What was measured, and what to expect from a re-run
@@ -68,4 +68,4 @@ No retry loop sleeps and re-tries the same request inside one attempt. This repo
 shell guard already refuses that shape elsewhere, under `PKMNSCAN_WAIT`. A wait that cannot
 see its own outcome is not a mechanism. Stopping the pass is the mechanism instead. Letting
 the operator re-run `archive sweep --write` is the other half.
-D-a-archive-press-resume is what makes that re-run cheap.
+D224 is what makes that re-run cheap.

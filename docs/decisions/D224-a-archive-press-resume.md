@@ -1,4 +1,4 @@
-## D-a-archive-press-resume — The preview costs nothing, and the press commits as it goes
+## D224 — The preview costs nothing, and the press commits as it goes
 
 **MEASURED AGAINST THE OWNER'S REAL STORE, 2026-09-19.** `archive sweep`
 (D219) over 914 SKUs and 4 ranges printed nothing for over ten
@@ -57,7 +57,7 @@ bucket read within `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` (one hour) of 
 That hour is not new. `pipeline/pricehistory.py` already argues for it: short enough that
 nobody reads a stale figure. Long enough that repeating a pass in one sitting costs no
 requests. Reusing it means a sweep resumed within the hour of an interrupt pays for nothing
-it already has. Per D-a-archive-press-pace, that resumed-within-the-hour case is now the
+it already has. Per D222, that resumed-within-the-hour case is now the
 NORMAL one, not the exception.
 
 A SKU with genuinely no sales in a period never looks fresh by this test. An empty series
