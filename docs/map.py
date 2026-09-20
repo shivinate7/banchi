@@ -1996,6 +1996,50 @@ COMPONENTS = [
                         "and the fixture asserts its own arming. Same lesson githooks-selftest "
                         "records about git's own refusals scoring as the hook's.",
             },
+            "js-breakpoints.py": {
+                "does": "the pure extraction, IMPORT-GRAPH PAIRING and comparison behind "
+                        "`make docs-audit`'s `js breakpoints` row (D123): every "
+                        "`(min|max)-width: NNNpx)` a `.ts`/`.tsx` file under app/src spells "
+                        "inside a media-query string, against only the `@media` widths of the "
+                        "stylesheets THAT FILE ITSELF IMPORTS (direct `.css` imports, "
+                        "followed transitively stylesheet-to-stylesheet through `@import`, "
+                        "never back out through another component's own imports) — never "
+                        "`@container`, which answers a pane's width and not the window's. "
+                        "`subject_css_widths` borrows `browser-scope.py`'s `file_imports` "
+                        "for the import graph rather than reimplementing one. Sides are "
+                        "canonicalized (`min-width: V` and `max-width: V-1` are one regime "
+                        "boundary). A file that imports no stylesheet at all is UNPAIRED, its "
+                        "own finding, never a silent pass. `docs-audit.py`'s row builds the "
+                        "two structures itself (its `read()` honors staged-commit mode for a "
+                        "stylesheet's content) and calls `compare`; `check` and `selftest` "
+                        "are this script's own CLI. `selftest` proves the row by violating it "
+                        "— posed exactly as the real Orders.tsx defect was shaped — and then "
+                        "by fixing it, plus a case proving a GLOBAL comparison would have "
+                        "missed that same defect.",
+                "governed_by": ["D16", "D18", "D123", "D141", "D173"],
+                "note": "THE FIRST VERSION OF THIS ROW WAS GLOBAL AND WENT GREEN ON ITS OWN "
+                        "MOTIVATING DEFECT. `app/src/Orders.tsx` carried `min-width: 1024px` "
+                        "with none of its own three imported stylesheets (`BoxBrowse.css`, "
+                        "`BoxOps.css`, `Orders.css`) declaring it, while a global sweep of "
+                        "every stylesheet under app/src found 1024 anyway — in `RunPanel.css` "
+                        "and `App.css`, both files `Orders.tsx` never imports. A guard that "
+                        "stays green while its own motivating defect sits in the tree is "
+                        "spent; the fix was IMPORT-GRAPH PAIRING, not a second layer beside "
+                        "the global one. THE PAIRING STOPS AT CSS ON PURPOSE: `Orders.tsx` "
+                        "also transitively imports `OrdersWalkPane.tsx`, which imports "
+                        "`Shipping.css` — and `Shipping.css` happens to declare "
+                        "`max-width: 1023px` (canonical 1024), which would have laundered "
+                        "the same defect back to green had the reader followed JS-to-JS "
+                        "imports before collecting CSS. A component answers to what IT "
+                        "declares itself governed by, never to a child component's private "
+                        "sheet. A KNOWN, UNPATCHED QUIRK IN THE BORROWED READER: "
+                        "`browser-scope.py`'s `_RELATIVE_EXTENSIONS` tries `.css` before "
+                        "`/index.tsx`, so `import ... from './kit'` resolves to "
+                        "`app/src/kit.css` instead of `app/src/kit/index.tsx` wherever a "
+                        "directory and a same-named stylesheet both exist — only `kit`, "
+                        "today. `kit.css` declares no width this defeats, so no verdict here "
+                        "moves, and the fix belongs to `browser-scope.py`, not to this file.",
+            },
             "browser-scope.py": {
                 "does": "does a change reach what a browser draws? The list of every path "
                         "`make design-check` loads, each with the reason it is there, and the "
@@ -2939,15 +2983,15 @@ COMPONENTS = [
                 # link this repo's own history ever produced.
                 "governed_by": ["D1", "D2", "D3", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D27", "D31",
-                                "D33", "D39", "D41", "D43", "D44", "D47", "D49", "D50", "D51", "D53",
-                                "D60", "D63", "D64", "D65", "D67", "D69", "D70", "D72", "D74",
-                                "D75", "D76", "D80", "D81", "D83", "D84", "D86", "D87", "D88",
-                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110", "D111",
-                                "D113", "D119", "D122", "D127", "D132", "D134", "D135", "D136",
-                                "D138", "D140", "D141", "D142", "D143", "D144", "D149", "D155",
-                                "D159", "D160", "D161", "D173", "D174", "D178", "D181", "D182",
-                                "D185", "D191", "D192", "D194", "D196", "D210", "D213",
-                                "D215", "D218", "D226"],
+                                "D33", "D39", "D41", "D43", "D44", "D47", "D49", "D50", "D51",
+                                "D53", "D60", "D63", "D64", "D65", "D67", "D69", "D70", "D72",
+                                "D74", "D75", "D76", "D80", "D81", "D83", "D84", "D86", "D87",
+                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110",
+                                "D111", "D113", "D119", "D122", "D123", "D127", "D132", "D134",
+                                "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
+                                "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
+                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
+                                "D213", "D215", "D218", "D226"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3669,11 +3713,11 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48", "D53",
-                                "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D83", "D86", "D88",
-                                "D89", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D139", "D140",
-                                "D141", "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D189",
-                                "D215"],
+                "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48",
+                                "D53", "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80",
+                                "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
+                                "D127", "D129", "D133", "D138", "D139", "D140", "D141", "D149",
+                                "D158", "D160", "D171", "D172", "D173", "D176", "D189", "D215"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

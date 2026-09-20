@@ -799,6 +799,27 @@ CHECKS = (
         "gates": True,
         "governed_by": ("D16", "D18", "D129"),
     },
+    {
+        "target": "js-breakpoints-selftest",
+        "runs": "python3 scripts/js-breakpoints.py selftest",
+        "asserts": "the pure extraction and comparison behind `make docs-audit`'s `js "
+                   "breakpoints` row (D123): a JS media-query width is read out of a "
+                   "matchMedia-shaped string with comments stripped (a block comment's own "
+                   "width does not fool it, and the line number survives the strip), a CSS "
+                   "width is read only out of an `@media` block and never an `@container` "
+                   "one, `min-width: V` and `max-width: V-1` canonicalize to the same regime "
+                   "boundary, a JS breakpoint with no CSS counterpart is reported (RED) and "
+                   "the same breakpoint once a stylesheet declares it is clean (GREEN), a "
+                   "clean file beside a broken one names only the broken one, and the real "
+                   "`app/src` tree has at least one breakpoint on each side to compare.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "D16 — it is a self-test rather than a doc check, and it "
+                               "belongs beside the other selftests at the end of `check`.",
+        "gates": True,
+        "governed_by": ("D18", "D123", "D173"),
+    },
 )
 
 
