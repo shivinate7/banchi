@@ -175,8 +175,18 @@
      shadow's reach on the top back down to 2px. 3px on every side covers the worst of those
      with room rather than a fitted-per-edge value that breaks the next time `--bn-shadow-1`
      changes. If that token's offset or blur grows, raise this to match. */
-  padding: 3px;
+  padding: 3px 3px 18px;
   margin: -3px;
+  /* THE FOOT, `#/inventory`'s OWN `.browse-list` PATTERN (`BoxBrowse.css`): 18px of padding
+     below the rows, ONLY 3px of which the negative margin above cancels back out (the shadow
+     bleed, unchanged on every other side) — so this list keeps 15px of real, uncancelled room
+     below its last row. Without it, the list's own flex-shrunk box ends flush against
+     `.orders-index-hint` with no gap at all (`.browse-boxes`, the shared rail panel this list
+     sits in, declares none): at 820 with a buyer list long enough to scroll, measured before
+     this fix, `.orders-index`'s own box bottom sat 3px BELOW `.orders-index-hint`'s top — the
+     3px shadow bleed this rule's negative margin buys back on every other side, reaching into
+     the hint on this one because nothing here made room for it. The last visible buyer row's
+     own bottom padding is what that 3px cut into. */
 }
 .orders-index > li { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
 /* THE TICK SITS BESIDE THE ROW, NOT INSIDE IT — `BuyerRow` is a `<button>` and a checkbox

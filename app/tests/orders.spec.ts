@@ -1864,6 +1864,57 @@ test('the default ordering puts Ready to Ship first, newest within', async ({ pa
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
 })
 
+/** Enough buyers that `.orders-index` must scroll inside `.browse-boxes`'s own 264px band
+ *  (`BoxBrowse.css`) rather than draw every row flat — the shape Task 2's own case needs. */
+function manyBuyerPayload(n: number): OrdersPayload {
+  const rows = Array.from({ length: n }, (_, i) => {
+    const num = `BUYER-${String(i).padStart(3, '0')}`
+    return order({
+      key: `TCGplayer:${num}`,
+      number: num,
+      buyer: `Buyer ${i}`,
+      lines: [line({ order: num, order_key: `TCGplayer:${num}` }).line],
+    })
+  })
+  const resolved = rows.map((one) => ({
+    key: one.key,
+    number: one.number,
+    complete: false,
+    outstanding: 1,
+    lines: [line({ order: one.number, order_key: one.key })],
+  }))
+  return payloadOf(rows, resolved)
+}
+
+/* THE ORDERS-FOLLOWUPS FIX, TASK 2: `.orders-index` (the buyer list) shrinks to fit inside
+ * `.browse-boxes`'s 264px band and scrolls internally — that half already worked. What did
+ * not: `.orders-index` carries `padding: 3px; margin: -3px` so a row's own hover shadow (which
+ * bleeds 3px past its border box, `--bn-shadow-1`'s own reach) is not clipped by the list's
+ * `overflow-y: auto` — and that same negative margin bleeds the list's OWN box 3px past its
+ * flow position on every side, including the bottom, where `.orders-index-hint` (the
+ * "step through the buyers" line, `.browse-boxes` declares no `gap` at all) sits immediately
+ * after it. Measured at 820 with 20 buyers scrolled to the end, before this fix: the list's
+ * own box bottom sat 3px BELOW the hint's own top — the last visible row's bottom padding is
+ * what that 3px reached into. */
+test('at 820, the last buyer row clears the step-through hint rather than sitting under it', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1180 })
+  await open(page, { orders: manyBuyerPayload(20) })
+
+  await page.locator('.orders-index').evaluate((el) => {
+    el.scrollTop = el.scrollHeight
+  })
+  const hint = await page.locator('.orders-index-hint').boundingBox()
+  const items = page.locator('.orders-index-item')
+  const count = await items.count()
+  const last = await items.nth(count - 1).boundingBox()
+  if (hint === null || last === null) throw new Error('the hint or the last buyer row did not lay out')
+
+  expect(
+    Math.round(last.y + last.height),
+    `the last buyer row (bottom=${last.y + last.height}) sits under the hint (top=${hint.y})`,
+  ).toBeLessThanOrEqual(Math.round(hint.y))
+})
+
 test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const options = page.locator('.orders-status-select option')
@@ -2410,13 +2461,76 @@ test('the walk pane is inventory\'s own card pane: the same header, photo, copie
   /* "EVERY COPY OF THIS CARD" — `CardLocations`, unmodified. */
   await expect(pane.locator('.card-locations-title')).toHaveText('Every copy of this card')
   await expect(pane.getByRole('button', { name: 'Mark sold' })).toBeVisible()
-  /* DETAILS — `CardDetailsSection`, moved whole from `BoxBrowse.tsx`. */
-  await expect(pane.locator('.browse-details .browse-details-hint')).toHaveText('identity · claims · provenance')
+  /* DETAILS — `CardDetailsSection`, moved whole from `BoxBrowse.tsx`, and — since the
+     orders-followups fix — a SIBLING of `pane` (`.orders-walk-card`) rather than a child of
+     it, mirroring `BoxBrowse.tsx`'s own `</section>` / `<CardDetailsSection .../>` pair
+     exactly: nesting it inside the section let the section's `.bn-panel` `overflow: hidden`
+     clip it into the same box as an overflowing copies list (D118, D220). Read off `page`
+     rather than `pane` for that reason; it is still the one `.browse-details` this screen
+     draws. */
+  await expect(page.locator('.browse-details .browse-details-hint')).toHaveText('identity · claims · provenance')
 
   /* AND NONE OF INVENTORY'S OWN EDITING ACTIONS: no Card actions menu, no Retire, no re-shoot —
      left out by name (§13's override): retire, move and re-shoot are Inventory-only. */
   await expect(pane.getByRole('button', { name: 'Card actions' })).toHaveCount(0)
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
+})
+
+/* THE ORDERS-FOLLOWUPS FIX: `.inventory-detail` reached `.card-locations` only through
+ * `.inventory-copies > .card-locations { flex: 1 1 auto; min-height: 0 }` (`Inventory.css`),
+ * and `WalkMainPane` skipped the `.inventory-copies` wrapper `CopiesPanel` always draws. With
+ * enough copies for a card, `.card-locations` kept its block default (`min-height: auto`,
+ * sized to its OWN content) instead of shrinking to `.browse-band`'s fixed height (D118), so
+ * the list grew past the band and `Details` — a child of `.orders-walk-card` at the time,
+ * drawn right after `.browse-band` closed — landed inside the overflow rather than below it.
+ * Measured at 1440 with 9 copies, before this fix: band 313.6-933.6, Details.y 933.6 (flush
+ * with the band's OWN box, never accounting for the 1600px the list actually wanted), rows
+ * `scrollHeight === clientHeight === 1600` (no internal scroll at all). This case is that
+ * measurement, as an assertion, over a plan built for it (`viewport(1440, 900)` is this
+ * file's own default, restated here because the case cares which height 720/620/520 the
+ * `min(720px, max(520px, calc(100dvh - 280px)))` band rule lands on). */
+test('the copies list scrolls inside the band, and Details never lands inside the overflow (D118, D220)', async ({ page }) => {
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  const n = 9
+  const copies: WalkPlanCopy[] = Array.from({ length: n }, (_, i) =>
+    walkPlanCopy({ index: 21 + i, card: 17 + i, capture_id: `cap-${i}`, label: `Box 3 · Section 2 · Card ${17 + i}` }),
+  )
+  const cards: Record<string, InventoryCard> = {}
+  for (let i = 0; i < n; i++) {
+    cards[`3/${21 + i}`] = inventoryCard({ index: 21 + i, card: 17 + i, label: `Box 3 · Section 2 · Card ${17 + i}` })
+  }
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, {
+    orders: oneOpenOrder(),
+    /* `open()`'s own `walkPlan`, never `stubWalkPlan` after it — the sole buyer selects itself
+       on landing (§13), so the plan has to be this screen's FIRST answer. */
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies })] })]),
+    inventoryCards: cards,
+  })
+
+  const band = page.locator('.browse-band')
+  const details = page.locator('.browse-details')
+  await expect(details).toBeVisible()
+  const bandBox = await band.boundingBox()
+  const detailsBox = await details.boundingBox()
+  if (bandBox === null || detailsBox === null) throw new Error('band or Details did not lay out')
+
+  /* THE OVERLAP ITSELF: `Details`' own top may never sit above the band's own bottom edge —
+     that gap, not the DOM position, is what an owner actually sees. */
+  expect(
+    Math.round(detailsBox.y),
+    `Details (y=${detailsBox.y}) sits inside the band (bottom=${bandBox.y + bandBox.height}), not below it`,
+  ).toBeGreaterThanOrEqual(Math.round(bandBox.y + bandBox.height))
+
+  /* THE LIST IS WHAT GIVES (D118): with more copies than the band can show at once, the rows
+     list scrolls INSIDE its own box rather than growing past it. */
+  const rowsScroll = await page.locator('.card-locations-rows').evaluate((el) => ({
+    scrollHeight: el.scrollHeight,
+    clientHeight: el.clientHeight,
+  }))
+  expect(rowsScroll.scrollHeight, 'the copies list grew past what the band can show, uncontained').toBeGreaterThan(
+    rowsScroll.clientHeight,
+  )
 })
 
 /* --------------------------------------------------------------------------------- Mark sold */
