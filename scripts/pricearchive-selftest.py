@@ -347,6 +347,51 @@ def main() -> int:
            "the export-shaped row carries the card's own name and resolved product line",
            rows["444"])
 
+        # ------------------- rows_from_store composes the number, D234
+        #
+        # THE REAL SHAPE (`Bulbasaur` `001` in `ME01: Mega Evolution`, measured 2026-09-20):
+        # `cards.number` is stored bare (542 of 542 Pokemon cards with a SKU carry no `/`),
+        # and `store/master.py`'s own write path already composes and stores `number_key`
+        # (`join_key(number, printed_total)`) for the search index — this asserts
+        # `rows_from_store` actually READS that column rather than leaving `Number` bare.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["1:4"] = Card(
+                box=1, index=4, sku="9001", name="Bulbasaur", number="001",
+                printed_total="132", set_name="ME01: Mega Evolution", game="pokemon",
+                condition="Near Mint",
+            )
+            # A Riftbound card: `printed_total` is never set for this game (no denominator
+            # to compose), so `number_key` is empty and the bare, already-verbatim `number`
+            # must pass through UNCHANGED.
+            snapshot.inventory.cards["1:5"] = Card(
+                box=1, index=5, sku="9002", name="Vilemaw", number="060/219",
+                set_name="Unleashed", game="riftbound", condition="Near Mint",
+            )
+        composed_rows = archive_walk.rows_from_store(Store().read())
+        ok(composed_rows["9001"][tcgcsv_module.NUMBER_COLUMN] == "001/132",
+           "a bare Pokemon number is composed with its own stored `printed_total` before "
+           "it ever reaches the mirror's number index — `001` alone can never match a "
+           "mirror keyed on `001/132`, by arithmetic (number_index_key strips padding, "
+           "it does not invent a denominator)",
+           composed_rows["9001"])
+        ok(composed_rows["9002"][tcgcsv_module.NUMBER_COLUMN] == "060/219",
+           "a Riftbound card (no printed_total, no denominator to compose) passes through "
+           "with its stored number unchanged",
+           composed_rows["9002"])
+
+        # MUTATION GUARD: select only the OLD column set, dropping `number_key`, and confirm
+        # the composed row goes back to bare — proves the fix above, not the fixture, is
+        # what composes it.
+        old_columns = ("sku", "name", "number", "set_name", "condition", "game")
+        mutated_row = None
+        for _, values in Store().read().inventory.cards.select(old_columns, sku="9001"):
+            name, number, set_name, condition, game = values[1:]
+            mutated_row = archive_walk._export_row("9001", name, number, set_name, condition, game)
+        ok(mutated_row is not None and mutated_row[tcgcsv_module.NUMBER_COLUMN] == "001",
+           "MUTATION: with no number_key handed in, the row goes back to the bare number — "
+           "the composition lives in the column read, not in `_export_row`'s own defaults",
+           mutated_row)
+
         # ------------------------------------------ ledger widening: sealed subjects
         print("\n-- pipeline/pricearchive.py: rows_from_store widened to the order ledger "
               "(sealed product) --")
@@ -630,10 +675,15 @@ def main() -> int:
             {"productId": 502, "name": "Bulbasaur - 133/132",
              "extendedData": [{"name": "Number", "value": "133/132"}]},
         ]
-        # Real shape 2: a stored number carrying a typed separator (`Twisted Fate`
-        # `OGN · 200/298` in `Origins`). The mirror's own number is the clean `200/298`
-        # and its own name carries the printing (`Twisted Fate, Gambler`) — neither the
-        # number nor the name rung matches the card row's own cells, so it refuses too.
+        # Real shape 2: a BLANK stored number whose name does not fold to the mirror's own
+        # name (`Twisted Fate` in `Origins`, stored with no number at all — an identification
+        # that read the name but missed the number). The mirror's own product name carries the
+        # printing (`Twisted Fate, Gambler`), which `join.name_index_key` does not fold to
+        # `TWISTED FATE` (that fold only strips a trailing `- <number>/<total>`, never a
+        # comma-joined suffix), so neither the number rung (nothing to key on) nor the name
+        # rung matches the card row's own cells — a genuinely unrepairable-by-shape miss,
+        # unlike a glued set code, which `ProductIndex.find`'s own repair step now resolves
+        # without any fallback at all (see the direct-resolution arm below).
         origins_products = [
             {"productId": 601, "name": "Twisted Fate, Gambler",
              "extendedData": [{"name": "Number", "value": "200/298"}]},
@@ -646,7 +696,7 @@ def main() -> int:
         card_rows = {
             "SKU-A": _row("SKU-A", "Bulbasaur", "001", "ME01: Mega Evolution"),
             "SKU-B": _row(
-                "SKU-B", "Twisted Fate", "OGN · 200/298", "Origins",
+                "SKU-B", "Twisted Fate", "", "Origins",
             ),
         }
         fallback_rows_fixture = {
@@ -662,10 +712,25 @@ def main() -> int:
             card_rows, resolving_market, ranges=("month",), now=1,
         )
         ok(set(no_fallback_refusals) == {"SKU-A", "SKU-B"},
-           "with no fallback row offered, the bare-number and the typed-separator card "
-           "rows both refuse, exactly as measured on the real store",
+           "with no fallback row offered, the bare-number and the blank-number/name-mismatch "
+           "card rows both refuse, exactly as measured on the real store",
            no_fallback_refusals)
         ok(not no_fallback_resolved, "and nothing is reported as fallback-resolved")
+
+        # A DIRECT-RESOLUTION ARM, NOT A FALLBACK ONE (D234): a
+        # glued-on set code (`OGN • 200/298`) is repaired by `ProductIndex.find` itself,
+        # from the card row alone, with no ledger fallback offered at all — the mechanism
+        # this task adds, proven distinct from D233's own fallback.
+        glued_row = {
+            "SKU-B": _row("SKU-B", "Twisted Fate", "OGN • 200/298", "Origins"),
+        }
+        _bg, _sg, glued_refusals, _glued_resolved = archive_walk.sweep(
+            glued_row, resolving_market, ranges=("month",), now=1,
+        )
+        ok(not glued_refusals,
+           "a glued-on set code resolves straight off the card row, no fallback needed — "
+           "`strip_set_code` is reached on a number-index miss before the name rung",
+           glued_refusals)
 
         # The fallback fires: both retry rows are the mirror's own clean cells.
         _b2, _s2, with_fallback_refusals, with_fallback_resolved = archive_walk.sweep(
@@ -675,7 +740,7 @@ def main() -> int:
         ok(not with_fallback_refusals,
            "with the ledger's own row offered as a fallback, both real shapes resolve — "
            "the bare `001` against a mirror holding `001/132`/`133/132`, and the "
-           "separator-carrying number", with_fallback_refusals)
+           "blank-number/name-mismatch row", with_fallback_refusals)
         ok(set(with_fallback_resolved) == {"SKU-A", "SKU-B"},
            "sweep() reports which SKUs answered via the fallback, so a reader can see "
            "when it fired", with_fallback_resolved)

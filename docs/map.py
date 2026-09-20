@@ -1064,15 +1064,9 @@ COMPONENTS = [
                                         "`measured_pace`/`load_pace`/`save_pace` turn a "
                                         "measured requests-before-block count into the next "
                                         "press's pace, persisted on disk.",
-                                "governed_by": ["D62", "D26", "D134", "D9", "D214", "D216",
-                                                "D219",
-                                                "D224",
-                                                "D223",
-                                                "D222",
-                                                "D231",
-                                                "D230",
-                                                "D21", "D22",
-                                                "D233"],
+                                "governed_by": ["D9", "D21", "D22", "D26", "D62", "D134", "D214",
+                                                "D216", "D219", "D222", "D223", "D224", "D230",
+                                                "D231", "D233", "D234"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
                                         "`make check` — no network call. A FakeMarket and a "
                                         "RecordingMarket stand in for the network; 48 "
@@ -1267,8 +1261,8 @@ COMPONENTS = [
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
-                                                "D62", "D64", "D171",
-                                                "D216"],
+                                                "D55", "D62", "D64", "D171", "D216",
+                                                "D234"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -1448,7 +1442,8 @@ COMPONENTS = [
                                    "`pipeline/join.py` to where both `store/master.py` and "
                                    "`pipeline/join.py` (which imports them back and re-exports "
                                    "under the same names) can reach them.",
-                           "governed_by": ["D36", "D55", "D63", "D67"], "tested_by": ["T7"]},
+                           "governed_by": ["D36", "D55", "D63", "D67",
+                                           "D234"], "tested_by": ["T7"]},
             "master.py": {"does": "the cards, boxes and listings tables — cards, positions, SKUs, "
                                   "listing states, `open_section`, which puts one divider in front "
                                   "of the next card at the index only the store can read (D10), and "
@@ -2475,13 +2470,8 @@ COMPONENTS = [
                         "the real ProductIndex/number_index_key/name_index_key, "
                         "mutation-tested by removing the fallback. Proves format_refusals "
                         "never truncates, grouped by reason. 87 assertions.",
-                "governed_by": ["D219", "D224",
-                                "D223", "D222",
-                                "D62", "D18",
-                                "D231",
-                                "D230",
-                                "D21", "D35",
-                                "D233"],
+                "governed_by": ["D18", "D21", "D35", "D62", "D219", "D222", "D223", "D224", "D230",
+                                "D231", "D233", "D234"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

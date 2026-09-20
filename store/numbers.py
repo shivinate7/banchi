@@ -36,7 +36,21 @@ from typing import Optional
 #                  bound that keeps a per-game rule from being necessary.
 #   at most five   Nothing measured needs more, and an unbounded run of letters would start
 #                  eating names the day something hands this a title by mistake.
-_SET_CODE_PREFIX = re.compile(r"^[A-Za-z]{2,5}\s*[•·/-]\s*")
+#
+# A FOURTH SHAPE, ADDED BY D234: the separator can be a plain space
+# with no punctuation at all (`SPD 208/221`), which the original three bounds did not cover
+# because they required one of `•·/-` between the letters and the digits. The
+# space-only branch requires an actual space (`\s+`, never `\s*`) immediately before a
+# digit, which is what keeps it from also matching a real printed-code cell that has NO
+# separator at all — `OP15-079`, `EB04-042` — where the digit follows the letters directly.
+# MEASURED, THE SAME WAY D67 LICENSED THE ORIGINAL THREE: over the same 2,607 distinct
+# `Number` cells across all four committed exports (190 SV09, 786 wide Pokemon, 1,236
+# Riftbound, 395 One Piece), the widened regex matches ZERO that the original did not —
+# same zero the original scored. Against the owner's own store, read-only, 2026-09-20: of
+# 3,299 numbered records, the original regex changes 163; the widened one changes 205 — 41
+# newly caught, all of them a letters-space-digits shape (`SFD 007/221`, `SPD 208/221`,
+# `UNL 029/219`, `OGN 019/298`, ...), none of them a real printed code losing a character.
+_SET_CODE_PREFIX = re.compile(r"^[A-Za-z]{2,5}(?:\s*[•·/-]\s*|\s+(?=\d))")
 
 
 def join_key(number, printed_total) -> str:
@@ -90,8 +104,14 @@ def strip_set_code(text) -> str:
     bounded the rule to two-to-five letters, no digits, then one separator, and licensed it by
     measuring: over every distinct `Number` cell in all four committed exports — 190 SV09, 786
     wide Pokemon, 1,236 Riftbound, 395 One Piece, **2,607 between them** — it matches ZERO. Over
-    the owner's own 676 numbered records it changes exactly **10**, and all ten are the glued
-    reads it exists to remove.
+    the owner's own 676 numbered records (at that measurement) it changed exactly **10**, and
+    all ten were the glued reads it exists to remove.
+
+    D234 WIDENS THE SEPARATOR TO ALSO ACCEPT A BARE SPACE
+    (`SPD 208/221`), re-measured the same way: still ZERO across the four committed exports,
+    and 41 additional real cases on the owner's own store (3,299 numbered records as of
+    2026-09-20), none of them a real printed code — see `_SET_CODE_PREFIX`'s own comment for
+    the exact counts and why the space branch cannot eat `OP15-079`.
 
     UNCONDITIONAL, WHERE `pipeline/join.py:_repair_set_code` FIRES ONLY ON A MISS, and the
     difference is not a weakening of D55's second safety. That safety is about a JOIN: an
