@@ -13,10 +13,10 @@ untracked, like `.claude/settings.local.json`.
 ## The name is the app's, and nothing beneath it (D94)
 
 **Banchi** (a lot number, 番地) names the product: the web app under `app/`. Everything beneath
-the app keeps its old name. That includes the checkout (`~/Developer/pkmnscan`), the CLI
-`./pkmnscan`, the Python packages (`server/ store/ pipeline/ identify/ geometry/ codes/ cli/`),
-the store on disk (`inventory/store.sqlite`), `PKMNSCAN_HOME`, every wire route,
-`PKMNSCAN_MAIN=off`, the harness, the fixtures, `docs/`, and `make` itself. Renaming any of
+the app keeps its old name. That covers the checkout (`~/Developer/pkmnscan`) and the CLI
+`./pkmnscan`. It covers the Python packages (`server/ store/ pipeline/ identify/ geometry/
+codes/ cli/`), the store on disk (`inventory/store.sqlite`) and `PKMNSCAN_HOME`. It covers
+every wire route, `PKMNSCAN_MAIN=off`, the harness, the fixtures, `docs/`, and `make` itself. Renaming any of
 these is a defect.
 
 **The GitHub repository is the one exception.** It was renamed
@@ -334,8 +334,8 @@ by SKU, never a destination anyone browses to cold. All three stay registered ro
 reachable from elsewhere.
 
 **The census.** Every route or screen count in this file, README.md and docs/map.py is
-reconciled against `ROUTES` by `make docs-audit`'s `route census` row, and every spec's pinned
-roster by `route rosters`. `app/tests/cursor.spec.ts` reads the nav strip rather than a
+reconciled against `ROUTES` by `make docs-audit`'s `route census` row. Every spec's pinned
+roster is reconciled by `route rosters`. `app/tests/cursor.spec.ts` reads the nav strip rather than a
 hand-typed hash list.
 
 ### The design system
@@ -395,12 +395,12 @@ routes and both rail states. `#/fulfillment` is excluded — no shell (D5).
 
 **Three more rules, each silent when broken.** A component's own `transition` REPLACES the
 floor's — name every animated property. `background-image` cannot animate — a hover
-compositing a gradient uses an inset `box-shadow` instead. The press dip is `translate`; a
+compositing a gradient uses an inset `box-shadow` instead. The press dip is `translate`. A
 screen's own emphasis is `transform: scale()`. Never `translateY`, which doubles the dip. A
 control may not ease the movement its own `:active` rule makes (D118).
 
 **A fifth floor beside stability: same-role buttons stacked in one sector share a width**
-(D195). Asserted in a real browser by `app/tests/button-stack.spec.ts`, via
+(D195). Asserted in a real browser by `app/tests/button-stack.spec.ts`, through
 `.bn-actions-stack` and `.capture-block-list`'s CSS Grid trick, discovered per group and never
 read off a declared class.
 
@@ -419,7 +419,7 @@ not rendered — not focusable, not reachable by a screen reader).
 - A keyboard reference sheet on `?`, the one unmodified key the shell takes, yielding to
   typing (`app/src/keys.ts`). A new binding is not done until it is in `SHORTCUTS`.
 - An error boundary per route, two shapes. The owner's crash page offers reload or home. The
-  Fulfiller's `plain` variant offers one button, no brand, no error text — a crash is the
+  Fulfiller's `plain` variant offers one button, no brand and no error text. A crash is the
   moment he is most likely to press whatever is offered.
 - A toast stack, an offline banner, the document title.
 
@@ -439,20 +439,20 @@ not rendered — not focusable, not reachable by a screen reader).
   `request_queue_size = 128` (bounds the accept backlog, not the thread count), and
   `CaptureHandler.timeout = 15` (reaps only idle connections). A burst of concurrent clients
   kills it. Measured at 80 Playwright browsers: 969 threads, 338% CPU, answering nothing.
-  Fixed 2026-09-04: `REQUEST_SLOTS = 4` bounds executing requests via a
+  Fixed 2026-09-04: `REQUEST_SLOTS = 4` bounds executing requests with a
   `ThreadPoolExecutor(REQUEST_SLOTS)`. It is safe over HTTP/1.1 only because every response
   sends `Connection: close` (DEBT11 has the mechanism and the measurements — this
-  was sized at 12 originally; the sweep found 4 keeps 82% of peak throughput, and less is
+  was sized at 12 originally. The sweep found 4 keeps 82% of peak throughput, and less is
   strictly better). `make launch-agent` keeps this alive over the owner's real store. Run the
   full suite ONCE at the end. Never `make up ARGS=--restart`, `make down` or `make up` to fix
   a wedge — the refusal without `--confirm` is the answer.
 - **The join key is PER-GAME and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Pokemon composes `zfill(3)(number) + "/" +
-  printedTotal`. One Piece and Riftbound match the printed identifier verbatim; both carry
+  printedTotal`. One Piece and Riftbound match the printed identifier verbatim. Both carry
   denominator-less rows. `zfill` is COMPOSITION only, never matching. A mismatch there once
   silently zero-joined 950 rows. Never join on Product Name as the key. D35 permits it as a
   last resort, folded through `name_index_key`, queued for review rather than listed outright.
-- **A run directory's slot numbers are not the truth; the photograph is** (D36).
+- **A run directory's slot numbers are not the truth. The photograph is** (D36).
   `cli/resolve.py:realign` re-binds every record to its digest's current slot. It refuses on
   ambiguity and on a box whose number was deleted and reused after the run
   (`store/master.py:refuse_reallocated`, D36 amended).
@@ -502,11 +502,11 @@ not rendered — not focusable, not reachable by a screen reader).
   2026-09-12, six set releases of headroom — so a widening is never silent (a `width` block on
   every fetch). Since D170, a Pokemon run that would widen itself is REFUSED outright
   (`export_needs_hint` in `pipeline/games.py`), unless the operator named `set_ids` or `scope`
-  explicitly. Not enforced at the shutter (D65). Fix an unhinted card via Manage box → Set
+  explicitly. Not enforced at the shutter (D65). Fix an unhinted card in Manage box → Set
   claims.
 - **The catalogue export is a property of the GAME, not the drawer** (D166). A fetch lands in
   `inventory/.exports/<game>/`, deduped store-wide by digest. A covering export fetched inside
-  900s is reused with no socket opened; `refresh: true` forces one. A reuse never touches the
+  900s is reused with no socket opened. `refresh: true` forces one. A reuse never touches the
   mtime — that is when the reading was TAKEN.
 - **The pricing answer is one file for the whole store, keyed by SKU** (D86, amended).
   `pipeline/corpus.py` over `inventory/prices.json`. `sub_threshold` defaults to $0.49 (D9
@@ -531,14 +531,14 @@ not rendered — not focusable, not reachable by a screen reader).
 - **A box is addressed by its name, and names are unique** (D20, amended). `next_box_number`
   allocates the lowest free integer, not a high-water mark. **A box also has `Box.bid`, a
   true index that is a high-water mark and is NEVER reused, drawn on no screen** (D145). The
-  number is a LABEL; the id is an IDENTITY a run binds to. A run records `bid`, never the
+  number is a LABEL. The id is an IDENTITY a run binds to. A run records `bid`, never the
   name. The name is joined at read time from the registry (D56), never written into a run
   directory — a rename would relabel a run's cards retroactively.
 
 ## Hard rules
 
-- **A RULE THAT CAN BE MECHANICALLY ENFORCED MUST BE, AND A NEW RULE IS NOT DONE UNTIL ITS
-  ENFORCEMENT EXISTS OR ITS UNENFORCEABILITY IS ARGUED** (D173). Owner's instruction,
+- **A RULE THAT CAN BE MECHANICALLY ENFORCED MUST BE.** A NEW RULE IS NOT DONE UNTIL ITS
+  ENFORCEMENT EXISTS, OR UNTIL ITS UNENFORCEABILITY IS ARGUED (D173). Owner's instruction,
   2026-09-12: *"every rule for all time... should be mechanically enforced."* A rule that
   cannot be mechanized carries a bold `**NOT MECHANIZED:**` sentence saying what a machine
   would have to SEE. `make docs-audit`'s `rule enforcement` row parses every rule below. It
@@ -599,8 +599,8 @@ not rendered — not focusable, not reachable by a screen reader).
   `scripts/githooks/pre-commit`, armed by `make hooks`.
 - **Nine shell mistakes are refused before they run**, by `scripts/guard-shell.py --hook` on
   Bash and on Write/Edit, armed in both rosters (D135). Each clause resolves what a command
-  would DO rather than matching what it says, carries its own escape hatch, and fails open on
-  its own bugs: `PKMNSCAN_CHECKOUT` (a `git checkout`/`restore` over a modified file),
+  would DO rather than matching what it says. Each carries its own escape hatch, and each
+  fails open on its own bugs: `PKMNSCAN_CHECKOUT` (a `git checkout`/`restore` over a modified file),
   `PKMNSCAN_TREE` (a write outside this checkout, or a `cd` into another one), `PKMNSCAN_GH` (`gh api -f` with no method),
   `PKMNSCAN_LINK` (`ln -s` at an existing path), `PKMNSCAN_WAIT` (a polling loop),
   `PKMNSCAN_PUSH` (a push to a differently-named upstream), `PKMNSCAN_STASH` (a bare
@@ -622,7 +622,8 @@ not rendered — not focusable, not reachable by a screen reader).
   takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line anchors`
   refuses a line past the file's end, and any anchor into a split-record stub. `line anchor
   ratchet` is per file, in D229's shape. A file its pin has never seen is held to zero.
-  `line anchor allowlist` refuses an exemption that has stopped being true. The rot rate
+  `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt` that has
+  stopped being true. The rot rate
   printed beside them is MEASURED and never gated. A citation pointing at a real line whose
   content has moved stays invisible, which D149 ruled no check can see.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
@@ -643,15 +644,16 @@ not rendered — not focusable, not reachable by a screen reader).
   It refuses on uncommitted tracked work or a mid-rebase. It touches only the primary
   checkout, never a worktree. `PKMNSCAN_SYNC=off`. `make sync-selftest` proves it.
   **An orchestrating session carries a standing D42 grant as of 2026-09-13.** The owner named
-  the act once for a whole batch, reaching only that session, only for PRs it planned and
-  reviewed, only via `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  the act once for a whole batch. It reaches only that session, and only PRs it planned and
+  reviewed. The one command is `make merge ARGS="<n> --confirm"`, with CI green, never
+  `--admin`.
 - **No user-visible string may TYPE a middle dot or bullet (U+00B7, U+2022) as a separator.**
   Owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists." D41
   removed the dot-joined address string and moved the separator into CSS
   (`::before { content: '·' }`) — a screen may SHOW a separator, never TYPE one into a
   string. Mechanized by `make docs-audit`'s `typed interpunct` row over
   `scripts/user-strings.mjs`'s extraction, RATCHETED against `scripts/typed-interpunct.json`'s
-  pinned count (D194's own discipline, mirrored): it fails only when the count RISES; a lower
+  pinned count (D194's own discipline, mirrored). It fails only when the count RISES. A lower
   count is accepted silently and printed. `node scripts/typed-interpunct-pin.mjs --pin`
   re-pins it, run by a person, never quietly. See D218.
 
@@ -681,8 +683,8 @@ that evening than every verification target combined (`docs/specs/verification-c
   captured before the edit or not at all. Wanting one afterwards is the orchestrator's job,
   in a separate clean checkout — never the working agent, never in a shared tree. The round
   this cost: an agent told to produce a "before" screenshot went looking for a way to un-build
-  its own change and reached for `git stash`, which is shared with every worktree of this
-  clone. `scripts/guard-shell.py`'s `PKMNSCAN_STASH` clause refuses the command; the brief
+  its own change. It reached for `git stash`, which is shared with every worktree of this
+  clone. `scripts/guard-shell.py`'s `PKMNSCAN_STASH` clause refuses the command. The brief
   should not have pointed an agent at it.
   **NOT MECHANIZED:** a machine cannot read a sentence addressed to a person and tell that
   satisfying it requires undoing work.
@@ -697,7 +699,7 @@ that evening than every verification target combined (`docs/specs/verification-c
 - **Show the screen before saying it looks right.** Render at 1440, 820 and 390, both themes,
   and look at the images.
 - Read `docs/decisions/` before proposing an architecture change
-  (`scripts/decision-context.py` finds the governing entry; see the index below). Every
+  (`scripts/decision-context.py` finds the governing entry, and the index is below). Every
   entry is settled. Reopen one only by citing it and waiting for the owner's word (see the
   outcomes rule above).
 - **Design work is repo work.** A design living only in chat is not done. Land it in
@@ -985,7 +987,7 @@ adopting some and deferring others (D99 sits where it does because main took D90
 - `docs/specs/undo.md` — BUILT 2026-09-17, all four sections. Undo as one concept: two
   mechanisms by ruling, and no clock is a limit anywhere. Read it before touching a reversal.
 - `docs/specs/corpus-pruning.md` — RECORDED, NOT BUILT (D177). Pruning may never be
-  automatic; 430 answers examined, 0 safe to auto-prune.
+  automatic. 430 answers examined, 0 safe to auto-prune.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/demo.md` — the public demo, BUILT and LIVE. Why it is not a fork, what is
   real and what is invented, what the published page refuses, and why no secret reaches it.

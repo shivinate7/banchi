@@ -11,14 +11,14 @@
       "words": 570
     },
     "AGENTS.md": {
-      "errors": 17,
-      "ratio_per_1k_words": 1.411,
-      "words": 12051
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 12064
     },
     "CLAUDE.md": {
-      "errors": 17,
-      "ratio_per_1k_words": 1.411,
-      "words": 12051
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 12064
     },
     "README.md": {
       "errors": 29,
