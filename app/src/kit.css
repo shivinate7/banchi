@@ -277,6 +277,11 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   vertical-align: middle;
 }
 .bn-kbd-group { display: inline-flex; gap: 3px; align-items: center; }
+/* A size modifier for a keycap a finger or a digit lands on, not a keyboard shortcut hint
+   (system review, 2026-09-20; this sheet already called `.review-key`, ReviewQueue.css's own
+   26px reimplementation, "a candidate for promotion" — this is that promotion). Only the
+   size differs; the border, the face and the ink stay the kit's. */
+.bn-kbd-lg { width: 26px; min-width: 26px; height: 26px; padding: 0; font-size: var(--bn-fs-sm); }
 
 /* ---- pills & status -------------------------------------------------------- */
 .bn-pill {
@@ -660,9 +665,45 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   color: var(--bn-accent);
   margin-bottom: var(--bn-2);
 }
+/* A size modifier, not a second component (system review, 2026-09-20): Fulfillment had
+   reinvented this exact shape and colour logic at 72px under its own class name. Compose
+   `bn-empty-art bn-empty-art-lg` to get it from the kit instead. */
+.bn-empty-art-lg { width: 72px; height: 72px; border-radius: var(--bn-r-2xl); }
 .bn-empty-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 700; color: var(--bn-ink); }
 .bn-empty-body { font-size: var(--bn-fs-base); max-width: 44ch; }
 .bn-empty-actions { display: flex; gap: var(--bn-2); margin-top: var(--bn-2); flex-wrap: wrap; justify-content: center; }
+
+/* A well version of the same idea, for a card that already sits on its own ground rather
+   than inside a panel — an icon, a line of text, bordered rather than shadowed (system
+   review, 2026-09-20; promoted out of Fulfillment's `.ff-photo-missing`, same declarations). */
+.bn-empty-well {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--bn-3);
+  padding: var(--bn-8) var(--bn-5);
+  border-radius: var(--bn-r-2xl);
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 2px var(--bn-line-strong);
+  color: var(--bn-ink-2);
+}
+
+/* A round icon badge, for a status glyph beside a sentence rather than a whole empty state
+   (system review, 2026-09-20; promoted out of Fulfillment's `.ff-today-none-icon`). Default
+   reads accent; `--ok` reads the same tint/ink pair `.bn-empty-art` already uses for its
+   colour logic, applied to a circle instead of a rounded square. */
+.bn-icon-badge {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--bn-r-full);
+  display: grid;
+  place-items: center;
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+}
+.bn-icon-badge--ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
 
 /* ---- notice / callout --------------------------------------------------------------- */
 .bn-notice {
@@ -782,7 +823,9 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-menu-item-danger .bn-icon { color: inherit; }
 .bn-menu-item-danger:hover { background: var(--bn-danger-tint); }
 .bn-menu-sep { height: 1px; margin: var(--bn-1) var(--bn-2); background: var(--bn-line); }
-.bn-menu-label { padding: var(--bn-2) var(--bn-3) var(--bn-1); font-size: var(--bn-fs-2xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-4); }
+/* ink-3, not ink-4 (system review, 2026-09-20): a menu-group label is a caption, and this
+   token's own comment two lines up in tokens.css says a caption may never sit at ink-4. */
+.bn-menu-label { padding: var(--bn-2) var(--bn-3) var(--bn-1); font-size: var(--bn-fs-2xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
 @keyframes bn-pop {
   from { opacity: 0; transform: translateY(-4px) scale(0.98); }
   to { opacity: 1; transform: none; }
