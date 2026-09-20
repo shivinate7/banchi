@@ -51,17 +51,17 @@ live-editing conflict, not a design decision.
 transactions this store never saw. The owner's own fills are exact — a price, a quantity, a
 date, each one real. They may never be drawn as one continuous series. This entry's own
 contribution is where that split falls on the READ side, given the archive
-`D-a-price-history-archive` built.
+`D219` built.
 
 - A SKU `pkmnscan archive sweep` has already visited answers straight off
-  `store/pricearchive.py`. No socket opens. `D-a-price-history-archive` states the archive
+  `store/pricearchive.py`. No socket opens. `D219` states the archive
   never deletes a row. This is a complete answer, not a stale one, for as long as a press
   has kept the archive current.
 - A SKU the archive has never swept falls through to `pipeline/pricehistory.py:Market` —
   the same live reader `#/pricing`'s own panel already calls (D62). One reader, two callers,
   never a second implementation.
 - Neither path writes. `pkmnscan archive sweep` stays the one press that folds a live read
-  back into the table. That is `D-a-price-history-archive`'s own ruling, restated rather
+  back into the table. That is `D219`'s own ruling, restated rather
   than reopened here.
 
 The screen never merges the two kinds of observation into one number or one line. The

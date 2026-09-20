@@ -1037,7 +1037,7 @@ COMPONENTS = [
                                        "live read. `history_begins` computes the date the "
                                        "chart states its own history starts from, off the "
                                        "buckets actually read, never the 357-day constant.",
-                                "governed_by": ["D62", "D-a-price-history-archive",
+                                "governed_by": ["D62", "D219",
                                                 "D-a-product-price-view"],
                                 "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
                                         "and by `app/tests/product-history.spec.ts`. No "
@@ -4184,7 +4184,7 @@ COMPONENTS = [
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
                                 "D188", "D189", "D216", "D-a-product-price-view",
-                                "D-a-price-history-archive"],
+                                "D219"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -6246,7 +6246,7 @@ COMPONENTS = [
                                                "separately as having no market data at all, "
                                                "never plotted.",
                                        "governed_by": ["D-a-product-price-view", "D62",
-                                                       "D-a-price-history-archive", "D212",
+                                                       "D219", "D212",
                                                        "D196", "D50"],
                                        "note": "No harness test -- a Playwright spec would be "
                                                "the honest coverage and none exists yet, named "
@@ -7571,7 +7571,7 @@ COMPONENTS = [
                         "payload); no real request is made and no store is touched. Not a "
                         "harness test; `make design-check` runs it.",
                 "governed_by": ["D-a-product-price-view", "D62", "D212",
-                                 "D-a-price-history-archive"],
+                                 "D219"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
