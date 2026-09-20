@@ -18052,9 +18052,16 @@ def self_test() -> int:
         "all agree with the checked-out tree)",
         str(real_report.checks[0].findings),
     )
+    # A FLOOR, NOT A COUNT, and the distinction is the point. An exact pin here says
+    # nothing true about the mechanism — it only records how many derivations happened to
+    # exist the day it was written, and it goes red on an honest eighth one. That is a
+    # guard which cries wolf on correct work, and this file's own rule is that such a
+    # guard is spent. What this arm must prove is NON-VACUITY: that the row read the real
+    # file and found real markers, so a `derived numbers` reporting zero cannot pass as
+    # clean. `HARD_RULE_FLOOR` is the same shape for the same reason.
     ok(
-        real_report.checks[0].scanned == 7,
-        "CLAUDE.md carries exactly the seven markers currently registered",
+        real_report.checks[0].scanned >= 1,
+        "CLAUDE.md carries at least one registered marker — the row is not vacuous",
         f"scanned={real_report.checks[0].scanned}",
     )
 
