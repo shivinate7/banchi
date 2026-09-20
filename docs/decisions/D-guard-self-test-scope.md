@@ -97,8 +97,11 @@ future one does, the same rule applies with no new list. A new guard self-test i
 scoped until it is added to `ROSTER` by hand. That is the same rule `docs/map.py` already
 applies. A new file is not covered until an entry names it.
 
-**THE SAVING, MEASURED ON THIS BRANCH.** A commit touching none of the fifteen subjects
-measures `make check` at 121.4s against the 163.85s baseline. That commit touches only
-this entry, the map entry, and the doc rewrites beside it. A commit touching one guard
+**THE SAVING, MEASURED ON THIS BRANCH.** `make check` on this machine, in this worktree,
+measured 93.3s with every guard self-test running. The same tree, one trivial follow-up
+commit later, measured 66.4s with all fifteen and `serve-selftest` skipping. That is a
+27-second cut on this hardware, on top of the 21.75s the ten-test harness already costs.
+The 76.6-second figure at the top of this entry is the orchestrator's own measurement, on
+a different Mac. Both are real. Neither restates the other. A commit touching one guard
 script, such as `scripts/reap.py`, still runs that one self-test. It skips the other
 fourteen.

@@ -477,6 +477,9 @@ new `guard scope` row reconciles the roster against the Makefile's wiring, both 
 was mutation-tested by breaking the classifier — it still runs — and by mismatching the
 roster and the wiring, where the row goes red.
 
-**The saving, measured on the branch that built this:** a commit touching none of the
-fifteen subjects measured `make check` at 121.4 s against the 163.85 s baseline.
+**The saving, measured on the branch that built this, on a third machine.** `make check`
+measured 93.3 s with every guard self-test running. One trivial follow-up commit later, the
+same tree measured 66.4 s with all fifteen and `serve-selftest` skipping. That is a
+27-second cut on that hardware. It does not restate the 163.85 s / 76.6 s figures above,
+taken on a different Mac — both are real, independently measured numbers.
 
