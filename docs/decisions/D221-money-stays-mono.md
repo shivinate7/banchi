@@ -1,4 +1,4 @@
-## D-money-stays-mono — Money stays mono, and the rule is amended to match
+## D221 — Money stays mono, and the rule is amended to match
 
 **The owner's ruling, 2026-09-19: mono is a font, and money in a table keeps it.**
 

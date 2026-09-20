@@ -329,7 +329,7 @@ first paint, cross-faded as one mechanism. A screen not looked at in dark is not
 everything), `--bn-font-mono` (JetBrains Mono, machine strings only — SKUs, run names, reason
 codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono, except
 money: a dollar figure takes the mono face through `.bn-money`, never a hand-rolled
-declaration (D-money-stays-mono). **NOT MECHANIZED:** a machine cannot tell a dollar figure
+declaration (D221). **NOT MECHANIZED:** a machine cannot tell a dollar figure
 from another tabular machine string by its CSS alone. Mono, 600-weight and tabular-nums
 already mark SKUs, run ids and card numbers throughout `app/src`. Which face a span deserves
 is read from what it holds, never from its declaration. Body is 14px.
@@ -899,6 +899,7 @@ D217 Sales becomes a tool: sort, filter, cross-filter, drill down and deep-link,
 D218 A typed dot is a defect wherever it is typed, and the reader is the mechanism this time, not the sweep
 D219 The archive key carries the range, and the archive never deletes
 D220 Orders is inventory's screen with orders in the rail, and the walk is a mode of it
+D221 Money stays mono, and the rule is amended to match
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
