@@ -5541,7 +5541,9 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115", "D132", "D134"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
+                                "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
+                                "D132", "D134", "D218"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -7451,7 +7453,7 @@ COMPONENTS = [
                                                      "D58", "D63", "D69", "D73", "D90", "D91",
                                                      "D93", "D96", "D103", "D113", "D114", "D118",
                                                      "D123", "D132", "D181", "D193", "D194", "D196",
-                                                     "D203", "D209", "D212"]},
+                                                     "D203", "D209", "D212", "D218"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -7641,7 +7643,7 @@ COMPONENTS = [
                                 "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58",
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
-                                "D136", "D142", "D155", "D172", "D181", "D192", "D213"],
+                                "D136", "D142", "D155", "D172", "D181", "D192", "D213", "D218"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

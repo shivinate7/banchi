@@ -3143,10 +3143,11 @@ test('a set-valued finish claim renders as its members, never as an array coerce
   await page.locator('.browse-row').nth(1).click()
   const finish = page.locator('.browse-fact', { hasText: 'Finish' }).locator('dd')
   /* THE MEMBERS, EACH DRAWN AS A WORD — which is what this case is about: `normal,reverse_holo`
-     is what JavaScript's coercion of an array looks like, and no separator and no capital would
-     save it. The labels are the human ones the owner ruled for; the failure this guards against
-     is the comma. */
-  await expect(finish).toHaveText('Normal · Reverse Holo')
+     is what JavaScript's coercion of an array looks like, lowercase and comma-packed with no
+     space. `claimText` joins a real list with `, ` (D218: a list of members is a real list,
+     never a typed bullet) — capitalized and spaced, which a coercion never produces. The
+     failure this guards against is the bare, unspaced, lowercase comma. */
+  await expect(finish).toHaveText('Normal, Reverse Holo')
 
   /* And a record written BEFORE the amendment still reads. There is no migration — a bare
      string is a one-member claim — so this is the shape most of the store still holds. */
@@ -3720,7 +3721,7 @@ test('the reclaim names the count and the bytes, sends confirm, and both presses
 
   /* The receipt names the keys, which is the only evidence left: the bytes are gone. */
   await expect(page.locator('.boxops-receipt')).toContainText('Reclaimed 2 photographs from box 2')
-  await expect(page.locator('.boxops-receipt')).toContainText('2/3 · 2/7')
+  await expect(page.locator('.boxops-receipt')).toContainText('2/3, 2/7')
 })
 
 test('a reclaimed photograph is drawn as reclaimed, not as a photo the store lost', async ({
@@ -3801,7 +3802,7 @@ test('the plan names what each SKU gives up, what it keeps, and which box holds 
   /* THE BUDGET, VISIBLE. The owner's ruling of 2026-08-24: each SKU gives up at most the
      copies this box holds, so a release reached from box 2 can never give up what only box
      7's copies could account for. The line says both halves. */
-  await expect(panel).toContainText('8937370 · 2 staged · keeps 3 staged · also box 7 (3)')
+  await expect(panel).toContainText('8937370 2 staged keeps 3 staged also box 7 (3)')
 
   /* AND THE OUTCOME A PERSON WOULD OTHERWISE READ AS A BUG. A shared SKU leaves a remainder,
      a remainder keeps the card listing-held, so the box stays refused after a release that
@@ -5055,10 +5056,10 @@ test('the two claims the correction button can overwrite are both on the panel',
      set on 543 of 543 real records, so this was live rather than latent. */
   await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
 
-  /* `Common · Uncommon` and never `Common,Uncommon` — the array-coercion guard, identical in kind
+  /* `Common, Uncommon` and never `common,uncommon` — the array-coercion guard, identical in kind
      to the finish case above, and the reason both rows go through one renderer. */
   const rarity = page.locator('.browse-fact', { hasText: 'Rarity' }).locator('dd')
-  await expect(rarity).toHaveText('Common · Uncommon')
+  await expect(rarity).toHaveText('Common, Uncommon')
 
   const note = page.locator('.browse-fact', { hasText: 'Note' }).locator('dd')
   await expect(note).toHaveText('japanese, no english print')
@@ -5300,7 +5301,7 @@ test('a card with an open question in the queue says so, and says whether it can
      already on this panel. `POST /review/<box>/<index>/answer` refuses such an entry outright. */
   await expect(block).toContainText('cannot be answered')
   await expect(block.locator('.bn-notice-code')).toHaveText(
-    'no_catalog_row · review · candidates 0',
+    'no_catalog_row, review queue, 0 candidates',
   )
 })
 
@@ -7009,5 +7010,32 @@ test('the re-rank control clears the thumb floor on a phone', async ({ page }) =
   await expect(chip).toBeVisible()
   const box = await chip.boundingBox()
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
+})
+
+/* ----------------------------------------------------------------------------------- D218 */
+
+test('D218: this lane\'s own facts draw the separator, never type it', async ({ page }) => {
+  /* A typed `·` (U+00B7) or `•` (U+2022) is a separator baked into a string; D218's rule is
+     that a screen may only SHOW one, drawn by CSS beside a fact that is its own element
+     (`.bn-facts` in `app/src/kit.css`) — never type one into text a component holds.
+
+     SCOPED TO WHAT THIS LANE (`BoxOps.tsx`, `BoxBrowse.tsx`, `Inventory.tsx`, `BoxRuns.tsx`,
+     `CardHero.tsx`) DRAWS, never the whole `.bn-view`: this route's own `.position-bar-text`
+     (`PositionBar.tsx`, D41's accessible-name territory, a different file this sweep does not
+     touch) still types one today, so a blanket assertion cannot pass until every lane on this
+     route has landed. `.browse-census` is the page header's store-wide pill (BoxBrowse.tsx);
+     `.boxops-sheet` is the Manage sheet in full, including the Name-sections editor's example
+     text and its own per-section Field labels (BoxOps.tsx) — both self-contained to this
+     lane's components. */
+  await open(page)
+
+  const census = page.locator('.browse-census')
+  await expect(census).toBeVisible()
+  expect(await census.innerText()).not.toMatch(/[·•]/)
+
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Name sections/ }).click()
+  const sheet = page.locator('.boxops-sheet')
+  expect(await sheet.innerText()).not.toMatch(/[·•]/)
 })
 

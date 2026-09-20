@@ -211,7 +211,6 @@
   color: var(--bn-ink-3);
 }
 .browse-status-text { white-space: nowrap; }
-.browse-status-sep { color: var(--bn-ink-4); margin: 0 3px; }
 .browse-quiet {
   display: inline-flex;
   align-items: center;

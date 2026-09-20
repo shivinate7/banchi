@@ -546,6 +546,23 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    that is not per-screen skin. */
 .bn-stat-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--bn-3) var(--bn-6); }
 
+/* ---- facts row (D218) --------------------------------------------------------- */
+/* Same-kind facts joined on one line WITHOUT typing the separator into a string (D218):
+   wrap each fact in its own child element and this draws the dot between them, in
+   `--bn-ink-4`, never a character in the source string. The idiom several files already
+   wrote per class (`.browse-hero-sub > span + span::before`, `.orders-order-meta > * +
+   *::before`, `.pricing-scope > span:not(:last-child)::after`, `.run-receipt-head > *:not
+   (:last-child)::after`) — one shared rule instead of a near-identical one per file. Add
+   `bn-facts` to an element whose children are ALL wrapped as elements (a bare text node
+   breaks the sibling combinator); nest it in its own wrapper rather than a flex parent
+   that already sets its own `gap`, or the dot's margin doubles up with that gap. THE DOT
+   IS PAINT, NOT TEXT: a generated `content:` string is invisible to `textContent` (what a
+   Playwright assertion and some assistive tech read), so a caller still puts a real space
+   between the JSX children — `<span>A</span> <span>B</span>` — and this rule's own margin
+   only widens the gap the dot sits in. Without that space the facts run together with no
+   word boundary at all, which is the actual defect this rule must not trade the old one for. */
+.bn-facts > * + *::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
+
 /* ---- table ------------------------------------------------------------------- */
 .bn-table { width: 100%; border-collapse: collapse; font-size: var(--bn-fs-md); }
 .bn-table th {
