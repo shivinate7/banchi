@@ -12,13 +12,13 @@
     },
     "AGENTS.md": {
       "errors": 17,
-      "ratio_per_1k_words": 1.427,
-      "words": 11913
+      "ratio_per_1k_words": 1.411,
+      "words": 12051
     },
     "CLAUDE.md": {
       "errors": 17,
-      "ratio_per_1k_words": 1.427,
-      "words": 11913
+      "ratio_per_1k_words": 1.411,
+      "words": 12051
     },
     "README.md": {
       "errors": 29,
@@ -219,6 +219,11 @@
       "errors": 6,
       "ratio_per_1k_words": 13.857,
       "words": 433
+    },
+    "docs/decisions/D-a-citation-names-a-symbol.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1419
     },
     "docs/decisions/D001-two-phase-architecture.md": {
       "errors": 1,
