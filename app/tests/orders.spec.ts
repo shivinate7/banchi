@@ -3,6 +3,7 @@ import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 
 import type {
+  InventoryCard,
   OrderRow,
   OrdersPayload,
   Place,
@@ -149,6 +150,49 @@ function walkPlanCopy(over: WalkPlanCopyInput = {}): WalkPlanCopy {
   }
 }
 
+/** One `GET /inventory`-shaped card — `options.inventoryCards`' own value type. Defaults to
+ *  box 3 / index 21 / cap-a, matching `walkPlanCopy()`'s own default, so a case that walks to
+ *  the default row and wants the REUSED pane (`CardHeroHead`/`PhotoPanel`/`CardDetailsSection`,
+ *  §13) to actually resolve — rather than fall back to the pre-`rawCards` synthesised header —
+ *  can pass `{ [\`${box}/${index}\`]: inventoryCard() }` as `inventoryCards` with no further
+ *  argument. Every field `InventoryCard` requires is here; only the few a case actually reads
+ *  ever need overriding. */
+function inventoryCard(over: Partial<InventoryCard> = {}): InventoryCard {
+  const base: InventoryCard = {
+    box: 3,
+    index: 21,
+    label: 'Box 3 · Section 2 · Card 17',
+    section: 2,
+    card: 17,
+    number_display: '025',
+    place: place(),
+    photo: '/photo/3/21',
+    photo_sha256: null,
+    set_hint: null,
+    set_name: null,
+    rarity: 'Rare',
+    metadata_finish: 'Normal',
+    game: 'pokemon',
+    rarity_claim: null,
+    note: null,
+    captured_at: '2026-08-29T10:00:00+00:00',
+    capture_id: 'cap-a',
+    cid: null,
+    photo_reclaimed_at: null,
+    name: 'Volcanion',
+    number: '025',
+    printed_total: '219',
+    confidence: 'high',
+    sku: SKU,
+    condition: 'Near Mint',
+    state: 'listed',
+    state_at: null,
+    retire_reason: null,
+    run: null,
+  }
+  return { ...base, ...over }
+}
+
 function walkPlanTake(over: Partial<WalkPlanTake> = {}): WalkPlanTake {
   const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }
   return {
@@ -275,6 +319,15 @@ async function open(
     reconcilePreview?: unknown
     /* The same route's press half. */
     reconcile?: unknown
+    /* `POST /orders/walk-plan`'s INITIAL answer — see the route below, registered
+       unconditionally, for why this exists at all. Omit it for a case that does not care about
+       the walk (an empty plan, the honest default); pass it for a case that presses `Mark sold`
+       on landing, which `stubWalkPlan` called AFTER `open()` cannot reliably reach — see that
+       comment for the race this closes. */
+    walkPlan?: WalkPlan
+    /* `POST /inventory/copies`'s answer — see the route below for why this exists. Keyed
+       `box/index`, matching `getInventoryCopies`'s own wire shape. */
+    inventoryCards?: Record<string, InventoryCard>
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -413,19 +466,47 @@ async function open(
      A WRITE-SHAPED ROUTE, REGISTERED BEFORE THE LOOSER READ REGEXES — `/orders$/`'s own rule
      one register down. `/inventory\/copies$/` is a POST and could not collide with `/orders$/`
      regardless, but the ordering is kept uniform with every other route in this file rather
-     than argued case by case. */
+     than argued case by case.
+
+     `options.inventoryCards`, keyed `box/index`, FOR A CASE THAT NEEDS `rawCards` TO RESOLVE —
+     `OrdersWalkPane.tsx`'s `currentCard`, which is what turns on the REUSED pane
+     (`CardHeroHead`/`PhotoPanel`/`CardDetailsSection`, §13) rather than the synthesised
+     fallback header it draws before this read answers. Empty by default, matching every case
+     that never asks. */
   await page.route(/\/inventory\/copies$/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"cards": {}}' })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ cards: options.inventoryCards ?? {} }),
+    })
   })
 
   /* THE WALK'S OWN READ, ALSO UNCONDITIONALLY (§13): selecting a buyer starts their walk at
    * once, so `POST /orders/walk-plan` now fires on ordinary mount, for any fixture that carries
    * a walkable order — not only for a case that presses "Walk N orders", which no longer
    * exists. An EMPTY plan by default, so a case that does not care about the walk never leaks
-   * this read to the capture server; `stubWalkPlan(page, ...)` called AFTER `open()` overrides
-   * it with a real one, the same "later registration wins" rule every other route here uses. */
+   * this read to the capture server.
+   *
+   * `options.walkPlan`, NOT `stubWalkPlan(page, …)` CALLED AFTER `open()`, FOR A CASE THAT
+   * WALKS ON LANDING. The sole buyer a single-order fixture draws is auto-selected the moment
+   * `GET /orders` answers — `selectedKey`'s own fallback to `shownGroups[0]`, §13's "clicking a
+   * buyer selects it and its walk starts at once" applied to the buyer the page lands on
+   * already — so the FIRST `walk-plan` request fires from inside `open()`'s own render, before
+   * a case's own `await` returns control to it. A `stubWalkPlan` call made after that has
+   * already lost the race: Playwright's routes still register in the order added, but the
+   * request this file's browser needs answered has often already been sent and fulfilled by
+   * this default by the time the call lands, and `useOrderWalk`'s fetch effect is keyed on the
+   * WALKED SET, not on time — an unchanged set never asks again. Measured, not assumed: three
+   * cases (`the receipt names…`, `Mark sold records…`, `a pooled copy…`, this file's own
+   * history) hung 15s on a `Mark sold` button that a stubbed-after plan never populated.
+   * `stubWalkPlan` stays correct for a case that changes the SET after landing (ticking a
+   * second buyer, replacing the selection) — it is only the FIRST fetch this cannot reach. */
   await page.route(/\/orders\/walk-plan$/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(walkPlanOf([])) })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.walkPlan ?? walkPlanOf([])),
+    })
   })
 
   if (options.boot !== undefined) {
@@ -793,6 +874,21 @@ test('all six reasons are drawn, including the ones that are zero', async ({ pag
 
 /* -------------------------------------------------------------------------------------- 3 */
 
+/* THE FOUR CASES BELOW (this one plus the pull-body, the receipt and the two undo cases) ALL
+ * PRESSED `button.orders-pull` DIRECTLY, WHICH NO LONGER EXISTS TO PRESS. `OrderDetail` inside
+ * the Manage sheet passes `hidePicks` UNCONDITIONALLY (§13: "the walk beside this sheet is the
+ * one place to Mark sold from"), and `hidePicks` filters out every TAKEABLE copy — exactly the
+ * ones a `.orders-pull`/`Mark sold` button would ever appear on (`copiesOf`'s own `takeable`,
+ * `aimOf(line, pick) !== null && pick.held_by === null`). A copy nobody holds can now be pressed
+ * in exactly one place: the walk's own `CardLocations` (`OrdersWalkPane.tsx`), which is
+ * `#/inventory`'s own card pane and draws the identical `Mark sold` button
+ * (`CardLocations.tsx`'s `renderAction`/`RowAction`) over the SAME write (`onWalkPull` calls the
+ * same `pullCopy`, so the wire body these cases assert is unchanged). This is a real change to
+ * WHERE the product draws a pressable copy, not a test bug to paper over — the PRODUCT decided
+ * it (§13's own ruling), so every case below is re-aimed at the walk rather than at Manage. A
+ * copy already spoken for is the opposite case: NOT takeable, so `hidePicks` leaves it alone and
+ * it is still exactly where it always was, in `OrderDetail`'s own list. */
+
 test('a copy another line already holds is drawn as spoken for, and is not offered', async ({
   page,
 }) => {
@@ -816,22 +912,22 @@ test('a copy another line already holds is drawn as spoken for, and is not offer
       [order({ wanted: 2 })],
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 0, lines: [held] }],
     ),
+    /* THE FREE COPY, OFFERED — IN THE WALK, the one place a takeable copy is drawn now. The
+       sole buyer selects itself on landing (§13), so this is `open()`'s own `walkPlan` rather
+       than a `stubWalkPlan` call after — see that option's comment for the race it closes. */
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies: [walkPlanCopy({ capture_id: 'cap-a' })] })] })]),
   })
+  await expect(page.getByRole('button', { name: 'Mark sold' })).toBeVisible()
 
-  /* RE-AIMED: the free copy is now drawn by the merged `By buyer` walk (`buildWalk` skips
-     `held_by` copies outright), and the held one is only this line's own map, behind the "By
-     order" fold — a real kit `Button` now, closed by default while a walk covers the order
-     (§9's "what is deleted", finding 5). Opening it is what puts both rows on screen at once. */
-  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
+  /* THE PROMISED ONE IS NOT — it is not takeable, so `hidePicks` never touches it, and it is
+     right where `OrderDetail`'s own list always drew it. ONE ROW, not two: the free copy above
+     is gone from this list entirely now, which is the change from the deleted `By order` fold
+     this case used to open — hidePicks removes exactly what the walk now offers instead. */
+  await openManage(page)
   const rows = page.locator('.orders-pick')
-  await expect(rows).toHaveCount(2)
-
-  /* THE FREE COPY IS OFFERED AND THE PROMISED ONE IS NOT. Not "disabled": a greyed Pull would
-     teach the operator that the press means nothing, and this copy is not unavailable — it is
-     already going to somebody else, which is a sentence rather than a state. */
-  await expect(rows.nth(0).locator('button.orders-pull')).toHaveCount(1)
-  await expect(rows.nth(1).locator('button.orders-pull')).toHaveCount(0)
-  await expect(rows.nth(1).locator('.orders-pick-held')).toContainText(OTHER_ORDER)
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first().locator('button.orders-pull')).toHaveCount(0)
+  await expect(rows.first().locator('.orders-pick-held')).toContainText(OTHER_ORDER)
 })
 
 /* -------------------------------------------------------------------------------------- 4 */
@@ -839,30 +935,35 @@ test('a copy another line already holds is drawn as spoken for, and is not offer
 test('the pull sends the capture_id of the row that was pressed, and its own position', async ({
   page,
 }) => {
-  const two = line({
-    wanted: 1,
-    fulfilled: 2,
-    on_hand: 2,
-    picks: [
-      pick({ capture_id: 'cap-a' }),
-      pick({
-        capture_id: 'cap-b',
-        index: 22,
-        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
-      }),
-    ],
-  })
+  /* TWO COPIES IN DIFFERENT BOXES, DELIBERATELY — same reason the old fixture used two picks:
+     pressing the first would pass against a screen that sent the wrong row's capture_id, and
+     the one a mid-box delete turns into a sale of the wrong card. Different boxes (rather than
+     two slots of the same box, the old shape) keep the assertion below reading exactly the old
+     body: same-box, `onWalkPull`'s own `refresh` list would name the OTHER row's own box/index
+     too (D58 — the walk tells the server about every other card whose number the write is about
+     to move), which is a real and separate claim this case is not about.
+
+     `open()`'s own `walkPlan`, not `stubWalkPlan` after it — the sole buyer selects itself on
+     landing (§13), so the plan has to be this screen's FIRST answer (see that option's comment
+     for the race a later stub loses). */
   const wire = await open(page, {
-    orders: payloadOf(
-      [order()],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [two] }],
-    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            copies: [
+              walkPlanCopy({ capture_id: 'cap-a' }),
+              walkPlanCopy({ box: 5, index: 22, slot: 18, card: 18, label: 'Box 5 · Section 2 · Card 18', capture_id: 'cap-b' }),
+            ],
+          }),
+        ],
+      }),
+    ]),
   })
 
   /* THE SECOND ROW, DELIBERATELY. Pressing the first would pass against a screen that sent
-     `picks[0]` for every row — the exact bug this case exists to catch, and the one a mid-box
-     delete turns into a sale of the wrong card. */
-  await page.locator('.orders-pick').nth(1).locator('button.orders-pull').click()
+     `picks[0]` for every row — the exact bug this case exists to catch. */
+  await page.locator('.card-locations-row').nth(1).getByRole('button', { name: 'Mark sold' }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
@@ -872,7 +973,7 @@ test('the pull sends the capture_id of the row that was pressed, and its own pos
     source: 'TCGplayer',
     number: ORDER_NUMBER,
     sku: SKU,
-    targets: [{ box: 3, index: 22, capture_id: 'cap-b' }],
+    targets: [{ box: 5, index: 22, capture_id: 'cap-b' }],
   })
 })
 
@@ -900,9 +1001,13 @@ test('the receipt names where the card just was, never the departed label the sa
         },
       ],
     },
+    /* THE SOLE BUYER SELECTS ITSELF ON LANDING (§13's fallback), so the plan has to be this
+       screen's FIRST answer — see `open()`'s own comment on `options.walkPlan` for the race a
+       `stubWalkPlan` call made after `open()` loses here. */
+    walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator('button.orders-pull').first().click()
+  await page.getByRole('button', { name: 'Mark sold' }).click()
 
   /* THE RECEIPT IS A TOAST NOW, which is the owner's ruling and changes nothing this case is
      about: it is still composed at the moment of the press, it still has to name the place the
@@ -934,9 +1039,10 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
       places: [place()],
       sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }],
     },
+    walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator('button.orders-pull').first().click()
+  await page.getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -965,9 +1071,10 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
       places: [place()],
       sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }],
     },
+    walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator('button.orders-pull').first().click()
+  await page.getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -986,31 +1093,43 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
 test('a pooled copy is drawn as pooled rather than as a position (D24)', async ({ page }) => {
   /* `Place.label` IS NULL BY DESIGN FOR A POOLED CARD AND NEVER BY FAULT — `located: false` is
      what says so. A screen that fell back to `box/index` would print a slot number for a card
-     that is in no slot, which is the one thing D24 rules out. */
-  const pooled = line({
-    picks: [
-      pick({
-        capture_id: 'cap-p',
-        place: place({
-          label: null,
-          located: false,
-          game: 'pokemon_code',
-          game_display: 'Pokémon code cards',
-          slot: null,
-          section: null,
-          card: null,
-        }),
-      }),
-    ],
-  })
+     that is in no slot, which is the one thing D24 rules out.
+
+     RE-AIMED, THE SAME REASON AS THE BANNER ABOVE: a pooled copy with a capture id and no
+     `held_by` is takeable, so `hidePicks` removes it from Manage's own list too — this is drawn
+     in the walk now, over `CardLocations`'s own pooled row (`isPooled`,
+     `.card-locations-boxname`), the identical component and class `#/inventory` draws a pooled
+     code card with. `open()`'s own `walkPlan`, not `stubWalkPlan` after it — the sole buyer
+     selects itself on landing (§13), so the plan has to be this screen's FIRST answer. */
   await open(page, {
-    orders: payloadOf(
-      [order()],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [pooled] }],
-    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        pooled: true,
+        box: null,
+        section: null,
+        takes: [
+          walkPlanTake({
+            copies: [
+              walkPlanCopy({
+                capture_id: 'cap-p',
+                place: {
+                  label: null,
+                  located: false,
+                  game: 'pokemon_code',
+                  game_display: 'Pokémon code cards',
+                  slot: null,
+                  section: null,
+                  card: null,
+                },
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]),
   })
 
-  await expect(page.locator('.orders-pick-pooled')).toContainText('pooled')
+  await expect(page.locator('.card-locations-boxname')).toContainText('pooled')
 
   /* AND NO PHOTOGRAPH ANYWHERE ON THIS SCREEN. A pooled capture's photo is a live code and a
      bearer instrument (D24, CLAUDE.md's opsec rule), and this screen draws no `<img>` at all —
@@ -1624,11 +1743,23 @@ test('?order= resolves an old link to the buyer group that holds it', async ({ p
       body: JSON.stringify({ orders: both.resolution.orders.filter((one) => wanted.has(one.key)) }),
     })
   })
+  /* THE WALK'S OWN READ, ALSO HAND-LAID because this case does not call `open()` (see that
+   *  helper's own comment on `options.walkPlan`): resolving `?order=` selects a buyer the same
+   *  as a click does, and selecting a buyer starts their walk at once (§13) — an unstubbed
+   *  `POST /orders/walk-plan` would otherwise reach the real capture server and trip
+   *  `sealEveryTest`'s refusal. Empty is enough; this case is about which buyer resolves, not
+   *  the walk itself. */
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(walkPlanOf([])) })
+  })
   await page.goto(`${VIEW_ROUTE}?order=${encodeURIComponent(secondOrderKey)}`)
   await expect(page.locator(VIEW)).toBeVisible()
 
-  /* THE SECOND BUYER'S GROUP IS SELECTED, resolved through the order key the old link named. */
-  await expect(page.locator('.orders-buyer-detail')).toContainText('Someone Else')
+  /* THE SECOND BUYER'S GROUP IS SELECTED, resolved through the order key the old link named —
+   *  RE-AIMED off the deleted `BuyerDetail`'s own `.orders-buyer-detail` onto the order panel's
+   *  own buyer name heading, `OrderPanel`'s `.boxops-identity-name` (§13, the pane `#/inventory`
+   *  already draws for a box). */
+  await expect(page.locator('.boxops-identity-name')).toContainText('Someone Else')
 })
 
 test('a buyer with nothing open and closed long ago sits under the Earlier fold', async ({ page }) => {
@@ -1855,6 +1986,10 @@ test('the reconcile preview draws a breakdown by feed status, with the count in 
     ],
   )
   const wire = await open(page, { orders: both })
+  /* RE-AIMED: `ReconcileBacklogPanel` moved into the Manage sheet with the rest of D203's own
+     family (§13, "Inventory's skeleton has no other place for them") — it draws beside
+     `BacklogPrompt`, not on the page directly. */
+  await openManage(page)
 
   const panel = page.locator('.orders-reconcile')
   await expect(panel).toBeVisible()
@@ -1898,6 +2033,7 @@ test('the reconcile press sends the cutoff shown on screen, and the receipt carr
       still_open: 1,
     },
   })
+  await openManage(page)
 
   const panel = page.locator('.orders-reconcile')
   await panel.getByRole('button', { name: /Stand down 2 orders/ }).click()
@@ -2027,7 +2163,10 @@ test('a terminal order that still owes copies, with no answer yet, shows a way t
   const owing = terminalOwingOrder()
   await open(page, { orders: payloadOf([owing], []) })
   await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
-  await expect(page.locator('main.orders')).toContainText('Not resolved in this read.')
+  /* RE-AIMED: `OrderDetail`'s own body — where this sentence lives — moved into the Manage
+     sheet with the rest of the per-order controls (§13). */
+  await openManage(page)
+  await expect(page.locator('.orders-manage-sheet')).toContainText('Not resolved in this read.')
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
 })
 
@@ -2126,23 +2265,30 @@ function bothPlan(): WalkPlan {
 /* -------------------------------------------------------- selecting starts, ticking joins */
 
 test('clicking a buyer selects it and its walk starts at once — no Start button', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  const planned = await stubWalkPlan(page, volcanionPlan())
+  /* RE-AIMED: the ORIGINAL premise here was that NOTHING is walked before a click —
+     `.browse-walk` asserted `toHaveCount(0)` ahead of `startWalk`. That was never true once a
+     buyer exists: `selectedKey`'s own fallback to `shownGroups[0]` (pre-dating this pass, D193's
+     own reasoning — a status filter that hides the selected buyer must never leave the detail
+     blank) selects the sole buyer on the very FIRST render, before any click, and selecting
+     starts the walk at once (§13). It passed before only because `stubWalkPlan` called after
+     `open()` loses the race for that first fetch (see `open()`'s own `walkPlan` comment) and the
+     walk stayed empty for the wrong reason. The claim this case actually owns — there is no
+     separate `Start`/`Walk N orders` control anywhere on the screen — is real and kept. */
+  await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
 
   await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
-  await expect(page.locator('.browse-walk')).toHaveCount(0)
-
-  await startWalk(page)
-
   await expect(page.locator('.browse-walk')).toContainText('Volcanion')
-  expect(planned.calls()).toBeGreaterThan(0)
 })
 
 test('ticking a second buyer joins the walk live, and it re-plans with no press but the tick', async ({ page }) => {
+  /* `open()`'s own `walkPlan`, not `stubWalkPlan` alone — the sole selected buyer (Ada) starts
+     her walk on landing (§13), which raced the `stubWalkPlan` call below often enough to flake
+     (see that option's own comment). `bothPlan()` up front, `stubWalkPlan` still registered
+     after for its own `calls()` counter, which only needs to prove a SECOND fetch happens once
+     the tick changes the walked set — a claim the initial fetch's own timing cannot affect. */
   const { payload } = secondBuyerPayload()
-  await open(page, { orders: payload })
+  await open(page, { orders: payload, walkPlan: bothPlan() })
   const planned = await stubWalkPlan(page, bothPlan())
-  await startWalk(page)
   await expect(page.locator('.browse-walk')).toContainText('Volcanion')
   const callsAfterSelect = planned.calls()
 
@@ -2154,10 +2300,12 @@ test('ticking a second buyer joins the walk live, and it re-plans with no press 
 })
 
 test('clicking buyer B while A is selected replaces A — the walk is over B alone', async ({ page }) => {
+  /* `open()`'s own `walkPlan` for A's plan — A selects herself on landing (§13), which races a
+     `stubWalkPlan` call made after `open()` (see that option's comment). B's own re-plan below,
+     triggered by an explicit click that changes the walked set, is not raced the same way and
+     keeps its `stubWalkPlan` call as before. */
   const { payload } = secondBuyerPayload()
-  await open(page, { orders: payload })
-  await stubWalkPlan(page, volcanionPlan())
-  await startWalk(page)
+  await open(page, { orders: payload, walkPlan: volcanionPlan() })
   await expect(page.locator('.browse-walk')).toContainText('Volcanion')
 
   await stubWalkPlan(page, sunrisePlan())
@@ -2240,9 +2388,17 @@ test('the selected buyer\'s own orders stay reachable in Manage for stand-down, 
 /* --------------------------------------------------------------------------- the pane is inventory's */
 
 test('the walk pane is inventory\'s own card pane: the same header, photo, copies and Details classes', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(page, volcanionPlan())
-  await startWalk(page)
+  /* THE REUSED PANE ONLY DRAWS ONCE `rawCards` RESOLVES THE CURRENT ROW'S REAL `InventoryCard`
+     (`OrdersWalkPane.tsx`'s own `currentCard`) — before that it falls back to a synthesised
+     header with no photo and no Details at all, which is what made this case's photo and
+     Details assertions time out. `inventoryCards`, keyed to the plan's own box/index, is what
+     makes the read answer with a real card instead of the empty default. */
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard() },
+  })
 
   const pane = page.locator('.orders-walk-card')
   /* THE HERO HEAD, `CardHeroHead` — `BoxBrowse.tsx`'s own classes. */
@@ -2264,12 +2420,28 @@ test('the walk pane is inventory\'s own card pane: the same header, photo, copie
 /* --------------------------------------------------------------------------------- Mark sold */
 
 test('Mark sold records the copy against the owing order, and the order panel updates', async ({ page }) => {
+  /* `open()`'s own `walkPlan`, not `stubWalkPlan` after it — the sole buyer selects itself on
+     landing (§13), so the plan has to be this screen's FIRST answer (see that option's
+     comment for the race a later stub loses).
+
+     `orders` IS A FUNCTION, ANSWERING THE SOLD FIGURE ON THE SECOND READ. The order panel's own
+     `sold` stat is `group.recorded`, off `GET /orders`'s own answer — not the walk's local
+     tally — so `onWalkPull`'s post-write `Promise.all([reread(), rereadStore()])` has to see
+     the copy recorded for the panel to move at all. A static payload here would leave `sold`
+     at 0 forever, which is a fixture gap this case's own claim depends on closing, not a
+     product one. */
+  let readCalls = 0
   const wire = await open(page, {
-    orders: oneOpenOrder(),
+    orders: () =>
+      readCalls++ === 0
+        ? oneOpenOrder()
+        : payloadOf(
+            [order({ recorded: 1 })],
+            [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: true, outstanding: 0, lines: [line({ fulfilled: 1, outstanding: 0, sold: 1 })] }],
+          ),
     pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+    walkPlan: volcanionPlan(),
   })
-  await stubWalkPlan(page, volcanionPlan())
-  await startWalk(page)
 
   await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
 
@@ -2328,6 +2500,12 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
   await expect(page.locator('.browse-list')).toContainText('Sunrise')
 
+  /* HIDE SOLD DEFAULTS ON (D132, reused for the walk by §13's override — no new key). Turned
+     off here on purpose: this case is about ORDER, not visibility, and the sold row disappearing
+     under the default is a second, true, and unrelated claim that would otherwise make `before`
+     and `after` differ for a reason this case is not naming. */
+  await page.locator('.browse-hidesold').click()
+
   const before = await page.locator('.browse-list .browse-secttitle, .browse-list .browse-row-name').allTextContents()
 
   await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
@@ -2347,6 +2525,11 @@ test('J steps to the next card in the walk list, K steps back', async ({ page })
   await startWalk(page)
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
   await expect(page.locator('.browse-list')).toContainText('Sunrise')
+
+  /* THE HAND IS ON THE PAGE HEADING, NOT ON THE TICK CHECKBOX — `check()` leaves focus on the
+     checkbox `<input>` it clicked, and `J`/`K`'s own listener yields to ANY `INPUT`, checkbox
+     included, the same guard `U`'s own case moves off a field for. */
+  await page.getByRole('heading', { name: 'Orders' }).click()
 
   const first = await page.locator('.orders-walk-card .browse-hero-name').textContent()
   await page.keyboard.press('j')
@@ -2422,11 +2605,39 @@ test('#/inventory renders its own known shell unchanged by any of this', async (
      `CardHero.tsx`'s extraction reads back off `BoxBrowse.tsx` are still the ones on screen —
      proof the shared file did not change what `#/inventory` draws, only where the code that
      draws it lives. */
-  await page.route(/\/boxes$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [{ box: 1, name: 'Box 1', state: 'open', cards: 0, sold: 0, retired: 0, moved: 0 }] }) }),
+  /* THE SHELL'S OWN BACKGROUND READS, on every route — `/queues` and `/orders` feed the sidebar's
+     own badges, unrelated to this screen, and a landed box fetches its own detail
+     (`/inventory/<n>`). None of this is `open()`'s own helper (this case does not carry a
+     fixture worth one route table), so they are stubbed by hand here, the same way `?order=`'s
+     own case above does for `#/orders`. */
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"review":[],"parked":[]}' }),
   )
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(oneOpenOrder()) }),
+  )
+  await page.route(/\/boxes(\?.*)?$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        boxes: [{ box: 1, name: 'Box 1', state: 'open', cards: 1, sold: 0, retired: 0, moved: 0 }],
+        facets: { games: [], sets: {}, rarities: {} },
+      }),
+    }),
+  )
+  /* ONE CARD, IN BOX 1 — `BoxBrowse.tsx` draws its own "No cards captured yet" empty state
+     over zero cards, which is a real and different screen from the one this case checks. */
+  const oneCard = inventoryCard({ box: 1, index: 1, label: 'Box 1 · Section 1 · Card 1', section: 1, card: 1 })
   await page.route(/\/inventory$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cards: {}, next_index: {} }) }),
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: { '1/1': oneCard } }) }),
+  )
+  await page.route(/\/inventory\/\d+$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: { '1/1': oneCard } }) }),
+  )
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs":[]}' }),
   )
   await page.goto('/#/inventory')
   await expect(page.locator('main.inventory')).toBeVisible()

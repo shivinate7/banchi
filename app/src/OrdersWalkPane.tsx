@@ -662,16 +662,32 @@ export function WalkMainPane({ walk, phone }: { readonly walk: OrderWalk; readon
           )}
         </div>
         <div className="browse-under">
-          <CardLocations
-            persona="owner"
-            group={currentGroup}
-            currentKey={currentRow.copy.key}
-            preserveOrder
-            onSell={walk.onSell}
-            busyKey={walk.busyCopy}
-            soldKeys={walk.soldKeys}
-            renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
-          />
+          {/* THE VISIBLE DEFECT, FOUND RENDERING THIS PASS OVER THE DEMO STORE: without this
+              wrapper, `CardLocations`' own row never opens the `copies` NAMED CONTAINER
+              (`CardLocations.css`'s `@container copies (max-width: 619px)` — the narrow, place-
+              spans-the-row template that keeps `BOX <name> Box <n>` on one line). No open
+              container means the query cannot match at all, so the row fell through to the
+              WIDE, side-by-side `'place state action'` template regardless of how much room it
+              actually had — 236px of a 587px row at 1440, a third of what `#/inventory` gives
+              the identical row (576px) — and the box's own name wrapped under `BOX 1` twice
+              over before truncating. `Inventory.tsx`'s own `.inventory-detail` is the ONE place
+              in the app that opens this container (`Inventory.css`); `OrdersWalkPane.tsx` reused
+              its class rather than inventing a second name for the same contract, since its
+              rules — `container-type: inline-size`, the flex chain that carries `.browse-band`'s
+              fixed height down to a list that scrolls in it — are exactly what this pane needs
+              too, and `./Inventory.css` was already imported here. */}
+          <div className="inventory-detail">
+            <CardLocations
+              persona="owner"
+              group={currentGroup}
+              currentKey={currentRow.copy.key}
+              preserveOrder
+              onSell={walk.onSell}
+              busyKey={walk.busyCopy}
+              soldKeys={walk.soldKeys}
+              renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
+            />
+          </div>
         </div>
       </div>
       {row === null ? null : <CardDetailsSection card={row.card} market={undefined} listings={{}} phone={phone} />}

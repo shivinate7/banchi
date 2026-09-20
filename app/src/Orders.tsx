@@ -840,7 +840,8 @@ function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status {
 }
 
 const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconName }> = {
-  ready: { label: 'Ready to sell', tone: 'ok', icon: 'check' },
+  /* THE WORD IS "Ready" — one word, not "Ready to sell" (owner's ruling, 2026-09-19). */
+  ready: { label: 'Ready', tone: 'ok', icon: 'check' },
   short: { label: 'Short', tone: 'warn', icon: 'alert' },
   look: { label: 'Needs a look', tone: 'warn', icon: 'eye' },
   unresolved: { label: 'Not resolved', tone: 'default', icon: 'clock' },
@@ -3345,10 +3346,16 @@ function PullStage({
             {well}
           </section>
           {receipt}
-          <div className="orders-manage-status">
-            {statusControl}
-            {statusPanel}
-          </div>
+          {/* FIXED, THIS PASS: `statusControl`/`statusPanel` were ALSO drawn here, a second time
+              — `wellOf`'s own `{withFetch ? statusControl : null}` (inline in the paste row) and
+              `{withFetch ? statusPanel : null}` right under it already put both on screen inside
+              `.orders-paste`, `well`'s own section above. This second copy dated to the Manage
+              sheet's first landing (5a42cb62) and every case that opened the picker got two
+              `.orders-statuses-ask` elements — a Playwright strict-mode violation, not a screen
+              a person had reason to look at differently, since the two copies were identical.
+              Removing this block leaves the one inside `well`, which is also the one the
+              narrowing control's own comment says is correct: "the narrowing sits beside the
+              press, not in front of it." */}
           <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
           <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />
 
