@@ -194,15 +194,18 @@ export function orderStalenessSentence(groups: number): string | null {
 
 /* --------------------------------------------------------------------- the unnamed label */
 
-/** UTC, not the viewer's clock. The date is a fact the feed sent about when an order was
- *  placed — it should read the same label on every screen that opens it, not one that shifts
- *  a day depending on which timezone happens to be looking. */
+/** THE VIEWER'S CLOCK, NOT UTC — and the reason is the row this label sits in. The same row
+ *  already draws the placed date through `toLocaleDateString` (`Orders.tsx`, the `placed`
+ *  line), which reads the local clock. A UTC label beside a local date makes one row state
+ *  two different days for one event, for every viewer west of UTC, for part of every day.
+ *  Cross-timezone stability is the weaker claim here: one store is read by one hand, and the
+ *  label's job is to tell two nameless rows apart, not to travel. */
 function shortDate(iso: string): string | null {
   const at = new Date(iso)
   if (Number.isNaN(at.getTime())) return null
-  const mm = String(at.getUTCMonth() + 1).padStart(2, '0')
-  const dd = String(at.getUTCDate()).padStart(2, '0')
-  const yy = String(at.getUTCFullYear() % 100).padStart(2, '0')
+  const mm = String(at.getMonth() + 1).padStart(2, '0')
+  const dd = String(at.getDate()).padStart(2, '0')
+  const yy = String(at.getFullYear() % 100).padStart(2, '0')
   return `${mm}-${dd}-${yy}`
 }
 
