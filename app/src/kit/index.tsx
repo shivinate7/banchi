@@ -219,21 +219,25 @@ export function Segmented<T extends string>({
   options,
   onChange,
   label,
+  size,
   className,
 }: {
   readonly value: T
   readonly options: readonly { readonly value: T; readonly label: ReactNode; readonly icon?: IconName; readonly kbd?: string }[]
   readonly onChange: (next: T) => void
   readonly label?: string
+  /** `'sm'` matches a 28px row of search/select controls (S10) — see kit.css's own note on
+   *  why this is two same-weight classes, container and item, never a descendant selector. */
+  readonly size?: 'sm'
   readonly className?: string
 }) {
   return (
-    <div className={['bn-seg', className].filter(Boolean).join(' ')} role="group" aria-label={label}>
+    <div className={['bn-seg', size === 'sm' ? 'bn-seg-sm' : '', className].filter(Boolean).join(' ')} role="group" aria-label={label}>
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
-          className="bn-seg-item"
+          className={['bn-seg-item', size === 'sm' ? 'bn-seg-item-sm' : ''].filter(Boolean).join(' ')}
           aria-pressed={option.value === value}
           onClick={() => onChange(option.value)}
         >
@@ -247,9 +251,22 @@ export function Segmented<T extends string>({
 }
 
 /* ---- Stat ------------------------------------------------------------------------------------ */
-export function Stat({ value, label, className }: { readonly value: ReactNode; readonly label: ReactNode; readonly className?: string }) {
+export function Stat({
+  value,
+  label,
+  size,
+  className,
+}: {
+  readonly value: ReactNode
+  readonly label: ReactNode
+  /** `'sm'` reads at Orders' own 14:11 (`.orders-index-figure`); `'xs'` reads at Inventory's
+   *  own 11:11, un-bolded (`.browse-boxcell-count` beside `.browse-boxcell-meta`) (S9). The
+   *  base size (omitted) is unchanged at 22:12. */
+  readonly size?: 'sm' | 'xs'
+  readonly className?: string
+}) {
   return (
-    <div className={['bn-stat', className].filter(Boolean).join(' ')}>
+    <div className={['bn-stat', size ? `bn-stat-${size}` : '', className].filter(Boolean).join(' ')}>
       <span className="bn-stat-value">{value}</span>
       <span className="bn-stat-label">{label}</span>
     </div>
