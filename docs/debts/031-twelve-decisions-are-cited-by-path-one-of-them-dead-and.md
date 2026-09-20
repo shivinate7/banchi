@@ -8,10 +8,13 @@ finding that is lost.
 
 **What was measured.** Two shapes exist. Only the first is this repo's defect.
 
-One LIVE slug-form path citation. `` `docs/decisions/D-a-price-history-archive.md` `` in
-`docs/specs/revenue-plan.md:139` is the exact pre-claim shape PR #424 fixes. It is not dead.
-The file still sits on disk unclaimed. The next claim now rewrites it to a bare id, not to a
-broken path. Nothing to do here beyond what that pull request already does.
+One slug-form path citation, and it is the worked example. `docs/specs/revenue-plan.md:139`
+carried a path naming the price-history archive entry. That entry was still an unclaimed
+slug. The claim ran on 2026-09-19 and allocated D219. The claim step rewrote the path by
+substituting the token. That produced a path to a file that does not exist. The real file
+keeps its slug tail after the number. The audit refused the claim commit and the merge
+stopped. A person repaired that one line by hand, to cite D219 as an id. PR #424 fixes the
+cause, so the next claim writes an id rather than a broken path.
 
 TWELVE already-claimed, numbered-path citations sit across six files. This is a different,
 older style. It names a real entry by its full `D<n>-<slug>.md` filename, not by its bare id:

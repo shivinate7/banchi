@@ -119,7 +119,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # and a migration that ran once at open time could never re-answer a card whose export
 # arrived later.
 #
-# NINE, FOR D-a-price-history-archive (`docs/specs/revenue-plan.md` §4). `_add_price_history`
+# NINE, FOR D219 (`docs/specs/revenue-plan.md` §4). `_add_price_history`
 # adds `price_history` and `price_history_sources` — the same purely-additive shape
 # `_add_readings` used at 5, two tables nothing older has. `pkmnscan archive sweep --write`
 # is the only writer, and an upgraded store's archive is correctly empty until the first
@@ -178,7 +178,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     # The accounting beside it: one row per file that walk read, keyed `kind:name` — see
     # `store/readings.py:_source_key` for why `kind` is part of the key.
     "readings_sources": ("kind", "name", "at", "skus"),
-    # D-a-price-history-archive: one row per (sku, range, start), NEVER cleared — see
+    # D219: one row per (sku, range, start), NEVER cleared — see
     # `store/pricearchive.py`'s module docstring for why the key carries `range` and not
     # `width_days`, and why this table is never a full replace.
     "price_history": (
@@ -211,7 +211,7 @@ _INDEXES = (
     ("events", "position"),
     ("boxes", "bid"),
     ("submissions", "state"),
-    # D-a-price-history-archive: `PriceArchive.for_sku` filters on `sku`, and a table this
+    # D219: `PriceArchive.for_sku` filters on `sku`, and a table this
     # never deletes from grows without bound, so a scan-per-lookup would only get worse.
     ("price_history", "sku"),
 )
@@ -427,7 +427,7 @@ def _upgrade(
             if stored < 8:
                 _add_set_columns(conn)       # D213
             if stored < 9:
-                _add_price_history(conn)     # D-a-price-history-archive
+                _add_price_history(conn)     # D219
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1145,7 +1145,7 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
 
 def _add_price_history(conn: sqlite3.Connection) -> None:
     """Schema 9: `price_history` and `price_history_sources`
-    (D-a-price-history-archive, `docs/specs/revenue-plan.md` §4).
+    (D219, `docs/specs/revenue-plan.md` §4).
 
     `_add_readings`'s case one version up — two tables nothing older has, so there is
     nothing to backfill and nothing to read wrong. No receipt file, for the same reason

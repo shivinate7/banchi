@@ -224,6 +224,9 @@
     "D215-browser-spec-allow-list.md",
     "D216-tcg-price-history-user-agent-block.md",
     "D217-revenue-slice.md",
-    "D218-no-typed-interpunct-on-screen.md"
+    "D218-no-typed-interpunct-on-screen.md",
+    "D219-a-price-history-archive.md",
+    "D220-orders-is-inventory.md",
+    "D221-money-stays-mono.md"
   ]
 }

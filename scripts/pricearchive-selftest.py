@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`store/pricearchive.py` and `pipeline/pricearchive.py`, proved against a throwaway store
-(D-a-price-history-archive).
+(D219).
 
 NO NETWORK CALL. `FakeMarket` below is a stand-in for `pipeline/pricehistory.py:Market`,
 duck-typed to the one method `pipeline/pricearchive.py:sweep` calls
@@ -9,7 +9,7 @@ duck-typed to the one method `pipeline/pricearchive.py:sweep` calls
 dataclasses the real `Market` returns, never a second, drifting shape.
 
 THE ARM THIS FILE EXISTS FOR proves the D62 argument this branch's own decision entry makes
-(D-a-price-history-archive): archiving the SAME calendar day out of `semiannual` and
+(D219): archiving the SAME calendar day out of `semiannual` and
 `annual` — both seven-day-wide ranges — must leave TWO rows, because the two are independent
 observations
 even when their bucket happens to start on the same date. A second arm builds the archive's
@@ -138,7 +138,7 @@ def main() -> int:
         width_only[collision_key] = bucket
     ok(len(width_only) == 1,
        "a key built from (sku, width_days, start) instead DOES collapse the two ranges into "
-       "one row — this is the bug D-a-price-history-archive's key design avoids",
+       "one row — this is the bug D219's key design avoids",
        width_only)
 
     # ---------------------------------------------------------------- never-delete

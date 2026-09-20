@@ -1,5 +1,5 @@
 """`pkmnscan archive` — the price-history archive: sweep the live endpoint into it, or look
-at what it holds (D-a-price-history-archive).
+at what it holds (D219).
 
 WHY THIS COMMAND EXISTS. `pipeline/pricehistory.py`'s history endpoint has a hard ceiling of
 357 days; everything older is already gone, and everything not captured from here ages out on

@@ -77,7 +77,7 @@ class Snapshot:
     # adopt` commits it atomically with everything else D88 already protects; every other
     # writer in this package leaves it untouched.
     readings: Readings
-    # THE PRICE-HISTORY ARCHIVE (D-a-price-history-archive): every bucket `pkmnscan archive
+    # THE PRICE-HISTORY ARCHIVE (D219): every bucket `pkmnscan archive
     # sweep --write` has ever read, kept past the source's own 357-day ceiling. In the
     # snapshot for the same reason `readings` is: a `Store.write()` from `archive sweep`
     # commits it atomically with everything else D88 already protects.

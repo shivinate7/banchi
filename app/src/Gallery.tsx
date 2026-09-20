@@ -1040,7 +1040,7 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="position" title="Position bar" lede={<>How far into its box a card sits. A closed box earns a percentage; an open one says <Code>so far</Code>.</>}>
+          <Section id="position" title="Position bar" lede={<>How far into its box a card sits. A closed box earns a percentage; an open one counts what is in it.</>}>
             <div className="kit-stack">
               <Spec name="bar-closed" label="closed box · 250 cards">
                 <PositionBar place={CLOSED_BOX} />
