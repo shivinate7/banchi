@@ -64,7 +64,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
-from pipeline import games, tcgcsv
+from pipeline import games, join, tcgcsv
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, Source, _key
 from store.session import Store
 
@@ -73,6 +73,21 @@ from store.session import Store
 # whole pass (D222). Not tuned to network throughput; `measured_pace`
 # below is what answers "how fast", this only answers "how much unwritten work at once".
 CHUNK_SKUS = 20
+
+# How long a SKU's own buckets are trusted fresh enough that a RESUMED SWEEP skips it
+# (D-a-archive-resume-window), NEVER `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` — that
+# constant is one hour, argued for a different reader with a different need (the live
+# `#/pricing` screen, where an hour-old figure is honest and a longer one would not be).
+# `split_by_freshness` treats this pass the same way whether it is resumed a minute later
+# or five hours later, and D222 measures the host throttling this client after roughly
+# 800 requests — with `rank_by_revenue` now stable and deterministic (D223), a one-hour
+# window sends every pass back to read the SAME top ~200 names it already read last time,
+# never advancing past them. MEASURED AGAINST THE OWNER'S REAL STORE: two passes five
+# hours apart, the second skipped nothing and restarted from the top of the ranked list —
+# it only ever advanced by the accident of running before ranking existed. Six days is
+# the owner's own ruling: a weekly press refreshes the whole archive, and any pass run
+# again within the same week always advances onto ground the last one had not covered.
+RESUME_TTL_SECONDS = 6 * 24 * 60 * 60
 
 # `pipeline/pricehistory.py:COURTESY_DELAY_SECONDS`, copied rather than imported — this
 # module still takes no hard dependency on `pricehistory` (the `market` argument stays
@@ -130,6 +145,197 @@ def _export_row(sku: str, name: str, number: str, set_name: str, condition: str,
     }
 
 
+class UnresolvedLedgerName(ValueError):
+    """One order line's own `name` could not be parsed into an export-shaped row. Carries
+    the reason as its message. Never raised past `ledger_subject_rows`, which turns every
+    instance into a per-SKU refusal — `CLAUDE.md`'s both-directions rule applies to a
+    ledger-only subject exactly as it does to a live fetch."""
+
+
+def _catalogued_product_lines() -> frozenset:
+    """Every `Product Line` string a catalogued game claims (D22), the only vocabulary a
+    ledger line's own `name` can ever open with — `misc` has no `Product Line` at all
+    (`games.py`'s own `None`) and an uncatalogued game has nothing `Market.category_id`
+    could resolve, so neither can ever widen the subject set."""
+    return frozenset(
+        str(entry["product_line"])
+        for entry in games.GAMES
+        if entry.get("product_line") and games.is_catalogued(str(entry["key"]))
+    )
+
+
+def _longest_group_prefix(remainder: str, groups: Dict[str, dict]) -> Optional[Tuple[str, str]]:
+    """The longest prefix of `remainder` that, followed by `": "`, names a real group in
+    `groups` (`pipeline/pricehistory.py:Market.groups`'s own return shape — keyed by
+    `join.normalize_set`) — never the first `": "`, because a group name itself carries a
+    colon (`SV09: Journey Together`) and a first-split reads `SV09` alone, which resolves
+    to nothing. `": "` occurrences only move forward through `remainder`, so walking them in
+    order and keeping the last match found IS keeping the longest one.
+
+    Answers `(the group's own catalog spelling, everything after "<group>: ")`, or `None`
+    when no prefix of `remainder` names a known group at all.
+    """
+    best: Optional[Tuple[str, str]] = None
+    start = 0
+    while True:
+        pos = remainder.find(": ", start)
+        if pos == -1:
+            break
+        candidate = remainder[:pos]
+        record = groups.get(join.normalize_set(candidate))
+        if record is not None:
+            real_name = str(record.get("name") or candidate).strip()
+            best = (real_name, remainder[pos + 2:])
+        start = pos + 1
+    return best
+
+
+def _split_ledger_tail(rest: str) -> Optional[Tuple[str, str, str]]:
+    """`(Product Name, Number, Condition)` out of `"<Product Name>[ - #<Number>] -
+    <Condition>"` — the shape left over once the product line and the group have both been
+    read off the front. The condition is always the final `" - "`-delimited segment. The
+    segment before it is the Number only when it is `"#"`-prefixed — a sealed line carries
+    no such segment at all, which is a correct, expected shape and not a refusal (see
+    `pipeline/pricehistory.py:ProductIndex`'s own docstring on a blank Number)."""
+    parts = rest.split(" - ")
+    if len(parts) < 2:
+        return None
+    condition = parts[-1].strip()
+    if not condition:
+        return None
+    if len(parts) >= 3 and parts[-2].strip().startswith("#"):
+        number = parts[-2].strip()[1:].strip()
+        product_name = " - ".join(parts[:-2]).strip()
+    else:
+        number = ""
+        product_name = " - ".join(parts[:-1]).strip()
+    if not product_name:
+        return None
+    return product_name, number, condition
+
+
+def parse_ledger_name(name: str, groups: Dict[str, dict]) -> dict:
+    """One order line's own `name` -> an export-shaped row (the `TCGplayer Id` cell is left
+    blank; the caller carries the SKU already), by the grammar `<Product Line> - <Group
+    Name>: <Product Name>[ - #<Number>] - <Condition>`.
+
+    A PURE FUNCTION. `groups` is `Market.groups(category_id)`'s own return shape for
+    whichever category the product line resolves to — a test hands this a plain dict, no
+    `Market`, no store, no network. `ledger_subject_rows` below is what actually calls
+    `Market.category_id`/`Market.groups`; this function only ever reads the dict it is
+    handed.
+
+    REFUSES RATHER THAN GUESSES, PER `CLAUDE.md`. Every one of the three hops — the product
+    line, the group boundary, and the tail split — raises `UnresolvedLedgerName` naming
+    itself when it cannot resolve, rather than falling back to a partial match.
+    """
+    text = str(name or "").strip()
+    if not text:
+        raise UnresolvedLedgerName("the line carries no name at all")
+    if " - " not in text:
+        raise UnresolvedLedgerName(
+            f"{text!r} has no ' - ' separator marking where the product line ends"
+        )
+    line, _, remainder = text.partition(" - ")
+    line = line.strip()
+    if line not in _catalogued_product_lines():
+        raise UnresolvedLedgerName(f"{line!r} is not a known, catalogued product line")
+    match = _longest_group_prefix(remainder, groups)
+    if match is None:
+        raise UnresolvedLedgerName(
+            f"no group tcgcsv lists for {line!r} prefixes {remainder!r} — either the "
+            "mirror does not carry that set or this name is not shaped like a real export"
+        )
+    set_name, rest = match
+    tail = _split_ledger_tail(rest)
+    if tail is None:
+        raise UnresolvedLedgerName(
+            f"{rest!r} does not carry both a product name and a condition"
+        )
+    product_name, number, condition = tail
+    return {
+        tcgcsv.PRODUCT_LINE_COLUMN: line,
+        tcgcsv.SET_COLUMN: set_name,
+        tcgcsv.NUMBER_COLUMN: number,
+        tcgcsv.NAME_COLUMN: product_name,
+        tcgcsv.SKU_COLUMN: "",
+        tcgcsv.CONDITION_COLUMN: condition,
+    }
+
+
+def ledger_subject_rows(
+    ledger, known_skus: Iterable[str], market: _MarketLike
+) -> Tuple[Dict[str, dict], Dict[str, str]]:
+    """Every SKU the order ledger ever priced a line for, that `known_skus` (the `cards`
+    table's own subject set) cannot already answer for, resolved into an export-shaped row
+    by parsing the line's own `name` — this is the sealed-product widening D223
+    names as a gap and leaves unsolved: sealed product has no
+    `cards` row and never will, but the ledger's own `name` carries every cell an
+    export-shaped row needs.
+
+    CARDS STILL WINS, BY CONSTRUCTION. This function is never asked about a SKU
+    `known_skus` already covers — `rows_from_store` only calls it with the remainder — so
+    there is no row here for it to lose a conflict against.
+
+    BOTH DIRECTIONS, PER `CLAUDE.md`. `refusals` names, by SKU, every ledger SKU that could
+    not be resolved and why — a missing name, a name that does not fit the grammar, or a
+    product line/group the catalog mirror does not carry. Never dropped, never resolved on
+    a partial match.
+
+    ONE `Market.groups` CALL PER DISTINCT PRODUCT LINE SEEN, NEVER PER SKU — `Market.groups`
+    is already a cached, whole-category read; asking it once per line and reusing the
+    answer for every SKU under that line is the same discipline `products()`/`prices()`
+    already apply to a category, not a second cache this module invents.
+    """
+    known = set(str(sku).strip() for sku in known_skus)
+    candidates: Dict[str, str] = {}
+    for order in getattr(ledger, "orders", {}).values():
+        for line_item in getattr(order, "lines", ()) or ():
+            sku = str(getattr(line_item, "sku", "") or "").strip()
+            if not sku or sku in known or sku in candidates:
+                continue
+            candidates[sku] = str(getattr(line_item, "name", "") or "").strip()
+
+    rows: Dict[str, dict] = {}
+    refusals: Dict[str, str] = {}
+    groups_by_line: Dict[str, Optional[Dict[str, dict]]] = {}
+
+    for sku, name in candidates.items():
+        if not name:
+            refusals[sku] = "the ledger line carries no name to parse"
+            continue
+        if " - " not in name:
+            refusals[sku] = (
+                f"{name!r} has no ' - ' separator marking where the product line ends"
+            )
+            continue
+        product_line = name.split(" - ", 1)[0].strip()
+        if product_line not in groups_by_line:
+            try:
+                category_id = market.category_id(product_line)
+                groups_by_line[product_line] = market.groups(category_id)
+            except Exception as exc:  # the mirror's own refusal shape, duck-typed (see
+                # the header — this module takes no hard dependency on
+                # `pipeline/pricehistory.py`'s exception types)
+                groups_by_line[product_line] = None
+                _ = exc
+        groups = groups_by_line[product_line]
+        if groups is None:
+            refusals[sku] = (
+                f"{product_line!r} could not be resolved against the tcgcsv category list"
+            )
+            continue
+        try:
+            row = parse_ledger_name(name, groups)
+        except UnresolvedLedgerName as exc:
+            refusals[sku] = str(exc)
+            continue
+        row[tcgcsv.SKU_COLUMN] = sku
+        rows[sku] = row
+
+    return rows, refusals
+
+
 def revenue_by_sku(ledger) -> Dict[str, Decimal]:
     """Gross revenue per SKU, canceled orders excluded — `app/src/Revenue.tsx`'s own rule
     (D214), read off the ledger directly rather than a second copy of it: `unit_price *
@@ -182,23 +388,40 @@ def rank_by_revenue(skus: Iterable[str], revenue: Dict[str, Decimal]) -> List[st
     return sorted(skus, key=lambda sku: (-(revenue.get(sku) or Decimal(0)), sku))
 
 
-def rows_from_store(snapshot=None) -> Dict[str, dict]:
-    """`sku -> export-shaped row`, one per distinct SKU the `cards` table has ever named,
+def rows_from_store(
+    snapshot=None,
+    market: Optional[_MarketLike] = None,
+    refusals: Optional[Dict[str, str]] = None,
+) -> Dict[str, dict]:
+    """`sku -> export-shaped row`, one per distinct SKU this store can price a subject for,
     ORDERED BY WHAT THAT SKU HAS ACTUALLY SOLD FOR
     (`rank_by_revenue`, D223) — a plain `dict` preserves the order it
     is built in, so a caller that chunks or iterates this in order walks the highest-value
     subjects first with no second sort.
 
-    A FULL-TABLE `select`, NOT `.values()` — `select` hands back only the six columns this
-    needs as plain tuples, never a `Card` object per row (`store-scaling` item 2's own
-    complaint about a table-wide walk, avoided the same way `cli/cmd_reprice.py` and
-    `cli/resolve.py` already avoid it elsewhere in this package). The LAST row this loop
-    sees for a SKU wins — `cards.select` has no declared order, so a SKU captured under two
-    slightly different set-hint spellings over its lifetime resolves to whichever row this
-    process happened to read last; that is a pre-existing ambiguity in what "the" name for a
-    SKU is, not one this module introduces, and it costs nothing worse than a possibly-stale
-    `Number`/`Set Name` pair that `Market.product_id_for_row` will refuse on its own if the
-    two together no longer resolve.
+    THE SUBJECT SET IS TWO SOURCES, `cards` FIRST. A FULL-TABLE `select`, NOT `.values()` —
+    `select` hands back only the six columns this needs as plain tuples, never a `Card`
+    object per row (`store-scaling` item 2's own complaint about a table-wide walk, avoided
+    the same way `cli/cmd_reprice.py` and `cli/resolve.py` already avoid it elsewhere in
+    this package). The LAST row this loop sees for a SKU wins — `cards.select` has no
+    declared order, so a SKU captured under two slightly different set-hint spellings over
+    its lifetime resolves to whichever row this process happened to read last; that is a
+    pre-existing ambiguity in what "the" name for a SKU is, not one this module introduces,
+    and it costs nothing worse than a possibly-stale `Number`/`Set Name` pair that
+    `Market.product_id_for_row` will refuse on its own if the two together no longer
+    resolve.
+
+    SEALED PRODUCT IS THE SECOND SOURCE, WHEN `market` IS GIVEN — the gap D223 named and
+    left unsolved. A SKU that sold but has no `cards` row is resolved from the order
+    ledger's own `name` (`ledger_subject_rows`, over `parse_ledger_name`). `market` is
+    `None` by default: a caller with no `Market` in hand (this module's own tests, or a
+    caller that only wants the `cards`-covered subjects) gets exactly D219's original
+    behaviour, no wider and no narrower. `cards` ALWAYS WINS where both sources answer for
+    the same SKU — `ledger_subject_rows` is never even asked about a SKU this loop has
+    already put a row against, so there is no later merge to get backwards.
+    `refusals`, when given, is filled in place with every ledger SKU this pass could not
+    resolve and why — `CLAUDE.md`'s both-directions rule, carried past this function's own
+    return shape rather than dropped at the boundary.
     """
     snapshot = snapshot if snapshot is not None else Store().read()
     unranked: Dict[str, dict] = {}
@@ -209,6 +432,15 @@ def rows_from_store(snapshot=None) -> Dict[str, dict]:
         if not sku:
             continue
         unranked[sku] = _export_row(sku, name, number, set_name, condition, game)
+
+    if market is not None:
+        ledger_rows, ledger_refusals = ledger_subject_rows(
+            snapshot.ledger, unranked.keys(), market
+        )
+        for sku, row in ledger_rows.items():
+            unranked.setdefault(sku, row)
+        if refusals is not None:
+            refusals.update(ledger_refusals)
 
     revenue = revenue_by_sku(snapshot.ledger)
     return {sku: unranked[sku] for sku in rank_by_revenue(unranked.keys(), revenue)}

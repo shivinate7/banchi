@@ -478,9 +478,12 @@ COMPONENTS = [
             # Argument parsing, the network-free preview, the chunked commit-as-you-go
             # write, and the throttle backoff; the walk itself is
             # `pipeline/pricearchive.py`, proved independently by `make pricearchive-selftest`.
-            "cmd_pricearchive.py": {"does": "`archive sweep` reads `rows_from_store()` "
-                                            "(sold value first) and previews with NO "
-                                            "network call: subject count, what the archive "
+            "cmd_pricearchive.py": {"does": "`archive sweep` builds a `Market` before it "
+                                            "reads `rows_from_store(market=..., "
+                                            "refusals=...)` (sold value first, sealed "
+                                            "product folded in), prints any ledger SKU that "
+                                            "could not be resolved to a subject, then "
+                                            "previews: subject count, what the archive "
                                             "already holds, what is fresh enough to skip. "
                                             "`--write` splits the subject list into chunks "
                                             "of `pipeline.pricearchive.CHUNK_SKUS`, skips "
@@ -501,7 +504,9 @@ COMPONENTS = [
                                                     "D224",
                                                     "D223",
                                                     "D222",
-                                                    "D62", "D86", "D43", "D88"],
+                                                    "D62", "D86", "D43", "D88",
+                                                    "D-a-sealed-ledger-archive-subjects",
+                                                    "D-a-archive-resume-window"],
                                     "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
@@ -1023,10 +1028,21 @@ COMPONENTS = [
             # Reads `pipeline/pricehistory.py`'s live endpoint for every SKU
             # `rows_from_store` names and hands `store/pricearchive.py` what came back,
             # keyed so D62's overlapping ranges never collide.
-            "pricearchive.py": {"does": "`rows_from_store` reads only the `cards` table for "
+            "pricearchive.py": {"does": "`rows_from_store` reads the `cards` table for "
                                         "every distinct, non-empty SKU, builds one "
                                         "export-shaped row per SKU (Product Line resolved "
-                                        "through `pipeline/games.py`), and orders them by "
+                                        "through `pipeline/games.py`), and, when handed a "
+                                        "`Market`, widens the subject set to sealed product "
+                                        "the order ledger sold but `cards` never carried — "
+                                        "`ledger_subject_rows`/`parse_ledger_name` parse an "
+                                        "`OrderLine.name` into the same export-shaped row by "
+                                        "resolving the group boundary against a real "
+                                        "`Market.groups` answer (the longest `\": \"`-prefixed "
+                                        "match, never the first, since a group name itself "
+                                        "carries a colon), reporting every unparseable SKU "
+                                        "as a named refusal and never dropping one. `cards` "
+                                        "always wins a SKU both sources can answer for. Every "
+                                        "subject, from either source, is ordered by "
                                         "`rank_by_revenue` over `revenue_by_sku` — sold "
                                         "value first, canceled orders excluded, ties broken "
                                         "on the SKU string. `sweep` takes a subject dict and "
@@ -1051,7 +1067,9 @@ COMPONENTS = [
                                                 "D219",
                                                 "D224",
                                                 "D223",
-                                                "D222"],
+                                                "D222",
+                                                "D-a-sealed-ledger-archive-subjects",
+                                                "D-a-archive-resume-window"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
                                         "`make check` — no network call. A FakeMarket and a "
                                         "RecordingMarket stand in for the network; 48 "
@@ -2396,11 +2414,19 @@ COMPONENTS = [
                         "pacing (D222): `classify_refusals` rewrites a 403 "
                         "only with evidence of an earlier success this pass, and "
                         "`measured_pace`/`load_pace`/`save_pace` are exercised directly. "
-                        "Forty-eight assertions, all passing. Not wired into `make check` — "
-                        "`make catalog-index-selftest`'s own precedent.",
+                        "Not wired into `make check` — "
+                        "`make catalog-index-selftest`'s own precedent. Also proves the "
+                        "sealed-ledger widening and the resume window, mutation-tested: "
+                        "cards still wins a SKU both sources answer for, an unparseable "
+                        "ledger name is a named refusal, the naive first-colon group split "
+                        "fails before the longest-prefix match is shown to succeed, and the "
+                        "OLD one-hour resume window is shown stale before the NEW six-day "
+                        "one is shown fresh over the same bucket. 73 assertions.",
                 "governed_by": ["D219", "D224",
                                 "D223", "D222",
-                                "D62", "D18"],
+                                "D62", "D18",
+                                "D-a-sealed-ledger-archive-subjects",
+                                "D-a-archive-resume-window"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

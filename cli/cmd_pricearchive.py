@@ -13,13 +13,18 @@ report at once — silence and a hang look identical from outside. `_sweep` says
 count and the range list before it does anything, then reports one line per commit as the
 pass goes.
 
-`sweep` PREVIEWS BY DEFAULT AND THE PREVIEW MAKES NO NETWORK CALL. It used to run the WHOLE
-walk and only skip the final write — measured the same day, a dry run made all 3,656
-requests. `_preview` below reads only the archive and the subject list: how many SKUs, how
-many already carry a bucket, how many are fresh enough that a `--write` pass would not
-re-read them. That is the shape every other free, re-runnable press in this repo shares
-(`reprice list`, `prices adopt`, `reconcile --live`), and it is honest about what it can say
-for nothing: what the archive already holds, never a live figure it did not pay to fetch.
+`sweep` PREVIEWS BY DEFAULT. `_preview` below reads only the archive and the subject list:
+how many SKUs, how many already carry a bucket, how many are fresh enough that a `--write`
+pass would not re-read them. That is the shape every other free, re-runnable press in this
+repo shares (`reprice list`, `prices adopt`, `reconcile --live`), and it is honest about
+what it can say for nothing: what the archive already holds, never a live figure it did not
+pay to fetch. Building the SUBJECT LIST no longer costs literally nothing: resolving a
+sealed order-ledger SKU's own Set Name needs `Market.category_id`/`.groups`
+(`pipeline.pricearchive.rows_from_store`'s widened subject set, the gap D223 named and this closes). Both are cached, whole-CATEGORY reads — at most one
+request per distinct Product Line this ledger has ever sold, never per SKU, and zero once
+the mirror's category/group lists are warm on disk. A store with no sealed sales, or one
+whose mirror lists are already cached, still previews for nothing; the first preview after
+a genuinely new sealed sale is the one exception, and it is cheap.
 
 `--write` COMMITS AS IT GOES, IN CHUNKS OF `pipeline.pricearchive.CHUNK_SKUS`, RATHER THAN
 ONCE AT THE END. Measured the same day: `archive show` read 0 buckets while a sweep was an
@@ -30,12 +35,15 @@ Each chunk's buckets and running accounting land in their own `Store.write()` tr
 (D88: many small transactions, not one enormous one), so an interrupt loses at most one
 chunk's reads.
 
-A RESUMED SWEEP DOES NOT RE-READ WHAT IT ALREADY HOLDS FROM THIS SAME SESSION.
+A RESUMED SWEEP DOES NOT RE-READ WHAT IT ALREADY HOLDS FROM A RECENT PASS.
 `pipeline.pricearchive.freshness_index` and `split_by_freshness` check the archive itself —
 not a second, ephemeral cache — before asking the market for anything, using
-`pipeline.pricehistory.HISTORY_TTL_SECONDS` as "recently read enough to trust", the same
-number that module already argues is short enough nobody reads a stale figure and long
-enough that re-running a pass in one sitting costs no requests.
+`pipeline.pricearchive.RESUME_TTL_SECONDS` (six days, D-a-archive-resume-window) as
+"recently read enough to trust", NEVER `pipeline.pricehistory.HISTORY_TTL_SECONDS` (one
+hour) — that number is right for the live `#/pricing` screen's single-SKU read and wrong
+for this walk. `rank_by_revenue` makes this pass read the same few hundred names first,
+every time; a one-hour window sent every later pass back to re-read exactly those names
+and never advance, measured against the owner's real store.
 
 THE SUBJECT ORDER IS SOLD VALUE FIRST, NOT WHATEVER `cards.select` RETURNED
 (`pipeline.pricearchive.rows_from_store`/`rank_by_revenue`, D223).
@@ -104,6 +112,21 @@ def _user_agent() -> str:
     return (envfile.get_live(tcg_export.AGENT_ENV) or "").strip() or pricehistory.USER_AGENT
 
 
+def _format_window(seconds: int) -> str:
+    """`seconds` as the largest whole unit that divides it evenly, days first — so the
+    resume window (D-a-archive-resume-window, days) and
+    `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` (minutes) each print in the unit a
+    person actually reads them in, rather than one shared `// 60` that turns six days into
+    a four-figure minute count nobody would recognize as "six days"."""
+    if seconds <= 0:
+        return "0 minute(s)"
+    if seconds % 86400 == 0:
+        return f"{seconds // 86400} day(s)"
+    if seconds % 3600 == 0:
+        return f"{seconds // 3600} hour(s)"
+    return f"{seconds // 60} minute(s)"
+
+
 def _read_archive(say):
     try:
         return Store().read().archive
@@ -121,7 +144,7 @@ def _preview(rows: Dict[str, dict], ranges, say) -> int:
 
     index = archive_walk.freshness_index(current.entries.values())
     now = int(time.time())
-    ttl = pricehistory.HISTORY_TTL_SECONDS
+    ttl = archive_walk.RESUME_TTL_SECONDS
     needed, fresh_skus = archive_walk.split_by_freshness(rows, index, ranges, now, ttl)
     covered = sum(1 for sku in rows if sku in index)
 
@@ -129,7 +152,7 @@ def _preview(rows: Dict[str, dict], ranges, say) -> int:
     say(f"{len(current.entries)} bucket(s) already archived, over "
         f"{len(current.sources_payload())} range(s) last swept")
     say(f"{covered} of {len(rows)} sku(s) already carry at least one bucket, of any age")
-    say(f"{len(fresh_skus)} sku(s) read within the last {ttl // 60} minute(s) — a --write "
+    say(f"{len(fresh_skus)} sku(s) read within the last {_format_window(ttl)} — a --write "
         f"pass would not re-read them")
     say(f"{len(needed)} sku(s) would be read fresh, up to {len(needed) * len(ranges)} "
         f"request(s), highest-sold-value first")
@@ -140,11 +163,36 @@ def _preview(rows: Dict[str, dict], ranges, say) -> int:
 
 
 def _sweep(args, say) -> int:
-    rows = archive_walk.rows_from_store()
+    # Built before the subject list, not only before a `--write` pass — resolving a sealed
+    # SKU's own SET NAME (D-a-sealed-ledger-archive-subjects) needs
+    # `Market.category_id`/`.groups`,
+    # which `rows_from_store` cannot do for itself without one. Both are cached, whole-
+    # category reads (one request per PRODUCT LINE this ledger has ever sold, not per SKU),
+    # so a store with no sealed sales pays nothing here and a preview costs at most a
+    # handful of cheap, cached requests rather than the 357-day history walk this whole
+    # command exists to pace.
+    pace_file = _pace_file()
+    starting_delay = archive_walk.load_pace(pace_file)
+    market = pricehistory.Market(
+        cache_dir=market_cache_dir(), user_agent=_user_agent(), courtesy_delay=starting_delay,
+    )
+
+    ledger_refusals: Dict[str, str] = {}
+    rows = archive_walk.rows_from_store(market=market, refusals=ledger_refusals)
     ranges = pricehistory.RANGES
     if not rows:
-        say("no card in this store carries a SKU — nothing to sweep")
+        say("no card in this store carries a SKU, and no order-ledger line resolved to a "
+            "sealed subject either — nothing to sweep")
         return 0
+
+    if ledger_refusals:
+        say(f"{len(ledger_refusals)} order-ledger sku(s) could not be resolved to a "
+            "subject and are skipped this pass:")
+        for sku in sorted(ledger_refusals)[:20]:
+            say(f"  {sku}  {ledger_refusals[sku]}")
+        if len(ledger_refusals) > 20:
+            say(f"  ... and {len(ledger_refusals) - 20} more")
+        say("")
 
     say(f"{len(rows)} sku(s) subject to this pass, over {len(ranges)} range(s) "
         f"({', '.join(ranges)}) — sold value first")
@@ -159,12 +207,12 @@ def _sweep(args, say) -> int:
 
     index = archive_walk.freshness_index(current.entries.values())
     now = int(time.time())
-    ttl = pricehistory.HISTORY_TTL_SECONDS
+    ttl = archive_walk.RESUME_TTL_SECONDS
     needed, fresh_skus = archive_walk.split_by_freshness(rows, index, ranges, now, ttl)
 
     say("")
     if fresh_skus:
-        say(f"{len(fresh_skus)} sku(s) already read within the last {ttl // 60} minute(s) "
+        say(f"{len(fresh_skus)} sku(s) already read within the last {_format_window(ttl)} "
             "— not re-read this pass")
     if not needed:
         say("nothing left to read — every subject is already fresh")
@@ -174,12 +222,6 @@ def _sweep(args, say) -> int:
     say(f"{len(needed)} sku(s) left to read, in {len(chunks)} batch(es) of up to "
         f"{archive_walk.CHUNK_SKUS}")
     say("")
-
-    pace_file = _pace_file()
-    starting_delay = archive_walk.load_pace(pace_file)
-    market = pricehistory.Market(
-        cache_dir=market_cache_dir(), user_agent=_user_agent(), courtesy_delay=starting_delay,
-    )
 
     totals = {r: {"answered": len(fresh_skus), "refused": 0} for r in ranges}
     all_refusals: Dict[str, str] = {}
