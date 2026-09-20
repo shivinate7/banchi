@@ -769,19 +769,26 @@ COMPONENTS = [
                 "does": "Two copies of one SKU disagreeing about the card's stored "
                         "number. `find_disagreements` groups and normalizes, no "
                         "catalogue needed. `resolve` settles the SKUs sharing a "
-                        "denominator against `pipeline/pricehistory.py:Market`, in three "
-                        "outcomes never collapsed into one: MISREAD (one side real), "
-                        "SHARED_SKU (both real, distinct — the numbers are fine and the "
-                        "SKU is wrong), UNRESOLVED (neither real, no winner picked). A "
-                        "denominator mismatch never reaches the network at all.",
+                        "denominator by NAME AGREEMENT against "
+                        "`pipeline/pricehistory.py:Market` — a candidate number's own "
+                        "product must be named what this SKU's copies stored, never "
+                        "merely exist — in three outcomes never collapsed into one: "
+                        "MISREAD (the name settles exactly one candidate, proposed as "
+                        "correct), SHARED_SKU (the name settles more than one — two real, "
+                        "correctly-named products share the SKU), UNRESOLVED (the name "
+                        "settles none). A denominator mismatch never reaches the network "
+                        "at all. Existence-only was this module's first, wrong shape: "
+                        "vacuous in a dense set (Vendetta, 100% of numbers 1-166 real).",
                 "governed_by": ["D146", "D167", "D173", "D234",
                                 "D-sku-number-contradictions"],
-                "note": "PROVED BY `scripts/sku-number-contradictions-selftest.py`: seven "
+                "note": "PROVED BY `scripts/sku-number-contradictions-selftest.py`: eight "
                         "arms, including a `RaisingMarket` that fails the test if the "
                         "denominator-mismatch class ever calls it, and a mutation arm "
-                        "showing a naive first-side-wins resolver picks a wrong winner "
-                        "on the SHARED_SKU fixture. Not wired into `make check`, matching "
-                        "`pricearchive.py`'s own precedent.",
+                        "running the ORIGINAL existence-only resolver against a dense-set "
+                        "fixture — it wrongly reports SHARED_SKU where the real, "
+                        "name-agreement function correctly finds the one misread. Not "
+                        "wired into `make check`, matching `pricearchive.py`'s own "
+                        "precedent.",
             },
             # D10's label formula lives here, and as of 2026-08-29 it assumes NO divider size:
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and

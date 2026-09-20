@@ -9,10 +9,13 @@ mismatch (unambiguous from stored data alone) or as needing the catalogue.
 preview already named as needing the catalogue — one `Market.products(category_id,
 group_id)` request per DISTINCT (game, set) pair among them, cached by
 `pipeline/pricehistory.py:Market` exactly as `cmd_pricearchive.py`'s own sweep caches it.
-Without `--resolve`, this command opens no socket. This module never writes a card, never
-picks a winner, and never touches the review queue: `store/queues.py:Queue.upsert` refuses
-to re-queue a position already answered (D167), and a card this check flags has usually
-already been through review once. That gap is recorded separately, not closed here.
+Without `--resolve`, this command opens no socket. It asks whether a candidate number's
+catalogue product is named what this SKU's own copies stored — NAME AGREEMENT, not mere
+existence (see `pipeline/sku_number_contradictions.py`'s own docstring for why existence
+alone is vacuous in a dense set). This module never writes a card, and never touches the
+review queue: `store/queues.py:Queue.upsert` refuses to re-queue a position already
+answered (D167), and a card this check flags has usually already been through review once.
+That gap is recorded separately, not closed here.
 
 Kept in its own file rather than folded into `cli/cmd_cards.py` or `cli/cmd_pricearchive.py`
 — it is a separate, more speculative check, on the owner's own ruling to keep it apart from
@@ -49,12 +52,12 @@ def _read_only(directory: Path) -> sqlite3.Connection:
 
 def _by_sku(conn: sqlite3.Connection) -> Dict[str, List[NumberRecord]]:
     out: Dict[str, List[NumberRecord]] = {}
-    for key, sku, _name, number, set_name, game in conn.execute(
+    for key, sku, name, number, set_name, game in conn.execute(
         "SELECT key, sku, name, number, set_name, game FROM cards "
         "WHERE sku IS NOT NULL AND sku != ''"
     ):
         out.setdefault(str(sku), []).append(
-            NumberRecord(key=str(key), number=number, set_name=set_name, game=game)
+            NumberRecord(key=str(key), number=number, name=name, set_name=set_name, game=game)
         )
     return out
 
@@ -108,17 +111,26 @@ def run(args, say) -> int:
 
     market = pricehistory.Market(cache_dir=_market_cache_dir())
     outcomes = {outcome: 0 for outcome in Outcome}
+    misreads = []
     for d in same_denom:
         resolution = resolve(d, market, _product_line_for_game)
         outcomes[resolution.outcome] += 1
+        if resolution.outcome == Outcome.MISREAD:
+            misreads.append(resolution)
         if getattr(args, "verbose", False):
             say(f"    {resolution.sku}  {resolution.outcome.value}  {resolution.detail}")
 
     say("")
-    say("  resolved against the live catalogue:")
-    say(f"    misread: {outcomes[Outcome.MISREAD]}")
-    say(f"    shared SKU, both numbers real: {outcomes[Outcome.SHARED_SKU]}")
+    say("  resolved against the live catalogue, by NAME agreement (not mere existence):")
+    say(f"    misread, correct number proposed: {outcomes[Outcome.MISREAD]}")
+    say(f"    shared SKU, two real named products: {outcomes[Outcome.SHARED_SKU]}")
     say(f"    unresolved, no winner picked: {outcomes[Outcome.UNRESOLVED]}")
+    if misreads:
+        say("")
+        say("  proposed corrections — never applied, a repair is a separate press:")
+        for resolution in misreads:
+            say(f"    {resolution.sku}  proposed {resolution.confirmed_key!r} "
+                f"(misread: {', '.join(resolution.misread_keys)})")
     say("")
     say(f"VERDICT: {len(disagreements)} contradiction(s) found. Never a repair — "
         "each is a review signal.")

@@ -3,18 +3,26 @@
 network (`D-sku-number-contradictions`, kept apart from the four approved stored-data
 checks, built as a separate, sibling PR, on the owner's own ruling).
 
+NAME AGREEMENT, NOT MERE EXISTENCE. The owner's own measurement killed the first shape of
+this check: in a dense set (Vendetta, 258 products over 100% of numbers 1-166), asking
+"does a real product exist at this number" is vacuous — every candidate always resolves.
+The fixtures below are built dense on purpose, so a regression back to the existence-only
+test would pass every arm here silently unless the negative arms specifically catch it —
+which `test_dense_set_existence_is_not_enough` does.
+
 NO REAL `Market`. `FakeIndex`/`FakeMarket` below duck-type the three calls
 `pipeline.sku_number_contradictions.resolve` makes
-(`category_id`, `group_id`, `products(...).by_number`), the same technique
+(`category_id`, `group_id`, `products(...).by_number`/`.by_name`), the same technique
 `scripts/pricearchive-selftest.py`'s own `FakeMarket` already uses for
 `pipeline/pricehistory.py:Market`.
 
-FIVE ARMS. A denominator mismatch is shown to resolve WITHOUT ever calling the fake market
-— a `RaisingMarket` that raises on any call proves it. A misread (one side real, one side
-not) resolves to `MISREAD` naming the confirmed key. Both sides real resolves to
-`SHARED_SKU`, never picking a winner. Neither side real resolves to `UNRESOLVED`. A
-mutation arm feeds the real 3-copy `39/166`/`64/166` shape from the owner's own measured
-store and shows the check finds it before any catalogue is asked.
+EIGHT ARMS. Denominator mismatch never reaches the network. A name settling exactly one
+candidate proposes it as `MISREAD`, naming the confirmed number. A name settling zero or
+two-or-more candidates never proposes a single winner (`UNRESOLVED`/`SHARED_SKU`) — proved
+BOTH as ordinary cases and as a mutation kill: a broken resolver that proposes MISREAD
+whenever a number merely EXISTS (the original, vacuous test) is shown wrong on a dense-set
+fixture where the real function correctly refuses. That second arm is the one protecting
+`CLAUDE.md`'s own rule against guessing an identification.
 """
 
 from __future__ import annotations
@@ -25,6 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from pipeline.join import name_index_key  # noqa: E402
 from pipeline.sku_number_contradictions import (  # noqa: E402
     NumberRecord,
     Outcome,
@@ -48,17 +57,24 @@ def ok(condition: bool, label: str, detail: str = "") -> None:
 
 
 class FakeIndex:
-    def __init__(self, real_keys):
-        self.by_number = {key: (1,) for key in real_keys}
+    """`by_number`/`by_name` shaped exactly like `pipeline/pricehistory.py:ProductIndex` —
+    normalized key -> tuple of productIds. `products` is `{normalized_number: name}`, one
+    entry per real product this fake group carries.
+    """
+
+    def __init__(self, products):
+        by_number = {}
+        by_name = {}
+        for pid, (number_key, name) in enumerate(products.items(), start=1):
+            by_number.setdefault(number_key, []).append(pid)
+            by_name.setdefault(name_index_key(name), []).append(pid)
+        self.by_number = {k: tuple(v) for k, v in by_number.items()}
+        self.by_name = {k: tuple(v) for k, v in by_name.items()}
 
 
 class FakeMarket:
-    """Answers with a fixed set of "real" normalized keys for any group it is asked
-    about — enough to exercise `resolve`'s three catalogue-backed outcomes.
-    """
-
-    def __init__(self, real_keys):
-        self._index = FakeIndex(real_keys)
+    def __init__(self, products):
+        self._index = FakeIndex(products)
 
     def category_id(self, product_line):
         return 1
@@ -100,12 +116,12 @@ def test_find_disagreements():
     print("find_disagreements groups by SKU and keeps only the ones that disagree")
     by_sku = {
         "9422414": [
-            NumberRecord(key="a", number="39/166", set_name="Vendetta", game="riftbound"),
-            NumberRecord(key="b", number="64/166", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="a", number="39/166", name="Twilight Reveler", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="b", number="64/166", name="Twilight Reveler", set_name="Vendetta", game="riftbound"),
         ],
         "agrees": [
-            NumberRecord(key="c", number="005", set_name="ME01: Mega Evolution", game="pokemon"),
-            NumberRecord(key="d", number="5", set_name="ME01: Mega Evolution", game="pokemon"),
+            NumberRecord(key="c", number="005", name="Exeggutor", set_name="ME01: Mega Evolution", game="pokemon"),
+            NumberRecord(key="d", number="5", name="Exeggutor", set_name="ME01: Mega Evolution", game="pokemon"),
         ],
     }
     found = find_disagreements(by_sku)
@@ -118,8 +134,8 @@ def test_denominator_mismatch_no_network():
     print("a denominator mismatch resolves without ever calling the market")
     by_sku = {
         "9422314": [
-            NumberRecord(key="a", number="134/166", set_name="Vendetta", game="riftbound"),
-            NumberRecord(key="b", number="134/266", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="a", number="134/166", name="X", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="b", number="134/266", name="X", set_name="Vendetta", game="riftbound"),
         ]
     }
     disagreement = find_disagreements(by_sku)["9422314"]
@@ -129,89 +145,135 @@ def test_denominator_mismatch_no_network():
        str(resolution.outcome))
 
 
-def test_misread():
-    print("one real, one not -> MISREAD, naming the confirmed key")
+def test_name_settles_it_misread():
+    print("the name settles exactly one candidate -> MISREAD, naming it")
+    # Two copies of one SKU: one reads 39/166 "Twilight Reveler", the other reads 64/166
+    # "Twilight Reveler" — same name on both, only ONE number is real for that name.
     by_sku = {
         "9422414": [
-            NumberRecord(key="a", number="39/166", set_name="Vendetta", game="riftbound"),
-            NumberRecord(key="b", number="64/166", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="a", number="39/166", name="Twilight Reveler", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="b", number="64/166", name="Twilight Reveler", set_name="Vendetta", game="riftbound"),
         ]
     }
     disagreement = find_disagreements(by_sku)["9422414"]
-    ok(not disagreement.denominator_mismatch, "same denominator, so this needs the catalogue")
-    market = FakeMarket(real_keys={"39/166"})
+    market = FakeMarket({
+        "39/166": "Twilight Reveler",
+        "64/166": "Grumpy Rockbear",
+    })
     resolution = resolve(disagreement, market, product_line_for_game)
     ok(resolution.outcome == Outcome.MISREAD, "outcome is MISREAD", str(resolution.outcome))
-    ok(resolution.confirmed_key == "39/166", "the real key is named as confirmed")
-    ok(resolution.misread_keys == ("64/166",), "the fake key is named as the misread")
+    ok(resolution.confirmed_key == "39/166", "the name-confirmed key is named")
+    ok(resolution.misread_keys == ("64/166",), "the other number is named as the misread")
 
 
-def test_shared_sku():
-    print("both real, distinct -> SHARED_SKU, never a winner picked")
+def test_dense_set_existence_is_not_enough():
+    print("dense set — every number exists, so ONLY the name can settle it")
+    # Both candidate numbers are REAL products (a dense set, like the owner's own Vendetta
+    # measurement: 258 products over 100% of 1-166). Existence alone would say "both real",
+    # which is exactly the vacuous first-shape bug this rewrite corrects.
     by_sku = {
         "9422109": [
-            NumberRecord(key="a", number="54/166", set_name="Vendetta", game="riftbound"),
-            NumberRecord(key="b", number="84/166", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="a", number="54/166", name="Ambessa, the Wolf", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="b", number="84/166", name="Ambessa, the Wolf", set_name="Vendetta", game="riftbound"),
         ]
     }
     disagreement = find_disagreements(by_sku)["9422109"]
-    market = FakeMarket(real_keys={"54/166", "84/166"})
-    resolution = resolve(disagreement, market, product_line_for_game)
-    ok(resolution.outcome == Outcome.SHARED_SKU, "outcome is SHARED_SKU", str(resolution.outcome))
-    ok(resolution.confirmed_key is None, "no single key is named as the winner")
-    ok(resolution.misread_keys == (), "nothing is named as a misread — both sides are real")
+    dense_market = FakeMarket({
+        "54/166": "Questionable Tome",
+        "84/166": "Ambessa, the Wolf",
+        # a dense set: every OTHER number in the group is a real, unrelated product too.
+        **{f"{n}/166": f"Filler Card {n}" for n in range(1, 166) if n not in (54, 84)},
+    })
+    resolution = resolve(disagreement, dense_market, product_line_for_game)
+    ok(resolution.outcome == Outcome.MISREAD, "the dense set still resolves by NAME", str(resolution.outcome))
+    ok(resolution.confirmed_key == "84/166", "the name-confirmed number is the real Ambessa card")
+    ok(resolution.misread_keys == ("54/166",), "the OTHER real-but-wrongly-named number is the misread")
 
 
-def test_unresolved():
-    print("neither real -> UNRESOLVED, this check picks no winner")
+def test_dense_set_mutation_existence_only():
+    print("mutation — an existence-only resolver is wrong on a dense set; the real one is not")
+
+    def mutant_resolve_existence_only(disagreement, market, product_line_for_game):
+        """The original, vacuous test this module shipped with before the owner's
+        correction: does a product exist at this number at all. Proves that test alone
+        would misreport `shared_sku` for what is really a plain, name-settleable misread.
+        """
+        category_id = market.category_id(product_line_for_game(disagreement.game))
+        group_id = market.group_id(category_id, disagreement.set_name)
+        index = market.products(category_id, group_id)
+        real = [k for k in disagreement.distinct_keys if k in index.by_number]
+        if len(real) == 1:
+            return "misread", real[0]
+        if len(real) >= 2:
+            return "shared_sku", None
+        return "unresolved", None
+
+    by_sku = {
+        "9422109": [
+            NumberRecord(key="a", number="54/166", name="Ambessa, the Wolf", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="b", number="84/166", name="Ambessa, the Wolf", set_name="Vendetta", game="riftbound"),
+        ]
+    }
+    disagreement = find_disagreements(by_sku)["9422109"]
+    dense_market = FakeMarket({
+        "54/166": "Questionable Tome",
+        "84/166": "Ambessa, the Wolf",
+    })
+    mutant_outcome, mutant_key = mutant_resolve_existence_only(
+        disagreement, dense_market, product_line_for_game
+    )
+    real_resolution = resolve(disagreement, dense_market, product_line_for_game)
+    ok(
+        mutant_outcome == "shared_sku" and real_resolution.outcome == Outcome.MISREAD
+        and real_resolution.confirmed_key == "84/166",
+        "the mutant reports shared_sku (both numbers exist); the real check finds the "
+        "single name-confirmed misread",
+        f"mutant={mutant_outcome} real={real_resolution.outcome}",
+    )
+
+
+def test_name_settles_nothing_unresolved():
+    print("the name settles NEITHER candidate -> UNRESOLVED, no winner picked")
     by_sku = {
         "9999999": [
-            NumberRecord(key="a", number="1/166", set_name="Vendetta", game="riftbound"),
-            NumberRecord(key="b", number="2/166", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="a", number="1/166", name="Mystery Card", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="b", number="2/166", name="Mystery Card", set_name="Vendetta", game="riftbound"),
         ]
     }
     disagreement = find_disagreements(by_sku)["9999999"]
-    market = FakeMarket(real_keys=set())
+    market = FakeMarket({"1/166": "Something Else", "2/166": "Something Different"})
     resolution = resolve(disagreement, market, product_line_for_game)
     ok(resolution.outcome == Outcome.UNRESOLVED, "outcome is UNRESOLVED", str(resolution.outcome))
+    ok(resolution.confirmed_key is None, "no key is confirmed")
 
 
-def test_mutation_naive_first_side_wins():
-    print("mutation — a naive 'first side wins' resolver is wrong on the SHARED_SKU case")
-
-    def naive_resolve(disagreement, market, product_line_for_game):
-        """The tempting wrong shape: whichever number was captured first wins, with no
-        catalogue asked at all. Proves the real function's catalogue-backed three-way
-        split is load-bearing rather than decorative.
-        """
-        return disagreement.distinct_keys[0]
-
+def test_name_settles_both_shared_sku():
+    print("the name settles BOTH candidates -> SHARED_SKU, never a winner picked")
+    # Two DIFFERENT physical copies of one SKU, each carrying its OWN correct name and
+    # number — the genuine "two products share one SKU" shape the owner's Riftbound
+    # over-number concern names.
     by_sku = {
-        "9422109": [
-            NumberRecord(key="a", number="54/166", set_name="Vendetta", game="riftbound"),
-            NumberRecord(key="b", number="84/166", set_name="Vendetta", game="riftbound"),
+        "9422559": [
+            NumberRecord(key="a", number="20/166", name="Card Alpha", set_name="Vendetta", game="riftbound"),
+            NumberRecord(key="b", number="30/166", name="Card Beta", set_name="Vendetta", game="riftbound"),
         ]
     }
-    disagreement = find_disagreements(by_sku)["9422109"]
-    naive_winner = naive_resolve(disagreement, None, product_line_for_game)
-    market = FakeMarket(real_keys={"54/166", "84/166"})
-    real_resolution = resolve(disagreement, market, product_line_for_game)
-    ok(
-        naive_winner == "54/166" and real_resolution.outcome == Outcome.SHARED_SKU,
-        "the naive resolver silently picks a winner; the real one reports both are real "
-        "and picks none",
-        f"naive={naive_winner} real={real_resolution.outcome}",
-    )
+    disagreement = find_disagreements(by_sku)["9422559"]
+    market = FakeMarket({"20/166": "Card Alpha", "30/166": "Card Beta"})
+    resolution = resolve(disagreement, market, product_line_for_game)
+    ok(resolution.outcome == Outcome.SHARED_SKU, "outcome is SHARED_SKU", str(resolution.outcome))
+    ok(resolution.confirmed_key is None, "no single key is named as the winner")
 
 
 TESTS = [
     test_normalize,
     test_find_disagreements,
     test_denominator_mismatch_no_network,
-    test_misread,
-    test_shared_sku,
-    test_unresolved,
-    test_mutation_naive_first_side_wins,
+    test_name_settles_it_misread,
+    test_dense_set_existence_is_not_enough,
+    test_dense_set_mutation_existence_only,
+    test_name_settles_nothing_unresolved,
+    test_name_settles_both_shared_sku,
 ]
 
 
