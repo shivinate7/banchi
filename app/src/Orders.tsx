@@ -2742,6 +2742,10 @@ function PullStage({
    *  `.browse-railsheet` styling, not a second stylesheet for the same shape. */
   const [railOpen, setRailOpen] = useState(false)
 
+  /** THE DESKTOP RAIL'S COLLAPSE (S17, the owner's ruling 2026-09-19) — `BoxBrowse.tsx`'s own
+   *  `railCollapsed`, not persisted there either: a plain `useState`, reset on remount. */
+  const [railCollapsed, setRailCollapsed] = useState(false)
+
   /** Hide sold (D132) — `#/inventory`'s own persisted `banchi.inventory.hide-sold`, on the
    *  owner's word: same preference, same screen family, one key. No new key. */
   const [hideSold, setHideSoldState] = useState<boolean>(() => storedHideSold())
@@ -2749,6 +2753,13 @@ function PullStage({
     setHideSoldState(next)
     rememberHideSold(next)
   }
+
+  /** "N sections", made a control (S5) — `#/inventory`'s own `toggleAllSections`, over every
+   *  section at once rather than per section: this walk draws no per-section fold state to
+   *  toggle independently (`WalkList`'s own chevron stays decorative), so one boolean answers
+   *  for the whole list. Not persisted — a fresh mount always opens expanded, matching what
+   *  this list has always drawn. */
+  const [sectionsCollapsed, setSectionsCollapsed] = useState(false)
   const toggleWalkTick = (key: string) =>
     setWalkTicked((prev) => {
       const next = new Set(prev)
@@ -3126,22 +3137,30 @@ function PullStage({
    *  `Untick shown` SUBTRACTS the rows in view rather than clearing the set. The prune above
    *  keeps the stored set inside the visible one, so the two are the same thing today — but
    *  the subtraction is the RULE, and a clear would only happen to agree with it. */
+  /* THE IDIOM (S5): `.browse-quiet`, `#/inventory`'s own text-not-boxed grammar for this
+   *  reach — D220 breaks the tie toward Inventory, so Orders adopts its idiom rather than
+   *  keeping the boxed `Button` pair this used to be. The two-button SEMANTICS above are
+   *  unchanged (each still disables on the set it actually acts on); only the paint moves
+   *  from a filled control to plain text, and the shared grid keeps both the same width
+   *  (D195) regardless of which idiom draws inside it. */
   const selectBar = (
     <div className="orders-select-bar" role="group" aria-label="Choose which buyers to walk">
-      <Button
-        size="sm"
+      <button
+        type="button"
+        className="browse-quiet orders-select-quiet"
         disabled={tickableKeys.size === 0}
         onClick={() => setWalkTicked((prev) => new Set([...prev, ...tickableKeys]))}
       >
         Tick shown
-      </Button>
-      <Button
-        size="sm"
+      </button>
+      <button
+        type="button"
+        className="browse-quiet orders-select-quiet"
         disabled={walkTicked.size === 0}
         onClick={() => setWalkTicked((prev) => new Set([...prev].filter((key) => !tickableKeys.has(key))))}
       >
         Untick shown
-      </Button>
+      </button>
     </div>
   )
 
@@ -3150,52 +3169,70 @@ function PullStage({
    *  rather than two hand-kept copies. */
   const searchSlot = (
     <div className="orders-toolbar orders-rail-toolbar">
-      {chips}
-      <div className="orders-view-controls" role="group" aria-label="Sort and narrow the buyer list">
-        <div className="orders-search-field">
-          <SearchField
-            value={query}
-            onChange={onQueryChange}
-            persona="owner"
-            label="Search buyers"
-            placeholder="Search buyers or order #"
+      <div className="orders-rail-controls">
+        {chips}
+        <div className="orders-view-controls" role="group" aria-label="Sort and narrow the buyer list">
+          <div className="orders-search-field">
+            <SearchField
+              value={query}
+              onChange={onQueryChange}
+              persona="owner"
+              label="Search buyers"
+              placeholder="Search buyers or order #"
+            />
+          </div>
+          <select
+            className="bn-select orders-status-select"
+            aria-label="Filter by status"
+            value={view.status ?? ''}
+            onChange={(event) => onStatusChange(event.target.value === '' ? null : event.target.value)}
+          >
+            <option value="">Status</option>
+            {statusOptions.map((option) => (
+              <option key={option.status} value={option.status}>
+                {option.status} ({option.count})
+              </option>
+            ))}
+          </select>
+          <Segmented<OrderSort>
+            className="orders-sort"
+            value={view.sort}
+            label="Sort"
+            options={[
+              { value: 'newest', label: 'Newest' },
+              { value: 'oldest', label: 'Oldest' },
+            ]}
+            onChange={onSortChange}
           />
+          <label className="orders-hide-unknown">
+            <input type="checkbox" checked={view.hideUnknown} onChange={(event) => onHideUnknownChange(event.target.checked)} />
+            Hide never-seen SKUs
+          </label>
+          <span className="orders-resort-slot">
+            {staleSentence === null ? null : (
+              <Chip icon="refresh" className="orders-resort" title="Sorted before this changed." onClick={onReSort}>
+                {staleSentence} · re-sort
+              </Chip>
+            )}
+          </span>
         </div>
-        <select
-          className="bn-select orders-status-select"
-          aria-label="Filter by status"
-          value={view.status ?? ''}
-          onChange={(event) => onStatusChange(event.target.value === '' ? null : event.target.value)}
-        >
-          <option value="">Status</option>
-          {statusOptions.map((option) => (
-            <option key={option.status} value={option.status}>
-              {option.status} ({option.count})
-            </option>
-          ))}
-        </select>
-        <Segmented<OrderSort>
-          className="orders-sort"
-          value={view.sort}
-          label="Sort"
-          options={[
-            { value: 'newest', label: 'Newest' },
-            { value: 'oldest', label: 'Oldest' },
-          ]}
-          onChange={onSortChange}
-        />
-        <label className="orders-hide-unknown">
-          <input type="checkbox" checked={view.hideUnknown} onChange={(event) => onHideUnknownChange(event.target.checked)} />
-          Hide never-seen SKUs
-        </label>
-        <span className="orders-resort-slot">
-          {staleSentence === null ? null : (
-            <Chip icon="refresh" className="orders-resort" title="Sorted before this changed." onClick={onReSort}>
-              {staleSentence} · re-sort
-            </Chip>
-          )}
-        </span>
       </div>
+      {/* THE RAIL-COLLAPSE TOGGLE (S17) — `BoxBrowse.tsx`'s own `.browse-rail-toggle`, over
+          the buyer rail rather than the box list. Phone-only (`searchSlot` is also the phone
+          sheet's content) never draws it: the sheet is already the collapsed state's own
+          substitute below 768px, so a second way to shrink it inside itself has nothing to
+          do. */}
+      {phone ? null : (
+        <Button
+          variant="ghost"
+          icon="chevronLeft"
+          iconOnly
+          className="browse-rail-toggle"
+          onClick={() => setRailCollapsed(true)}
+        >
+          Collapse the buyer rail
+        </Button>
+      )}
     </div>
   )
 
@@ -3254,16 +3291,28 @@ function PullStage({
       </div>
 
       <div className="browse-status">
-        <span className="browse-status-text">
-          {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
-        </span>
+        {walk.sections.length < 2 ? (
+          <span className="browse-status-text">
+            {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
+          </span>
+        ) : (
+          <button className="browse-quiet" type="button" onClick={() => setSectionsCollapsed((v) => !v)}>
+            <Icon name={sectionsCollapsed ? 'chevronDown' : 'chevronUp'} size={12} />
+            <span className="bn-facts">
+              <span>{sectionsCollapsed ? 'expand all' : 'collapse all'}</span>{' '}
+              <span>
+                {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
+              </span>
+            </span>
+          </button>
+        )}
         <span className="bn-spacer" />
-        <Chip pressed={hideSold} className="browse-hidesold" onClick={() => setHideSold(!hideSold)}>
+        <Chip pressed={hideSold} count={walk.soldKeys.size} className="browse-hidesold" onClick={() => setHideSold(!hideSold)}>
           Hide sold
         </Chip>
       </div>
 
-      <WalkList walk={walk} hideSold={hideSold} />
+      <WalkList walk={walk} hideSold={hideSold} collapsed={sectionsCollapsed} />
 
       {walk.rows.length === 0 ? null : (
         <p className="browse-listkeys">
@@ -3294,6 +3343,38 @@ function PullStage({
       </div>
       {railWalkPanel}
     </>
+  )
+
+  /** THE COLLAPSED RAIL (S17) — `BoxBrowse.tsx`'s own `miniRail`, `.browse-rail-mini` and
+   *  `.browse-boxcell-mini` reused verbatim rather than restyled: a glyph per SHOWN buyer
+   *  (never the Earlier fold — that list is the one thing this rail already hides behind a
+   *  disclosure at full width, so collapsing it further would bury it twice), the same first-
+   *  word-or-tail short label `BoxBrowse.tsx:miniLabel` derives for a box name. */
+  const miniRail = (
+    <div className="browse-rail-mini">
+      <Button variant="ghost" icon="chevronRight" iconOnly onClick={() => setRailCollapsed(false)}>
+        Expand the buyer rail
+      </Button>
+      {shownGroups.map((group) => {
+        const heading = group.name ?? unnamedBuyerLabel(group)
+        return (
+          <button
+            key={group.key}
+            type="button"
+            className="browse-boxcell-mini"
+            aria-label={heading}
+            title={heading}
+            aria-current={group.key === selectedKey ? 'true' : undefined}
+            onClick={() => {
+              select(group.key)
+              setRailCollapsed(false)
+            }}
+          >
+            {buyerMiniLabel(group)}
+          </button>
+        )
+      })}
+    </div>
   )
 
   return (
@@ -3345,13 +3426,15 @@ function PullStage({
         </div>
       ) : null}
 
-      <div className="browse-body">
+      <div className="browse-body" data-rail={railCollapsed && !phone ? 'collapsed' : undefined}>
         {/* ONE VALUE, RENDERED IN EXACTLY ONE PLACE AT A TIME (see `rail`'s own comment above):
-            `phone` picks between here and the `Overlay` below, the same way `BoxBrowse.tsx`
-            picks between its rail and `miniRail`/`null`. Below 768px this slot draws nothing —
-            `.browse-body > .browse-map`'s own CSS already hides it, and now there is nothing
-            duplicated underneath for that CSS to be hiding. */}
-        <div className="browse-map">{phone ? null : rail}</div>
+            `phone` picks between here and the `Overlay` below, and — now that S17 gives this
+            rail the same toggle `BoxBrowse.tsx`'s own does — `railCollapsed` picks between
+            `rail` and `miniRail` the same way that file's own render does. Below 768px this
+            slot draws nothing regardless of `railCollapsed`: `.browse-body > .browse-map`'s
+            own CSS already hides it, and now there is nothing duplicated underneath for that
+            CSS to be hiding. */}
+        {phone ? null : railCollapsed ? miniRail : <div className="browse-map">{rail}</div>}
         <div className="browse-side">
           <WalkMainPane walk={walk} phone={phone} />
           {why}
@@ -3470,6 +3553,14 @@ function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrd
   return worst
 }
 
+/** The mini rail's own glyph (S17) — `BoxBrowse.tsx`'s own `miniLabel`, over a buyer's first
+ *  name instead of a box's own name: the first word, to 4 characters, or `unnamedBuyerLabel`'s
+ *  own short id/date tail when there is no name to take a word from. */
+function buyerMiniLabel(group: BuyerGroup): string {
+  const word = group.name?.trim().split(/\s+/)[0] ?? ''
+  return word === '' ? unnamedBuyerLabel(group).slice(0, 4) : word.slice(0, 4)
+}
+
 /** The buyer's index row and phone accordion head — replaces `OrderSummaryRow`
  *  (`D193`). A nameless buyer draws "No name · #<number>"; a buyer with
  *  more than one order draws an `N orders` pill and a chip per open order, so a two-order
@@ -3538,7 +3629,7 @@ function BuyerRow({
         <span className="orders-index-figure">
           {group.wanted === 0 ? 'nothing open' : group.recorded >= group.wanted ? 'all sold' : (
             <>
-              <b>{group.wanted - group.recorded}</b> left
+              <b>{group.wanted - group.recorded}</b> owed
             </>
           )}
         </span>
@@ -3589,13 +3680,28 @@ function OrderPanel({
    * reads `2 ORDERS` in the small-caps slot instead of a single id, and owed/sold/short
    * aggregate across every order the buyer holds — the same total `BuyerRow`'s own figure
    * already counts, not a second arithmetic. */
-  const label = group.orders.length === 1 ? `ORDER ${group.orders[0]!.number}` : `${group.orders.length} ORDERS`
+  const single = group.orders.length === 1 ? group.orders[0]!.number : null
 
   return (
     <div className="boxops-identity">
       <div className="boxops-identity-top">
         <div className="boxops-identity-text">
-          <span className="boxops-identity-num">{label}</span>
+          {/* `.boxops-identity-num` IS `BoxOps.tsx`'s SMALL-CAPS LABEL, BUILT FOR "BOX 3" (S8):
+              its uppercase transform and 0.1em tracking wrap a real order id mid-identifier at
+              165px. The id itself is a machine string (D221: mono goes to SKUs, run ids, card
+              numbers — an order id is the same kind of string), so it gets its own span rather
+              than inheriting the label's display casing and spacing, `nowrap` plus an ellipsis
+              rather than a wrap, and never `text-overflow` on the "N ORDERS" plural — that one
+              is short by construction, at most two digits and a word. */}
+          <span className="boxops-identity-num orders-buyer-order-num">
+            {single === null ? (
+              `${group.orders.length} ORDERS`
+            ) : (
+              <>
+                ORDER <span className="bn-mono orders-buyer-order-id">{single}</span>
+              </>
+            )}
+          </span>
           <h2 className={`boxops-identity-name${group.name === null ? ' bn-mono' : ''}`}>
             {group.name ?? unnamedBuyerLabel(group)}
           </h2>

@@ -33,6 +33,17 @@
   flex-wrap: wrap;
 }
 .orders-toolbar-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+/* THE FILTER SELECT AND THE VIEW CONTROLS, GROUPED — so the rail-collapse toggle (S17) can
+   sit beside them as `.orders-toolbar`'s second flex item rather than a third one splitting
+   `justify-content: space-between` three ways. */
+.orders-rail-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bn-3);
+  flex: 1 1 auto;
+  min-width: 0;
+}
 
 /* ---- the buyer list's own view: search, status, sort, hide-unknown ------------ */
 .orders-view-controls {
@@ -61,6 +72,26 @@
   white-space: nowrap;
 }
 
+/* THE RAIL'S OWN CONTROLS, KEPT COMPACT AT ITS OWN WIDTH (S11) — `.browse-body`'s breakpoint
+   (`BoxBrowse.css`, already imported here) is what actually narrows this column to 268px, both
+   at 1024 and at 820, so this shares that exact figure rather than guessing a second one: it is
+   not assuming a column width, it is answering the same one that breakpoint already set. Below
+   it, flex-wrap's own min-widths (`.orders-search-field`'s 160px alone) forced five stacked
+   rows — search, status, sort, hide-unknown each alone — where two columns fit three. */
+@media (max-width: 1279px) {
+  .orders-view-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--bn-2);
+  }
+  .orders-search-field { grid-column: 1 / -1; min-width: 0; max-width: none; }
+  .orders-status-select { width: 100%; min-width: 0; }
+  .orders-sort.bn-seg { display: flex; width: 100%; }
+  .orders-sort .bn-seg-item { flex: 1 1 0; }
+  .orders-hide-unknown,
+  .orders-resort-slot:not(:empty) { grid-column: 1 / -1; }
+}
+
 /* The filter is a native select (owner's ruling, 2026-09-19: "make this a dropdown not
    pills"), sized like `.orders-status-select` beside it. `--bn-control-h` alone already
    clears the 40px thumb floor below 768px (tokens.css), so no phone-only override is needed
@@ -73,10 +104,11 @@
    `300px` / `268px` / one stacked column are that sheet's own numbers, adopted here rather
    than approximated.
 
-   WHAT IS NOT COPIED IS `.browse-body[data-rail='collapsed']`'s 52px column. That is
-   `BoxBrowse.tsx`'s OWN inner box-rail, set from its local `railCollapsed` — a control this
-   screen has no equivalent of. Importing the sheet wholesale would give `#/orders` a column
-   state it can never enter, so the numbers are shared and the state is not. */
+   `.browse-body[data-rail='collapsed']`'s 52px column IS NOW COPIED TOO (S17, the owner's
+   ruling 2026-09-19): `#/orders` carries its own `railCollapsed` state and toggle, over
+   `miniRail`/`browse-boxcell-mini`, exactly `BoxBrowse.tsx`'s own shape over buyers instead
+   of boxes. Nothing below this comment needed to change to gain it — `.browse-body`'s own
+   rule already answers for both screens. */
 .orders-layout {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
@@ -163,6 +195,9 @@
   gap: var(--bn-2);
   padding-bottom: var(--bn-1);
 }
+/* `.browse-quiet` is content-width by nature; the grid above still stretches each button to
+   fill its column (D195), so this only centers the label inside the width the grid gives it. */
+.orders-select-quiet { justify-content: center; }
 /* THE SLOT IS ALWAYS DRAWN AND ALWAYS THIS TALL (D118). Start appears the moment something is
    ticked and goes again when the pass begins; reserving the height here is what keeps those
    two presses from moving the list they were made on. `--bn-control-h-lg` is the size the
@@ -202,6 +237,7 @@
   text-align: left;
   color: var(--bn-ink);
   background: transparent;
+  position: relative;
   transition:
     background-color var(--bn-t-fast) var(--bn-ease),
     box-shadow var(--bn-t-fast) var(--bn-ease),
@@ -209,10 +245,28 @@
 }
 .orders-index-row:hover { background: var(--bn-surface); box-shadow: var(--bn-shadow-1); transform: translateY(-1px); }
 .orders-index-row:active { transform: translateY(0); }
+/* THE SPINE, NOT THE RING (S4, D50) — `#/inventory`'s own `.browse-boxcell`/`.browse-row`
+   grammar for "this is the selected one", copied rather than re-invented: a tint plus a 3px
+   accent spine on the left, the spine itself always in the DOM and only its opacity/scale
+   toggling (D118 — the row never gains or loses a box-shadow ring's own space on selection,
+   because there is none). */
+.orders-index-row::before {
+  content: '';
+  position: absolute;
+  left: var(--bn-1);
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-accent);
+  opacity: 0;
+  scale: 1 0.4;
+  transition: opacity var(--bn-t-fast) var(--bn-ease), scale var(--bn-t) var(--bn-ease-spring);
+}
 .orders-index-row[aria-current='true'] {
   background: var(--bn-accent-tint);
-  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
 }
+.orders-index-row[aria-current='true']::before { opacity: 1; scale: 1 1; }
 .orders-index-row[aria-current='true']:hover { transform: none; }
 .orders-index-row[aria-current='true'] .orders-index-number { color: var(--bn-accent); }
 .orders-index-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bn-ink-4); flex: none; }
@@ -242,6 +296,29 @@
 .orders-index-count { flex: none; }
 
 .orders-detail { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+
+/* ---- the buyer panel's own ORDER label (S8) -------------------------------------- */
+/* `.boxops-identity-num` (`BoxOps.css`) is built for "BOX 3": uppercase, 0.1em tracking, no
+   overflow handling — fine for a short label, and it wraps a real order id mid-identifier at
+   the rail's own ~165px. `.orders-buyer-order-num` lets the "ORDER" word and the id size
+   independently on one line rather than sharing the label's own wrap behavior; the id itself
+   gets `nowrap` and an ellipsis instead, plus D221's mono face (an order id is a machine
+   string) with the label's uppercase/tracking undone so mono renders as the id actually is. */
+.orders-buyer-order-num {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.orders-buyer-order-id {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: normal;
+}
 
 /* ---- Earlier fold (`D193`) ------------------------------ */
 .orders-earlier { margin-top: var(--bn-3); }
