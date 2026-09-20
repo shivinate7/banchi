@@ -1,4 +1,4 @@
-## D-a-claim-race-order — The claim is spent only on a merge that can happen, and the loser of a race backs itself out
+## D228 — The claim is spent only on a merge that can happen, and the loser of a race backs itself out
 
 **MEASURED, 2026-09-19.** Two sessions merged four minutes apart. `make merge ARGS="422
 --confirm"` ran from the branch `claude/ste-ratchet`. It allocated three numbers. It rewrote
