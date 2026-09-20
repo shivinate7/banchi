@@ -3341,8 +3341,12 @@ COMPONENTS = [
                         "Its four entries are one record — docs/decisions/D149's own "
                         "citation of four wrong `docs/DECISIONS.md` line numbers, kept as "
                         "history rather than corrected, because correcting them would "
-                        "falsify what D149 is an account of.",
-                "governed_by": ["D16", "D136", "D141", "D149", "D229"],
+                        "falsify what D149 is an account of. A fifth entry, added "
+                        "2026-09-20, is the same shape for a different record: "
+                        "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
+                        "backlog.md, from before the harness left turn end.",
+                "governed_by": ["D16", "D136", "D141", "D149", "D229",
+                                "D-turn-end-drops-the-harness-and-code-cards-fold-in"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -3396,17 +3400,18 @@ COMPONENTS = [
                 "governed_by": ["D18", "D47"],
             },
             "stop-gate.sh": {
-                "does": "the Stop hook: runs `make harness` at turn end and refuses to let "
-                        "the turn end on a failure. Arms itself on the absence of the last "
-                        "NOT_IMPLEMENTED marker rather than on a toggle, so nobody has to "
-                        "remember to switch it on; PKMNSCAN_GATE=off is the visible escape "
-                        "hatch, and `--status` says armed or disarmed and why.",
-                # Thin on purpose rather than padded. The contract it runs is docs/GATES.md,
-                # which is prose and not a numbered decision, so what D16 settles about this
-                # file is what may NOT be put behind it: a docs check here would fire at the
-                # end of every turn, including turns that touched no markdown. That is the
-                # whole reason the audit is commit-time and on-demand.
-                "governed_by": ["D16"],
+                "does": "the Stop hook. RUNS NOTHING as of 2026-09-20 — the owner's ruling "
+                        "moved the harness off turn end entirely, onto the commit path and "
+                        "CI only (see the decision entry). It stays on the Stop hook roster "
+                        "so `--status` can answer 'what runs at turn end' honestly instead "
+                        "of the roster falling silent; `make status`'s 'turn gate' line reads "
+                        "it. PKMNSCAN_GATE=off is kept, recognised but no longer load-bearing.",
+                # Thin on purpose rather than padded. The contract it USED TO run is
+                # docs/GATES.md, which is prose and not a numbered decision, so what D16
+                # settles about this file is what may NOT be put behind it: a docs check
+                # here would fire at the end of every turn, including turns that touched no
+                # markdown. That reasoning still argues against putting anything back.
+                "governed_by": ["D16", "D-turn-end-drops-the-harness-and-code-cards-fold-in"],
             },
             "guard-opsec.sh": {
                 "does": "the PreToolUse opsec twin — RE-ENABLED 2026-08-23 with a narrowed "

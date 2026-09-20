@@ -12,7 +12,8 @@ the wire keep the names they have always had, and renaming any of them is a defe
 
 ```
 CLAUDE.md                  always-on rules. Keep it short.
-code-card-fork/CLAUDE.md   code-card track, auto-loaded in that directory
+code-card-fork/CLAUDE.md   a symlink to CLAUDE.md — the code cards feature is dormant, folded
+                           into the root file's own "Code cards" section (2026-09-20)
 docs/map.py                the repo as data: built vs TBD, and what governs each file.
                            `make map` renders it; `make map ARGS=--stale` ranks the
                            entries whose file has outrun the prose about it.

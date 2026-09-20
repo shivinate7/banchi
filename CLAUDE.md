@@ -4,18 +4,20 @@ Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and 
 every card physically is.
 
 **Code cards are a FEATURE of this product, not a second track** (owner's ruling, 2026-09-20,
-replacing D14's framing in prose). The owner has not used it yet. Its rules live in
-`code-card-fork/CLAUDE.md`, auto-loaded in that directory.
+replacing D14's framing in prose). The owner has not used it yet. The feature is DORMANT as
+of 2026-09-20 — "Code cards (dormant feature)" below is the one place that says so. Its rules
+live in this file now, not in a second document.
 
 D14's structural half is NOT repealed by this line. `codes/` is still its own package.
 `docs/map.py` still carries a `TRACKS` tuple, and `scripts/decision-context.py` still prints a
 track banner. Repealing those is a code change and needs the owner's word on its own.
 
-**Codex reads this same file, not a copy (D135).** `AGENTS.md` at the root and
-`code-card-fork/AGENTS.md` are relative symlinks to the `CLAUDE.md` beside each. `.agents/skills`
-is a directory symlink to `.claude/skills`. `.codex/hooks.json` mirrors `.claude/settings.json`'s
-hooks. `make docs-audit`'s `codex hooks` row checks both directions. `.codex/config.toml` stays
-untracked, like `.claude/settings.local.json`.
+**Codex reads this same file, not a copy (D135).** `AGENTS.md` at the root is a relative
+symlink to `CLAUDE.md`. `code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are both
+relative symlinks to this same file too, since 2026-09-20 — the fold above, not a new
+exception. `.agents/skills` is a directory symlink to `.claude/skills`. `.codex/hooks.json`
+mirrors `.claude/settings.json`'s hooks. `make docs-audit`'s `codex hooks` row checks both
+directions. `.codex/config.toml` stays untracked, like `.claude/settings.local.json`.
 
 ## The name is the app's, and nothing beneath it (D94)
 
@@ -457,6 +459,84 @@ not rendered — not focusable, not reachable by a screen reader).
 - `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser: 20px
   body, 32px position labels, 320px photograph, 44px targets, 7:1 contrast, no jargon, no
   route out.
+
+## Code cards (dormant feature) — DORMANT as of 2026-09-20
+
+Code cards share the rig, the capture server, and the capture app shell with singles.
+Everything downstream is separate: data model, identification, sales channel, and
+fulfillment (D14's structural half, untouched — see the opening section above).
+
+**DORMANT MEANS THIS: the owner has not run this feature yet, and no session should read it
+as active work unless the owner names it.** `codes/`, the `#/codes` route, harness test T8,
+and the QR decode all stay in the build and keep working. Nothing here is deleted. This is
+the one place that marks the dormancy. Do not repeat the marker elsewhere. Update this date
+if the owner picks the feature back up.
+
+**The gating system is retired.** This section used to say the delivery worker "was gated on
+singles Gate B." Gate B passed on 2026-08-22. The gating system retired the day after, and
+nothing here waits behind anything. The worker stays unbuilt because the channel decision
+stays unexecuted, a different reason, argued in `docs/specs/code-cards.md` §6.
+
+**`docs/specs/code-cards.md` is the spec and supersedes this section's architecture.** Read
+it before building. This section is the short operating summary. The spec carries the
+measurements, the channel research, and the open questions.
+
+### Things you will get wrong without being told
+
+- **The QR IS the code, and the primary path makes NO model call and NO network call.**
+  `codes/qr.py` decodes locally. Measured at the rig's real 3840x2160 frame size: **140 of
+  140 physically-possible frames, ZERO mis-reads, 87 ms each.** The decoder is
+  `zxing-cpp==2.3.0` and **the pin is load-bearing** — plain `pip install zxing-cpp` FAILS on
+  this repo's Python 3.9.
+- **THERE IS NO OCR, AND C2's OCR HALF IS RETIRED.** C2 specified a SKU crop off the QR as a
+  fiducial, then Tesseract with an `A-Z0-9` whitelist. Do not build it. Vision OCR was
+  measured returning confidence 1.0 on 24 renders of which 10 were misreads. Tesseract's
+  whitelist does not work with its default LSTM engine. No public list of code-card SKU
+  strings exists to fuzzy-match against. The question it was for is answered by the next
+  rule.
+- **The product is a CAPTURE CLAIM, not a reading.** Code cards arrive in sealed-product
+  batches — a booster box yields 36 identical booster codes. The operator declares the
+  product and set at capture, in D21's exact sense. `codes/products.py` holds the vocabulary,
+  derived from the real catalog rather than invented.
+- **A MIS-READ IS FAR WORSE THAN A REFUSAL.** A refusal costs a re-shoot. A mis-read sells a
+  stranger something that does not work. Someone finds it days later, and it lands in C6 with
+  nobody able to tell whether the code was bad or the read was. Every failure path here
+  returns nothing rather than a guess.
+- **The ledger's key is the CODE, not the position** (C3, and C8's first build had it as the
+  position). Under D24 the card is destroyed, so the position is a filing reference and the
+  code is the identity. This is what makes dedupe and reservation possible.
+- **Codes are fungible pool inventory, not located items** (D24). No box, no section, no
+  position. The code string is the primary key. Do not reuse the singles schema.
+- **Atomic dequeue is required.** A code is marked reserved the instant it is assigned to an
+  order. Never reissue. Double-selling a code is unrecoverable, so `codes/ledger.py:reserve`
+  REFUSES anything that is not `held` rather than quietly doing nothing.
+- **Codes are globally single-use and never expire, and a redeemed card looks identical to an
+  unredeemed one.** The ledger is the only record of a code's state. There is no usable API
+  to check one. The official verify step is genuinely non-consuming, but it sits behind
+  session auth, a `can_redeem` gate and a reCAPTCHA.
+- **The redemption limits are SOFT** (corrects C3). Past the limit, a code grants a little
+  in-game currency instead of the product. The code is not refused.
+- **DESTROYING THE CARD FORECLOSES TCGPLAYER AND EBAY'S DISPUTE DEFENCE.** TCGplayer permits
+  code cards only when *attached to a physical card*. eBay's Money Back Guarantee excludes
+  intangible goods, and its seller protection requires physical delivery evidence. This
+  overturns C5, which existed to buy exactly that protection. See `docs/specs/code-cards.md`
+  §6.1 — it is a real cost of D24, stated so nobody rediscovers it.
+- **Every researched channel came back MARGINAL.** Booster codes are worth $0.01-$0.13, and
+  the published wholesale bid for one is BELOW what bulk costs to get. The money is in the
+  premium tail: a Pokemon Center ETB code lists at ~46x a booster. Tier the pile.
+
+### Hard rules
+
+- Never guess a code. No decode → the paid vision read, then a human. Never a default.
+- Failure must be loud. A QR that does not decode is a stop.
+- Separate non-`BST` codes on sight — they are the scarce, high-value ones, and the catalog
+  numbers now confirm it rather than merely asserting it.
+- No real code-card photo or code string in any tracked file. Enforced by pre-commit hook.
+  The runtime writing codes into gitignored `inventory/` is the sanctioned path. The guards
+  protect the repository, not the store.
+
+Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
+Spec, measurements and channel research: `docs/specs/code-cards.md`.
 
 ## Things you will get wrong without being told
 
@@ -1054,7 +1134,8 @@ adopting some and deferring others (D99 sits where it does because main took D90
   `scripts/score-trace.py` is how a trace is scored — read it before changing a threshold here.
 - `docs/DESIGN.md` — the Fulfillment view's hard constraints, asserted by `make design-check`,
   and the `--bn-*` token block, reconciled by `make docs-audit`'s `design tokens` row.
-- `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
+- `code-card-fork/CLAUDE.md` — a relative symlink to this file since 2026-09-20. The
+  "Code cards (dormant feature)" section above is its content now.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.
 
 Deeper schema facts live in the `tcgplayer-csv` skill. It loads on demand.
