@@ -125,6 +125,7 @@
      paint outside the border box is cut. Pin `overflow-x` explicitly rather than leaving it
      an accident of the other axis. */
   overflow-x: hidden;
+  overscroll-behavior: contain;
   min-height: 0;
   /* THE BLEED IS SIZED TO `--bn-shadow-1`'s OWN REACH, NOT A MAGIC NUMBER: that token's first
      layer is `0 1px 2px`, a 1px vertical offset plus a 2px blur, so its paint reaches 3px past
