@@ -10236,36 +10236,49 @@ def check_breakpoint_columns(report: Report) -> None:
 
 
 JS_BREAKPOINTS_SCRIPT = ROOT / "scripts" / "js-breakpoints.py"
+BROWSER_SCOPE_SCRIPT_FOR_PAIRING = ROOT / "scripts" / "browser-scope.py"
 
 
 def check_js_breakpoints(report: Report) -> None:
-    """A JS media query's viewport width, against what a stylesheet under app/src declares
-    (D123): a responsive breakpoint belongs in the stylesheet, and where a screen genuinely
-    needs one in JavaScript its value must match one the stylesheets already declare, so the
-    two can never quietly disagree.
+    """A JS media query's viewport width, against what THE STYLESHEETS THAT FILE ITSELF
+    IMPORTS declare (D123): a responsive breakpoint belongs in the stylesheet, and where a
+    screen genuinely needs one in JavaScript its value must match one the stylesheets it is
+    subject to already declare, so the two can never quietly disagree.
 
-    MECHANICAL, unlike `breakpoint columns` above: whether a `min-width` in CSS is asking the
-    wrong thing is a matter of intent this row's sibling cannot see. Whether a JS breakpoint's
-    value has a CSS counterpart at all is not — it either does or it does not.
+    PAIRED BY THE IMPORT GRAPH, NEVER GLOBALLY. A component declares which stylesheets it is
+    subject to by importing them, and that is a primitive this repo already built for a
+    different question — `scripts/browser-scope.py`'s `file_imports`, which D141's classifier
+    needs to know whether one file reaches another. An earlier version of this row compared a
+    JS breakpoint against every stylesheet under `app/src`, and it went GREEN on the exact
+    defect it was written for: `app/src/Orders.tsx` carried `min-width: 1024px` with no
+    stylesheet it imports declaring it, while `RunPanel.css` — a file `Orders.tsx` never
+    imports — happened to declare 1024 for a reason of its own, and the global comparison
+    could not tell the two apart. A guard that stays green on its own motivating defect is
+    spent; this is the fix, not a second layer beside the old one.
 
-    THE EXTRACTION AND COMPARISON LIVE IN `scripts/js-breakpoints.py`, imported rather than
-    reimplemented (this file already owns one CSS-width reader in `read_widths`; a second
-    copy here would be the drift this whole file exists to catch). This row does the
-    filesystem half itself instead of calling that script's own `scan()`, because `read()`
-    honors staged-commit mode and a sibling script reading straight off disk does not — the
-    same reason `breakpoint_subject` above reads its own stylesheets rather than delegating
-    that too.
+    MECHANICAL: whether a JS breakpoint's value has a counterpart in the stylesheets ITS OWN
+    FILE imports is not a matter of intent the way `breakpoint columns`' viewport-vs-column
+    question is — it either does or it does not.
 
-    THE COMPARISON IS GLOBAL ACROSS `app/src`, NOT PER-SCREEN, ON PURPOSE — see the sibling
-    script's own module docstring for why a per-screen version would have to guess a pairing
-    this repo's own rule warns against inventing.
+    THE EXTRACTION, THE PAIRING AND THE COMPARISON LIVE IN `scripts/js-breakpoints.py`,
+    imported rather than reimplemented — the same reason its own `subject_css_widths` reuses
+    `browser-scope.py`'s `file_imports` rather than writing a second import reader. This row
+    does the filesystem half itself instead of calling the sibling's own `scan()`, because
+    `read()` honors staged-commit mode for a stylesheet's CONTENT (the import graph itself,
+    borrowed from `browser-scope.py`, still reads the worktree — the same limit `browser
+    scope` and `spec map` above already accept).
 
-    CONTAINER QUERIES CARRY NO JS SIDE and never enter the CSS set that feeds this row; a
+    A FILE THAT IMPORTS NO STYLESHEET AT ALL, and still carries a JS viewport query, is
+    UNPAIRED — its own finding, distinct from a mismatch, because there is no CSS to compare
+    against and a silent pass would be exactly the failure this row exists to end.
+
+    CONTAINER QUERIES CARRY NO JS SIDE and never enter the CSS a file is paired against; a
     `@container` width is `breakpoint columns`' and `breakpoints`' question, not this one's.
 
-    FAILS OPEN: a missing sibling script, or a subject that reads zero JS breakpoints and
-    zero CSS breakpoints, is a finding and never a silent pass — the same posture
-    `breakpoint_subject` takes for its own two rows.
+    FAILS OPEN: a missing sibling script (this row's own, or the `browser-scope.py` it
+    borrows the import reader from), or a subject that reads zero JS breakpoints, is a
+    finding and never a silent pass — the same posture `breakpoint_subject` above takes for
+    its own two rows.
     """
     if not exists(APP_STYLES):
         report.add("js breakpoints", MECHANICAL, [Finding(
@@ -10278,40 +10291,60 @@ def check_js_breakpoints(report: Report) -> None:
             rel(JS_BREAKPOINTS_SCRIPT),
             "does not exist or does not import, so no JS breakpoint can be read at all.")])
         return
+    scope_module = _sibling("browser-scope.py")
+    if scope_module is None:
+        report.add("js breakpoints", MECHANICAL, [Finding(
+            rel(BROWSER_SCOPE_SCRIPT_FOR_PAIRING),
+            "does not exist or does not import, and `js-breakpoints.py`'s pairing borrows "
+            "its `file_imports` — with no import reader, no JS breakpoint can be paired to "
+            "the stylesheets it is subject to.")])
+        return
 
     js_by_file: Dict[str, List[Tuple[str, int, int]]] = {}
     for path in module.js_files(APP_STYLES):
         widths = module.read_js_widths(read(path))
         if widths:
             js_by_file[rel(path)] = widths
-    css_widths: List[Tuple[str, int, int]] = []
-    for path in module.css_files(APP_STYLES):
-        css_widths.extend(module.read_css_widths(read(path)))
 
-    if not js_by_file and not css_widths:
+    if not js_by_file:
         report.add("js breakpoints", MECHANICAL, [Finding(
             rel(APP_STYLES),
-            "read 0 JS breakpoints and 0 CSS breakpoints. A side that parses to nothing "
-            "compares nothing.")])
+            "read 0 JS breakpoints under app/src. A side that parses to nothing compares "
+            "nothing.")])
         return
 
-    mismatches = module.find_mismatches(js_by_file, css_widths)
+    subject_by_file: Dict[str, Optional[List[Tuple[str, int, int]]]] = {
+        path: module.subject_css_widths(path, scope_module.file_imports, read_fn=read)
+        for path in js_by_file
+    }
+    verdict = module.compare(js_by_file, subject_by_file)
+
     findings: List[Finding] = [
         Finding(f"{m.path}:{m.line}", (
             f"opens a whole layout regime in JavaScript at `{m.side}-width: {m.value}px`, "
-            f"and no `@media` block in any stylesheet under app/src declares that "
+            f"and no `@media` block in any stylesheet THIS FILE ITSELF IMPORTS declares that "
             f"breakpoint.\n"
-            f"  D123: a responsive breakpoint belongs in the stylesheet. Where a screen "
-            f"genuinely needs one in code, its value must match one the stylesheets already "
-            f"declare — the way `app/src/BoxBrowse.tsx:704` matches "
-            f"`app/src/BoxBrowse.css`'s own `max-width: 767px` — so the screen's script and "
-            f"its CSS can never quietly disagree."))
-        for m in mismatches
+            f"  D123: a responsive breakpoint belongs in the stylesheet. A component "
+            f"declares which stylesheets it answers to by importing them — the way "
+            f"`app/src/BoxBrowse.tsx:704` matches `app/src/BoxBrowse.css`'s own "
+            f"`max-width: 767px`, which it imports directly — so the screen's script and "
+            f"the CSS it actually loads can never quietly disagree. A DIFFERENT stylesheet "
+            f"elsewhere declaring this value does not count; this file does not import it."))
+        for m in verdict.mismatches
+    ] + [
+        Finding(f"{path}:{line}", (
+            f"runs a JavaScript viewport query at `{side}-width: {value}px` and imports no "
+            f"stylesheet at all — `.css` or otherwise — so nothing can vouch for the value.\n"
+            f"  Import the stylesheet this breakpoint actually answers to, or argue in "
+            f"`scripts/js-breakpoints.py`'s own module docstring why this file is exempt. A "
+            f"file with no CSS to compare against is not a pass."))
+        for path in verdict.unpaired
+        for side, value, line in js_by_file[path]
     ]
     total_js = sum(len(v) for v in js_by_file.values())
     report.add("js breakpoints", MECHANICAL, findings,
-               f"{total_js} JS breakpoints in {len(js_by_file)} files, against "
-               f"{len(css_widths)} CSS breakpoints",
+               f"{total_js} JS breakpoints in {len(js_by_file)} files, each paired to its "
+               f"own imports; {len(verdict.unpaired)} unpaired",
                scanned=total_js)
 
 
