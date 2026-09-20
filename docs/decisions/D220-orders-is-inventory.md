@@ -29,7 +29,7 @@ D90 had the shape right in 2026-08. An order drives the walk as a mode of the in
 
 ### Four answers after the second render
 
-The owner saw the rebuilt screen over a seeded store beside `#/inventory` and ruled four things. The copy budget is pinned to the measured count, because D194's ratchet accepts Inventory's Details vocabulary on Orders. `so far` is dropped from the position caption everywhere, on the box line and the section line, on every screen. `market` and `listings` ship with their empty states on Orders. The pill's word is `Ready`.
+The owner saw the rebuilt screen over a seeded store beside `#/inventory` and ruled four things. The copy budget is pinned to the measured count, because D194's ratchet accepts Inventory's Details vocabulary on Orders. `so far` is dropped from the position caption everywhere, on the box line and the section line, on every screen. `market` and `listings` shipped with their empty states on Orders at the time (see the amendment below, which reverses this one). The pill's word is `Ready`.
 
 ### What this protects, and what protected it before
 
@@ -48,3 +48,15 @@ Three places drew a nameless buyer's NAME slot as `No name` then a typed dot the
 A nameless group can only ever hold one order. `orderBuyers.ts` keys a nameless order on itself. It never merges two. "Several orders, several dates" cannot happen today. The helper still falls back to the most recent order if that changes. That is the same order `latest` is already computed across. A shorter id draws whole, never padded. The full id stays in the order slot alone. It is never repeated here (`OrderPanel`'s `ORDER <number>` / `<n> ORDERS`).
 
 Landing this also surfaced four small readings on the same screen. Each was fixed in the same pass. A buyer row's per-order pill drew the order's own number, not its status word. "Hide unknown SKUs" named the wrong reason. It filters `sku_unseen`, the "Never seen" chip's own reason. It never filtered `sku_unknown`. "Tick all" and "Untick all" over-claimed their reach. Both act on the rows in view. Both now read "Tick shown" and "Untick shown", matching `#/inventory`'s own wording. "Untick shown" also read the wrong set for its disabled state. The step-through arrow-key hint rendered below phone width, where its handler is gated off.
+
+### Amended 2026-09-20: market and listings are wired, by the same path Inventory uses
+
+The owner reversed the "ship as is" ruling above. He asked for `market` and `listings` on Orders. He asked for them by the path Inventory already uses. This entry is amended to say so.
+
+`WalkMainPane` now reads both facts the same way `BoxBrowse.tsx` reads them. `Orders.tsx` threads `listings` from the free third face of the copies read that already answers `rawCards`. No second fetch is made for it. The walk pane keeps a per-run market cache, copied from Inventory's own `priced`/`asked` pair. It is keyed on the current row's real card. A copy whose run is null never asks for a reading.
+
+The copies route, `POST /inventory/copies`, now answers `listings` too. It is narrowed to the SKUs the route's own scan matched. `GET /inventory/<box>` narrows its own `listings` the same way. This is a dictionary lookup over data the route already read. It is not a new scan. The `unscoped walk` allow list is unchanged.
+
+The measured word count on `#/orders` did not move. The pinned fixture prices no stock key its cards carry. The wiring reaches no new string on that fixture. D194's ratchet stays at its measured figure.
+
+D189 is not adopted here. It puts the market reading in a table. This amendment keeps the per-run live read Inventory already uses. The ask was parity with Inventory's own path. It was not a switch to the newer one.

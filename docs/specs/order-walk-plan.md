@@ -820,12 +820,19 @@ their own branch).
 
 The owner saw the rebuilt screen over a seeded store beside `#/inventory` and answered:
 
-- **Copy budget (D194).** `#/orders` measures 140 words against the pinned 107; the 33 are
+- **Copy budget (D194).** `#/orders` measures 140 words against the pinned 107. The 33 are
   Inventory's Details vocabulary the reused pane carries. **Pin to the measured count.** The
-  pane is worth its words; hiding facts on one screen would make the two panes differ.
+  pane is worth its words. Hiding facts on one screen would make the two panes differ.
 - **`so far`.** Dropped everywhere — see §8's caption paragraph.
-- **`market` and `listings`.** Not wired for Orders in this build; the pane's two pricing facts
+- **`market` and `listings`.** Not wired for Orders in this build. The pane's two pricing facts
   draw their honest empty states. **Ship as is.** Wiring is a follow-up if the walk misses them.
+  **Amended 2026-09-20: the owner asked for the follow-up.** Both facts are wired now, by the
+  same path Inventory uses. `WalkMainPane` keeps a per-run market cache, copied from
+  `BoxBrowse.tsx`'s own `priced`/`asked` pair. It reads `listings` from `Orders.tsx`. This is
+  the free third face of the copies read that already answers `rawCards`. `POST
+  /inventory/copies` now answers `listings` too, narrowed to the SKUs the route's own scan
+  matched. This is a dictionary lookup over data the route already read, not a new scan. See
+  D220's own amendment for the full account.
 - **The pill's word** is `Ready`, above.
 
 ### What is deleted
