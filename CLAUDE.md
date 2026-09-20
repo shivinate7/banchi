@@ -218,7 +218,7 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   (D189). Previews. `--write` is a FULL REPLACE of both
                                    #   tables.
 ./pkmnscan readings show           # what the table holds, and which files it last credited.
-./pkmnscan archive  sweep [--write] # THE PRICE-HISTORY ARCHIVE (D-a-price-history-archive).
+./pkmnscan archive  sweep [--write] # THE PRICE-HISTORY ARCHIVE (D219).
                                    #   The source's 357-day window slides. This press reads
                                    #   every range for every sku this store has sold or holds,
                                    #   and keeps a copy past that ceiling. Previews. UNLIKE
@@ -327,7 +327,12 @@ first paint, cross-faded as one mechanism. A screen not looked at in dark is not
 
 **Type has three roles**: `--bn-font-display` (Manrope, headings), `--bn-font-ui` (Inter,
 everything), `--bn-font-mono` (JetBrains Mono, machine strings only — SKUs, run names, reason
-codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono. Body is 14px.
+codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono, except
+money: a dollar figure takes the mono face through `.bn-money`, never a hand-rolled
+declaration (D221). **NOT MECHANIZED:** a machine cannot tell a dollar figure
+from another tabular machine string by its CSS alone. Mono, 600-weight and tabular-nums
+already mark SKUs, run ids and card numbers throughout `app/src`. Which face a span deserves
+is read from what it holds, never from its declaration. Body is 14px.
 
 **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders all of it. Reach for
 the kit before writing a primitive. A fourth hand-rolled button is how a design system dies.
@@ -892,6 +897,9 @@ D215 Both: the worker count is raised, and the spec allow-list is built
 D216 The price history's honest agent stopped answering, and D64's escape hatch already fit it
 D217 Sales becomes a tool: sort, filter, cross-filter, drill down and deep-link, over the same rows D214 already drew
 D218 A typed dot is a defect wherever it is typed, and the reader is the mechanism this time, not the sweep
+D219 The archive key carries the range, and the archive never deletes
+D220 Orders is inventory's screen with orders in the rail, and the walk is a mode of it
+D221 Money stays mono, and the rule is amended to match
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

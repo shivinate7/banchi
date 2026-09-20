@@ -86,12 +86,22 @@ def _publish() -> None:
         os.environ[FROM_FILE_ENV] = " ".join(sorted(_from_file))
 
 
-def load(path: Path = ENV_FILE, *, force: bool = False) -> None:
-    """Populate os.environ from `path`, once per process. Missing file is not an error."""
+def load(path: Path | None = None, *, force: bool = False) -> None:
+    """Populate os.environ from `path`, once per process. Missing file is not an error.
+
+    THE DEFAULT RESOLVES AT CALL TIME, NEVER AT DEFINITION TIME. `path: Path = ENV_FILE` in
+    the signature would bind the module global's value the moment Python reads this `def`,
+    so a caller that later redirects `envfile.ENV_FILE` (as harness/tests/t7_store_and_seams.py
+    does, seven times) would find a bare `load()` still reading the ORIGINAL file. `get_live`
+    below already got this right one line after its own `load()` call, by reading `ENV_FILE`
+    at call time through `_parse(ENV_FILE)` — this function disagreed with itself.
+    """
     global _loaded
     if _loaded and not force:
         return
     _loaded = True
+    if path is None:
+        path = ENV_FILE
 
     # A PARENT'S LIFTED NAMES ARE THIS PROCESS'S LIFTED NAMES. Adopted before the file is read
     # so a name the parent lifted and this `.env` no longer carries is still known to have come

@@ -136,7 +136,7 @@ The house pattern is the readings table and its adopt command, applied here.
 Buckets are keyed by `(sku, range, start)`, **not** by width. The ranges overlap. `semiannual`
 and `annual` are both seven-day-wide, so a width-only key would collide two independent
 observations. That is exactly the collision D62 forbids.
-`docs/decisions/D-a-price-history-archive.md` argues the key in full.
+D219 argues the key in full.
 
 The archive never deletes a row. A bucket a later sweep does not mention is left exactly as it
 was. That covers two cases: it aged out of the source, or that SKU fell outside a narrower

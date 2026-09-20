@@ -1,5 +1,5 @@
 """`price_history` and `price_history_sources` — the market-history buckets this machine has
-read, kept past the source's own 357-day ceiling (D-a-price-history-archive).
+read, kept past the source's own 357-day ceiling (D219).
 
 WHY THIS TABLE EXISTS AT ALL. `pipeline/pricehistory.py` reads `infinite-api.tcgplayer.com`'s
 history endpoint, and that endpoint's own `annual` range is 357 days wide and SLIDES: a

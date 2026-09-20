@@ -8,7 +8,6 @@ import type {
   InventoryFacetFilter,
   InventoryFacets,
   Listing,
-  PricingPayload,
   QueueEntryWire,
   QueueSnapshot,
   RemoveResult,
@@ -35,9 +34,21 @@ import {
 } from './server'
 import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
-import { collectorNumber } from './cardNumber'
-import { ReadingAge } from './CardLocations'
-import { readingAgo, stateLabel, stateTone } from './cardState'
+import {
+  CardDetailsSection,
+  claimList,
+  gameLabel,
+  gameWord,
+  marketTable,
+  nameOf,
+  numberCell,
+  PhotoPanel,
+  photoSrc,
+  titleCase,
+  type MarketRead,
+  type Row,
+} from './CardHero'
+import { stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
@@ -58,8 +69,10 @@ import './BoxBrowse.css'
  */
 
 /* The inventory arrives as a map keyed `"3/1"`. The key is kept for identity and shown only
- * where a row carries no label — never parsed into a position. */
-export type Row = { key: string; card: InventoryCard }
+ * where a row carries no label — never parsed into a position. `Row` itself now lives in
+ * `CardHero.tsx` (re-exported here so `Inventory.tsx`'s own `import { BoxBrowse, type Row }
+ * from './BoxBrowse'` keeps working) — `#/orders`' walk pane builds one too. */
+export type { Row } from './CardHero'
 
 /* Box-walk order — box, then index — the order the cards physically sit in. */
 function rowsOf(cards: Record<string, InventoryCard>): Row[] {
@@ -327,13 +340,7 @@ function hasDeparted(card: InventoryCard): boolean {
   return isDeparted(card.place)
 }
 
-/** The card's name, or null — AND AN EMPTY STRING IS NOT A NAME. The pipeline writes `""` for
- *  a card whose name it could not read (8 of them in the owner's store today), and a bare `??`
- *  lets that through as a blank heading and a blank row in the walk. */
-function nameOf(card: InventoryCard): string | null {
-  const name = card.name
-  return typeof name === 'string' && name.trim() !== '' ? name.trim() : null
-}
+/* `nameOf` moved to `CardHero.tsx` (imported above), for the reason its own header gives. */
 
 // -------------------------------------------------------------- stepping through the list
 
@@ -468,190 +475,10 @@ function pooledText(card: InventoryCard, key: string): string {
   return `${card.place?.game_display ?? card.game ?? 'pooled'} · pooled · ${key}`
 }
 
-/* `mono` is for a machine string — the number, the set hint, the run name, a reason code.
- * `money` is Inter with tabular figures. Everything else is a word.
- *
- * `node` is drawn instead of `value` where the fact is a figure PLUS something quieter beside
- * it — a live count and how old the reading is. `value` stays required so every fact has a
- * plain-text form for the title attribute and for anything that reads the row as a string. */
-type Detail = { label: string; value: string; kind?: 'mono' | 'money'; node?: ReactNode }
-
-/** An enum value drawn as a word: `reverse_holofoil` → `Reverse Holofoil`. Only the first
- * letter of each word moves, so a value that already carries its own casing keeps it. */
-function titleCase(raw: string): string {
-  return raw
-    .split(/[_\s]+/)
-    .filter((word) => word !== '')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
-
-/* The game as a word. The server's `game_display` when it is on the wire; the id otherwise,
- * through the few names title-casing gets wrong. */
-const GAME_WORDS: Record<string, string> = {
-  pokemon: 'Pokémon',
-  pokemon_code: 'Pokémon code cards',
-  one_piece: 'One Piece',
-}
-/** The same word list `gameWord` reads, for a caller that only has the raw key — D213's
- *  filter dropdown, which is built off `facets.games` and never off a `Row`. */
-function gameLabel(game: string): string {
-  return GAME_WORDS[game] ?? titleCase(game)
-}
-function gameWord(card: InventoryCard): string | null {
-  if (card.place?.game_display) return card.place.game_display
-  if (card.game === null) return null
-  return gameLabel(card.game)
-}
-
-/** A snake_case reason code — `no_market_data` — which is drawn verbatim, in mono. */
-function isCode(text: string): boolean {
-  return /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(text)
-}
-
-/** A set-valued claim, rendered — a bare string reads as a one-member set. `word` is how each
- * member is drawn; the default is verbatim, which is what a rarity string wants. */
-function claimText(claim: string | string[] | null, word: (member: string) => string = (member) => member): string {
-  const members = claimList(claim).map(word)
-  return members.length === 0 ? 'none recorded' : members.join(' · ')
-}
-
-function claimList(claim: string | string[] | null): string[] {
-  return (typeof claim === 'string' ? [claim] : (claim ?? [])).filter(
-    (member) => typeof member === 'string' && member.trim() !== '',
-  )
-}
-
-/* What a run's join said a card is worth, and how long ago it said it. The store has no price
- * in it (D8); the edge is card -> `run` -> that run's `pricing.json`, keyed by position. */
-type MarketRead =
-  | { kind: 'table'; at: number | null; rows: Record<string, string | null> }
-  | { kind: 'absent'; why: string }
-
-function marketTable(payload: PricingPayload): MarketRead {
-  const rows: Record<string, string | null> = {}
-  for (const priced of payload.pricing?.skus ?? []) {
-    for (const at of priced.positions ?? []) {
-      rows[`${at.box}/${at.index}`] = priced.snap?.market ?? null
-    }
-  }
-  return { kind: 'table', at: payload.written_at ?? null, rows }
-}
-
-/* A price is never drawn without its age — the age of the JOIN. `no_market_data` verbatim,
- * because a blank Market cell is an UNKNOWN price rather than a low one. */
-function marketText(card: InventoryCard, read: MarketRead | undefined): string {
-  if (card.run === null) return 'not joined yet'
-  if (read === undefined) return 'reading…'
-  if (read.kind === 'absent') return read.why
-
-  const price = read.rows[`${card.box}/${card.index}`]
-  if (price === undefined) return 'no row in this run'
-  if (price === null) return 'no_market_data'
-
-  const ago = read.at === null ? null : readingAgo(new Date(read.at * 1000).toISOString())
-  if (ago === null) return `$${price} · no age`
-  return `$${price} · read ${ago}`
-}
-
-/* THE MARKET ROW AND THE LISTED ROW ARE ADJACENT AND SAY THE SAME KIND OF THING, so they say
- * it the same way. This one used to render `$0.34 · read 4d` — a terse compact age behind a
- * mid-dot — directly above `3 live  read 16 hours ago`, and read as two different kinds of
- * fact. One `ReadingAge`, one weight, one colour, both rows. */
-function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
-  const value = marketText(card, read)
-  if (!value.startsWith('$') || read === undefined || read.kind !== 'table') {
-    return { label: 'Market', value, kind: isCode(value) ? 'mono' : undefined }
-  }
-  const price = read.rows[`${card.box}/${card.index}`]
-  return {
-    label: 'Market',
-    value,
-    kind: 'money',
-    node: (
-      <span className="browse-fact-live">
-        <span className="bn-tnum">${price}</span>
-        <ReadingAge at={read.at === null ? null : new Date(read.at * 1000).toISOString()} />
-      </span>
-    ),
-  }
-}
-
-type FactGroup = { title: string; facts: Detail[] }
-
-/* WHAT THIS CARD'S SKU IS BELIEVED TO HAVE LIVE, AND WHEN THAT WAS LAST READ. The live count
- * is an estimate between runs (`store/master.py:Listing`), so the age is not decoration — it
- * is the difference between "TCGplayer is holding four of these" and "four is what we wrote
- * down on Tuesday". The record comes off `GET /inventory`'s own `listings` map. */
-function listingFact(card: InventoryCard, listings: Readonly<Record<string, Listing>>): Detail {
-  const sku = card.sku === null ? '' : card.sku.trim()
-  if (sku === '') return { label: 'Listed', value: 'no SKU yet' }
-  const listing = listings[sku]
-  if (listing === undefined) return { label: 'Listed', value: 'no import row yet' }
-  return {
-    label: 'Listed',
-    value: `${listing.live} live`,
-    node: (
-      <span className="browse-fact-live">
-        <span className="bn-tnum">{listing.live}</span> live
-        <ReadingAge at={listing.live_as_of} />
-      </span>
-    ),
-  }
-}
-
-function factGroupsOf(
-  card: InventoryCard,
-  market: MarketRead | undefined,
-  listings: Readonly<Record<string, Listing>>,
-): FactGroup[] {
-  return [
-    {
-      title: 'Identity',
-      facts: [
-        { label: 'Card', value: nameOf(card) ?? 'not identified yet' },
-        { label: 'Number', value: numberCell(card), kind: 'mono' },
-        { label: 'Game', value: gameWord(card) ?? 'not recorded' },
-        { label: 'Set hint', value: card.set_hint ?? 'none', kind: 'mono' },
-      ],
-    },
-    {
-      title: 'Claims',
-      facts: [
-        { label: 'Finish', value: claimText(card.metadata_finish, titleCase) },
-        { label: 'Rarity', value: claimText(card.rarity_claim, titleCase) },
-        { label: 'Note', value: card.note ?? 'none' },
-      ],
-    },
-    {
-      title: 'Provenance',
-      facts: [
-        { label: 'State', value: stateLabel(card.state) },
-        { label: 'Captured', value: capturedText(card.captured_at) },
-        { label: 'Run', value: card.run ?? 'not identified yet', kind: 'mono' },
-        { label: 'Confidence', value: card.confidence === null ? 'none recorded' : titleCase(card.confidence) },
-        marketFact(card, market),
-        listingFact(card, listings),
-      ],
-    },
-  ]
-}
-
-/* When this card was photographed, as a person says it — local time, the year only when it is
- * not this one. A string that will not parse is returned verbatim. */
-function capturedText(stamp: string | null): string {
-  if (stamp === null) return 'not recorded'
-  const at = new Date(stamp)
-  if (Number.isNaN(at.getTime())) return stamp
-
-  const clock = at
-    .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    .replace(/\s?([AP])M/i, (_m, half: string) => half.toLowerCase() + 'm')
-  const day = at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  const year = at.getFullYear()
-  const suffix = year === new Date().getFullYear() ? '' : ` ${year}`
-  return `${clock} · ${day}${suffix}`
-}
+/* `nameOf`, `numberCell`, `titleCase`, `claimList`, `gameLabel`, `gameWord`, `MarketRead`,
+ * `marketTable` and `factGroupsOf`/`CardDetailsSection` moved to `CardHero.tsx` so `#/orders`'
+ * walk pane can share them (`docs/specs/order-walk-plan.md` §13) — imported below, this file's
+ * own JSX unchanged. */
 
 /** The open question about one position, or null — the entry and which queue it is in. */
 function openQuestion(
@@ -682,10 +509,6 @@ function sinceText(at: number): string {
 function waitingFor(firstSeen: string): string {
   const at = Date.parse(firstSeen)
   return Number.isNaN(at) ? 'unknown age' : sinceText(at)
-}
-
-function numberCell(card: InventoryCard): string {
-  return collectorNumber(card) ?? 'none'
 }
 
 /** The box named on the hash — `#/inventory?box=3`, the way the home screen links here. */
@@ -883,7 +706,6 @@ export function BoxBrowse({
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [manage, setManage] = useState(false)
   const [zoomed, setZoomed] = useState(false)
-  const [detailsOpen, setDetailsOpen] = useState<boolean | null>(null)
 
   /* The search is the server's matcher filtering this screen's own list: the answer is read
    * for its copy KEYS and nothing else. No autoFocus: this screen is opened to WALK. */
@@ -2688,38 +2510,12 @@ export function BoxBrowse({
                     </div>
                   </section>
 
-                  <details
-                    className="bn-panel browse-details"
-                    open={detailsOpen ?? !phone}
-                    onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
-                  >
-                    <summary className="browse-details-summary">
-                      <Icon name="chevronRight" size={14} className="browse-details-chev" />
-                      <span className="bn-section-title">Details</span>
-                      <span className="browse-details-hint">identity · claims · provenance</span>
-                    </summary>
-                    <div className="browse-about">
-                      {factGroupsOf(
-                        panelRow.card,
-                        panelRow.card.run === null ? undefined : priced[panelRow.card.run],
-                        listings,
-                      ).map((group) => (
-                        <div className="browse-factgroup" key={group.title}>
-                          <span className="bn-label">{group.title}</span>
-                          <dl className="browse-facts">
-                            {group.facts.map((fact) => (
-                              <div className="browse-fact" key={fact.label}>
-                                <dt>{fact.label}</dt>
-                                <dd className={fact.kind === 'mono' ? 'is-util' : fact.kind === 'money' ? 'is-money' : undefined}>
-                                  {fact.node ?? fact.value}
-                                </dd>
-                              </div>
-                            ))}
-                          </dl>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
+                  <CardDetailsSection
+                    card={panelRow.card}
+                    market={panelRow.card.run === null ? undefined : priced[panelRow.card.run]}
+                    listings={listings}
+                    phone={phone}
+                  />
                 </>
               )}
             </div>
@@ -2783,123 +2579,6 @@ export function BoxBrowse({
         </Overlay>
       ) : null}
     </section>
-  )
-}
-
-/* THE ADDRESS NAMES THE PHOTOGRAPH NOW (D172), AND THE STAMP STAYS FOR THE ONE THING THE
- * ADDRESS CANNOT SAY — WHICH IS THIS SCREEN'S OWN RE-SHOOT.
- *
- * D52 gave this URL a `?card=<capture_id>` because `/photo/<box>/<index>` names a SLOT and
- * three operations put different bytes behind one slot: a mid-box delete slides every higher
- * card down an index (D10 ruling 1), an undo releases an index the next capture reuses, and
- * D26's re-shoot replaces the bytes outright. `GET /photo/by-card/<cid>` answers the first two
- * outright — the name is frozen at issue and `cards_cid` is UNIQUE, so a different card is a
- * different URL and no stamp can improve on that.
- *
- * IT DOES NOT ANSWER THE THIRD, AND UNDER THE NEW ADDRESS THE THIRD IS STRICTLY HARDER THAN IT
- * WAS. A re-shoot writes NEW bytes at the SAME name, deliberately — `cid` is the birth
- * certificate and is never recomputed — and that response is `Cache-Control: public,
- * max-age=31536000, immutable` with an ETag that is the NAME's own first 32 hex. So when the
- * bytes change, the URL does not move, the freshness lifetime does not move, and THE VALIDATOR
- * DOES NOT MOVE EITHER: a browser that revalidates anyway is answered 304 into the stale
- * photograph. The slot route's `no-cache` plus a digest ETag used to make a re-shoot correct
- * everywhere for free; nothing is free about it now.
- *
- * MEASURED AGAINST A LIVE CAPTURE SERVER, because this is the sentence the whole line rests on.
- * Re-shooting one card through `POST /inventory/<box>/<index>/photo`: the bytes went 31,889 ->
- * 37,293, the cid did not move, the ETag did not move (`"a85f840ba226018d13c99d101f029c80"`
- * before and after), and a request carrying the OLD `If-None-Match` was answered **304** — the
- * browser keeps the old picture, and `immutable` means it would not usually have asked at all.
- * `capture_id` moved, which is the whole reason it is the stamp.
- *
- * `capture_id` IS THE ONE FIELD ON THE RECORD THAT MOVES WHEN THE BYTES MOVE — `do_reshoot`
- * writes a fresh one in the same transaction as the file — so it is the honest cache key for
- * these bytes, and it is stable in between, which is what keeps the year of caching this
- * screen would otherwise spend on every scroll. The `nonce` is the same id arriving one step
- * earlier: it is the re-shoot response's own, and it covers the window between that response
- * and the inventory re-read that carries the new `capture_id` on the row.
- *
- * SO THE STAMP IS NOT A LEFTOVER AND IS NOT UNDER-APPLIED AT THE OTHER SITES. It is the
- * re-shoot's cache key, and the re-shoot is reachable from this screen and from no other
- * (`#/inventory` → the card panel). The route's own docstring accepts the residue by name —
- * a re-shot card drawn BY NAME on another screen may show the pre-re-shoot bytes until that
- * cache entry goes — on the ground that what is stale is then an older photograph of the RIGHT
- * card, where D52's hazard was a photograph of a DIFFERENT one. The address killed that class;
- * this line covers the screen where the replacement is pressed and looked at. */
-function photoSrc(row: Row, nonce: string | null): string {
-  const base = photoUrl(row.card.box, row.card.index, row.card.cid)
-  const stamp = nonce ?? row.card.capture_id
-  return stamp === null ? base : `${base}?card=${encodeURIComponent(stamp)}`
-}
-
-type PhotoPanelProps = {
-  row: Row
-  label: string | null
-  absent: boolean
-  onAbsent: () => void
-  nonce: string | null
-  onZoom: () => void
-  reshoot: ReactNode
-}
-
-/* Three ways a photo can be missing, and they are different facts: never stored, reclaimed on
- * purpose after the sale (D89), or claimed and not on disk. Each is a card-shaped placeholder
- * with the add-a-photo control on it. */
-function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot }: PhotoPanelProps) {
-  const where = label ?? `store key ${row.key}`
-
-
-  if (row.card.photo === null) {
-    return (
-      <div className="bn-photo browse-absent">
-        <Icon name="image" size={28} />
-        <p>No photo was stored for this card.</p>
-        <span className="browse-machine">photo: null</span>
-        {reshoot}
-      </div>
-    )
-  }
-
-  if (row.card.photo_reclaimed_at !== null) {
-    return (
-      <div className="bn-photo browse-absent">
-        <Icon name="check" size={28} />
-        <p>Photograph reclaimed after the sale — deleted on purpose, record kept.</p>
-        <span className="browse-machine">
-          reclaimed {row.card.photo_reclaimed_at}
-          {row.card.photo_sha256 ? ` · sha256 ${row.card.photo_sha256.slice(0, 16)}…` : ''}
-        </span>
-      </div>
-    )
-  }
-
-  const src = photoSrc(row, nonce)
-
-  if (absent) {
-    return (
-      <div className="bn-photo browse-absent">
-        <Icon name="alert" size={28} />
-        <p>The record has a photo but the file is not on disk. The card is still at {where}.</p>
-        <span className="browse-machine">{src}</span>
-        {reshoot}
-      </div>
-    )
-  }
-
-  return (
-    <button type="button" className="bn-photo browse-photo-frame" onClick={onZoom} aria-label="Open the photograph full size">
-      <img
-        /* Remounted per card, per occupant and per replacement. */
-        key={`${row.key}:${row.card.capture_id ?? 'no-id'}:${src}`}
-        className="browse-photo"
-        src={src}
-        alt={`The card photographed at ${where}`}
-        onError={onAbsent}
-      />
-      <span className="browse-photo-zoom" aria-hidden="true">
-        <Icon name="eye" size={14} /> tap to zoom
-      </span>
-    </button>
   )
 }
 

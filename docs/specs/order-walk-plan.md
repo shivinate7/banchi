@@ -530,6 +530,11 @@ says still owes, and `record_pull` refuses if the line is already full. The ship
 **The copy's bar reads `#8 of 34`, never `#8 of 34 so far`** (owner, 2026-09-19). `so far` is
 `PositionBar`'s own caption for a box still being filled — true on `#/capture` and `#/inventory`,
 meaningless in the middle of a pull. The walk drops the two words; every other screen keeps them.
+**Superseded the same evening, once §13 made the pane one component:** the owner ruled *drop it
+everywhere*, `#/inventory` included, rather than carry a flag that makes the shared pane differ
+by two words. `#8 of 34` is the whole caption on every screen. **And the section line too**
+(owner, later the same evening, asked by name): D20's growing-section caption reads
+`card 7 of 14`, never `card 7 of 14 so far`; a settled section still reads `card 7 of 14 slots`.
 
 **The row's address stays as built — `#8 RB Origins Commons` — until the owner has walked with
 it.** The owner's word: leave it, and ask again after real use. A session that changes it before
@@ -741,6 +746,100 @@ settled work by accident before.
 - **Sections stop fragmenting.** The whole objective assumes sections are finer than boxes. On
   this store they are — 50 sections over 5 boxes — and a store that stops sectioning makes the
   cost function equal to counting boxes.
+
+## 13. Orders is inventory's screen with orders in the rail — RULED 2026-09-19, superseding sections 8, 9a and 12's stop
+
+**The owner, after the third build, in their own words:** *"Walking an order should just be a
+tweaked way of routing inventory — an order walk is a tailored prompt that still uses the
+inventory engine, except the left portion of the inventory screen turns into orders and the
+sort is by density."* And, on the vocabulary: *"Stop this 'drawer' nonsense, that term doesn't
+exist anywhere else, neither does 'pull'. You will reuse Inventory's UI/UX and terminology
+exactly."* D90 (an order drives the walk as a mode of the inventory screen) said the same on
+2026-09-02, was built at `71c6dcb5`, and was deleted at `84be07ed` under D96. The owner has
+heard that argument and overruled the deletion — but D90 is NOT brought back as it was. The
+owner's word: *"D90 itself was not perfect, do not just bring D90 back."* What follows is what
+they said today, answered question by question, with the mock they picked.
+
+### The two screens
+
+**`#/inventory` is not touched.** **`#/orders` is its own sidebar item** and takes inventory's
+exact skeleton — the rail, the card pane, the strip between, the header — with orders in the
+rail and the density plan as the order the cards come in.
+
+### The header
+
+Inventory's: `Orders`, one line beneath it, the count chip top-right (`12 open orders`). The
+owner imagines the SELECTED order's text occupying the main pane's top-right quadrant once an
+order is chosen; that is theirs to shape after they see the build and is NOT built first.
+
+### The rail, slot for slot
+
+1. **The search slot** — the buyer search, the status select and the sort that section 12
+   already built.
+2. **Where inventory lists boxes, Orders lists orders.** One row per order, today's `BuyerRow`
+   shape: buyer, `placed Aug 30`, `3 left` with its bar, the status dot. A tick beside each row.
+   - Clicking an order SELECTS it and its walk starts at once — as clicking a box opens it.
+   - Ticking others JOINS them to the walk, live. There is no Start button. Each tick re-plans.
+   - Clicking B while walking A: B replaces A. Ticks stay ticks. The walked set is the selected
+     order plus every ticked one.
+3. **Where inventory shows the box panel, Orders shows the SELECTED order's panel — mock A**
+   (`scratchpad/panel-mock/A-1440-dark.png`, rendered in inventory's own CSS, 197px): the
+   small-caps label `ORDER A2FFC195-256158`, the buyer's name as the title, `Manage` top-right,
+   the status pill, then the census triad in the kit's `bn-stat` — `4 owed`, `1 sold`, `0 short`
+   — the way the card pane's *Every copy of this card* draws its three figures, then the bar,
+   then `placed Aug 30`. No typed middle dot anywhere in it.
+   **Behind `Manage`**: the Add orders well (fetch and paste), the fetch receipt, the status
+   picker, and both stand-down prompts. Inventory's skeleton has no other place for them.
+4. **The strip** — `collapse all`, the section count, `Hide sold`, as inventory draws it.
+5. **Where inventory lists sections and cards, Orders lists THE WALK**: boxes and sections in
+   density order (the solver, §5-6, unchanged), the cards under each, ticks as inventory has,
+   the current card lit, sold copies folded under `Hide sold`. Click a card to land on it.
+
+### The main pane
+
+**Inventory's card pane, unchanged.** Name, number, game, the pills, the photograph, *Every copy
+of this card* with its triad, the SKU line, every copy in the store with `CARD n`, `BOX`,
+`SECTION`, after/before, the state pill, **`Mark sold`**, the section ruler and the box bar
+(D155), `#387 of 675` (no `so far` anywhere, ruled with §8's caption), Details. **`Mark sold` is
+the button and the word**; on this screen
+it also records the copy against an owing order (D212: no order claims a copy, the write
+refuses a full line). The copies in the section you are standing in come first; the order is
+held for the walk (§8's ruling: ranking frozen, position refreshed); a sale refreshes
+positions the way inventory already does. `J`/`K` step through the walk list. When a card's
+owed copies are all sold, the next card lights.
+
+### Words
+
+Inventory's, only: box, section, card, copy, on hand, sold, Mark sold. `all pulled` on a buyer
+row becomes `all sold`. The order pill that read `Ready to pull` reads **`Ready`** — one word
+(owner, 2026-09-19, over `Ready to sell` and `Ready to walk`). `Drawer`, `pull`, `stop`, `take`
+do not appear on this screen. No typed middle dot in any string (the rule and its reader are
+their own branch).
+
+### Four answers after the second render — RULED 2026-09-19
+
+The owner saw the rebuilt screen over a seeded store beside `#/inventory` and answered:
+
+- **Copy budget (D194).** `#/orders` measures 140 words against the pinned 107; the 33 are
+  Inventory's Details vocabulary the reused pane carries. **Pin to the measured count.** The
+  pane is worth its words; hiding facts on one screen would make the two panes differ.
+- **`so far`.** Dropped everywhere — see §8's caption paragraph.
+- **`market` and `listings`.** Not wired for Orders in this build; the pane's two pricing facts
+  draw their honest empty states. **Ship as is.** Wiring is a follow-up if the walk misses them.
+- **The pill's word** is `Ready`, above.
+
+### What is deleted
+
+All of `app/src/OrdersWalk.tsx` and `.css` as built at `d1f3cb28` (#406): the stop, the take
+header, the copy row, the bars, the `Identified` pill. Not adapted — deleted. The density route
+and the #406 wire (`WalkPlanCopy` with `key`, `place`, `here`) stay; they feed only the walk
+list's order and the pane's landing.
+
+### What must not happen a fourth time
+
+Do not design a stop. Do not design a row. Do not write a walk-specific component where
+inventory already has one. If the walk needs something the card pane does not draw, it is
+added to INVENTORY and both screens get it.
 
 ## 12. One screen, and the list that is already there
 

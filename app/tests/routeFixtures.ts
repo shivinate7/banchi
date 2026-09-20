@@ -12,6 +12,7 @@ import type {
   ResolvedOrder,
   ShippingBatch,
   ShippingRow,
+  WalkPlan,
 } from '../src/types'
 
 /* THE BUILDER FUNCTIONS `run-panel.spec.ts`, `orders.spec.ts` AND `shipping.spec.ts` ALREADY
@@ -352,13 +353,74 @@ export function severalOrders(): OrdersPayload {
   ])
 }
 
-/** Stub `GET /orders` with several real orders, so `#/orders` draws its populated list. */
+/** THE WALK'S OWN PLAN, over `severalOrders()`'s FIRST order — `resolvedOrder = order()`, the
+ *  default fixture's Volcanion / box 3 / index 21 / `cap-a` — which is the one that selects
+ *  itself on landing (§13's own fallback-to-first-shown rule): the walk pane is real screen
+ *  area on `#/orders` now (`docs/specs/order-walk-plan.md` §13), so a ceiling pinned without it
+ *  would bound the screen MINUS the pane it added, not the screen. */
+function severalOrdersWalkPlan(): WalkPlan {
+  const p = place()
+  return {
+    cost: 'default',
+    stops: [
+      {
+        key: `box/${p.box}/section/${p.section}`,
+        box: p.box,
+        box_name: p.box_name,
+        section: p.section,
+        section_name: null,
+        pooled: false,
+        game: null,
+        game_display: null,
+        order: 1,
+        span: { start: p.section_start, end: p.section_end },
+        box_total: p.box_total,
+        takes: [
+          {
+            sku: '9191486',
+            name: 'Volcanion',
+            number_display: '025',
+            set: null,
+            rarity: null,
+            condition: 'Near Mint',
+            wanted: 1,
+            for: [{ key: 'TCGplayer:A2FFC195-0000F4-006AC', number: 'A2FFC195-0000F4-006AC', buyer: 'Ada Lovelace' }],
+            copies: [
+              {
+                key: `${p.box}/${p.index}`,
+                state: 'identified',
+                has_photo: false,
+                capture_id: 'cap-a',
+                cid: null,
+                place: p,
+                here: true,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    shortfall: [],
+    counts: { stops: 1, boxes: 1, copies: 1, sections_considered: 1, sections_candidate: 1, exact: true, solve_ms: 4 },
+  }
+}
+
+/** Stub `GET /orders` with several real orders, so `#/orders` draws its populated list — and
+ *  `POST /orders/walk-plan`, which the sole selected buyer's walk now fetches on landing
+ *  (§13: selecting a buyer starts it at once, no separate press). */
 export async function seedPopulatedOrders(page: Page): Promise<void> {
   await page.route(/\/orders$/, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(severalOrders()),
+    }),
+  )
+  await page.route(/\/orders\/walk-plan$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(severalOrdersWalkPlan()),
     }),
   )
 }

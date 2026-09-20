@@ -382,7 +382,7 @@ COMPONENTS = [
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180",
                                             "D189", "D210",
-                                            "D213", "D-a-price-history-archive"],
+                                            "D213", "D219"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -473,7 +473,7 @@ COMPONENTS = [
                                              "D26", "D88", "D89",
                                              "D213"],
                              "tested_by": ["T7"]},
-            # THE PRESS `pkmnscan archive sweep` RUNS (D-a-price-history-archive). Argument
+            # THE PRESS `pkmnscan archive sweep` RUNS (D219). Argument
             # parsing and the preview/--write/show split; the walk itself is
             # `pipeline/pricearchive.py`, proved independently by `make pricearchive-selftest`.
             "cmd_pricearchive.py": {"does": "`pkmnscan archive sweep` runs "
@@ -484,7 +484,7 @@ COMPONENTS = [
                                             "unlike `readings adopt`'s full replace. Previews "
                                             "by default. `archive show [--sku]` reads the "
                                             "table and writes nothing.",
-                                    "governed_by": ["D-a-price-history-archive", "D62", "D86",
+                                    "governed_by": ["D219", "D62", "D86",
                                                     "D43"],
                                     "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
@@ -1002,7 +1002,7 @@ COMPONENTS = [
                                     "directly, so `tested_by` is empty rather than a "
                                     "citation nothing backs — `check_readings_adopt_cli` in "
                                     "T7 exercises it only through the CLI dispatch."},
-            # THE SWEEP `pkmnscan archive sweep` RUNS (D-a-price-history-archive). Reads
+            # THE SWEEP `pkmnscan archive sweep` RUNS (D219). Reads
             # `pipeline/pricehistory.py`'s live endpoint for every SKU `rows_from_store` names
             # and hands `store/pricearchive.py` what came back, keyed so D62's overlapping
             # ranges never collide.
@@ -1018,7 +1018,7 @@ COMPONENTS = [
                                         "both seven-day buckets and a width-only key would "
                                         "collide them. Reports refusals by SKU, never drops "
                                         "one.",
-                                "governed_by": ["D62", "D26", "D134", "D-a-price-history-archive"],
+                                "governed_by": ["D62", "D26", "D134", "D219"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
                                         "`make check` — no network call, a FakeMarket stand-in, "
                                         "17 assertions including the D62 collision arm run both "
@@ -1525,7 +1525,7 @@ COMPONENTS = [
                                     "31 assertions, all caught. No harness test exercises it, "
                                     "so `tested_by` is empty rather than a citation nothing "
                                     "backs."},
-            # THE PRICE-HISTORY ARCHIVE (D-a-price-history-archive). Unlike `readings.py`'s
+            # THE PRICE-HISTORY ARCHIVE (D219). Unlike `readings.py`'s
             # `Readings.replace()`, this table is NEVER a full replace — see its own module
             # docstring for why a bucket a later sweep does not mention must survive forever
             # once the source's 357-day window can no longer reproduce it.
@@ -1540,7 +1540,7 @@ COMPONENTS = [
                                         "overwrites an existing key with a fresher reading of "
                                         "the SAME bucket; a key a pass does not mention is left "
                                         "untouched, forever.",
-                                "governed_by": ["D-a-price-history-archive", "D62", "D88",
+                                "governed_by": ["D219", "D62", "D88",
                                                 "D189"],
                                 "note": "PROVED BY `make pricearchive-selftest` — 17 "
                                         "assertions, no network, over a throwaway store."},
@@ -1559,7 +1559,7 @@ COMPONENTS = [
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
                            "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189", "D191", "D-a-price-history-archive"],
+                                           "D189", "D191", "D219"],
                            "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
@@ -1576,7 +1576,7 @@ COMPONENTS = [
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
                       "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D166", "D172",
-                                      "D174", "D189", "D192", "D213", "D-a-price-history-archive"],
+                                      "D174", "D189", "D192", "D213", "D219"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -2323,7 +2323,7 @@ COMPONENTS = [
             },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
-                        "throwaway store, no network (D-a-price-history-archive). A "
+                        "throwaway store, no network (D219). A "
                         "FakeMarket duck-types `Market.readings_for_rows` over canned "
                         "pipeline/pricehistory.py objects. Proves the D62 key argument both "
                         "ways: the real (sku, range, start) key keeps two rows for the same "
@@ -2333,7 +2333,7 @@ COMPONENTS = [
                         "one that resolves nothing, never removes an earlier pass's rows. "
                         "Seventeen assertions, all passing. Not wired into `make check` — "
                         "`make catalog-index-selftest`'s own precedent.",
-                "governed_by": ["D-a-price-history-archive", "D62", "D18"],
+                "governed_by": ["D219", "D62", "D18"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -5619,9 +5619,11 @@ COMPONENTS = [
                                             "that crosses it and the section's own bounds written "
                                             "inside its two ends; under it an 8px strip of chips for "
                                             "the box, with a caret on the chip this card is in. Says "
-                                            "'#40 of 250 · 16% in' for a sealed box and '#12 of 62 so "
-                                            "far' for an open one, because an open box's denominator "
-                                            "still moves. THE SVG TRAPEZOID IS DELETED "
+                                            "'#40 of 250 · 16% in' for a sealed box and '#12 of 62' "
+                                            "for an open one — NO 'SO FAR' ANYWHERE (owner's ruling, "
+                                            "2026-09-19: the words trailed unconditionally on every "
+                                            "open box, an opt-out flag nothing ever set, now deleted). "
+                                            "THE SVG TRAPEZOID IS DELETED "
                                             "(D155): its two legs' slope ratio "
                                             "carried neither a width nor a height term and its "
                                             "arithmetic pointed at the wrong chip by up to 42px. THE "
@@ -5691,6 +5693,29 @@ COMPONENTS = [
                                           "because one sale makes both lists stale at once. D28 "
                                           "is the precedent, on the other screen.",
                                   "governed_by": ["D26", "D28", "D31", "D68", "D97", "D118", "D132"]},
+            "src/CardHero.tsx": {"does": "the card pane's shared pieces, lifted out of "
+                                         "`BoxBrowse.tsx` so `#/orders`' walk can reuse them "
+                                         "(`docs/specs/order-walk-plan.md` §13: \"Inventory's "
+                                         "card pane, unchanged\"). `PhotoPanel`/`photoSrc` (the "
+                                         "re-shoot cache-key comment moved whole), `nameOf`, "
+                                         "`numberCell`, `titleCase`, `claimList`/`claimText`, "
+                                         "`gameLabel`/`gameWord`, `MarketRead`/`marketTable`/"
+                                         "`marketFact`/`listingFact`, and `factGroupsOf` are all "
+                                         "MOVED — pure over their own arguments, no closure over "
+                                         "`BoxBrowse.tsx`'s own state — and `BoxBrowse.tsx` "
+                                         "imports them back with its own JSX unchanged, proved "
+                                         "by `app/tests/inventory.spec.ts`. `CardHeroHead` is "
+                                         "NEW: the name/number/pills BoxBrowse's own hero head "
+                                         "draws, minus the printing-chooser and review-queue "
+                                         "chips (BoxBrowse-only state this file cannot see) and "
+                                         "minus `CardOps`'s edit menu (an `actions` slot, empty "
+                                         "on `#/orders`). `CardDetailsSection` is MOVED WHOLE — "
+                                         "`BoxBrowse.tsx`'s own `<details>` block, now owning its "
+                                         "open/closed state itself instead of reading it off the "
+                                         "caller. `Row` also moved here; `BoxBrowse.tsx` "
+                                         "re-exports it so `Inventory.tsx`'s own import keeps "
+                                         "working.",
+                                 "governed_by": ["D6", "D26", "D31", "D52", "D89", "D96", "D172"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
@@ -6444,8 +6469,8 @@ COMPONENTS = [
                                "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39",
                                                "D51", "D57", "D58", "D61", "D63", "D66", "D69",
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
-                                               "D118", "D159", "D181", "D192", "D193", "D196",
-                                               "D203", "D209", "D212"]},
+                                               "D118", "D132", "D159", "D181", "D192", "D193",
+                                               "D196", "D203", "D209", "D212"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -6490,47 +6515,37 @@ COMPONENTS = [
                                                 "D61's third answer drawn as the pile that needs "
                                                 "a person.",
                                         "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94"]},
-            "src/OrdersWalk.tsx": {"does": "`Walk the boxes` (`docs/specs/order-walk-plan.md` "
-                                           "§8-9): the mode BECOMES the solver's own plan "
-                                           "rather than a third mode beside `By buyer`. Two "
-                                           "phases in one component: a SELECTION list of every "
-                                           "walkable order with a tick, defaulted to all of "
-                                           "them, and one `Walk N orders` press that freezes "
-                                           "the ticked set into `hub.walkKeys`; once frozen, "
-                                           "this calls `POST /orders/walk-plan` ONCE (no "
-                                           "Re-plan control) and renders the answer as STOPS "
-                                           "(a drawer), each holding TAKES (one card ordered, "
-                                           "with a counter), each holding COPIES (one physical "
-                                           "card, with its own photograph, position and "
-                                           "neighbours — the copy is what proves what a hand "
-                                           "would pick up, not the take). A row's Pull buttons "
-                                           "disable rather than vanish once `taken === wanted` "
-                                           "(D118), the row keeps a 20s inline Undo "
-                                           "(`UNDO_WINDOW_MS`, this file's own copy of "
-                                           "`Inventory.tsx`'s and `Fulfillment.tsx`'s number), "
-                                           "then collapses to one line with a `Take another` "
-                                           "escape for a deliberate over-pull; nothing re-ranks "
-                                           "for the pass. A mid-pass `copy_already_pulled` "
-                                           "marks that copy `gone, skip` in place. "
-                                           "`pickOrderFor` attributes a press to the first "
-                                           "order in a take's `for` still owing by the LIVE "
-                                           "ledger figure — the wire names every order a take "
-                                           "serves but not how the demand splits between them, "
-                                           "so this is a rendering-side choice forced by "
-                                           "completing the write, not a second demand "
-                                           "computation; flagged for the owner in this branch's "
-                                           "own report. Replaces `WalkView`, `WalkCards` and "
-                                           "`buildWalkPlan`/`PlanStop`/`PlanCard`/`WalkPlan`, "
-                                           "all deleted from `Orders.tsx`. `WalkGroups` and "
-                                           "`buildWalk` stay in `Orders.tsx` — `By buyer`'s "
-                                           "merged walk is a different job (D193, D209) and "
-                                           "this file does not touch it.",
+            "src/OrdersWalkPane.tsx": {"does": "`docs/specs/order-walk-plan.md` §13, \"Orders "
+                                           "is inventory's screen with orders in the rail\": "
+                                           "replaces `OrdersWalk.tsx` whole, not adapted. There "
+                                           "is no more frozen pass — `useOrderWalk` re-fetches "
+                                           "`POST /orders/walk-plan` LIVE whenever the walked "
+                                           "set (the selected order plus every ticked one) "
+                                           "changes, the same way selecting a box opens it. "
+                                           "`WalkList` draws the plan's boxes and sections in "
+                                           "`BoxBrowse.css`'s own `.browse-list`/`.browse-row` "
+                                           "shape, one row per physical pick (`here: true` "
+                                           "copy); `WalkMainPane` is inventory's own card pane "
+                                           "— `CardLocations` with `preserveOrder`, over a "
+                                           "`SearchGroup` synthesised from the current row's "
+                                           "take, exactly as `Inventory.tsx`'s `loneGroup` and "
+                                           "the old `TakeBlock` built one. `Mark sold` is the "
+                                           "one write, `WalkPullFn`/`WalkUndoFn` restated from "
+                                           "the deleted file, and it records against an owing "
+                                           "order via `pickOrderFor`'s live-tally rule "
+                                           "(unchanged from `OrdersWalk.tsx`). `hideHeader`, "
+                                           "`rowOverride` and `rowAttrs` — added to "
+                                           "`CardLocations.tsx` only for the deleted file's own "
+                                           "one-line collapsed row — are deleted with it; "
+                                           "`preserveOrder` stays, the trap this rebuild's own "
+                                           "brief named first (never re-sort the walk).",
                                    "governed_by": ["D58", "D93", "D96", "D97", "D116", "D118",
-                                                   "D181", "D193", "D209", "D212"]},
-            "src/OrdersWalk.css": {"does": "`Walk the boxes`' own stylesheet — the selection "
-                                           "list, the stop/take/copy hierarchy, the shortfall "
-                                           "block. `--bn-*` tokens only, the repo's one color "
-                                           "rule.",
+                                                   "D132", "D181", "D193", "D209", "D212"]},
+            "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
+                                           "drain-bar (borrowed from `Inventory.css` by class "
+                                           "name); every other shape this file draws is "
+                                           "`BoxBrowse.css`'s own `.browse-*` classes, imported "
+                                           "by `Orders.tsx` rather than restated here.",
                                    "governed_by": ["D50", "D94", "D118"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "

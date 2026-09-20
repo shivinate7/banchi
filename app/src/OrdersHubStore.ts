@@ -29,18 +29,6 @@ export type HubState = {
   readonly arriving: boolean | null
   readonly paste: string
   readonly filter: PullFilter
-  /** THE ORDERS THIS WALK WAS STARTED OVER — `OrderRow.key`s, frozen when the walk is entered
-   *  and cleared when it is left. `null` outside a walk.
-   *
-   *  It exists so the walk's "N of M orders fully pulled" counts progress through the work in
-   *  front of you rather than the ledger's lifetime. Counted over `done` against `open + done`
-   *  the figure was correct on the day it was measured (20 open, 0 done) and inflates for ever:
-   *  a store with 200 completed orders and 3 open reads `200 of 203` on a three-order walk.
-   *
-   *  IT IS HERE AND NOT IN THE URL, on the owner's ruling of 2026-09-04. This store's whole
-   *  argument is a lifetime as long as the tab, and a walk is a sitting at the boxes. A reload
-   *  mid-walk resets the figure, which is honest — you are starting the walk again. */
-  readonly walkKeys: ReadonlySet<string> | null
   /** The order the Pull stage has open — an `OrderRow.key`. `null` means the first one shown.
    *  Mirrored into the hash as `#/orders?order=<key>` so a selection is linkable. */
   readonly selected: string | null
@@ -68,7 +56,6 @@ let state: HubState = {
   arriving: null,
   paste: '',
   filter: 'all',
-  walkKeys: null,
   selected: null,
   batch: null,
   lanes: new Set(SHIP_LANES),
@@ -116,16 +103,10 @@ export const BATCH_GONE_NOTICE =
   'The capture server restarted, so the export it was holding is gone. Read the file again.'
 
 onServerBoot(() => {
-  /* AND THE WALK'S PASS GOES WITH IT. `walkKeys` is the orders a pass was started over (D96,
-     amended), and a capture server that restarted may have taken orders since — so a figure counted
-     against the old set describes a sitting that is over. Unlike a stale batch it is not visibly
-     broken: it is a smaller number that looks fine. Cleared rather than recounted, for the reason
-     the batch is: this listener knows the server changed and nothing here knows what it changed to.
-     The next walk freezes a fresh set from whatever `GET /orders` answers.
-
-     SEPARATELY FROM THE BATCH, because the two are not one fact. A restart with no batch held says
-     nothing to the operator — there is no export to be gone — but it still ends a pass. */
-  if (state.walkKeys !== null) setHub({ walkKeys: null })
+  /* THE WALK NO LONGER HAS A FROZEN SET TO CLEAR HERE (§13 supersedes D96's own note): it is a
+     live read of the selected order plus every ticked one, held in `Orders.tsx`'s own component
+     state, and a server restart simply means its next `POST /orders/walk-plan` re-solves over
+     whatever the store holds now — the same as any other re-read after a boot. */
   if (state.batch === null) return
   setHub({ batch: null, gone: BATCH_GONE_NOTICE })
 })

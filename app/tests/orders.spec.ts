@@ -1,11 +1,9 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
-import { settleFonts } from './fontsReady'
-import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 
 import type {
-  OrderLineProgress,
+  InventoryCard,
   OrderRow,
   OrdersPayload,
   Place,
@@ -59,6 +57,14 @@ import type {
  *
  * NO REAL REQUEST IS EVER MADE. Every route is intercepted and the POST is RECORDED rather than
  * performed, which is what lets case 4 assert the exact shape the screen would have sent.
+ *
+ * §13 REPLACES SECTIONS 8, 9, 9a AND 12'S OWN BUILD WHOLE (`docs/specs/order-walk-plan.md`,
+ * ruled 2026-09-19): "Orders is inventory's screen with orders in the rail." The cases for
+ * `OrdersWalk.tsx`'s `.walkplan-*` markup, the `Tick all` → `Walk N orders` two-press flow and
+ * the merged `By buyer` walk are replaced, not adapted — see the banner above that block, deep
+ * in this file, for exactly which claims were superseded and why. There is no
+ * `order-walk.spec.ts`: an earlier draft of this file's own header named one that was never
+ * built; the walk's own cases live in this file, beside the rest of the screen.
  */
 
 const VIEW_ROUTE = '/#/orders'
@@ -144,6 +150,49 @@ function walkPlanCopy(over: WalkPlanCopyInput = {}): WalkPlanCopy {
   }
 }
 
+/** One `GET /inventory`-shaped card — `options.inventoryCards`' own value type. Defaults to
+ *  box 3 / index 21 / cap-a, matching `walkPlanCopy()`'s own default, so a case that walks to
+ *  the default row and wants the REUSED pane (`CardHeroHead`/`PhotoPanel`/`CardDetailsSection`,
+ *  §13) to actually resolve — rather than fall back to the pre-`rawCards` synthesised header —
+ *  can pass `{ [\`${box}/${index}\`]: inventoryCard() }` as `inventoryCards` with no further
+ *  argument. Every field `InventoryCard` requires is here; only the few a case actually reads
+ *  ever need overriding. */
+function inventoryCard(over: Partial<InventoryCard> = {}): InventoryCard {
+  const base: InventoryCard = {
+    box: 3,
+    index: 21,
+    label: 'Box 3 · Section 2 · Card 17',
+    section: 2,
+    card: 17,
+    number_display: '025',
+    place: place(),
+    photo: '/photo/3/21',
+    photo_sha256: null,
+    set_hint: null,
+    set_name: null,
+    rarity: 'Rare',
+    metadata_finish: 'Normal',
+    game: 'pokemon',
+    rarity_claim: null,
+    note: null,
+    captured_at: '2026-08-29T10:00:00+00:00',
+    capture_id: 'cap-a',
+    cid: null,
+    photo_reclaimed_at: null,
+    name: 'Volcanion',
+    number: '025',
+    printed_total: '219',
+    confidence: 'high',
+    sku: SKU,
+    condition: 'Near Mint',
+    state: 'listed',
+    state_at: null,
+    retire_reason: null,
+    run: null,
+  }
+  return { ...base, ...over }
+}
+
 function walkPlanTake(over: Partial<WalkPlanTake> = {}): WalkPlanTake {
   const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }
   return {
@@ -210,12 +259,21 @@ async function stubWalkPlan(page: Page, plan: WalkPlan): Promise<{ readonly call
   return { calls: () => calls }
 }
 
-/** TICK EVERY WALKABLE ROW IN VIEW AND PRESS START — the two presses §12 replaced three with.
- *  Six cases in this file used to click the `Walk the boxes` tab and then `WalkSelect`'s own
- *  foot; both are deleted, and the buyer list they sat beside IS the selection now. */
+/** SELECT THE FIRST BUYER ROW — §13 supersedes §12's own "Tick all, then Start": there is no
+ *  Start button and no frozen pass any more. Clicking a buyer selects it and its walk starts
+ *  at once, the same as clicking a box opens it (`useOrderWalk`'s `walkedKeys`). "Tick all"
+ *  still exists (it JOINS every walkable buyer's orders to the live walk, `Untick all` drops
+ *  them), which is a different thing from starting one. */
 async function startWalk(page: Page): Promise<void> {
-  await page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true }).click()
-  await page.locator('.orders-start-slot').getByRole('button', { name: /Walk \d+ orders?/ }).click()
+  await page.locator('.orders-index-row').first().click()
+}
+
+/** OPEN THE SELECTED ORDER'S `Manage` SHEET — where the fetch/paste well, the receipt, the
+ *  status picker and both stand-down prompts live now (§13: "Inventory's skeleton has no other
+ *  place for them"), retired from the page header's own "Add orders" toggle. Needs a selected
+ *  order on screen already, which every fixture in this file provides by default. */
+async function openManage(page: Page): Promise<void> {
+  await page.locator('main.orders .browse-manage').first().click()
 }
 
 /** The default world: one open order, one resolved line, one copy in box 3. */
@@ -261,6 +319,15 @@ async function open(
     reconcilePreview?: unknown
     /* The same route's press half. */
     reconcile?: unknown
+    /* `POST /orders/walk-plan`'s INITIAL answer — see the route below, registered
+       unconditionally, for why this exists at all. Omit it for a case that does not care about
+       the walk (an empty plan, the honest default); pass it for a case that presses `Mark sold`
+       on landing, which `stubWalkPlan` called AFTER `open()` cannot reliably reach — see that
+       comment for the race this closes. */
+    walkPlan?: WalkPlan
+    /* `POST /inventory/copies`'s answer — see the route below for why this exists. Keyed
+       `box/index`, matching `getInventoryCopies`'s own wire shape. */
+    inventoryCards?: Record<string, InventoryCard>
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -399,9 +466,47 @@ async function open(
      A WRITE-SHAPED ROUTE, REGISTERED BEFORE THE LOOSER READ REGEXES — `/orders$/`'s own rule
      one register down. `/inventory\/copies$/` is a POST and could not collide with `/orders$/`
      regardless, but the ordering is kept uniform with every other route in this file rather
-     than argued case by case. */
+     than argued case by case.
+
+     `options.inventoryCards`, keyed `box/index`, FOR A CASE THAT NEEDS `rawCards` TO RESOLVE —
+     `OrdersWalkPane.tsx`'s `currentCard`, which is what turns on the REUSED pane
+     (`CardHeroHead`/`PhotoPanel`/`CardDetailsSection`, §13) rather than the synthesised
+     fallback header it draws before this read answers. Empty by default, matching every case
+     that never asks. */
   await page.route(/\/inventory\/copies$/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"cards": {}}' })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ cards: options.inventoryCards ?? {} }),
+    })
+  })
+
+  /* THE WALK'S OWN READ, ALSO UNCONDITIONALLY (§13): selecting a buyer starts their walk at
+   * once, so `POST /orders/walk-plan` now fires on ordinary mount, for any fixture that carries
+   * a walkable order — not only for a case that presses "Walk N orders", which no longer
+   * exists. An EMPTY plan by default, so a case that does not care about the walk never leaks
+   * this read to the capture server.
+   *
+   * `options.walkPlan`, NOT `stubWalkPlan(page, …)` CALLED AFTER `open()`, FOR A CASE THAT
+   * WALKS ON LANDING. The sole buyer a single-order fixture draws is auto-selected the moment
+   * `GET /orders` answers — `selectedKey`'s own fallback to `shownGroups[0]`, §13's "clicking a
+   * buyer selects it and its walk starts at once" applied to the buyer the page lands on
+   * already — so the FIRST `walk-plan` request fires from inside `open()`'s own render, before
+   * a case's own `await` returns control to it. A `stubWalkPlan` call made after that has
+   * already lost the race: Playwright's routes still register in the order added, but the
+   * request this file's browser needs answered has often already been sent and fulfilled by
+   * this default by the time the call lands, and `useOrderWalk`'s fetch effect is keyed on the
+   * WALKED SET, not on time — an unchanged set never asks again. Measured, not assumed: three
+   * cases (`the receipt names…`, `Mark sold records…`, `a pooled copy…`, this file's own
+   * history) hung 15s on a `Mark sold` button that a stubbed-after plan never populated.
+   * `stubWalkPlan` stays correct for a case that changes the SET after landing (ticking a
+   * second buyer, replacing the selection) — it is only the FIRST fetch this cannot reach. */
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.walkPlan ?? walkPlanOf([])),
+    })
   })
 
   if (options.boot !== undefined) {
@@ -540,6 +645,7 @@ test('a line no pull can reach offers the two presses that can, and each sends i
     ),
   })
 
+  await openManage(page)
   const stand = page.locator('.orders-standdown').first()
   await expect(stand).toBeVisible()
 
@@ -594,6 +700,7 @@ test('a copy that left by the sale door can be recorded, and a line that will no
     ),
   })
 
+  await openManage(page)
   const stand = page.locator('.orders-standdown').first()
   await expect(stand).toBeVisible()
 
@@ -639,6 +746,7 @@ test('a refunded line on a multi-line order is closed alone, and the siblings ar
     ),
   })
 
+  await openManage(page)
   const stand = page.locator('.orders-standdown').first()
   await expect(stand).toBeVisible()
   await stand.getByRole('button', { name: /isn.t shipping/i }).click()
@@ -689,6 +797,7 @@ test('an order the marketplace already shipped is proposed for stand-down, and t
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
     ),
   })
+  await openManage(page)
 
   const prompt = page.locator('.orders-backlog')
   await expect(prompt).toBeVisible()
@@ -765,6 +874,21 @@ test('all six reasons are drawn, including the ones that are zero', async ({ pag
 
 /* -------------------------------------------------------------------------------------- 3 */
 
+/* THE FOUR CASES BELOW (this one plus the pull-body, the receipt and the two undo cases) ALL
+ * PRESSED `button.orders-pull` DIRECTLY, WHICH NO LONGER EXISTS TO PRESS. `OrderDetail` inside
+ * the Manage sheet passes `hidePicks` UNCONDITIONALLY (§13: "the walk beside this sheet is the
+ * one place to Mark sold from"), and `hidePicks` filters out every TAKEABLE copy — exactly the
+ * ones a `.orders-pull`/`Mark sold` button would ever appear on (`copiesOf`'s own `takeable`,
+ * `aimOf(line, pick) !== null && pick.held_by === null`). A copy nobody holds can now be pressed
+ * in exactly one place: the walk's own `CardLocations` (`OrdersWalkPane.tsx`), which is
+ * `#/inventory`'s own card pane and draws the identical `Mark sold` button
+ * (`CardLocations.tsx`'s `renderAction`/`RowAction`) over the SAME write (`onWalkPull` calls the
+ * same `pullCopy`, so the wire body these cases assert is unchanged). This is a real change to
+ * WHERE the product draws a pressable copy, not a test bug to paper over — the PRODUCT decided
+ * it (§13's own ruling), so every case below is re-aimed at the walk rather than at Manage. A
+ * copy already spoken for is the opposite case: NOT takeable, so `hidePicks` leaves it alone and
+ * it is still exactly where it always was, in `OrderDetail`'s own list. */
+
 test('a copy another line already holds is drawn as spoken for, and is not offered', async ({
   page,
 }) => {
@@ -788,22 +912,22 @@ test('a copy another line already holds is drawn as spoken for, and is not offer
       [order({ wanted: 2 })],
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 0, lines: [held] }],
     ),
+    /* THE FREE COPY, OFFERED — IN THE WALK, the one place a takeable copy is drawn now. The
+       sole buyer selects itself on landing (§13), so this is `open()`'s own `walkPlan` rather
+       than a `stubWalkPlan` call after — see that option's comment for the race it closes. */
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies: [walkPlanCopy({ capture_id: 'cap-a' })] })] })]),
   })
+  await expect(page.getByRole('button', { name: 'Mark sold' })).toBeVisible()
 
-  /* RE-AIMED: the free copy is now drawn by the merged `By buyer` walk (`buildWalk` skips
-     `held_by` copies outright), and the held one is only this line's own map, behind the "By
-     order" fold — a real kit `Button` now, closed by default while a walk covers the order
-     (§9's "what is deleted", finding 5). Opening it is what puts both rows on screen at once. */
-  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
+  /* THE PROMISED ONE IS NOT — it is not takeable, so `hidePicks` never touches it, and it is
+     right where `OrderDetail`'s own list always drew it. ONE ROW, not two: the free copy above
+     is gone from this list entirely now, which is the change from the deleted `By order` fold
+     this case used to open — hidePicks removes exactly what the walk now offers instead. */
+  await openManage(page)
   const rows = page.locator('.orders-pick')
-  await expect(rows).toHaveCount(2)
-
-  /* THE FREE COPY IS OFFERED AND THE PROMISED ONE IS NOT. Not "disabled": a greyed Pull would
-     teach the operator that the press means nothing, and this copy is not unavailable — it is
-     already going to somebody else, which is a sentence rather than a state. */
-  await expect(rows.nth(0).locator('button.orders-pull')).toHaveCount(1)
-  await expect(rows.nth(1).locator('button.orders-pull')).toHaveCount(0)
-  await expect(rows.nth(1).locator('.orders-pick-held')).toContainText(OTHER_ORDER)
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first().locator('button.orders-pull')).toHaveCount(0)
+  await expect(rows.first().locator('.orders-pick-held')).toContainText(OTHER_ORDER)
 })
 
 /* -------------------------------------------------------------------------------------- 4 */
@@ -811,30 +935,35 @@ test('a copy another line already holds is drawn as spoken for, and is not offer
 test('the pull sends the capture_id of the row that was pressed, and its own position', async ({
   page,
 }) => {
-  const two = line({
-    wanted: 1,
-    fulfilled: 2,
-    on_hand: 2,
-    picks: [
-      pick({ capture_id: 'cap-a' }),
-      pick({
-        capture_id: 'cap-b',
-        index: 22,
-        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
-      }),
-    ],
-  })
+  /* TWO COPIES IN DIFFERENT BOXES, DELIBERATELY — same reason the old fixture used two picks:
+     pressing the first would pass against a screen that sent the wrong row's capture_id, and
+     the one a mid-box delete turns into a sale of the wrong card. Different boxes (rather than
+     two slots of the same box, the old shape) keep the assertion below reading exactly the old
+     body: same-box, `onWalkPull`'s own `refresh` list would name the OTHER row's own box/index
+     too (D58 — the walk tells the server about every other card whose number the write is about
+     to move), which is a real and separate claim this case is not about.
+
+     `open()`'s own `walkPlan`, not `stubWalkPlan` after it — the sole buyer selects itself on
+     landing (§13), so the plan has to be this screen's FIRST answer (see that option's comment
+     for the race a later stub loses). */
   const wire = await open(page, {
-    orders: payloadOf(
-      [order()],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [two] }],
-    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            copies: [
+              walkPlanCopy({ capture_id: 'cap-a' }),
+              walkPlanCopy({ box: 5, index: 22, slot: 18, card: 18, label: 'Box 5 · Section 2 · Card 18', capture_id: 'cap-b' }),
+            ],
+          }),
+        ],
+      }),
+    ]),
   })
 
   /* THE SECOND ROW, DELIBERATELY. Pressing the first would pass against a screen that sent
-     `picks[0]` for every row — the exact bug this case exists to catch, and the one a mid-box
-     delete turns into a sale of the wrong card. */
-  await page.locator('.orders-pick').nth(1).locator('button.orders-pull').click()
+     `picks[0]` for every row — the exact bug this case exists to catch. */
+  await page.locator('.card-locations-row').nth(1).getByRole('button', { name: 'Mark sold' }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
@@ -844,7 +973,7 @@ test('the pull sends the capture_id of the row that was pressed, and its own pos
     source: 'TCGplayer',
     number: ORDER_NUMBER,
     sku: SKU,
-    targets: [{ box: 3, index: 22, capture_id: 'cap-b' }],
+    targets: [{ box: 5, index: 22, capture_id: 'cap-b' }],
   })
 })
 
@@ -872,9 +1001,13 @@ test('the receipt names where the card just was, never the departed label the sa
         },
       ],
     },
+    /* THE SOLE BUYER SELECTS ITSELF ON LANDING (§13's fallback), so the plan has to be this
+       screen's FIRST answer — see `open()`'s own comment on `options.walkPlan` for the race a
+       `stubWalkPlan` call made after `open()` loses here. */
+    walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator('button.orders-pull').first().click()
+  await page.getByRole('button', { name: 'Mark sold' }).click()
 
   /* THE RECEIPT IS A TOAST NOW, which is the owner's ruling and changes nothing this case is
      about: it is still composed at the moment of the press, it still has to name the place the
@@ -906,9 +1039,10 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
       places: [place()],
       sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }],
     },
+    walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator('button.orders-pull').first().click()
+  await page.getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -937,9 +1071,10 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
       places: [place()],
       sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }],
     },
+    walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.locator('button.orders-pull').first().click()
+  await page.getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -958,31 +1093,43 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
 test('a pooled copy is drawn as pooled rather than as a position (D24)', async ({ page }) => {
   /* `Place.label` IS NULL BY DESIGN FOR A POOLED CARD AND NEVER BY FAULT — `located: false` is
      what says so. A screen that fell back to `box/index` would print a slot number for a card
-     that is in no slot, which is the one thing D24 rules out. */
-  const pooled = line({
-    picks: [
-      pick({
-        capture_id: 'cap-p',
-        place: place({
-          label: null,
-          located: false,
-          game: 'pokemon_code',
-          game_display: 'Pokémon code cards',
-          slot: null,
-          section: null,
-          card: null,
-        }),
-      }),
-    ],
-  })
+     that is in no slot, which is the one thing D24 rules out.
+
+     RE-AIMED, THE SAME REASON AS THE BANNER ABOVE: a pooled copy with a capture id and no
+     `held_by` is takeable, so `hidePicks` removes it from Manage's own list too — this is drawn
+     in the walk now, over `CardLocations`'s own pooled row (`isPooled`,
+     `.card-locations-boxname`), the identical component and class `#/inventory` draws a pooled
+     code card with. `open()`'s own `walkPlan`, not `stubWalkPlan` after it — the sole buyer
+     selects itself on landing (§13), so the plan has to be this screen's FIRST answer. */
   await open(page, {
-    orders: payloadOf(
-      [order()],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [pooled] }],
-    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        pooled: true,
+        box: null,
+        section: null,
+        takes: [
+          walkPlanTake({
+            copies: [
+              walkPlanCopy({
+                capture_id: 'cap-p',
+                place: {
+                  label: null,
+                  located: false,
+                  game: 'pokemon_code',
+                  game_display: 'Pokémon code cards',
+                  slot: null,
+                  section: null,
+                  card: null,
+                },
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]),
   })
 
-  await expect(page.locator('.orders-pick-pooled')).toContainText('pooled')
+  await expect(page.locator('.card-locations-boxname')).toContainText('pooled')
 
   /* AND NO PHOTOGRAPH ANYWHERE ON THIS SCREEN. A pooled capture's photo is a live code and a
      bearer instrument (D24, CLAUDE.md's opsec rule), and this screen draws no `<img>` at all —
@@ -996,13 +1143,12 @@ test('a pooled copy is drawn as pooled rather than as a position (D24)', async (
 test('a paste is projected before it is sent, and what was dropped is named', async ({ page }) => {
   const wire = await open(page)
 
-  /* THE WAY IN IS SHUT WHILE THERE IS WORK ON SCREEN, AND ITS CONTROL IS IN THE HEADER EITHER
-     WAY. A paste box drawn above the counts costs about 180px on every arrival for an errand
-     that happens once a batch; the control never moves, only the panel. */
+  /* THE WAY IN IS SHUT WHILE THERE IS WORK ON SCREEN, AND ITS CONTROL IS THE SELECTED ORDER'S
+     OWN `Manage` (§13: "Inventory's skeleton has no other place for them" — the same reason
+     `BoxOps` is the box's Manage sheet). RE-AIMED from the header's own "Add orders" toggle,
+     retired with it. */
   await expect(page.locator('.orders-paste')).toHaveCount(0)
-  const openWell = page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' })
-  await expect(openWell).toHaveAttribute('aria-expanded', 'false')
-  await openWell.click()
+  await openManage(page)
   await expect(page.locator('.orders-paste')).toHaveCount(1)
 
   /* AND THE FETCH IS INSIDE IT, not in the page header. It is the same errand with the copying
@@ -1090,7 +1236,7 @@ test('the ordinary press is one fetch, one ingest and one names call, with no pr
       names: [{ source: 'TCGplayer', number: ORDER_NUMBER, buyer: 'Ada Lovelace' }],
     },
   })
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
@@ -1123,7 +1269,7 @@ test('a fetch the cap cut short loops, and the receipt names the batches and wha
   })
   const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
   const mounted = reads()
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1144,7 +1290,7 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
   const wire = await open(page, {
     allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
   })
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch two years' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
@@ -1229,7 +1375,7 @@ test('a remembered tick narrows the fetch, and the statuses go out as the wire s
   await remember(page, ['Cancelled', 'Ready to Ship'], true)
   const wire = await open(page)
 
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1255,7 +1401,7 @@ test('a ticked status this window holds none of is named on screen, and is not s
   await remember(page, ['Ready to Ship', 'Awaiting Shipment'])
   const wire = await open(page)
 
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1282,7 +1428,7 @@ test('every status ticked off refuses the press here, rather than letting the wi
   await remember(page, [])
   const wire = await open(page)
 
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect(page.locator('.orders-paste-note')).toContainText('Nothing to fetch')
@@ -1300,7 +1446,7 @@ test('the picker is built from the preview alone, and unticking one narrows the 
 }) => {
   await remember(page, null)
   const wire = await open(page)
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
 
   /* UNCHOSEN SAYS SO. A device that has never opened this panel fetches everything, and the
      control names that rather than a count it would have to spend a call to know. */
@@ -1349,7 +1495,7 @@ test('an unasked device is never shown the picker on the ordinary press', async 
   const wire = await open(page, {
     allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
   })
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   /* NO PANEL, NO PREVIEW. The picker is reached only by choosing to narrow, never by pressing
@@ -1365,7 +1511,7 @@ test('an unasked device is never shown the picker on the ordinary press', async 
 
 test('the narrowing picker opens from its own control, and the ask is shown once', async ({ page }) => {
   const wire = await open(page)
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
 
   /* THE PICKER'S OWN CONTROL — separate from either fetch button. */
   const control = page.locator('.orders-paste').getByRole('button', { name: /statuses/i })
@@ -1398,7 +1544,7 @@ test('a tick IS an answer, so unticking one settles the device without pressing 
      and unticks a status has already done the thing the ask is for, and being asked again next
      time would be the recurring step that was ruled out. */
   const wire = await open(page)
-  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await openManage(page)
   await page.locator('.orders-paste').getByRole('button', { name: /statuses/i }).click()
   await expect(page.locator('.orders-statuses-ask')).toBeVisible()
 
@@ -1424,7 +1570,7 @@ test('a tick IS an answer, so unticking one settles the device without pressing 
 const SECOND_ORDER = 'B58DDD-24C44'
 const secondOrderKey = `TCGplayer:${SECOND_ORDER}`
 
-test('the index lists buyers, and a two-order buyer carries the N-orders pill and two bars', async ({
+test('the index lists buyers, and a two-order buyer carries the N-orders pill and the aggregated triad', async ({
   page,
 }) => {
   const secondLine = () =>
@@ -1453,11 +1599,12 @@ test('the index lists buyers, and a two-order buyer carries the N-orders pill an
   await expect(rows.first()).toBeVisible()
   await rows.first().click()
 
-  /* THE DETAIL HEADER ENUMERATES BOTH ORDERS, each with its own progress bar. */
-  const chips = page.locator('.orders-buyer-chip')
-  await expect(chips).toHaveCount(2)
-  await expect(chips.nth(0)).toContainText(ORDER_NUMBER)
-  await expect(chips.nth(1)).toContainText(SECOND_ORDER)
+  /* THE ORDER PANEL READS "2 ORDERS" AND AGGREGATES OWED/SOLD ACROSS BOTH (§13; RE-AIMED off
+     the deleted `BuyerDetail`'s two order chips — one order-detail header is gone with it, see
+     the banner deep in this file for the claims that replace it). */
+  await expect(page.locator('.boxops-identity-num')).toHaveText('2 ORDERS')
+  const stats = page.locator('.card-locations-stats .bn-stat')
+  await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('2')
 })
 
 test('a nameless order groups on its own, as No name and the order number', async ({ page }) => {
@@ -1467,7 +1614,10 @@ test('a nameless order groups on its own, as No name and the order number', asyn
   await expect(page.locator('.orders-index-row').first()).toContainText(`No name · #${ORDER_NUMBER}`)
 })
 
-test('a buyer with two open orders draws one merged walk carrying rows from both', async ({ page }) => {
+test('a buyer with two open orders walks both at once — one selection, one plan, both cards', async ({ page }) => {
+  /* RE-AIMED off the deleted `BuyerDetail`'s own merged walk (`buildWalk`): selecting a buyer
+     now starts the SAME union directly (`useOrderWalk`'s `walkedKeys`, §13), which is why this
+     needs its own `stubWalkPlan` — the default fixture answers an empty plan otherwise. */
   const secondLine = () =>
     line({
       order: SECOND_ORDER,
@@ -1483,26 +1633,47 @@ test('a buyer with two open orders draws one merged walk carrying rows from both
       { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
     ],
   )
-  await open(page, { orders: both })
+  /* `open()`'s OWN `walkPlan`, not `stubWalkPlan` after it: the sole buyer selects itself on
+     landing (§13) and the plan is fetched before a later stub can register — CI lost that race
+     on 2026-09-20 (`.browse-list` never drew), the same race `open()`'s option exists for. */
+  await open(page, {
+    orders: both,
+    walkPlan: walkPlanOf([
+      walkPlanStop(),
+      walkPlanStop({
+        key: 'box/5/section/1',
+        box: 5,
+        box_name: 'Box Five',
+        section: 1,
+        order: 2,
+        span: { start: 1, end: 10 },
+        takes: [
+          walkPlanTake({
+            sku: '9197754',
+            name: 'Sunrise',
+            number_display: '030',
+            for: [{ key: secondOrderKey, number: SECOND_ORDER, buyer: 'Ada Lovelace' }],
+            copies: [walkPlanCopy({ box: 5, index: 30, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5 · Section 1 · Card 1' })],
+          }),
+        ],
+      }),
+    ]),
+  })
   await page.locator('.orders-index-row').first().click()
 
-  /* BOTH CARDS ARE PULLABLE FROM ONE MERGED LIST — the walk built from the union of the buyer's
-     open orders, not from either order alone. */
-  const picks = page.locator('.orders-buyer-walk .orders-pick')
-  await expect(picks).toHaveCount(2)
-  await expect(page.locator('.orders-buyer-walk')).toContainText('Volcanion')
-  await expect(page.locator('.orders-buyer-walk')).toContainText('Sunrise')
+  /* BOTH CARDS ARE IN ONE WALK LIST — the plan built from the union of the buyer's open
+     orders, not from either order alone. */
+  await expect(page.locator('.browse-list')).toContainText('Volcanion')
+  await expect(page.locator('.browse-list')).toContainText('Sunrise')
 
-  /* AND THE BY-ORDER FOLD STILL HOLDS EACH ORDER SEPARATELY, so a per-order press (stand-down,
-     close-line, declare-kind, hand-fill) stays reachable — RE-AIMED: the fold is a real kit
-     `Button` now and starts closed while a walk covers the buyer (§9's own "what is deleted",
-     finding 5), so it has to be opened before its content is on screen. */
-  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
-  await expect(page.locator('.orders-buyer-byorder')).toContainText(ORDER_NUMBER)
-  await expect(page.locator('.orders-buyer-byorder')).toContainText(SECOND_ORDER)
+  /* AND EACH ORDER'S OWN STAND-DOWN/CLOSE-LINE/DECLARE-KIND/HAND-FILL STAYS REACHABLE — behind
+     `Manage` now, not a "By order" fold (deleted with `BuyerDetail`). */
+  await openManage(page)
+  await expect(page.locator('.orders-manage-orders')).toContainText(ORDER_NUMBER)
+  await expect(page.locator('.orders-manage-orders')).toContainText(SECOND_ORDER)
 })
 
-test('opening a two-order buyer sends exactly one batched POST /orders/picks, never one per key', async ({ page }) => {
+test('selecting a two-order buyer sends exactly one batched POST /orders/picks, never one per key', async ({ page }) => {
   /* THE REGRESSION THIS CATCHES: `detail` (React state) does not settle inside one render
    *  pass, so a dedupe check reading only `detail` sees the SAME empty map across every
    *  render that happens before the first fetch resolves and fires a fresh identical POST
@@ -1510,12 +1681,15 @@ test('opening a two-order buyer sends exactly one batched POST /orders/picks, ne
    *  a four-order buyer selected by default sent SEVEN identical calls before the fix
    *  (`pendingPicks`, a ref marked synchronously before the fetch's own `await`); one after.
    *  This fixture's buyer holds two orders, which is enough to prove the batching — both
-   *  keys travel in ONE call, never two single-key ones. */
+   *  keys travel in ONE call, never two single-key ones. RE-AIMED to wait on the order
+   *  panel's own short figure settling (fed by `answers`, the same map `/orders/picks`
+   *  answers into) rather than the deleted merged walk. */
   const secondLine = () =>
     line({
       order: SECOND_ORDER,
       order_key: secondOrderKey,
       sku: '9197754',
+      reason: 'short',
       picks: [pick({ index: 30, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030' })],
       line: { ...line().line, sku: '9197754', name: 'Sunrise', number: '030' },
     })
@@ -1529,9 +1703,10 @@ test('opening a two-order buyer sends exactly one batched POST /orders/picks, ne
   const wire = await open(page, { orders: both })
   await page.locator('.orders-index-row').first().click()
 
-  /* Wait for the merged walk to actually render — the same proof of "the picks arrived" the
-     test above uses — before counting the wire, so this does not race the fetch. */
-  await expect(page.locator('.orders-buyer-walk .orders-pick')).toHaveCount(2)
+  /* Wait for the real picks to have landed — the short figure only reads non-zero once
+     `answers` carries the real (not lite) tier for both orders — before counting the wire, so
+     this does not race the fetch. */
+  await expect(page.locator('.card-locations-stats .bn-stat').nth(2).locator('.bn-stat-value')).not.toHaveText('0')
 
   const picksCalls = wire.filter((one) => one.path.endsWith('/orders/picks'))
   expect(picksCalls).toHaveLength(1)
@@ -1539,6 +1714,7 @@ test('opening a two-order buyer sends exactly one batched POST /orders/picks, ne
     new Set([`TCGplayer:${ORDER_NUMBER}`, secondOrderKey]),
   )
 })
+
 
 test('?order= resolves an old link to the buyer group that holds it', async ({ page }) => {
   const secondLine = () =>
@@ -1569,11 +1745,23 @@ test('?order= resolves an old link to the buyer group that holds it', async ({ p
       body: JSON.stringify({ orders: both.resolution.orders.filter((one) => wanted.has(one.key)) }),
     })
   })
+  /* THE WALK'S OWN READ, ALSO HAND-LAID because this case does not call `open()` (see that
+   *  helper's own comment on `options.walkPlan`): resolving `?order=` selects a buyer the same
+   *  as a click does, and selecting a buyer starts their walk at once (§13) — an unstubbed
+   *  `POST /orders/walk-plan` would otherwise reach the real capture server and trip
+   *  `sealEveryTest`'s refusal. Empty is enough; this case is about which buyer resolves, not
+   *  the walk itself. */
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(walkPlanOf([])) })
+  })
   await page.goto(`${VIEW_ROUTE}?order=${encodeURIComponent(secondOrderKey)}`)
   await expect(page.locator(VIEW)).toBeVisible()
 
-  /* THE SECOND BUYER'S GROUP IS SELECTED, resolved through the order key the old link named. */
-  await expect(page.locator('.orders-buyer-detail')).toContainText('Someone Else')
+  /* THE SECOND BUYER'S GROUP IS SELECTED, resolved through the order key the old link named —
+   *  RE-AIMED off the deleted `BuyerDetail`'s own `.orders-buyer-detail` onto the order panel's
+   *  own buyer name heading, `OrderPanel`'s `.boxops-identity-name` (§13, the pane `#/inventory`
+   *  already draws for a box). */
+  await expect(page.locator('.boxops-identity-name')).toContainText('Someone Else')
 })
 
 test('a buyer with nothing open and closed long ago sits under the Earlier fold', async ({ page }) => {
@@ -1800,6 +1988,10 @@ test('the reconcile preview draws a breakdown by feed status, with the count in 
     ],
   )
   const wire = await open(page, { orders: both })
+  /* RE-AIMED: `ReconcileBacklogPanel` moved into the Manage sheet with the rest of D203's own
+     family (§13, "Inventory's skeleton has no other place for them") — it draws beside
+     `BacklogPrompt`, not on the page directly. */
+  await openManage(page)
 
   const panel = page.locator('.orders-reconcile')
   await expect(panel).toBeVisible()
@@ -1843,6 +2035,7 @@ test('the reconcile press sends the cutoff shown on screen, and the receipt carr
       still_open: 1,
     },
   })
+  await openManage(page)
 
   const panel = page.locator('.orders-reconcile')
   await panel.getByRole('button', { name: /Stand down 2 orders/ }).click()
@@ -1972,1567 +2165,485 @@ test('a terminal order that still owes copies, with no answer yet, shows a way t
   const owing = terminalOwingOrder()
   await open(page, { orders: payloadOf([owing], []) })
   await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
-  await expect(page.locator('main.orders')).toContainText('Not resolved in this read.')
+  /* RE-AIMED: `OrderDetail`'s own body — where this sentence lives — moved into the Manage
+     sheet with the rest of the per-order controls (§13). */
+  await openManage(page)
+  await expect(page.locator('.orders-manage-sheet')).toContainText('Not resolved in this read.')
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
 })
 
-test('a terminal order that still owes copies, once resolved, draws its lines and a Pull button', async ({
-  page,
-}) => {
-  const owing = terminalOwingOrder({ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, lines: [line().line] })
-  const resolved: ResolvedOrder = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }
-  await open(page, { orders: payloadOf([owing], [resolved]) })
 
-  /* RE-AIMED: this order is walkable (still owing), so the merged `By buyer` walk already
-     covers its one Pull, and `.orders-lines` (inside "By order") hides it in favour of that
-     (`hidePicks`, §9's own fold survives with a NEW default — closed while a walk covers the
-     order). Its lines are still drawn once the fold is opened; the Pull is where the walk put
-     it. */
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
-  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
-  await expect(page.locator('.orders-lines')).toHaveCount(1)
-  await expect(page.locator('.orders-buyer-walk').getByRole('button', { name: 'Pull' })).toBeVisible()
-})
-
-/* ------------------------------------------------------------------------------------- 23
+/* ======================================================================================
+ * §13 — "ORDERS IS INVENTORY'S SCREEN WITH ORDERS IN THE RAIL", RULED 2026-09-19.
  *
- * "WALK THE BOXES" COVERS EVERY UNFULFILLED ORDER, NOT ONLY THE OPEN ONES. The owner's own
- * words opening this task: "I need the ability to walk orders even if it already shows
- * shipped ... when I do the order walk, I see all copies of the card". `buildWalk` now takes
- * `ownsAWalkableBody`'s union — open, or terminal-and-still-owing — at both call sites, and
- * `walkKeys`/`passComplete` are re-derived off the SAME predicate so a terminal order does not
- * read as "complete in this pass" the instant the pass opens.
+ * EVERYTHING FROM HERE DOWN REPLACES THE CASES THIS FILE CARRIED FOR SECTIONS 8, 9, 9a AND
+ * 12's OWN "Start"/tick/pass/stop/take BUILD, which §13 supersedes whole. `OrdersWalk.tsx`
+ * and its `.walkplan-*` markup, the `Tick all` → `Walk N orders` two-press flow, the frozen
+ * pass (`hub.walkKeys`), `End walk`, and the merged `.orders-buyer-walk` `By buyer` fold are
+ * all DELETED, not adapted — this file's own cases for them go with them, named here rather
+ * than left to rot quietly:
+ *
+ *   - "a terminal order that still owes copies, once resolved, draws its lines and a Pull
+ *     button", "the walk includes a terminal-but-owing order once resolved", "a fully-pulled
+ *     terminal order never enters the walk", "a terminal order sharing a buyer with nothing
+ *     else draws exactly one Pull per copy" and every "By buyer" merged-walk case — the
+ *     capability (a buyer's open+terminal-but-owing orders walked as one) is UNCHANGED and now
+ *     proved by `useOrderWalk`'s own `walkedKeys` (a selected buyer's `ownsAWalkableBody`
+ *     orders) rather than `buildWalk`.
+ *   - every `.walkplan-stop` / `.walkplan-take` / `.walkplan-row` case (line header sentences,
+ *     span bars, neighbour ladders, photo-once-per-take, re-description on a pull, gone-copy
+ *     handling, the "no re-sort" fence) — the CLAIMS survive under `CardLocations`'s own
+ *     `preserveOrder`, which is `#/inventory`'s own component and carries its own coverage in
+ *     `app/tests/inventory.spec.ts`; the cases below prove `#/orders` reaches it correctly
+ *     rather than re-proving `CardLocations` itself.
+ *   - `Tick all`/`Untick all`/tick-survival-under-a-filter — UNCHANGED (the tick still selects
+ *     which OTHER buyers join a walk); no case here repeats `app/tests/orders.spec.ts`'s own
+ *     surviving assertions for them above this line.
+ *
+ * WHAT REPLACES THEM is organised the same way `useOrderWalk`/`OrdersWalkPane.tsx` is: the
+ * walked set (select, tick, replace), the rail's own order panel and walk list, the pane
+ * (inventory's, reused), the write (Mark sold), the no-re-sort fence, stepping, the word ban,
+ * and one proof that `#/inventory` did not move under any of it.
  */
 
-const TERM_NUMBER = 'T0001'
-const TERM_KEY = `TCGplayer:${TERM_NUMBER}`
-const TERM_SKU = '9000001'
+const SECOND_BUYER_ORDER = 'B31A0C7D-0001A2-00311'
+const secondBuyerKey = `TCGplayer:${SECOND_BUYER_ORDER}`
+const SECOND_SKU = '9197754'
 
-/** A terminal-and-still-owing order, WITH a resolved answer carrying one pickable copy in a
- *  box distinct from the default fixture's, so the two never collide in the walk's own
- *  box/section grouping. */
-function terminalOwingWalkable(over: Partial<OrderRow> = {}): { row: OrderRow; resolved: ResolvedOrder } {
+/** A second buyer, own SKU, own box — so a case can tick or select them independently of the
+ *  default fixture's Ada Lovelace / Volcanion / box 3. */
+function secondBuyerPayload(): { payload: OrdersPayload; resolved: ResolvedOrder } {
   const theLine = line({
-    order: TERM_NUMBER,
-    order_key: TERM_KEY,
-    sku: TERM_SKU,
-    line: { ...line().line, sku: TERM_SKU, name: 'Terminal Treasure' },
-    picks: [pick({ box: 5, index: 50, capture_id: 'cap-term', card_name: 'Terminal Treasure', place: place({ box: 5, box_name: 'Box Five', label: 'Box 5 · Section 1 · Card 1' }) })],
+    order: SECOND_BUYER_ORDER,
+    order_key: secondBuyerKey,
+    sku: SECOND_SKU,
+    line: { ...line().line, sku: SECOND_SKU, name: 'Sunrise' },
+    picks: [pick({ box: 5, index: 9, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030', place: place({ box: 5, box_name: 'Box Five', section: 1, label: 'Box 5 · Section 1 · Card 9' }) })],
   })
-  const row = terminalOwingOrder({ key: TERM_KEY, number: TERM_NUMBER, buyer: 'Nora Terminal', lines: [theLine.line], ...over })
-  const resolved: ResolvedOrder = { key: TERM_KEY, number: TERM_NUMBER, complete: false, outstanding: 1, lines: [theLine] }
-  return { row, resolved }
-}
-
-test('the walk includes a terminal-but-owing order once resolved', async ({ page }) => {
-  /* RE-AIMED off "and counts it in the head figure" — the head no longer counts orders (see
-     the deletion note over case 10-11 above); the rule that survives is that a terminal order
-     still owing copies is WALKABLE and gets a real Pull, same as any open one. */
-  const term = terminalOwingWalkable()
-  await open(page, {
-    orders: payloadOf(
-      [order(), term.row],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }, term.resolved],
-    ),
-  })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop(),
-      walkPlanStop({
-        key: 'box/5/section/1',
-        box: 5,
-        box_name: 'Box Five',
-        section: 1,
-        span: { start: 1, end: 10 },
-        order: 2,
-        takes: [
-          walkPlanTake({
-            sku: TERM_SKU,
-            name: 'Terminal Treasure',
-            number_display: null,
-            wanted: 1,
-            for: [{ key: TERM_KEY, number: TERM_NUMBER, buyer: 'Nora Terminal' }],
-            copies: [walkPlanCopy({ box: 5, index: 50, slot: 1, capture_id: 'cap-term', card: 1, label: 'Box 5 · Section 1 · Card 1' })],
-          }),
-        ],
-      }),
-    ]),
-  )
-  await startWalk(page)
-  await expect(page.locator('.orders-walk')).toContainText('Terminal Treasure')
-  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(2)
-})
-
-test('a fully-pulled terminal order (nothing owed) never enters the walk', async ({ page }) => {
-  /* RE-AIMED TWICE, and the claim is the same one both times: an order that owes nothing is not
-     walkable. `WalkView`'s "Nothing left to walk" became `WalkSelect`'s "Nothing to walk", and
-     §12 deleted `WalkSelect` along with the second list it was — so the claim now lands where
-     the selection itself lives. A row with no walkable order draws NO TICK (not a disabled one),
-     which leaves nothing to tick, nothing for `Tick all` to act on, and no Start. */
-  const settled = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
-  await open(page, { orders: payloadOf([settled], []) })
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
-  await expect(page.locator('main.orders')).toContainText('Ada Lovelace')
-  await expect(page.locator('.orders-index-tick')).toHaveCount(0)
-  await expect(page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true })).toBeDisabled()
-  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
-})
-
-test('a terminal order sharing a buyer with nothing else draws exactly one Pull per copy, never two', async ({
-  page,
-}) => {
-  const term = terminalOwingWalkable()
-  await open(page, { orders: payloadOf([term.row], [term.resolved]) })
-
-  /* THE GROUP IS DONE-ONLY (`group.open.length === 0`), so it sits behind the Done chip, same
-     as any other terminal buyer. */
-  await page.locator('main.orders').getByRole('button', { name: 'Done' }).click()
-  await expect(page.locator('main.orders')).toContainText('Nora Terminal')
-
-  /* THE MERGED WALK ITSELF MUST BE THE ONE DRAWING IT — not merely "one Pull button somewhere",
-     which the "By order" fold alone could also produce if the widening regressed. */
-  await expect(page.locator('.orders-buyer-walk')).toContainText('Terminal Treasure')
-  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(1)
-})
-
-/* -------------------------------------------------------------------------------------- D212+ */
-
-/* THE LINE-HEADER SENTENCE (item 1 of the D212 follow-up, the owner's own question 2026-09-17:
- * "is it saying they ordered one and there's two places, or they need two and here's two
- * places"). `.orders-map-lede` ties `figure.remaining` ("Pull N"), `line.on_hand`/`map.total`
- * ("N on hand") and `map.stops.length` ("across N boxes") into one sentence, once, above the
- * box list — `pullLedeOf` in `Orders.tsx`. These cases render it directly through a copy the
- * merged buyer walk does NOT cover (every candidate copy already `held_by` another order), the
- * one path `hidePicks` leaves this line's own map visible on. */
-
-test('the line header sentence names how many to pull, how many are on hand, and how many boxes', async ({
-  page,
-}) => {
-  const spread = line({
-    wanted: 2,
-    fulfilled: 0,
-    outstanding: 2,
-    on_hand: 3,
-    picks: [
-      pick({ capture_id: 'cap-a', held_by: { order: OTHER_ORDER, sku: SKU } }),
-      pick({
-        capture_id: 'cap-b',
-        box: 5,
-        index: 9,
-        place: place({ box: 5, index: 9, slot: 3, card: 3, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 3' }),
-        held_by: { order: OTHER_ORDER, sku: SKU },
-      }),
-      pick({
-        capture_id: 'cap-c',
-        box: 5,
-        index: 10,
-        place: place({ box: 5, index: 10, slot: 4, card: 4, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 4' }),
-        held_by: { order: OTHER_ORDER, sku: SKU },
-      }),
-    ],
-  })
-  await open(page, {
-    orders: payloadOf(
-      [order({ wanted: 2, progress: [{ sku: SKU, wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [spread] }],
-    ),
-  })
-
-  await expect(page.locator('.orders-map-lede')).toHaveText('Pull 2 — 3 on hand across 2 boxes.')
-})
-
-test('one box reads ", 1 box", never "across 1 boxes"', async ({ page }) => {
-  const oneBox = line({
-    wanted: 1,
-    fulfilled: 0,
-    outstanding: 1,
-    on_hand: 2,
-    picks: [
-      pick({ capture_id: 'cap-a', held_by: { order: OTHER_ORDER, sku: SKU } }),
-      pick({
-        capture_id: 'cap-b',
-        index: 22,
-        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
-        held_by: { order: OTHER_ORDER, sku: SKU },
-      }),
-    ],
-  })
-  await open(page, {
-    orders: payloadOf(
-      [order({ wanted: 1, progress: [{ sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [oneBox] }],
-    ),
-  })
-
-  await expect(page.locator('.orders-map-lede')).toHaveText('Pull 1 — 2 on hand, 1 box.')
-})
-
-test('a satisfied line says so, plainly, rather than "Pull 0"', async ({ page }) => {
-  const done = line({
-    wanted: 1,
-    fulfilled: 0,
-    outstanding: 0,
-    on_hand: 2,
-    picks: [
-      pick({ capture_id: 'cap-a', held_by: { order: OTHER_ORDER, sku: SKU } }),
-      pick({
-        capture_id: 'cap-b',
-        index: 22,
-        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
-        held_by: { order: OTHER_ORDER, sku: SKU },
-      }),
-    ],
-  })
-  await open(page, {
-    orders: payloadOf(
-      [order({ wanted: 1, recorded: 1, progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }], })],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: true, outstanding: 0, lines: [done] }],
-    ),
-  })
-
-  await expect(page.locator('.orders-map-lede')).toHaveText('All 1 pulled — 2 on hand.')
-  await expect(page.locator('.orders-map-lede')).not.toContainText('Pull 0')
-})
-
-/* THE CUT `docs/specs/undo.md` §5 (D212) DRAWS, ASSERTED WHERE A REGRESSION WOULD ACTUALLY SHOW:
- * a copy that has ALREADY LEFT is named by card and count, and a copy still ON HAND is named by
- * its place. `GET /orders` never joins a position for a recorded copy any more (`server/
- * capture_server.py:_order_progress` dropped `_pulled_positions`), so this is a real-browser
- * assertion of the shape the wire now answers with — `pulled` is gone from `OrderLineProgress`,
- * so a fixture reviving it would fail `tsc` before this file ever ran.
- *
- * THE REMAINING COPY IS `held_by` A SECOND ORDER, ON PURPOSE. `OrderLineRow`'s own copy list —
- * the one place `figure.pulled`'s note draws — is suppressed by `hidePicks` the instant this
- * line has a copy the MERGED WALK would draw instead (see the comment two cases below this one),
- * and any takeable on-hand copy earns exactly that. Marking the remaining copy spoken for by
- * another order takes it out of THIS buyer's walk without taking it out of the box, which is the
- * state that renders both halves in one screen: this row's own list stays up (not folded behind
- * the walk), so the already-pulled note is visible beside a copy that has not left — proving the
- * one draws a place and the other never does. */
-test('an already-pulled copy draws the card and the count, never a place — and a copy still on hand keeps its own', async ({
-  page,
-}) => {
-  const stillOnHand = line({
-    wanted: 3,
-    fulfilled: 1,
-    outstanding: 1,
-    on_hand: 1,
-    picks: [
-      pick({
-        capture_id: 'cap-remaining',
-        box: 3,
-        index: 21,
-        held_by: { order: OTHER_ORDER, sku: SKU },
-      }),
-    ],
-  })
-  await open(page, {
-    orders: payloadOf(
-      [
-        order({
-          wanted: 3,
-          recorded: 2,
-          progress: [
-            {
-              sku: SKU,
-              wanted: 3,
-              recorded: 2,
-              outstanding: 1,
-              over: 0,
-              copies: ['cap-gone-1', 'cap-gone-2'],
-              at: null,
-              by_hand: 0,
-              reason: null,
-              declared_kind: null,
-              closed_at: null,
-              closed_reason: null,
-            },
-          ],
-        }),
-      ],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [stillOnHand] }],
-    ),
-  })
-
-  /* THE FIGURE: a count beside "remaining", never a drawer. */
-  await expect(page.locator('.orders-line-pulled')).toHaveText('2 already pulled')
-
-  /* THE NOTE UNDER THE COPY LIST: the card left through the count alone. No box, no section, no
-   * slot — `Box`/`Section`/`Card #` is exactly the vocabulary `PositionLabel` draws for a copy
-   * still IN a drawer, and none of it belongs to one that already left it. */
-  const pulledNote = page.locator('.orders-pulled-note')
-  await expect(pulledNote).toBeVisible()
-  await expect(pulledNote).toContainText('2 copies have already been pulled for this order and left')
-  await expect(pulledNote).not.toContainText('Box')
-  await expect(pulledNote).not.toContainText('Section')
-
-  /* THE COPY STILL ON HAND KEEPS ITS PLACE. This is the other half of the cut: a copy that has
-   * not left the box is a card sitting in a drawer, and the row says exactly where. */
-  await expect(page.locator('.orders-pick-place')).toContainText('3', { ignoreCase: true })
-  await expect(page.locator('.orders-pick-link')).toHaveAttribute('title', 'Open box 3 in the inventory')
-})
-
-/* `.orders-map-lede` renders on `OrderLineRow` only where `hidePicks` is false — the state where
- * EVERY candidate copy is already `held_by` another order, because the merged buyer walk covers
- * every takeable one and this row's own map is suppressed to avoid a second Pull button on the
- * same copy (see `BuyerDetail`'s own comment). That state has no pressable Pull button on this
- * line by construction — a click-driven stability proof belongs to the merged walk, which this
- * session does not touch (out of scope). So this case proves the SAME thing `inventory.spec.ts`
- * proves for a sale — a write changing what the sentence says moves nothing beneath it — over a
- * re-read the fixture stands in for, rather than a click this row cannot offer. */
-test('the sentence changing on a write moves no box row beneath it (D118)', async ({ page }) => {
-  const progressOf = (recorded: number) => [
-    {
-      sku: SKU,
-      wanted: 2,
-      recorded,
-      outstanding: 2 - recorded,
-      over: 0,
-      copies: [],
-      at: null,
-      by_hand: 0,
-      reason: null,
-      declared_kind: null,
-      closed_at: null,
-      closed_reason: null,
-    },
-  ]
-  const spread = (recorded: number) =>
-    line({
-      wanted: 2,
-      fulfilled: 0,
-      outstanding: 2 - recorded,
-      on_hand: 2,
-      picks: [
-        pick({ capture_id: 'cap-a', held_by: { order: OTHER_ORDER, sku: SKU } }),
-        pick({
-          capture_id: 'cap-b',
-          box: 5,
-          index: 9,
-          place: place({ box: 5, index: 9, slot: 3, card: 3, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 3' }),
-          held_by: { order: OTHER_ORDER, sku: SKU },
-        }),
-      ],
-    })
-  const payloadAt = (recorded: number) =>
-    payloadOf(
-      [order({ wanted: 2, recorded, progress: progressOf(recorded) })],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2 - recorded, lines: [spread(recorded)] }],
-    )
-
-  let recorded = 0
-  await open(page, { orders: () => payloadAt(recorded) })
-
-  await expect(page.locator('.orders-map-lede')).toHaveText('Pull 2 — 2 on hand across 2 boxes.')
-  await settleFonts(page)
-  await settleMotion(page)
-  const ledeBefore = await page.locator('.orders-map-lede').boundingBox()
-  const stopsBefore = await page.locator('.orders-map-stops').boundingBox()
-  /* THE GAP, NOT THE PAGE POSITION. A reload resets scroll, so the two boxes' absolute page `y`
-     is not comparable across it — what has to hold is the DISTANCE from the sentence to the box
-     list, which is exactly what `.orders-map-lede`'s `min-height` (D118) reserves. */
-  const gapBefore = (stopsBefore?.y ?? 0) - (ledeBefore?.y ?? 0)
-
-  recorded = 1
-  await page.reload()
-  await expect(page.locator(VIEW)).toBeVisible()
-
-  await expect(page.locator('.orders-map-lede')).toHaveText('Pull 1 — 2 on hand across 2 boxes.')
-  await settleFonts(page)
-  await settleMotion(page)
-  const ledeAfter = await page.locator('.orders-map-lede').boundingBox()
-  const stopsAfter = await page.locator('.orders-map-stops').boundingBox()
-  const gapAfter = (stopsAfter?.y ?? 0) - (ledeAfter?.y ?? 0)
-  /* THE RAW GAPS, NOT TWO ROUNDED ONES. `Math.round` on either side of this comparison was both
-     too loose and too tight: `24.6` against `25.4` is 0.8px of real reflow that both round to
-     `25` and pass, and `25.4` against `26` is a hair either side of a half pixel that fails.
-     THE GUARANTEE GETS TIGHTER, NOT LOOSER: the worst drift this can now wave through is 0.34px,
-     against very nearly a whole pixel before. Where rounding was tighter than that it was by
-     accident of which side of a half pixel the pair happened to land on, which is not a bound at
-     all. Measured on the rig with `settleMotion` above it, twelve consecutive runs report 26.000
-     against 26.000, drift 0.000, so the margin is headroom for a future layout rather than
-     tolerance for a known wobble; mutating the reading by 0.5px turns this red. */
-  expect(Math.abs(gapAfter - gapBefore), 'the box list moved relative to the sentence above it').toBeLessThan(0.34)
-})
-
-/* A REAL PRESS, NOT A RELOAD (item 2 of the D212 follow-up), REWRITTEN AGAINST `OrdersWalk.tsx`'s
- * OWN MARKUP: `WalkCards` and `WalkGroups`' box header are both deleted (§9) along with the
- * text they carried, but the rule they existed to prove is D118 itself and it still governs
- * this screen — a press changes what is ON SCREEN and never where the REST of it is. The
- * take's own counter (`0 of 2 taken` -> `1 of 2 taken`) is now the text that changes on a
- * successful Pull, and its own row is what must not move for it. Two copies of ONE take at ONE
- * stop, so the pull leaves the row open (still short of `wanted`) rather than collapsing it —
- * the same "same-block text change, not a whole-block removal" shape the old case asserted. */
-test('a real Pull press changes the take counter without changing its height (D118)', async ({ page }) => {
-  await open(page, {
-    orders: oneOpenOrder(),
-    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 1, places: [], sales: [] },
-  })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({
-        takes: [
-          walkPlanTake({
-            wanted: 2,
-            copies: [walkPlanCopy({ capture_id: 'cap-a' }), walkPlanCopy({ capture_id: 'cap-b', index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' })],
-          }),
-        ],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  const counter = page.locator('.walkplan-take-counter').first()
-  const takeName = page.locator('.walkplan-take-name').first()
-  await expect(counter).toContainText('0 of 2 taken')
-  await settleFonts(page)
-  await settleMotion(page)
-  const counterBoxBefore = await counter.boundingBox()
-  const counterHeightBefore = counterBoxBefore?.height ?? 0
-  const counterRightBefore = (counterBoxBefore?.x ?? 0) + (counterBoxBefore?.width ?? 0)
-  const nameBoxBefore = await takeName.boundingBox()
-
-  await page.locator('.card-locations-row').first().locator('button.walkplan-pull').click()
-
-  await expect(counter).toContainText('1 of 2 taken')
-  await settleFonts(page)
-  await settleMotion(page)
-  const counterBoxAfter = await counter.boundingBox()
-  const counterHeightAfter = counterBoxAfter?.height ?? 0
-  const counterRightAfter = (counterBoxAfter?.x ?? 0) + (counterBoxAfter?.width ?? 0)
-  const nameBoxAfter = await takeName.boundingBox()
-
-  /* HEIGHT, NOT PAGE POSITION — the SECOND copy is still there, `Taken` rather than removed
-     (D118's own rule for a row: disabled, not gone), so nothing beneath the counter unmounts.
-     What has to hold, on the SAME single-line counter, is that it neither grew nor shrank a
-     pixel from changing what it says. RAW, for the reason the case this replaces carried in
-     full: rounding a sub-pixel measurement hides up to a whole pixel of real movement. */
-  expect(Math.abs(counterHeightAfter - counterHeightBefore), 'the counter changed height across the press').toBeLessThan(0.34)
-
-  /* THE COUNTER'S OWN LEFT EDGE IS NOT THE RIGHT SUBJECT (CI evidence below). `margin-left:
-     auto` anchors the counter's RIGHT edge to the row's own right edge; its LEFT edge is
-     `row-right - own-width`, and `own-width` is a measurement of the very text D118 entitles
-     the press to change (`0 of 2 taken` -> `1 of 2 taken`). Asserting the left edge therefore
-     asserts that the counter's own changing text rendered at an identical width on two
-     different strings — a claim about font-rasterization precision, not about D118.
-     MEASURED, not guessed: `inter-latin.woff2`'s `tnum` substitutes (`zero.tf`, `one.tf`, …)
-     are all exactly 1328 font units wide, so the design-time advance is equal, and this rig's
-     DOM measurement of both strings agrees to the pixel (0.000px apart, `getBoundingClientRect`,
-     Chromium 1.58.0). Canvas-measured WITHOUT `font-variant-numeric` the same two strings
-     differ by 2.69px, so the feature is doing real work here — it is a rig-dependent rendering
-     guarantee (glyph shaping/hinting), not a CSS layout fact, and CI's shard-2 failure (run
-     35418072547: height held, X moved by exactly 1px, nothing else in the DOM changed size —
-     confirmed by instrumenting `document.documentElement.scrollHeight`/`clientWidth` across
-     the press, both constant) is consistent with that precision differing by a device pixel on
-     Linux's text stack. What D118 actually requires is that NOTHING BESIDE the counter moved:
-     the row's own right edge (what `margin-left: auto` is anchored to, independent of the
-     counter's own width) and the take's name, both outside the text the press is allowed to
-     change. */
-  expect(Math.abs(counterRightAfter - counterRightBefore), 'the row narrowed or widened around the counter').toBeLessThan(0.34)
-  expect(Math.abs((nameBoxAfter?.x ?? 0) - (nameBoxBefore?.x ?? 0)), 'the take name moved').toBeLessThan(0.34)
-  expect(Math.abs((nameBoxAfter?.y ?? 0) - (nameBoxBefore?.y ?? 0)), 'the take name moved').toBeLessThan(0.34)
-})
-
-/* -------------------------------------------------------------------------------------- walk plan */
-
-/* ITEM 3 OF THE D212 FOLLOW-UP: a one-line order gets a walk plan too (the owner's own report,
- * 2026-09-17: "I always thought there's a button like walk this order"), and the plan names
- * which card and how many of it sit in each stop rather than counting alone. */
-
-function twoCardOrder(): { row: OrderRow; resolved: ResolvedOrder } {
-  const akshan = pick({ capture_id: 'ak-1', card_name: 'Akshan, Mischievous' })
-  const akshan2 = pick({
-    capture_id: 'ak-2',
-    index: 22,
-    card_name: 'Akshan, Mischievous',
-    place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
-  })
-  const yasuo = pick({
-    capture_id: 'ya-1',
-    card_name: 'Yasuo, Unforgiven',
-    box: 5,
-    index: 9,
-    place: place({ box: 5, index: 9, slot: 3, card: 3, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 3' }),
-  })
-  const akshanLine = line({ sku: '9038408', picks: [akshan, akshan2], on_hand: 2, wanted: 2, outstanding: 2 })
-  const yasuoLine = line({ sku: '9038409', picks: [yasuo], on_hand: 1, wanted: 1, outstanding: 1 })
-  const row = order({
-    wanted: 3,
-    lines: [akshanLine.line, yasuoLine.line],
-    progress: [
-      { sku: '9038408', wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
-      { sku: '9038409', wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
-    ],
-  })
+  const row = order({ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second', lines: [theLine.line] })
+  const resolved: ResolvedOrder = { key: secondBuyerKey, number: SECOND_BUYER_ORDER, complete: false, outstanding: 1, lines: [theLine] }
   return {
-    row,
-    resolved: { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 3, lines: [akshanLine, yasuoLine] },
+    payload: payloadOf(
+      [order(), row],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }, resolved],
+    ),
+    resolved,
   }
 }
 
-test('a single-line order gets a walk plan when it spans more than one box', async ({ page }) => {
-  /* RE-AIMED against the deleted `.orders-plan`/`buildWalkPlan` (§9: "replaced, not extended
-   * ... nothing of its shape survives"). That was an automatic, no-click preview under a
-   * single-line order; the owner's ruling moved this job wholesale onto the solver's own plan,
-   * reached through `Walk the boxes` rather than drawn inline. The claim that survives —
-   * copies spread across boxes become that many stops — is asserted there instead. */
-  const oneLine = line({
-    sku: '9038408',
-    on_hand: 2,
-    wanted: 2,
-    outstanding: 2,
-    picks: [
-      pick({ capture_id: 'cap-a' }),
-      pick({
-        capture_id: 'cap-b',
-        box: 5,
-        index: 9,
-        place: place({ box: 5, index: 9, slot: 3, card: 3, box_name: 'Mixed Singles', label: 'Box 5 · Section 1 · Card 3' }),
-      }),
-    ],
-  })
-  await open(page, {
-    orders: payloadOf(
-      [order({ wanted: 2, lines: [oneLine.line] })],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [oneLine] }],
-    ),
-  })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({ takes: [walkPlanTake({ sku: '9038408', name: 'Volcanion', wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] })] }),
-      walkPlanStop({
-        key: 'box/5/section/1',
-        box: 5,
-        box_name: 'Mixed Singles',
-        section: 1,
-        span: { start: 1, end: 20 },
-        order: 2,
-        takes: [walkPlanTake({ sku: '9038408', name: 'Volcanion', wanted: 1, copies: [walkPlanCopy({ box: 5, index: 9, slot: 3, capture_id: 'cap-b', card: 3, label: 'Box 5 · Section 1 · Card 3' })] })],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  await expect(page.locator('.walkplan-figure')).toContainText('2 drawers')
-  await expect(page.locator('.walkplan-stop')).toHaveCount(2)
-})
-
-test('one line, one copy, one box draws no walk plan — the row beneath it already says it', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  await expect(page.locator('.orders-plan')).toHaveCount(0)
-})
-
-test('each stop names the cards in it, by how many sit THERE, not by how many the order wants', async ({
-  page,
-}) => {
-  /* RE-AIMED onto `WalkPlanTake.wanted`, which is "how many to take AT THIS STOP" by its own
-   * doc comment (`types.ts`) — the same per-stop rule `.orders-plan-stop` used to carry, on
-   * the solver's own wire field rather than a client-derived count. */
-  const { row, resolved } = twoCardOrder()
-  await open(page, { orders: payloadOf([row], [resolved]) })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({
-        takes: [
-          walkPlanTake({ sku: '9038408', name: 'Akshan, Mischievous', number_display: null, wanted: 2, copies: [walkPlanCopy({ capture_id: 'ak-1' }), walkPlanCopy({ capture_id: 'ak-2', index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' })] }),
-        ],
-      }),
-      walkPlanStop({
-        key: 'box/5/section/1',
-        box: 5,
-        box_name: 'Mixed Singles',
-        section: 1,
-        span: { start: 1, end: 20 },
-        order: 2,
-        takes: [walkPlanTake({ sku: '9038409', name: 'Yasuo, Unforgiven', number_display: null, wanted: 1, copies: [walkPlanCopy({ box: 5, index: 9, slot: 3, capture_id: 'ya-1', card: 3, label: 'Box 5 · Section 1 · Card 3' })] })],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  const stops = page.locator('.walkplan-stop')
-  await expect(stops).toHaveCount(2)
-  /* Box 3 holds two of Akshan and none of Yasuo; Box 5 holds one of Yasuo. The count is per
-     stop, never the order's own quantity. */
-  await expect(stops.nth(0)).toContainText('Akshan, Mischievous')
-  await expect(stops.nth(0).locator('.walkplan-take-counter')).toContainText('of 2 taken')
-  await expect(stops.nth(1)).toContainText('Yasuo, Unforgiven')
-  await expect(stops.nth(1).locator('.walkplan-take-counter')).toContainText('of 1 taken')
-})
-
-/* THE WALK GROUP HEADER, THE OTHER HALF OF THE OWNER'S 2026-09-17 REPORT: a box holding several
- * copies of the SAME card must not draw as several cards. Two DIFFERENT cards, one copy each,
- * is the ordinary case the plain "N cards" always got right; asserted here so a future change
- * cannot quietly widen the disambiguating "copies of" form to a case that never needed it. */
-test('a box with two different cards, one copy each, still reads as plain cards — not "copies of"', async ({
-  page,
-}) => {
-  const akshan = line({
-    sku: '9038408',
-    on_hand: 1,
-    wanted: 1,
-    outstanding: 1,
-    picks: [pick({ capture_id: 'ak-1', card_name: 'Akshan, Mischievous' })],
-  })
-  const yasuo = line({
-    sku: '9038409',
-    on_hand: 1,
-    wanted: 1,
-    outstanding: 1,
-    picks: [
-      pick({
-        capture_id: 'ya-1',
-        card_name: 'Yasuo, Unforgiven',
-        index: 2,
-        place: place({ index: 2, slot: 2, card: 2, label: 'Box 3 · Section 1 · Card 2' }),
-      }),
-    ],
-  })
-  await open(page, {
-    orders: payloadOf(
-      [order({ wanted: 2, lines: [akshan.line, yasuo.line] })],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [akshan, yasuo] }],
-    ),
-  })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({
-        takes: [
-          walkPlanTake({ sku: '9038408', name: 'Akshan, Mischievous', number_display: null, wanted: 1, copies: [walkPlanCopy({ capture_id: 'ak-1' })] }),
-          walkPlanTake({ sku: '9038409', name: 'Yasuo, Unforgiven', number_display: null, wanted: 1, copies: [walkPlanCopy({ capture_id: 'ya-1', index: 2, slot: 2, card: 2, label: 'Box 3 · Section 1 · Card 2' })] }),
-        ],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  /* RE-AIMED: `WalkGroups`' own "N cards" vs "N copies of M cards" header is deleted with it
-   * (§9) — the new stop draws every card as its own `.walkplan-take`, by name, so two
-   * DIFFERENT cards can never be misread as copies of one; that is now structural rather than
-   * a wording choice. The claim that survives is the one the old header protected: a box with
-   * two different cards draws two distinct takes, not one combined line. */
-  await expect(page.locator('.walkplan-stop-instruction')).toContainText('Take 2')
-  await expect(page.locator('.walkplan-take')).toHaveCount(2)
-  await expect(page.locator('.walkplan-take-name').nth(0)).toHaveText('Akshan, Mischievous')
-  await expect(page.locator('.walkplan-take-name').nth(1)).toHaveText('Yasuo, Unforgiven')
-})
-
-/* ------------------------------------------------------------------------------------- 14
- *
- * ONE SCREEN: THE LIST THE OPERATOR IS READING IS THE SELECTION
- * (`docs/specs/order-walk-plan.md` §12, the owner's rulings of 2026-09-18 and 2026-09-19).
- *
- * The mode strip, `PullMode` and `WalkSelect` are all deleted in the same change, so the cases
- * above that used to reach the walk through a tab now go through `startWalk`. What follows is
- * the set of rules that change ONLY existed once there was one list — each of them written
- * against the built code and then mutation-proved by breaking the code it names.
- *
- * THE ONE MOST LIKELY TO BE BUILT WRONG AND LOOK RIGHT is the prune. A render-time
- * `ticked ∩ visible` passes every assertion about a tick disappearing under a filter and fails
- * only the one below about it NOT coming back — which is the half the owner's answer 1 is
- * actually about ("filtering back does not bring it back"). It is asserted in both directions
- * here for that reason.
- */
-
-/** Alice, Bob and Carol are all open, so all three are walkable and all three draw a tick. */
-const WALK_SELECTION_WORLD = () => ({ orders: threeBuyerPayload() })
-
-test('nothing is ticked at first render, and Start is absent rather than disabled', async ({ page }) => {
-  await open(page, WALK_SELECTION_WORLD())
-  await expect(page.locator('.orders-index-tick')).toHaveCount(3)
-  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
-  /* ABSENT, NOT DISABLED (§12 answer 3). `toHaveCount(0)` is the whole assertion — a disabled
-     button would satisfy "cannot be pressed" and pass a weaker one. */
-  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
-  /* The slot it will appear in is drawn all the same, so its arrival moves nothing (D118). */
-  await expect(page.locator('.orders-start-slot')).toHaveCount(1)
-})
-
-test('a tick dies with the row a filter hides, and filtering back does not bring it back', async ({ page }) => {
-  await open(page, WALK_SELECTION_WORLD())
-  await page.getByRole('checkbox', { name: 'Walk Bob' }).check()
-  await expect(page.getByRole('button', { name: 'Walk 1 order' })).toBeVisible()
-
-  /* Narrow to a list Bob is not in. The stored set must LOSE him, not merely stop drawing him. */
-  await page.locator('.orders-search-input').fill('Alice')
-  await expect(page.locator('.orders-index-row')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
-
-  /* AND HE COMES BACK UNTICKED. This is the assertion a render-time intersection fails: it
-     would still be holding Bob behind the filter and would hand the tick straight back here. */
-  await page.locator('.orders-search-clear').click()
-  await expect(page.locator('.orders-index-row')).toHaveCount(3)
-  await expect(page.getByRole('checkbox', { name: 'Walk Bob' })).not.toBeChecked()
-  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
-})
-
-test('Tick all ticks the rows in view and only those', async ({ page }) => {
-  await open(page, WALK_SELECTION_WORLD())
-  await page.locator('.orders-search-input').fill('Alice')
-  await expect(page.locator('.orders-index-row')).toHaveCount(1)
-  await page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Walk 1 order' })).toBeVisible()
-
-  /* Widening the list again does not widen what was ticked — the press was over the rows in
-     view at the time, which is the only set that could hold a tick (§12 answer 1). */
-  await page.locator('.orders-search-clear').click()
-  await expect(page.locator('.orders-index-row')).toHaveCount(3)
-  await expect(page.getByRole('button', { name: 'Walk 1 order' })).toBeVisible()
-  await expect(page.getByRole('checkbox', { name: 'Walk Bob' })).not.toBeChecked()
-  await expect(page.getByRole('checkbox', { name: 'Walk Alice' })).toBeChecked()
-})
-
-test('Untick all clears the rows in view', async ({ page }) => {
-  await open(page, WALK_SELECTION_WORLD())
-  await page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Walk 3 orders' })).toBeVisible()
-  await page.locator('main.orders').getByRole('button', { name: 'Untick all' }).click()
-  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
-})
-
-/** WHERE A BOX SITS IN THE DOCUMENT, not in the viewport.
- *
- *  `boundingBox()` is viewport-relative, and Playwright scrolls a target into view before it
- *  clicks it — a press near the foot of a column scrolls the page by a few pixels and every
- *  rect on the screen reads as moved. That is the scroll, not the layout, and D118 is about the
- *  layout. Measured: the press below scrolled by exactly 4px and nothing had moved at all. */
-async function pageRect(page: Page, selector: string): Promise<{ top: number; left: number; width: number; height: number }> {
-  return page.evaluate((sel) => {
-    const el = document.querySelector(sel)
-    if (el === null) throw new Error(`no ${sel}`)
-    const box = el.getBoundingClientRect()
-    return { top: box.top + window.scrollY, left: box.left + window.scrollX, width: box.width, height: box.height }
-  }, selector)
+/** The default fixture's own plan: one stop, box 3, one take (Volcanion, wanted 1). */
+function volcanionPlan(): WalkPlan {
+  return walkPlanOf([walkPlanStop()])
 }
 
-test('pressing Start moves nothing in the buyer list (D118)', async ({ page }) => {
-  await open(page, WALK_SELECTION_WORLD())
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
-  await settleFonts(page)
-  await settleMotion(page)
-
-  const before = await pageRect(page, '.orders-index-row')
-
-  /* TWO PRESSES, BOTH OF WHICH ADD OR REMOVE A CONTROL IN THIS COLUMN: the tick makes Start
-     appear, and Start makes it go again. Neither may move the row the hand is over. The slot
-     Start lives in reserves its own tallest state so that neither press can. */
-  await page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Walk 3 orders' })).toBeVisible()
-  await settleMotion(page)
-  expect(await pageRect(page, '.orders-index-row')).toEqual(before)
-
-  await page.locator('.orders-start-slot').getByRole('button', { name: 'Walk 3 orders' }).click()
-  await expect(page.locator('.orders-walk')).toBeVisible()
-  await settleMotion(page)
-  expect(await pageRect(page, '.orders-index-row')).toEqual(before)
-})
-
-test('at phone width, Start appearing moves nothing in the list beneath it (D118)', async ({ page }) => {
-  /* THE RESERVED SLOT'S REAL SUBJECT IS THIS WIDTH. In the wide frame the slot is the last
-     thing in the left column and nothing sits under it to be moved; at 390 the column is one
-     stack and the slot is ABOVE the whole buyer list, so Start arriving would push every row
-     down by its own height. That is what `.orders-start-slot`'s `min-height` reserves, and this
-     is the case that goes red without it.
-     THE START PRESS ITSELF IS NOT ASSERTED HERE, deliberately: at this width the walk is drawn
-     above the list and the list moves by the walk's height. That displacement is the screen
-     changing what it is for, said out loud in `Orders.tsx`, not a control shifting its own
-     surroundings. */
-  await page.setViewportSize({ width: 390, height: 780 })
-  await open(page, WALK_SELECTION_WORLD())
-  await settleFonts(page)
-  await settleMotion(page)
-
-  const before = await pageRect(page, '.orders-list .orders-index-row')
-  await page.getByRole('checkbox', { name: 'Walk Bob' }).check()
-  await expect(page.getByRole('button', { name: 'Walk 1 order' })).toBeVisible()
-  await settleMotion(page)
-  expect(await pageRect(page, '.orders-list .orders-index-row')).toEqual(before)
-
-  /* No horizontal scroll at this width, with the tick and the two selection buttons added. */
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-  expect(overflow).toBeLessThanOrEqual(0)
-})
-
-test('the filters stay on screen while a pass is running, and Start does not', async ({ page }) => {
-  await open(page, WALK_SELECTION_WORLD())
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
-  await startWalk(page)
-  await expect(page.locator('.orders-walk')).toBeVisible()
-
-  /* THE LINE THIS WHOLE SECTION EXISTS TO REMOVE was `mode === 'walk' ? null : …` around these.
-     The owner's answer 1 makes them the SELECTING tool, so they may never be hidden by a pass. */
-  await expect(page.locator('.orders-chips')).toBeVisible()
-  await expect(page.locator('.orders-view-controls')).toBeVisible()
-  await expect(page.locator('.orders-search-input')).toBeVisible()
-  await expect(page.locator('.orders-status-select')).toBeVisible()
-  await expect(page.locator('main.orders').getByRole('button', { name: 'Tick all', exact: true })).toBeEnabled()
-
-  /* START IS NOT OFFERED WHILE A PASS RUNS, so a stray press cannot discard the plan the hand
-     is working. `End walk` first, then Start. */
-  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
-})
-
-test('clicking a buyer during a pass keeps the walk in the main column', async ({ page }) => {
-  await open(page, WALK_SELECTION_WORLD())
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
-  await startWalk(page)
-  await expect(page.locator('.orders-walk')).toBeVisible()
-
-  /* The left list stays live and fully interactive (the owner's ruling, 2026-09-19) — but the
-     detail does NOT open over the walk, and the pass is not ended. */
-  await page.locator('.orders-index-row').filter({ hasText: 'Bob' }).click()
-  await expect(page.locator('.orders-walk')).toBeVisible()
-  await expect(page.locator('.orders-buyer-detail')).toHaveCount(0)
-  await page.getByRole('checkbox', { name: 'Walk Bob' }).uncheck()
-  await expect(page.locator('.orders-walk')).toBeVisible()
-})
-
-test('End walk returns the main column to the buyer detail, and nothing else ends a pass', async ({ page }) => {
-  await open(page, WALK_SELECTION_WORLD())
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
-  await startWalk(page)
-  await expect(page.locator('.orders-walk')).toBeVisible()
-
-  /* A filter, a search and a tick all leave the pass alone — deleting the mode strip deleted the
-     only thing that used to end one, and `End walk` is its whole replacement. */
-  await page.locator('.orders-search-input').fill('Alice')
-  await expect(page.locator('.orders-walk')).toBeVisible()
-  await page.locator('.orders-search-clear').click()
-  await page.locator('main.orders').getByRole('button', { name: 'Untick all' }).click()
-  await expect(page.locator('.orders-walk')).toBeVisible()
-
-  await page.locator('main.orders').getByRole('button', { name: 'End walk' }).click()
-  await expect(page.locator('.orders-walk')).toHaveCount(0)
-  await expect(page.locator('.orders-buyer-detail')).toBeVisible()
-})
-
-test('leaving #/orders ends the pass', async ({ page }) => {
-  /* RE-AIMED. The case this replaces toggled the mode strip back to `By buyer` and asserted the
-     pass was over — §8's "leaving the walk ends the pass", read through the two tabs finding 3
-     named. §12 deletes the tabs, so the claim moves to the other half of that same ruling,
-     which the unmount cleanup in `PullStage` has always carried: "tap another screen, close the
-     tab, come back an hour later — that walk is over." */
-  await open(page, WALK_SELECTION_WORLD())
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop({})]))
-  await startWalk(page)
-  await expect(page.locator('.orders-walk')).toBeVisible()
-
-  /* IN-APP, THROUGH THE SHELL'S OWN NAV — never `page.goto('#/shipping')`, which reloads the
-     tab and takes the whole hub's memory with it. A reload would pass this case against a
-     `PullStage` that had no cleanup at all (measured: it does), so it would be asserting the
-     browser rather than the screen. */
-  await page.locator('.bn-side .app-nav-link').filter({ hasText: 'Shipping' }).click()
-  await expect(page.locator('.orders-walk')).toHaveCount(0)
-  await page.locator('.bn-side .app-nav-link').filter({ hasText: 'Orders' }).click()
-  await expect(page.locator('.orders-index-row').first()).toBeVisible()
-  await expect(page.locator('.orders-walk')).toHaveCount(0)
-})
-
-/* ------------------------------------------------------------------------------------- 66-69
- *
- * `docs/specs/order-walk-plan.md` §9a, findings 1-4 — four layout defects the orchestrating
- * session found at the first render of the walk row, recorded rather than fixed in that round.
- * Each case here is mutation-proved: it fails against the code as it shipped on 2026-09-18,
- * before this fix.
- */
-
-test('a walk row names neither the box nor the section as a labelled field (finding 1)', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([walkPlanStop({ box_name: 'RB Epics', section_name: 'Rares' })]),
-  )
-  await startWalk(page)
-
-  const row = page.locator('.card-locations-row').first()
-  await expect(row).toBeVisible()
-  /* `PositionLabel`'s own `lead='slot'` stack is what draws `BOX <name> · Box <n>` and
-   * `SECTION <n> · <name>` as key/value fields (`.position-path`) — reusing it verbatim on the
-   * walk is exactly how this finding came back once already (2026-09-19, over `CardLocations`'s
-   * default row). `CopyAddress` (`OrdersWalk.tsx`) draws the same two facts as one plain line —
-   * its absence here is the assertion, not a class name chosen to dodge the words: the stop
-   * header already carries the drawer's name and section span once, and a row repeating it is
-   * exactly this finding. */
-  await expect(row.locator('.position-path')).toHaveCount(0)
-  await expect(row).not.toContainText('SECTION')
-  await expect(row).not.toContainText(/\bBOX\b/)
-})
-
-test('the buyer for a card is named only on a stop with more than one buyer, and never by a raw order key (finding 2)', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      /* One buyer: nothing is said, because the walk already knows who it is for. */
-      walkPlanStop({
-        key: 'box/3/section/2',
-        takes: [walkPlanTake({ for: [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }] })],
-      }),
-      /* Two buyers: each take says which, by NAME — never `ref.number`, the order's own key. */
-      walkPlanStop({
-        key: 'box/5/section/1',
-        box: 5,
-        box_name: 'Box Five',
-        section: 1,
-        span: { start: 1, end: 10 },
-        order: 2,
-        takes: [
-          walkPlanTake({
-            sku: '9038408',
-            for: [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }],
-            copies: [walkPlanCopy({ capture_id: 'cap-two-a' })],
-          }),
-          /* THE MUTATION THIS CASE PROVES: a ref with no buyer name at all — D20's optional
-           * field, on an order the feed never named — is exactly what turned "conditional and
-           * a name" into "always, and a raw key" on the shipped screen: `?? b.number` fell
-           * back to this order's own key the moment `buyer` was null. */
-          walkPlanTake({
-            sku: '9038409',
-            name: 'Yasuo, Unforgiven',
-            for: [{ key: `TCGplayer:${OTHER_ORDER}`, number: OTHER_ORDER, buyer: null }],
-            copies: [walkPlanCopy({ capture_id: 'cap-two-b', index: 40 })],
-          }),
-        ],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  const stops = page.locator('.walkplan-stop')
-  await expect(stops).toHaveCount(2)
-  await expect(stops.nth(0).locator('.walkplan-take-for')).toHaveCount(0)
-
-  /* The named take says so, by name. The nameless one says nothing — never `ref.number`. */
-  const multiBuyerFors = stops.nth(1).locator('.walkplan-take-for')
-  await expect(multiBuyerFors).toHaveCount(1)
-  await expect(multiBuyerFors.first()).toHaveText('for Ada Lovelace')
-  await expect(stops.nth(1)).not.toContainText(OTHER_ORDER)
-})
-
-/* SUPERSEDED 2026-09-19 BY §8's "the stop, rebuilt" ruling — finding 3's own fix (a 220px
- * photograph on every copy row) turned out to BE the next defect: two copies of one card drew
- * the same photograph twice, and the photograph's height set a ~307px row around ~90px of
- * content. The ruling's own words: "the photograph belongs to the CARD, once, at the take
- * header." This case asserts that replacement rather than the finding-3 fix it replaces. */
-test('the photograph is drawn once per take, at the take header, never per copy', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({
-        takes: [walkPlanTake({ copies: [walkPlanCopy({ capture_id: 'cap-a' }), walkPlanCopy({ capture_id: 'cap-b', index: 22, slot: 18, card: 18 })] })],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  /* ONE PHOTO FOR THE TAKE, NOT ONE PER COPY — two copies under this take, one `.walkplan-take-
-     photo`. */
-  await expect(page.locator('.walkplan-take-photo')).toHaveCount(1)
-  const photo = page.locator('.walkplan-take-photo').first()
-  await expect(photo).toBeVisible()
-  const box = await photo.boundingBox()
-  /* 76×106, every width (§8's ruling) — never `#/inventory`'s 220px hero, which is what the
-   * card this replaces asked for and is exactly the defect the owner reported. */
-  expect(Math.round(box?.width ?? 0)).toBe(76)
-  /* AND NO ROW DRAWS ITS OWN PHOTOGRAPH — the copy row's own place is `CardLocations`'s row,
-     which never composes a photo element for this caller (no `photoSrc`, and the walk's own
-     `rowOverride` draws none either). */
-  await expect(page.locator('.card-locations-row img')).toHaveCount(0)
-})
-
-test('a walk row draws the copy\'s own position bar and its physical neighbours (finding 4)', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({
-        takes: [
-          walkPlanTake({
-            copies: [
-              walkPlanCopy({
-                neighbors: {
-                  prev: { name: 'Galio, Indefatigable', slot: 16, index: 20, skipped: 0 },
-                  next: { name: 'Evelynn, Entrancing', slot: 18, index: 22, skipped: 0 },
-                },
-              }),
-            ],
-          }),
-        ],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  const row = page.locator('.card-locations-row').first()
-  /* The position bar — the kit's own `PositionBar`, reused rather than the bare `Card 8` this
-   * finding named. `role="img"` is `PositionBar`'s own accessible shape. */
-  await expect(row.getByRole('img').first()).toBeVisible()
-  /* The physical neighbours — `PlaceNeighbors`, reused rather than a fifth hand-rolled
-   * sentence. Its own two names, ranked as `after`/`before`. */
-  await expect(row.locator('.nb')).toBeVisible()
-  await expect(row.locator('.nb')).toContainText('Galio')
-  await expect(row.locator('.nb')).toContainText('Evelynn')
-  /* The stop's own span chip is untouched and not duplicated onto the row. */
-  await expect(page.locator('.walkplan-stop-span')).toHaveCount(1)
-})
-
-/* D212 (every copy is fungible, no order claims one) widened to this very screen, 2026-09-19:
- * every on-hand copy of the take's SKU is drawn, this stop's own copies first, then every
- * other ascending (box, index) — the wire's own load-bearing order (`types.ts:WalkPlanTake`).
- * D93: none is hidden. */
-test('every on-hand copy is drawn, this stop leading, and every one offers Pull (D212, D93)', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({
-        takes: [
-          walkPlanTake({
-            wanted: 1,
-            copies: [
-              walkPlanCopy({ capture_id: 'cap-here-1', here: true }),
-              walkPlanCopy({ capture_id: 'cap-here-2', index: 22, slot: 18, card: 18, here: true }),
-              walkPlanCopy({ capture_id: 'cap-else-1', box: 5, index: 9, slot: 3, card: 3, here: false, key: '5/9' }),
-              walkPlanCopy({ capture_id: 'cap-else-2', box: 6, index: 1, slot: 1, card: 1, here: false, key: '6/1' }),
-            ],
-          }),
-        ],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  const rows = page.locator('.card-locations-row')
-  await expect(rows).toHaveCount(4)
-  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(4)
-  /* THE ORDER IS THE WIRE'S, NEVER RE-SORTED: this stop's two copies first, in the order sent,
-     then the other two, ascending. */
-  const ids = await rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-capture-id')))
-  expect(ids).toEqual(['cap-here-1', 'cap-here-2', 'cap-else-1', 'cap-else-2'])
-})
-
-/* §8's 2026-09-19 ruling: "Undo is per copy, not per take." A take at `1 of 2` — still open,
- * still short of `wanted` — draws its first pulled copy's own Undo. The shipped build gated
- * Undo on the WHOLE TAKE being satisfied, so at `1 of 2` there was none. */
-test('Undo appears on a pulled copy at 1 of 2 taken, before the take is satisfied', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder(), pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 1, places: [], sales: [] } })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({
-        takes: [walkPlanTake({ wanted: 2, copies: [walkPlanCopy({ capture_id: 'cap-a' }), walkPlanCopy({ capture_id: 'cap-b', index: 22, slot: 18, card: 18 })] })],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  await page.locator('.card-locations-row').first().getByRole('button', { name: 'Pull' }).click()
-  await expect(page.locator('.walkplan-take-counter')).toContainText('1 of 2 taken')
-  /* The take is NOT satisfied (1 of 2), so it never reaches the met-take strip — the copy list
-     stays open, and the pulled copy's own row carries its own Undo. */
-  await expect(page.locator('.walkplan-take-done-row')).toHaveCount(0)
-  await expect(page.locator('.walkplan-taken-line').getByRole('button', { name: 'Undo' })).toBeVisible()
-  /* The other copy is untouched and still offers Pull. */
-  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(1)
-})
-
-/* D196: no user-visible string may name a decision, a repository path, or a pipeline-internal
- * noun — and an order's own KEY (`TCGplayer:A2FFC195-0000F4-006AC`) or NUMBER
- * (`A2FFC195-0000F4-006AC`) is exactly that register, never a fact a buyer would read.
- * `Orders.tsx`'s walk receipt shipped printing the raw number; this asserts the sentence names
- * the buyer instead. */
-test('the pull receipt names the buyer, never the order\'s own key or number', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder(), pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] } })
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop()]))
-  await startWalk(page)
-
-  await page.getByRole('button', { name: 'Pull' }).first().click()
-  const toast = page.locator('.bn-toast', { hasText: 'Pulled' })
-  await expect(toast).toBeVisible()
-  await expect(toast).toContainText('Ada Lovelace')
-  await expect(toast).not.toContainText(ORDER_NUMBER)
-  await expect(toast).not.toContainText(`TCGplayer:${ORDER_NUMBER}`)
-})
-
-/* §8's 2026-09-19 ruling: "a stop whose every take is closed collapses to its instruction line
- * and one summary line per take." Naturally true once every take's own collapse fires — this
- * proves the STOP draws nothing else once that happens, rather than asserting the mechanism a
- * second time. */
-test('a stop whose every take is closed draws the instruction line and one summary per take', async ({ page }) => {
-  await open(page, {
-    orders: payloadOf(
-      [order(), order({ key: 'TCGplayer:B31A0C7D-0001A2-00311', number: 'B31A0C7D-0001A2-00311', buyer: 'Tom K.' })],
-      [
-        { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
-        { key: 'TCGplayer:B31A0C7D-0001A2-00311', number: 'B31A0C7D-0001A2-00311', complete: false, outstanding: 1, lines: [line()] },
-      ],
-    ),
-    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [], sales: [] },
-  })
-  await stubWalkPlan(
-    page,
-    walkPlanOf([
-      walkPlanStop({
-        takes: [
-          walkPlanTake({ wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] }),
-          walkPlanTake({
-            sku: '9038409',
-            name: 'Yasuo, Unforgiven',
-            wanted: 1,
-            for: [{ key: 'TCGplayer:B31A0C7D-0001A2-00311', number: 'B31A0C7D-0001A2-00311', buyer: 'Tom K.' }],
-            copies: [walkPlanCopy({ capture_id: 'cap-b', index: 30, slot: 25, card: 25 })],
-          }),
-        ],
-      }),
-    ]),
-  )
-  await startWalk(page)
-
-  await page.getByRole('button', { name: 'Pull' }).first().click()
-  await expect(page.locator('.walkplan-take-counter').first()).toContainText('1 of 1 taken')
-  await page.getByRole('button', { name: 'Pull' }).first().click()
-
-  // past both undo windows
-  await page.waitForTimeout(20_500)
-
-  await expect(page.locator('.walkplan-stop-instruction')).toBeVisible()
-  await expect(page.locator('.walkplan-take-collapsed')).toHaveCount(2)
-  await expect(page.locator('.card-locations-row')).toHaveCount(0)
-  await expect(page.locator('.walkplan-take-done-row')).toHaveCount(0)
-})
-
-/* ------------------------------------------------------------------------------------- 25
- *
- * THE WALK'S POSITIONAL FACTS ARE REAL, AND THEY REFRESH ON A PULL.
- * `docs/specs/order-walk-plan.md` §8, "What the freeze covers, and what it does not — RULED
- * 2026-09-19". The owner's ruling, answering a case that document had not considered.
- *
- * THE CASE IS THE WALK'S OWN NORMAL OPERATION, NOT AN OUTSIDE SALE. The solver packs a pass
- * into the fewest drawers, so two cards at one stop are LIKELY to be physical neighbours.
- * Pull the first and D58 renumbers the drawer behind it: the second card's `#18` becomes
- * `#17`, and its neighbour line names a card that has just left.
- *
- * WHAT IS FROZEN AND WHAT IS NOT. Frozen: which drawers, which cards, the stop order, the row
- * order and the copy order. Refreshed: neighbours, the card's own number and the position bar
- * — the DESCRIPTION of a card that is still the same card, at the same stop, in the same
- * place in the list. The last case in this block is the fence: a pull re-orders nothing and
- * re-solves nothing.
- *
- * MUTATED PER ASSERTION, per this repo's rule that a guard must see its subject. Sending
- * `box_total: 0` again turns A red; dropping `refresh` from the request, or `refreshed` from
- * the answer, turns B red; widening the refresh past the touched box turns C red; deleting
- * `.card-locations-row-override`'s `min-height` reservation (`OrdersWalk.css`) turns D red;
- * dropping the `gone` blanking turns E red; dropping `refresh` from the undo turns F red; and
- * re-fetching the plan on a press turns F2 red.
- */
-
-const NEAR_SKU = '9191999'
-
-/** Two cards in one drawer, physically adjacent, plus one card in a second drawer. The shape
- *  the solver produces on most walks, and the shape the ruling is about. */
-function twoInOneDrawer(): OrdersPayload {
-  const first = line()
-  const second = line({
-    sku: NEAR_SKU,
-    line: { ...line().line, sku: NEAR_SKU, name: 'Sunrise' },
-    picks: [
-      pick({
-        index: 22,
-        capture_id: 'cap-b',
-        card_name: 'Sunrise',
-        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
-      }),
-    ],
-  })
-  const owing = (sku: string): OrderLineProgress => ({
-    sku,
-    wanted: 1,
-    recorded: 0,
-    outstanding: 1,
-    over: 0,
-    copies: [],
-    at: null,
-    by_hand: 0,
-    reason: null,
-    declared_kind: null,
-    closed_at: null,
-    closed_reason: null,
-  })
-  const row = order({ wanted: 2, lines: [first.line, second.line], progress: [owing(SKU), owing(NEAR_SKU)] })
-  return payloadOf(
-    [row],
-    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [first, second] }],
-  )
-}
-
-/** The plan over that world: one stop holding both neighbours, and a second stop in box 5
- *  whose only job is to be somewhere the press must NOT reach.
- *
- *  `volcanionWanted` DEFAULTS TO 1, which every case but the fence wants: one pull satisfies
- *  the take, and that is what puts it into its own met-take strip (§8's 2026-09-19 ruling) —
- *  exactly the state several cases below are about. The fence test alone passes `2`, because
- *  its own claim is that a pull re-orders nothing in a list that is STILL OPEN; the take
- *  reaching satisfied and folding into a strip is a real, on-purpose CONTENT change (a state
- *  transition), never a reordering, and conflating the two would make the fence assert
- *  something this rebuild deliberately does. */
-function twoDrawerPlan(volcanionWanted = 1): WalkPlan {
+/** The second buyer's own plan: one stop, box 5, one take (Sunrise, wanted 1). */
+function sunrisePlan(): WalkPlan {
   return walkPlanOf([
-    walkPlanStop({
-      takes: [
-        walkPlanTake({
-          wanted: volcanionWanted,
-          copies: [walkPlanCopy({ neighbors: { prev: null, next: { name: 'Sunrise', slot: 18, index: 22, skipped: 0 } } })],
-        }),
-        walkPlanTake({
-          sku: NEAR_SKU,
-          name: 'Sunrise',
-          number_display: '026',
-          copies: [
-            walkPlanCopy({
-              index: 22,
-              slot: 18,
-              card: 18,
-              capture_id: 'cap-b',
-              label: 'Box 3 · Section 2 · Card 18',
-              neighbors: { prev: { name: 'Volcanion', slot: 17, index: 21, skipped: 0 }, next: null },
-            }),
-          ],
-        }),
-      ],
-    }),
     walkPlanStop({
       key: 'box/5/section/1',
       box: 5,
       box_name: 'Box Five',
       section: 1,
       span: { start: 1, end: 10 },
-      order: 2,
       takes: [
         walkPlanTake({
-          sku: TERM_SKU,
-          name: 'Terminal Treasure',
-          number_display: null,
-          for: [{ key: TERM_KEY, number: TERM_NUMBER, buyer: 'Nora Terminal' }],
-          copies: [
-            walkPlanCopy({
-              box: 5,
-              index: 50,
-              slot: 1,
-              card: 1,
-              capture_id: 'cap-term',
-              label: 'Box 5 · Section 1 · Card 1',
-              box_total: 40,
-              fraction: 0,
-              neighbors: { prev: null, next: { name: 'Far Away', slot: 2, index: 51, skipped: 0 } },
-            }),
-          ],
+          sku: SECOND_SKU,
+          name: 'Sunrise',
+          number_display: '030',
+          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second' }],
+          copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5 · Section 1 · Card 1' })],
         }),
       ],
     }),
   ])
 }
 
-/** What the server answers when the press hands it `refresh`. The drawer has closed up by one,
- *  so the card behind takes the departed card's number and new landmarks. `skipped: 2` on both
- *  sides is deliberate: it is the TALLEST the ladder gets, and case D is about that. */
-function refreshedSunrise(): Place {
-  return place({
-    index: 22,
-    slot: 17,
-    card: 17,
-    label: 'Box 3 · Section 2 · Card 17',
-    box_total: 132,
-    neighbors: {
-      prev: { name: 'Galio, Indefatigable', slot: 16, index: 19, skipped: 2 },
-      next: { name: 'Evelynn, Entrancing', slot: 18, index: 25, skipped: 2 },
-    },
+/** Both buyers' orders in one plan — what the walked union asks for once the second buyer is
+ *  ticked alongside the first, which is already selected. */
+function bothPlan(): WalkPlan {
+  return walkPlanOf([volcanionPlan().stops[0]!, sunrisePlan().stops[0]!])
+}
+
+/* -------------------------------------------------------- selecting starts, ticking joins */
+
+test('clicking a buyer selects it and its walk starts at once — no Start button', async ({ page }) => {
+  /* RE-AIMED: the ORIGINAL premise here was that NOTHING is walked before a click —
+     `.browse-walk` asserted `toHaveCount(0)` ahead of `startWalk`. That was never true once a
+     buyer exists: `selectedKey`'s own fallback to `shownGroups[0]` (pre-dating this pass, D193's
+     own reasoning — a status filter that hides the selected buyer must never leave the detail
+     blank) selects the sole buyer on the very FIRST render, before any click, and selecting
+     starts the walk at once (§13). It passed before only because `stubWalkPlan` called after
+     `open()` loses the race for that first fetch (see `open()`'s own `walkPlan` comment) and the
+     walk stayed empty for the wrong reason. The claim this case actually owns — there is no
+     separate `Start`/`Walk N orders` control anywhere on the screen — is real and kept. */
+  await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
+
+  await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
+  await expect(page.locator('.browse-walk')).toContainText('Volcanion')
+})
+
+test('ticking a second buyer joins the walk live, and it re-plans with no press but the tick', async ({ page }) => {
+  /* `open()`'s own `walkPlan`, not `stubWalkPlan` alone — the sole selected buyer (Ada) starts
+     her walk on landing (§13), which raced the `stubWalkPlan` call below often enough to flake
+     (see that option's own comment). `bothPlan()` up front, `stubWalkPlan` still registered
+     after for its own `calls()` counter, which only needs to prove a SECOND fetch happens once
+     the tick changes the walked set — a claim the initial fetch's own timing cannot affect. */
+  const { payload } = secondBuyerPayload()
+  await open(page, { orders: payload, walkPlan: bothPlan() })
+  const planned = await stubWalkPlan(page, bothPlan())
+  await expect(page.locator('.browse-walk')).toContainText('Volcanion')
+  const callsAfterSelect = planned.calls()
+
+  await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
+
+  await expect(page.locator('.browse-walk')).toContainText('Sunrise')
+  await expect(page.locator('.browse-walk')).toContainText('Volcanion')
+  expect(planned.calls()).toBeGreaterThan(callsAfterSelect)
+})
+
+test('clicking buyer B while A is selected replaces A — the walk is over B alone', async ({ page }) => {
+  /* `open()`'s own `walkPlan` for A's plan — A selects herself on landing (§13), which races a
+     `stubWalkPlan` call made after `open()` (see that option's comment). B's own re-plan below,
+     triggered by an explicit click that changes the walked set, is not raced the same way and
+     keeps its `stubWalkPlan` call as before. */
+  const { payload } = secondBuyerPayload()
+  await open(page, { orders: payload, walkPlan: volcanionPlan() })
+  await expect(page.locator('.browse-walk')).toContainText('Volcanion')
+
+  await stubWalkPlan(page, sunrisePlan())
+  await page.locator('.orders-index-row', { hasText: 'Nora Second' }).click()
+
+  await expect(page.locator('.browse-walk')).toContainText('Sunrise')
+  await expect(page.locator('.browse-walk')).not.toContainText('Volcanion')
+})
+
+/* ------------------------------------------------------------------------ the order panel */
+
+test('the selected order\'s panel is mock A\'s shape: label, title, Manage, pill, the bn-stat triad', async ({ page }) => {
+  const owing = order({ wanted: 4, recorded: 1 })
+  const resolvedLine = line({ reason: 'short', owed: 2, wanted: 2 })
+  await open(page, {
+    orders: payloadOf([owing], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [resolvedLine] }]),
   })
-}
-
-function pullAnswer(refreshed: readonly Place[], over: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    undone: false,
-    order_key: `TCGplayer:${ORDER_NUMBER}`,
-    sku: SKU,
-    newly: 1,
-    recorded: 1,
-    outstanding: 0,
-    places: [place()],
-    refreshed: [...refreshed],
-    sales: [],
-    ...over,
-  }
-}
-
-/** The stop order, the row order inside each stop and the copy order inside each row, as one
- *  string. The fence's own reading: a pull may move none of it. */
-async function shapeOf(page: Page): Promise<string> {
-  return page.evaluate(() =>
-    [...document.querySelectorAll('.walkplan-stop')]
-      .map((stop) =>
-        [
-          stop.getAttribute('aria-label') ?? '',
-          ...[...stop.querySelectorAll('.walkplan-take')].map((take) =>
-            [
-              take.querySelector('.walkplan-take-name')?.textContent ?? '',
-              ...[...take.querySelectorAll('.card-locations-row')].map((copy) => copy.getAttribute('data-capture-id') ?? ''),
-            ].join('>'),
-          ),
-        ].join('|'),
-      )
-      .join('//'),
-  )
-}
-
-/** Press the Pull inside the row whose card is `name`. */
-async function pullRowNamed(page: Page, name: string): Promise<void> {
-  await page
-    .locator('.walkplan-take')
-    .filter({ has: page.locator('.walkplan-take-name', { hasText: name }) })
-    .getByRole('button', { name: 'Pull' })
-    .click()
-}
-
-/** The copy row for one capture id, whichever stop it sits in — `CardLocations`'s own row,
- *  reused (`docs/specs/order-walk-plan.md` §8's 2026-09-19 "the stop, rebuilt" ruling), never
- *  the walk's own hand-rolled `.walkplan-copy` any more. */
-function copyRow(page: Page, captureId: string) {
-  return page.locator(`.card-locations-row[data-capture-id="${captureId}"]`)
-}
-
-test('the walk row draws a real proportion, not the "box we could not size" blank track', async ({ page }) => {
-  await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop()]))
   await startWalk(page)
 
-  /* `PositionBar`'s accessible name IS `position.ts:sentenceOf`. With a real `box_total` the
-     owner's form elsewhere reads `#17 of 133 so far`; with the `box_total: 0` this screen
-     shipped with it reads "where this sits in the box is not known yet", on every row, for
-     ever. The two are different sentences, so asserting the first is a guard the second
-     cannot pass — and it is D194's own direction of travel too, the real one being the
-     shorter. The walk's own copy is shorter still: no `so far` (see below). */
-  const bar = copyRow(page, 'cap-a').getByRole('img').first()
-  await expect(bar).toHaveAttribute('aria-label', '#17 of 133')
-  /* And the track is real segments rather than the honest blank one. */
-  await expect(copyRow(page, 'cap-a').locator('.position-bar-segment-blank')).toHaveCount(0)
+  const panel = page.locator('.boxops-identity')
+  await expect(panel.locator('.boxops-identity-num')).toContainText(ORDER_NUMBER)
+  await expect(panel.locator('.boxops-identity-name')).toContainText('Ada Lovelace')
+  await expect(panel.getByRole('button', { name: 'Manage' })).toBeVisible()
+  await expect(panel.locator('.bn-pill')).toBeVisible()
+
+  const stats = panel.locator('.card-locations-stats .bn-stat')
+  await expect(stats).toHaveCount(3)
+  await expect(stats.nth(0).locator('.bn-stat-label')).toHaveText('owed')
+  await expect(stats.nth(1).locator('.bn-stat-label')).toHaveText('sold')
+  await expect(stats.nth(2).locator('.bn-stat-label')).toHaveText('short')
+  await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('3')
+  await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('1')
+
+  /* NO TYPED MIDDLE DOT anywhere in the panel (§13, mock A). */
+  await expect(panel).not.toContainText(' · ')
 })
 
-test('the walk\'s copy bar never says "so far"', async ({ page }) => {
-  /* `docs/specs/order-walk-plan.md` §8's "The stop, rebuilt" ruling, owner, 2026-09-19: "The
-     copy's bar reads `#8 of 34`, never `#8 of 34 so far`." `so far` is `PositionBar`'s own
-     caption for a box still being FILLED — true on `#/capture` and `#/inventory`, meaningless
-     in the middle of a PULL. This is the walk's own opt-out (`PositionBar`'s `soFar` prop,
-     `OrdersWalk.tsx`'s one direct call), asserted directly against the caption's own text so a
-     future caller cannot quietly bring the two words back. */
-  await open(page, { orders: oneOpenOrder() })
-  await stubWalkPlan(page, walkPlanOf([walkPlanStop()]))
-  await startWalk(page)
-
-  const bar = copyRow(page, 'cap-a').getByRole('img').first()
-  await expect(bar).toHaveAttribute('aria-label', '#17 of 133')
-  const label = await bar.getAttribute('aria-label')
-  expect(label ?? '').not.toContain('so far')
-})
-
-test('a pull re-describes the row still ahead in the same drawer', async ({ page }) => {
-  const wire = await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
-  await stubWalkPlan(page, twoDrawerPlan())
-  await startWalk(page)
-
-  const sunrise = copyRow(page, 'cap-b')
-  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#18 of 133')
-  await expect(sunrise.locator('.nb')).toContainText('Volcanion')
-
-  await pullRowNamed(page, 'Volcanion')
-
-  /* THE REQUEST NAMED THE CARD IT WAS NOT TOUCHING. `targets` is the card coming out of the
-     drawer; `refresh` is the card staying in it. Two lists, one press, never overlapping. */
-  const sent = wire.filter((one) => one.path.endsWith('/orders/pull')).at(-1)?.body as {
-    targets: { box: number; index: number; capture_id: string }[]
-    refresh: { box: number; index: number }[]
-  }
-  expect(sent.targets).toEqual([{ box: 3, index: 21, capture_id: 'cap-a' }])
-  expect(sent.refresh).toEqual([{ box: 3, index: 22 }])
-
-  /* AND THE ROW SAYS THE NEW THING. The drawer closed up, so Sunrise is card 17 of 132 now and
-     the landmark it used to sit behind has gone. */
-  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132')
-  await expect(sunrise.locator('.nb')).not.toContainText('Volcanion')
-  await expect(sunrise.locator('.nb')).toContainText('Galio')
-})
-
-test('a pull re-describes nothing in a drawer it never opened', async ({ page }) => {
-  const wire = await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
-  await stubWalkPlan(page, twoDrawerPlan())
-  await startWalk(page)
-
-  const far = copyRow(page, 'cap-term')
-  const before = await far.getByRole('img').first().getAttribute('aria-label')
-  const farLadder = await far.locator('.nb').textContent()
-
-  await pullRowNamed(page, 'Volcanion')
-  await expect(copyRow(page, 'cap-b').getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132')
-
-  /* The box-5 copy was never named in `refresh` — nothing moved in that drawer — and it says
-     exactly what it said before. */
-  const sent = wire.filter((one) => one.path.endsWith('/orders/pull')).at(-1)?.body as { refresh: { box: number }[] }
-  expect(sent.refresh.every((one) => one.box === 3)).toBe(true)
-  await expect(far.getByRole('img').first()).toHaveAttribute('aria-label', before ?? '')
-  expect(await far.locator('.nb').textContent()).toBe(farLadder)
-})
-
-test('the re-description moves nothing: the row keeps its height and its Pull stays put', async ({ page }) => {
-  /* AT PHONE WIDTH, WHERE THE ROW'S OWN GRID STACKS (`OrdersWalk.css`'s `@container copies
-     (max-width: 619px)`) rather than the desktop's three-column place/state/action row. The
-     photograph is gone from the row entirely since §8's 2026-09-19 rebuild — it is the take's
-     own header now, once — so what is left to reserve is the address, the ladder and the bar,
-     and `.card-locations-row-override`'s `min-height` is what holds them still. Proved by
-     mutation: deleting that rule leaves this case GREEN at 1440 (the grid has slack) and turns
-     it red here, where the stacked column has none. */
-  await page.setViewportSize({ width: 390, height: 900 })
-  await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
-  await stubWalkPlan(page, twoDrawerPlan())
-  await startWalk(page)
-
-  const sunrise = copyRow(page, 'cap-b')
-  const pullButton = sunrise.getByRole('button', { name: 'Pull' })
-
-  /* D118, READ AS A RECT-DIFF, the way `inventory.spec.ts` reads it for Mark sold. The row is
-     BELOW the one being pressed, so its TOP moves as that row opens its own done state — that
-     is the press's own doing and is not what this asserts. What may not change is this row's
-     OWN geometry: its height, and where its control sits inside it. Before the refresh the
-     ladder is one line a side; after it, `skipped: 2` puts a second line under each name — the
-     tallest state the block can take — and `.card-locations-row-override`'s reservation is the
-     only reason that costs nothing. Delete that rule and this case goes red. */
-  const geometry = async () => {
-    const row = await sunrise.boundingBox()
-    const button = await pullButton.boundingBox()
-    return { height: Math.round(row?.height ?? 0), offset: Math.round((button?.y ?? 0) - (row?.y ?? 0)) }
-  }
-  const before = await geometry()
-
-  await pullRowNamed(page, 'Volcanion')
-  await expect(sunrise.locator('.nb')).toContainText('Galio')
-  await expect(sunrise.locator('.nb-skip').first()).toBeVisible()
-
-  /* WITHIN 1px, NOT EXACT, for the reason `orders.spec.ts`'s own D118 case two rows up carries
-     in full: two font-shaping passes over two different strings ("one line a side" against
-     "two, with a skip caption") can round a sub-pixel baseline a device-pixel apart, measured
-     here across five repeats — 1px on one of five, 0px on the rest. The structural failure this
-     case exists to catch is the ROW GROWING (measured before this fix: 168px -> 217px, and the
-     button's offset with it, 63px -> 112px) — a whole reservation missing, not a hinting jitter. */
-  const after = await geometry()
-  expect(after.height, 'the row changed height across the refresh').toBe(before.height)
-  expect(Math.abs(after.offset - before.offset), 'the Pull button moved inside its own row').toBeLessThanOrEqual(1)
-})
-
-test('a row the press found already gone blanks its own neighbour line', async ({ page }) => {
-  await open(page, { orders: twoInOneDrawer() })
-  await stubWalkPlan(page, twoDrawerPlan())
-  await startWalk(page)
-
-  const volcanion = copyRow(page, 'cap-a')
-  await expect(volcanion.locator('.nb')).toContainText('Sunrise')
-
-  /* The press loses the race: this copy went somewhere else. `OrdersWalk.tsx` marks that row
-     `gone` in place (D118 — nothing is removed), and the ladder it is still holding names
-     cards around a card that is not there. Blank is the honest answer, and the reserved slot
-     is why blanking moves nothing. Registered here rather than through `open`'s own `pull`
-     option because this one answers a REFUSAL, not a body. */
-  await page.route(/\/orders\/pull$/, async (route) => {
-    /* THE ENVELOPE IS `{error: {code, message}}` — `server.ts:errorEnvelope`'s own shape. A
-       bare `{code, message}` reads as a refusal from something that is not this server and
-       arrives as `http_error`, which no row branches on. */
-    await route.fulfill({
-      status: 409,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: { code: 'copy_already_pulled', message: 'That copy has already been pulled.' } }),
-    })
+test('a buyer holding two orders reads N ORDERS in the label, aggregated across both', async ({ page }) => {
+  const second = order({ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Ada Lovelace', wanted: 1, recorded: 0 })
+  await open(page, {
+    orders: payloadOf(
+      [order(), second],
+      [
+        { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+        { key: secondBuyerKey, number: SECOND_BUYER_ORDER, complete: false, outstanding: 1, lines: [line({ order: SECOND_BUYER_ORDER, order_key: secondBuyerKey })] },
+      ],
+    ),
   })
-  await pullRowNamed(page, 'Volcanion')
-
-  await expect(volcanion).toHaveAttribute('data-state', 'gone')
-  await expect(volcanion.locator('.nb')).toHaveCount(0)
-  /* THE ROW'S OWN HEIGHT IS THE RESERVATION NOW (`.card-locations-row-override`'s `min-height`,
-     `OrdersWalk.css`) — there is no second, dedicated wrapper to assert is still attached. A
-     blanked ladder must not shrink the row below the reservation any live row also gets. */
-  const height = await volcanion.evaluate((el) => el.getBoundingClientRect().height)
-  expect(height).toBeGreaterThanOrEqual(90)
+  await startWalk(page)
+  await expect(page.locator('.boxops-identity-num')).toHaveText('2 ORDERS')
 })
 
-test('an undo inside the window puts the description back with the card', async ({ page }) => {
+/* --------------------------------------------------------------------------- the Manage sheet */
+
+test('Manage opens a sheet carrying the fetch/paste well, the status picker and both stand-down prompts', async ({ page }) => {
+  const owing = terminalOwingOrder()
+  await open(page, { orders: payloadOf([owing, order()], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
+
+  await expect(page.locator('.orders-paste')).toHaveCount(0)
+  await openManage(page)
+
+  const sheet = page.locator('.orders-manage-sheet')
+  await expect(sheet.locator('.orders-paste')).toHaveCount(1)
+  await expect(sheet.getByRole('button', { name: /statuses/i })).toBeVisible()
+  /* The shipped-but-owing backlog prompt (D113) is reachable inside the sheet. */
+  await expect(sheet).toContainText('Shipped')
+})
+
+test('the selected buyer\'s own orders stay reachable in Manage for stand-down, close-line and declare-kind', async ({ page }) => {
+  const shortLine = line({ reason: 'no_copies_on_hand', owed: 1, wanted: 1, picks: [] })
+  await open(page, { orders: payloadOf([order()], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [shortLine] }]) })
+  await startWalk(page)
+  await openManage(page)
+
+  const sheet = page.locator('.orders-manage-sheet')
+  await expect(sheet.locator('.orders-manage-orders')).toContainText(ORDER_NUMBER)
+  await expect(sheet.locator('.orders-manage-orders')).toContainText('Volcanion')
+})
+
+/* --------------------------------------------------------------------------- the pane is inventory's */
+
+test('the walk pane is inventory\'s own card pane: the same header, photo, copies and Details classes', async ({ page }) => {
+  /* THE REUSED PANE ONLY DRAWS ONCE `rawCards` RESOLVES THE CURRENT ROW'S REAL `InventoryCard`
+     (`OrdersWalkPane.tsx`'s own `currentCard`) — before that it falls back to a synthesised
+     header with no photo and no Details at all, which is what made this case's photo and
+     Details assertions time out. `inventoryCards`, keyed to the plan's own box/index, is what
+     makes the read answer with a real card instead of the empty default. */
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard() },
+  })
+
+  const pane = page.locator('.orders-walk-card')
+  /* THE HERO HEAD, `CardHeroHead` — `BoxBrowse.tsx`'s own classes. */
+  await expect(pane.locator('.browse-hero-head .browse-hero-name')).toContainText('Volcanion')
+  /* THE PHOTOGRAPH, `PhotoPanel`. */
+  await expect(pane.locator('.bn-photo, .browse-photo-frame')).toBeVisible()
+  /* "EVERY COPY OF THIS CARD" — `CardLocations`, unmodified. */
+  await expect(pane.locator('.card-locations-title')).toHaveText('Every copy of this card')
+  await expect(pane.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  /* DETAILS — `CardDetailsSection`, moved whole from `BoxBrowse.tsx`. */
+  await expect(pane.locator('.browse-details .browse-details-hint')).toHaveText('identity · claims · provenance')
+
+  /* AND NONE OF INVENTORY'S OWN EDITING ACTIONS: no Card actions menu, no Retire, no re-shoot —
+     left out by name (§13's override): retire, move and re-shoot are Inventory-only. */
+  await expect(pane.getByRole('button', { name: 'Card actions' })).toHaveCount(0)
+  await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
+})
+
+/* --------------------------------------------------------------------------------- Mark sold */
+
+test('Mark sold records the copy against the owing order, and the order panel updates', async ({ page }) => {
+  /* `open()`'s own `walkPlan`, not `stubWalkPlan` after it — the sole buyer selects itself on
+     landing (§13), so the plan has to be this screen's FIRST answer (see that option's
+     comment for the race a later stub loses).
+
+     `orders` IS A FUNCTION, ANSWERING THE SOLD FIGURE ON THE SECOND READ. The order panel's own
+     `sold` stat is `group.recorded`, off `GET /orders`'s own answer — not the walk's local
+     tally — so `onWalkPull`'s post-write `Promise.all([reread(), rereadStore()])` has to see
+     the copy recorded for the panel to move at all. A static payload here would leave `sold`
+     at 0 forever, which is a fixture gap this case's own claim depends on closing, not a
+     product one. */
+  let readCalls = 0
   const wire = await open(page, {
-    orders: twoInOneDrawer(),
-    pull: (body: unknown) => {
-      /* The undo answers the card's OLD description, because the drawer has opened back up. */
-      const sent = body as { undo?: boolean }
-      return sent.undo === true
-        ? pullAnswer([place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18', box_total: 133 })], {
-            undone: true,
-            newly: 0,
-            recorded: 0,
-            outstanding: 1,
-          })
-        : pullAnswer([refreshedSunrise()])
-    },
+    orders: () =>
+      readCalls++ === 0
+        ? oneOpenOrder()
+        : payloadOf(
+            [order({ recorded: 1 })],
+            [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: true, outstanding: 0, lines: [line({ fulfilled: 1, outstanding: 0, sold: 1 })] }],
+          ),
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+    walkPlan: volcanionPlan(),
   })
-  await stubWalkPlan(page, twoDrawerPlan())
-  await startWalk(page)
 
-  await pullRowNamed(page, 'Volcanion')
-  const sunrise = copyRow(page, 'cap-b')
-  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132')
+  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
 
-  await page
-    .locator('.walkplan-take')
-    .filter({ has: page.locator('.walkplan-take-name', { hasText: 'Volcanion' }) })
-    .getByRole('button', { name: 'Undo' })
-    .click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBeGreaterThan(0)
+  const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
+  expect(sent?.body).toMatchObject({
+    source: 'TCGplayer',
+    number: ORDER_NUMBER,
+    sku: SKU,
+    targets: [{ box: 3, index: 21, capture_id: 'cap-a' }],
+  })
 
-  /* The reversal named the same cards the pull did, and the row is back at card 18 of 133. */
-  await expect(sunrise.getByRole('img').first()).toHaveAttribute('aria-label', '#18 of 133')
-  const undone = wire.filter((one) => one.path.endsWith('/orders/pull')).at(-1)?.body as {
-    undo: boolean
-    refresh: { box: number; index: number }[]
-  }
-  expect(undone.undo).toBe(true)
-  expect(undone.refresh).toEqual([{ box: 3, index: 22 }])
+  const stats = page.locator('.boxops-identity .card-locations-stats .bn-stat')
+  await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('1')
 })
 
-test('THE FENCE: a pull re-orders no stop, no row and no copy, and re-solves nothing', async ({ page }) => {
-  /* `volcanionWanted: 2` keeps the take OPEN across the one pull below — the fence is about
-     ordering, not about the met-take strip a satisfied take deliberately becomes (see
-     `twoDrawerPlan`'s own comment). */
-  await open(page, { orders: twoInOneDrawer(), pull: () => pullAnswer([refreshedSunrise()]) })
-  const planned = await stubWalkPlan(page, twoDrawerPlan(2))
+/* ------------------------------------------------------------------- the trap: no re-sort */
+
+test('a sale does not re-sort the walk list, and this section leads', async ({ page }) => {
+  /* THE TRAP THIS SCREEN'S OWN BRIEF NAMED FIRST: `CardLocations` re-sorts by fullest section
+     on every render UNLESS `preserveOrder` is passed. This case builds a plan whose SECOND
+     section (box 5) would sort ahead of the first (box 3) under that rule — box 5's take
+     starts with more on-hand copies — then sells the first row's own copy and asserts the
+     section order and the row order are both exactly as the plan sent them, before and after.
+     Verified red first: dropping `preserveOrder` from `WalkMainPane`'s `CardLocations` call
+     turns this case red, because the sale then sorts the just-sold copy's section behind the
+     section that still has more on hand. */
+  const denseSecondSection = walkPlanOf([
+    walkPlanStop({ key: 'box/3/section/2', box: 3, box_name: 'RB Epics', section: 2 }),
+    walkPlanStop({
+      key: 'box/5/section/1',
+      box: 5,
+      box_name: 'Box Five',
+      section: 1,
+      order: 2,
+      span: { start: 1, end: 10 },
+      takes: [
+        walkPlanTake({
+          sku: SECOND_SKU,
+          name: 'Sunrise',
+          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second' }],
+          copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5 · Section 1 · Card 1' })],
+        }),
+      ],
+    }),
+  ])
+  const { payload } = secondBuyerPayload()
+  await open(page, {
+    orders: payload,
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+  })
+  await stubWalkPlan(page, denseSecondSection)
+  await startWalk(page)
+  await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
+  await expect(page.locator('.browse-list')).toContainText('Sunrise')
+
+  /* HIDE SOLD DEFAULTS ON (D132, reused for the walk by §13's override — no new key). Turned
+     off here on purpose: this case is about ORDER, not visibility, and the sold row disappearing
+     under the default is a second, true, and unrelated claim that would otherwise make `before`
+     and `after` differ for a reason this case is not naming. */
+  await page.locator('.browse-hidesold').click()
+
+  const before = await page.locator('.browse-list .browse-secttitle, .browse-list .browse-row-name').allTextContents()
+
+  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
+  await expect
+    .poll(async () => (await page.locator('.orders-walk-card .browse-hero-name').textContent()) ?? '')
+    .not.toBe('Volcanion')
+
+  const after = await page.locator('.browse-list .browse-secttitle, .browse-list .browse-row-name').allTextContents()
+  expect(after).toEqual(before)
+})
+
+/* --------------------------------------------------------------------------- J/K, auto-advance */
+
+test('J steps to the next card in the walk list, K steps back', async ({ page }) => {
+  await open(page, { orders: secondBuyerPayload().payload })
+  await stubWalkPlan(page, bothPlan())
+  await startWalk(page)
+  await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
+  await expect(page.locator('.browse-list')).toContainText('Sunrise')
+
+  /* THE HAND IS ON THE PAGE HEADING, NOT ON THE TICK CHECKBOX — `check()` leaves focus on the
+     checkbox `<input>` it clicked, and `J`/`K`'s own listener yields to ANY `INPUT`, checkbox
+     included, the same guard `U`'s own case moves off a field for. */
+  await page.getByRole('heading', { name: 'Orders' }).click()
+
+  const first = await page.locator('.orders-walk-card .browse-hero-name').textContent()
+  await page.keyboard.press('j')
+  await expect
+    .poll(async () => page.locator('.orders-walk-card .browse-hero-name').textContent())
+    .not.toBe(first)
+  const second = await page.locator('.orders-walk-card .browse-hero-name').textContent()
+
+  await page.keyboard.press('k')
+  await expect(page.locator('.orders-walk-card .browse-hero-name')).toHaveText(first ?? '')
+  expect(second).not.toBe(first)
+})
+
+test('when a card\'s owed copies are all sold, the next card in the walk lights', async ({ page }) => {
+  const wire = await open(page, {
+    orders: secondBuyerPayload().payload,
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+  })
+  await stubWalkPlan(page, bothPlan())
+  await startWalk(page)
+  await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
+  await expect(page.locator('.orders-walk-card .browse-hero-name')).toHaveText('Volcanion')
+
+  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBeGreaterThan(0)
+
+  /* Volcanion's own `wanted: 1` is now satisfied by the one sale, so the pane lights the next
+     card — Sunrise — without a press beyond the sale itself. */
+  await expect(page.locator('.orders-walk-card .browse-hero-name')).toHaveText('Sunrise')
+})
+
+/* --------------------------------------------------------------------------------- the words */
+
+test('drawer, pull, stop and take do not appear anywhere on the screen — Mark sold and all pulled do', async ({ page }) => {
+  const satisfied = order({ wanted: 2, recorded: 2 })
+  await open(page, {
+    orders: payloadOf([satisfied, order({ key: secondBuyerKey, number: SECOND_BUYER_ORDER })], [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: true, outstanding: 0, lines: [line({ reason: 'resolved', owed: 0 })] },
+      { key: secondBuyerKey, number: SECOND_BUYER_ORDER, complete: false, outstanding: 1, lines: [line({ order: SECOND_BUYER_ORDER, order_key: secondBuyerKey })] },
+    ]),
+  })
+  await stubWalkPlan(page, volcanionPlan())
   await startWalk(page)
 
-  /* THE WHOLE POINT OF THE PASS (§8, D181, D118). The plan is solved once. A press may change
-     what a row SAYS and may never change which drawers the walk visits, which cards it asks
-     for, the order of the stops, the order of the rows in a stop, or the order of the copies
-     in a row. This reads all four as one string and asserts the press left it alone.
-     The call count is the other half: re-fetching the plan after a write is the obvious wrong
-     fix for the staleness this feature removes, and it would pass every assertion above.
+  const text = (await page.locator('main.orders').innerText()).toLowerCase()
+  for (const banned of ['drawer', 'stop', 'take']) {
+    expect(text, `"${banned}" must not appear on #/orders`).not.toMatch(new RegExp(`\\b${banned}\\b`))
+  }
+  /* "pull" survives only inside the Fulfiller hand-off's own name, "Cards to pull" — that
+     screen's real title, quoted rather than reworded. Nowhere else. */
+  const pullMatches = text.match(/\bpull\w*/g) ?? []
+  for (const match of pullMatches) {
+    expect(['pull'].includes(match) && text.includes('cards to pull'), `unexpected "${match}"`).toBe(true)
+  }
+  expect(text).not.toContain('all pulled')
+})
 
-     IT IS A DELTA AND NOT AN ABSOLUTE, because this suite runs the DEV build and `main.tsx`
-     wraps the app in `StrictMode`, whose deliberate double-invoke of every effect makes the
-     one fetch per pass arrive as two. Pinning `1` would assert a fact about the build rather
-     than about the press. What the ruling is actually about is whether a PRESS re-solves, and
-     that is the difference across the click. */
-  const before = await shapeOf(page)
-  const planCalls = planned.calls()
+test('a buyer row whose orders are all recorded reads "all sold", never "all pulled"', async ({ page }) => {
+  const satisfied = order({ wanted: 2, recorded: 2 })
+  await open(page, { orders: payloadOf([satisfied], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: true, outstanding: 0, lines: [line({ reason: 'resolved', owed: 0 })] }]) })
+  await expect(page.locator('.orders-index-row')).toContainText('all sold')
+  await expect(page.locator('.orders-index-row')).not.toContainText('all pulled')
+})
 
-  await pullRowNamed(page, 'Volcanion')
-  await expect(copyRow(page, 'cap-b').getByRole('img').first()).toHaveAttribute('aria-label', '#17 of 132')
+/* ------------------------------------------------------------------------- #/inventory, unchanged */
 
-  expect(await shapeOf(page)).toBe(before)
-  expect(planned.calls()).toBe(planCalls)
+test('#/inventory renders its own known shell unchanged by any of this', async ({ page }) => {
+  /* NOT A FULL RE-PROOF OF #/inventory — `app/tests/inventory.spec.ts` is that, and it is
+     asserted to pass UNCHANGED alongside this file (`make design-check`'s own report). This is
+     the light DOM-signature this file owns: the route resolves, and the exact class names
+     `CardHero.tsx`'s extraction reads back off `BoxBrowse.tsx` are still the ones on screen —
+     proof the shared file did not change what `#/inventory` draws, only where the code that
+     draws it lives. */
+  /* THE SHELL'S OWN BACKGROUND READS, on every route — `/queues` and `/orders` feed the sidebar's
+     own badges, unrelated to this screen, and a landed box fetches its own detail
+     (`/inventory/<n>`). None of this is `open()`'s own helper (this case does not carry a
+     fixture worth one route table), so they are stubbed by hand here, the same way `?order=`'s
+     own case above does for `#/orders`. */
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"review":[],"parked":[]}' }),
+  )
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(oneOpenOrder()) }),
+  )
+  await page.route(/\/boxes(\?.*)?$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        boxes: [{ box: 1, name: 'Box 1', state: 'open', cards: 1, sold: 0, retired: 0, moved: 0 }],
+        facets: { games: [], sets: {}, rarities: {} },
+      }),
+    }),
+  )
+  /* ONE CARD, IN BOX 1 — `BoxBrowse.tsx` draws its own "No cards captured yet" empty state
+     over zero cards, which is a real and different screen from the one this case checks. */
+  const oneCard = inventoryCard({ box: 1, index: 1, label: 'Box 1 · Section 1 · Card 1', section: 1, card: 1 })
+  await page.route(/\/inventory$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: { '1/1': oneCard } }) }),
+  )
+  await page.route(/\/inventory\/\d+$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: { '1/1': oneCard } }) }),
+  )
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs":[]}' }),
+  )
+  await page.goto('/#/inventory')
+  await expect(page.locator('main.inventory')).toBeVisible()
+  await expect(page.locator('.browse-body')).toHaveCount(1)
+  await expect(page.locator('.browse-map')).toHaveCount(1)
+  await expect(page.locator('.browse-boxes.bn-panel')).toHaveCount(1)
 })

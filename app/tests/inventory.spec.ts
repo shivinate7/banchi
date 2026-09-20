@@ -2535,13 +2535,15 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(bars).toHaveCount(2)
 
   const first = bars.nth(0).locator('.position-bar-text')
-  await expect(first.nth(0)).toHaveText('#1 of 5 so far')
+  /* NO "SO FAR" ON THE BOX LINE (owner's ruling, 2026-09-19 — see the case below this one for
+     the full argument): `#1 of 5`, not `#1 of 5 so far`. */
+  await expect(first.nth(0)).toHaveText('#1 of 5')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week. */
   await expect(first.nth(1)).toHaveText('Section 1 · card 1 of 3 slots')
 
   const second = bars.nth(1).locator('.position-bar-text')
-  await expect(second.nth(0)).toHaveText('#3 of 5 so far')
+  await expect(second.nth(0)).toHaveText('#3 of 5')
   await expect(second.nth(1)).toHaveText('Section 1 · card 3 of 3 slots')
 
   /* The section track carries no dividers of its own — a section is not divided by anything,
@@ -2549,7 +2551,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(bars.nth(0).locator('.position-bar-sectiontrack .position-bar-segment')).toHaveCount(0)
 })
 
-test('the last section of an open box counts what is in it, and says so far', async ({ page }) => {
+test('the last section of an open box counts what is in it, and the box line drops "so far"', async ({ page }) => {
   await open(page)
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Pyroar' }).click()
@@ -2557,24 +2559,26 @@ test('the last section of an open box counts what is in it, and says so far', as
   /* THE OTHER DENOMINATOR, AND IT IS D20 AT SECTION SCALE. Section 2 is declared 4..5 in a box
    * that holds 5 and is not sealed, so its far bound is the end of an open box: it is where the
    * next capture lands and it will be wider tomorrow. Measured against its fill so far and
-   * labelled `so far` — the same word, for the same reason, as the box line above it, because a
-   * denominator that is different tomorrow is worse than no denominator.
+   * labelled `so far` — `sectionDepthOf`'s own growing-section word, UNTOUCHED by the ruling
+   * below, which is about the BOX line only.
    *
-   * The pair also shows why both scales are wanted: the box line puts this card at the very
-   * back of the box and the section line puts it at the back of a two-card section. */
+   * NO "SO FAR" ON THE BOX LINE (owner's ruling, 2026-09-19: "this... needs to be removed
+   * everywhere it exists" — `#20 of 34` stays). RE-AIMED, NOT DROPPED: this case used to be the
+   * guard AGAINST dropping the two words from the box line, reasoning that an open box's own
+   * denominator is honestly "so far" while the walk's is not. The owner's later ruling overrides
+   * that argument outright — `sentenceOf`'s own `soFar` flag was never wired to `false` by any
+   * caller in the first place, so the box line had been reading `so far` unconditionally on
+   * EVERY open box, walk included, the whole time; the flag is deleted rather than fixed
+   * forward. This case is now the opposite guard: neither line says it again. The owner's
+   * second ruling the same evening — "drop it everywhere" — reached the section line too: a
+   * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#5 of 5 so far')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2 · card 2 of 2 so far')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#5 of 5')
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2 · card 2 of 2')
 
   /* One accessible name carrying both, because `role="img"` hides every descendant — a screen
      reader is told the second scale here or not at all. */
-  await expect(bar).toHaveAttribute('aria-label', '#5 of 5 so far · Section 2 · card 2 of 2 so far')
-
-  /* THE GUARD FOR THE OTHER HALF OF §8's "The stop, rebuilt" RULING (owner, 2026-09-19): the
-     walk drops `so far` (`PositionBar`'s own `soFar` prop, `OrdersWalk.tsx`'s one call, and
-     `app/tests/orders.spec.ts`'s "the walk's copy bar never says \"so far\""), but `#/inventory`
-     never passes that prop and keeps the word — this is a box still being FILLED, not a pull in
-     progress. This case is what stops the next person dropping the two words everywhere. */
+  await expect(bar).toHaveAttribute('aria-label', '#5 of 5 · Section 2 · card 2 of 2')
 })
 
 test('the card with no group gets both depths too', async ({ page }) => {
@@ -2596,7 +2600,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
    * so the bars below are the ROW's, in the same shape every identified card gets. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#2 of 5 so far')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#2 of 5')
   await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1 · card 2 of 3 slots')
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
@@ -6553,7 +6557,34 @@ test('a new search takes a new order, so the staleness never carries across answ
   await expectCopiesHeld(page)
 })
 
-test('the copies list holds while a new answer moves the walk to another drawer', async ({ page }) => {
+/* SHELVED 2026-09-19, ON THE OWNER'S EXPLICIT WORD. THIS IS A STANDING STATE THE OWNER
+   CHOSE, NOT AN ACCIDENT LEFT ON. THE OWNER WILL REVISIT IT, NO DATE SET.
+   THE OWNER'S OWN WORDS: "Turn the guard off for now on the repo. I give you explicit
+   authority."
+   THE DEFECT IT WAS CATCHING, IN ONE SENTENCE: during a deliberately delayed box fetch, on a
+   search-driven re-rank from box 7 to box 2, the copies panel stayed on screen but its rows
+   blanked to skeleton placeholders for 14 consecutive animation frames (about 230ms) before
+   recovering, so the final page reads clean and only frame sampling can see the flash.
+   THE MEASUREMENT: this test and its sibling below (`a press to another drawer dims…`) failed
+   6 of the last 10 completed runs on main, always the same shard, always these two tests. It
+   predates the most recent merge. Full record: DEBT30.
+   WHAT MUST BE TRUE TO TURN IT BACK ON: `docs/debts/030-…md` names the condition. Do not
+   delete this test and do not loosen `expectCopiesHeld`'s assertion or widen a timeout to make
+   it pass — either hides the finding instead of shelving it. */
+test.skip(
+  'the copies list holds while a new answer moves the walk to another drawer',
+  {
+    annotation: {
+      type: 'skip',
+      description:
+        'Shelved 2026-09-19 on the owner\'s explicit authority. Standing state, not temporary. ' +
+        'Defect: the copies panel stayed on screen but its rows blanked to skeleton for 14 ' +
+        'consecutive frames (about 230ms) during a delayed re-rank across drawers. Failed 6 of ' +
+        '10 recent runs on main. See DEBT30 for the measurements and the condition to turn ' +
+        'this back on.',
+    },
+  },
+  async ({ page }) => {
   /* D118's FOURTH FLOOR OVER THE SLOWEST MOMENT THIS SCREEN HAS, AND THE ORDERING IS FORCED
      RATHER THAN HOPED FOR.
      The case above asserts the same continuity on whatever ordering the machine happens to
@@ -6617,7 +6648,19 @@ test('the copies list holds while a new answer moves the walk to another drawer'
   await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
   await expectCopiesHeld(page)
 })
-test('a press to another drawer dims its predecessor’s rows rather than drawing them as the new box’s, or drawing nothing', async ({ page }) => {
+test.skip(
+  'a press to another drawer dims its predecessor’s rows rather than drawing them as the new box’s, or drawing nothing',
+  {
+    annotation: {
+      type: 'skip',
+      description:
+        'Shelved 2026-09-19 on the owner\'s explicit authority. Standing state, not temporary. ' +
+        'Guards the same mechanism as its sibling above, through the shared helper ' +
+        'expectCopiesHeld. Same defect, same measurement: 14 consecutive frames of blanked ' +
+        'copies rows, 6 of 10 recent runs on main. See DEBT30.',
+    },
+  },
+  async ({ page }) => {
   /* THE REGRESSION PR #404 SHIPPED, caught in review before it merged, and the OWNER'S
      RULING THAT FOLLOWED IT, 2026-09-19. The fix in the review holds the walk's row across a
      fresh SEARCH answer that re-ranks the drawers on its own — but the code it changed could

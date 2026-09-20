@@ -1,4 +1,4 @@
-## D-a-price-history-archive — The archive key carries the range, and the archive never deletes
+## D219 — The archive key carries the range, and the archive never deletes
 
 **THE SOURCE WINDOW SLIDES.** Everything not captured ages out for good.
 `pipeline/pricehistory.py`'s history endpoint answers `annual` at 357 days wide. No range
