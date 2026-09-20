@@ -260,19 +260,20 @@ function passesFacetFilter(card: InventoryCard, filter: InventoryFacetFilter): b
  * Composed from the server's own decorations — no position arithmetic here. */
 function sectionTitleOf(row: Row): string {
   if (isPooled(row.card)) {
-    return `Pooled · ${row.card.place?.game_display ?? row.card.game ?? 'cards'}`
+    return `Pooled: ${row.card.place?.game_display ?? row.card.game ?? 'cards'}`
   }
   if (row.card.section === undefined) return 'No position label'
 
   const start = row.card.place?.section_start
   const end = row.card.place?.section_end
-  /* THE SECTION'S NAME RIDES ITS NUMBER (D132): `Section 6 · Rares · #101–#153`. Off the place
-     block, where the server joined it at read time, so a rename reaches every header at once. */
+  /* THE SECTION'S NAME RIDES ITS NUMBER (D132): `Section 6: Rares, #101–#153`. Off the place
+     block, where the server joined it at read time, so a rename reaches every header at once.
+     D218: the separator is punctuation in a real sentence, never a typed middle dot. */
   const named = row.card.place?.section_name
-    ? `Section ${row.card.section} · ${row.card.place.section_name}`
+    ? `Section ${row.card.section}: ${row.card.place.section_name}`
     : `Section ${row.card.section}`
   if (typeof start !== 'number') return named
-  return typeof end === 'number' ? `${named} · #${start}–#${end}` : `${named} · #${start} onward`
+  return typeof end === 'number' ? `${named}, #${start}–#${end}` : `${named}, #${start} onward`
 }
 
 type Section = { key: string; title: string; first: Row; rows: Row[] }
@@ -323,7 +324,7 @@ function rowSlot(row: Row): string {
   if (hasDeparted(row.card)) return departedKey(row.card)
   const label = positionLabel(row.card)
   if (label !== null) return label
-  return isPooled(row.card) ? pooledText(row.card, row.key) : `no label · ${row.key}`
+  return isPooled(row.card) ? pooledText(row.card, row.key) : `no label, ${row.key}`
 }
 
 /** `join.departed_label`'s store key, in the server's spelling (`B3 #96`, D68).
@@ -472,7 +473,7 @@ function isPooled(card: InventoryCard): boolean {
 }
 
 function pooledText(card: InventoryCard, key: string): string {
-  return `${card.place?.game_display ?? card.game ?? 'pooled'} · pooled · ${key}`
+  return `${card.place?.game_display ?? card.game ?? 'pooled'}, pooled, ${key}`
 }
 
 /* `nameOf`, `numberCell`, `titleCase`, `claimList`, `gameLabel`, `gameWord`, `MarketRead`,
@@ -1698,7 +1699,7 @@ export function BoxBrowse({
 
   const shelfName = shelfBox?.name ?? null
   const shelfChip =
-    shelf === null ? 'Boxes' : `${shelfLabel(shelf)}${shelfName ? ` · ${shelfName}` : ''}`
+    shelf === null ? 'Boxes' : `${shelfLabel(shelf)}${shelfName ? ` (${shelfName})` : ''}`
 
   /* D213's dropdown options, off `facets` (never a hardcoded list — see `_card_facets`'s own
    * docstring for which of the two the brief asked for). Set and rarity are scoped to the
@@ -1968,7 +1969,7 @@ export function BoxBrowse({
             <span className="bn-spacer" />
 
             {visible.length === 0 ? null : (
-              <button className="browse-quiet" type="button" onClick={tickAllShown}>
+              <button className="browse-quiet" type="button" aria-pressed={shownAllTicked} onClick={tickAllShown}>
                 {shownAllTicked ? 'untick shown' : 'tick shown'}
               </button>
             )}

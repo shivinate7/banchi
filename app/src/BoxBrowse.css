@@ -328,12 +328,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* the ticks: the kit's checkbox look, on a bare input */
+/* the ticks: the kit's checkbox look (`.bn-check input`, kit.css), on a bare input — 16px to
+   match it exactly rather than a drifted 15px copy. */
 .browse-tick {
   appearance: none;
   flex: none;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   margin: 0;
   border-radius: 4px;
   border: 1.5px solid var(--bn-line-strong);
@@ -345,8 +346,8 @@
 }
 .browse-tick::before {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   transform: scale(0);
   transition: transform var(--bn-t-fast) var(--bn-ease-spring);
   background: var(--bn-on-accent);

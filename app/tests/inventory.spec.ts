@@ -5827,7 +5827,9 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   }
   await open(page, boxes, { cards, search: (query) => searchAnswer(query, cards) })
   await expandAll(page)
-  await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1 · Rares · #1–#3')
+  /* D218: the separator is punctuation in a real sentence, not a typed middle dot
+     (`sectionTitleOf`, BoxBrowse.tsx). */
+  await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1: Rares, #1–#3')
   await page.locator('.browse-row').nth(0).click()
   await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1Rarescard 1 of 3 slots')
   await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1Rares')
