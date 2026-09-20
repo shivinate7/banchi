@@ -88,4 +88,5 @@ DEBT27 Two `GET /inventory` call sites were store-wide; site 1 is closed, site 2
 DEBT28 `pkmnscan rescue` is reachable from no screen, and the screen that needs it names a command
 DEBT29 The drawer's tap sweep is skipped, because it races itself on a slower runner
 DEBT30 The copies panel flash guard is shelved, on the owner's own word
+DEBT31 Twelve decisions are cited by path, one of them dead, and the path guard never reads code
 ```

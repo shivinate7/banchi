@@ -1197,6 +1197,13 @@ def main() -> int:
         write(split, "CLAUDE.md",
               f"# Fixture\n\nthe branch cites {entry} twice: {entry}.\n\n"
               f"```\n{D(1):<4} First\n{D(2):<4} Second\n```\n")
+        # THE 2026-09-19 SHAPE: A CITATION BY PATH TO THE SLUG'S OWN FILE. True the day it
+        # was written — the unclaimed file really is named `{entry}-a-third-thing.md` — and
+        # exactly what a blind token substitution turns into a path that has never existed,
+        # because the claim also adds the number to the FILENAME in the same pass. This is
+        # `docs/specs/revenue-plan.md`'s own line, reproduced rather than invented.
+        write(split, "docs/specs/example.md",
+              f"`docs/decisions/{entry}-a-third-thing.md` argues the key in full.\n")
         git(split, "add", "-A")
         git(split, "commit", "-qm", "a branch writes a slug into the directory")
 
@@ -1247,6 +1254,22 @@ def main() -> int:
            "the HEADING inside it is the number, not the slug", body.split("\n")[0])
         ok(entry not in (split / "CLAUDE.md").read_text(encoding="utf-8"),
            "and every citation of the slug elsewhere was substituted too")
+
+        # THE 2026-09-19 DEFECT: A PATH CITATION OF THE SLUG'S OWN FILE. `apply_to_text`
+        # alone turns `` `docs/decisions/D-<slug>.md` `` into `` `docs/decisions/D<n>.md` ``
+        # — a path that never existed, since the real file lands at `D<n>-<slug>.md` in the
+        # SAME claim. Cite by id, never by path.
+        example = (split / "docs/specs/example.md").read_text(encoding="utf-8")
+        ok(f"docs/decisions/D{number}.md" not in example,
+           "the claim does not leave behind a path to a file that was never created",
+           example)
+        ok("docs/decisions/" not in example,
+           "no path survives the claim at all — the citation is dropped, not repaired",
+           example)
+        ok(example.strip() == f"D{number} argues the key in full.",
+           "the path citation becomes a bare id citation, the form this repo already uses "
+           "everywhere else",
+           example)
 
         # --------------------------------------------------------------------------------
         # `--unclaim`: THE EXACT INVERSE, WHICH `stale_claims` NAMED AND NOTHING PERFORMED.
