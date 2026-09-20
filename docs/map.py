@@ -2675,9 +2675,9 @@ COMPONENTS = [
                 # the queue refresh (D167), the push/publish pair (D106), the live export
                 # (D104) and the seven order-line closers (D113).
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
-                                "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
-                                "D134", "D159", "D167", "D168", "D174", "D192",
-                                "D193", "D203", "D165", "D210"],
+                                "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113", "D134",
+                                "D159", "D165", "D167", "D168", "D174", "D189", "D192", "D193",
+                                "D203", "D210", "D225"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -4023,17 +4023,17 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D145", "D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11",
-                                "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26",
-                                "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43",
-                                "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61",
-                                "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
-                                "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
-                                "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
-                                "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
-                                "D165", "D168", "D174", "D183", "D172", "D192", "D191",
-                                "D193", "D203", "D212",
-                                "D213"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
+                                "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28",
+                                "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45",
+                                "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62",
+                                "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76", "D77",
+                                "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92",
+                                "D93", "D96", "D100", "D103", "D104", "D108", "D113", "D114",
+                                "D115", "D116", "D132", "D134", "D137", "D138", "D145", "D159",
+                                "D165", "D168", "D172", "D174", "D183", "D189", "D191", "D192",
+                                "D193", "D203", "D212", "D213", "D219",
+                                "D225"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4192,14 +4192,14 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
-                                "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33",
-                                "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56",
-                                "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
-                                "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
-                                "D134", "D137", "D145", "D147", "D156", "D159", "D163",
-                                "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D188", "D189", "D216"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20",
+                                "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36",
+                                "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62",
+                                "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88",
+                                "D89", "D100", "D103", "D105", "D134", "D137", "D145", "D147",
+                                "D156", "D159", "D163", "D165", "D166", "D168", "D170", "D172",
+                                "D174", "D180", "D188", "D189", "D216", "D219",
+                                "D225"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4847,8 +4847,9 @@ COMPONENTS = [
                                               "D69", "D70", "D73", "D76", "D79", "D83", "D86",
                                               "D87", "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D104", "D113", "D116", "D132", "D134", "D159",
-                                              "D165", "D168", "D172", "D174", "D180", "D192",
-                                              "D193", "D203", "D207", "D213"]},
+                                              "D165", "D168", "D172", "D174", "D180", "D189",
+                                              "D192", "D193", "D203", "D207", "D213",
+                                              "D219", "D225"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6597,9 +6598,10 @@ COMPONENTS = [
                                         "the in-progress bucket is marked, and period, sort, "
                                         "search and the active bucket all round-trip through "
                                         "the URL.",
-                                "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105",
-                                                 "D118", "D159", "D193", "D194", "D201",
-                                                 "D214", "D217"]},
+                                "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105", "D118",
+                                                "D159", "D189", "D193", "D194", "D201", "D214",
+                                                "D217", "D219",
+                                                "D225"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "
                                         "reuses `--bn-accent` rather than naming a color; the "
@@ -7532,8 +7534,8 @@ COMPONENTS = [
                         "does not. A dedicated case pins the 390px overflow this build found "
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
-                "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201",
-                                 "D214", "D217"],
+                "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
+                                "D217", "D225"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
