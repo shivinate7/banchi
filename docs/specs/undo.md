@@ -186,3 +186,34 @@ in the order the hand took them (D164). The granular press is beside it, not ins
 A second operator. Every ruling here assumes one hand: the fast path is one hand's own newest
 press, and the slow path assumes the card in front of you is the card you are reversing. Two
 people pulling from the same drawers changes what a resurrect means to the other one.
+
+## 10. The order walk's own row: a rank, never a clock
+
+**AMENDED 2026-09-20.** `app/src/OrdersWalkPane.tsx` drew its own `Undo` inside the walk's own
+row, on its own twenty-second clock, separate from the receipt this file already describes. A
+copy sold more than twenty seconds ago showed a dead `Sold` pill. This was a fixed time limit
+on a reversal. Section 2 rules that shape out for every write in this product.
+
+**The owner gave this its own lane on 2026-09-19, apart from the rest of this file's build.**
+
+**The clock is gone. Rank replaces it.** The walk's own row still offers `Undo`, but only on
+the NEWEST pull this walk made. Section 3 already says this for the walk: *"the fast path
+undoes the newest pull. Anything older is the slow path's job."* This was a ruling about which
+copy gets `Undo`, never about a duration.
+
+**"Newest" is not a countdown. It is a position.** A pull is newest until a later pull replaces
+it. Undoing the newest pull hands the rank back to whichever pull came before it, if one is
+still standing. Nothing here reads a clock.
+
+**What was the clock protecting, and what protects it now.** The old clock kept a walk from
+piling up several open `Undo` buttons at once, one per sold copy. The owner declined that
+shape directly (section 3, "per-pull granularity"). The rank does the same job without a
+timer: only one row ever carries `Undo`, because only one pull is ever the newest.
+
+**An older sold copy is a dead end IN THIS ROW, on purpose.** Its way back is the card, on
+`#/inventory`'s own departed row (section 4). This pane never draws a second door.
+
+**What has to be verified, added to section 8's own list.** A case proves `Undo` on the walk's
+newest pull still stands after the OLD twenty-second window would have closed it. The clock is
+faked and only advanced, never slept through. A second case proves a later pull is what removes
+an older row's `Undo`, mutation-tested against the granularity the owner declined.

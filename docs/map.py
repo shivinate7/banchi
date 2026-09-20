@@ -6787,14 +6787,14 @@ COMPONENTS = [
                                            "`preserveOrder` stays, the trap this rebuild's own "
                                            "brief named first (never re-sort the walk).",
                                    "governed_by": ["D58", "D62", "D79", "D93", "D96", "D97", "D116",
-                                                   "D118", "D132", "D181", "D193", "D209", "D212",
-                                                   "D220"]},
+                                                   "D118", "D132", "D164", "D181", "D193", "D209",
+                                                   "D212", "D220"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
                                            "name); every other shape this file draws is "
                                            "`BoxBrowse.css`'s own `.browse-*` classes, imported "
                                            "by `Orders.tsx` rather than restated here.",
-                                   "governed_by": ["D50", "D94", "D118"]},
+                                   "governed_by": ["D50", "D94", "D118", "D164"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "
@@ -7698,6 +7698,28 @@ COMPONENTS = [
                                                      "D118", "D123", "D132", "D181", "D193", "D194",
                                                      "D196", "D203", "D209", "D212", "D218", "D220",
                                                      "D221"]},
+            "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
+                                                 "else `tests/orders.spec.ts` already covers "
+                                                 "(that file's own docstring names this file so "
+                                                 "a reader is not sent looking for two copies of "
+                                                 "the same case). Before this file existed the "
+                                                 "walk's own row drew `Undo` on a twenty-second "
+                                                 "clock local to the pane, past docs/specs/"
+                                                 "undo.md section 10's amendment. Four cases: "
+                                                 "only the newest pull in the walk offers `Undo` "
+                                                 "and an older one reads `Sold`; a later pull, "
+                                                 "not any span of time, is what ends the older "
+                                                 "one's `Undo`; the newest pull's `Undo` still "
+                                                 "stands after the OLD twenty-second window "
+                                                 "would have closed it, on a fake clock advanced "
+                                                 "rather than slept through (D136); and undoing "
+                                                 "the newest pull returns it to `Mark sold` while "
+                                                 "the older copy regains `Undo`. Each case is "
+                                                 "mutation-tested against the defect it guards. "
+                                                 "Not a harness test — it starts a browser; "
+                                                 "`make design-check` runs it.",
+                                         "governed_by": ["D57", "D58", "D113", "D118", "D136",
+                                                         "D164", "D212", "D220"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

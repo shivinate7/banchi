@@ -2,8 +2,12 @@
  * gives every `.browse-*` class it draws (`.browse-card`, `.browse-hero-head`, `.browse-band`,
  * `.browse-shot`, `.browse-under`, `.browse-list`, `.browse-group`, `.browse-row`). This file
  * adds only what this screen draws that no other screen already has a rule for: the lead
- * photograph (`Inventory.tsx`'s and the old `OrdersWalk.tsx`'s own image, restated) and the
- * `Sold` receipt drain-bar borrowed from `Inventory.css` by class name. */
+ * photograph (`Inventory.tsx`'s and the old `OrdersWalk.tsx`'s own image, restated).
+ *
+ * NO DRAIN BAR (`docs/specs/undo.md` §3, D164): the walk's own `Undo` never had a clock to
+ * count down, so it borrows `Inventory.css`'s `.inventory-copy-actions.inventory-receipt`
+ * spacing rule only, never the `.bn-receipt-bar` element `#/inventory`'s own twenty-second
+ * receipt draws beside it. */
 
 .orders-walk-photo {
   width: 100%;
