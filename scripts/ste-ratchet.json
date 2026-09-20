@@ -12,13 +12,13 @@
     },
     "AGENTS.md": {
       "errors": 17,
-      "ratio_per_1k_words": 1.473,
-      "words": 11544
+      "ratio_per_1k_words": 1.452,
+      "words": 11709
     },
     "CLAUDE.md": {
       "errors": 17,
-      "ratio_per_1k_words": 1.473,
-      "words": 11544
+      "ratio_per_1k_words": 1.452,
+      "words": 11709
     },
     "README.md": {
       "errors": 29,
@@ -220,10 +220,10 @@
       "ratio_per_1k_words": 13.857,
       "words": 433
     },
-    "D229": {
+    "docs/decisions/D-a-janitor-autonomy.md": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
-      "words": 910
+      "words": 891
     },
     "docs/decisions/D001-two-phase-architecture.md": {
       "errors": 1,
@@ -1364,6 +1364,21 @@
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 1791
+    },
+    "docs/decisions/D229-a-ratchet-per-file.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 910
+    },
+    "docs/decisions/D230-a-archive-resume-window.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 509
+    },
+    "docs/decisions/D231-a-sealed-ledger-archive-subjects.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 929
     },
     "docs/decisions/_deferred-argued-not-gated-nothing-here-is-blocked-and.md": {
       "errors": 5,

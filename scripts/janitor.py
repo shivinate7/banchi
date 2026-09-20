@@ -1219,6 +1219,157 @@ def sweep(root: str, sessions_dir: Path, confirm: bool, tier1: bool,
     return reaped, reported, pending
 
 
+# ------------------------------------------------------------------- the daily sweep agent
+#
+# THE EVENT HALF MISSES THINGS, AND `.claude/settings.json` SAYS SO ITSELF. `SessionEnd` is
+# "not reliable at app quit or machine sleep", and `WorktreeRemove` only fires when somebody
+# removes a tree — an agent worktree abandoned by a session that died is removed by nobody, so
+# no event ever fires for it. Measured on this clone 2026-09-20: five such trees and nine
+# merged branches were waiting, some for days, with every event that could have taken them
+# long past.
+#
+# SO THE SCHEDULE IS THE BACKSTOP, AND IT IS A BACKSTOP RATHER THAN THE MECHANISM. Everything
+# it presses, the hooks would have pressed at the right moment had they fired. A sweep that
+# runs whether or not an event arrived is D111's re-runnability applied to the trigger instead
+# of to the sweep.
+#
+# GENERATED AND NEVER TRACKED, and MAIN TREE ONLY, for serve.py's two reasons verbatim: a
+# plist names an absolute path on one Mac (D47), and a plist naming a worktree outlives the
+# worktree, leaving launchd retrying a directory that is not there.
+#
+# THE LOG IS THE RECEIPT, AND IT IS THE WHOLE OF WHAT MAKES AN UNATTENDED DELETION ACCEPTABLE.
+# Every other destructive target in this repo is read by a person as it runs. This one is not,
+# so it writes what it did where a person can read it afterwards, and the account it writes is
+# the same one `make janitor` prints.
+
+AGENT_LOG = "janitor.log"
+
+
+def agent_label(root: str) -> str:
+    """A label per CLONE, so two clones on one Mac do not evict each other's agent."""
+    import hashlib
+    return "com.pkmnscan.janitor." + hashlib.sha256(_real(root).encode()).hexdigest()[:8]
+
+
+def agent_plist_path(root: str) -> Path:
+    return Path.home() / "Library" / "LaunchAgents" / (agent_label(root) + ".plist")
+
+
+def install_agent(root: str, remove: bool, hour: int = 4) -> int:
+    """Install or remove the daily unattended sweep. 0 when done, 1 when refused."""
+    import plistlib
+
+    label = agent_label(root)
+    plist = agent_plist_path(root)
+
+    if remove:
+        if not plist.exists():
+            say("no janitor agent installed for this checkout ({0}).".format(label))
+            return 0
+        run(["launchctl", "bootout", "gui/{0}/{1}".format(os.getuid(), label)])
+        plist.unlink()
+        say("janitor agent removed ({0}).".format(label))
+        return 0
+
+    main_tree = main_checkout(root)
+    if not main_tree:
+        return refuse("this clone's own layout is unreadable, so there is no tree to install "
+                      "against.")
+    if _real(root) != _real(main_tree):
+        return refuse(
+            "{0} is a linked worktree.".format(root),
+            "",
+            "A worktree is deleted routinely and its plist is an absolute path that would",
+            "outlive it — launchd would retry a directory that is gone, forever, with",
+            "nothing on screen to say so. Install this from the main checkout:",
+            "",
+            "  {0}".format(main_tree),
+        )
+
+    log = Path(main_tree) / ".serve" / AGENT_LOG
+    log.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "Label": label,
+        "ProgramArguments": [
+            sys.executable, str(Path(__file__).resolve()),
+            "--root", main_tree, "--confirm",
+        ],
+        "WorkingDirectory": main_tree,
+        # A CALENDAR INTERVAL AND NEVER `KeepAlive`. This is a sweep that ends, not a service
+        # that stays up — and launchd runs a missed calendar job at the next wake, so a Mac
+        # asleep at the hour below still gets its sweep rather than skipping the day.
+        "StartCalendarInterval": {"Hour": hour, "Minute": 0},
+        "RunAtLoad": False,
+        "StandardOutPath": str(log),
+        "StandardErrorPath": str(log),
+        "EnvironmentVariables": {"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+    }
+    plist.parent.mkdir(parents=True, exist_ok=True)
+    with open(plist, "wb") as handle:
+        plistlib.dump(payload, handle)
+
+    run(["launchctl", "bootout", "gui/{0}/{1}".format(os.getuid(), label)])
+    loaded = run(["launchctl", "bootstrap", "gui/{0}".format(os.getuid()), str(plist)])
+    say("janitor agent installed ({0}).".format(label))
+    say("  plist     {0}".format(plist))
+    say("  runs      daily at {0:02d}:00, and at the next wake if the Mac was asleep".format(hour))
+    say("  receipt   {0}".format(log))
+    say("  remove    make janitor-agent ARGS=--remove")
+    if not loaded.ok:
+        say("")
+        say("  launchctl bootstrap failed: {0}".format(
+            (loaded.err.splitlines() or ["(it said nothing)"])[-1]))
+        say("  it will still load at your next login.")
+        return 1
+    return 0
+
+
+def cut_merged_branches(root: str, confirm: bool) -> Tuple[int, int]:
+    """(cut, kept). Tier 2's ONE provably-lossless act, and nothing else in tier 2.
+
+    THE SUBSET THAT NEEDS NO HUMAN WORD, WHICH IS WHY IT CAN RUN FROM A HOOK. Tier 2 does three
+    things: it stops loose processes, it removes worktrees, and it cuts branches. The first two
+    are judgement calls about what somebody might still be using. The third is not. A branch
+    reaches `reapable_branches`' `cut` list only when main is a descendant of every commit on it
+    — `git branch -D` there removes a label and destroys nothing, because every object it named
+    is reachable from main. That is the same ancestry test `make janitor ARGS=--confirm`
+    already runs, called here and not reimplemented.
+
+    SO THE WORD TIER 2 WAITS ON IS ABOUT THE OTHER TWO. Deleting a worktree can cost uncommitted
+    work the sweep failed to see, and stopping a process can cost a run somebody wanted. Neither
+    risk exists here, and holding a lossless act behind the same word as a lossy one is what
+    left nine merged branches sitting on this disk with nobody to press it.
+
+    IT FAILS CLOSED ON A LAYOUT IT CANNOT READ, which is the whole of the protection. `held`
+    comes from `git worktree list`; an unreadable one returns no trees, every branch loses the
+    protection a checked-out tree gives it, and a branch somebody is standing on becomes
+    eligible. The full sweep already refuses in that state and so does this, by the same test.
+
+    NOTHING HERE REMOVES A TREE, so `held` is every worktree's branch with nothing subtracted.
+    The full sweep lets a branch out of `held` when it is about to remove that branch's tree;
+    this never removes one, so it never lets one out. That is the safe direction by
+    construction rather than by care.
+    """
+    trees = worktrees(root)
+    if not trees or not main_checkout(root):
+        say("  KEPT      every branch — this clone's own layout is unreadable")
+        return 0, 1
+    held = {tree.branch for tree in trees if tree.branch}
+    cut, kept = reapable_branches(root, held)
+    if not cut:
+        return 0, 0
+    done = 0
+    for branch in cut:
+        if not confirm:
+            say("  would reap {0}  (merged, no working tree)".format(branch))
+            continue
+        gone = run(["git", "branch", "-D", branch], cwd=root)
+        say("  {0} {1}".format("reaped   " if gone.ok else "NOT CUT  ", branch))
+        if gone.ok:
+            done += 1
+    return done, len(cut) - done
+
+
 def teardown(tree: str, sessions_dir: Path) -> int:
     """Stop what a leaving session started in `tree`, and nothing else.
 
@@ -1286,6 +1437,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", default="", help="the checkout to sweep. Defaults to this one.")
     parser.add_argument("--confirm", action="store_true",
                         help="perform tier 2. Without this, tier 2 is a preview.")
+    parser.add_argument("--install-agent", action="store_true",
+                        help="install the daily unattended sweep as a launch agent. Main "
+                             "checkout only. Add --remove to take it away.")
+    parser.add_argument("--remove", action="store_true",
+                        help="with --install-agent, remove it instead.")
+    parser.add_argument("--branches", action="store_true",
+                        help="cut every branch main already carries, and do nothing else. "
+                             "The one part of tier 2 that destroys nothing, so it needs no "
+                             "word and a hook may run it. Previews without --confirm.")
     parser.add_argument("--tier1", action="store_true",
                         help="the provably-dead only — no preview, no prompt. What a hook runs.")
     parser.add_argument("--sessions", default="",
@@ -1326,6 +1486,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     root = _real(found.out)
     sessions_dir = Path(args.sessions) if args.sessions else SESSIONS_DIR
     confine = _real(args.confine) if args.confine else ""
+
+    if args.install_agent:
+        return install_agent(root, args.remove)
+
+    if args.branches:
+        cut, kept = cut_merged_branches(root, args.confirm)
+        if cut or kept:
+            say("janitor: {0} branch(es) cut, {1} reported".format(cut, kept))
+        return 0
 
     if args.tier1:
         reaped, reported, _ = sweep(root, sessions_dir, False, True, confine, args.stale_hours)
