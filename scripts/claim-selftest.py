@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Tuple
 
@@ -1607,6 +1608,320 @@ def main() -> int:
         ok(before == after,
            "and nothing was renamed — no second number was minted for the same content",
            f"before={before}\nafter={after}")
+
+        # ---------------------------------------------------------------------------
+        print("\n  -- the 2026-09-19 shape: the race is lost and main is ALREADY MERGED IN --")
+        # TONIGHT'S EXACT STATE, AND THE ONE `--unclaim` COULD NOT READ. Branch B loses the
+        # race exactly as the arm above, and then does the documented pre-merge thing: fetch
+        # `origin/main` and MERGE IT. Two entry files now carry one number — B's own and the
+        # one the merge brought — and until 2026-09-19 `find_decision_file` refused rather
+        # than resolving which was which: `no single docs/decisions/D<n>-*.md file in this
+        # tree`, from the command whose whole purpose is this state.
+        race = tmp / "race"
+        race.mkdir()
+        race_a = tmp / "race_a"
+        race_b = tmp / "race_b"
+        base_race = build_split(race)
+        with_claimer(base_race)
+        git(base_race, "add", "-A")
+        git(base_race, "commit", "-qm", "the checkout carries the claimer")
+        git(base_race, "push", "-q", "origin", "main")
+        for clone in (race_a, race_b):
+            subprocess.run(["git", "clone", "-q", str(race / "origin.git"), str(clone)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+        won = "D-" + "race-winner"
+        lost = "D-" + "race-loser"
+
+        # A's entry lands on main, and main cites it in prose and indexes it in CLAUDE.md.
+        git(race_a, "checkout", "-q", "-b", "winner")
+        write(race_a, f"docs/decisions/{won}.md", f"## {won} — The winner\n\nbody\n")
+        claude_a = race_a / "CLAUDE.md"
+        claude_a.write_text(claude_a.read_text(encoding="utf-8")
+                            + f"\nmain's own prose cites {won} here.\n", encoding="utf-8")
+        git(race_a, "add", "-A")
+        git(race_a, "commit", "-qm", "the winner writes its slug")
+        claim(race_a, "--root", str(race_a), "--write")
+        git(race_a, "add", "-A")
+        git(race_a, "commit", "-qm", "the winner claims it")
+        git(race_a, "push", "-q", "origin", "winner")
+        git(base_race, "fetch", "-q", "origin", "winner")
+        git(base_race, "merge", "-q", "--ff-only", "origin/winner")
+        git(base_race, "push", "-q", "origin", "main")
+
+        # B claims the same number honestly, then merges main in — the routine, in order.
+        git(race_b, "checkout", "-q", "-b", "loser")
+        write(race_b, f"docs/decisions/{lost}.md", f"## {lost} — The loser\n\nbody\n")
+        claude_b = race_b / "CLAUDE.md"
+        claude_b.write_text(claude_b.read_text(encoding="utf-8")
+                            + f"\nthis branch's own prose cites {lost} here.\n",
+                            encoding="utf-8")
+        git(race_b, "add", "-A")
+        git(race_b, "commit", "-qm", "the loser writes its slug")
+        claim(race_b, "--root", str(race_b), "--write")
+        git(race_b, "add", "-A")
+        git(race_b, "commit", "-qm", "the loser claims it, honestly, before seeing A merge")
+        loser_file = next((race_b / "docs/decisions").glob("D*-race-loser.md"))
+        shared = "D" + str(int(loser_file.stem.split("-", 1)[0][1:]))
+        git(race_b, "fetch", "-q", "origin", "main")
+        git(race_b, "merge", "origin/main", "-m", "merge main into the branch")
+        # The merge conflicts in the two files both sides append to — resolve it the way a
+        # person does, KEEPING BOTH SIDES, which is what produces the two-file state.
+        conflicted = claude_b.read_text(encoding="utf-8")
+        claude_b.write_text(
+            re.sub(r"<<<<<<< HEAD\n(.*?)=======\n(.*?)>>>>>>> [^\n]*\n", r"\1\2",
+                   conflicted, flags=re.S), encoding="utf-8")
+        manifest_path = race_b / "docs/decisions/ORDER.json"
+        manifest = json.loads(re.sub(
+            r"<<<<<<< HEAD\n(.*?)=======\n.*?>>>>>>> [^\n]*\n", r"\1",
+            manifest_path.read_text(encoding="utf-8"), flags=re.S))
+        order = [name for name in manifest["order"] if "race-" not in name]
+        order += sorted(x.name for x in (race_b / "docs/decisions").glob("D*-race-*.md"))
+        manifest_path.write_text(json.dumps({**manifest, "order": order}, indent=2) + "\n",
+                                 encoding="utf-8")
+        git(race_b, "add", "-A")
+        git(race_b, "commit", "-qm", "merge main into the branch")
+
+        both = sorted(x.name for x in (race_b / "docs/decisions").glob("D[0-9]*-race-*.md"))
+        ok(len(both) == 2,
+           "the merge leaves TWO entry files carrying one number — the state tonight's "
+           "`--unclaim` refused to read", str(both))
+
+        out, rc = claim_rc(race_b, "--stale")
+        ok(rc == 3 and "declared twice" in out and shared in out,
+           "`--stale` catches it anyway — the MERGE moved the base it measures from, so the "
+           "added-versus-taken difference reads clean and the duplicate count is what does "
+           "not", out)
+        ok("--unclaim " + shared in out,
+           "and it names the command that fixes it, spelled so it can be run", out)
+
+        before_race = snapshot(race_b)
+        out, rc = claim_rc(race_b, "--unclaim", shared, "--ref", "origin/main")
+        ok(rc == 0 and "DIFFERENT entry" in out,
+           "`--unclaim` RESOLVES which of the two files is this branch's, where it refused "
+           "`no single D<n>-*.md file in this tree` before", out)
+        ok(snapshot(race_b) == before_race, "and the preview wrote nothing")
+
+        out, rc = claim_rc(race_b, "--unclaim", shared, "--ref", "origin/main", "--write")
+        ok(rc == 0, "and --write performs it", out)
+
+        ok((race_b / "docs/decisions" / (lost + ".md")).exists(),
+           "this branch's own entry is back under its slug filename")
+        winner_file = next((race_b / "docs/decisions").glob("D*-race-winner.md"), None)
+        ok(winner_file is not None,
+           "and main's entry keeps its number AND its filename",
+           str(sorted(x.name for x in (race_b / "docs/decisions").glob("*.md"))))
+        ok(winner_file is not None
+           and winner_file.read_text(encoding="utf-8").startswith(f"## {shared} "),
+           "main's own heading is untouched — the substitution is keyed on the TOKEN, so "
+           "without a guard it rewrites the OTHER entry's heading into this branch's slug",
+           winner_file.read_text(encoding="utf-8") if winner_file else "")
+
+        claude_after = claude_b.read_text(encoding="utf-8")
+        ok(f"main's own prose cites {shared} here." in claude_after,
+           "main's own prose citation is untouched — a half-reversed claim is worse than an "
+           "unreversed one, and this is the half that was wrong", claude_after)
+        ok(f"this branch's own prose cites {lost} here." in claude_after,
+           "and this branch's own citation IS reverted", claude_after)
+
+        out, rc = claim_rc(race_b, "--stale")
+        ok(rc == 0, "the branch is clean again", out)
+        replanned = claim(race_b, "--root", str(race_b), "--porcelain")
+        fresh = re.search(re.escape(lost) + r"\t(D[0-9]+)", replanned)
+        ok(fresh is not None and fresh.group(1) != shared,
+           "and a plain re-plan allocates a FRESH number against main as it stands — the "
+           "loser retries with a free number, with nobody unpicking anything", replanned)
+
+        # ---------------------------------------------------------------------------
+        print("\n  -- the claim is not spent on a pull request that cannot merge --")
+        # THE ORDER, WHICH IS THE 2026-09-19 DEFECT ITSELF. The claim committed and pushed
+        # before anything asked whether the pull request could merge at all — and the answer
+        # was in a reply `main()` had already read for the head branch. These arms drive
+        # `main()` with every half around the two under test stubbed, so what they assert is
+        # the ORDER rather than either half's own body.
+        gate = tmp / "gate"
+        gate.mkdir()
+        gate_repo = build_split(gate)
+        with_claimer(gate_repo)
+        git(gate_repo, "add", "-A")
+        git(gate_repo, "commit", "-qm", "the checkout carries the claimer")
+
+        def drive_main(repo: Path, pr_json: dict, github: Tuple, claims: bool,
+                       claim_code: int = 0):
+            """`main()` over `repo`, with the halves around the gate replaced by recorders."""
+            module = merge_pr_module()
+            seen = {"claim": 0, "rollback": [], "reads": 0}
+
+            def read(number):
+                seen["reads"] += 1
+                return dict(pr_json), ""
+
+            def claim_half(root, number, branch, confirm):
+                seen["claim"] += 1
+                if claims:
+                    # A DISTINCT BODY EVERY TIME, because an identical one commits nothing
+                    # and HEAD does not move — which makes the rollback arm below pass for
+                    # the wrong reason, by having nothing to roll back.
+                    (Path(root) / "claimed.txt").write_text(
+                        "a claim {0}".format(uuid.uuid4()), encoding="utf-8")
+                    git(Path(root), "add", "-A")
+                    git(Path(root), "commit", "-qm", "Claim the ids this branch left as slugs")
+                return claim_code
+
+            def rollback(root, number, sha, branch):
+                seen["rollback"].append(sha)
+
+            # THE PAUSE AND THE CLOCK ARE REAL IN THE SHIPPED PATH and there is nothing to learn
+            # from waiting it out here — the arm asks whether it RE-READS, not how long it
+            # waited between reads.
+            module.MERGEABILITY_PAUSE = 0
+            module.MERGEABILITY_DEADLINE = 0.05
+            module.repo_root = lambda cwd=None: str(repo)
+            module.surface_half = lambda root, ref="refs/remotes/origin/main": 0
+            module.pr_state = read
+            module.claim_half = claim_half
+            module.github_half = lambda number, confirm: github
+            module.rollback_claim = rollback
+            module.primary_half = lambda root, confirm: 0
+            module.delete_head_branch = lambda root, number, confirm: None
+            module.local_half = lambda root, commit, confirm: 0
+            module.landed_half = lambda root, commit: 0
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = module.main(["77", "--confirm"])
+            return buf.getvalue(), code, seen
+
+        conflicting = {"number": 77, "title": "t", "url": "u", "state": "OPEN",
+                       "mergeable": "CONFLICTING", "mergeStateStatus": "DIRTY",
+                       "headRefName": "feature", "mergeCommit": None}
+        out, code, seen = drive_main(gate_repo, conflicting, (None, 0), claims=True)
+        ok(code != 0 and "conflicts with its base" in out,
+           "a CONFLICTING pull request is refused", out)
+        ok(seen["claim"] == 0,
+           "AND THE CLAIM NEVER RAN — nothing was allocated, committed or pushed for a "
+           "merge that could not have happened", out)
+        ok("NOTHING HAS BEEN CLAIMED" in out,
+           "and the refusal says so, because the whole cost of the old order was a person "
+           "not knowing what had already been pushed", out)
+
+        mergeable = dict(conflicting, mergeable="MERGEABLE", mergeStateStatus="CLEAN")
+        head_before = git(gate_repo, "rev-parse", "HEAD").strip()
+        out, code, seen = drive_main(gate_repo, mergeable, (None, 1), claims=True)
+        ok(seen["claim"] == 1, "a MERGEABLE one reaches the claim", out)
+        claimed_sha = git(gate_repo, "rev-parse", "HEAD").strip()
+        ok(seen["rollback"] == [claimed_sha],
+           "and when the GitHub half refuses AFTERWARDS — the race that opens during the "
+           "claim's own CI wait, which no gate before the claim can see — the claim this "
+           "run made is backed out by its own sha",
+           f"{seen['rollback']} vs {claimed_sha}")
+        ok(claimed_sha != head_before, "the arm really did move HEAD, so it is not vacuous")
+
+        out, code, seen = drive_main(gate_repo, mergeable, (None, 1), claims=False)
+        ok(seen["rollback"] == [],
+           "a run that claimed NOTHING backs nothing out — the rollback is keyed on this "
+           "run having moved the branch, never on the refusal alone", out)
+
+        unknown = dict(mergeable, mergeable="UNKNOWN", mergeStateStatus="UNKNOWN")
+        out, code, seen = drive_main(gate_repo, unknown, (None, 0), claims=False)
+        ok(code != 0 and "still UNKNOWN" in out,
+           "an UNKNOWN that never resolves REFUSES — owner's ruling, 2026-09-19: wait "
+           "longer, then refuse. An unread state is not a mergeable one", out)
+        ok(seen["claim"] == 0 and "NOTHING HAS BEEN CLAIMED" in out,
+           "and nothing is claimed for it, which is the whole difference between this and "
+           "proceeding on a guess", out)
+        ok(seen["reads"] > 1,
+           "and it really did ask again rather than refusing on the first UNKNOWN",
+           str(seen["reads"]))
+
+        print("\n  -- any claim that does not reach a merge goes back, not only a lost race --")
+        # OWNER'S RULING, 2026-09-19. `claim_half` also refuses for a RED check on the claim
+        # commit, a push that failed, and a sha it could not read back. None of those is a
+        # lost race, and each used to leave the claim standing on the branch while the older
+        # text said to fix it and run again. A number held by a branch that is not about to
+        # land is a number another branch can take from under it.
+        red_before = git(gate_repo, "rev-parse", "HEAD").strip()
+        out, code, seen = drive_main(gate_repo, mergeable, (None, 0), claims=True,
+                                     claim_code=1)
+        red_sha = git(gate_repo, "rev-parse", "HEAD").strip()
+        ok(code == 1 and seen["rollback"] == [red_sha],
+           "a claim half that refuses AFTER committing — a red claim commit, a failed push "
+           "— has its claim backed out by sha, where it used to be left standing",
+           f"{code} {seen['rollback']} vs {red_sha}")
+        ok(red_sha != red_before, "the arm really did move HEAD, so it is not vacuous")
+
+        out, code, seen = drive_main(gate_repo, mergeable, (None, 0), claims=False,
+                                     claim_code=1)
+        ok(seen["rollback"] == [],
+           "and a claim half that refused BEFORE committing backs nothing out — the "
+           "rollback is keyed on this run having moved the branch", out)
+
+        print("\n  -- and the backout is a revert of the claim commit, pushed --")
+        # THE INVERSE BY THE EXACT ROUTE. `claim_half` refuses a dirty tree before it
+        # commits, so the claim commit is the ONLY thing between the branch and its slug
+        # form — reverting it restores the heading, the citations, the index, the manifest
+        # and the entry's own filename with nothing parsed and nothing reconstructed.
+        back = tmp / "backout"
+        back.mkdir()
+        back_repo = build_split(back)
+        with_claimer(back_repo)
+        git(back_repo, "add", "-A")
+        git(back_repo, "commit", "-qm", "the checkout carries the claimer")
+        git(back_repo, "push", "-q", "origin", "main")
+        git(back_repo, "checkout", "-q", "-b", "backout-branch")
+        b_slug = "D-" + "backed-out"
+        write(back_repo, f"docs/decisions/{b_slug}.md", f"## {b_slug} — Backed out\n\nbody\n")
+        git(back_repo, "add", "-A")
+        git(back_repo, "commit", "-qm", "the branch writes its slug")
+        git(back_repo, "push", "-q", "origin", "backout-branch")
+        slugged = snapshot(back_repo)
+        claim(back_repo, "--root", str(back_repo), "--write")
+        git(back_repo, "add", "-A")
+        git(back_repo, "commit", "-qm", "Claim the ids this branch left as slugs (D140)")
+        git(back_repo, "push", "-q", "origin", "HEAD")
+        claim_sha = git(back_repo, "rev-parse", "HEAD").strip()
+        ok(snapshot(back_repo) != slugged, "the claim really changed the tree")
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            merge_pr_module().rollback_claim(str(back_repo), 77, claim_sha, "backout-branch")
+        rolled = buf.getvalue()
+        ok(snapshot(back_repo) == slugged,
+           "the backout restores the tree BYTE FOR BYTE, filename included",
+           "\n".join(sorted(set(slugged) ^ set(snapshot(back_repo)))))
+        ok(git(back_repo, "rev-parse", "HEAD").strip() != claim_sha
+           and claim_sha in git(back_repo, "log", "--format=%H"),
+           "by a REVERT and never a rewrite — the claim commit is already on origin and may "
+           "already be somebody's read", rolled)
+        ok(git(back_repo, "rev-parse", "HEAD").strip()
+           == git(back_repo, "rev-parse", "origin/backout-branch").strip(),
+           "and origin carries the backout too, so no claimed number is left standing there",
+           rolled)
+        ok("main HAS NOT MOVED" in rolled and "merge" in rolled.lower(),
+           "it says which it did — backed out, not retried — and what to do next", rolled)
+
+        out, code = claim_rc(back_repo, "--porcelain")
+        ok(b_slug in out,
+           "and the slug is pending again, so a re-run claims a fresh number", out)
+
+        moved = tmp / "moved"
+        moved.mkdir()
+        moved_repo = build_split(moved)
+        git(moved_repo, "checkout", "-q", "-b", "moved-branch")
+        write(moved_repo, "note.md", "a\n")
+        git(moved_repo, "add", "-A")
+        git(moved_repo, "commit", "-qm", "a commit that is not the claim")
+        stale_sha = git(moved_repo, "rev-parse", "HEAD").strip()
+        write(moved_repo, "note.md", "b\n")
+        git(moved_repo, "add", "-A")
+        git(moved_repo, "commit", "-qm", "something moved the branch since")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            merge_pr_module().rollback_claim(str(moved_repo), 77, stale_sha, "moved-branch")
+        out = buf.getvalue()
+        ok("no longer the claim commit" in out
+           and (moved_repo / "note.md").read_text(encoding="utf-8") == "b\n",
+           "and it refuses to revert when HEAD is not the commit it was told to undo — a "
+           "backout that guesses is the thing this whole file exists to delete", out)
 
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))

@@ -911,8 +911,9 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
     if not pushed.ok:
         return refuse("the claim commit could not be pushed to `{0}`.".format(branch),
                       pushed.err or pushed.out,
-                      "", "The claim is committed here and main has NOT moved. Push it yourself,",
-                      "then run this again — a second run finds no unclaimed id and skips.")
+                      "", "Main has NOT moved, and the claim is backed out below — a claim",
+                      "that does not reach a merge does not stay. Fix the push and run this",
+                      "again; the claim then allocates against main as it stands.")
 
     sha = run(["git", "rev-parse", "HEAD"], cwd=root).out.strip()
     parent = run(["git", "rev-parse", "--verify", "--quiet", "HEAD^"], cwd=root).out.strip()
@@ -921,8 +922,8 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
             "the claim commit was pushed and its SHA could not be read back.",
             "",
             "The wait is about that commit and about nothing else, so there is nothing safe",
-            "to wait on. The claim is pushed and main has NOT moved; watch the pull request",
-            "yourself and run this again once it is green.")
+            "to wait on. Main has NOT moved, and the claim is backed out below. Watch the",
+            "pull request yourself and run this again once it is green.")
 
     rule("waiting for the claim commit's checks")
     say("  this is the wait D140 buys: main never takes a substitution",
@@ -953,13 +954,158 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
         return refuse(
             "PR #{0}'s claim commit {1} is not green.".format(number, sha[:9]),
             "",
-            "The claim is pushed and main has NOT moved. Fix the branch and run this again;",
-            "a second run finds no unclaimed id and goes straight to the merge.",
+            "Main has NOT moved, and the claim is backed out below — owner's ruling,",
+            "2026-09-19: a claim that does not reach a merge does not stay. Fix the branch",
+            "and run this again; the claim then allocates a number against main as it",
+            "stands at that moment rather than at this one.",
             "",
             "A wait that ENDED WITHOUT AN ANSWER lands here too, and that is the point: an",
             "empty answer, an unreadable one and a deadline are all `not known yet`, and",
             "none of the three is evidence that anything passed.")
     return 0
+
+
+# ------------------------------------------- can it merge at all, asked BEFORE it is claimed
+
+# THE CLAIM COMMITS AND PUSHES BEFORE ANYTHING ESTABLISHES THE PULL REQUEST CAN MERGE, and on
+# 2026-09-19 that order cost two force-pushes. A claim ran from a branch, allocated three
+# numbers, rewrote the entry, the heading, CLAUDE.md's index, `ORDER.json` and every citation,
+# committed, pushed, waited for CI — and THEN reached the GitHub half and was told the pull
+# request conflicts with its base. Another session had merged four minutes earlier and taken
+# those numbers. The branch was left carrying a pushed commit claiming a number main already
+# owned, and a person unpicked it.
+#
+# THE STATE WAS READABLE ALL ALONG. `main()` already calls `pr_state` before the claim — it
+# has to, to learn the head branch — and the answer it throws away carries `mergeable` and
+# `mergeStateStatus`. Reading two more fields of a reply already in hand costs nothing and
+# closes the case where the pull request was ALREADY conflicting when the merge was typed.
+#
+# IT DOES NOT CLOSE THE RACE, AND SAYING SO IS THE POINT. The claim's own CI wait is minutes
+# long; a merge that lands during it turns a MERGEABLE answer stale while this is standing
+# still. That window is what `rollback_claim` below is for. A gate here and a rollback there
+# are two halves of one answer, and neither is the whole of it.
+#
+# `UNKNOWN` IS NOT `CONFLICTING` AND IT IS NOT `MERGEABLE`. GitHub computes mergeability
+# asynchronously, so a pull request read moments after a push answers `UNKNOWN` for a few
+# seconds. It is re-read until it answers or the deadline passes, and a deadline that passes
+# REFUSES.
+#
+# OWNER'S RULING, 2026-09-19: wait longer, then refuse. The alternative shipped for an hour
+# and was overruled — proceed on `UNKNOWN` and let the backout cover it. The cost of waiting
+# is a slow merge on a slow day. The cost of proceeding is a claim, a push and a CI wait
+# spent on a state nobody read, which is the incident this section exists for, one remove
+# further out. A claim is never spent on a guess.
+
+MERGEABILITY_DEADLINE = 120.0
+MERGEABILITY_PAUSE = 5.0
+
+
+def mergeable_half(number: int, data: dict, read=None, pause=None, now=None) -> Tuple[int, dict]:
+    """(exit code, the freshest PR reading). 0 when merging is not already ruled out."""
+    read = read or pr_state
+    pause = time.sleep if pause is None else pause
+    now = time.monotonic if now is None else now
+    deadline = now() + MERGEABILITY_DEADLINE
+    asked = 1
+    while str(data.get("mergeable") or "UNKNOWN") == "UNKNOWN" and now() < deadline:
+        pause(MERGEABILITY_PAUSE)
+        fresh, _ = read(number)
+        asked += 1
+        if fresh is None:
+            break
+        data = fresh
+
+    state = str(data.get("mergeable") or "UNKNOWN")
+    status = str(data.get("mergeStateStatus") or "")
+    rule("can it merge")
+    say("  mergeable {0}{1}".format(state, "  ({0})".format(status) if status else ""))
+    if state == "CONFLICTING":
+        return refuse(
+            "PR #{0} conflicts with its base — refusing to claim an id for it.".format(number),
+            "",
+            "NOTHING HAS BEEN CLAIMED, COMMITTED OR PUSHED, and that is the whole of this",
+            "check. The claim is a commit and a push that allocates a number against main as",
+            "it stands; spending one on a pull request that cannot merge leaves the branch",
+            "holding an id main will take from under it.",
+            "",
+            "Merge `origin/main` into the branch, resolve it, push, and run this again. The",
+            "claim then allocates against main as it stands after that merge.",
+            "",
+            "If main took the number this branch already claimed, `make claim-stale` names",
+            "it and `claim-ids.py --unclaim <id> --write` puts it back.",
+        ), data
+    if state == "UNKNOWN":
+        return refuse(
+            "PR #{0}'s mergeability is still UNKNOWN after {1:.0f}s and {2} readings."
+            .format(number, MERGEABILITY_DEADLINE, asked),
+            "",
+            "NOTHING HAS BEEN CLAIMED, COMMITTED OR PUSHED. GitHub computes this",
+            "asynchronously and has not finished, or it cannot answer at all.",
+            "",
+            "An unread state is not a mergeable one. A claim is a commit, a push and a CI",
+            "wait spent against main as it stands, and spending one here would be spending",
+            "it on a guess. Run this again in a minute.",
+        ), data
+    return 0, data
+
+
+# --------------------------------------------------------- and the claim is backed out again
+
+# THE LOSER OF A RACE BACKS OUT BY ITSELF, AND SAYS SO. A claim whose merge did not happen is
+# not neutral: it is a pushed commit holding a number against a main that is free to take it,
+# and every minute it sits there is a minute another branch can. On 2026-09-19 it sat until a
+# person noticed, and the unpicking cost two force-pushes.
+#
+# `git revert` OF THE CLAIM COMMIT, AND NOT `--unclaim`. The two are the same operation by
+# different routes, and this one is exact: the claim commit is the only thing between the
+# branch and its slug form — `claim_half` refuses a dirty tree before it commits — so
+# reversing that commit restores the heading, the citations, the index, the manifest AND the
+# entry's filename with no id parsing, no slug reconstruction and nothing to get wrong.
+# `--unclaim` is the command for a tree a person is standing in, where no single commit holds
+# the whole claim; here one does.
+#
+# A REVERT AND NEVER A FORCE-PUSH. The claim commit is already on origin and may already be
+# somebody's read; a new commit on top says what happened and leaves the history readable,
+# where a reset would rewrite a pushed branch to make an accident look like it never was.
+#
+# IT NEVER RETRIES BY ITSELF. Re-claiming needs main merged into the branch and the conflict
+# resolved, which is a person's judgement and not a lookup — the one thing this file is
+# careful never to automate. So it backs out, names what it did, and stops.
+
+
+def rollback_claim(root: str, number: int, sha: str, branch: str) -> None:
+    """Undo this run's own claim commit, on origin too. Reports; never raises."""
+    rule("backing the claim out")
+    dirty = run(["git", "status", "--porcelain"], cwd=root).out.strip()
+    if dirty:
+        say("  the working tree is not clean, so nothing was reverted.",
+            "  Run this yourself once it is:",
+            "",
+            "    git revert --no-edit {0}".format(sha[:9]),
+            "    git push origin HEAD")
+        return
+    here = run(["git", "rev-parse", "HEAD"], cwd=root).out.strip()
+    if here != sha:
+        say("  HEAD is no longer the claim commit — something moved this branch since.",
+            "  Nothing was reverted. The claim {0} is still on `{1}`.".format(sha[:9], branch))
+        return
+    undone = run(["git", "revert", "--no-edit", sha], cwd=root)
+    if not undone.ok:
+        say("  the revert failed, so the claim is still here and on origin:",
+            "  " + (undone.err or undone.out or "(git said nothing)"))
+        return
+    pushed = run(["git", "push", "origin", "HEAD"], cwd=root)
+    say("  reverted the claim commit {0} — this branch is back to its slugs.".format(sha[:9]))
+    if pushed.ok:
+        say("  pushed, so `{0}` on origin carries no claimed number either.".format(branch))
+    else:
+        say("  THE PUSH FAILED, so origin still carries the claim. Push it yourself:",
+            "  " + (pushed.err or pushed.out or "(git said nothing)"),
+            "", "    git push origin HEAD")
+    say("",
+        "  NOTHING WAS MERGED AND main HAS NOT MOVED. Merge `origin/main` into this branch,",
+        "  resolve it, push, and run `make merge ARGS=\"{0} --confirm\"` again — the claim".format(number),
+        "  then allocates a fresh number against main as it stands.")
 
 
 def pr_state(number: int) -> Tuple[Optional[dict], str]:
@@ -1110,16 +1256,45 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if code:
         return code
 
+    claimed = ""
+    branch = ""
     if not args.no_claim:
         data, why = pr_state(args.pr)
         if data is None:
             return refuse("could not read PR #{0}.".format(args.pr), why)
         if data.get("state") != "MERGED":
-            code = claim_half(root, args.pr, str(data.get("headRefName") or ""), args.confirm)
+            branch = str(data.get("headRefName") or "")
+            # BEFORE THE CLAIM, OUT OF THE REPLY ALREADY IN HAND. See `mergeable_half`: the
+            # claim is a commit and a push, and spending one on a pull request already known
+            # not to merge is the 2026-09-19 incident in one line.
+            code, data = mergeable_half(args.pr, data)
             if code:
+                return code
+            was = head_of(root, "HEAD")
+            code = claim_half(root, args.pr, branch, args.confirm)
+            # WHAT THIS RUN ITSELF MOVED, read rather than reported back. A claim that found
+            # nothing pending leaves HEAD where it was and there is nothing to back out. A
+            # claim that committed is the only thing that can have moved it, because the same
+            # function refuses a dirty tree before it writes.
+            now = head_of(root, "HEAD")
+            claimed = now if now and now != was else ""
+            if code:
+                # OWNER'S RULING, 2026-09-19: ANY CLAIM THAT DOES NOT REACH A MERGE GOES
+                # BACK. This half refuses for a red check on the claim commit, a push that
+                # failed, and a SHA it could not read back. None of those is a lost race, and
+                # the older text told the reader to fix the branch and run again with the
+                # claim left standing. A number held by a branch that is not about to land is
+                # a number another branch can take from under it, which is the whole incident.
+                if claimed:
+                    rollback_claim(root, args.pr, claimed, branch)
                 return code
     commit, code = github_half(args.pr, args.confirm)
     if code:
+        # THE RACE THAT OPENED DURING THE CI WAIT LANDS HERE, and this is the half a
+        # mergeability gate cannot cover: it was answered minutes ago. The claim exists to
+        # travel with a merge that did not happen, so it goes back.
+        if claimed:
+            rollback_claim(root, args.pr, claimed, branch)
         return code
     if commit is None:  # preview of an unmerged PR: no commit exists to reason about yet
         rule("the local half")
