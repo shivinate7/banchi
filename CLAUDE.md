@@ -263,10 +263,11 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 ### The screens
 
-**The app has thirteen screens and thirteen routes — twelve the owner's, one the Fulfiller's.**
-Two routes are off-nav (the `aside` group — Kit and Cards to pull), so the nav itself draws
-eleven rows. `app/src/App.tsx`'s `ROUTES` table is the count. Recount from the table, never a
-sentence (see "the census" below).
+**The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
+Three routes are off-nav (the `aside` group — Kit, Cards to pull, and the per-product view
+D-a-product-price-view added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
+`ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
+below).
 
 ```
 #/             Home           one ranked sentence of what the store is waiting on (D121),
@@ -293,6 +294,8 @@ sentence (see "the census" below).
 #/codes        Codes          code-card track: QR ledger, lanes, hand-off
 #/fulfillment  Cards to pull  the Fulfiller's whole product. NO shell (D5)
 #/gallery      Kit            the component sheet, rendered by the build
+#/product      Product history one product's market history and the owner's own sales on
+                              it, by SKU. Off-nav, deep-linked (D-a-product-price-view)
 ```
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
@@ -302,8 +305,10 @@ stages, not two unrelated views.
 **`#/inventory` is the one owner-side view of stored cards** (D31). `#/boxes` and `#/pull` are
 not routes. Box operations live in its Manage box sheet.
 
-**Two routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen and the
-kit. Both stay registered routes, reachable from elsewhere.
+**Three routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
+kit, and `#/product`, the per-product view (D-a-product-price-view). It is a deep link reached
+by SKU, never a destination anyone browses to cold. All three stay registered routes,
+reachable from elsewhere.
 
 **The census.** Every route or screen count in this file, README.md and docs/map.py is
 reconciled against `ROUTES` by `make docs-audit`'s `route census` row, and every spec's pinned
@@ -376,7 +381,7 @@ read off a declared class.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the shell: thirteen hash routes, no routing
+`App.tsx` is a hand-written hash router and the shell: fourteen hash routes, no routing
 library, one table. It renders for every screen except the Fulfiller's (`persona: 'fulfiller'`,
 not rendered — not focusable, not reachable by a screen reader).
 

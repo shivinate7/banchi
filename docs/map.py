@@ -1024,6 +1024,24 @@ COMPONENTS = [
                                         "17 assertions including the D62 collision arm run both "
                                         "ways (the real key keeps two rows, a width-only key "
                                         "collapses them to one)."},
+            # THE PER-PRODUCT VIEW'S OWN READ (D-a-product-price-view). Archive-first,
+            # live-fallback only when `store/pricearchive.py` has never seen the SKU at all.
+            # Never writes — a sweep is still a press, never this route.
+            "productview.py": {"does": "`row_for_sku` looks up one SKU's export-shaped row "
+                                       "without walking the whole `cards` table. "
+                                       "`archive_payload` reads `store/pricearchive.py` for "
+                                       "every range it holds for that SKU, per-bucket "
+                                       "low/high carried through untouched, or `None` when "
+                                       "the archive has never seen it — the caller's signal "
+                                       "to fall back to `pipeline/pricehistory.py:Market`'s "
+                                       "live read. `history_begins` computes the date the "
+                                       "chart states its own history starts from, off the "
+                                       "buckets actually read, never the 357-day constant.",
+                                "governed_by": ["D62", "D-a-price-history-archive",
+                                                "D-a-product-price-view"],
+                                "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
+                                        "and by `app/tests/product-history.spec.ts`. No "
+                                        "network call in the archive-hit path."},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -2335,6 +2353,20 @@ COMPONENTS = [
                         "`make catalog-index-selftest`'s own precedent.",
                 "governed_by": ["D219", "D62", "D18"],
             },
+            "product-history-selftest.py": {
+                "does": "proves pipeline/productview.py and "
+                        "server/pipeline_routes.py:do_product_history against a throwaway "
+                        "store (D-a-product-price-view). Three arms, each broken to prove "
+                        "the guard first: an unknown SKU refuses `sku_unknown`; a `misc` SKU "
+                        "refuses `not_catalogued`; a SKU the archive has already swept "
+                        "answers `source: archive` with per-bucket spread carried through, "
+                        "asserted by pointing an `ExplodingMarket` at the route and proving "
+                        "it is never called; a SKU the archive has never swept reaches a "
+                        "`FakeMarket` and answers `source: live`. Nine assertions, all "
+                        "passing. Not wired into `make check` — the same precedent this "
+                        "file's own sibling above sets.",
+                "governed_by": ["D-a-product-price-view", "D62", "D18", "D22"],
+            },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
                         "throwaway checkout, a throwaway sibling standing in for "
@@ -2628,7 +2660,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D167", "D168", "D174", "D192",
-                                "D193", "D203", "D165", "D210"],
+                                "D193", "D203", "D165", "D210", "D-a-product-price-view"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -3813,7 +3845,7 @@ COMPONENTS = [
                         "(D43) — a tracked file cannot name a port derived from one "
                         "directory's path — and screenshot.sh substitutes a worktree's own "
                         "before rendering.",
-                # D5 is what the list is for: EIGHT owner screens and the Fulfiller's, which
+                # D5 is what the list is for: NINE owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,
                 # orders and shipping by D69) and the count beside them was not, the same
@@ -3833,7 +3865,8 @@ COMPONENTS = [
                 # rather than the screen. D86 is the same drift on the `pricing` line — the
                 # corpus made that screen's default the full cross-run worklist, and the
                 # paragraph beside it still described a run picker that draws nothing.
-                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86"],
+                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86",
+                                "D-a-product-price-view"],
             },
         },
     },
@@ -3984,7 +4017,7 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
                                 "D165", "D168", "D174", "D183", "D172", "D192", "D191",
                                 "D193", "D203", "D212",
-                                "D213"],
+                                "D213", "D-a-product-price-view"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4150,7 +4183,8 @@ COMPONENTS = [
                                 "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
                                 "D134", "D137", "D145", "D147", "D156", "D159", "D163",
                                 "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D188", "D189", "D216"],
+                                "D188", "D189", "D216", "D-a-product-price-view",
+                                "D-a-price-history-archive"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4266,8 +4300,8 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "does": "the web app, REBUILT AS BANCHI in 2026-09: a new shell, a shared kit, two "
-                "themes, and every screen redrawn against it. THIRTEEN routes behind a "
-                "hand-written hash router, TWELVE of them the owner's — home, which took the "
+                "themes, and every screen redrawn against it. FOURTEEN routes behind a "
+                "hand-written hash router, THIRTEEN of them the owner's — home, which took the "
                 "root hash and is where the six-stage spine is drawn; the capture screen that "
                 "Gate B runs on, now at `#/capture`; the runs screen the pipeline lives on; the "
                 "review queue; the pricing worklist; the order screen and the shipping lane "
@@ -4691,7 +4725,7 @@ COMPONENTS = [
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
                                             "D95", "D100", "D105", "D109", "D120", "D134",
-                                            "D159", "D207"]},
+                                            "D159", "D207", "D-a-product-price-view"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -4799,7 +4833,8 @@ COMPONENTS = [
                                               "D87", "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D192",
-                                              "D193", "D203", "D207", "D213"]},
+                                              "D193", "D203", "D207", "D213",
+                                              "D-a-product-price-view"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -4891,7 +4926,8 @@ COMPONENTS = [
                                              "D91", "D92", "D93", "D97", "D100", "D103", "D104",
                                              "D113", "D114", "D115", "D116", "D132", "D134", "D142",
                                              "D145", "D147", "D156", "D159", "D165", "D166", "D168",
-                                             "D172", "D174", "D180", "D183", "D193", "D212", "D213"]},
+                                             "D172", "D174", "D180", "D183", "D193", "D212", "D213",
+                                             "D-a-product-price-view"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6191,6 +6227,39 @@ COMPONENTS = [
                                             "(D85) — read by three declarations and set by "
                                             "nothing from D54 until then.",
                                      "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62", "D85"]},
+            # THE PER-PRODUCT VIEW (D-a-product-price-view). Off-nav, deep-linked by SKU. Never
+            # links from #/revenue -- that file was being edited by another branch when this
+            # route was built, and the decision entry argues the deferral in full.
+            "src/ProductHistory.tsx": {"does": "`#/product`: one product's market history, "
+                                               "with the owner's own sales marked on it. "
+                                               "`getProductHistory` reads the archive first "
+                                               "and falls back to a live read only for a SKU "
+                                               "the archive has never swept -- read-only, never "
+                                               "a sweep from the screen. The market series and "
+                                               "the owner's own fills (read off `getOrders`, "
+                                               "filtered by SKU -- D212's grain) are drawn as a "
+                                               "broken polyline and separate diamond marks, "
+                                               "never one line, with a legend. A per-bucket "
+                                               "spread tick is carried rather than discarded. "
+                                               "`history_begins` states where the source's own "
+                                               "data starts; a fill older than that is listed "
+                                               "separately as having no market data at all, "
+                                               "never plotted.",
+                                       "governed_by": ["D-a-product-price-view", "D62",
+                                                       "D-a-price-history-archive", "D212",
+                                                       "D196", "D50"],
+                                       "note": "No harness test -- a Playwright spec would be "
+                                               "the honest coverage and none exists yet, named "
+                                               "rather than silently absent."},
+            "src/ProductHistory.css": {"does": "the chart at `--bn-*` tokens only. The market "
+                                               "line and the per-bucket spread tick are both "
+                                               "ink, never accent -- accent is reserved for the "
+                                               "owner's own fill marks, the one thing on this "
+                                               "screen that is a fact rather than a reading, "
+                                               "and never a color standing in for beat-or-miss "
+                                               "(D62: direction is a sign and a word).",
+                                       "governed_by": ["D-a-product-price-view", "D62", "D94",
+                                                       "D41", "D218"]},
             # D79 is the batched half of D62, and D62 is why this file is separate from
             # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
             # has and the strip draws a shape and a sign, which are two answers to two
@@ -6980,7 +7049,10 @@ COMPONENTS = [
             },
             "tests/routes.ts": {
                 "does": "one helper, `routesFromNav`, which harvests the owner's route roster "
-                        "off `.bn-side a.bn-nav-link` and names `#/gallery` beside it. Moved "
+                        "off `.bn-side a.bn-nav-link` and names `#/gallery` beside it, joined "
+                        "by `#/product` for the identical reason (D-a-product-price-view): "
+                        "off-nav, so undiscoverable, but still an owner screen D194's ratchet "
+                        "must reach. Moved "
                         "out of `cursor.spec.ts` on 2026-09-07 when `wide.spec.ts` needed the "
                         "same roster at the other end of the width ladder (D118), and put "
                         "beside `fontsReady.ts` rather than into `shell.ts`, whose one argument "
@@ -6990,7 +7062,8 @@ COMPONENTS = [
                         "second copy of an anti-vacuity contract is a copy that drifts. It "
                         "cannot run below 768: the sidebar is `display: none` there, which is "
                         "why the phone sweep harvests its own.",
-                "governed_by": ["D31", "D50", "D69", "D70", "D95", "D123"]},
+                "governed_by": ["D31", "D50", "D69", "D70", "D95", "D123", "D194",
+                                "D-a-product-price-view"]},
             "tests/wide.spec.ts": {
                 "does": "the owner's screens ABOVE the desk, which nothing in this suite had "
                         "ever rendered. Of twenty-one specs, ten cases set 1440x900 and none "
@@ -7485,6 +7558,20 @@ COMPONENTS = [
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201",
                                  "D214", "D217"],
+            },
+            "tests/product-history.spec.ts": {
+                "does": "`#/product`'s own hard rule (D-a-product-price-view): the market "
+                        "series and the owner's own fills draw as two different SVG shapes, "
+                        "never one line — counted by class name, a `<polyline>` for a market "
+                        "run and a `<path>` for a fill. Proved to fail: relabelling a fill's "
+                        "class as the market line's own drops the fill count to zero. A "
+                        "second case proves a sale older than `history_begins` is listed as "
+                        "having no market data and never reaches either chart locator. Two "
+                        "requests are intercepted (the product history and the orders "
+                        "payload); no real request is made and no store is touched. Not a "
+                        "harness test; `make design-check` runs it.",
+                "governed_by": ["D-a-product-price-view", "D62", "D212",
+                                 "D-a-price-history-archive"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "

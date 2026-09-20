@@ -50,6 +50,7 @@ import type {
   MarkdownSummary,
   RunDetail,
   PriceHistoryPayload,
+  ProductHistoryPayload,
   PricingPayload,
   PricingCorpus,
   PricingClearable,
@@ -2640,6 +2641,31 @@ export async function getPriceHistory(
     `/pipeline/runs/${encodeURIComponent(run)}/history?sku=${encodeURIComponent(sku)}`,
     NO_CACHE,
   )) as PriceHistoryPayload
+}
+
+/**
+ * One product's market history, addressed by SKU — the per-product view's own read
+ * (`#/product`, D-a-product-price-view).
+ *
+ * ARCHIVE FIRST, LIVE ONLY WHEN THE ARCHIVE HAS NEVER SWEPT THIS SKU. Unlike
+ * `getPriceHistory` above, this call does NOT always leave the machine — read the answer's
+ * own `source` field. A SKU `pkmnscan archive sweep` has already visited answers straight off
+ * `store/pricearchive.py`, no socket opened. Only a SKU the archive has zero rows for at all
+ * reaches the same live reader `getPriceHistory` always does.
+ *
+ * PRESSED ON PAGE LOAD, NOT ON A WALK. This is a per-product PAGE, not a row in a list — one
+ * SKU per navigation, never fifty in a loop, so the "never fired by a walk" rule
+ * `getPriceHistory`'s own docstring states does not need a second press here to hold.
+ *
+ * Refusals worth branching on: `sku_unknown` (no card in this store has ever carried this
+ * SKU), `not_catalogued` (D22's `misc`), and the live-fallback path's own
+ * `history_unresolved` / `history_unreachable` / `history_blocked`.
+ */
+export async function getProductHistory(sku: string): Promise<ProductHistoryPayload> {
+  return (await request(
+    `/pipeline/products/${encodeURIComponent(sku)}/history`,
+    NO_CACHE,
+  )) as ProductHistoryPayload
 }
 
 /**

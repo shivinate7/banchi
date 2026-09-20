@@ -104,6 +104,19 @@ refunded order. That comes before anyone designs a state for it.
 
 ## 3. The per product view
 
+**BUILT.** `#/product` (D-a-product-price-view). One page per product, deep linkable by
+`?sku=`. It reads `store/pricearchive.py` first. It falls back to a live read through
+`pipeline/pricehistory.py` only for a SKU the archive has never swept. It never writes and
+never triggers a sweep from the screen. `server/pipeline_routes.py:do_product_history` is
+the route. `pipeline/productview.py` is the read it calls. `app/src/ProductHistory.tsx` is
+the screen. Proved by `scripts/product-history-selftest.py`, not wired into `make check` —
+`scripts/pricearchive-selftest.py`'s own precedent.
+
+Off-nav rather than linked from `#/revenue`: that screen was being edited by a parallel
+branch. The decision entry argues the route-versus-lens question. It also argues why the
+link from `#/revenue` is deferred rather than built. The route's own SKU field is the
+control a person who lands here without a query string actually finds.
+
 One page per product, deep linkable. It shows what a product has been selling for. It marks the
 owner's own sales on that line.
 
