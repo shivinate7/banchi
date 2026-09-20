@@ -118,7 +118,14 @@ PHOTOS_RELOCATED = "photos_relocated"
 # against whatever export happens to be on disk, which can change from one run to the next,
 # and a migration that ran once at open time could never re-answer a card whose export
 # arrived later.
-SCHEMA_VERSION = 8
+#
+# NINE, FOR D-a-price-history-archive (`docs/specs/revenue-plan.md` §4). `_add_price_history`
+# adds `price_history` and `price_history_sources` — the same purely-additive shape
+# `_add_readings` used at 5, two tables nothing older has. `pkmnscan archive sweep --write`
+# is the only writer, and an upgraded store's archive is correctly empty until the first
+# press: the source's own 357-day window means there was nothing this build could have
+# captured before this table existed either.
+SCHEMA_VERSION = 9
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -171,10 +178,20 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     # The accounting beside it: one row per file that walk read, keyed `kind:name` — see
     # `store/readings.py:_source_key` for why `kind` is part of the key.
     "readings_sources": ("kind", "name", "at", "skus"),
+    # D-a-price-history-archive: one row per (sku, range, start), NEVER cleared — see
+    # `store/pricearchive.py`'s module docstring for why the key carries `range` and not
+    # `width_days`, and why this table is never a full replace.
+    "price_history": (
+        "sku", "product_id", "range", "width_days", "start", "market", "quantity",
+        "transactions", "low", "high", "at",
+    ),
+    # One row per range last swept — see `store/pricearchive.py:Source`.
+    "price_history_sources": ("range", "at", "requested", "answered", "refused"),
 }
 
 _INTEGER = {
     "box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid", "at", "skus",
+    "product_id", "width_days", "quantity", "transactions", "requested", "answered", "refused",
 }
 
 _INDEXES = (
@@ -194,6 +211,9 @@ _INDEXES = (
     ("events", "position"),
     ("boxes", "bid"),
     ("submissions", "state"),
+    # D-a-price-history-archive: `PriceArchive.for_sku` filters on `sku`, and a table this
+    # never deletes from grows without bound, so a scan-per-lookup would only get worse.
+    ("price_history", "sku"),
 )
 
 # D172'S TWO INDEXES, DELIBERATELY NOT IN `_INDEXES` BECAUSE NEITHER IS A PLAIN ONE.
@@ -406,6 +426,8 @@ def _upgrade(
                 _add_search_index(conn)      # STORE-SCALING ITEM 8
             if stored < 8:
                 _add_set_columns(conn)       # D213
+            if stored < 9:
+                _add_price_history(conn)     # D-a-price-history-archive
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1119,6 +1141,28 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
         conn.execute(
             "UPDATE cards SET set_hint = ? WHERE set_hint = ?", (resolved, stale)
         )
+
+
+def _add_price_history(conn: sqlite3.Connection) -> None:
+    """Schema 9: `price_history` and `price_history_sources`
+    (D-a-price-history-archive, `docs/specs/revenue-plan.md` §4).
+
+    `_add_readings`'s case one version up — two tables nothing older has, so there is
+    nothing to backfill and nothing to read wrong. No receipt file, for the same reason
+    `_add_readings` writes none.
+
+    AN EMPTY ARCHIVE IS THE CORRECT STATE FOR AN UPGRADED STORE, and unlike `_add_readings`
+    this is not merely convenient — it is the honest answer. The source endpoint's own
+    window is 357 days; nothing this build could have captured before this table existed is
+    recoverable now, upgrade or not. The first `pkmnscan archive sweep --write` after an
+    upgrade starts the archive from whatever the live endpoint can still answer, which is
+    all any build, old or new, could ever have gotten.
+    """
+    conn.execute(_ddl("price_history", TABLES["price_history"]))
+    conn.execute(_ddl("price_history_sources", TABLES["price_history_sources"]))
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS price_history_sku ON price_history(sku)"
+    )
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:

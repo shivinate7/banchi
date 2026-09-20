@@ -19,6 +19,7 @@ from cli import (  # noqa: E402
     cmd_emit,
     cmd_identify,
     cmd_join,
+    cmd_pricearchive,
     cmd_prices,
     cmd_queue,
     cmd_readings,
@@ -489,6 +490,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     readings_sub.add_parser("show", help="what the table holds, and which files it last read")
 
+    # ------------------------------------------------------------------------- archive
+    #
+    # THE PRICE-HISTORY ARCHIVE (D-a-price-history-archive, `docs/specs/revenue-plan.md` §4).
+    # The source endpoint's window is 357 days and slides; `sweep` is the one press that
+    # reads it and keeps what it found past that ceiling. Previews by default, like
+    # `readings adopt`, though for the same weaker reason: nothing here overrides an
+    # operator's own answer. UNLIKE `readings adopt`, `--write` never clears a row a pass
+    # did not mention — see `store/pricearchive.py`'s module docstring.
+    archive = sub.add_parser(
+        "archive",
+        help="the price-history archive: sweep the live endpoint into it, or look at it",
+    )
+    archive_sub = archive.add_subparsers(dest="archive_command")
+    archive_sweep = archive_sub.add_parser(
+        "sweep",
+        help="read every range for every sku this store has sold or holds, and archive "
+        "what came back — never deleting a bucket a pass did not mention",
+    )
+    archive_sweep.add_argument(
+        "--write", action="store_true", help="actually write; previews without it"
+    )
+    archive_show = archive_sub.add_parser(
+        "show", help="what the archive holds, and which ranges were last swept"
+    )
+    archive_show.add_argument(
+        "--sku", help="also print one sku's own buckets, across every range archived"
+    )
+
     # ------------------------------------------------------------------------- reprice
     #
     # THE LIVE LISTINGS THAT ARE NOT SELLING, MARKED DOWN AND PUSHED BACK (D100). Two
@@ -591,6 +620,7 @@ COMMANDS = {
     "reconcile": cmd_reconcile.run,
     "prices": cmd_prices.run,
     "readings": cmd_readings.run,
+    "archive": cmd_pricearchive.run,
     "queue": cmd_queue.run,
     "reprice": cmd_reprice.run,
     "rescue": cmd_rescue.run,
