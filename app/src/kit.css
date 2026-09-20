@@ -58,17 +58,18 @@
 .bn-actions-stack > * { justify-self: stretch; }
 .bn-grow { flex: 1 1 auto; min-width: 0; }
 .bn-spacer { flex: 1 1 auto; }
-/* `min-width: 0` (S13): a flex item's default `min-width: auto` refuses to shrink below its
-   own content, which defeats `text-overflow: ellipsis` outright. It was missing here, which is
-   why 4 of the 10 hand copies this class should have replaced (`.orders-plan-card-name`,
-   `.browse-secttitle`, `.browse-row-slot`, `.browse-boxchip-text`) had to add it themselves at
-   their own call site. The other 6 (`.orders-index-number`, `.browse-boxcell-name`,
-   `.browse-boxcell-meta`, `.browse-row-name`, `.browse-variant-name`, `.browse-variant-sub`)
-   never needed it: each sits as a plain block child inside an ancestor that already shrinks
-   (a flex column with its own `min-width: 0`, or a grid track declared `minmax(0, 1fr)`), so
-   for them this is a no-op. Safe to add unconditionally either way — it only ever loosens a
-   width floor that a shrinking layout was going to fight anyway. */
-.bn-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* S13: `.bn-truncate` was never used — 10 hand copies of these same three properties exist
+   instead, 4 of which (`.orders-plan-card-name`, `.browse-secttitle`, `.browse-row-slot`,
+   `.browse-boxchip-text`) ALSO write their own `min-width: 0`, which looked at first like a
+   gap this class should close. It is not: a flex or grid item's automatic minimum size is
+   already defined as 0 once its own `overflow` is anything but `visible` (CSS Flexbox §7.1.1 /
+   CSS Grid §6.6, both browser-verified here), and `overflow: hidden` is inseparable from
+   `text-overflow: ellipsis` — you cannot write one without the other. So every one of the 10
+   copies gets the same automatic-zero for free, and the 4 that also spell `min-width: 0`
+   are being redundant, not compensating for something this class lacks. Proved in a real
+   flex row on #/gallery (`gallery.spec.ts`'s truncate case) with `.bn-truncate` exactly as
+   it already stood; nothing added. */
+.bn-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bn-tnum { font-variant-numeric: tabular-nums; }
 .bn-sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* SAME-KIND FACTS ON ONE LINE, dot-joined by CSS rather than typed into a string (D218). Wrap

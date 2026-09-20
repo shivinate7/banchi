@@ -324,7 +324,8 @@ test('bn-truncate clips a name too long for its row (S13)', async ({ page }) => 
   await expect(el).toHaveCSS('overflow-x', 'hidden')
   const [scrollWidth, clientWidth] = await el.evaluate((node) => [node.scrollWidth, node.clientWidth])
   /* The text is wider than the box it sits in — proof the ellipsis is actually doing
-     something and not merely declared and unreachable, which `min-width: 0` is what makes
-     possible inside this spec's flex row. */
+     something inside a flex row, and not merely declared and unreachable. `.bn-truncate`
+     needed no extra property for this: its own `overflow: hidden` already zeroes a flex
+     item's automatic minimum size (kit.css's own note on this rule). */
   expect(scrollWidth).toBeGreaterThan(clientWidth)
 })

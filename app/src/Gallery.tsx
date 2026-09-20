@@ -979,10 +979,10 @@ export function Gallery() {
                 </dl>
               </Spec>
               {/* S13: `.bn-truncate` was never used anywhere — 10 hand copies of the same
-                  three properties exist instead, four of which also had to add their own
-                  `min-width: 0` because a flex item's default refuses to shrink below its
-                  content. `.bn-truncate` now carries that itself (see kit.css's own note),
-                  proved here in a flex row narrow enough to force the ellipsis. */}
+                  three properties exist instead, 4 of which also write their own
+                  `min-width: 0`. Unchanged here: that turned out to be redundant rather than
+                  a gap (see kit.css's own note), and this flex row proves `.bn-truncate`
+                  clips exactly as written, with nothing added. */}
               <Spec name="truncate" label="truncate, in a flex row">
                 <div className="kit-row" style={{ width: 160 }}>
                   <Icon name="box" size={16} />
