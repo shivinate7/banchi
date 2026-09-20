@@ -1094,7 +1094,7 @@ COMPONENTS = [
                                         "and by `app/tests/product-history.spec.ts`. No "
                                         "network call in the archive-hit path."},
             # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/revenue-plan.md` section 1,
-            # second half; `D-a-holdings-value-series`). The position is the SKU
+            # second half; `D236`). The position is the SKU
             # (D212); quantity is the `cards` table's own state, never the marketplace
             # mirror. The series source is the archive (D219), one range at a time,
             # never merged (D62).
@@ -1116,7 +1116,7 @@ COMPONENTS = [
                                     "it. `build_holdings_report` is the one entry point: one "
                                     "range in, a `HoldingsReport` out.",
                                 "governed_by": ["D62", "D159", "D189", "D212", "D219", "D225",
-                                                "D-a-holdings-value-series"],
+                                                "D236"],
                                 "note": "PROVED BY `make holdings-selftest`, not in `make "
                                         "check` — no store on disk, no network, "
                                         "`pricearchive-selftest.py`'s own precedent. Two "
@@ -2525,7 +2525,7 @@ COMPONENTS = [
             },
             "holdings-selftest.py": {
                 "does": "proves pipeline/holdings.py against fixtures built in the file "
-                        "(`D-a-holdings-value-series`) — no store on disk, no network. "
+                        "(`D236`) — no store on disk, no network. "
                         "Covers: on-hand quantity honors `TERMINAL_STATES` and never counts "
                         "a SOLD copy; a name with an archived reading produces a correctly "
                         "valued point; a name with no reading at all is counted in "
@@ -2542,7 +2542,7 @@ COMPONENTS = [
                         "dropped). 28 assertions, all passing. Not wired into `make check` "
                         "— `pricearchive-selftest.py`'s own precedent.",
                 "governed_by": ["D62", "D159", "D189", "D212", "D219", "D18",
-                                "D-a-holdings-value-series"],
+                                "D236"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -4443,7 +4443,7 @@ COMPONENTS = [
                                 "D89", "D100", "D103", "D105", "D134", "D137", "D145", "D147",
                                 "D156", "D159", "D163", "D165", "D166", "D168", "D170", "D172",
                                 "D174", "D180", "D188", "D189", "D212", "D216", "D219",
-                                "D225", "D227", "D-a-holdings-value-series"],
+                                "D225", "D227", "D236"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

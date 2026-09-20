@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`pipeline/holdings.py`, proved against fixtures built in this file
-(`D-a-holdings-value-series`).
+(`D236`).
 
 NO STORE ON DISK. NO NETWORK. Every fixture below is a plain `Inventory`, `PriceArchive` or
 `Ledger` built in memory — the same dataclasses `store/session.py:Snapshot` carries, never a

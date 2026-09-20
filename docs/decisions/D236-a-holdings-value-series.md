@@ -1,4 +1,4 @@
-## D-a-holdings-value-series — Unsold stock is valued by SKU off the archive, one range at a time, and sealed stock is a counted gap
+## D236 — Unsold stock is valued by SKU off the archive, one range at a time, and sealed stock is a counted gap
 
 **THE FEATURE.** `docs/specs/revenue-plan.md` section 1 names two features. `D225` built the
 first: sold cards, then against now. This entry builds the second: unsold stock, valued at
