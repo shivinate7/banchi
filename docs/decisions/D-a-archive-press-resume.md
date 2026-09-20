@@ -1,7 +1,7 @@
 ## D-a-archive-press-resume — The preview costs nothing, and the press commits as it goes
 
 **MEASURED AGAINST THE OWNER'S REAL STORE, 2026-09-19.** `archive sweep`
-(D-a-price-history-archive) over 914 SKUs and 4 ranges printed nothing for over ten
+(D219) over 914 SKUs and 4 ranges printed nothing for over ten
 minutes. Then it printed the whole report at once. Silence and a hang look identical from
 outside.
 
@@ -37,7 +37,7 @@ D88 says one transaction per write. It does not say one transaction per PRESS. A
 walks 914 SKUs and writes once at the end is one enormous transaction wearing D88's name.
 It fails D88's own purpose the moment the process dies before reaching the write. Every
 bucket read that hour is gone. The archive exists because a bucket lost to the source's
-357-day window may be unrecoverable at any later date (D-a-price-history-archive).
+357-day window may be unrecoverable at any later date (D219).
 
 `cli/cmd_pricearchive.py:_sweep` now splits the subject list into chunks of
 `pipeline.pricearchive.CHUNK_SKUS` (20). It opens one `Store().write()` per chunk. It
@@ -83,7 +83,7 @@ and archived exactly once.
 
 ### What this does not touch
 
-The schema and the key stay `(sku, range, start)` (D-a-price-history-archive). The
+The schema and the key stay `(sku, range, start)` (D219). The
 never-delete rule is unchanged. A chunk commits with `PriceArchive.upsert()`, the same
 method, called more often on smaller inputs. No timer, cron or launch agent is added. The
 sweep is still a press a person runs, one invocation or several. D62's statement that this

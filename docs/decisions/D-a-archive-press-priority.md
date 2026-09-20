@@ -27,10 +27,10 @@ order. No caller needs a second sort.
 Sealed product is never captured. `pipeline/games.py` says so directly. It has no row in
 `cards` and never will. `store/orders.py` says the same of a sealed Holiday Calendar's
 fulfilment record. `rows_from_store`'s subject list is `cards.sku`, by
-D-a-price-history-archive's own settled argument. No ranking of that list can put a SKU on
+D219's own settled argument. No ranking of that list can put a SKU on
 it that was never there.
 
-This is the STALE premise to flag, not repeal. D-a-price-history-archive argued the subject
+This is the STALE premise to flag, not repeal. D219 argued the subject
 is "the names the owner has sold or holds," read off `cards.sku`. That argument was right
 about every SKU a physical card was ever photographed against. It did not anticipate that
 the owner's highest-revenue SKUs would be ones with no photograph at all. Measured
@@ -68,7 +68,7 @@ subjects and only a small fraction have ever sold.
 ### What this does not touch
 
 `rows_from_store`'s SUBJECT SET is unchanged. It is still `cards.sku`, exactly as
-D-a-price-history-archive settled it. Only the ORDER those subjects are read in changes. No
+D219 settled it. Only the ORDER those subjects are read in changes. No
 SKU is added. No SKU is dropped. `chunk_rows` and the resume logic both depend on the
 ranking being stable run to run. That is why ties break on the SKU string, rather than
 being left to dict order.
