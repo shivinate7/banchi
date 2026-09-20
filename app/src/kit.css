@@ -82,6 +82,9 @@
   text-transform: uppercase;
   color: var(--bn-ink-3);
 }
+/* An eyebrow can carry several short facts on one line (D218). Each is a sibling span, and
+   this draws the separator between them rather than one being typed into the string. */
+.bn-eyebrow > *:not(:last-child)::after { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 .bn-title {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-3xl);
