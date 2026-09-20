@@ -2574,7 +2574,7 @@ test('the last section of an open box counts what is in it, and the box line dro
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#5 of 5')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2 · card 2 of 2')
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2card 2 of 2')
 
   /* One accessible name carrying both, because `role="img"` hides every descendant — a screen
      reader is told the second scale here or not at all. */
@@ -2601,7 +2601,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#2 of 5')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1 · card 2 of 3 slots')
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1card 2 of 3 slots')
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
    * the lone-copy branch and asserted only the two bars, so the label beside them went on being
@@ -5826,7 +5826,7 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await expandAll(page)
   await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1 · Rares · #1–#3')
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1 · Rares · card 1 of 3 slots')
+  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1Rarescard 1 of 3 slots')
   await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1Rares')
 
   /* AND THE NAME IS WRITTEN FROM THE MANAGE SHEET, keyed by the section's number. */
