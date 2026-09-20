@@ -321,8 +321,13 @@ function useTheme(): [Theme, () => void] {
 /* ---- rail state ----------------------------------------------------------------------
    A browser with no opinion gets one from its own width: below 1280 the rail is the honest
    default, and above it there is room for the words. THE NUMBER LIVES IN `App.css`, AS
-   `--bn-rail-break-px` (D123) — read here and built into a `matchMedia` query at runtime, so
-   no `1280` or `1279` literal is ever written twice and the two can never quietly disagree.
+   `--bn-rail-break-px` — read here and built into a `matchMedia` query at runtime, so the
+   1280 the rail answers to and the 1280 a screen's own stylesheet might reference are one
+   value with one home, not two numbers that could drift apart under a re-tune. (This is a
+   design choice, not something `scripts/js-breakpoints.py`'s D123 row required: that row
+   only pairs a `matchMedia`-shaped string literal against a CSS `@media` block, and neither
+   the old `window.innerWidth < 1280` nor this file's interpolated query ever gave it one to
+   pair — the row reports 0 breakpoints from this file's rail code, before and after.)
    A lazy initializer alone only ever ran once, at mount, so a window dragged narrower kept
    whatever density it started in until a reload; `useRailNarrow` (below) is a live
    `matchMedia` listener instead, the same shape `useMedia`/`TABLET_RAIL` already use. Once a

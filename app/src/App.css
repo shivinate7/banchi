@@ -11,12 +11,15 @@
 }
 .bn-shell[data-rail='true'] { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
 
-/* THE RAIL'S OWN DEFAULT NUMBER LIVES HERE, NOT IN JAVASCRIPT (D123). Below 1280 there is
-   not enough width for the sidebar's words, so a session with no stored preference
+/* THE RAIL'S OWN DEFAULT NUMBER LIVES HERE, NOT IN JAVASCRIPT. Below 1280 there is not
+   enough width for the sidebar's words, so a session with no stored preference
    (`storedRail()` in `deviceMemory.ts`) collapses to the rail. `App.tsx` reads
    `--bn-rail-break-px` with `getComputedStyle` and builds its own `matchMedia` query from
    the number — never a `1280` or `1279` literal of its own — so the breakpoint has exactly
-   one home and the two can never quietly disagree. */
+   one home and the two can never quietly disagree. This is a design choice for its own
+   sake, not something `scripts/js-breakpoints.py` (D123) required: that row only pairs a
+   `matchMedia`-shaped string literal in a `.tsx` against a CSS `@media` block, and the rail
+   code never gave it one to pair, before or after this file changed. */
 :root { --bn-rail-break-px: 1280; }
 
 /* ---- the brand's collapse: ONE SWITCH, ONE CLOCK ------------------------------------------- */
