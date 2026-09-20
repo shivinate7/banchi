@@ -2676,6 +2676,38 @@ export async function getPriceTrends(run: string, skus: string[] = []): Promise<
   )) as TrendsPayload
 }
 
+/** One SKU's answer from `getSoldPrices` — a market figure as text, when it dates from as a
+ *  Unix second, and which table answered. `source: 'archive'` is a `price_history` `month`
+ *  bucket (D-a-price-history-archive), its own calendar day as `at`; `source: 'live'` is a
+ *  `readings` (D189) row, its own fetch/join moment as `at`. The two ages mean different
+ *  things and neither is converted into the other. */
+export type SoldPriceEntry = { market: string; at: number; source: 'archive' | 'live' }
+
+/** `sku -> SoldPriceEntry`, for exactly the SKUs asked. A SKU neither table has ever priced
+ *  is simply ABSENT, never a `null` — `do_pipeline_price_now`'s own contract, D159's
+ *  `no_reading` shape carried over. */
+export type SoldPricesLookup = Record<string, SoldPriceEntry>
+
+/**
+ * Named SKUs, the price-history archive first and the `readings` table as its fallback —
+ * `#/revenue`'s "then against now" over a SKU that may well have LEFT inventory the day it
+ * sold, which `getValuePage`'s on-hand filter would never carry, and which `readings` alone
+ * answered for under 1% of the owner's real gross and NONE of the sealed product that is
+ * most of it (measured; see `do_pipeline_price_now`'s own header for the numbers).
+ *
+ * A PLAIN READ, UNLIKE `getPriceHistory`/`getPriceTrends` ABOVE: neither table leaves the
+ * machine, so D62's cost argument for gating those behind a press does not apply here on its
+ * own terms — the reason THIS call is still a press and not an effect is `#/revenue`'s own
+ * ruling: both tables are caches, however cheap the read is, and a screen that fetched on
+ * mount would draw a number that looks live and is not (D-a-sales-truth).
+ */
+export async function getSoldPrices(skus: string[]): Promise<SoldPricesLookup> {
+  if (skus.length === 0) return {}
+  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+  const body = (await request(`/pipeline/price-now?${query}`, NO_CACHE)) as { prices: SoldPricesLookup }
+  return body.prices
+}
+
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from
  *  a terminal appears here exactly as one started from this app does. */
 export async function getRuns(): Promise<RunSummary[]> {

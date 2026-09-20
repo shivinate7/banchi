@@ -32,7 +32,9 @@
 }
 
 .revenue-verdict-prior,
-.revenue-verdict-dropped {
+.revenue-verdict-dropped,
+.revenue-verdict-canceled,
+.revenue-verdict-refunded {
   font-size: var(--bn-fs-base);
   color: var(--bn-ink-3);
   margin: 0;
@@ -92,6 +94,9 @@
 .revenue-month-row:hover { background: var(--bn-hover); }
 .revenue-month-row[aria-pressed='true'] { background: var(--bn-accent-tint); }
 .revenue-month-row[data-current='true'] .revenue-month-name { color: var(--bn-ink); font-weight: 600; }
+/* `bn-stagger` (`kit.css`) sets each row's `animation-delay`; this is the animation itself,
+ * the same `bn-page-in` entrance every other staggered list in this app already uses. */
+.revenue-month-row { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
 
 .revenue-month-name { color: var(--bn-ink-2); display: inline-flex; align-items: center; gap: var(--bn-2); }
 .revenue-month-orders { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); text-align: right; min-width: 6ch; }
@@ -117,10 +122,35 @@
 .revenue-search { min-width: 220px; max-width: 320px; }
 @media (max-width: 767px) { .revenue-search { max-width: none; width: 100%; } }
 
+/* THE TODAY COLUMN CAN OUTGROW 390px, so the TABLE scrolls horizontally inside its own
+ * wrapper rather than the PAGE ever doing it — `.graveyard-table-wrap`/`.codes-table-wrap`'s
+ * own house pattern. Every other screen's floor still holds: nothing wider than the
+ * viewport reaches `document.documentElement`. */
+.revenue-table-wrap { overflow-x: auto; }
+
 .revenue-table td,
 .revenue-table th { white-space: nowrap; }
 .revenue-table td:nth-child(2),
-.revenue-table th:nth-child(2) { white-space: normal; }
+.revenue-table th:nth-child(2) {
+  white-space: normal;
+  /* HEIGHT-CAPPED AT TWO LINES, so a long product name cannot push every numeric cell in the
+   * same row down with it — the baselines beside it stay level regardless of how many
+   * characters the name spent (defect fix). */
+  max-height: calc(var(--bn-fs-base) * 1.4 * 2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.revenue-table > tbody > tr { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
+
+.revenue-market { white-space: normal; }
+.revenue-market-none { color: var(--bn-ink-4); }
+.revenue-market-delta { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+
+.revenue-market-refresh { display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; }
+.revenue-market-note { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); margin: 0; }
 
 /* ---- sortable headers ------------------------------------------------------------ */
 /* The button INHERITS the `<th>`'s own type treatment (`font: inherit; color: inherit`,
@@ -160,6 +190,21 @@ th.num .revenue-sort { flex-direction: row-reverse; }
 .revenue-detail-table { background: var(--bn-surface-2); border-radius: var(--bn-r); }
 .revenue-detail-table th, .revenue-detail-table td { padding: var(--bn-2) var(--bn-3); }
 .revenue-detail-table tbody tr:last-child td { border-bottom: 0; }
+/* THE ORDER NUMBER NEVER CLIPS MID-STRING (defect fix). At 390px an unbreakable `.bn-mono`
+ * string ran the column past the table's own width and the page's no-horizontal-scroll floor
+ * cut it off wherever it happened to run out of room — mid-digit, not at either end. Capping
+ * the SPAN ITSELF at a comfortable character width, not the column, ends it in `…` on
+ * purpose instead: `ch` is the digit's own advance width in this monospace font, so 14
+ * characters is a real, generous budget rather than a guess, and the `Order` header (plain
+ * text, not `.bn-mono`) is untouched. */
+.revenue-detail-table td:nth-child(2) .bn-mono {
+  display: inline-block;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
 
 @media (max-width: 767px) {
   .revenue-products-head { flex-direction: column; align-items: stretch; }
@@ -171,7 +216,14 @@ th.num .revenue-sort { flex-direction: row-reverse; }
   .revenue-period { align-items: stretch; }
   /* FIVE OPTIONS (`Custom` is new) measured 11px past 390px width in `.bn-seg`'s own
    * one-row layout — the kit's shared rule stays a single, non-wrapping row for every
-   * OTHER screen's Segmented, which all fit; only this screen's own instance wraps. */
-  .revenue-period .bn-seg { flex-wrap: wrap; justify-content: flex-end; }
+   * OTHER screen's Segmented, which all fit; only this screen's own instance wraps.
+   * A PLAIN `flex-wrap` LEFT THE FIFTH OPTION ALONE ON ITS OWN ROW (defect fix): a 3-column
+   * grid instead makes it two even rows of three and two, matching a reader's expectation
+   * that the last row belongs to the layout rather than looking like an overflow. */
+  .revenue-period .bn-seg {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .revenue-period .bn-seg-item { width: 100%; }
   .revenue-range .bn-field { width: auto; flex: 1; min-width: 132px; }
 }

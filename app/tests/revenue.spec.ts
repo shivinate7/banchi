@@ -1,7 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
-import type { OrderLineWire, OrderRow, OrdersPayload } from '../src/types'
+import type { OrderLineProgress, OrderLineWire, OrderRow, OrdersPayload } from '../src/types'
 
 /* `#/revenue` (SALES) BECOMES A TOOL — sort, filter, cross-filter, deep-link and drill down
  * (`D217`), over the same `GET /orders` payload D214 already reshapes. Nothing here
@@ -107,8 +107,44 @@ function generalOrders(): OrderRow[] {
   ]
 }
 
+function progressOf(over: Partial<OrderLineProgress> & { sku: string }): OrderLineProgress {
+  return {
+    wanted: 1,
+    recorded: 0,
+    outstanding: 1,
+    over: 0,
+    copies: [],
+    by_hand: 0,
+    reason: null,
+    declared_kind: null,
+    closed_at: null,
+    closed_reason: null,
+    at: null,
+    ...over,
+  }
+}
+
 async function stub(page: Page, orders: OrderRow[]) {
   await page.route(/\/orders$/, (route) => json(route, payloadOf(orders)))
+}
+
+/** Stubs `/pipeline/price-now` and counts how many times it was hit — the press-only
+ *  contract (`getSoldPrices`'s own header) needs a positive assertion that it was NOT
+ *  called on mount. `source` defaults to `'archive'`, matching the real route's own
+ *  archive-first order (D-a-sales-truth). */
+function stubPrices(
+  page: Page,
+  entries: Record<string, { market: string; at: number; source?: 'archive' | 'live' }>,
+) {
+  let calls = 0
+  const prices = Object.fromEntries(
+    Object.entries(entries).map(([sku, e]) => [sku, { source: 'archive' as const, ...e }]),
+  )
+  page.route(/\/pipeline\/price-now\?/, (route) => {
+    calls += 1
+    json(route, { prices })
+  })
+  return () => calls
 }
 
 async function open(page: Page, query = ''): Promise<void> {
@@ -342,6 +378,179 @@ test('no horizontal scroll at 390, with Custom selected — the fifth period opt
   await expect(page.getByLabel('From')).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
+})
+
+test('no PAGE horizontal scroll at 390 with the Today column active — it scrolls in its own wrapper', async ({ page }) => {
+  // The Today column (D-a-sales-truth) is the widest state the product table can be in.
+  // `.revenue-table-wrap` is where any overflow belongs, never `document.documentElement`.
+  stubPrices(page, { '9100001': { market: '18.00', at: 1_758_000_000 } })
+  await page.setViewportSize({ width: 390, height: 900 })
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toBeVisible()
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+})
+
+/* -------------------------------------------------------------- refunds (D-a-sales-truth) */
+
+test('a line closed as refunded is subtracted from the total, and the count is stated', async ({ page }) => {
+  await stub(page, [
+    orderRow({
+      number: 'ORD-REAL',
+      placed_at: '2026-08-05T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: '12.50' })],
+    }),
+    orderRow({
+      number: 'ORD-REFUND',
+      placed_at: '2026-08-10T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9200002', name: 'Pikachu VMAX', quantity: 1, unit_price: '20.00' })],
+      progress: [progressOf({ sku: '9200002', closed_reason: 'not_shipping' })],
+    }),
+  ])
+  await open(page, '?period=all')
+  await expect(page.locator('.revenue-verdict-said')).toContainText('$12.50')
+  await expect(page.locator('.revenue-verdict-said')).not.toContainText('$32.50')
+  await expect(page.locator('.revenue-verdict-refunded')).toHaveText(
+    "1 line was marked refunded or canceled during fulfilment and left out — your own note, not TCGplayer's, so treat it as a habit rather than a guarantee.",
+  )
+  // The two exclusions are NEVER conflated: no order here carries a Canceled status, so
+  // that sentence states zero rather than folding this line's count into it.
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 orders were canceled by the marketplace and left out.')
+  expect(await productNames(page)).toEqual(['Charizard ex'])
+})
+
+test('a line closed for a DIFFERENT reason (shipped_elsewhere) is not excluded', async ({ page }) => {
+  await stub(page, [
+    orderRow({
+      number: 'ORD-1010',
+      placed_at: '2026-08-05T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: '12.50' })],
+      progress: [progressOf({ sku: '9100001', closed_reason: 'shipped_elsewhere' })],
+    }),
+  ])
+  await open(page, '?period=all')
+  await expect(page.locator('.revenue-verdict-said')).toContainText('$12.50')
+  // BOTH exclusion sentences still render, stating zero plainly rather than staying silent.
+  await expect(page.locator('.revenue-verdict-refunded')).toHaveText(
+    "0 lines were marked refunded or canceled during fulfilment and left out — your own note, not TCGplayer's, so treat it as a habit rather than a guarantee.",
+  )
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 orders were canceled by the marketplace and left out.')
+})
+
+test('the owner\'s real store has zero not_shipping lines today, and the screen still says so honestly', async ({ page }) => {
+  // Measured 2026-09-19: 796 fulfilment lines (739 shipped_elsewhere, 57 null, 0
+  // not_shipping) and 56 Canceled orders ($3,059.07). This fixture mirrors that shape —
+  // a real shipped_elsewhere line and a real Canceled order, NEITHER of which is a
+  // not_shipping line — so the refund sentence has to state zero over real exclusions
+  // already happening for OTHER reasons, not merely an empty fixture.
+  await stub(page, [
+    orderRow({
+      number: 'ORD-SHIPPED-ELSEWHERE',
+      placed_at: '2026-08-05T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: '12.50' })],
+      progress: [progressOf({ sku: '9100001', closed_reason: 'shipped_elsewhere' })],
+    }),
+    orderRow({
+      number: 'ORD-CANCELED',
+      placed_at: '2026-08-06T10:00:00+00:00',
+      status: 'Canceled',
+      lines: [line({ sku: '9300003', name: 'Should never appear', quantity: 1, unit_price: '99.00' })],
+    }),
+  ])
+  await open(page, '?period=all')
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('1 order was canceled by the marketplace and left out.')
+  await expect(page.locator('.revenue-verdict-refunded')).toHaveText(
+    "0 lines were marked refunded or canceled during fulfilment and left out — your own note, not TCGplayer's, so treat it as a habit rather than a guarantee.",
+  )
+})
+
+/* ------------------------------------------------------------- the lead-string fix (defect) */
+
+test('the prior-period line never says "So far" about the CLOSED prior period (defect fix)', async ({ page }) => {
+  // Default period is 6 months: Apr 1 - Oct 1 2026 (nominal), still forming on 2026-09-19.
+  // The prior window (Oct 2025 - Apr 2026) is fully CLOSED, so "so far" belongs to the
+  // current window and never to this one.
+  await stub(page, [
+    orderRow({
+      number: 'ORD-PRIOR',
+      placed_at: '2025-11-01T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: '10.00' })],
+    }),
+    orderRow({
+      number: 'ORD-NOW',
+      placed_at: '2026-09-05T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9200002', name: 'Pikachu VMAX', quantity: 1, unit_price: '5.00' })],
+    }),
+  ])
+  await open(page)
+  const prior = page.locator('.revenue-verdict-prior')
+  await expect(prior).toContainText('Over the same stretch, the period before this one made $10.00')
+  await expect(prior).not.toContainText('So far, the period before this one made')
+})
+
+/* --------------------------------------------------------- then against now (D-a-sales-truth) */
+
+test('market comparison is a press, never a mount, and draws a sign and a word (D62)', async ({ page }) => {
+  const calls = stubPrices(page, { '9100001': { market: '18.00', at: 1_758_000_000 } })
+  await stub(page, [
+    orderRow({
+      number: 'ORD-1001',
+      placed_at: '2026-08-05T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: '12.50' })],
+    }),
+  ])
+  await open(page, '?period=all')
+
+  // Never fetched on mount.
+  await page.waitForTimeout(200)
+  expect(calls()).toBe(0)
+  await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  expect(calls()).toBeGreaterThan(0)
+
+  await expect(page.locator('.revenue-table thead th', { hasText: 'Today' })).toBeVisible()
+  const cell = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' }).locator('.revenue-market')
+  await expect(cell).toContainText('$18.00')
+  // A SIGN and a WORD, never a colour (D62) — market is above what it sold for.
+  await expect(cell).toContainText('+$5.50 above what it sold for')
+  await expect(page.locator('.revenue-market-note')).toContainText('Blind to what any of this cost you')
+})
+
+test('a name with no price draws no figure, never a zero, and the coverage is stated', async ({ page }) => {
+  stubPrices(page, {}) // neither the archive nor readings has priced anything
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await expect(page.locator('.revenue-market-none').first()).toHaveText('no reading')
+  await expect(page.locator('.revenue-market-none')).toHaveCount(3)
+  await expect(page.locator('.revenue-market-note')).toContainText('0 of 3 names have a price today, 3 do not')
+})
+
+test('the archive answers first, and a name only readings has priced still draws (fallback)', async ({ page }) => {
+  // Charizard ex: an archive `month` bucket. Pikachu VMAX: no archive entry, only a
+  // `readings` (live) row — the fallback path, not the primary one.
+  stubPrices(page, {
+    '9100001': { market: '18.00', at: 1_758_000_000, source: 'archive' },
+    '9200002': { market: '9.00', at: 1_758_000_000, source: 'live' },
+  })
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await page.getByRole('button', { name: "Compare to today's market" }).click()
+  await expect(page.locator('.revenue-market-note')).toContainText('2 of 3 names have a price today, 1 do not')
+  const charizard = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' }).locator('.revenue-market')
+  await expect(charizard).toContainText('$18.00')
+  const pikachu = page.locator('.revenue-table tbody tr', { hasText: 'Pikachu VMAX' }).locator('.revenue-market')
+  await expect(pikachu).toContainText('$9.00')
 })
 
 test('both themes: the table stays usable and sortable in dark', async ({ page }) => {

@@ -1,11 +1,12 @@
-import { Fragment, useEffect, useId, useMemo, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useState, type CSSProperties } from 'react'
 
-import { describeFailure, getOrders, type Failure } from './server'
+import { describeFailure, getOrders, getSoldPrices, type Failure, type SoldPricesLookup } from './server'
 import type { OrderLineWire, OrderRow } from './types'
 import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented } from './kit'
 import { money, moneyGrouped } from './money'
 import { sparkSegments } from './PriceHistory'
 import { SearchField } from './SearchField'
+import { ReadingAge } from './CardLocations'
 import './Revenue.css'
 
 /* SALES (`#/revenue`) — the owner's gross-revenue retrospective.
@@ -86,16 +87,42 @@ type Sale = {
    *  the fact `nameIsSku` at the render site draws in mono rather than guessing from the
    *  string's own shape. */
   readonly nameIsSku: boolean
+  /** The line's own SKU — never shown here, only used to ask `getSoldPrices` what this exact
+   *  name is worth today (D-a-sales-truth). */
+  readonly sku: string
   readonly quantity: number
   readonly unitPrice: number
   readonly gross: number
 }
 
-function salesOf(orders: readonly OrderRow[]): { readonly sales: Sale[]; readonly dropped: number } {
+/** `true` where the OPERATOR closed this line as never shipping — a refund or a
+ *  cancellation, `store/orders.py:174`'s own words for `not_shipping` — during fulfilment,
+ *  matched by SKU against the same order's `OrderLineProgress` list (D-a-sales-truth,
+ *  `docs/specs/revenue-plan.md` §2). `closed_reason` rides on every order's `progress`
+ *  already; this screen was simply never reading it. NOT THE MARKETPLACE'S WORD: the value
+ *  is recorded by a person during fulfilment, so a line can be a real refund the operator
+ *  never got around to closing, and this can only ever undercount, never overcount. */
+function isClosedNotShipping(order: OrderRow, sku: string): boolean {
+  return order.progress.some((p) => p.sku === sku && p.closed_reason === 'not_shipping')
+}
+
+function salesOf(
+  orders: readonly OrderRow[],
+): {
+  readonly sales: Sale[]
+  readonly dropped: number
+  readonly refundExcluded: number
+  readonly canceledOrders: number
+} {
   const sales: Sale[] = []
   let dropped = 0
+  let refundExcluded = 0
+  let canceledOrders = 0
   for (const order of orders) {
-    if (isCanceled(order.status)) continue
+    if (isCanceled(order.status)) {
+      canceledOrders += 1
+      continue
+    }
     if (order.placed_at === null) {
       dropped += order.lines.length
       continue
@@ -106,6 +133,10 @@ function salesOf(orders: readonly OrderRow[]): { readonly sales: Sale[]; readonl
       continue
     }
     for (const line of order.lines as readonly OrderLineWire[]) {
+      if (isClosedNotShipping(order, line.sku)) {
+        refundExcluded += 1
+        continue
+      }
       const price = line.unit_price === null ? NaN : Number(line.unit_price)
       if (!Number.isFinite(price)) {
         dropped += 1
@@ -117,13 +148,14 @@ function salesOf(orders: readonly OrderRow[]): { readonly sales: Sale[]; readonl
         at,
         name: line.name ?? line.sku,
         nameIsSku: line.name === null,
+        sku: line.sku,
         quantity: line.quantity,
         unitPrice: price,
         gross: price * line.quantity,
       })
     }
   }
-  return { sales, dropped }
+  return { sales, dropped, refundExcluded, canceledOrders }
 }
 
 function pad2(n: number): string {
@@ -253,7 +285,12 @@ function compareLine(current: number, previousRows: readonly Sale[] | null, like
       : 'Nothing is recorded for the period before this one.'
   }
   const previous = sum(previousRows)
-  const lead = likeForLike ? 'So far, the period before this one made' : 'The period before this one made'
+  // `likeForLike` means THIS window is still forming, not the PRIOR one — the prior window is
+  // a closed stretch cut down to the same elapsed length for a fair comparison, and "so far"
+  // belongs to the one that has not finished, never to the one already over (defect fix).
+  const lead = likeForLike
+    ? 'Over the same stretch, the period before this one made'
+    : 'The period before this one made'
   // A REAL DIVIDE-BY-ZERO GUARD: rows exist and still sum to exactly $0.00 — free lines are
   // real and are not filtered out. A percentage has no base to divide by here, so this says
   // the dollar amount plainly instead of rendering `Infinity%` or `NaN%`.
@@ -334,6 +371,31 @@ type Product = {
   readonly copies: number
   readonly gross: number
   readonly last: Date
+  /** The SKU and unit price of the MOST RECENT sale under this name — what `getSoldPrices` is
+   *  asked about, and the "then" half of "then against now" (D-a-sales-truth). Two SKUs can
+   *  share a display name (a reprint, a different printing the feed named the same); this
+   *  is deliberately the latest one sold, not an average across them. */
+  readonly lastSku: string
+  readonly lastPrice: number
+}
+
+/** "Then against now" for one already-sold name (D-a-sales-truth) — a market observation and
+ *  NEVER a profit or a loss, D62's rule for this exact shape ("direction is a sign and a
+ *  word, never a color"). `word` is never rendered as a color anywhere this is used. */
+type MarketCompare = { readonly market: number; readonly at: number; readonly diff: number; readonly word: 'above' | 'below' | 'even with' }
+
+/** `null` for a SKU `prices` was never asked about or never has an entry for — NEVER
+ *  drawn as a zero (D189's own rule, restated for this screen: "a name with no reading
+ *  shows no figure"). `prices[row.lastSku]` is a lookup against the LAST sale's own SKU
+ *  (`Product.lastSku`), not an average across every SKU this name has ever sold under. */
+function marketCompareOf(row: Product, prices: SoldPricesLookup): MarketCompare | null {
+  const entry = prices[row.lastSku]
+  if (entry === undefined) return null
+  const market = Number(entry.market)
+  if (!Number.isFinite(market)) return null
+  const diff = market - row.lastPrice
+  const word = diff > 0 ? 'above' : diff < 0 ? 'below' : 'even with'
+  return { market, at: entry.at, diff, word }
 }
 
 function compareProducts(a: Product, b: Product, key: SortKey): number {
@@ -494,7 +556,16 @@ export function Revenue() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, customFrom, customTo])
 
-  const { sales, dropped } = useMemo(() => salesOf(orders ?? []), [orders])
+  const { sales, dropped, refundExcluded, canceledOrders } = useMemo(() => salesOf(orders ?? []), [orders])
+
+  // THE PRESS, NEVER THE MOUNT (D-a-sales-truth, over D189's/D-a-price-history-archive's own
+  // tables). `prices` is `null` until pressed once — a screen that fetched it on mount would
+  // draw a number that looks live off a table that is really a cache of the last archive
+  // sweep, `readings adopt`, or live fetch. `pricesLoading` and `pricesFailure` describe that
+  // one press.
+  const [prices, setPrices] = useState<SoldPricesLookup | null>(null)
+  const [pricesLoading, setPricesLoading] = useState(false)
+  const [pricesFailure, setPricesFailure] = useState<string | null>(null)
 
   const { start: windowStart, nominalEnd, previousStart } = useMemo(
     () => windowsOf(period, now, { from: customFrom, to: customTo }),
@@ -539,9 +610,25 @@ export function Revenue() {
     for (const sale of scopeSales) {
       const existing = by.get(sale.name)
       if (existing) {
-        by.set(sale.name, { ...existing, copies: existing.copies + sale.quantity, gross: existing.gross + sale.gross, last: sale.at > existing.last ? sale.at : existing.last })
+        const newer = sale.at > existing.last
+        by.set(sale.name, {
+          ...existing,
+          copies: existing.copies + sale.quantity,
+          gross: existing.gross + sale.gross,
+          last: newer ? sale.at : existing.last,
+          lastSku: newer ? sale.sku : existing.lastSku,
+          lastPrice: newer ? sale.unitPrice : existing.lastPrice,
+        })
       } else {
-        by.set(sale.name, { name: sale.name, nameIsSku: sale.nameIsSku, copies: sale.quantity, gross: sale.gross, last: sale.at })
+        by.set(sale.name, {
+          name: sale.name,
+          nameIsSku: sale.nameIsSku,
+          copies: sale.quantity,
+          gross: sale.gross,
+          last: sale.at,
+          lastSku: sale.sku,
+          lastPrice: sale.unitPrice,
+        })
       }
     }
     const rows = Array.from(by.values())
@@ -578,6 +665,26 @@ export function Revenue() {
       return next
     })
   }
+
+  /** THE PRESS. Asks only about the names on screen right now — a filtered or bucket-narrowed
+   *  view presses a smaller list, and merging the answer onto whatever `prices` already
+   *  held (rather than replacing it) means widening the filter back out does not blank a name
+   *  this press already answered. */
+  const refreshReadings = () => {
+    const skus = Array.from(new Set(products.map((p) => p.lastSku)))
+    if (skus.length === 0) return
+    setPricesLoading(true)
+    setPricesFailure(null)
+    getSoldPrices(skus)
+      .then((found) => setPrices((prev) => ({ ...(prev ?? {}), ...found })))
+      .catch((err) => setPricesFailure(describeFailure(err).message))
+      .finally(() => setPricesLoading(false))
+  }
+
+  const noReading = useMemo(() => {
+    if (prices === null) return 0
+    return products.filter((p) => prices[p.lastSku] === undefined).length
+  }, [products, prices])
 
   const earliestSale = useMemo(
     () => sales.reduce((min: Date | null, s) => (min === null || s.at < min ? s.at : min), null),
@@ -669,7 +776,9 @@ export function Revenue() {
 
       <section className="revenue-verdict">
         <p className="revenue-verdict-said">
-          {`You grossed ${moneyGrouped(total)} ${periodPhrase}, across ${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}.`}
+          {'You grossed '}
+          <strong>{moneyGrouped(total)}</strong>
+          {` ${periodPhrase}, across ${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}.`}
         </p>
         <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
         {dropped === 0 ? null : (
@@ -677,6 +786,18 @@ export function Revenue() {
             {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable price or date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}
           </p>
         )}
+        {/* TWO SEPARATE EXCLUSIONS, TWO SEPARATE SENTENCES, EACH STATED EVEN AT ZERO
+            (D-a-sales-truth). Measured on the owner's real store: 56 Canceled orders
+            ($3,059.07) and, as of this build, ZERO lines marked `not_shipping` — this
+            screen never claims the second mechanism has caught anything until it counts
+            one. Collapsing the two into one sentence, or hiding either at zero, would say
+            more than this store actually knows. */}
+        <p className="revenue-verdict-canceled">
+          {`${canceledOrders.toLocaleString()} ${canceledOrders === 1 ? 'order was' : 'orders were'} canceled by the marketplace and left out.`}
+        </p>
+        <p className="revenue-verdict-refunded">
+          {`${refundExcluded.toLocaleString()} ${refundExcluded === 1 ? 'line was' : 'lines were'} marked refunded or canceled during fulfilment and left out — your own note, not TCGplayer's, so treat it as a habit rather than a guarantee.`}
+        </p>
       </section>
 
       <section className="revenue-months">
@@ -706,17 +827,22 @@ export function Revenue() {
             ) : null}
           </>
         )}
-        <div className="revenue-month-rows" role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
+        <div
+          className="revenue-month-rows bn-stagger"
+          role="group"
+          aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}
+        >
           {buckets
             .slice()
             .reverse()
-            .map((b) => (
+            .map((b, i) => (
               <button
                 type="button"
                 className="revenue-month-row"
                 key={b.key}
                 data-current={b.inProgress}
                 aria-pressed={activeBucket === b.key}
+                style={{ '--i': i } as CSSProperties}
                 onClick={() => setActiveBucket((cur) => (cur === b.key ? null : b.key))}
               >
                 <span className="revenue-month-name">
@@ -749,9 +875,36 @@ export function Revenue() {
             <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Find what you sold" />
           </div>
         </div>
+
+        {/* THEN AGAINST NOW (D-a-sales-truth). A press, never a mount — see `getSoldPrices`'s
+            own header. `noReading` counts by NAME on screen right now, so widening the
+            filter can only ever raise it, never silently shrink what it claims to cover. */}
+        <div className="revenue-market-refresh">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="refresh"
+            onClick={refreshReadings}
+            disabled={pricesLoading || products.length === 0}
+          >
+            {pricesLoading ? 'Reading…' : "Compare to today's market"}
+          </Button>
+          {prices === null ? null : (
+            <p className="revenue-market-note">
+              {`Blind to what any of this cost you. ${products.length - noReading} of ${products.length} names have a price today, ${noReading} do not.`}
+            </p>
+          )}
+        </div>
+        {pricesFailure === null ? null : (
+          <Notice tone="danger" title="Could not read today's prices">
+            {pricesFailure}
+          </Notice>
+        )}
+
         {products.length === 0 ? (
           <EmptyState icon="search" title="Nothing sold under that name in this period." />
         ) : (
+          <div className="revenue-table-wrap">
           <table className="bn-table revenue-table">
             <thead>
               <tr>
@@ -776,19 +929,21 @@ export function Revenue() {
                     </th>
                   )
                 })}
+                {prices === null ? null : <th>Today</th>}
               </tr>
             </thead>
-            <tbody>
-              {products.map((row) => {
+            <tbody className="bn-stagger">
+              {products.map((row, i) => {
                 const isOpen = expanded.has(row.name)
                 const detailId = `revenue-detail-${row.name}`
                 const lines = scopeSales
                   .filter((s) => s.name === row.name)
                   .slice()
                   .sort((a, b) => b.at.getTime() - a.at.getTime())
+                const compare = prices === null ? null : marketCompareOf(row, prices)
                 return (
                   <Fragment key={row.name}>
-                    <tr>
+                    <tr style={{ '--i': i } as CSSProperties}>
                       <td className="revenue-disclosure-col">
                         <button
                           type="button"
@@ -810,10 +965,25 @@ export function Revenue() {
                           the screen. */}
                       <td className="num"><span className="bn-money">{money(row.gross)}</span></td>
                       <td>{row.last.toLocaleDateString()}</td>
+                      {prices === null ? null : (
+                        <td className="revenue-market">
+                          {compare === null ? (
+                            <span className="revenue-market-none">no reading</span>
+                          ) : (
+                            <>
+                              <span className="bn-money">{money(compare.market)}</span>
+                              <span className="revenue-market-delta">
+                                {`${compare.diff > 0 ? '+' : compare.diff < 0 ? '−' : ''}${money(Math.abs(compare.diff))} ${compare.word} what it sold for`}
+                              </span>
+                              <ReadingAge at={new Date(compare.at * 1000).toISOString()} />
+                            </>
+                          )}
+                        </td>
+                      )}
                     </tr>
                     {isOpen ? (
                       <tr id={detailId} className="revenue-detail-row">
-                        <td colSpan={5}>
+                        <td colSpan={prices === null ? 5 : 6}>
                           <table className="bn-table revenue-detail-table" aria-label={`Orders that included ${row.name}`}>
                             <thead>
                               <tr>
@@ -842,6 +1012,7 @@ export function Revenue() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </section>
     </main>
