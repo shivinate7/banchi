@@ -75,7 +75,7 @@ nobody has made yet.
 from __future__ import annotations
 
 import time
-from typing import Dict
+from typing import Dict, List
 
 from pipeline import pricearchive as archive_walk
 from pipeline import pricehistory
@@ -178,7 +178,10 @@ def _sweep(args, say) -> int:
     )
 
     ledger_refusals: Dict[str, str] = {}
-    rows = archive_walk.rows_from_store(market=market, refusals=ledger_refusals)
+    fallback_rows: Dict[str, dict] = {}
+    rows = archive_walk.rows_from_store(
+        market=market, refusals=ledger_refusals, fallback_rows=fallback_rows,
+    )
     ranges = pricehistory.RANGES
     if not rows:
         say("no card in this store carries a SKU, and no order-ledger line resolved to a "
@@ -188,10 +191,8 @@ def _sweep(args, say) -> int:
     if ledger_refusals:
         say(f"{len(ledger_refusals)} order-ledger sku(s) could not be resolved to a "
             "subject and are skipped this pass:")
-        for sku in sorted(ledger_refusals)[:20]:
-            say(f"  {sku}  {ledger_refusals[sku]}")
-        if len(ledger_refusals) > 20:
-            say(f"  ... and {len(ledger_refusals) - 20} more")
+        for line in archive_walk.format_refusals(ledger_refusals):
+            say(f"  {line}")
         say("")
 
     say(f"{len(rows)} sku(s) subject to this pass, over {len(ranges)} range(s) "
@@ -225,6 +226,7 @@ def _sweep(args, say) -> int:
 
     totals = {r: {"answered": len(fresh_skus), "refused": 0} for r in ranges}
     all_refusals: Dict[str, str] = {}
+    all_resolved_via_ledger: List[str] = []
     total_buckets = 0
     done = 0
     answered_so_far = 0
@@ -234,7 +236,10 @@ def _sweep(args, say) -> int:
     stopped_early = False
 
     for i, chunk in enumerate(chunks, start=1):
-        buckets, sources, refusals = archive_walk.sweep(chunk, market, ranges=ranges)
+        buckets, sources, refusals, resolved_via_ledger = archive_walk.sweep(
+            chunk, market, ranges=ranges, fallback_rows=fallback_rows,
+        )
+        all_resolved_via_ledger.extend(resolved_via_ledger)
         # ONE SIGNAL, USED TWICE — whether to rewrite a 403's message and whether to treat
         # it as a throttle worth backing off for. Computed from THIS chunk's own answered
         # count too, not only earlier chunks', so a chunk that itself answers some SKUs
@@ -298,13 +303,18 @@ def _sweep(args, say) -> int:
         t = totals[r]
         say(f"  {r:<10} {t['answered']}/{len(rows)} sku(s) answered, {t['refused']} refused")
 
+    if all_resolved_via_ledger:
+        say("")
+        say(f"{len(all_resolved_via_ledger)} sku(s) resolved via the ledger's own row "
+            "after the card row could not:")
+        for sku in sorted(all_resolved_via_ledger):
+            say(f"  {sku}")
+
     say("")
     if all_refusals:
         say(f"{len(all_refusals)} sku(s) asked for and never answered:")
-        for sku in sorted(all_refusals)[:20]:
-            say(f"  {sku}  {all_refusals[sku]}")
-        if len(all_refusals) > 20:
-            say(f"  ... and {len(all_refusals) - 20} more")
+        for line in archive_walk.format_refusals(all_refusals):
+            say(f"  {line}")
     else:
         say("every sku asked for came back with an answer or a known reason it could not")
 

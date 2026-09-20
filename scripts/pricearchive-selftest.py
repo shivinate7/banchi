@@ -35,6 +35,7 @@ from typing import Dict
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from pipeline import games as games_module  # noqa: E402
 from pipeline import join as join_module  # noqa: E402
 from pipeline import pricearchive as archive_walk  # noqa: E402
 from pipeline import pricehistory  # noqa: E402
@@ -419,6 +420,101 @@ def main() -> int:
         with Store().write() as snapshot:
             del snapshot.ledger.orders["ebay:sealed"]
 
+        # ---------------- ledger resolution gates on the MIRROR, never on games.py (D231)
+        print("\n-- pipeline/pricearchive.py: the ledger parse gates on the MIRROR's own "
+              "category list, never pipeline/games.py (D231 amended) --")
+
+        class MirrorOnlyMarket:
+            """`category_id`/`groups` answer for whatever THE MIRROR carries, with no
+            regard for `pipeline/games.py`'s own registry — `YuGiOh` is real here and
+            genuinely absent from `games.py`, checked below rather than assumed."""
+
+            def __init__(self, categories, groups_by_category):
+                self._categories = categories
+                self._groups = groups_by_category
+
+            def category_id(self, product_line: str) -> int:
+                if product_line not in self._categories:
+                    raise ValueError(f"no tcgcsv category named {product_line!r}")
+                return self._categories[product_line]
+
+            def groups(self, category_id: int) -> Dict[str, dict]:
+                return self._groups.get(category_id, {})
+
+            def readings_for_rows(self, rows, ranges=()):  # unused by this arm
+                return {}, {}
+
+        class _FakeLedger:
+            def __init__(self, orders):
+                self.orders = orders
+
+        ok(not any(
+            entry.get("product_line") == "YuGiOh" for entry in games_module.GAMES
+        ), "sanity: YuGiOh is genuinely absent from pipeline/games.py's own registry — "
+           "this arm proves nothing if it is not", games_module.GAMES)
+
+        yugioh_groups = _groups("Legend of Blue Eyes White Dragon")
+        mirror_market = MirrorOnlyMarket(
+            categories={"YuGiOh": 2}, groups_by_category={2: yugioh_groups},
+        )
+        gate_ledger = _FakeLedger({
+            "ebay:gate": OrderRecord(
+                source="ebay", number="gate", status="Open",
+                lines=[
+                    # A real tcgcsv category `games.py` does not track at all.
+                    OrderLine(
+                        sku="YU1", quantity=1, unit_price="10.00",
+                        name="YuGiOh - Legend of Blue Eyes White Dragon: Blue-Eyes White "
+                             "Dragon - Near Mint",
+                    ),
+                    # A product line the MIRROR itself has no category for either.
+                    OrderLine(
+                        sku="NO1", quantity=1, unit_price="5.00",
+                        name="Digimon - Some Set: Some Card - Near Mint",
+                    ),
+                ],
+            ),
+        })
+        gate_rows, gate_refusals = archive_walk._ledger_export_rows(
+            gate_ledger, ["YU1", "NO1"], mirror_market
+        )
+        ok("YU1" in gate_rows,
+           "a product line absent from games.py but present in the mirror RESOLVES — "
+           "this is the D231 amendment: the mirror is the authority, not games.py",
+           gate_rows)
+        ok("NO1" in gate_refusals and "tcgcsv category list" in gate_refusals["NO1"],
+           "a product line the mirror itself does not carry still refuses, with the "
+           "mirror's own reason", gate_refusals)
+
+        # MUTATION CHECK: put the old games.py gate back inline and confirm the YuGiOh
+        # arm goes red — proves the fix, not the fixture, is what resolves it.
+        def _old_gated_parse(name, groups):
+            line = name.split(" - ", 1)[0].strip()
+            catalogued_lines = frozenset(
+                str(entry["product_line"]) for entry in games_module.GAMES
+                if entry.get("product_line")
+                and games_module.is_catalogued(str(entry["key"]))
+            )
+            if line not in catalogued_lines:
+                raise archive_walk.UnresolvedLedgerName(
+                    f"{line!r} is not a known, catalogued product line"
+                )
+            return archive_walk.parse_ledger_name(name, groups)
+
+        try:
+            _old_gated_parse(
+                "YuGiOh - Legend of Blue Eyes White Dragon: Blue-Eyes White Dragon - "
+                "Near Mint",
+                yugioh_groups,
+            )
+            mutation_raised = False
+        except archive_walk.UnresolvedLedgerName:
+            mutation_raised = True
+        ok(mutation_raised,
+           "MUTATION: reinstating the old games.py gate makes the same YuGiOh line "
+           "refuse again — confirms the fix above, and not the fixture, is what "
+           "resolves it")
+
         # -------------------------------------------------------- pipeline: sweep (no network)
         print("\n-- pipeline/pricearchive.py: sweep, against a FakeMarket, both directions --")
         script = {
@@ -428,7 +524,7 @@ def main() -> int:
             },
         }
         market = FakeMarket(script)
-        buckets, sources, refusals = archive_walk.sweep(
+        buckets, sources, refusals, _resolved = archive_walk.sweep(
             rows, market, ranges=("semiannual", "annual"), now=1_000,
         )
         ok(len(buckets) == 2,
@@ -457,7 +553,7 @@ def main() -> int:
         # A second sweep over a store where "555" no longer resolves (its only source vanished
         # from the script) must not touch "444"'s already-archived buckets.
         market_narrower = FakeMarket({})
-        buckets2, sources2, refusals2 = archive_walk.sweep(
+        buckets2, sources2, refusals2, _resolved2 = archive_walk.sweep(
             {"555": rows["555"]}, market_narrower, ranges=("month",), now=2_000,
         )
         ok(not buckets2, "a pass that resolves nothing writes nothing")
@@ -468,6 +564,163 @@ def main() -> int:
         ok(after == stored,
            "a later pass over a different, narrower selection never deletes what an earlier "
            "pass archived", after)
+
+        # ---------------------------------- card row refuses -> retry the ledger's own row
+        print("\n-- pipeline/pricearchive.py: sweep() retries the ledger row when the card "
+              "row refuses (D233) --")
+
+        class ResolvingMarket:
+            """Resolves EXACTLY the way `pipeline/pricehistory.py:Market.readings_for_rows`
+            does — real `ProductIndex.find` over real `join.number_index_key`/
+            `name_index_key` — so a bare-number miss and a name-only ambiguity behave
+            exactly as the real Market's would, no network, no `category_id`/`groups`
+            (this arm feeds `Set Name` straight to the index, sidestepping that hop, which
+            `ledger_subject_rows`'s own tests already cover)."""
+
+            def __init__(self, products_by_set: Dict[str, list]):
+                self._index_by_set = {
+                    set_name: pricehistory.ProductIndex.build(products)
+                    for set_name, products in products_by_set.items()
+                }
+
+            def readings_for_rows(self, rows, ranges=()):
+                readings = {}
+                refusals = {}
+                for row in rows:
+                    sku = row.get(tcgcsv_module.SKU_COLUMN, "")
+                    set_name = row.get(tcgcsv_module.SET_COLUMN, "")
+                    index = self._index_by_set.get(set_name)
+                    if index is None:
+                        refusals[sku] = f"no tcgcsv group named {set_name!r}"
+                        continue
+                    product_id = index.find(
+                        row.get(tcgcsv_module.NUMBER_COLUMN, ""),
+                        row.get(tcgcsv_module.NAME_COLUMN, ""),
+                    )
+                    if product_id is None:
+                        refusals[sku] = (
+                            f"no single tcgcsv product matches "
+                            f"{row.get(tcgcsv_module.NAME_COLUMN, '')!r} "
+                            f"{row.get(tcgcsv_module.NUMBER_COLUMN, '')!r} in {set_name!r}"
+                        )
+                        continue
+                    readings[sku] = HistoryReading(sku=sku, product_id=product_id, series={})
+                return readings, refusals
+
+        def _row(sku, name, number, set_name):
+            return {
+                tcgcsv_module.PRODUCT_LINE_COLUMN: "Pokemon",
+                tcgcsv_module.SET_COLUMN: set_name,
+                tcgcsv_module.NUMBER_COLUMN: number,
+                tcgcsv_module.NAME_COLUMN: name,
+                tcgcsv_module.SKU_COLUMN: sku,
+                tcgcsv_module.CONDITION_COLUMN: "Near Mint",
+            }
+
+        # Real shape 1: a stored number with no denominator (`Bulbasaur` `001` in `ME01:
+        # Mega Evolution`). The mirror carries `001/132` AND a `133/132` secret rare whose
+        # NAME also folds to `BULBASAUR` (the number is embedded in the product's own
+        # name, D35's `name_index_key`) — the bare `001` misses the number index outright
+        # (`number_index_key("001")` is `"1"`, never `"1/132"`) and the name rung then
+        # finds two, so the card row genuinely refuses on ambiguity. The mirror also
+        # carries the SKU's own order line with the clean number, which resolves alone.
+        me01_products = [
+            {"productId": 501, "name": "Bulbasaur - 001/132",
+             "extendedData": [{"name": "Number", "value": "001/132"}]},
+            {"productId": 502, "name": "Bulbasaur - 133/132",
+             "extendedData": [{"name": "Number", "value": "133/132"}]},
+        ]
+        # Real shape 2: a stored number carrying a typed separator (`Twisted Fate`
+        # `OGN · 200/298` in `Origins`). The mirror's own number is the clean `200/298`
+        # and its own name carries the printing (`Twisted Fate, Gambler`) — neither the
+        # number nor the name rung matches the card row's own cells, so it refuses too.
+        origins_products = [
+            {"productId": 601, "name": "Twisted Fate, Gambler",
+             "extendedData": [{"name": "Number", "value": "200/298"}]},
+        ]
+        resolving_market = ResolvingMarket({
+            "ME01: Mega Evolution": me01_products,
+            "Origins": origins_products,
+        })
+
+        card_rows = {
+            "SKU-A": _row("SKU-A", "Bulbasaur", "001", "ME01: Mega Evolution"),
+            "SKU-B": _row(
+                "SKU-B", "Twisted Fate", "OGN · 200/298", "Origins",
+            ),
+        }
+        fallback_rows_fixture = {
+            "SKU-A": _row("SKU-A", "Bulbasaur", "001/132", "ME01: Mega Evolution"),
+            "SKU-B": _row(
+                "SKU-B", "Twisted Fate, Gambler", "200/298", "Origins",
+            ),
+        }
+
+        # Baseline: with NO fallback offered, both real shapes refuse — proves the fixture
+        # itself reproduces the two measured refusals before any fallback logic runs.
+        _b, _s, no_fallback_refusals, no_fallback_resolved = archive_walk.sweep(
+            card_rows, resolving_market, ranges=("month",), now=1,
+        )
+        ok(set(no_fallback_refusals) == {"SKU-A", "SKU-B"},
+           "with no fallback row offered, the bare-number and the typed-separator card "
+           "rows both refuse, exactly as measured on the real store",
+           no_fallback_refusals)
+        ok(not no_fallback_resolved, "and nothing is reported as fallback-resolved")
+
+        # The fallback fires: both retry rows are the mirror's own clean cells.
+        _b2, _s2, with_fallback_refusals, with_fallback_resolved = archive_walk.sweep(
+            card_rows, resolving_market, ranges=("month",), now=1,
+            fallback_rows=fallback_rows_fixture,
+        )
+        ok(not with_fallback_refusals,
+           "with the ledger's own row offered as a fallback, both real shapes resolve — "
+           "the bare `001` against a mirror holding `001/132`/`133/132`, and the "
+           "separator-carrying number", with_fallback_refusals)
+        ok(set(with_fallback_resolved) == {"SKU-A", "SKU-B"},
+           "sweep() reports which SKUs answered via the fallback, so a reader can see "
+           "when it fired", with_fallback_resolved)
+
+        # A SKU with a fallback row that ALSO cannot resolve is still a refusal.
+        unresolvable_fallback = {
+            "SKU-A": _row("SKU-A", "Nobody Here", "999/999", "ME01: Mega Evolution"),
+        }
+        _b3, _s3, still_refused, still_resolved = archive_walk.sweep(
+            {"SKU-A": card_rows["SKU-A"]}, resolving_market, ranges=("month",), now=1,
+            fallback_rows=unresolvable_fallback,
+        )
+        ok("SKU-A" in still_refused and "SKU-A" not in still_resolved,
+           "a SKU whose fallback row ALSO fails to resolve is still named as a refusal, "
+           "never silently dropped", still_refused)
+
+        # MUTATION CHECK: remove the fallback (call `sweep()` with none) and confirm the
+        # two arms this fallback exists for go back to refusing — the guard is trusted
+        # only once it is seen to fail on the defect it guards.
+        _b4, _s4, mutated_refusals, mutated_resolved = archive_walk.sweep(
+            card_rows, resolving_market, ranges=("month",), now=1, fallback_rows=None,
+        )
+        ok(set(mutated_refusals) == {"SKU-A", "SKU-B"} and not mutated_resolved,
+           "MUTATION: with the fallback removed, both real shapes go back to refusing — "
+           "proves the fix above, rather than the fixture, is what resolves them",
+           mutated_refusals)
+
+        # ------------------------------------------ every refusal reaches the output
+        print("\n-- pipeline/pricearchive.py: format_refusals never truncates --")
+        many_refusals = {f"SKU{i:03d}": "a manufactured refusal reason" for i in range(37)}
+        formatted = archive_walk.format_refusals(many_refusals)
+        joined_lines = "\n".join(formatted)
+        ok(all(sku in joined_lines for sku in many_refusals),
+           "every one of 37 refused skus appears in the formatted output — none truncated "
+           "and no '... and N more' tail", formatted[:3])
+        ok(not any("more" in line and "..." in line for line in formatted),
+           "no truncating tail line is ever produced")
+        two_reasons = dict(many_refusals)
+        two_reasons["SKU999"] = "a different, rarer reason"
+        formatted_grouped = archive_walk.format_refusals(two_reasons)
+        ok(formatted_grouped[0].startswith("37 sku(s):"),
+           "grouped output leads with the LARGEST reason group first", formatted_grouped[0])
+        ok(any(line.startswith("1 sku(s): a different") for line in formatted_grouped),
+           "a lone, different reason still gets its own named group, never folded into "
+           "the majority's", formatted_grouped)
 
         # ---------------------------------------------------- ranking: sold value first
         print("\n-- pipeline/pricearchive.py: revenue_by_sku and rank_by_revenue "
@@ -691,7 +944,7 @@ def main() -> int:
         interrupted_at = None
         for idx, chunk in enumerate(chunks_of_one):
             try:
-                b, s, r = archive_walk.sweep(chunk, chunked_market, ranges=("month",))
+                b, s, r, _r_ = archive_walk.sweep(chunk, chunked_market, ranges=("month",))
             except RuntimeError:
                 interrupted_at = idx
                 break
@@ -719,7 +972,7 @@ def main() -> int:
 
         resume_market = RecordingMarket(script)
         for chunk in archive_walk.chunk_rows(resume_needs, 1):
-            b, s, r = archive_walk.sweep(chunk, resume_market, ranges=("month",))
+            b, s, r, _r_ = archive_walk.sweep(chunk, resume_market, ranges=("month",))
             with Store().write() as snapshot:
                 snapshot.archive.upsert(b)
         ok("R1" not in resume_market.asked,
