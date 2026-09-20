@@ -113,6 +113,10 @@
 }
 /* The box caption sits above its track, right-aligned; the section caption above its own. */
 .position-bar > .position-bar-text-box { order: -1; align-self: flex-end; max-width: 100%; }
+/* THE QUALIFIER BESIDE THE POSITION, drawn with a CSS dot rather than a typed one (D218) —
+   `#20 · where this sits in the box is not known yet` and `#40 of 250 · 16% in` are each two
+   facts, never one joined string. */
+.position-bar-text-detail::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 /* ---- the second scale: the section, as a ruler --------------------------------------------
    THE SECTION IS THE SUBJECT AND THE BOX IS THE CONTEXT. Four bands, and the visual order is
@@ -270,12 +274,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* `pre`, so the tail's leading separator survives. A flex item strips leading white space under
-   `nowrap` — which would render `Section 6 · Rares· card 54` — and an `&nbsp;` would change the
-   text content the caption assertions read. */
 .position-bar-cap-tail {
   flex: none;
-  white-space: pre;
+}
+/* THE DOT IS DRAWN, NEVER TYPED (D218). `depth.head` and `depth.tail` are each a list of facts
+   — a section number, its name, a count — and every fact after the first in either list gets a
+   separator glyph from CSS rather than a typed `' · '` baked into a joined string. The tail's
+   own separator FROM the head is the one exception with nothing to key off `+` (it is the first
+   child of a different element), so it is targeted directly. */
+.position-bar-cap-fact + .position-bar-cap-fact::before,
+.position-bar-cap-tail > .position-bar-cap-fact:first-child::before {
+  content: '·';
+  margin: 0 6px;
+  color: var(--bn-ink-4);
 }
 
 /* ---- the Fulfiller's density: every floor in the constraints table ---- */

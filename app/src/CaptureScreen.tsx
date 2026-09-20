@@ -998,7 +998,7 @@ export function CaptureScreen() {
 
   
   const [sectionNote, setSectionNote] = useState<
-    (Note & { done: boolean; place: string | null }) | null
+    (Note & { done: boolean; place: { section: number; fromCard: number } | null }) | null
   >(null)
   const [sectionBusy, setSectionBusy] = useState(false)
 
@@ -2455,7 +2455,7 @@ export function CaptureScreen() {
         // it produced beside it. `from card N` and not `at card N`: the number is where the
         // section STARTS, and the next card is the first one in it.
         text: 'New section',
-        place: opened === null ? null : `Section ${opened.section} · from card ${opened.start}`,
+        place: opened === null ? null : { section: opened.section, fromCard: opened.start },
         code: null,
       })
     } catch (err) {
@@ -2737,11 +2737,21 @@ export function CaptureScreen() {
   /* The trigger's state, beside it. Manual mode is one word — its key rides on the shutter,
    * the one keycap on this stage; motion mode is the machine's own phase, which is the most
    * icon-shaped state in the product. */
-  const mode: { tone: PillTone; icon: IconName; text: string } =
+  const mode: { tone: PillTone; icon: IconName; text: ReactNode } =
     triggerMode === 'manual'
       ? { tone: 'accent', icon: 'keyboard', text: 'Manual' }
       : motionDiag === null
-        ? { tone: 'warn', icon: 'eye', text: 'Armed · no signal' }
+        ? {
+            tone: 'warn',
+            icon: 'eye',
+            /* TWO FACTS, DRAWN WITH A CSS DOT (D218): the state and what it is waiting on. */
+            text: (
+              <>
+                <span className="capture-list-part">Armed</span>
+                <span className="capture-list-part">no signal</span>
+              </>
+            ),
+          }
         : !motionDiag.hasBaseline
           ? { tone: 'warn', icon: 'eye', text: 'Baseline pending' }
           : phase === 'moving'
@@ -2800,12 +2810,17 @@ export function CaptureScreen() {
   const gameSentence =
     gameEntry === null ? (registryNote === null ? 'Loading…' : 'Unavailable') : gameEntry.display
 
-  const rarityText =
-    gameEntry === null || rarityClaim.length === 0
-      ? null
-      : rarityClaim.length <= 2
-        ? rarityClaim.join(' · ')
-        : `${rarityClaim.length} of ${gameEntry.rarities.length} claimed`
+  /* Two or fewer claims are named; more than that reads as a count. `rarityParts` is null in
+     the counted case (and when there is nothing to claim) — `rarityCountText` carries that
+     sentence instead. Never a joined string: each named rarity is its own element and the
+     separator between them is drawn by CSS, not typed (D218). */
+  const rarityParts: readonly string[] | null =
+    gameEntry === null || rarityClaim.length === 0 || rarityClaim.length > 2 ? null : rarityClaim
+  const rarityCountText =
+    gameEntry !== null && rarityClaim.length > 2
+      ? `${rarityClaim.length} of ${gameEntry.rarities.length} claimed`
+      : null
+  const rarityIsBlank = gameEntry === null || rarityClaim.length === 0
 
   return (
     <main className="capture bn-page" data-mode={triggerMode} data-live={camera.ready ? 'true' : 'false'}>
@@ -2928,9 +2943,14 @@ export function CaptureScreen() {
               </Pill>
             ) : (
               <Pill tone="danger" icon="alert" className="capture-odo-verdict">
-                {runCount.gaps === 0 ? '' : `${runCount.gaps} missing`}
-                {runCount.gaps !== 0 && runCount.ids !== runCount.shots ? ' · ' : ''}
-                {runCount.ids === runCount.shots ? '' : `${runCount.ids} ids of ${runCount.shots}`}
+                {runCount.gaps === 0 ? null : (
+                  <span className="capture-list-part">{runCount.gaps} missing</span>
+                )}
+                {runCount.ids === runCount.shots ? null : (
+                  <span className="capture-list-part">
+                    {runCount.ids} ids of {runCount.shots}
+                  </span>
+                )}
               </Pill>
             )}
           </div>
@@ -2941,7 +2961,7 @@ export function CaptureScreen() {
           <p className="capture-odo-split" aria-label="Where this sitting went">
             {runCount === null
               ? null
-              : runCount.drawers.map((drawer, at) => (
+              : runCount.drawers.map((drawer) => (
                   <span
                     key={drawer.box}
                     className={
@@ -2950,7 +2970,6 @@ export function CaptureScreen() {
                         : 'capture-odo-drawer'
                     }
                   >
-                    {at === 0 ? null : <span aria-hidden="true"> · </span>}
                     Box {drawer.box} <b>{drawer.shots}</b>
                   </span>
                 ))}
@@ -3124,12 +3143,20 @@ export function CaptureScreen() {
                 <Icon name="settings" size={14} />
                 <span className="capture-tuning-word">Tuning</span>
                 <span className="capture-tuning-sum">
-                  {triggerMode === 'manual'
-                    ? ''
-                    : motionDiag === null
-                      ? 'armed · no frames yet'
-                      : `${motionDiag.phase} · ${motionDiag.fires} fires`}
-                  {swallowedTotal > 0 ? ` · ${swallowedTotal} dropped` : ''}
+                  {triggerMode === 'manual' ? null : motionDiag === null ? (
+                    <>
+                      <span className="capture-list-part">armed</span>
+                      <span className="capture-list-part">no frames yet</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="capture-list-part">{motionDiag.phase}</span>
+                      <span className="capture-list-part">{motionDiag.fires} fires</span>
+                    </>
+                  )}
+                  {swallowedTotal > 0 ? (
+                    <span className="capture-list-part">{swallowedTotal} dropped</span>
+                  ) : null}
                 </span>
                 <Icon name="chevronUp" size={13} className="capture-chev" />
               </summary>
@@ -3183,12 +3210,14 @@ export function CaptureScreen() {
                 <div className="capture-tuning-actions">
                   {triggerMode !== 'manual' && motionDiag !== null ? (
                     <Button size="sm" icon="refresh" onClick={() => motionControls.current?.rebaseline()}>
-                      Re-baseline · stand must be empty
+                      <span className="capture-list-part">Re-baseline</span>
+                      <span className="capture-list-part">stand must be empty</span>
                     </Button>
                   ) : null}
                   {traceFrames > 0 ? (
                     <Button size="sm" icon="download" onClick={() => traceRef.current?.download()}>
-                      Save trace · {traceFrames} frames
+                      <span className="capture-list-part">Save trace</span>
+                      <span className="capture-list-part">{traceFrames} frames</span>
                     </Button>
                   ) : null}
                 </div>
@@ -3241,7 +3270,15 @@ export function CaptureScreen() {
                 ) : (
                   <Pill>No set hint</Pill>
                 )}
-                <Pill>{last.finish.length === 0 ? 'No claim' : last.finish.map(finishLabel).join(' · ')}</Pill>
+                <Pill>
+                  {last.finish.length === 0
+                    ? 'No claim'
+                    : last.finish.map((f) => (
+                        <span key={f} className="capture-list-part">
+                          {finishLabel(f)}
+                        </span>
+                      ))}
+                </Pill>
                 {last.card.new_box ? (
                   <Pill tone="accent" className="capture-flag">
                     New box
@@ -3521,7 +3558,12 @@ export function CaptureScreen() {
                 {sectionNote.place === null ? null : (
                   <>
                     {' '}
-                    <span className="capture-inline-label">{sectionNote.place}</span>
+                    {/* TWO FACTS, NOT ONE JOINED STRING — the section number and the card it
+                        starts at, with the separator drawn by CSS rather than typed (D218). */}
+                    <span className="capture-inline-label">
+                      <span className="capture-list-part">Section {sectionNote.place.section}</span>
+                      <span className="capture-list-part">from card {sectionNote.place.fromCard}</span>
+                    </span>
                   </>
                 )}
                 {sectionNote.code === null ? null : (
@@ -3853,11 +3895,17 @@ export function CaptureScreen() {
                 label="Rarity"
                 icon="sparkles"
                 right={
-                  rarityText === null ? (
+                  rarityIsBlank ? (
                     <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
                   ) : (
                     <span className="capture-val">
-                      {rarityText}
+                      {rarityParts === null
+                        ? rarityCountText
+                        : rarityParts.map((name) => (
+                            <span key={name} className="capture-list-part">
+                              {name}
+                            </span>
+                          ))}
                       <span
                         className="capture-bits"
                         role="img"
@@ -3901,8 +3949,11 @@ export function CaptureScreen() {
                   <p className="capture-opennote">
                     {gameEntry.finishes
                       .filter((member) => !offeredFinishes.has(member))
-                      .map(finishLabel)
-                      .join(' · ')}{' '}
+                      .map((member) => (
+                        <span key={member} className="capture-list-part">
+                          {finishLabel(member)}
+                        </span>
+                      ))}{' '}
                     — not stocked under the claimed rarities
                   </p>
                 )}
@@ -3916,7 +3967,13 @@ export function CaptureScreen() {
                   finish.length === 0 ? (
                     <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
                   ) : (
-                    <span className="capture-val">{finish.map(finishLabel).join(' · ')}</span>
+                    <span className="capture-val">
+                      {finish.map((f) => (
+                        <span key={f} className="capture-list-part">
+                          {finishLabel(f)}
+                        </span>
+                      ))}
+                    </span>
                   )
                 }
                 onToggle={() => toggleField('finish')}
@@ -4004,10 +4061,13 @@ export function CaptureScreen() {
                 <span className="bn-label capture-card-label">Rig</span>
                 {rigVisible ? null : (
                   <span className="capture-rig-summary-val">
-                    {gameEntry === null ? gameSentence : gameEntry.display}
-                    {' · '}
-                    {camera.rotation}°{' · '}
-                    {triggerMode === 'manual' ? 'Key' : 'Motion'}
+                    <span className="capture-list-part">
+                      {gameEntry === null ? gameSentence : gameEntry.display}
+                    </span>
+                    <span className="capture-list-part">{camera.rotation}°</span>
+                    <span className="capture-list-part">
+                      {triggerMode === 'manual' ? 'Key' : 'Motion'}
+                    </span>
                   </span>
                 )}
                 <Icon
@@ -4212,9 +4272,12 @@ export function CaptureScreen() {
               icon={triggerIcon(triggerMode)}
               meta={
                 <>
-                  {triggerMode === 'motion'
-                    ? 'Motion · the machine fires it'
-                    : `Manual · ${CAPTURE_KEY_LABEL} fires it`}
+                  <span className="capture-list-part">
+                    {triggerMode === 'motion' ? 'Motion' : 'Manual'}
+                  </span>
+                  <span className="capture-list-part">
+                    {triggerMode === 'motion' ? 'the machine fires it' : `${CAPTURE_KEY_LABEL} fires it`}
+                  </span>
                   <span className="bn-sr capture-trigger">{captureTrigger.name}</span>
                 </>
               }
