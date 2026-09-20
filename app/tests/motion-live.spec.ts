@@ -289,9 +289,11 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   await expect(page.locator('.capture-trigger')).toHaveText('motion')
   /* ARMED, AND THE SCREEN SAYS SO WITH NOTHING OPENED. The disclosure's summary is the
      readout's public face now, and it carries the machine's state: no camera is open, so it
-     reads `armed · no frames yet` rather than zeros that would look like a working machine
-     seeing nothing. That is the claim the old `toBeVisible` on the placeholder was making. */
-  await expect(tuningSummary(page)).toContainText('armed · no frames yet')
+     reads `armed` and `no frames yet` — two facts, separated by a CSS dot rather than a typed
+     one (D218), so the DOM text runs the two together with nothing between them — rather than
+     zeros that would look like a working machine seeing nothing. That is the claim the old
+     `toBeVisible` on the placeholder was making. */
+  await expect(tuningSummary(page)).toContainText('armedno frames yet')
   /* Open it once; everything below reads instruments. */
   await openTuning(page)
   await expect(page.getByText('Motion is armed but no frame has reached it yet')).toBeVisible()

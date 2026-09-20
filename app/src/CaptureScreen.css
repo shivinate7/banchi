@@ -86,6 +86,8 @@
 }
 .capture-odo-drawer { white-space: nowrap; }
 .capture-odo-drawer b { font-weight: 700; color: var(--bn-ink-3); }
+/* The separator between drawers is drawn here, never typed into the row (D218). */
+.capture-odo-drawer + .capture-odo-drawer::before { content: '·'; margin-right: 6px; color: var(--bn-ink-4); }
 /* The drawer the Box field is on. The whole point of the split is that the operator can see
    the drawer they are NOT on, so the one they are on is the thing to mark. */
 .capture-odo-drawer.is-here { color: var(--bn-ink-2); }
@@ -805,6 +807,12 @@
 .capture-note-wrap .bn-input { padding-right: 40px; min-height: 36px; font-size: var(--bn-fs-md); }
 .capture-note-save { position: absolute; right: 4px; }
 .capture-inline-label { font-weight: 600; color: var(--bn-ink); }
+/* A SHARED SEPARATOR FOR EVERY LIST OF FACTS THIS SCREEN DRAWS ON ONE LINE (D218): the section
+   receipt's number and starting card, the rarity and finish claims, the odometer's verdict, the
+   tuning summary, the rig fold and the trigger meta. One class rather than one rule per site —
+   the dot is CSS, never typed into a joined string, so it is never in the DOM text a screen
+   reader or a copy-paste sees. */
+.capture-list-part + .capture-list-part::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 /* ---- the filmstrip: what undo can reach --------------------------------------------------------------------------- */
 .capture-film {

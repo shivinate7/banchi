@@ -87,8 +87,14 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
 }
 
 /**
- * The sentence, which is also the accessible name. A closed box gets a percentage and an open
- * one never does. `fraction` is the server's and is never recomputed. Null is not zero.
+ * The box caption in two facts rather than one joined string (D218) — `main` is the position
+ * itself and `detail` is the qualifier beside it, when there is one. A caller that draws text
+ * renders them as sibling elements with the separator drawn by CSS; `sentenceOf` below joins
+ * them back with a typed `' · '` for the one caller allowed to keep it, the accessible name
+ * (D41).
+ *
+ * A closed box gets a percentage and an open one never does. `fraction` is the server's and is
+ * never recomputed. Null is not zero.
  *
  * The Fulfiller's form is `Card 53 of 65`, in words.
  *
@@ -100,22 +106,37 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
  * parameter nothing ever set to `false` was not an opt-out, it was dead code with one branch
  * live.
  */
-export function sentenceOf(place: Place, persona: Persona = 'owner'): string {
+export type SentenceParts = { main: string; detail: string | null }
+
+export function sentencePartsOf(place: Place, persona: Persona = 'owner'): SentenceParts {
   const { slot, box_total, box_closed, fraction } = place
-  if (isDeparted(place)) return persona === 'fulfiller' ? 'No longer in the box' : 'no longer in the box'
+  if (isDeparted(place)) {
+    return { main: persona === 'fulfiller' ? 'No longer in the box' : 'no longer in the box', detail: null }
+  }
   if (slot === null) {
-    return persona === 'fulfiller'
-      ? 'Where this sits in the box is not known yet'
-      : 'where this sits in the box is not known yet'
+    return {
+      main:
+        persona === 'fulfiller'
+          ? 'Where this sits in the box is not known yet'
+          : 'where this sits in the box is not known yet',
+      detail: null,
+    }
   }
   if (fraction === null || !Number.isFinite(box_total) || box_total <= 0) {
     return persona === 'fulfiller'
-      ? `Card ${slot} · where it sits in the box is not known yet`
-      : `#${slot} · where this sits in the box is not known yet`
+      ? { main: `Card ${slot}`, detail: 'where it sits in the box is not known yet' }
+      : { main: `#${slot}`, detail: 'where this sits in the box is not known yet' }
   }
-  if (persona === 'fulfiller') return `Card ${slot} of ${box_total}`
-  if (box_closed) return `#${slot} of ${box_total} · ${Math.round(fraction * 100)}% in`
-  return `#${slot} of ${box_total}`
+  if (persona === 'fulfiller') return { main: `Card ${slot} of ${box_total}`, detail: null }
+  if (box_closed) return { main: `#${slot} of ${box_total}`, detail: `${Math.round(fraction * 100)}% in` }
+  return { main: `#${slot} of ${box_total}`, detail: null }
+}
+
+/** The joined form, for the accessible name only (D41 kept the dot there on purpose). Never
+ *  render this string directly — draw `sentencePartsOf`'s two fields as elements instead. */
+export function sentenceOf(place: Place, persona: Persona = 'owner'): string {
+  const { main, detail } = sentencePartsOf(place, persona)
+  return detail === null ? main : `${main} · ${detail}`
 }
 
 /** The second scale: how far into its own SECTION a card sits. Null when there is no honest
@@ -135,12 +156,14 @@ export type SectionDepth = {
   sentence: string
   /** THE CAPTION'S TWO HALVES, HANDED OVER AS FIELDS AND NEVER RECOVERED BY SPLITTING
    *  `sentence`. The ruler's caption ellipsizes its head and pins its tail, which needs two
-   *  elements — and `head` contains a ` · ` of its own whenever the owner has named the
-   *  section (D132), so a caller splitting on the separator cuts a name in half.
-   *  `head + tail` is byte-identical to `sentence`, which stays whole because it is also the
-   *  accessible name. */
-  head: string
-  tail: string
+   *  elements. Each half is now a LIST OF FACTS (D218) rather than a joined string — `head` is
+   *  `['Section 6']` or `['Section 6', 'Rares']` when the owner has named the section (D132),
+   *  and `tail` is one or two facts depending on `growing` and whether the copy departed. A
+   *  caller draws each list as sibling elements with the separator drawn by CSS; joining every
+   *  entry of `head` then `tail` with `' · '` is byte-identical to `sentence`, which stays
+   *  whole because it is also the accessible name (D41). */
+  head: readonly string[]
+  tail: readonly string[]
   /** The section's bounds IN BOX CARDS — `86` and `170` of a box holding 400 — so the ruler's
    *  two ends can state the nesting as a number the reader checks against the box caption
    *  rather than as a shape they have to trust. D58's unit: a card COUNT, never a stored
@@ -191,9 +214,11 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   const { card: slot, section, section_start: start, section_end: end, box_total: total } = place
   const gone = isDeparted(place)
   if (section === null) return null
-  /* THE SECTION'S NAME IS SAID WITH ITS NUMBER (D132) — `Section 6 · Rares · card 54 of 153`.
-     The number is what a hand counts to and the name is what the owner calls it. */
-  const named = place.section_name ? `Section ${section} · ${place.section_name}` : `Section ${section}`
+  /* THE SECTION'S NAME IS SAID WITH ITS NUMBER (D132) — `Section 6`, `Rares`, `card 54 of 153`.
+     The number is what a hand counts to and the name is what the owner calls it. Two facts, not
+     one string: `head` carries both so a caller draws the separator in CSS instead of typing it
+     into the name (D218). */
+  const head: readonly string[] = place.section_name ? [`Section ${section}`, place.section_name] : [`Section ${section}`]
   /* A DEPARTED COPY KEEPS THE SECOND SCALE AND LOSES ONLY ITS MARK (D118). `card` is null the
      moment it leaves, and returning null here used to take the whole zoom block with it — 40 of
      the 85px the lens was worth, and the reason the panel changed size on the press that sold
@@ -218,30 +243,30 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   const lastCard = firstCard + of - 1
 
   if (gone || slot === null) {
-    const tail = growing
-      ? ` · ${of} cards · this copy is not among them`
-      : ` · ${of} slots · this copy is not in one`
+    const tail: readonly string[] = growing
+      ? [`${of} cards`, 'this copy is not among them']
+      : [`${of} slots`, 'this copy is not in one']
     return {
       slot: null,
       of,
       growing,
       marker: null,
-      sentence: named + tail,
-      head: named,
+      sentence: [...head, ...tail].join(' · '),
+      head,
       tail,
       firstCard,
       lastCard,
     }
   }
 
-  const tail = growing ? ` · card ${slot} of ${of}` : ` · card ${slot} of ${of} slots`
+  const tail: readonly string[] = [growing ? `card ${slot} of ${of}` : `card ${slot} of ${of} slots`]
   return {
     slot,
     of,
     growing,
     marker,
-    sentence: named + tail,
-    head: named,
+    sentence: [...head, ...tail].join(' · '),
+    head,
     tail,
     firstCard,
     lastCard,

@@ -5152,7 +5152,7 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145", "D153",
-                            "D164", "D170", "D172"]},
+                            "D164", "D170", "D172", "D218"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -5166,9 +5166,9 @@ COMPONENTS = [
                                       # line: the drawer label rides an absolute caption and
                                       # the split is floored by `min-height`, so neither can
                                       # move what is around it when a drawer changes.
-                                      "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
-                                                      "D118", "D130", "D142",
-                                                      "D164", "D195", "D205"]},
+                                      "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65",
+                                                      "D117", "D118", "D130", "D142", "D164",
+                                                      "D195", "D205", "D218"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -5637,7 +5637,8 @@ COMPONENTS = [
                                             "ZOOM BLOCK MOUNTS ON THE `sectionDepth` PROP and never on "
                                             "whether the depth resolved, so all four owner states are "
                                             "one DOM at one height (D118).",
-                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41", "D58", "D68", "D118", "D132", "D155"]},
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41",
+                                                    "D58", "D68", "D118", "D132", "D155", "D218"]},
             "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
                                         "`sentenceOf`, `sectionDepthOf`, their types and the shared "
                                         "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "
@@ -5656,7 +5657,8 @@ COMPONENTS = [
                                         "hands the caption over as `head`/`tail` FIELDS, never as a "
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
-                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118", "D132", "D155"]},
+                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
+                                                "D68", "D118", "D132", "D155", "D218"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -5666,7 +5668,8 @@ COMPONENTS = [
                                             "`.position-bar-sectiontrack` carries `.position-bar-track` "
                                             "too, so document order is the only thing that makes the "
                                             "spec's `querySelector` return the box strip.",
-                                    "governed_by": ["D5", "D20", "D41", "D50", "D118", "D155"]},
+                                    "governed_by": ["D5", "D20", "D41", "D50", "D118", "D155",
+                                                    "D218"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
                                          "component in it — `readingAgo`, `readingExact`, `stateTone`, "
                                          "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
@@ -6981,7 +6984,7 @@ COMPONENTS = [
                         "spec also pins that the seeded thresholds are Gate C's hand-tuned "
                         "4.50/8.00 to two places, and that the saved trace is version 2. Run "
                         "by `make design-check`.",
-                "governed_by": ["D5", "D13", "D19", "D81", "D84", "D130"],
+                "governed_by": ["D5", "D13", "D19", "D81", "D84", "D130", "D218"],
                 "note": "No box is ever selected in this spec, deliberately: with one, the "
                         "fire would POST /capture into a real store. The dropped counter IS "
                         "the assertion.",
@@ -7000,8 +7003,7 @@ COMPONENTS = [
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
                 "governed_by": ["D3", "D20", "D22", "D23", "D27", "D56", "D65", "D101", "D118",
-                                "D142", "D145", "D153",
-                                "D211"],
+                                "D142", "D145", "D153", "D211", "D218"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -7018,7 +7020,7 @@ COMPONENTS = [
                         "undoing exactly one, a row undoing that card AND everything after "
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
-                "governed_by": ["D10", "D41", "D58", "D67", "D101", "D118", "D164", "D196"],
+                "governed_by": ["D10", "D41", "D58", "D67", "D101", "D118", "D164", "D196", "D218"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "
