@@ -2677,7 +2677,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113", "D134",
                                 "D159", "D165", "D167", "D168", "D174", "D189", "D192", "D193",
-                                "D203", "D210", "D-a-sales-truth"],
+                                "D203", "D210", "D225"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -4033,7 +4033,7 @@ COMPONENTS = [
                                 "D115", "D116", "D132", "D134", "D137", "D138", "D145", "D159",
                                 "D165", "D168", "D172", "D174", "D183", "D189", "D191", "D192",
                                 "D193", "D203", "D212", "D213", "D219",
-                                "D-a-sales-truth"],
+                                "D225"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4199,7 +4199,7 @@ COMPONENTS = [
                                 "D89", "D100", "D103", "D105", "D134", "D137", "D145", "D147",
                                 "D156", "D159", "D163", "D165", "D166", "D168", "D170", "D172",
                                 "D174", "D180", "D188", "D189", "D216", "D219",
-                                "D-a-sales-truth"],
+                                "D225"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4849,7 +4849,7 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213",
-                                              "D219", "D-a-sales-truth"]},
+                                              "D219", "D225"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6601,7 +6601,7 @@ COMPONENTS = [
                                 "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105", "D118",
                                                 "D159", "D189", "D193", "D194", "D201", "D214",
                                                 "D217", "D219",
-                                                "D-a-sales-truth"]},
+                                                "D225"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "
                                         "reuses `--bn-accent` rather than naming a color; the "
@@ -7535,7 +7535,7 @@ COMPONENTS = [
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
-                                "D217", "D-a-sales-truth"],
+                                "D217", "D225"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "

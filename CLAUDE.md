@@ -914,6 +914,7 @@ D221 Money stays mono, and the rule is amended to match
 D222 The press paces itself on a measurement, and names a throttle
 D223 Sold value goes first, and sealed product is a named gap
 D224 The preview costs nothing, and the press commits as it goes
+D225 Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

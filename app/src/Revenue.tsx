@@ -88,7 +88,7 @@ type Sale = {
    *  string's own shape. */
   readonly nameIsSku: boolean
   /** The line's own SKU — never shown here, only used to ask `getSoldPrices` what this exact
-   *  name is worth today (D-a-sales-truth). */
+   *  name is worth today (D225). */
   readonly sku: string
   readonly quantity: number
   readonly unitPrice: number
@@ -97,7 +97,7 @@ type Sale = {
 
 /** `true` where the OPERATOR closed this line as never shipping — a refund or a
  *  cancellation, `store/orders.py:174`'s own words for `not_shipping` — during fulfilment,
- *  matched by SKU against the same order's `OrderLineProgress` list (D-a-sales-truth,
+ *  matched by SKU against the same order's `OrderLineProgress` list (D225,
  *  `docs/specs/revenue-plan.md` §2). `closed_reason` rides on every order's `progress`
  *  already; this screen was simply never reading it. NOT THE MARKETPLACE'S WORD: the value
  *  is recorded by a person during fulfilment, so a line can be a real refund the operator
@@ -372,14 +372,14 @@ type Product = {
   readonly gross: number
   readonly last: Date
   /** The SKU and unit price of the MOST RECENT sale under this name — what `getSoldPrices` is
-   *  asked about, and the "then" half of "then against now" (D-a-sales-truth). Two SKUs can
+   *  asked about, and the "then" half of "then against now" (D225). Two SKUs can
    *  share a display name (a reprint, a different printing the feed named the same); this
    *  is deliberately the latest one sold, not an average across them. */
   readonly lastSku: string
   readonly lastPrice: number
 }
 
-/** "Then against now" for one already-sold name (D-a-sales-truth) — a market observation and
+/** "Then against now" for one already-sold name (D225) — a market observation and
  *  NEVER a profit or a loss, D62's rule for this exact shape ("direction is a sign and a
  *  word, never a color"). `word` is never rendered as a color anywhere this is used. */
 type MarketCompare = { readonly market: number; readonly at: number; readonly diff: number; readonly word: 'above' | 'below' | 'even with' }
@@ -558,7 +558,7 @@ export function Revenue() {
 
   const { sales, dropped, refundExcluded, canceledOrders } = useMemo(() => salesOf(orders ?? []), [orders])
 
-  // THE PRESS, NEVER THE MOUNT (D-a-sales-truth, over D189's/D219's own
+  // THE PRESS, NEVER THE MOUNT (D225, over D189's/D219's own
   // tables). `prices` is `null` until pressed once — a screen that fetched it on mount would
   // draw a number that looks live off a table that is really a cache of the last archive
   // sweep, `readings adopt`, or live fetch. `pricesLoading` and `pricesFailure` describe that
@@ -787,7 +787,7 @@ export function Revenue() {
           </p>
         )}
         {/* TWO SEPARATE EXCLUSIONS, TWO SEPARATE SENTENCES, EACH STATED EVEN AT ZERO
-            (D-a-sales-truth). Measured on the owner's real store: 56 Canceled orders
+            (D225). Measured on the owner's real store: 56 Canceled orders
             ($3,059.07) and, as of this build, ZERO lines marked `not_shipping` — this
             screen never claims the second mechanism has caught anything until it counts
             one. Collapsing the two into one sentence, or hiding either at zero, would say
@@ -876,7 +876,7 @@ export function Revenue() {
           </div>
         </div>
 
-        {/* THEN AGAINST NOW (D-a-sales-truth). A press, never a mount — see `getSoldPrices`'s
+        {/* THEN AGAINST NOW (D225). A press, never a mount — see `getSoldPrices`'s
             own header. `noReading` counts by NAME on screen right now, so widening the
             filter can only ever raise it, never silently shrink what it claims to cover. */}
         <div className="revenue-market-refresh">

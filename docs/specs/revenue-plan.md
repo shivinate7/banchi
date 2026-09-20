@@ -5,7 +5,7 @@ supersedes nothing. Read `docs/specs/revenue-next.md` first. That file holds the
 file holds what to do about them.
 
 **Refunds (§2) and sold-cards then-against-now (§1, first half) are BUILT**, 2026-09-19,
-`docs/decisions/D-a-sales-truth.md`. Six of the §5 ride-along defects rode along with them.
+D225. Six of the §5 ride-along defects rode along with them.
 Unsold-holdings value-over-time (§1, second half), the per-product view (§3) and money
 typography (§5's open question) remain not built.
 
@@ -38,7 +38,7 @@ These are separate features with separate rules. Nothing may merge them into one
 
 ### Sold cards: then against now
 
-**BUILT 2026-09-19 (`D-a-sales-truth`).** For a card already sold, compare the price it went for against what the market says today.
+**BUILT 2026-09-19 (`D225`).** For a card already sold, compare the price it went for against what the market says today.
 
 The owner's own sales are exact fills. Each carries a price, a quantity and a date. There are
 1,268 of them. That is a real measurement and not an estimate. This is the half that makes the
@@ -72,7 +72,7 @@ For cards still held, value them at the market and show that value moving.
 
 ## 2. Refunds, which are reachable after all
 
-**The first layer is BUILT 2026-09-19 (`D-a-sales-truth`).** The second and third stay as
+**The first layer is BUILT 2026-09-19 (`D225`).** The second and third stay as
 recorded below.
 
 Three layers, in order of what they cost to reach.
@@ -160,7 +160,7 @@ own. That reversal needs its own argument, which nobody has made.
 
 ## 5. Defects to carry into whichever change comes first
 
-**All six below are BUILT 2026-09-19**, riding along with `D-a-sales-truth`.
+**All six below are BUILT 2026-09-19**, riding along with `D225`.
 
 - ~~The `lead` string in `compareLine` attributes `So far` to a closed period. Fix the string. Add a
   test at the default period against a populated prior window.~~

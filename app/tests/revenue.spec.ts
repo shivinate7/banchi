@@ -131,7 +131,7 @@ async function stub(page: Page, orders: OrderRow[]) {
 /** Stubs `/pipeline/price-now` and counts how many times it was hit — the press-only
  *  contract (`getSoldPrices`'s own header) needs a positive assertion that it was NOT
  *  called on mount. `source` defaults to `'archive'`, matching the real route's own
- *  archive-first order (D-a-sales-truth). */
+ *  archive-first order (D225). */
 function stubPrices(
   page: Page,
   entries: Record<string, { market: string; at: number; source?: 'archive' | 'live' }>,
@@ -381,7 +381,7 @@ test('no horizontal scroll at 390, with Custom selected — the fifth period opt
 })
 
 test('no PAGE horizontal scroll at 390 with the Today column active — it scrolls in its own wrapper', async ({ page }) => {
-  // The Today column (D-a-sales-truth) is the widest state the product table can be in.
+  // The Today column (D225) is the widest state the product table can be in.
   // `.revenue-table-wrap` is where any overflow belongs, never `document.documentElement`.
   stubPrices(page, { '9100001': { market: '18.00', at: 1_758_000_000 } })
   await page.setViewportSize({ width: 390, height: 900 })
@@ -393,7 +393,7 @@ test('no PAGE horizontal scroll at 390 with the Today column active — it scrol
   expect(overflow).toBeLessThanOrEqual(0)
 })
 
-/* -------------------------------------------------------------- refunds (D-a-sales-truth) */
+/* -------------------------------------------------------------- refunds (D225) */
 
 test('a line closed as refunded is subtracted from the total, and the count is stated', async ({ page }) => {
   await stub(page, [
@@ -496,7 +496,7 @@ test('the prior-period line never says "So far" about the CLOSED prior period (d
   await expect(prior).not.toContainText('So far, the period before this one made')
 })
 
-/* --------------------------------------------------------- then against now (D-a-sales-truth) */
+/* --------------------------------------------------------- then against now (D225) */
 
 test('market comparison is a press, never a mount, and draws a sign and a word (D62)', async ({ page }) => {
   const calls = stubPrices(page, { '9100001': { market: '18.00', at: 1_758_000_000 } })

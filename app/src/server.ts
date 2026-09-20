@@ -2699,7 +2699,7 @@ export type SoldPricesLookup = Record<string, SoldPriceEntry>
  * machine, so D62's cost argument for gating those behind a press does not apply here on its
  * own terms — the reason THIS call is still a press and not an effect is `#/revenue`'s own
  * ruling: both tables are caches, however cheap the read is, and a screen that fetched on
- * mount would draw a number that looks live and is not (D-a-sales-truth).
+ * mount would draw a number that looks live and is not (D225).
  */
 export async function getSoldPrices(skus: string[]): Promise<SoldPricesLookup> {
   if (skus.length === 0) return {}

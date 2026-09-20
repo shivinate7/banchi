@@ -1,4 +1,4 @@
-## D-a-sales-truth — Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
+## D225 — Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
 
 **Two changes to `#/revenue`.** Both are about what the screen admits it does not know. `docs/specs/revenue-plan.md` §1-2 is the plan. This is the record of what was built, corrected twice against the owner's real store, and why the second half stays honest.
 
