@@ -12586,6 +12586,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         band=band, box=box, after=after, limit=limit
                     ),
                 )
+            if path == "/pipeline/price-now":
+                # NAMED SKUs, THE ARCHIVE FIRST AND `readings` AS ITS FALLBACK
+                # (D219, D189) — `#/revenue`'s sold-cards comparison
+                # (D225) over a SKU that has long since left the store, which
+                # `/pipeline/value`'s on-hand filter would silently drop, and which
+                # `readings` ALONE answered for under 1% of the owner's real gross. A plain
+                # read, costs nothing, reaches no public mirror — see
+                # `do_pipeline_price_now`'s own header for why the screen still gates it
+                # behind a press rather than a mount.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or []
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_price_now(asked)
+                )
             if path == "/pipeline/submissions":
                 # WHAT IS CLAIMED RIGHT NOW (D174). Free, reads the store and
                 # holds nothing — the count that has to be on screen before the control that

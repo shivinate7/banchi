@@ -1,8 +1,13 @@
 # Sales: the build plan
 
-**Recorded 2026-09-19. Not built.** This is the plan the owner settled by interview on
-2026-09-19. It supersedes nothing. Read `docs/specs/revenue-next.md` first. That file holds the
-findings. This file holds what to do about them.
+**Recorded 2026-09-19.** This is the plan the owner settled by interview on 2026-09-19. It
+supersedes nothing. Read `docs/specs/revenue-next.md` first. That file holds the findings. This
+file holds what to do about them.
+
+**Refunds (§2) and sold-cards then-against-now (§1, first half) are BUILT**, 2026-09-19,
+D225. Six of the §5 ride-along defects rode along with them.
+Unsold-holdings value-over-time (§1, second half), the per-product view (§3) and money
+typography (§5's open question) remain not built.
 
 Build order is deliberately not fixed here. The owner asked to choose it when the work is picked
 up.
@@ -33,7 +38,7 @@ These are separate features with separate rules. Nothing may merge them into one
 
 ### Sold cards: then against now
 
-For a card already sold, compare the price it went for against what the market says today.
+**BUILT 2026-09-19 (`D225`).** For a card already sold, compare the price it went for against what the market says today.
 
 The owner's own sales are exact fills. Each carries a price, a quantity and a date. There are
 1,268 of them. That is a real measurement and not an estimate. This is the half that makes the
@@ -66,6 +71,9 @@ For cards still held, value them at the market and show that value moving.
   all is unresolved. It must be measured before this is designed.
 
 ## 2. Refunds, which are reachable after all
+
+**The first layer is BUILT 2026-09-19 (`D225`).** The second and third stay as
+recorded below.
 
 Three layers, in order of what they cost to reach.
 
@@ -152,17 +160,17 @@ own. That reversal needs its own argument, which nobody has made.
 
 ## 5. Defects to carry into whichever change comes first
 
-None of these justifies a branch of its own. Each rides along with the next change to this screen.
+**All six below are BUILT 2026-09-19**, riding along with `D225`.
 
-- The `lead` string in `compareLine` attributes `So far` to a closed period. Fix the string. Add a
-  test at the default period against a populated prior window.
-- Order numbers clip in the middle of the string at 390 pixels, in the per order drill down.
-- The product name column has no height cap, so numeric baselines drift down the table.
-- The fifth period option wraps onto its own row and sits alone at 390 pixels.
-- `bn-stagger` is absent from the month rows and the product table. The house rule is written and
-  the mechanism exists.
-- The verdict figure carries no weight of its own. Pricing wraps the key figure of every verdict
-  in a strong tag. One tag, no words.
+- ~~The `lead` string in `compareLine` attributes `So far` to a closed period. Fix the string. Add a
+  test at the default period against a populated prior window.~~
+- ~~Order numbers clip in the middle of the string at 390 pixels, in the per order drill down.~~
+- ~~The product name column has no height cap, so numeric baselines drift down the table.~~
+- ~~The fifth period option wraps onto its own row and sits alone at 390 pixels.~~
+- ~~`bn-stagger` is absent from the month rows and the product table. The house rule is written and
+  the mechanism exists.~~
+- ~~The verdict figure carries no weight of its own. Pricing wraps the key figure of every verdict
+  in a strong tag. One tag, no words.~~
 
 Two items are questions rather than defects. They are not for a builder to settle.
 

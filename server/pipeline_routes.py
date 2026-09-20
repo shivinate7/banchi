@@ -3100,6 +3100,77 @@ def _readings() -> Tuple[Dict[str, _Reading], List[dict]]:
     return found, sources
 
 
+def _bucket_at(start: str) -> int:
+    """A `price_history` bucket's own `start` (an ISO date, "YYYY-MM-DD") as a Unix second at
+    that day's UTC midnight — the same unit `readings.Reading.at` already uses, so a caller
+    on the other side of `do_pipeline_price_now` reads one field regardless of which table
+    answered. `0` for anything that will not parse, matching `store/readings.py:_parse_reading`'s
+    own skip-rather-than-raise rule."""
+    try:
+        return int(datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+    except ValueError:
+        return 0
+
+
+def do_pipeline_price_now(skus: Sequence[str]) -> dict:
+    """`GET /pipeline/price-now?sku=...` — for each named SKU, the closest thing this store
+    has to "what the market says today": the price-history archive's own newest `month`
+    bucket (D219) where one exists, and the `readings` table (D189)
+    where it does not.
+
+    **THIS ROUTE REPLACES AN EARLIER, NARROWER ONE.** `#/revenue`'s first cut read `readings`
+    alone. Measured against the owner's real store: 93 of 539 sold names had a `readings`
+    entry, covering $606 of $66,335 gross (0.9%), and NONE of those 93 were sealed product —
+    which is 93% of the owner's money. `readings` is a cache built for `#/pricing`'s own
+    on-hand walk; a sold copy is routinely both gone from inventory AND never priced by that
+    walk in the first place, so leaning on it here was answering for under one percent of
+    what this feature was built to cover.
+
+    THE ARCHIVE IS TRIED FIRST AND `readings` IS THE FALLBACK, never the reverse and never
+    merged into one average. `pkmnscan archive sweep` (D219) walks every
+    SKU this store has ever recorded, sold or held, across four ranges — sealed product
+    included, because unlike `readings` it is not filtered through on-hand inventory or
+    `#/pricing`'s own live-export walk. `month` is the finest range the archive keeps, so its
+    newest bucket is the closest thing to a live quote the archive can offer; a bucket with no
+    `market` (a real day the endpoint answered with nothing) is skipped in favor of an older
+    one that has a price, rather than counted as this SKU's answer.
+
+    A SKU NEITHER SOURCE HAS EVER PRICED IS SIMPLY ABSENT FROM THE RESULT, never a null or a
+    zero — D159's `no_reading` shape, which every reader of either table now inherits rather
+    than each inventing its own. `source` says which table answered (`archive` or `live`) —
+    carried through rather than discarded, because the two ages mean different things: an
+    archived bucket's `at` is the calendar day the bucket covers, and a `readings` row's `at`
+    is the moment something last fetched or joined it.
+
+    A PLAIN READ, LIKE ITS PREDECESSOR: no socket, no run, no on-hand inventory anywhere in
+    the walk. Still gated behind a press and not a mount, for the reason `#/revenue`'s own
+    ruling gave that route: both tables are caches, however cheap the read is, and a screen
+    that fetched on every visit would draw a number that looks live and is not.
+    """
+    try:
+        snapshot = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError):
+        snapshot = None
+    found, _sources = _readings()
+    out: Dict[str, dict] = {}
+    for sku in skus:
+        sku = str(sku)
+        if snapshot is not None:
+            month_buckets = [
+                b for b in snapshot.archive.for_sku(sku)
+                if b.range == "month" and b.market
+            ]
+            if month_buckets:
+                latest = max(month_buckets, key=lambda b: b.start)
+                out[sku] = {"market": latest.market, "at": _bucket_at(latest.start), "source": "archive"}
+                continue
+        reading = found.get(sku)
+        if reading is None:
+            continue
+        out[sku] = {"market": reading.market, "at": reading.at, "source": "live"}
+    return {"prices": out}
+
+
 #: Why a card on hand carries no market price. Three causes, three remedies, and a screen
 #: that collapsed them would be telling the operator to do one thing for three problems.
 _NEVER_IDENTIFIED = "never_identified"
