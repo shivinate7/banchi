@@ -937,6 +937,7 @@ D228 The claim is spent only on a merge that can happen, and the loser of a race
 D229 The prose ratchet is pinned per file, because a repo-wide number is one every merge takes from somebody
 D230 The sweep's own resume window is six days, not one hour
 D231 The subject list widens to the order ledger, and sealed product joins it
+D232 The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

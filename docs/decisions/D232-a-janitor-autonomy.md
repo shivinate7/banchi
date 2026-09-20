@@ -1,4 +1,4 @@
-## D-a-janitor-autonomy — The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
+## D232 — The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
 
 **MEASURED ON THIS CLONE, 2026-09-20.** `make janitor` reported 14 items waiting on a word. Five
 worktrees with no session and nothing uncommitted. Nine branches whose every commit main
