@@ -372,7 +372,7 @@ export function BoxIdentity({
               className="boxops-span"
               key={`${span.start}-${span.end}`}
               style={{ flexGrow: span.end - span.start + 1 }}
-              title={`Section ${i + 1}${record.sections_detail[i]?.name ? ` · ${record.sections_detail[i]?.name}` : ''} · #${span.start}–#${span.end}`}
+              title={`Section ${i + 1}${record.sections_detail[i]?.name ? `: ${record.sections_detail[i]?.name}` : ''}, cards #${span.start}–#${span.end}`}
             />
           ))}
           {at === null ? null : (
@@ -530,8 +530,8 @@ export function BoxOps({
     <Overlay kind="sheet" label={`Manage box ${record.box}`} onClose={onClose} className="boxops-sheet">
       <header className="inv-sheet-head">
         <div className="inv-sheet-head-text">
-          <span className="bn-eyebrow">
-            Box {record.box} · {sealed ? 'sealed' : 'open'}
+          <span className="bn-eyebrow bn-facts">
+            <span>Box {record.box}</span> <span>{sealed ? 'sealed' : 'open'}</span>
           </span>
           <h2 className="inv-sheet-title">{record.name ?? `Box ${record.box}`}</h2>
         </div>
@@ -772,13 +772,19 @@ export function BoxOps({
                   onChange={(event) => setMoveTo(event.target.value)}
                 >
                   <option value="">Choose a box…</option>
-                  {others.map((candidate) => (
-                    <option key={candidate.box} value={String(candidate.box)}>
-                      Box {candidate.box}
-                      {candidate.name ? ` · ${candidate.name}` : ''}
-                      {candidate.state === CLOSED ? ' (sealed)' : ''}
-                    </option>
-                  ))}
+                  {others.map((candidate) => {
+                    // `<option>` renders plain text only, so the name and the sealed state
+                    // fold into one parenthetical rather than a typed separator (D218).
+                    const extras = [candidate.name, candidate.state === CLOSED ? 'sealed' : null].filter(
+                      (part): part is string => Boolean(part),
+                    )
+                    return (
+                      <option key={candidate.box} value={String(candidate.box)}>
+                        Box {candidate.box}
+                        {extras.length > 0 ? ` (${extras.join(', ')})` : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               ) : (
                 <input
@@ -812,14 +818,19 @@ export function BoxOps({
         ) : editing === 'section-names' ? (
           <EditorFrame title="Name sections" onBack={closeEdit}>
             <p className="boxops-editor-lead">
-              A word for each section, drawn beside its number on every label — <b>Section 2 · Rares</b>.
+              A word for each section, drawn beside its number on every label — <b className="bn-facts"><span>Section 2</span> <span>Rares</span></b>.
               Leave one blank to clear it. The name follows its divider if the layout is edited later.
             </p>
             <div className="boxops-section-names">
               {record.sections_detail.map((detail) => (
                 <Field
                   key={detail.section}
-                  label={`Section ${detail.section} · #${detail.start}${detail.end === null ? ' onward' : `–#${detail.end}`}`}
+                  label={
+                    <span className="bn-facts">
+                      <span>Section {detail.section}</span>{' '}
+                      <span>#{detail.start}{detail.end === null ? ' onward' : `–#${detail.end}`}</span>
+                    </span>
+                  }
                   value={sectionNames[detail.section] ?? ''}
                   onChange={(next) => setSectionNames((held) => ({ ...held, [detail.section]: next }))}
                   placeholder="unnamed"
@@ -980,7 +991,7 @@ function Field({
   mono = false,
   autoFocus = false,
 }: {
-  label: string
+  label: ReactNode
   value: string
   onChange: (next: string) => void
   placeholder?: string
@@ -1383,7 +1394,7 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
             ? 'Nothing changed — every card in scope already said this.'
             : `${count(result.applied, 'card', 'cards')} changed.`
         }
-        code={`box ${result.box} · eligible ${result.eligible} · applied ${result.applied} · unchanged ${result.unchanged} · sidecars ${result.sidecars_rewritten} · skipped ${result.skipped_terminal}`}
+        code={`box ${result.box}: eligible ${result.eligible}, applied ${result.applied}, unchanged ${result.unchanged}, sidecars ${result.sidecars_rewritten}, skipped ${result.skipped_terminal}`}
       >
         {result.skipped.length === 0
           ? null
@@ -1391,7 +1402,7 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
                These cards were not touched, so none has a slot in the result to count to, and an
                operator matching this line against the store needs the key it was aimed by. */
             // sigil-ok: a bulk write's receipt names the records it skipped, by the key it aimed by
-            `Stepped over: ${result.skipped.map((row) => `#${row.index} ${row.state}`).join(' · ')}`}
+            `Stepped over: ${result.skipped.map((row) => `#${row.index} ${row.state}`).join(', ')}`}
       </Notice>
     </div>
   )
@@ -1403,12 +1414,21 @@ function ListingLine({ row, at }: { row: BoxListingRow; at?: string | null }) {
   const keeps = Object.entries(row.after)
   return (
     <p className="boxops-machine boxops-line">
-      <span className="boxops-line-text">
-        {row.sku} · {gives.length === 0 ? 'nothing' : gives.map(([k, n]) => `${n} ${k}`).join(' ')}
-        {keeps.length === 0 ? '' : ` · keeps ${keeps.map(([k, n]) => `${n} ${k}`).join(' ')}`}
-        {row.also_in_boxes.length === 0
-          ? ''
-          : ` · also ${row.also_in_boxes.map((o) => `box ${o.box} (${o.copies})`).join(', ')}`}
+      <span className="boxops-line-text bn-facts">
+        <span>{row.sku}</span>{' '}
+        <span>{gives.length === 0 ? 'nothing' : gives.map(([k, n]) => `${n} ${k}`).join(' ')}</span>
+        {keeps.length === 0 ? null : (
+          <>
+            {' '}
+            <span>keeps {keeps.map(([k, n]) => `${n} ${k}`).join(' ')}</span>
+          </>
+        )}
+        {row.also_in_boxes.length === 0 ? null : (
+          <>
+            {' '}
+            <span>also {row.also_in_boxes.map((o) => `box ${o.box} (${o.copies})`).join(', ')}</span>
+          </>
+        )}
       </span>
       <ReadingAge at={at} />
     </p>
@@ -1481,7 +1501,7 @@ function ReleaseListings({
         <Notice
           tone="ok"
           title={`Released ${count(receipt.released, 'SKU', 'SKUs')} in box ${receipt.box}${
-            gave.length === 0 ? '.' : `, giving up ${gave.map(([stage, n]) => `${n} ${stage}`).join(' · ')}.`
+            gave.length === 0 ? '.' : `, giving up ${gave.map(([stage, n]) => `${n} ${stage}`).join(', ')}.`
           }`}
         >
           Nothing was deleted — these are counts, and staging again re-establishes them.
@@ -1638,7 +1658,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
         <Notice
           tone="ok"
           title={`Reclaimed ${count(receipt.reclaimed, 'photograph', 'photographs')} from box ${receipt.box}, ${megabytes(receipt.bytes)}.`}
-          code={receipt.keys.join(' · ')}
+          code={receipt.keys.join(', ')}
         >
           Records stay sold; each keeps its photograph's digest. No undo.
           {receipt.already_reclaimed > 0

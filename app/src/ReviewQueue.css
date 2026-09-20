@@ -83,6 +83,7 @@
 .review-progress-text { color: var(--bn-ink-3); }
 .review-progress-text strong { color: var(--bn-ink); font-weight: 700; }
 .review-progress-parked { color: var(--bn-ink-3); }
+.review-progress-parked::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 
 /* The reason lens. Wide screens wrap it; below 1024px it is one scrolling strip with a
    fade for the affordance. The mask's colour is alpha-only and names no colour. */
@@ -413,6 +414,7 @@
 }
 /* The value is a word; the pipeline's spelling is in the chip's title. A set code stays mono. */
 .review-chip-value { font-family: var(--bn-font-ui); font-weight: 600; }
+.review-chip-value > span + span::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 .review-chip-value-mono { font-family: var(--bn-font-mono); font-weight: 600; }
 .review-chip-key {
   font-family: var(--bn-font-ui);
@@ -465,6 +467,7 @@
 .review-shared { display: flex; align-items: baseline; gap: var(--bn-3); flex-wrap: wrap; margin-bottom: calc(-1 * var(--bn-2)); }
 .review-shared-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 700; letter-spacing: var(--bn-tracking-tight); color: var(--bn-ink); }
 .review-shared-meta { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.review-shared-meta > span + span::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 /* ---- candidate rows ----------------------------------------------------------- */
 .review-candidates { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
@@ -499,6 +502,7 @@
 .review-candidate-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .review-candidate-name { font-size: var(--bn-fs-lg); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .review-candidate-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-candidate-meta > span + span::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 .review-candidate-tags { display: flex; gap: 4px; }
 .review-tag {
   font-size: var(--bn-fs-2xs);
@@ -688,6 +692,7 @@
 .review-fact dt { color: var(--bn-ink-3); }
 .review-fact dd { color: var(--bn-ink); overflow-wrap: anywhere; }
 .review-fact dd.bn-mono { font-size: var(--bn-fs-xs); }
+.review-fact-multi > span + span::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 
 /* ---- catalog ------------------------------------------------------------------- */
 .review-catalog { display: flex; flex-direction: column; gap: var(--bn-3); }
@@ -724,6 +729,7 @@
 .review-session { padding: 10px var(--bn-3); border-radius: var(--bn-r-lg); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); flex: none; }
 .review-session-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); }
 .review-session-tally { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.review-session-tally > span + span::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .review-session-list { list-style: none; display: flex; flex-direction: column; margin-top: 6px; }
 .review-session-row { display: flex; align-items: center; gap: var(--bn-2); padding: 6px 0; border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-sm); }
 .review-session-icon { color: var(--bn-ok); flex: none; }
@@ -768,8 +774,7 @@
   background: var(--bn-accent);
 }
 .review-row[data-rule='parked'] { margin-top: var(--bn-2); padding-top: 30px; }
-.review-row[data-rule='parked']::after {
-  content: 'Parked · under the threshold';
+.review-row-parked-label {
   position: absolute;
   top: 6px;
   left: 14px;
@@ -782,6 +787,7 @@
   text-transform: uppercase;
   color: var(--bn-ink-3);
 }
+.review-row-parked-label > span + span::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 .review-row-main { display: flex; justify-content: space-between; align-items: baseline; gap: var(--bn-2); }
 .review-row-name { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .review-row-price { font-family: var(--bn-font-display); font-size: var(--bn-fs-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bn-ink); white-space: nowrap; }
@@ -940,6 +946,7 @@
 .review-done-empty .bn-empty-art path { stroke-dasharray: 32; stroke-dashoffset: 32; animation: rv-draw 560ms var(--bn-ease-out) 220ms forwards; }
 .review-done-empty .bn-empty-title { font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: -0.02em; animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 120ms both; }
 .review-done-empty .bn-empty-body { animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 220ms both; }
+.review-done-tally::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .review-done-empty .bn-empty-actions { animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 320ms both; }
 .review-done-session { padding: 0 var(--bn-4) var(--bn-2); }
 .review-done-session .bn-rule { margin-bottom: var(--bn-2); }

@@ -61,6 +61,11 @@
 .bn-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bn-tnum { font-variant-numeric: tabular-nums; }
 .bn-sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* SAME-KIND FACTS ON ONE LINE, dot-joined by CSS rather than typed into a string (D218). Wrap
+   each fact in its own <span> child; a non-span child (an icon) is left alone. Reused across
+   the pricing lane's files rather than one near-identical rule per file. */
+.bn-dotline { display: inline-flex; align-items: center; flex-wrap: wrap; }
+.bn-dotline > span:not(:last-child)::after { content: '·'; margin-left: var(--bn-2); color: var(--bn-ink-4); }
 /* One cadence for every list: give each child `style="--i: <index>"` and it waits its turn. */
 .bn-stagger > * { animation-delay: calc(min(var(--i, 0), var(--bn-stagger-cap)) * var(--bn-stagger)); }
 
@@ -82,6 +87,9 @@
   text-transform: uppercase;
   color: var(--bn-ink-3);
 }
+/* An eyebrow can carry several short facts on one line (D218). Each is a sibling span, and
+   this draws the separator between them rather than one being typed into the string. */
+.bn-eyebrow > *:not(:last-child)::after { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 .bn-title {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-3xl);
@@ -542,6 +550,23 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    box panel (`.boxops-stats`) so the two owner-side census blocks read one rule for the part
    that is not per-screen skin. */
 .bn-stat-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--bn-3) var(--bn-6); }
+
+/* ---- facts row (D218) --------------------------------------------------------- */
+/* Same-kind facts joined on one line WITHOUT typing the separator into a string (D218):
+   wrap each fact in its own child element and this draws the dot between them, in
+   `--bn-ink-4`, never a character in the source string. The idiom several files already
+   wrote per class (`.browse-hero-sub > span + span::before`, `.orders-order-meta > * +
+   *::before`, `.pricing-scope > span:not(:last-child)::after`, `.run-receipt-head > *:not
+   (:last-child)::after`) — one shared rule instead of a near-identical one per file. Add
+   `bn-facts` to an element whose children are ALL wrapped as elements (a bare text node
+   breaks the sibling combinator); nest it in its own wrapper rather than a flex parent
+   that already sets its own `gap`, or the dot's margin doubles up with that gap. THE DOT
+   IS PAINT, NOT TEXT: a generated `content:` string is invisible to `textContent` (what a
+   Playwright assertion and some assistive tech read), so a caller still puts a real space
+   between the JSX children — `<span>A</span> <span>B</span>` — and this rule's own margin
+   only widens the gap the dot sits in. Without that space the facts run together with no
+   word boundary at all, which is the actual defect this rule must not trade the old one for. */
+.bn-facts > * + *::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 
 /* ---- table ------------------------------------------------------------------- */
 .bn-table { width: 100%; border-collapse: collapse; font-size: var(--bn-fs-md); }

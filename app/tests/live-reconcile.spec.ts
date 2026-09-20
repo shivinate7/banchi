@@ -313,3 +313,17 @@ test('Escape leaves this sheet alone while it is mid-request, and closes it once
   expect(wire).toHaveLength(1)
 })
 
+/* NO TYPED MIDDLE DOT OR BULLET ON THIS SHEET (D218). The eyebrow used to type one between
+ * `Store-wide` and `free`; it is now two sibling spans with the separator drawn by
+ * `.bn-eyebrow > *:not(:last-child)::after` in `app/src/kit.css`, which never reaches
+ * `innerText`. PROVED RED: putting the old `<span className="bn-eyebrow">Store-wide · free
+ * </span>` back over this file failed the assertion below. */
+test('no typed interpunct reaches the reconcile sheet', async ({ page }) => {
+  await open(page)
+  await pick(page)
+  await expect(page.locator('.livecheck-console')).toContainText('agreed')
+
+  const text = await panel(page).innerText()
+  expect(text).not.toMatch(/[·•]/)
+})
+

@@ -669,8 +669,8 @@ export function RunsComposer({
         onStarted(first.run)
         toast({
           kind: 'ok',
-          title: `Started · ${runLabel(first, boxes) ?? line}`,
-          body: `${money(quote?.total.estimate_usd)} · ${plural(quote?.total.to_send ?? 0, 'card')}`,
+          title: `${runLabel(first, boxes) ?? line} started`,
+          body: `${money(quote?.total.estimate_usd)} (${plural(quote?.total.to_send ?? 0, 'card')})`,
         })
       }
     })
@@ -746,7 +746,10 @@ export function RunsComposer({
       >
         <header className="runs-composer-head">
           <div className="runs-composer-heading">
-            <span className="bn-eyebrow">Identify · costs money</span>
+            <span className="bn-eyebrow">
+              <span>Identify</span>
+              <span>costs money</span>
+            </span>
             <h2 className="runs-composer-title" id="runs-composer-title">
               {TITLES[stage]}
             </h2>
@@ -944,7 +947,7 @@ export function RunsComposer({
                             {runs.map((row) => (
                               <option key={row.run} value={row.run}>
                                 {row.run}
-                                {runBoxLabel(row) === null ? '' : ` · ${runBoxLabel(row)}`}
+                                {runBoxLabel(row) === null ? '' : ` (${runBoxLabel(row)})`}
                               </option>
                             ))}
                           </select>
@@ -996,7 +999,7 @@ export function RunsComposer({
                     {(sectionsOf?.sections_detail ?? []).map((row) => (
                       <option key={row.section} value={row.section}>
                         Section {row.section}
-                        {row.name === null ? '' : ` · ${row.name}`} · {plural(row.count, 'card')}
+                        {row.name === null ? '' : ` (${row.name})`} with {plural(row.count, 'card')}
                       </option>
                     ))}
                   </select>
@@ -1197,7 +1200,7 @@ export function RunsComposer({
                       aria-label={`${storeKeyText(preview.sample.box, preview.sample.index)} at full size, as this reading sends it`}
                     />
                     <p className="run-preview-fact">
-                      <span>{aim === null ? 'Resting on the collector number' : 'Where you are pointing'} · 1:1</span>
+                      <span>{aim === null ? 'Resting on the collector number' : 'Where you are pointing'} (1:1)</span>
                       {preview.sample.band_px != null && (
                         <span>
                           the number is {preview.sample.band_px[0]}×{preview.sample.band_px[1]} px as sent
@@ -1245,8 +1248,11 @@ export function RunsComposer({
                 <span className="bn-label">Estimated cost</span>
                 <span className="runs-quote-money">{money(quote.total.estimate_usd)}</span>
                 <span className="runs-quote-line">
-                  <strong>{plural(quote.total.to_send ?? 0, 'card')}</strong> to send ·{' '}
-                  {count(quote.total.cache_hits)} already answered · {count(quote.total.photographs)} photographs
+                  <span>
+                    <strong>{plural(quote.total.to_send ?? 0, 'card')}</strong> to send
+                  </span>
+                  <span>{count(quote.total.cache_hits)} already answered</span>
+                  <span>{count(quote.total.photographs)} photographs</span>
                 </span>
                 <span className="runs-quote-line">
                   {/* `cards` IS THE SELECTION AND `to_send` IS THE INVOICE, and the two differing
@@ -1268,10 +1274,15 @@ export function RunsComposer({
                 <p className="run-step-fine">
                   {quote.scope === null
                     ? 'These cards are in more than one drawer, so the run records no single drawer of its own.'
-                    : `The run will record ${boxLabel(
-                        quote.scope.box,
-                        boxes?.find((row) => row.box === quote.scope?.box)?.name,
-                      )}${quote.scope.whole_box ? ' · the whole drawer' : ` · ${count(quote.scope.cards)} of its cards`}.`}
+                    : quote.scope.whole_box
+                      ? `The run will record all of ${boxLabel(
+                          quote.scope.box,
+                          boxes?.find((row) => row.box === quote.scope?.box)?.name,
+                        )}.`
+                      : `The run will record ${count(quote.scope.cards)} of ${boxLabel(
+                          quote.scope.box,
+                          boxes?.find((row) => row.box === quote.scope?.box)?.name,
+                        )}'s cards.`}
                 </p>
               </div>
 
@@ -1284,8 +1295,9 @@ export function RunsComposer({
                 <Notice tone="danger" title={`${plural(partial.length, 'run')} did not start`}>
                   Nothing in this send was paid for. Press again.
                   {partial.map((row) => (
-                    <div className="bn-notice-code" key={row.code}>
-                      {row.code} · {row.sentence ?? row.message}
+                    <div className="bn-notice-code runs-code-parts" key={row.code}>
+                      <span>{row.code}</span>
+                      <span>{row.sentence ?? row.message}</span>
                     </div>
                   ))}
                 </Notice>
@@ -1300,9 +1312,11 @@ export function RunsComposer({
                    message to learn. */
                 <Notice tone="warn" title="Some of these cards are already being paid for">
                   {quote.claimed.sentence}. Watch that run, or release its claim if its holder is gone.
-                  <div className="bn-notice-code">
-                    {plural(quote.claimed.cards, 'card')} ·{' '}
-                    {quote.claimed.runs.length > 0 ? quote.claimed.runs.join(', ') : quote.claimed.receipts.join(', ')}
+                  <div className="bn-notice-code runs-code-parts">
+                    <span>{plural(quote.claimed.cards, 'card')}</span>
+                    <span>
+                      {quote.claimed.runs.length > 0 ? quote.claimed.runs.join(', ') : quote.claimed.receipts.join(', ')}
+                    </span>
                   </div>
                 </Notice>
               ) : quote.total.to_send === 0 ? (
@@ -1410,7 +1424,7 @@ export function RunsComposer({
                     <LogWell text={quote.console} label="Preflight" maxHeight={220} />
                     <p className="run-step-fine">
                       Scanned under {quote.capture_dirs.join(', ')}
-                      {quote.exit_code === 0 ? '' : ` · exit ${quote.exit_code}`}
+                      {quote.exit_code === 0 ? '' : ` (exit ${quote.exit_code})`}
                     </p>
                   </>
                 ) : null}
@@ -1428,7 +1442,7 @@ export function RunsComposer({
                 {started.runs.length === 1 ? 'The run has started' : `${started.runs.length} runs have started`}
               </h3>
               <p className="runs-receipt-line">
-                <strong>{money(started.estimate)}</strong> · {plural(started.cards ?? 0, 'card')} sent to be read
+                {plural(started.cards ?? 0, 'card')} sent to be read (<strong>{money(started.estimate)}</strong>)
               </p>
               <ul className="runs-receipt-runs">
                 {started.runs.map((row) => (
@@ -1446,8 +1460,9 @@ export function RunsComposer({
                 <Notice tone="danger" title={`${plural(partial.length, 'run')} did not start`}>
                   Nothing in that send was paid for. Check the cost again to start it.
                   {partial.map((row) => (
-                    <div className="bn-notice-code" key={row.code}>
-                      {row.code} · {row.sentence ?? row.message}
+                    <div className="bn-notice-code runs-code-parts" key={row.code}>
+                      <span>{row.code}</span>
+                      <span>{row.sentence ?? row.message}</span>
                     </div>
                   ))}
                 </Notice>
@@ -1468,7 +1483,7 @@ export function RunsComposer({
                 Cancel
               </Button>
               <Button variant="primary" iconRight="arrowRight" disabled={!scoped} onClick={() => setStage('read')}>
-                Next · how they are read
+                Continue to the reading
               </Button>
             </>
           ) : null}
@@ -1494,7 +1509,7 @@ export function RunsComposer({
               <Button variant="ghost" icon="arrowLeft" onClick={() => setStage('read')}>
                 Reading
               </Button>
-              <span className="runs-composer-note">{line} · quoted for exactly these cards</span>
+              <span className="runs-composer-note">{line} (quoted for exactly these cards)</span>
               <Button variant="ghost" onClick={close}>
                 Not now
               </Button>

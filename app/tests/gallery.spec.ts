@@ -108,7 +108,7 @@ test('the pooled row is the only no-bar shell that has not left', async ({ page 
      so this is the pooled shell and not a lookalike. */
   const pooled = page.locator(`${NOBAR_PRESENT}:has(.card-locations-boxname)`)
   await expect(pooled).toHaveCount(1)
-  await expect(pooled.locator('.card-locations-boxname')).toContainText('pooled ·')
+  await expect(pooled.locator('.card-locations-boxname')).toContainText('pooled')
 
   /* AND NO POSITION LABEL ANYWHERE ON IT (D24). A pool has no coordinate; a row that fell back
      to `box/index` would print a slot number for a card that is in no slot, which is the one

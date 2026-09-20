@@ -80,6 +80,9 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
 .home-foot-sum { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
 .home-foot-sum b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-foot-sum i { font-style: normal; color: var(--bn-ink-4); padding: 0 5px; }
+/* D218: the separator is CSS content now, not typed into the JSX; the padding above still
+   frames it on both sides exactly as it framed the character. */
+.home-foot-sum i::before { content: '·'; }
 .home-foot-quiet { color: var(--bn-ink-4); }
 .home-foot-last { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.5; }
 .home-foot-last b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -173,6 +176,8 @@ a.home-deck { pointer-events: auto; }
 
 .home-deck-name { font-family: var(--bn-font-display); font-weight: 700; font-size: 13px; letter-spacing: -0.01em; }
 .home-deck-meta { font-family: var(--bn-font-mono); font-size: 10px; color: var(--bn-ink-3); }
+/* D218: the number and the finish are sibling spans; the seam is CSS. */
+.home-deck-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 /* The address chip is a stage: dark in both themes, so "Card 17" reads at 6.6:1 either way. */
 .home-deck-address {
   position: absolute;
@@ -196,7 +201,12 @@ a.home-deck { pointer-events: auto; }
 }
 .home-deck-address .bn-icon { color: var(--bn-stage-live); }
 .home-deck-sep { opacity: 0.4; }
+/* D218: `.home-deck-address` is already `inline-flex; gap: 6px`, so the gap alone spaces this
+   marker from its neighbours on both sides — the content is the only thing that moved to CSS. */
+.home-deck-sep::before { content: '·'; }
 .home-deck-card-no { color: var(--bn-stage-accent); }
+/* D218: the server's own parts, kept apart by CSS. */
+.home-deck-card-no > span:not(:first-child)::before { content: '·'; margin: 0 4px; opacity: 0.6; }
 /* `from` only, on purpose: each card lands on ITS OWN rotation, which a `to { transform: none }`
    would strip. The end of an enter animation is the element's resting style. */
 @keyframes home-deck-in { from { opacity: 0; transform: translateY(14px); } }
@@ -305,7 +315,11 @@ a.home-deck { pointer-events: auto; }
 }
 .home-box-text, .home-run-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
 .home-box-name, .home-run-box { font-weight: 600; font-size: var(--bn-fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* D218: the box's number and its name are sibling spans; the seam is CSS. */
+.home-run-box > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-3); }
 .home-box-meta, .home-run-name { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* D218: on hand, sold and sealed are sibling spans; the seam is CSS. */
+.home-box-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .home-box-bar { width: 96px; height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; flex: none; }
 .home-box-bar > span { display: block; height: 100%; background: var(--bn-accent); border-radius: 3px; transition: width var(--bn-t-slow) var(--bn-ease); }
 .home-box-count { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); width: 40px; text-align: right; flex: none; }

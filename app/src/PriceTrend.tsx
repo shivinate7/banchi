@@ -48,7 +48,7 @@ function Mini({ range }: { range: TrendRange }) {
     H,
   )
   return (
-    <span className="pricetrend-mini" data-direction={direction} title={`${label} · ${moved ?? 'not enough sales to say'}`}>
+    <span className="pricetrend-mini" data-direction={direction} title={`${label} — ${moved ?? 'not enough sales to say'}`}>
       {segments === null ? (
         <span className="pricetrend-blank" aria-hidden="true" />
       ) : (

@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -62,6 +61,7 @@ import { Markdown } from './Markdown'
 import { ClearPrices } from './ClearPrices'
 import { LogWell } from './RunsLog'
 import { runBoxLabel } from './runScope'
+import { storeKeyText } from './storeKey'
 import {
   bandInHash,
   markdownInHash,
@@ -429,6 +429,14 @@ function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
+/** A short list of server words as one clause — "unpriced and unjoined" rather than a typed
+ *  dot between them (D218). `row.owes` is almost always one word; the join only shows on the
+ *  rare row that owes more than one thing. */
+function wordList(words: readonly string[]): string {
+  if (words.length <= 1) return words[0] ?? ''
+  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+}
+
 function isWithheld(value: unknown): value is WithheldRecord | 'unlisted' {
   return value === 'unlisted' || (typeof value === 'object' && value !== null && 'withheld' in value)
 }
@@ -587,7 +595,7 @@ function PickRuns({
       <div className="pricing-runs-head">
         <span className="bn-label">Runs</span>
         <span className="pricing-runs-count">
-          {picked.size === 0 ? `${open} with work left · showing all of them` : `${picked.size} picked`}
+          {picked.size === 0 ? `Showing all ${open} with work left` : `${picked.size} picked`}
         </span>
       </div>
       <div className="pricing-runs-list">
@@ -609,7 +617,12 @@ function PickRuns({
               <span className="pricing-run-text">
                 <span className="pricing-run-name">
                   {label ?? row.run}
-                  {label === null || day === null ? null : ` · ${day}`}
+                  {label === null || day === null ? null : (
+                    <>
+                      {' '}
+                      <span className="pricing-run-day">{day}</span>
+                    </>
+                  )}
                 </span>
                 <span className="pricing-run-meta">
                   {label === null ? null : <span className="pricing-run-id">{row.run}</span>}
@@ -623,7 +636,7 @@ function PickRuns({
                   hid them. `unsent` is counted against the live store, never the join. */}
               <span className={`pricing-run-owes bn-pill ${row.open ? 'bn-pill-warn' : 'bn-pill-ok pricing-run-done'}`}>
                 {row.owes.length > 0
-                  ? sentence(row.owes.join(' · '))
+                  ? sentence(wordList(row.owes))
                   : (row.unsent ?? 0) > 0
                     ? `${row.unsent} unsent`
                     : row.box_former === true
@@ -699,10 +712,10 @@ function LiveCount({
     >
       <span className="bn-dot bn-dot-live" aria-hidden="true" />
       {forSaleNow} live
-      {age === null ? null : <span className="pricing-live-age">· read {age}</span>}
+      {age === null ? null : <span className="pricing-live-age">read {age}</span>}
       {sold > 0 ? (
         <span className="pricing-live-age">
-          · {live} when read, {sold} sold since
+          {live} when read, {sold} sold since
         </span>
       ) : null}
     </span>
@@ -765,7 +778,7 @@ function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number
       type="button"
       className="pricing-thumb"
       aria-label={`Photograph of ${name}`}
-      title="Photograph · P"
+      title="Press P to open the photograph"
       onClick={onOpen}
       data-cropped={crop === null ? undefined : 'true'}
     >
@@ -1303,7 +1316,7 @@ export function Pricing() {
         if (result.ok) {
           toast({
             kind: 'ok',
-            title: `Import files written · ${imports.length} file${imports.length === 1 ? '' : 's'}`,
+            title: `${imports.length} import file${imports.length === 1 ? '' : 's'} written`,
             body: `${byHand === 0 ? '' : `${byHand} card${byHand === 1 ? '' : 's'} at the quantity you typed. `}Import them to Staged in TCGplayer, then reconcile on Runs.`,
             action: { label: 'Files', onPress: () => setFilesOpen(true) },
           })
@@ -1900,7 +1913,7 @@ export function Pricing() {
       setNote(null)
       toast({
         kind: 'receipt',
-        title: `Rule set · ${customShort(draft)} of ${BASIS_LABEL[draft.basis]}`,
+        title: `Rule set to ${customShort(draft)} of ${BASIS_LABEL[draft.basis]}`,
         body:
           `${onRule} row${onRule === 1 ? '' : 's'} you have not set go out at this rule.` +
           ' Emit prices them — this screen has no per-row figure until the run is joined under it.',
@@ -1998,7 +2011,7 @@ export function Pricing() {
       toast({
         kind: 'receipt',
         title: `Held ${sku.name}`,
-        body: `${WITHHOLD_LABELS[reason]}${watch.trim() !== '' ? ` · tell me above $${watch.trim()}` : ''}`,
+        body: `${WITHHOLD_LABELS[reason]}${watch.trim() !== '' ? `, tell me above $${watch.trim()}` : ''}`,
         ttlMs: 8000,
         action: { label: 'Undo', kbd: 'U', onPress: () => undoRef.current() },
       })
@@ -2288,7 +2301,7 @@ export function Pricing() {
       const when = sheet?.at ? new Date(sheet.at) : null
       return when === null || Number.isNaN(when.getTime())
         ? 'Live listings'
-        : `Live listings · read ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+        : `Live listings, read ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
     }
     if (run === null) return null
     const row = detail !== null && detail.run === run ? detail : runs.find((r) => r.run === run)
@@ -2600,12 +2613,10 @@ export function Pricing() {
      state different prices for the same cards. */
   const cheapMoney = `$${cheapNow}`
   const ruleRows = Math.max(0, progress.rule - progress.cheap)
-  const standingSays = [
+  const standingParts = [
     ruleRows > 0 ? `${ruleRows} on the rule` : null,
     progress.cheap > 0 ? `${progress.cheap} cheap at ${cheapMoney}` : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(' · ')
+  ].filter((part): part is string => part !== null)
 
   /* The progress figure lives in the lede: "decided" counts what a hand typed or held, and the
      rows on a standing answer are named beside it so the ship bar's verdict and this line agree. */
@@ -2619,20 +2630,24 @@ export function Pricing() {
   const progressLine =
     progress.total === 0 ? null : (
       <span
-        className="pricing-scope-progress"
+        className="pricing-scope-progress bn-dotline"
         aria-describedby={progressLegendId}
-        title={`${progress.typed} typed · ${progress.held} held · ${ruleRows} on the rule · ${progress.cheap} cheap at ${cheapMoney}`}
+        title={`${progress.typed} typed, ${progress.held} held, ${ruleRows} on the rule, and ${progress.cheap} cheap at ${cheapMoney}`}
       >
-        {progress.answered} of {progress.total} decided
-        {standingSays === '' ? '' : ` · ${standingSays}`}
-        {progress.closed > 0 ? ` · ${progress.closed} nothing to add` : ''}
+        <span>
+          {progress.answered} of {progress.total} decided
+        </span>
+        {standingParts.map((part) => (
+          <span key={part}>{part}</span>
+        ))}
+        {progress.closed > 0 ? <span>{progress.closed} nothing to add</span> : null}
       </span>
     )
   const progressLegend =
     progress.total === 0 ? null : (
       <p className="pricing-scope-legend" id={progressLegendId}>
-        typed = you set a price · held = held back on purpose · on the rule = following the
-        standing rule · cheap = under the cut-off
+        typed = you set a price. held = held back on purpose. on the rule = following the
+        standing rule. cheap = under the cut-off.
       </p>
     )
 
@@ -2796,7 +2811,7 @@ export function Pricing() {
           onClick={() => void load(picked, stamp)}
           disabled={loading}
           busy={loading}
-          title={phone ? 'Reload' : 'Reload · R'}
+          title="Reload"
         >
           Reload
         </Button>
@@ -2972,7 +2987,8 @@ export function Pricing() {
           <Notice tone="warn" title="Run unreadable — left out of this list" className="pricing-notice">
             {(work?.skipped ?? []).map((row) => (
               <span className="pricing-machine" key={row.run}>
-                {row.run} · {row.code}
+                <span>{row.run}</span>
+                <span>{row.code}</span>
               </span>
             ))}
           </Notice>
@@ -3196,11 +3212,20 @@ export function Pricing() {
                   rude: the reading is a courtesy-delayed walk at a free public mirror, and the
                   operator deserves to know it is about to ask about four hundred cards rather
                   than forty before they press. */}
-              {trendRun === null
-                ? `Load trends${source.kind === 'markdown' ? ` · ${rows.length}` : ''}`
-                : trendRun.reading
-                  ? `Reading ${trendRun.done} of ${trendRun.total}…`
-                  : 'Read again'}
+              {trendRun === null ? (
+                source.kind === 'markdown' ? (
+                  <span className="bn-dotline">
+                    <span>Load trends</span>
+                    <span>{rows.length}</span>
+                  </span>
+                ) : (
+                  'Load trends'
+                )
+              ) : trendRun.reading ? (
+                `Reading ${trendRun.done} of ${trendRun.total}…`
+              ) : (
+                'Read again'
+              )}
             </Button>
           </div>
         </div>
@@ -3223,10 +3248,10 @@ export function Pricing() {
                     {RANGE_LABEL[range.range] ?? range.range} {range.from ?? '?'} → {range.to ?? '?'}
                   </span>
                 ))}
-                <span className="pricing-trendbar-tally">
-                  {trendTally.read} read
-                  {trendRun.skipped > 0 ? ` · ${trendRun.skipped} not asked` : ''}
-                  {trendTally.refused > 0 ? ` · ${trendTally.refused} refused` : ''}
+                <span className="pricing-trendbar-tally bn-dotline">
+                  <span>{trendTally.read} read</span>
+                  {trendRun.skipped === 0 ? null : <span>{trendRun.skipped} not asked</span>}
+                  {trendTally.refused === 0 ? null : <span>{trendTally.refused} refused</span>}
                 </span>
                 <span
                   className="pricing-trendbar-why"
@@ -3285,11 +3310,16 @@ export function Pricing() {
                 >
                   <span className="pricing-section-answer-figure">${cut}</span>
                   <span className="pricing-section-answer-says">
-                    {cutFrom === 'default'
-                      ? 'store default · not written'
-                      : cutFrom === 'store'
-                        ? 'the store’s cut-off'
-                        : 'this run only'}
+                    {cutFrom === 'default' ? (
+                      <span className="bn-dotline">
+                        <span>store default</span>
+                        <span>not written</span>
+                      </span>
+                    ) : cutFrom === 'store' ? (
+                      'the store’s cut-off'
+                    ) : (
+                      'this run only'
+                    )}
                   </span>
                   <Icon name="chevronUp" size={13} />
                 </button>
@@ -3386,19 +3416,11 @@ export function Pricing() {
                       </span>
                       <span className="pricing-meta">
                         <span className={`pricing-cond${section.uniform ? ' pricing-meta-same' : ''}`}>{sku.condition}</span>
-                        <span className="pricing-meta-sep">·</span>
                         <span className={section.uniform ? 'pricing-meta-same' : undefined}>{sku.set_name}</span>
-                        <span className="pricing-meta-sep">·</span>
                         <span className="bn-mono">{sku.row['Number'] ?? ''}</span>
-                        {sku.row['Rarity'] ? (
-                          <>
-                            <span className="pricing-meta-sep">·</span>
-                            <span>{sku.row['Rarity']}</span>
-                          </>
-                        ) : null}
+                        {sku.row['Rarity'] ? <span>{sku.row['Rarity']}</span> : null}
                         {sku.listing === null ? null : (
                           <span className="pricing-row-span">
-                            <span className="pricing-meta-sep">·</span>
                             <LiveCount
                               live={sku.listing.live}
                               soldHere={sku.listing.sold_here}
@@ -3413,27 +3435,35 @@ export function Pricing() {
                             hide it. */}
                         {!sku.over_cap && (!compare || sku.in.length < 2) ? null : (
                           <span className="pricing-row-span">
-                            <span className="pricing-meta-sep">·</span>
                             {!compare ? null : (
                               <span className="pricing-span-where">
-                                {boxes.length === 0
-                                  ? `${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`
-                                  : `${boxes.length === 1 ? 'Box' : 'Boxes'} ${boxes.join(', ')} · ${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`}
+                                {boxes.length === 0 ? (
+                                  `${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`
+                                ) : (
+                                  <span className="bn-dotline">
+                                    <span>
+                                      {boxes.length === 1 ? 'Box' : 'Boxes'} {boxes.join(', ')}
+                                    </span>{' '}
+                                    <span>
+                                      {sku.in.length} run{sku.in.length === 1 ? '' : 's'}
+                                    </span>
+                                  </span>
+                                )}
                               </span>
                             )}
                             {!sku.over_cap ? null : (
                               <span
-                                className="pricing-span-cap bn-pill bn-pill-warn"
+                                className="pricing-span-cap bn-pill bn-pill-warn bn-dotline"
                                 title={`Claimed ${sku.claimed_add} at join; ${sku.add_to_quantity} can go now.`}
                               >
-                                Runs claim {sku.claimed_add} · {sku.add_to_quantity} can go
+                                <span>Runs claim {sku.claimed_add}</span>{' '}
+                                <span>{sku.add_to_quantity} can go</span>
                               </span>
                             )}
                           </span>
                         )}
                         {why === null ? null : (
                           <span className="pricing-row-note">
-                            <span className="pricing-meta-sep">·</span>
                             <span className="pricing-row-why" title={why}>
                               “{why}”
                             </span>
@@ -3495,7 +3525,7 @@ export function Pricing() {
                           key={column.key}
                           className={`pricing-ref pricing-ref-${column.field}${column.field === 'market' ? ' pricing-ref-market' : ''}`}
                           data-empty={sku.snap[column.field] === null ? 'true' : undefined}
-                          title={`${column.column}: ${sku.row[column.column] || '—'} · press ${column.key.toUpperCase()} to use it`}
+                          title={`${column.column}: ${sku.row[column.column] || '—'}, press ${column.key.toUpperCase()} to use it`}
                         >
                           <span className="pricing-ref-label">{column.label} </span>
                           {sku.snap[column.field] === null ? '—' : `$${sku.snap[column.field]}`}
@@ -3612,7 +3642,7 @@ export function Pricing() {
                         className="pricing-history"
                         aria-pressed={pinned === sku.sku}
                         aria-label={`Price history for ${sku.name}`}
-                        title="Price history · hold T to peek"
+                        title="Price history — hold T to peek"
                         disabled={source.history === null}
                         onClick={() => (pinned === sku.sku ? unpin() : pinHistory(sku))}
                       >
@@ -3626,7 +3656,7 @@ export function Pricing() {
                         className="pricing-hold"
                         aria-pressed={withheld}
                         aria-label={withheld ? `Release ${sku.name}` : `Hold ${sku.name}`}
-                        title={withheld ? 'Release · H' : 'Hold back · H'}
+                        title={withheld ? 'Release — H' : 'Hold back — H'}
                         onClick={() => toggleHold(sku)}
                       >
                         {withheld ? 'Release' : 'Hold'}
@@ -3736,9 +3766,21 @@ export function Pricing() {
             </div>
             <p className="pricing-photo-caption">
               <Icon name="pin" size={13} />
-              {photoAt === null ? null : photoAt.label ?? `no label · ${photoAt.box}/${photoAt.index}`}
-              {' · '}
-              {(photoFor.at % photoSku.positions.length) + 1} of {photoSku.positions.length}
+              <span className="bn-dotline">
+                <span>
+                  {photoAt === null
+                    ? null
+                    : (photoAt.label ?? (
+                        <span className="bn-dotline">
+                          <span>No label</span>{' '}
+                          <span>{storeKeyText(photoAt.box, photoAt.index)}</span>
+                        </span>
+                      ))}
+                </span>
+                <span>
+                  {(photoFor.at % photoSku.positions.length) + 1} of {photoSku.positions.length}
+                </span>
+              </span>
             </p>
             <div className="pricing-photo-controls">
               <Button
@@ -3763,9 +3805,13 @@ export function Pricing() {
       {loaded.length < 2 ? null : (
         <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship these runs">
           <div className="pricing-ship-status">
-            <span className="bn-pill bn-pill-accent">
+            <span className="bn-pill bn-pill-accent bn-dotline">
               <Icon name="layers" size={12} />
-              {loaded.length} runs · {boxesLoaded.length} {boxesLoaded.length === 1 ? 'box' : 'boxes'} · one file
+              <span>{loaded.length} runs</span>
+              <span>
+                {boxesLoaded.length} {boxesLoaded.length === 1 ? 'box' : 'boxes'}
+              </span>
+              <span>one file</span>
             </span>
             {/* WHAT THE MERGE IS FOR, AND IT STOPPED BEING THE CAP (D7, rewritten). This line
                 read "the cap is spent once across the send" unconditionally, which after the
@@ -4208,7 +4254,16 @@ function CutoffPanel({
         <div className="pricing-deck-heading">
           {/* The eyebrow names WHOSE figure the number below is, so the panel cannot read as
               the store's while a run is quietly overriding it. */}
-          <span className="bn-eyebrow">{overridden ? 'Store policy · overridden here' : 'Store policy'}</span>
+          <span className="bn-eyebrow">
+            {overridden ? (
+              <span className="bn-dotline">
+                <span>Store policy</span>
+                <span>overridden here</span>
+              </span>
+            ) : (
+              'Store policy'
+            )}
+          </span>
           <h2 className="pricing-deck-title">The cut-off</h2>
         </div>
         <span className={`bn-pill ${written ? 'bn-pill-ok' : 'bn-pill-warn'}`}>
@@ -4225,12 +4280,12 @@ function CutoffPanel({
         />
         <span className="pricing-cheap-caption">
           <span className="pricing-cheap-says">
-            {overridden ? 'this run only · ' : 'the line, and what everything under it lists at'}
+            {overridden ? 'this run only' : 'the line, and what everything under it lists at'}
           </span>
           {/* BOTH SIDES OF THE LINE, because the figure moves both. A count of what is under it
               alone reads as a warning; the pair reads as a partition, which is what it is. */}
           <span className="pricing-cheap-count">
-            {count} under · {above} above
+            <span>{count} under</span> <span>{above} above</span>
           </span>
         </span>
       </div>
@@ -4528,13 +4583,7 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
       <Icon name="alert" size={13} />
       <span>
         Not on this list, because nothing here can send them:{' '}
-        {parts.map((part, i) => (
-          <Fragment key={i}>
-            {i === 0 ? '' : ' · '}
-            {part}
-          </Fragment>
-        ))}
-        .
+        <span className="pricing-unreachable-parts bn-dotline">{parts}</span>.
       </span>
     </p>
   )
@@ -4577,12 +4626,10 @@ function ReadyPanel({
      them apart: a listable row nobody typed into takes the rule's figure, a cheap one takes
      the cheap-card answer. Saying "on the rule" over both was false for every cheap row. */
   const ruleRows = Math.max(0, progress.rule - progress.cheap)
-  const standing = [
+  const standingParts = [
     ruleRows > 0 ? `${ruleRows} row${ruleRows === 1 ? '' : 's'} still on the rule` : null,
     progress.cheap > 0 ? `${progress.cheap} cheap card${progress.cheap === 1 ? '' : 's'} on the cheap-card answer` : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(' · ')
+  ].filter((part): part is string => part !== null)
   const writesAt =
     ruleRows > 0 && progress.cheap > 0
       ? `Rule rows at the rule’s price; cheap ones at ${cheapMoney}.`
@@ -4610,8 +4657,12 @@ function ReadyPanel({
         <p className="pricing-verdict-says">
           {progress.rule > 0 ? (
             <>
-              <strong>{standing}</strong>
-              {progress.answered === 0 ? ' — nothing typed or held yet.' : ` · ${progress.answered} typed or held.`}{' '}
+              <strong className="bn-dotline">
+                {standingParts.map((part) => (
+                  <span key={part}>{part}</span>
+                ))}
+              </strong>
+              {progress.answered === 0 ? ' — nothing typed or held yet.' : `. ${progress.answered} typed or held.`}{' '}
               {writesAt}
             </>
           ) : (
@@ -4681,9 +4732,15 @@ function ReadyPanel({
       <dl className="pricing-verdict-facts">
         <div>
           <dt>Scope</dt>
-          <dd>
-            {runCount} run{runCount === 1 ? '' : 's'}
-            {boxCount === 0 ? '' : ` · ${boxCount} box${boxCount === 1 ? '' : 'es'}`}
+          <dd className="bn-dotline">
+            <span>
+              {runCount} run{runCount === 1 ? '' : 's'}
+            </span>
+            {boxCount === 0 ? null : (
+              <span>
+                {boxCount} box{boxCount === 1 ? '' : 'es'}
+              </span>
+            )}
           </dd>
         </div>
         <div>
@@ -4722,7 +4779,7 @@ function fieldState(
     // The human label is drawn; the machine string it stands for travels in the title.
     const reason = heldReason(standing)
     const label = (HOLD_SHORT as Record<string, string>)[reason] ?? reason
-    return { text: label ? `Held · ${label}` : 'Held', title: reason ? `withheld: ${reason}` : 'withheld', tone: 'quiet' }
+    return { text: label ? `Held, ${label}` : 'Held', title: reason ? `withheld: ${reason}` : 'withheld', tone: 'quiet' }
   }
   /* THE RAISE, ON THE ROW, AT THE KEYSTROKE (D103). `read_back` marks a price above the live
      one `RAISED` and `Application.fatal` refuses THE WHOLE FILE over one — so on a lens over
@@ -4771,7 +4828,7 @@ function fieldState(
   const custom = parseCustomRule(doc?.rule, doc?.basis)
   if (custom !== null) {
     return {
-      text: `On the rule · ${customShort(custom)}`,
+      text: `On the rule, ${customShort(custom)}`,
       title: `${customRuleText(custom)} of ${BASIS_LABEL[custom.basis]}`,
       tone: 'quiet',
     }

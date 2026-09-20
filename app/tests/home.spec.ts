@@ -147,3 +147,18 @@ test('the Orders stage tile on Home carries the same figure, joined by `open` an
   const text = (await ordersTile.innerText()).replace(/\s+/g, ' ')
   expect(text).not.toContain('7 not found')
 })
+
+/* D218: NO ROUTE TYPES A MIDDLE DOT OR BULLET. `stubStore`'s two boxes carry real
+ * `on_hand`/`sold` figures (box 2: 3 on hand, 1 sold), which is what actually puts
+ * `.home-box-meta` on screen with something to join — an empty-boxes fixture would let this
+ * pass over a screen with nothing rendered at all. */
+test('no dot is typed on the box list or the hero deck (D218)', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+
+  const meta = page.locator('.home-box-meta').first()
+  await expect(meta).toContainText('on hand')
+  const typedDot = /[·•]/
+  await expect(page.locator('.bn-view')).not.toContainText(typedDot)
+})

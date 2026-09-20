@@ -35,7 +35,7 @@ function reasonSentence(reason: RescueResult['reason']): string {
 function destinationLabel(destination: RescueResult['destination']): string {
   if (destination === null) return 'another drawer'
   const named = destination.box_name?.trim()
-  return named ? `Box ${destination.box} · ${named}` : `Box ${destination.box}`
+  return named ? `${named} (Box ${destination.box})` : `Box ${destination.box}`
 }
 
 export function RunRescue({
@@ -113,7 +113,10 @@ export function RunRescue({
       >
         <header className="rescue-sheet-top">
           <div className="rescue-sheet-heading">
-            <span className="bn-eyebrow">This run · free</span>
+            <span className="bn-eyebrow">
+              <span>This run</span>
+              <span>free</span>
+            </span>
             <h2 className="rescue-sheet-head" id="rescue-sheet-head">
               Rebind this run
             </h2>

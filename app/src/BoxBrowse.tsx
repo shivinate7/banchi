@@ -575,14 +575,12 @@ function VariantChooser({
           // THE CATALOGUE'S OWN SET FIRST, `set_hint` ONLY WHEN THERE IS NO OTHER ANSWER
           // (D213) — the fallback D65
           // already established for the case no export has ever priced this game.
-          const sub = [
+          const subParts = [
             group.number_display,
             group.set ?? group.set_hint,
             group.condition,
             showRarity ? group.rarity : null,
-          ]
-            .filter((part): part is string => typeof part === 'string' && part !== '')
-            .join(' · ')
+          ].filter((part): part is string => typeof part === 'string' && part !== '')
           return (
             <li key={group.sku ?? `unidentified-${index}`}>
               <button type="button" className="browse-variant-tile" onClick={() => onPick(index)}>
@@ -597,7 +595,16 @@ function VariantChooser({
                   <span className={name === 'Not identified yet' ? 'browse-variant-name is-unnamed' : 'browse-variant-name'}>
                     {name}
                   </span>
-                  {sub === '' ? null : <span className="browse-variant-sub">{sub}</span>}
+                  {subParts.length === 0 ? null : (
+                    <span className="browse-variant-sub bn-facts">
+                      {subParts.map((part, partIndex) => (
+                        <span key={partIndex}>
+                          {part}
+                          {partIndex < subParts.length - 1 ? ' ' : ''}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
                 <span className="browse-variant-count">
                   {group.on_hand.toLocaleString()} {group.on_hand === 1 ? 'copy' : 'copies'}
@@ -1912,9 +1919,9 @@ export function BoxBrowse({
             ) : (
               <button className="browse-quiet" type="button" onClick={toggleAllSections}>
                 <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
-                {anyExpanded ? 'collapse all' : 'expand all'}
-                <span className="browse-status-sep">·</span>
-                {sections.length} sections
+                <span className="bn-facts">
+                  <span>{anyExpanded ? 'collapse all' : 'expand all'}</span> <span>{sections.length} sections</span>
+                </span>
               </button>
             )}
 
@@ -1926,8 +1933,8 @@ export function BoxBrowse({
                 the actual defect; the count line stays for the case this box DOES have
                 matches, which the EmptyState never covers. */}
             {searching && !loading && results !== null && inQuery.length > 0 ? (
-              <span className="browse-status-text">
-                {`${visible.length} here · ${inQuery.length} of ${rows?.length ?? 0} match`}
+              <span className="browse-status-text bn-facts">
+                <span>{visible.length} here</span> <span>{inQuery.length} of {rows?.length ?? 0} match</span>
               </span>
             ) : null}
 
@@ -2039,7 +2046,7 @@ export function BoxBrowse({
                 const census =
                   gone === 0
                     ? `${section.rows.length} ${section.rows.length === 1 ? 'card' : 'cards'}`
-                    : `${onHand} on hand · ${gone} departed · ${section.rows.length} records`
+                    : `${onHand} on hand, ${gone} departed, ${section.rows.length} records`
                 return (
                   <li className="browse-group" key={section.key}>
                     <div className="browse-secthead">
@@ -2064,7 +2071,7 @@ export function BoxBrowse({
                         <span className="browse-secttitle">{section.title}</span>
                         <span
                           className="browse-sectcount"
-                          title={ticked === 0 ? census : `${ticked} of ${section.rows.length} records ticked · ${census}`}
+                          title={ticked === 0 ? census : `${ticked} of ${section.rows.length} records ticked; ${census}`}
                         >
                           {ticked === 0 ? onHand : `${ticked}/${section.rows.length}`}
                         </span>
@@ -2233,8 +2240,14 @@ export function BoxBrowse({
         actions={
           rows === null ? null : (
             <Pill mono className="browse-census">
-              {storeCards.toLocaleString()} {storeCards === 1 ? 'card' : 'cards'} · {boxRecords.length}{' '}
-              {boxRecords.length === 1 ? 'box' : 'boxes'}
+              <span className="bn-facts">
+                <span>
+                  {storeCards.toLocaleString()} {storeCards === 1 ? 'card' : 'cards'}
+                </span>{' '}
+                <span>
+                  {boxRecords.length} {boxRecords.length === 1 ? 'box' : 'boxes'}
+                </span>
+              </span>
             </Pill>
           )
         }
@@ -2430,7 +2443,9 @@ export function BoxBrowse({
                               carried them away from it. */}
                           {searchGroups !== null && searchGroups.length > 1 ? (
                             <Chip icon="layers" onClick={() => setChosenVariant(null)}>
-                              {searchGroups.length} printings · change
+                              <span className="bn-facts">
+                                <span>{searchGroups.length} printings</span> <span>change</span>
+                              </span>
                             </Chip>
                           ) : null}
                           {claimList(panelRow.card.metadata_finish).map((finish) => (
@@ -2473,7 +2488,7 @@ export function BoxBrowse({
 
                     {open === null ? null : (
                       <div className="browse-queued">
-                        <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason} · ${open.queue} · candidates ${open.entry.candidates.length}`}>
+                        <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason}, ${open.queue}, ${open.entry.candidates.length} candidates`}>
                           {waitingFor(open.entry.first_seen)}.{' '}
                           {open.entry.candidates.length > 0
                             ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`
@@ -2677,7 +2692,7 @@ function CardOps({
     setTrouble(null)
     try {
       await updateCard(row.card.box, row.card.index, patch)
-      toast({ kind: 'ok', icon: 'wand', title: 'Claims written', body: `${row.key} · ${Object.keys(patch).join(' · ')}` })
+      toast({ kind: 'ok', icon: 'wand', title: 'Claims written', body: `${row.key}: ${Object.keys(patch).join(', ')}` })
       setOpen(null)
       onChanged()
     } catch (err) {
@@ -2700,7 +2715,7 @@ function CardOps({
         title:
           result.shifted === 0
             ? 'Capture removed'
-            : `Capture removed · ${result.shifted} ${result.shifted === 1 ? 'card' : 'cards'} moved down`,
+            : `Capture removed. ${result.shifted} ${result.shifted === 1 ? 'card' : 'cards'} moved down.`,
         body: `${
           result.shifted === 0
             ? 'It was the top of its box, so nothing moved.'
@@ -2898,7 +2913,9 @@ function CardOps({
       {open !== 'delete' ? null : (
         <Overlay kind="dialog" label="Remove this card" onClose={() => setOpen(null)}>
           <div className="inv-dialog-head">
-            <span className="bn-eyebrow">Box {row.card.box} · {row.key}</span>
+            <span className="bn-eyebrow bn-facts">
+              <span>Box {row.card.box}</span> <span>{row.key}</span>
+            </span>
             <h2 className="inv-dialog-title">Remove this card and slide the box down?</h2>
           </div>
           <div className="inv-dialog-body">

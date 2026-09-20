@@ -778,7 +778,9 @@ function CopiesPanel({
             {lone === null ? (
               <>
                 The store sent no position for this record, so there is no copy to draw.{' '}
-                <span className="inventory-machine">place: absent · key {row.key}</span>
+                <span className="inventory-machine bn-facts">
+                  <span>place: absent</span> <span>key {row.key}</span>
+                </span>
               </>
             ) : (
               <>This is one copy at one position, and the panel above is that copy alone.</>
@@ -811,7 +813,7 @@ function CopiesPanel({
       ) : null}
 
       {group === null && settled && !loading ? (
-        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key} · query ${query}`}>
+        <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
           That should not happen; a reload usually settles it.
         </Notice>
       ) : null}

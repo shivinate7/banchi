@@ -79,6 +79,8 @@
 }
 .codes-fix-where { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .codes-fix-box { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
+/* D218: the box number and its name are sibling spans; the seam is CSS. */
+.codes-fix-box > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .codes-fix-n { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 .codes-fix-company { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .codes-fix-do { display: flex; align-items: flex-end; gap: var(--bn-3); }
@@ -129,6 +131,9 @@
 .codes-dup:hover { background: var(--bn-hover); }
 .codes-dup-where { display: inline-flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 .codes-dup-link { display: inline-flex; align-items: center; gap: 5px; color: var(--bn-ink-2); font-weight: 500; }
+/* D218: `.codes-dup-link` is already `inline-flex; gap: 5px`, so the gap alone spaces the box
+   and index facts apart; the dot needs only a trailing margin to clear "index" after it. */
+.codes-dup-link > span:not(:first-child)::before { content: '·'; margin-right: 5px; color: var(--bn-ink-4); }
 .codes-dup-link:hover { color: var(--bn-accent); text-decoration: none; }
 
 /* ---- hero: the pile ------------------------------------------------------- */
@@ -303,6 +308,11 @@
 .codes-task-body { font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.45; }
 .codes-task-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); padding-top: var(--bn-3); border-top: 1px solid var(--bn-line); }
 .codes-task-meta { font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* D218: the two lane counts are sibling spans; the seam is CSS. */
+.codes-task-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+/* D218: `.bn-seg-item` is already `inline-flex; gap: 6px`, so the gap alone spaces the lane's
+   count from its label; the dot needs only a trailing margin to clear the figure after it. */
+.codes-seg-n::before { content: '·'; margin-right: 6px; }
 /* THE ARROW TRAVELS; THE LABEL DOES NOT. This was a `gap` from 4px to 7px on hover, which is a
    3px reflow of the whole footer — `.codes-task-meta` beside it is an ellipsised single line, so
    it re-measures under a pointer that is still moving. `translate` on the mark alone composites
@@ -411,6 +421,9 @@
 .codes-product-cell { display: inline-flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
 .codes-unclaimed { color: var(--bn-warn); font-weight: 600; }
 .codes-where { display: inline-flex; align-items: center; gap: var(--bn-2); white-space: nowrap; }
+/* D218: the box and the index are sibling spans nested one level in, so the seam does not also
+   fall in front of the sibling `Read twice` pill this wrapper's own gap already spaces off. */
+.codes-where-parts > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 /* the store index is a key, not a counted card number (D58), so it is drawn as a machine string */
 .codes-index { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 
@@ -591,10 +604,15 @@
 .codes-figure-n { font-family: var(--bn-font-display); font-size: var(--bn-fs-4xl); font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--bn-ink); }
 .codes-figure-n small { font-size: var(--bn-fs-xl); font-weight: 700; color: var(--bn-ink-3); letter-spacing: -0.01em; }
 .codes-figure-label { font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+/* D218: the count phrase, the venue and the delivery are sibling spans; the seam is CSS. */
+.codes-figure-label > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .codes-mono-list { margin: var(--bn-2) 0 0; padding-left: var(--bn-4); font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.6; }
 .codes-confirm { display: flex; flex-direction: column; gap: var(--bn-4); padding: var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-surface-2); }
 .codes-sample { display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; }
 .codes-sets { display: flex; gap: 6px; flex-wrap: wrap; }
+/* D218: `.bn-pill` is already `inline-flex; gap: 5px`, so the gap alone spaces the set from its
+   count; the dot needs only a trailing margin to clear the count after it. */
+.codes-set-count::before { content: '·'; margin-right: 5px; color: var(--bn-ink-4); }
 .codes-mini-table th:first-child, .codes-mini-table td:first-child { padding-left: 0; }
 .codes-mini-table th:last-child, .codes-mini-table td:last-child { padding-right: 0; }
 
