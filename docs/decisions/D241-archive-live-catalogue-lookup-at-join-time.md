@@ -1,4 +1,4 @@
-## D-archive-live-catalogue-lookup-at-join-time — Recorded, not built: ask the catalogue earlier than the archive does
+## D241 — Recorded, not built: ask the catalogue earlier than the archive does
 
 **What this records.** D237 measured a gap. 8 of 15
 identification errors behind the archive's own 16 refusals cannot be caught from stored
@@ -42,7 +42,7 @@ settle whether to build this. The three open questions below are unaffected by t
 correction.
 
 **What is not decided.** Three questions stay open. Which cards would trigger the lookup:
-every unresolved card, or only one a check from `D-a-archive-store-checks` or
+every unresolved card, or only one a check from `D239` or
 the sku-number-contradictions build (a separate PR) already flagged. Whether a failed lookup should block the
 join, or fall through to today's behaviour. How the result would be cached, so a re-join of
 the same box does not re-ask the same question. None of these is answered here. Building

@@ -7,12 +7,12 @@ FIVE SUBCOMMANDS AND THREE OF THEM WRITE NOTHING EVER.
                         the receipt
   cards audit           does every card's name still resolve to its photograph? THREE
                         verdicts, never two, and the third is `not known`
-  cards checks          the four stored-data identification checks (D-a-archive-store-checks):
+  cards checks          the four stored-data identification checks (D239):
                         a name too long, a denominator or digit count that disagrees with
                         its set, a name one edit from a sibling in the same set. Review
                         signals, never repairs, never a catalogue call.
   cards contradictions  two copies of one SKU disagreeing about the card's number
-                        (D-sku-number-contradictions). Read-only preview, opens no socket
+                        (D242). Read-only preview, opens no socket
                         unless `--resolve` is given.
   cards photos          move the corpus off the legacy `(box, index)` address onto the
                         card's own name. Previews by default; `--write` performs it
@@ -381,7 +381,7 @@ def _audit(args, say) -> int:
 
 
 def _checks(args, say) -> int:
-    """The four stored-data checks `D-a-archive-store-checks` builds: read-only, no catalogue,
+    """The four stored-data checks `D239` builds: read-only, no catalogue,
     no network, never a repair. Opens the store the same way `audit` does, straight
     `sqlite3`, never `db.connect` — this reads `name`, `number` and `set_name` only, and a
     migration is not a preview's business.

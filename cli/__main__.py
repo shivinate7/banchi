@@ -285,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cards_checks = cards_sub.add_parser(
         "checks",
-        help="four stored-data identification checks (D-a-archive-store-checks): a name too "
+        help="four stored-data identification checks (D239): a name too "
         "long to be a name, a denominator that disagrees with its set, more digits than "
         "the set has cards, a name one edit from a sibling in the same set. Read-only "
         "review signals, never repairs, never a catalogue call.",
@@ -298,7 +298,7 @@ def build_parser() -> argparse.ArgumentParser:
     cards_contradictions = cards_sub.add_parser(
         "contradictions",
         help="two copies of one SKU disagreeing about the card's number "
-        "(D-sku-number-contradictions). Preview is read-only and opens no socket. "
+        "(D242). Preview is read-only and opens no socket. "
         "`--resolve` asks the live catalogue to tell a misread from a shared SKU, only "
         "for the SKUs that need it.",
     )

@@ -953,6 +953,10 @@ D235 The heartbeat is refused a pipe, and the wait learns the other half of its 
 D236 Unsold stock is valued by SKU off the archive, one range at a time, and sealed stock is a counted gap
 D237 What the archive's 16 refusals could have caught, and what could not
 D238 The archive's own refusals reach a human, with a photo
+D239 Four stored-data checks, built whole, from D237
+D240 Measured, not shipped: the join trusts a number that resolves, and the owner asked why
+D241 Recorded, not built: ask the catalogue earlier than the archive does
+D242 Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

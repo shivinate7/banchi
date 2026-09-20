@@ -1,4 +1,4 @@
-## D-sku-number-contradictions — Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
+## D242 — Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
 
 **What this builds.** A SKU is one product in one condition. Two copies of it have no
 legitimate reason to read a different card number. `pipeline/sku_number_contradictions.py`

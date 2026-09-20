@@ -1,4 +1,4 @@
-"""`pkmnscan cards contradictions` — one SKU, two stored numbers (`D-sku-number-contradictions`).
+"""`pkmnscan cards contradictions` — one SKU, two stored numbers (`D242`).
 
 READ-ONLY, ALWAYS. Groups every card by SKU straight out of the store, no `Store()` write
 lock taken anywhere in this module. The default preview never touches the network: it

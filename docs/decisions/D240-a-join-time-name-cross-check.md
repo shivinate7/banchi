@@ -1,4 +1,4 @@
-## D-a-join-time-name-cross-check — Measured, not shipped: the join trusts a number that resolves, and the owner asked why
+## D240 — Measured, not shipped: the join trusts a number that resolves, and the owner asked why
 
 **The ask.** The owner, on seeing the SKU-contradiction check's name-agreement correction:
 apply the same correction on the paths that actually use the answer. Not only in a report
@@ -60,4 +60,4 @@ build.
 
 Cites D1, D25, D35 (the name rung this seam already has, for the opposite direction), D55
 (the set-code repair `_walk` already tries before falling to name), D234, and
-`D-a-archive-store-checks` (the tolerance this measurement reuses).
+`D239` (the tolerance this measurement reuses).
