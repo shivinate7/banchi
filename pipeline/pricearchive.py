@@ -75,7 +75,7 @@ from store.session import Store
 CHUNK_SKUS = 20
 
 # How long a SKU's own buckets are trusted fresh enough that a RESUMED SWEEP skips it
-# (D-a-archive-resume-window), NEVER `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` — that
+# (D230), NEVER `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` — that
 # constant is one hour, argued for a different reader with a different need (the live
 # `#/pricing` screen, where an hour-old figure is honest and a longer one would not be).
 # `split_by_freshness` treats this pass the same way whether it is resumed a minute later

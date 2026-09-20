@@ -1,4 +1,4 @@
-## D-a-sealed-ledger-archive-subjects — The subject list widens to the order ledger, and sealed product joins it
+## D231 — The subject list widens to the order ledger, and sealed product joins it
 
 **MEASURED AGAINST THE OWNER'S REAL STORE, 2026-09-20.** 539 distinct SKUs have sold.
 Together they total $66,334.71 gross (canceled excluded, D214's own rule). 270 of them

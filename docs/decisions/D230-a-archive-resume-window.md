@@ -1,4 +1,4 @@
-## D-a-archive-resume-window — The sweep's own resume window is six days, not one hour
+## D230 — The sweep's own resume window is six days, not one hour
 
 **MEASURED AGAINST THE OWNER'S REAL STORE.** Two `archive sweep` passes ran five hours
 apart. The second skipped nothing. It started again from the top of the ranked list.
@@ -52,5 +52,5 @@ would read "8640 minute(s)."
 ### What this does not touch
 
 The subject list, the ranking, `chunk_rows`, and the throttle backoff are all unchanged.
-So is the sealed-product widening (`D-a-sealed-ledger-archive-subjects`). This entry is
+So is the sealed-product widening (`D231`). This entry is
 one number and the string that prints it.

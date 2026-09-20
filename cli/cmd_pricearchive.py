@@ -38,7 +38,7 @@ chunk's reads.
 A RESUMED SWEEP DOES NOT RE-READ WHAT IT ALREADY HOLDS FROM A RECENT PASS.
 `pipeline.pricearchive.freshness_index` and `split_by_freshness` check the archive itself —
 not a second, ephemeral cache — before asking the market for anything, using
-`pipeline.pricearchive.RESUME_TTL_SECONDS` (six days, D-a-archive-resume-window) as
+`pipeline.pricearchive.RESUME_TTL_SECONDS` (six days, D230) as
 "recently read enough to trust", NEVER `pipeline.pricehistory.HISTORY_TTL_SECONDS` (one
 hour) — that number is right for the live `#/pricing` screen's single-SKU read and wrong
 for this walk. `rank_by_revenue` makes this pass read the same few hundred names first,
@@ -114,7 +114,7 @@ def _user_agent() -> str:
 
 def _format_window(seconds: int) -> str:
     """`seconds` as the largest whole unit that divides it evenly, days first — so the
-    resume window (D-a-archive-resume-window, days) and
+    resume window (D230, days) and
     `pipeline/pricehistory.py:HISTORY_TTL_SECONDS` (minutes) each print in the unit a
     person actually reads them in, rather than one shared `// 60` that turns six days into
     a four-figure minute count nobody would recognize as "six days"."""
@@ -164,7 +164,7 @@ def _preview(rows: Dict[str, dict], ranges, say) -> int:
 
 def _sweep(args, say) -> int:
     # Built before the subject list, not only before a `--write` pass — resolving a sealed
-    # SKU's own SET NAME (D-a-sealed-ledger-archive-subjects) needs
+    # SKU's own SET NAME (D231) needs
     # `Market.category_id`/`.groups`,
     # which `rows_from_store` cannot do for itself without one. Both are cached, whole-
     # category reads (one request per PRODUCT LINE this ledger has ever sold, not per SKU),

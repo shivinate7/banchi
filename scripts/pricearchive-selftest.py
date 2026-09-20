@@ -532,7 +532,7 @@ def main() -> int:
            "order is preserved from the caller's own ranking, not re-sorted here", needs)
 
         # -------------------------------------------------------------- chunk_rows
-        # ------------------------------------------- resume window (D-a-archive-resume-window)
+        # ------------------------------------------- resume window (D230)
         print("\n-- pipeline/pricearchive.py: RESUME_TTL_SECONDS, mutation-tested --")
         five_hours_ago = 100_000 - 5 * 3600
         resume_window_existing = [

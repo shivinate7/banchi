@@ -505,8 +505,8 @@ COMPONENTS = [
                                                     "D223",
                                                     "D222",
                                                     "D62", "D86", "D43", "D88",
-                                                    "D-a-sealed-ledger-archive-subjects",
-                                                    "D-a-archive-resume-window"],
+                                                    "D231",
+                                                    "D230"],
                                     "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
@@ -1068,8 +1068,8 @@ COMPONENTS = [
                                                 "D224",
                                                 "D223",
                                                 "D222",
-                                                "D-a-sealed-ledger-archive-subjects",
-                                                "D-a-archive-resume-window"],
+                                                "D231",
+                                                "D230"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
                                         "`make check` — no network call. A FakeMarket and a "
                                         "RecordingMarket stand in for the network; 48 "
@@ -2425,8 +2425,8 @@ COMPONENTS = [
                 "governed_by": ["D219", "D224",
                                 "D223", "D222",
                                 "D62", "D18",
-                                "D-a-sealed-ledger-archive-subjects",
-                                "D-a-archive-resume-window"],
+                                "D231",
+                                "D230"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
