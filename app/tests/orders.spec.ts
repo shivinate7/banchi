@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
+import { settleMotion } from './motionSettled'
 
 import type {
   InventoryCard,
@@ -261,9 +262,9 @@ async function stubWalkPlan(page: Page, plan: WalkPlan): Promise<{ readonly call
 
 /** SELECT THE FIRST BUYER ROW — §13 supersedes §12's own "Tick all, then Start": there is no
  *  Start button and no frozen pass any more. Clicking a buyer selects it and its walk starts
- *  at once, the same as clicking a box opens it (`useOrderWalk`'s `walkedKeys`). "Tick all"
- *  still exists (it JOINS every walkable buyer's orders to the live walk, `Untick all` drops
- *  them), which is a different thing from starting one. */
+ *  at once, the same as clicking a box opens it (`useOrderWalk`'s `walkedKeys`). "Tick shown"
+ *  still exists (it JOINS every walkable buyer's orders in view into the live walk, "Untick
+ *  shown" drops them), which is a different thing from starting one. */
 async function startWalk(page: Page): Promise<void> {
   await page.locator('.orders-index-row').first().click()
 }
@@ -1607,11 +1608,110 @@ test('the index lists buyers, and a two-order buyer carries the N-orders pill an
   await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('2')
 })
 
-test('a nameless order groups on its own, as No name and the order number', async ({ page }) => {
+test('an open order under Ready in the row draws its status LABEL, never the order id', async ({ page }) => {
+  /* DEFECT 1: `BuyerRow`'s per-order pill (drawn only for a non-ready order) read
+     `order.number` where `OrderPanel`'s own identical pill reads `pill.label`. A short line
+     makes the second order draw its pill — before the fix this pill's text was the id
+     `SECOND_ORDER`, not "Short". */
+  const secondLine = () =>
+    line({
+      order: SECOND_ORDER,
+      order_key: secondOrderKey,
+      sku: '9197754',
+      reason: 'short',
+      picks: [pick({ index: 30, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030' })],
+      line: { ...line().line, sku: '9197754', name: 'Sunrise', number: '030' },
+    })
+  const both = payloadOf(
+    [order(), order({ key: secondOrderKey, number: SECOND_ORDER })],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
+    ],
+  )
+  await open(page, { orders: both })
+
+  const row = page.locator('.orders-index-row').first()
+  await expect(row).toContainText('Short')
+  await expect(row).not.toContainText(SECOND_ORDER)
+})
+
+test('a nameless order groups on its own, drawing the composed date_id label and never the full id', async ({ page }) => {
   const nameless = order({ buyer: null })
   await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  await expect(page.locator('.orders-index-row').first()).toContainText(`No name · #${ORDER_NUMBER}`)
+  /* `placed_at` is `2026-08-29T10:00:00+00:00` and the id's last 5 characters are `006AC`
+     (the fixture's own default, `routeFixtures.ts:order`). `unnamedBuyerLabel` reads the
+     LOCAL clock, so this typed date is safe only because the browser's zone is pinned to
+     `America/Chicago` in `playwright.config.ts` and 10:00 UTC is 05:00 there, the same
+     calendar day. The margin is ten hours: a pinned zone further behind UTC than that would
+     move this date, and the case below derives its own expectation in the browser instead of
+     relying on the margin. */
+  const row = page.locator('.orders-index-row').first()
+  await expect(row).toContainText('08-29-26_006AC')
+  await expect(row).not.toContainText(ORDER_NUMBER)
+})
+
+test('two unnamed buyers with different placed dates draw different name-slot labels, neither the full id', async ({
+  page,
+}) => {
+  const firstNumber = 'AAAA1111-0000F4-00001'
+  const secondNumber = 'BBBB2222-0000F4-00002'
+  const first = order({
+    key: `TCGplayer:${firstNumber}`,
+    number: firstNumber,
+    buyer: null,
+    placed_at: '2026-07-01T00:00:00+00:00',
+  })
+  const second = order({
+    key: `TCGplayer:${secondNumber}`,
+    number: secondNumber,
+    buyer: null,
+    placed_at: '2026-07-15T00:00:00+00:00',
+  })
+  await open(page, {
+    orders: payloadOf(
+      [first, second],
+      [
+        { key: first.key, number: firstNumber, complete: false, outstanding: 1, lines: [line()] },
+        { key: second.key, number: secondNumber, complete: false, outstanding: 1, lines: [line()] },
+      ],
+    ),
+  })
+
+  /* Default sort is newest first, and both fixtures share the default Ready-to-ship status
+     (D209), so the newer of the two (07-15) leads.
+
+     THE EXPECTED DATE IS DERIVED, NOT TYPED. The label reads the LOCAL clock, because the
+     same row draws its placed date through `toLocaleDateString` and one row may not state
+     two different days for one event. A typed `07-15-26` would therefore pass only in a
+     zone at or east of UTC, and these fixtures sit at midnight. Compose the expectation the
+     way the product composes it, so this case asserts the FORMAT and the DISTINCTNESS
+     rather than the runner's timezone.
+
+     AND IT IS DERIVED IN THE BROWSER, NOT IN NODE. `playwright.config.ts` pins the browser to
+     `America/Chicago` on purpose, so a person sees their own zone. Node ran in a different
+     one on CI, computed `07-15` and failed against a page that correctly drew `07-14-26`
+     beside its own `placed Jul 14`. The two dates on the row agreeing is the whole point of
+     the fix, so the expectation is computed where the product computes it. */
+  const localLabel = (iso: string): Promise<string> =>
+    page.evaluate((value: string) => {
+      const at = new Date(value)
+      const mm = String(at.getMonth() + 1).padStart(2, '0')
+      const dd = String(at.getDate()).padStart(2, '0')
+      const yy = String(at.getFullYear() % 100).padStart(2, '0')
+      return `${mm}-${dd}-${yy}`
+    }, iso)
+  const rows = page.locator('.orders-index-row')
+  await expect(rows).toHaveCount(2)
+  const texts = await rows.allTextContents()
+  expect(texts[0]).toContain(`${await localLabel('2026-07-15T00:00:00+00:00')}_00002`)
+  expect(texts[1]).toContain(`${await localLabel('2026-07-01T00:00:00+00:00')}_00001`)
+  expect(texts[0]).not.toEqual(texts[1])
+  for (const text of texts) {
+    expect(text).not.toContain(firstNumber)
+    expect(text).not.toContain(secondNumber)
+  }
 })
 
 test('a buyer with two open orders walks both at once — one selection, one plan, both cards', async ({ page }) => {
@@ -1788,7 +1888,7 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
  * THREE BUYERS, ONE FIXTURE. Alice (Ready to Ship, oldest), Carol (Ready to Ship, newest),
  * Bob (a status this file never hardcodes, in the middle). Default order is therefore
  * Carol, Alice, Bob — both Ready-to-Ship groups lead, newest of the two first, then Bob.
- * Carol's own line answers `sku_unseen`, which is what "Hide unknown SKUs" narrows on.
+ * Carol's own line answers `sku_unseen`, which is what "Hide never-seen SKUs" narrows on.
  */
 
 function seededOrder(seed: {
@@ -1915,6 +2015,109 @@ test('at 820, the last buyer row clears the step-through hint rather than sittin
   ).toBeLessThanOrEqual(Math.round(hint.y))
 })
 
+/* THE ORDERS-FOLLOWUPS FIX, DEFECT 1: the two-column layout used to be picked in JavaScript
+ * (`const wide = useMediaQuery('(min-width: 1024px)')`), which stacked `#/orders` into one
+ * column everywhere between 768 and 1023 while `#/inventory`'s identical `.browse-body` CSS
+ * stayed two columns at that width. `.browse-body`'s own breakpoints (`BoxBrowse.css:12-26`)
+ * now do the whole job, with no JS reader left to disagree with them. */
+test('at 820, the buyer rail sits beside the walk pane rather than stacking above it', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1000 })
+  await open(page, { orders: threeBuyerPayload() })
+
+  const rail = await page.locator('.browse-map').boundingBox()
+  const pane = await page.locator('.browse-side').boundingBox()
+  if (rail === null || pane === null) throw new Error('the rail or the pane did not lay out')
+
+  expect(pane.x, 'the pane does not sit to the right of the rail').toBeGreaterThan(rail.x + rail.width)
+  const overlap = Math.min(rail.y + rail.height, pane.y + pane.height) - Math.max(rail.y, pane.y)
+  expect(overlap, 'the rail and the pane share no vertical band — they stacked instead of sitting side by side').toBeGreaterThan(0)
+})
+
+test('the step-through hint shows at desktop width, where its arrow-key handler is live, and not at phone width', async ({
+  page,
+}) => {
+  /* DEFECT 5: the hint rendered unconditionally, but its handler
+     (`if (phone || shownGroups.length === 0) return`) is gated on `!phone`. At 390 the arrow
+     keys do nothing, so the hint must not claim they do. */
+  await open(page, { orders: threeBuyerPayload() })
+  await expect(page.locator('.orders-index-hint')).toContainText('step through buyers')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.locator('.browse-boxchip').click()
+  await expect(page.locator('.browse-railsheet .orders-index-hint')).toHaveCount(0)
+})
+
+/* DEFECT 2: below 768px `.browse-body > .browse-map` is hidden by that same CSS, so once
+ * defect 1 is fixed the buyer picker needs its own way onto the screen — the chip and bottom
+ * sheet this asserts, reusing `.browse-railsheet` rather than a second stylesheet. */
+test('at 390, the buyer picker is reachable through the chip and its bottom sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { orders: threeBuyerPayload() })
+
+  await expect(page.locator('.browse-map')).toBeHidden()
+  const chip = page.locator('.browse-boxchip')
+  await expect(chip).toBeVisible()
+  await expect(page.locator('.browse-railsheet')).toHaveCount(0)
+
+  await chip.click()
+  const sheet = page.locator('.browse-railsheet')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.locator('.orders-index-row')).toHaveCount(3)
+  await expect(sheet).toContainText('Bob')
+
+  await sheet.locator('.orders-index-row', { hasText: 'Bob' }).click()
+  await expect(sheet).toBeHidden()
+  await expect(page.locator('.browse-boxchip-text')).toContainText('Bob')
+})
+
+/* THE AMENDED BRIEF'S OWN CASE: the sheet is the RAIL, not the buyer list alone. Before this
+ * fix the sheet's markup was a second, hand-kept copy of `searchSlot`/`selectBar`/`ordersList`
+ * that left `railWalkPanel` (the selected buyer's own walk — `OrderPanel` plus `WalkList`'s
+ * `.browse-row`s) out of it, so a phone buyer with more than one card in the walk had no touch
+ * way to see the second card — only `WalkMainPane`'s single current-card view survived the
+ * width. Ticking a second buyer into the walk, the same union `bothPlan()`'s own case (`J
+ * steps to the next card...`) proves, is what makes this observable: one row is not enough to
+ * tell "the walk panel is missing" from "the walk panel drew its one card". */
+test('at 390, the sheet exposes the selected buyer\'s walk rows, not only the buyer list', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await open(page, { orders: secondBuyerPayload().payload })
+  await stubWalkPlan(page, bothPlan())
+
+  await page.locator('.browse-boxchip').click()
+  await page.locator('.browse-railsheet .orders-index-row').first().click()
+
+  /* Selecting a buyer closes the sheet (§13's own `pickRow` echo) — reopen it to tick the
+   * second buyer into the walk from inside it, the same control the rail always carried. */
+  await page.locator('.browse-boxchip').click()
+  await page
+    .locator('.browse-railsheet .orders-index-item', { hasText: 'Nora Second' })
+    .locator('.orders-index-tick input')
+    .check()
+
+  const sheet = page.locator('.browse-railsheet')
+  await expect(sheet.locator('.browse-row')).toHaveCount(2)
+  await expect(sheet).toContainText('Volcanion')
+  await expect(sheet).toContainText('Sunrise')
+})
+
+test('Untick shown is disabled with nothing ticked, and enables only once a tick lands', async ({ page }) => {
+  /* DEFECT 4, SECOND HALF: `Untick shown` read `tickableKeys` (the rows in view) for its
+     disabled state, so it sat enabled the moment the view held a walkable row even with
+     `walkTicked` empty — a press that would visibly do nothing. It must read `walkTicked`. */
+  await open(page, { orders: threeBuyerPayload() })
+  const tickAll = page.getByRole('button', { name: 'Tick shown', exact: true })
+  const untickAll = page.getByRole('button', { name: 'Untick shown' })
+
+  await expect(tickAll).toBeEnabled()
+  await expect(untickAll).toBeDisabled()
+
+  await tickAll.click()
+  await expect(untickAll).toBeEnabled()
+
+  await untickAll.click()
+  await expect(untickAll).toBeDisabled()
+})
+
 test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const options = page.locator('.orders-status-select option')
@@ -1985,7 +2188,18 @@ test('each filter option narrows the buyer list exactly as the chip it replaced 
 test('the filter select clears the 40px thumb floor at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 })
   await open(page, { orders: threeBuyerPayload() })
-  const box = await page.locator('.orders-filter-select').boundingBox()
+  /* THE ORDERS-FOLLOWUPS FIX, DEFECT 2: the filter select lives in `searchSlot`, part of the
+   * rail — below 768px the rail is the chip's bottom sheet, not the inline column this case
+   * used to read directly. Open it the same way an operator would. */
+  await page.locator('.browse-boxchip').click()
+  /* THE SHEET SLIDES IN, SO ITS HEIGHT IS NOT ITS HEIGHT YET. Measuring straight after the
+   * press read a mid-transition box and failed about one run in two. Wait for the control to
+   * exist and for every clock-driven animation on the page to finish, the way `settleMotion`
+   * already does for the rest of this suite, THEN measure. */
+  const select = page.locator('.browse-railsheet .orders-filter-select')
+  await expect(select).toBeVisible()
+  await settleMotion(page)
+  const box = await select.boundingBox()
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
