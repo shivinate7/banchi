@@ -499,7 +499,13 @@ COMPONENTS = [
                                             "to a measured pace and stops cleanly if still "
                                             "blocked, persisting the measurement for the next "
                                             "press. `archive show [--sku]` reads the table "
-                                            "and writes nothing.",
+                                            "and writes nothing. A `--write` pass's own final "
+                                            "refusal set, once classified, routes every "
+                                            "identification-shaped refusal to the standing "
+                                            "review queue with its photograph "
+                                            "(`cli/archive_review.py`, D167's own "
+                                            "`Queue.upsert`), and leaves a network-shaped "
+                                            "refusal alone.",
                                     "governed_by": ["D219",
                                                     "D224",
                                                     "D223",
@@ -507,8 +513,22 @@ COMPONENTS = [
                                                     "D62", "D86", "D43", "D88",
                                                     "D231",
                                                     "D230",
-                                                    "D233"],
+                                                    "D233",
+                                                    "D167"],
                                     "tested_by": []},
+            "archive_review.py": {"does": "Routes one `archive sweep` pass's own "
+                                          "identification-shaped refusals (never a "
+                                          "network-shaped one) to the standing review "
+                                          "queue, with each card's own photograph, over "
+                                          "`store/queues.py:Queue.upsert` — never a new "
+                                          "queue or write primitive. Matches PER CARD, "
+                                          "never per SKU: a SKU can cover several physical "
+                                          "copies with different stored numbers, and only "
+                                          "the one `pipeline/pricearchive.py:rows_from_store` "
+                                          "actually tested is queued. A card with no "
+                                          "photograph is never queued.",
+                                   "governed_by": ["D167", "D219", "D233", "D234", "D26", "D58", "D89"],
+                                   "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
                                       "derives a SECOND run over the drawer they are actually "
@@ -2476,6 +2496,24 @@ COMPONENTS = [
                         "never truncates, grouped by reason. 87 assertions.",
                 "governed_by": ["D18", "D21", "D35", "D62", "D219", "D222", "D223", "D224", "D230",
                                 "D231", "D233", "D234"],
+            },
+            "archive-review-selftest.py": {
+                "does": "proves cli/archive_review.py against a throwaway store, no "
+                        "network. Fabricates refusal strings shaped exactly like "
+                        "pipeline/pricehistory.py:NotResolvable/Unreachable's own "
+                        "messages, never calls a market. Proves: an identification "
+                        "refusal reaches the review queue with its photograph; a "
+                        "network-shaped refusal never does; a card sharing the refused "
+                        "SKU but carrying a DIFFERENT stored number is never queued (the "
+                        "Exeggutor shape, D234); a card with no photograph is never "
+                        "queued; a re-run over the same refusal adds nothing new and "
+                        "preserves first_seen; an already-answered position is never "
+                        "re-queued (D167). Mutation-tested: a broken apply that writes "
+                        "the queue mapping directly, skipping Queue.upsert's own "
+                        "cleared-entry guard, is shown to silently reopen an answered "
+                        "entry and lose its first_seen. Not wired into `make check` — "
+                        "`make pricearchive-selftest`'s own precedent.",
+                "governed_by": ["D167", "D219", "D233", "D234", "D-archive-refusals-to-review-queue"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
