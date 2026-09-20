@@ -1,4 +1,4 @@
-## D-archive-refusal-mechanization — What the archive's 16 refusals could have caught, and what could not
+## D237 — What the archive's 16 refusals could have caught, and what could not
 
 **The question, in the owner's own words.** After D233 and D234 closed every cause a rule
 could remove, `pkmnscan archive sweep` still ends with 16 names it cannot resolve. The owner
@@ -154,7 +154,7 @@ that a read that could not run is named as unknown, never as clear.
 | 4. one edit from a sibling name | 3 | yes, as a review flag, never a repair |
 | blank number, unmatched name | 8 | no, needs the live mirror, same as the archive |
 
-Governs nothing yet. No check named here is built. See `D-archive-refusals-to-review-queue`,
+Governs nothing yet. No check named here is built. See `D238`,
 this session's sibling entry, for the build that routes all 15 to the review queue. Cites
 D146 (two agreeing signals release a claim), D173 (a mechanizable rule names what the check
 would see), D233, and D234 (the two mechanism rounds this analysis follows).

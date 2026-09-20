@@ -951,6 +951,8 @@ D233 A card row that refuses retries the ledger's own row
 D234 The archive reads the store's own composed number, and the glued-code repair reaches it too
 D235 The heartbeat is refused a pipe, and the wait learns the other half of its own question
 D236 Unsold stock is valued by SKU off the archive, one range at a time, and sealed stock is a counted gap
+D237 What the archive's 16 refusals could have caught, and what could not
+D238 The archive's own refusals reach a human, with a photo
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

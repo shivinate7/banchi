@@ -2545,7 +2545,7 @@ COMPONENTS = [
                         "cleared-entry guard, is shown to silently reopen an answered "
                         "entry and lose its first_seen. Not wired into `make check` — "
                         "`make pricearchive-selftest`'s own precedent.",
-                "governed_by": ["D167", "D219", "D233", "D234", "D-archive-refusals-to-review-queue"],
+                "governed_by": ["D167", "D219", "D233", "D234", "D238"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

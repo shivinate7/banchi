@@ -195,7 +195,7 @@ def main() -> int:
            "refuses it", added_after_answer)
         ok(dict(Store().read().review.entries)["1/1"].cleared_by_human,
            "the answer stands — this build never reopens it (see the sibling decision "
-           "entry, D-archive-refusals-to-review-queue, for why the real store's own 16 "
+           "entry, D238, for why the real store's own 16 "
            "cards are all in exactly this state)")
 
         print("\n-- MUTATION ARM: bypassing Queue.upsert re-opens and duplicates --")
