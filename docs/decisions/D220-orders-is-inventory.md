@@ -1,4 +1,4 @@
-## D-orders-is-inventory — Orders is inventory's screen with orders in the rail, and the walk is a mode of it
+## D220 — Orders is inventory's screen with orders in the rail, and the walk is a mode of it
 
 **The owner's ruling, 2026-09-19, verbatim:**
 
