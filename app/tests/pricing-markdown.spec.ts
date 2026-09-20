@@ -209,6 +209,20 @@ test('the lens draws every live listing the survey saw, and no run-shaped cell e
   await expect(page.locator(`${VIEW} .pricing-caption-price`)).toHaveText('New price')
 })
 
+/* NO TYPED MIDDLE DOT OR BULLET REACHES THE LENS (D218). `Live listings, read <date>` and the
+ * meta row's condition/set/number join are the same components `pricing.spec.ts` covers, drawn
+ * here over the markdown SOURCE rather than a run — the separator is CSS either way. */
+test('no typed middle dot or bullet reaches the pricing lens (D218)', async ({ page }) => {
+  await open(page, {
+    skus: [live(), live({ sku: '8608464', name: 'Dunsparce', standing: 'deferred', asking: '5.0000' })],
+    counts: { considered: 2, offered: 1, deferred: 1, refused: 0 },
+  })
+  await expect(page.locator('.pricing-row')).toHaveCount(2)
+
+  const text = await page.locator(VIEW).innerText()
+  expect(text).not.toMatch(/[·•]/)
+})
+
 test('a live count is drawn and it is TCGplayer’s own, never a copy count', async ({ page }) => {
   await open(page, { skus: [live({ live: 4 })] })
   await expect(page.locator('.pricing-row .pricing-live')).toContainText('4')

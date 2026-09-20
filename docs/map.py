@@ -6129,12 +6129,13 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D156", "D4", "D5", "D7", "D9", "D22", "D26", "D28", "D36",
-                                                "D33", "D35", "D37", "D39", "D41", "D48",
-                                                "D49", "D51", "D54", "D56", "D58", "D59",
-                                                "D62", "D78", "D79", "D85", "D86", "D89",
-                                                "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117", "D125", "D38",
-                                                "D118", "D159", "D168", "D172", "D208", "D210"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33",
+                                                "D35", "D36", "D37", "D38", "D39", "D41", "D48",
+                                                "D49", "D51", "D54", "D56", "D58", "D59", "D62",
+                                                "D78", "D79", "D85", "D86", "D89", "D98", "D99",
+                                                "D100", "D101", "D103", "D105", "D107", "D109",
+                                                "D115", "D117", "D118", "D125", "D156", "D159",
+                                                "D168", "D172", "D208", "D210", "D218"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
                                             "header (D168). The operator's "
                                             "own ask - \"after several emits a lot of pricing "
@@ -6198,8 +6199,8 @@ COMPONENTS = [
                                         "panels start after it, so no panel is ever over a row "
                                         "control and nothing has to win a stacking order.",
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
-                                                "D54", "D56", "D62", "D78", "D79", "D85",
-                                                "D86", "D103", "D105", "D117", "D125", "D208"]},
+                                                "D54", "D56", "D62", "D78", "D79", "D85", "D86",
+                                                "D103", "D105", "D117", "D125", "D208", "D218"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -7483,8 +7484,8 @@ COMPONENTS = [
                                                   "rows on a store with fewer than ten priced "
                                                   "cards, and its own D118 case sampling a rect "
                                                   "mid page-enter animation.",
-                                          "governed_by": ["D103", "D105", "D109", "D118",
-                                                          "D159"]},
+                                          "governed_by": ["D103", "D105", "D109", "D118", "D159",
+                                                          "D218"]},
             "tests/pricing-markdown.spec.ts": {"does": "`#/pricing` AS A LENS OVER LIVE "
                                                "TCGPLAYER LISTINGS (D103), in its own file so "
                                                "that `tests/pricing.spec.ts` could stay "
@@ -7501,7 +7502,8 @@ COMPONENTS = [
                                                "at a marketplace, and it pins that the trends "
                                                "press is scoped to the filter rather than to "
                                                "the whole survey (D62). Not a harness test.",
-                                               "governed_by": ["D62", "D100", "D103", "D107", "D28", "D99", "D101", "D54"]},
+                                               "governed_by": ["D28", "D54", "D62", "D99", "D100",
+                                                               "D101", "D103", "D107", "D218"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "
@@ -7524,8 +7526,11 @@ COMPONENTS = [
                                               "seventy-one cases measuring the uncropped "
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
-                                      "governed_by": ["D156", "D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D103", "D115", "D117", "D118",
-                                                      "D168", "D208"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49",
+                                                      "D51", "D54", "D56", "D57", "D58", "D59",
+                                                      "D62", "D68", "D78", "D79", "D85", "D86",
+                                                      "D92", "D98", "D99", "D103", "D115", "D117",
+                                                      "D118", "D156", "D168", "D208", "D218"]},
             "tests/revenue.spec.ts": {
                 "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
                         "states, every column's sort and its reverse, the search field, the "
@@ -7558,7 +7563,8 @@ COMPONENTS = [
                         "than disabled, D33's shape applied twice on one screen. Two routes are "
                         "intercepted and their bodies read; no real request is made and no store "
                         "is touched.",
-                "governed_by": ["D7", "D9", "D33", "D64", "D86", "D100", "D103", "D104", "D105"],
+                "governed_by": ["D7", "D9", "D33", "D64", "D86", "D100", "D103", "D104", "D105",
+                                "D218"],
                 "note": "ONE OF ITS CASES IS A GEOMETRY ASSERTION AND IT WAS WRITTEN FROM A "
                         "DEFECT. The survey console rendered 512px wide and 0px TALL — "
                         "`.runslog` sets `overflow: hidden`, which makes a flex item's automatic "
