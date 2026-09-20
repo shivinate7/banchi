@@ -31,11 +31,20 @@ these at runtime — `style={{ '--x': ... }}`, `style={{ ['--x' as string]: ... 
 chosen (`--cap-halt-h`, `--pricing-ship-h`, `--receipt-ms`, `--i`, `--n`, `--pos-slot`, and
 others, all real and all otherwise invisible to a checker that reads only `.css`). Missing any
 one of those three shapes would report a false positive on every property it sets, so all
-three are matched. THE FIRST TWO ARE READ ONLY INSIDE A `style={{...}}` SPAN — found by
-brace-counting from each `style={` — and not anywhere a quoted key meets a colon: an unrelated
-object literal whose key happens to be spelled like a token name would otherwise silently mask
-a real finding, which is exactly how a definition-side check goes quiet. No such collision
-exists in this tree today; the span restriction is here so one landing tomorrow still counts.
+three are matched. THE FIRST TWO ARE READ ONLY INSIDE A `style={{...}}` SPAN — found by a
+string-aware brace count from each `style={` (`_style_span_end`; a brace inside a `'`, `"` or
+`` ` `` literal is never counted, only a `${...}` interpolation's own is) — and not anywhere a
+quoted key meets a colon: an unrelated object literal whose key happens to be spelled like a
+token name would otherwise silently mask a real finding, which is exactly how a
+definition-side check goes quiet. No such collision exists in this tree today; the span
+restriction is here so one landing tomorrow still counts.
+
+STRINGS ARE NOT STRIPPED, ONLY COMMENTS ARE — a deliberate choice, not an oversight, and it
+costs nothing today: every `var(--` under `app/src/**/*.{ts,tsx}` is inside a real `style=`
+attribute, measured before this line was written. It remains a false-positive vector should a
+future user-facing or log string ever spell `var(--...)` outside a style value; narrowing the
+reference scan to `style={{...}}` spans as the definition scan already is would close it, at
+the cost this file's own docstring paid to stay narrow rather than clever.
 
 COMMENTS ARE STRIPPED BEFORE EITHER SIDE IS COLLECTED — a reference or a definition written
 only in prose (this very docstring names five properties by their `--` spelling) is neither a
@@ -155,10 +164,84 @@ def references(path: str, cleaned: str) -> List[Reference]:
     return out
 
 
+def _style_span_end(cleaned: str, start: int) -> int:
+    """Where a `style={` attribute closes, `start` being the index right after its own
+    opening brace (already counted as depth 1). STRING-AWARE: a `'`, `"` or `` ` `` opens a
+    literal whose own brace characters are never counted — a single unbalanced `{` inside a
+    string value (`style={{ label: '{', ... }}`) must not make this run past the attribute's
+    real close and swallow the code after it into the span, which is the exact failure the
+    naive counter this replaced had, reopened through content nobody stripped (strings are
+    deliberately kept — see the module docstring). A template literal's OWN `` ` `` pair is
+    likewise opaque, but a `${...}` interpolation inside one is real code, so its braces ARE
+    counted: entering one pushes a fresh code frame targeting the depth it was entered at,
+    which pops back to template scanning the moment that frame's own matching `}` is seen —
+    never the base frame's, so a `` `${x}` `` cannot be mistaken for the attribute's close.
+    Backslash escapes are honoured in both quote forms and inside a template's raw text.
+    Unterminated input (malformed source) fails open to end-of-file, the same tolerance the
+    naive counter had.
+    """
+    depth = 1
+    # ("code", target_depth) for the base frame and for each open `${...}`; a plain string
+    # ("squote"/"dquote"/"template") for whichever literal is currently open.
+    frames: List[object] = [("code", 0)]
+    i = start
+    n = len(cleaned)
+    while i < n:
+        top = frames[-1]
+        ch = cleaned[i]
+        if top in ("squote", "dquote"):
+            quote = "'" if top == "squote" else '"'
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == quote:
+                frames.pop()
+            i += 1
+            continue
+        if top == "template":
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == "`":
+                frames.pop()
+                i += 1
+                continue
+            if ch == "$" and i + 1 < n and cleaned[i + 1] == "{":
+                target = depth  # the depth to RETURN to — captured before this brace counts
+                depth += 1
+                frames.append(("code", target))
+                i += 2
+                continue
+            i += 1
+            continue
+        # top is ("code", target_depth) — the base frame, or an open `${...}`.
+        target_depth = top[1]
+        if ch == "'":
+            frames.append("squote")
+        elif ch == '"':
+            frames.append("dquote")
+        elif ch == "`":
+            frames.append("template")
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            i += 1
+            if depth == target_depth:
+                frames.pop()
+                if not frames:
+                    return i
+            continue
+        i += 1
+    return n
+
+
 def style_object_spans(cleaned: str) -> Iterable[str]:
     """Each `style={...}` JSX attribute's own text, `style=` through its matching closing
     brace — found by counting braces rather than assuming a shape, so `style={{ ['--x' as
-    string]: n } as CSSProperties}`'s trailing cast stays inside the span it belongs to.
+    string]: n } as CSSProperties}`'s trailing cast stays inside the span it belongs to, and
+    string-aware (`_style_span_end`) so a brace INSIDE a string value cannot extend the span
+    past the attribute's real close.
 
     THIS IS WHAT KEEPS `TS_DEF_PLAIN_KEY`/`TS_DEF_BRACKET_KEY` FROM READING AN UNRELATED
     OBJECT LITERAL AS A DEFINITION: a quoted key followed by `:` is common in this tree (route
@@ -167,15 +250,8 @@ def style_object_spans(cleaned: str) -> Iterable[str]:
     silently masking a real finding.
     """
     for match in re.finditer(r"style\s*=\s*\{", cleaned):
-        depth = 1  # the brace `style=\{` already consumed
-        i = match.end()
-        while i < len(cleaned) and depth > 0:
-            if cleaned[i] == "{":
-                depth += 1
-            elif cleaned[i] == "}":
-                depth -= 1
-            i += 1
-        yield cleaned[match.start():i]
+        end = _style_span_end(cleaned, match.end())
+        yield cleaned[match.start():end]
 
 
 def ts_definitions(cleaned: str) -> Iterable[str]:
@@ -355,6 +431,34 @@ SELF_TEST: Tuple[SelfCase, ...] = (
         "the same key, inside a real style={{...}}, still counts as a definition",
         [("f.css", ".x { color: var(--bn-nope); }")],
         [("f.tsx", "<div style={{ '--bn-nope': 1 } as CSSProperties} />")],
+        0,
+    ),
+    (
+        "an unbalanced brace inside a STRING VALUE inside style={{...}} must not extend the "
+        "span past the attribute's real close and swallow the unrelated object after it — "
+        "reopens the exact failure the span restriction exists to prevent",
+        [("f.css", ".x { color: var(--bn-mask-me); }")],
+        [
+            (
+                "f.tsx",
+                "<div style={{ label: '{', '--bn-real': 1 }} />\n"
+                "const other = { '--bn-mask-me': 1 }",
+            )
+        ],
+        1,
+    ),
+    (
+        "a style={{...}} whose string value carries a BALANCED brace stays green — the string "
+        "content must still be skipped for depth, not merely tolerated when unbalanced",
+        [("f.css", ".x { color: var(--bn-nope); }")],
+        [("f.tsx", "<div style={{ label: '{}', '--bn-nope': 1 }} />")],
+        0,
+    ),
+    (
+        "a template-literal value with a ${...} interpolation still closes the span "
+        "correctly — the interpolation's braces are real code and must be counted",
+        [("f.css", ".x { color: var(--bn-nope); }")],
+        [("f.tsx", "<div style={{ ['--bn-nope' as string]: `${n}px` }} />")],
         0,
     ),
 )
