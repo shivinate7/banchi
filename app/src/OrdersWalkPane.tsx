@@ -627,7 +627,8 @@ export function WalkMainPane({ walk, phone }: { readonly walk: OrderWalk; readon
   const row: Row | null = currentCard === null ? null : { key: currentRow.copy.key, card: currentCard }
 
   return (
-    <section className="bn-panel browse-card orders-walk-card">
+    <>
+      <section className="bn-panel browse-card orders-walk-card">
       {row === null ? (
         <div className="browse-hero-head">
           <div className="browse-hero-text">
@@ -675,27 +676,50 @@ export function WalkMainPane({ walk, phone }: { readonly walk: OrderWalk; readon
               its class rather than inventing a second name for the same contract, since its
               rules — `container-type: inline-size`, the flex chain that carries `.browse-band`'s
               fixed height down to a list that scrolls in it — are exactly what this pane needs
-              too, and `./Inventory.css` was already imported here. */}
+              too, and `./Inventory.css` was already imported here.
+
+              THE SAME CHAIN'S SECOND LINK (the orders-followups task): `.inventory-detail`'s
+              CSS reaches `.card-locations` only through `.inventory-copies > .card-locations
+              { flex: 1 1 auto; min-height: 0 }` (`Inventory.css`). `CopiesPanel`
+              (`Inventory.tsx`) always wraps `CardLocations` in
+              `<section className="inventory-copies">`; this pane skipped that wrapper, so the
+              rule never matched and `.card-locations` kept its block default (`min-height:
+              auto`, sized to its own content) instead of shrinking to the band. Measured at
+              1440 with 9 copies: the rows list grew to 1600px inside a 620px band, and
+              `Details` — a child of THIS section, drawn right after `.browse-band` closed —
+              sat at y=933, squarely inside the overflow (933-1913px), because the overflow
+              paints past the band's own box while `Details` still lands in normal flow right
+              after it. Adding the wrapper is the whole fix for the scroll: the list is what
+              gives (D118), and it now does. */}
           <div className="inventory-detail">
-            <CardLocations
-              persona="owner"
-              group={currentGroup}
-              currentKey={currentRow.copy.key}
-              preserveOrder
-              onSell={walk.onSell}
-              busyKey={walk.busyCopy}
-              soldKeys={walk.soldKeys}
-              renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
-            />
+            <section className="inventory-copies">
+              <CardLocations
+                persona="owner"
+                group={currentGroup}
+                currentKey={currentRow.copy.key}
+                preserveOrder
+                onSell={walk.onSell}
+                busyKey={walk.busyCopy}
+                soldKeys={walk.soldKeys}
+                renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
+              />
+            </section>
           </div>
         </div>
       </div>
+      </section>
+      {/* `Details` MOVED HERE, A SIBLING OF THE SECTION RATHER THAN A CHILD OF IT — mirroring
+          `BoxBrowse.tsx`'s own `</section>` / `<CardDetailsSection .../>` pair exactly (§13:
+          this pane is inventory's card pane, reused whole). `.bn-panel`'s `overflow: hidden`
+          was clipping hero, band and Details together to one box; the scroll fix above means
+          that box no longer has to stretch to fit an overflowing list, but the DOM shape still
+          owed inventory's own, one section shallower than this pane drew it. */}
       {row === null ? null : <CardDetailsSection card={row.card} market={undefined} listings={{}} phone={phone} />}
       {!zoomed || row === null ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt={`The card at ${currentRow.copy.place.label ?? row.key}`} />
         </Overlay>
       )}
-    </section>
+    </>
   )
 }

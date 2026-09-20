@@ -7563,7 +7563,7 @@ COMPONENTS = [
                                                      "D58", "D63", "D69", "D73", "D90", "D91",
                                                      "D93", "D96", "D103", "D113", "D114", "D118",
                                                      "D123", "D132", "D181", "D193", "D194", "D196",
-                                                     "D203", "D209", "D212"]},
+                                                     "D203", "D209", "D212", "D220"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
