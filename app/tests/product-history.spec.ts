@@ -3,7 +3,7 @@ import { sealEveryTest } from './shell'
 
 import type { OrderRow, OrdersPayload, ProductHistoryPayload } from '../src/types'
 
-/* `#/product` — THE PER-PRODUCT VIEW (D-a-product-price-view). Off-nav, reached by hash and
+/* `#/product` — THE PER-PRODUCT VIEW (D227). Off-nav, reached by hash and
  * `?sku=`, so `VIEW_ROUTE` below is the one thing a compiler cannot check for this screen —
  * the same reason `fulfillment.spec.ts` and `gallery.spec.ts` pin their own route verbatim.
  *

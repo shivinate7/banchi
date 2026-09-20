@@ -1,5 +1,5 @@
 """The per-product view's own read: one SKU's market history, archive-first, live-fallback
-(D-a-product-price-view).
+(D227).
 
 WHAT THIS ANSWERS. `docs/specs/revenue-plan.md` section 3: one page per product, showing what
 it has been selling for, with the owner's own sales marked on it. The owner's fills are

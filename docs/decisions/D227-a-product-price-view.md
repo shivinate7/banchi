@@ -1,4 +1,4 @@
-## D-a-product-price-view — A route, not a lens, and never one line for two kinds of observation
+## D227 — A route, not a lens, and never one line for two kinds of observation
 
 **THE VIEW.** One page per product, deep-linkable. It shows what that product has been
 selling for. It marks the owner's own sales on it. `docs/specs/revenue-plan.md` section 3

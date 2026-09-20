@@ -112,7 +112,7 @@ refunded order. That comes before anyone designs a state for it.
 
 ## 3. The per product view
 
-**BUILT.** `#/product` (D-a-product-price-view). One page per product, deep linkable by
+**BUILT.** `#/product` (D227). One page per product, deep linkable by
 `?sku=`. It reads `store/pricearchive.py` first. It falls back to a live read through
 `pipeline/pricehistory.py` only for a SKU the archive has never swept. It never writes and
 never triggers a sweep from the screen. `server/pipeline_routes.py:do_product_history` is

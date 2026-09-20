@@ -921,6 +921,7 @@ D223 Sold value goes first, and sealed product is a named gap
 D224 The preview costs nothing, and the press commits as it goes
 D225 Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
 D226 A prose ratchet gets a reader, and bytes are not the ruler
+D227 A route, not a lens, and never one line for two kinds of observation
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
