@@ -13,12 +13,12 @@
     "AGENTS.md": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
-      "words": 12121
+      "words": 12305
     },
     "CLAUDE.md": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
-      "words": 12121
+      "words": 12305
     },
     "README.md": {
       "errors": 29,
@@ -1115,10 +1115,10 @@
       "ratio_per_1k_words": 20.899,
       "words": 957
     },
-    "docs/decisions/D179-five-shell-mistakes.md": {
+    "docs/decisions/D179-shell-mistakes.md": {
       "errors": 61,
-      "ratio_per_1k_words": 14.479,
-      "words": 4213
+      "ratio_per_1k_words": 14.482,
+      "words": 4212
     },
     "docs/decisions/D180-a-selection-of-cards.md": {
       "errors": 40,
@@ -1737,8 +1737,8 @@
     },
     "docs/specs/order-walk-plan.md": {
       "errors": 108,
-      "ratio_per_1k_words": 9.53,
-      "words": 11333
+      "ratio_per_1k_words": 9.528,
+      "words": 11335
     },
     "docs/specs/revenue-next.md": {
       "errors": 0,
@@ -1844,11 +1844,6 @@
       "errors": 19,
       "ratio_per_1k_words": 8.151,
       "words": 2331
-    },
-    "docs/specs/ux-walkthrough-2026-09-13.md": {
-      "errors": 24,
-      "ratio_per_1k_words": 14.109,
-      "words": 1701
     },
     "docs/specs/verification-cost.md": {
       "errors": 38,
