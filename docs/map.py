@@ -4756,7 +4756,8 @@ COMPONENTS = [
                                       "(`codes_routes._pool`), which is where the money "
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
-                              "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172"]},
+                              "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172",
+                                              "D218"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -4768,7 +4769,8 @@ COMPONENTS = [
                                       "roster did not list this route, and this checkout's "
                                       "store is empty (D43) so no disabled button renders for "
                                       "it to see even now that it does.",
-                              "governed_by": ["D14", "D32", "D43", "D50", "D58", "D70", "D117"]},
+                              "governed_by": ["D14", "D32", "D43", "D50", "D58", "D70", "D117",
+                                              "D218"]},
             "src/App.css": {"does": "the shell's chrome: the sidebar and the rail it collapses "
                                     "to, the phone's top bar and its sheet, the bottom tab bar, "
                                     "the command palette, the which-key overlay, the "
@@ -4782,9 +4784,9 @@ COMPONENTS = [
                                     "The chord chip lights when the leader is armed; D51's step "
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
-                            "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
-                                             "D95", "D110", "D117", "D118", "D134",
-                                             "D152", "D204", "D205"]},
+                            "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51",
+                                            "D94", "D95", "D110", "D117", "D118", "D134", "D152",
+                                            "D204", "D205", "D218"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -4812,7 +4814,9 @@ COMPONENTS = [
                                      "correctly without one, and a reclaimed photograph (D89) "
                                      "leaves the frame rather than a broken image. Each panel "
                                      "loads on its own, so no figure waits on another.",
-                             "governed_by": ["D156", "D145", "D56", "D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95", "D125", "D172", "D192", "D202"]},
+                             "governed_by": ["D5", "D6", "D10", "D13", "D32", "D33", "D52", "D56",
+                                             "D63", "D69", "D86", "D89", "D94", "D95", "D125",
+                                             "D145", "D156", "D172", "D192", "D202", "D218"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -4825,7 +4829,8 @@ COMPONENTS = [
                              # standing rule thickens with `scale` and never with `width`;
                              # D117 is the thumb floor this sheet answers to at phone width;
                              # D121 is the hero the lede became.
-                             "governed_by": ["D5", "D32", "D50", "D94", "D110", "D117", "D118", "D121"]},
+                             "governed_by": ["D5", "D32", "D50", "D94", "D110", "D117", "D118",
+                                             "D121", "D218"]},
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
@@ -5186,7 +5191,8 @@ COMPONENTS = [
                         "number column EMPTY, because what D58 refuses is the figure. Refusing "
                         "the whole treatment over it is what put the pre-D41 plain string back "
                         "on two screens for exactly the cards that had been sold.",
-                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71", "D92", "D132", "D119"]},
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71",
+                                "D92", "D119", "D132", "D218"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
@@ -5217,7 +5223,7 @@ COMPONENTS = [
                         "the advance of `0` in the element's own face and Manrope is variable. "
                         "The dash in the empty column is `content`, so it "
                         "never joins the label's textContent.",
-                "governed_by": ["D24", "D31", "D41", "D58", "D68", "D71", "D92"]},
+                "governed_by": ["D24", "D31", "D41", "D58", "D68", "D71", "D92", "D218"]},
             "src/PlaceNeighbors.tsx": {
                 "does": "D30's neighbors, RANKED rather than joined (D41's move one line down, "
                         "2026-08-30). `after` / `before` as a muted mono key column with the two "
@@ -5573,7 +5579,7 @@ COMPONENTS = [
                         "a departed record has no slot to count to, so `positionOf` and the "
                         "Where column both go through `storeKey.ts:storeKeyText` — `B9 #3`, "
                         "D68's own spelling — rather than composing `#{index}` by hand.",
-                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134"],
+                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D218"],
             },
             "src/Graveyard.css": {
                 "does": "a smaller sheet than a working screen's, because this one has no "
@@ -5585,14 +5591,15 @@ COMPONENTS = [
                         "counts were sized to their own content inside a flex column and bled "
                         "the whole page wider than the viewport rather than either wrapping or "
                         "scrolling.",
-                "governed_by": ["D50", "D94", "D117", "D134"],
+                "governed_by": ["D50", "D94", "D117", "D134", "D218"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
                         "order, photo-confirm before each pull, one-tap mark-sold with an undo "
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
-                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D69", "D125", "D32", "D172", "D93", "D192", "D193"],
+                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
+                                "D93", "D125", "D172", "D192", "D193", "D218"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -5600,7 +5607,7 @@ COMPONENTS = [
                         "none is restated as a comment — they are asserted next door instead. "
                         "The temporary rule that hid the shell nav is gone: src/App.tsx stopped "
                         "rendering it on this route, which is the fix that rule named.",
-                "governed_by": ["D5", "D10"],
+                "governed_by": ["D5", "D10", "D218"],
             },
 
             # ---- step 6's component and the sheet that renders it ----
@@ -5757,7 +5764,9 @@ COMPONENTS = [
                                               "bar's, and the drain's track is a token here where "
                                               "`kit.css` paints it as a white alpha for an inverted "
                                               "panel.",
-                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45", "D58", "D71", "D115", "D118", "D132", "D119"]},
+                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45",
+                                                      "D58", "D71", "D115", "D118", "D119", "D132",
+                                                      "D218"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -6521,7 +6530,8 @@ COMPONENTS = [
                                                 "file is handed over. The abstention lane is "
                                                 "D61's third answer drawn as the pile that needs "
                                                 "a person.",
-                                        "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94"]},
+                                        "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94",
+                                                        "D218"]},
             "src/OrdersWalkPane.tsx": {"does": "`docs/specs/order-walk-plan.md` §13, \"Orders "
                                            "is inventory's screen with orders in the rail\": "
                                            "replaces `OrdersWalk.tsx` whole, not adapted. There "
@@ -6567,7 +6577,7 @@ COMPONENTS = [
                                          "unjudged lane is drawn as an answer rather than as a "
                                          "fault, because D61's third lane is a deliberate "
                                          "abstention and not a failure to route.",
-                                 "governed_by": ["D40", "D50", "D61", "D69"]},
+                                 "governed_by": ["D40", "D50", "D61", "D69", "D218"]},
             "src/Revenue.tsx": {"does": "`#/revenue` (Sales): the gross-revenue "
                                         "retrospective. AN ELEVENTH NAV ROW ON PURPOSE — tried "
                                         "off-nav on 2026-09-19, reversed the same day on the "
@@ -7229,7 +7239,7 @@ COMPONENTS = [
                         "`standing.ts` and `Home.tsx` join `resolution.orders` against the "
                         "wire's own `open` field by key rather than trusting the server "
                         "pre-filtered it. Not a harness test; `make design-check` runs it.",
-                "governed_by": ["D63", "D114", "D121", "D202"],
+                "governed_by": ["D63", "D114", "D121", "D202", "D218"],
                 "note": "Proved red first: reverting the "
                         "join in `standing.ts` and `Home.tsx` reads "
                         "\"Cannot be filled — 7 copies for 1 open order cannot be found.\" and "
@@ -7461,7 +7471,8 @@ COMPONENTS = [
                                                "second projection would arrive unnoticed. Not a "
                                                "harness test — it starts a browser; "
                                                "`make design-check` runs it.",
-                                       "governed_by": ["D16", "D61", "D63", "D66", "D69", "D194"]},
+                                       "governed_by": ["D16", "D61", "D63", "D66", "D69", "D194",
+                                                       "D218"]},
             "tests/value-bands.spec.ts": {"does": "the value lens "
                                                   "(D159), in its own "
                                                   "file so `pricing.spec.ts` stays the unedited "
@@ -7636,7 +7647,7 @@ COMPONENTS = [
                                 "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58",
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
-                                "D136", "D142", "D155", "D172", "D181", "D192", "D213"],
+                                "D136", "D142", "D155", "D172", "D181", "D192", "D213", "D218"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
@@ -7717,7 +7728,8 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D115", "D125", "D136", "D193"],
+                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D115", "D125",
+                                "D136", "D193", "D218"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

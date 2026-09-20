@@ -1307,9 +1307,9 @@ test('selecting a card shows every copy of it, each with both doors out of inven
      against a ceiling of two leaves room for ONE, where a screen reading the bare cap of 4
      would offer room for three. */
   await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('1')
-  await expect(page.locator('.card-locations-counts')).toHaveText(
-    'Pushed 0 · Staged 2 · Room for 1 more live',
-  )
+  // D218: pushed/staged/headroom are sibling spans now; the seam is CSS
+  // (`.card-locations-counts > span::before`), never part of `textContent`.
+  await expect(page.locator('.card-locations-counts')).toHaveText('Pushed 0Staged 2Room for 1 more live')
 
   /* AND THE CARD'S NAME IS DRAWN ONCE ON THIS SCREEN. This header carried an `<h3>` with the same
      name the band's first fact row prints a few hundred pixels above — invisible while the two
@@ -1406,13 +1406,13 @@ test('a copy sold here since the reading is drawn beside it, and headroom follow
   await expect(page.locator('.card-locations-owner')).toBeVisible()
 
   await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('0')
-  await expect(page.locator('.card-locations-since')).toHaveText('1 when read · 1 sold here since')
+  // D218: the seam is CSS now (`.card-locations-since > span::before`), never `textContent`.
+  await expect(page.locator('.card-locations-since')).toHaveText('1 when read1 sold here since')
   /* AND HEADROOM MOVES WITH IT. Computing off the raw reading would say `Room for 1 more live`
      here and refuse a relist the shelf can support — the one-line bug the change would
      otherwise have left behind. */
-  await expect(page.locator('.card-locations-counts')).toHaveText(
-    'Pushed 0 · Staged 2 · Room for 2 more live',
-  )
+  // D218: the seam is CSS now (`.card-locations-counts > span::before`), never `textContent`.
+  await expect(page.locator('.card-locations-counts')).toHaveText('Pushed 0Staged 2Room for 2 more live')
 })
 
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {

@@ -398,6 +398,8 @@
 }
 .bn-server[data-state='offline'] { color: var(--bn-danger); background: var(--bn-danger-tint); }
 .bn-server-detail { font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
+/* D218: the card count is its own span; the seam before it is CSS, never typed. */
+.bn-server-detail::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 
 /* ---- mobile top bar + sheet ------------------------------------------------ */
 .bn-topbar { display: none; }
