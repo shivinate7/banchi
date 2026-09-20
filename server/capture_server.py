@@ -12622,6 +12622,18 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_price_now(asked)
                 )
+            if path == "/pipeline/holdings-value":
+                # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/revenue-plan.md` section 1,
+                # second half). NOT YET REACHABLE FROM A SCREEN — see
+                # `do_pipeline_holdings_value`'s own header. `range` defaults to `month`,
+                # the finest range the archive keeps.
+                range_ = (
+                    parse_qs(parsed.query, keep_blank_values=True).get("range")
+                    or [pipeline_routes._HOLDINGS_DEFAULT_RANGE]
+                )[0]
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_holdings_value(range_)
+                )
             if path == "/pipeline/submissions":
                 # WHAT IS CLAIMED RIGHT NOW (D174). Free, reads the store and
                 # holds nothing — the count that has to be on screen before the control that
