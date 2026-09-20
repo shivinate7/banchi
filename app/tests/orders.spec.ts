@@ -261,9 +261,9 @@ async function stubWalkPlan(page: Page, plan: WalkPlan): Promise<{ readonly call
 
 /** SELECT THE FIRST BUYER ROW — §13 supersedes §12's own "Tick all, then Start": there is no
  *  Start button and no frozen pass any more. Clicking a buyer selects it and its walk starts
- *  at once, the same as clicking a box opens it (`useOrderWalk`'s `walkedKeys`). "Tick all"
- *  still exists (it JOINS every walkable buyer's orders to the live walk, `Untick all` drops
- *  them), which is a different thing from starting one. */
+ *  at once, the same as clicking a box opens it (`useOrderWalk`'s `walkedKeys`). "Tick shown"
+ *  still exists (it JOINS every walkable buyer's orders in view into the live walk, "Untick
+ *  shown" drops them), which is a different thing from starting one. */
 async function startWalk(page: Page): Promise<void> {
   await page.locator('.orders-index-row').first().click()
 }
@@ -1607,11 +1607,85 @@ test('the index lists buyers, and a two-order buyer carries the N-orders pill an
   await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('2')
 })
 
-test('a nameless order groups on its own, as No name and the order number', async ({ page }) => {
+test('an open order under Ready in the row draws its status LABEL, never the order id', async ({ page }) => {
+  /* DEFECT 1: `BuyerRow`'s per-order pill (drawn only for a non-ready order) read
+     `order.number` where `OrderPanel`'s own identical pill reads `pill.label`. A short line
+     makes the second order draw its pill — before the fix this pill's text was the id
+     `SECOND_ORDER`, not "Short". */
+  const secondLine = () =>
+    line({
+      order: SECOND_ORDER,
+      order_key: secondOrderKey,
+      sku: '9197754',
+      reason: 'short',
+      picks: [pick({ index: 30, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030' })],
+      line: { ...line().line, sku: '9197754', name: 'Sunrise', number: '030' },
+    })
+  const both = payloadOf(
+    [order(), order({ key: secondOrderKey, number: SECOND_ORDER })],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondOrderKey, number: SECOND_ORDER, complete: false, outstanding: 1, lines: [secondLine()] },
+    ],
+  )
+  await open(page, { orders: both })
+
+  const row = page.locator('.orders-index-row').first()
+  await expect(row).toContainText('Short')
+  await expect(row).not.toContainText(SECOND_ORDER)
+})
+
+test('a nameless order groups on its own, drawing the composed date_id label and never the full id', async ({ page }) => {
   const nameless = order({ buyer: null })
   await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  await expect(page.locator('.orders-index-row').first()).toContainText(`No name · #${ORDER_NUMBER}`)
+  /* `placed_at` is `2026-08-29T10:00:00+00:00` and the id's last 5 characters are `006AC`
+     (the fixture's own default, `routeFixtures.ts:order`) — `unnamedBuyerLabel` reads UTC so
+     this is stable regardless of which timezone the runner sits in. */
+  const row = page.locator('.orders-index-row').first()
+  await expect(row).toContainText('08-29-26_006AC')
+  await expect(row).not.toContainText(ORDER_NUMBER)
+})
+
+test('two unnamed buyers with different placed dates draw different name-slot labels, neither the full id', async ({
+  page,
+}) => {
+  const firstNumber = 'AAAA1111-0000F4-00001'
+  const secondNumber = 'BBBB2222-0000F4-00002'
+  const first = order({
+    key: `TCGplayer:${firstNumber}`,
+    number: firstNumber,
+    buyer: null,
+    placed_at: '2026-07-01T00:00:00+00:00',
+  })
+  const second = order({
+    key: `TCGplayer:${secondNumber}`,
+    number: secondNumber,
+    buyer: null,
+    placed_at: '2026-07-15T00:00:00+00:00',
+  })
+  await open(page, {
+    orders: payloadOf(
+      [first, second],
+      [
+        { key: first.key, number: firstNumber, complete: false, outstanding: 1, lines: [line()] },
+        { key: second.key, number: secondNumber, complete: false, outstanding: 1, lines: [line()] },
+      ],
+    ),
+  })
+
+  /* Default sort is newest first, and both fixtures share the default Ready-to-ship status
+     (D209), so the newer of the two (07-15) leads. */
+  const rows = page.locator('.orders-index-row')
+  await expect(rows).toHaveCount(2)
+  const texts = await rows.allTextContents()
+  expect(texts[0]).toContain('07-15-26_00002')
+  expect(texts[1]).toContain('07-01-26_00001')
+  expect(texts[0]).not.toEqual(texts[1])
+  for (const text of texts) {
+    expect(text).not.toContain(firstNumber)
+    expect(text).not.toContain(secondNumber)
+  }
 })
 
 test('a buyer with two open orders walks both at once — one selection, one plan, both cards', async ({ page }) => {
@@ -1788,7 +1862,7 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
  * THREE BUYERS, ONE FIXTURE. Alice (Ready to Ship, oldest), Carol (Ready to Ship, newest),
  * Bob (a status this file never hardcodes, in the middle). Default order is therefore
  * Carol, Alice, Bob — both Ready-to-Ship groups lead, newest of the two first, then Bob.
- * Carol's own line answers `sku_unseen`, which is what "Hide unknown SKUs" narrows on.
+ * Carol's own line answers `sku_unseen`, which is what "Hide never-seen SKUs" narrows on.
  */
 
 function seededOrder(seed: {
@@ -1933,6 +2007,20 @@ test('at 820, the buyer rail sits beside the walk pane rather than stacking abov
   expect(overlap, 'the rail and the pane share no vertical band — they stacked instead of sitting side by side').toBeGreaterThan(0)
 })
 
+test('the step-through hint shows at desktop width, where its arrow-key handler is live, and not at phone width', async ({
+  page,
+}) => {
+  /* DEFECT 5: the hint rendered unconditionally, but its handler
+     (`if (phone || shownGroups.length === 0) return`) is gated on `!phone`. At 390 the arrow
+     keys do nothing, so the hint must not claim they do. */
+  await open(page, { orders: threeBuyerPayload() })
+  await expect(page.locator('.orders-index-hint')).toContainText('step through buyers')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.locator('.browse-boxchip').click()
+  await expect(page.locator('.browse-railsheet .orders-index-hint')).toHaveCount(0)
+})
+
 /* DEFECT 2: below 768px `.browse-body > .browse-map` is hidden by that same CSS, so once
  * defect 1 is fixed the buyer picker needs its own way onto the screen — the chip and bottom
  * sheet this asserts, reusing `.browse-railsheet` rather than a second stylesheet. */
@@ -1984,6 +2072,24 @@ test('at 390, the sheet exposes the selected buyer\'s walk rows, not only the bu
   await expect(sheet.locator('.browse-row')).toHaveCount(2)
   await expect(sheet).toContainText('Volcanion')
   await expect(sheet).toContainText('Sunrise')
+})
+
+test('Untick shown is disabled with nothing ticked, and enables only once a tick lands', async ({ page }) => {
+  /* DEFECT 4, SECOND HALF: `Untick shown` read `tickableKeys` (the rows in view) for its
+     disabled state, so it sat enabled the moment the view held a walkable row even with
+     `walkTicked` empty — a press that would visibly do nothing. It must read `walkTicked`. */
+  await open(page, { orders: threeBuyerPayload() })
+  const tickAll = page.getByRole('button', { name: 'Tick shown', exact: true })
+  const untickAll = page.getByRole('button', { name: 'Untick shown' })
+
+  await expect(tickAll).toBeEnabled()
+  await expect(untickAll).toBeDisabled()
+
+  await tickAll.click()
+  await expect(untickAll).toBeEnabled()
+
+  await untickAll.click()
+  await expect(untickAll).toBeDisabled()
 })
 
 test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {

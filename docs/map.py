@@ -6584,8 +6584,13 @@ COMPONENTS = [
                                         "boolean, because the buyer list has one call site and "
                                         "not three. A re-sort or an arrival that would reorder "
                                         "only OFFERS to, via a reserved chip; a changed status "
-                                        "or hide-unknown toggle retakes immediately.",
-                                 "governed_by": ["D103", "D114", "D118", "D181", "D209"]},
+                                        "or hide-unknown toggle retakes immediately. "
+                                        "`unnamedBuyerLabel` is the one composer for a nameless "
+                                        "buyer's NAME-slot text (D220 amended, 2026-09-20): "
+                                        "`MM-DD-YY_XXXXX` off the group's own `latest` date and "
+                                        "the most recent order's id tail — never a typed dot "
+                                        "(D218), never the full id.",
+                                 "governed_by": ["D103", "D114", "D118", "D181", "D209", "D218", "D220"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
@@ -7593,8 +7598,10 @@ COMPONENTS = [
                                              "(2026-09-13) THE INDEX IS ASSERTED BY BUYER: a "
                                              "two-order buyer draws the `N orders` pill and its "
                                              "detail header enumerates both order numbers with "
-                                             "two bars; a nameless order groups as `No name · "
-                                             "#<n>`; the merged walk's rows are asserted to come "
+                                             "two bars; a nameless order draws "
+                                             "`orderView.ts:unnamedBuyerLabel`'s composed "
+                                             "date_id label (D220) rather than its full id; "
+                                             "the merged walk's rows are asserted to come "
                                              "from BOTH orders in a group; `?order=<key>` still "
                                              "resolves to the right buyer through the reverse "
                                              "lookup; and a closed order older than seven days "
