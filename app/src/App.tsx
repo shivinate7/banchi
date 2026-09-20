@@ -765,6 +765,7 @@ const SHORTCUTS: readonly KeyGroup[] = [
     at: '/orders',
     where: 'Only while Orders is open, in the two-pane layout on a wide window.',
     rows: [
+      { keys: ['/'], does: 'Jump into the search field; Esc hands focus back and keeps what you typed' },
       { keys: ['↓'], does: 'Select the next buyer' },
       { keys: ['↑'], does: 'Select the buyer before it' },
       { keys: ['J'], does: 'Step to the next card in the walk' },

@@ -6679,14 +6679,15 @@ COMPONENTS = [
                                                "D51", "D57", "D58", "D61", "D63", "D66", "D69",
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D181", "D192",
-                                               "D193", "D196", "D203", "D209", "D212"]},
+                                               "D193", "D195", "D196", "D203", "D209", "D212",
+                                               "D220", "D221"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D193", "D195",
-                                               "D203"]},
+                                               "D203", "D221"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -7655,10 +7656,11 @@ COMPONENTS = [
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
                                      "governed_by": ["D20", "D24", "D27", "D28", "D36", "D49",
-                                                     "D58", "D63", "D69", "D73", "D90", "D91",
-                                                     "D93", "D96", "D103", "D113", "D114", "D118",
-                                                     "D123", "D132", "D181", "D193", "D194", "D196",
-                                                     "D203", "D209", "D212", "D218", "D220"]},
+                                                     "D50", "D58", "D63", "D69", "D73", "D90",
+                                                     "D91", "D93", "D96", "D103", "D113", "D114",
+                                                     "D118", "D123", "D132", "D181", "D193", "D194",
+                                                     "D196", "D203", "D209", "D212", "D218", "D220",
+                                                     "D221"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

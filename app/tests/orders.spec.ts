@@ -1080,13 +1080,13 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
 
-  await page.getByRole('searchbox', { name: 'Search buyers by name or order number' }).click()
+  await page.getByRole('searchbox', { name: 'Search buyers' }).click()
   await page.keyboard.press('u')
 
   // No second `/orders/pull` call — the field ate the key.
   await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toHaveCount(0)
   expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
-  await expect(page.getByRole('searchbox', { name: 'Search buyers by name or order number' })).toHaveValue('u')
+  await expect(page.getByRole('searchbox', { name: 'Search buyers' })).toHaveValue('u')
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
@@ -2121,7 +2121,7 @@ test('Untick shown is disabled with nothing ticked, and enables only once a tick
 test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const options = page.locator('.orders-status-select option')
-  await expect(options).toContainText(['All', 'Ready to Ship (2)', 'Zorbo Pending (1)'])
+  await expect(options).toContainText(['Status', 'Ready to Ship (2)', 'Zorbo Pending (1)'])
 })
 
 test('each control narrows; they compose', async ({ page }) => {
@@ -2386,7 +2386,7 @@ test('the search narrows the buyer list by name, case- and space-insensitively',
   await open(page, { orders: threeBuyerPayload() })
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 
-  const search = page.locator('.orders-search-input')
+  const search = page.locator('.orders-search-field .search-field-input')
   await search.fill('  ALICE ')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
@@ -2397,7 +2397,7 @@ test('the search narrows the buyer list by name, case- and space-insensitively',
 
 test('the search matches an order number too', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-search-input').fill('c0003')
+  await page.locator('.orders-search-field .search-field-input').fill('c0003')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Carol')
 })
@@ -2407,7 +2407,7 @@ test('the search composes with the status select — an AND, never a second gate
   await page.locator('.orders-status-select').selectOption('Ready to Ship')
   await expect(page.locator('.orders-index-row')).toHaveCount(2) // Carol, Alice
 
-  await page.locator('.orders-search-input').fill('bob')
+  await page.locator('.orders-search-field .search-field-input').fill('bob')
   await expect(page.locator('.orders-index-row')).toHaveCount(0)
 })
 
@@ -2424,7 +2424,7 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
   await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
-  await page.locator('.orders-search-input').fill('hopper')
+  await page.locator('.orders-search-field .search-field-input').fill('hopper')
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
   await expect(earlier).toContainText('Grace Hopper')
@@ -2432,13 +2432,13 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
 
 test('a search with nothing left says so by name and offers to clear it', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-search-input').fill('nobody named this')
+  await page.locator('.orders-search-field .search-field-input').fill('nobody named this')
   await expect(page.locator('main.orders')).toContainText('No buyer matches')
   await expect(page.locator('main.orders')).toContainText('nobody named this')
 
   const clear = page.locator('.bn-empty').getByRole('button', { name: 'Clear search' })
   await clear.click()
-  await expect(page.locator('.orders-search-input')).toHaveValue('')
+  await expect(page.locator('.orders-search-field .search-field-input')).toHaveValue('')
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 })
 
@@ -2446,7 +2446,7 @@ test('a changed search is an explicit retake — no stale chip offered', async (
   await open(page, { orders: threeBuyerPayload() })
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
 
-  await page.locator('.orders-search-input').fill('a')
+  await page.locator('.orders-search-field .search-field-input').fill('a')
   await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
 })
 
@@ -2920,6 +2920,115 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
   expect(after).toEqual(before)
 })
 
+/* ---------------------------------------------------------------- the sidebar-review "Should" pass */
+
+test('the buyer search is SearchField: 40px, and "/" jumps into it', async ({ page }) => {
+  /* S1 — Orders' own search used to be a raw 28px input. `SearchField` is the shared
+   *  component `#/inventory`, `#/revenue` and the Fulfiller's screen all reach for; this
+   *  asserts the box itself clears the 40px floor and that the owner's "/" hotkey (off on
+   *  every other input, per `SearchField`'s own guard) lands in it. */
+  await open(page, { orders: threeBuyerPayload() })
+  const box = page.locator('.orders-search-field .search-field-box')
+  await expect(box).toBeVisible()
+  const height = await box.evaluate((el) => el.getBoundingClientRect().height)
+  expect(height).toBeGreaterThanOrEqual(40)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('/')
+  await expect(page.locator('.orders-search-field .search-field-input')).toBeFocused()
+})
+
+test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
+  /* S4, D50 — one grammar with `#/inventory`'s own `.browse-row`/`.browse-boxcell`: a tint
+   *  plus an accent spine (`::before`, opacity/scale toggled), never a `box-shadow` ring. */
+  await open(page, { orders: threeBuyerPayload() })
+  const selected = page.locator('.orders-index-row[aria-current="true"]')
+  await expect(selected).toHaveCount(1)
+  const before = await selected.evaluate((el) => {
+    const style = getComputedStyle(el, '::before')
+    return { opacity: style.opacity, background: style.backgroundColor, position: style.position }
+  })
+  expect(before.opacity).toBe('1')
+  expect(before.position).toBe('absolute')
+  expect(before.background).not.toBe('rgba(0, 0, 0, 0)')
+  const ownStyle = await selected.evaluate((el) => getComputedStyle(el).boxShadow)
+  expect(ownStyle).toBe('none')
+})
+
+test('the walk panel folds every section at once, and Hide sold carries a count', async ({ page }) => {
+  /* S5 — "N sections" becomes a real collapse-all/expand-all control, and the Hide sold chip
+   *  now carries how many rows it would hide, matching `#/inventory`'s own `departedHere`. */
+  const wire = await open(page, {
+    orders: secondBuyerPayload().payload,
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+  })
+  await stubWalkPlan(page, bothPlan())
+  await startWalk(page)
+  await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
+  await expect(page.locator('.browse-list')).toContainText('Sunrise')
+
+  const foldButton = page.locator('.browse-status').getByRole('button', { name: /collapse all|expand all/ })
+  await expect(foldButton).toContainText('2 sections')
+  await expect(page.locator('.browse-group-rows')).toHaveCount(2)
+  await foldButton.click()
+  await expect(page.locator('.browse-group-rows')).toHaveCount(0)
+  await expect(foldButton).toContainText('expand all')
+  await foldButton.click()
+  await expect(page.locator('.browse-group-rows')).toHaveCount(2)
+
+  await expect(page.locator('.browse-hidesold .bn-chip-count')).toHaveText('0')
+  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
+  await expect
+    .poll(async () => (await page.locator('.orders-walk-card .browse-hero-name').textContent()) ?? '')
+    .not.toBe('Volcanion')
+  await expect(page.locator('.browse-hidesold .bn-chip-count')).toHaveText('1')
+  void wire
+})
+
+test('the ORDER id stays on one line and in the mono face, however long it is', async ({ page }) => {
+  /* S8, D221 — `.boxops-identity-num` was built for "Box 3" and wrapped a real order id
+   *  mid-identifier; the id now gets its own nowrap/ellipsis span in the mono face. */
+  const longId = 'A2FFC195-0000F4-006AC'
+  const rows = [
+    order({
+      key: `TCGplayer:${longId}`,
+      number: longId,
+      buyer: 'Alice',
+      lines: [line({ order: longId, order_key: `TCGplayer:${longId}` }).line],
+    }),
+  ]
+  const resolved = [
+    { key: rows[0]!.key, number: longId, complete: false, outstanding: 1, lines: [line({ order: longId, order_key: rows[0]!.key })] },
+  ]
+  await open(page, { orders: payloadOf(rows, resolved) })
+  const idSpan = page.locator('.orders-buyer-order-id')
+  await expect(idSpan).toHaveText(longId)
+  const box = await idSpan.evaluate((el) => el.getBoundingClientRect())
+  expect(box.height).toBeLessThan(24)
+  const style = await idSpan.evaluate((el) => getComputedStyle(el))
+  expect(style.whiteSpace).toBe('nowrap')
+  expect(style.fontFamily).toContain('JetBrains')
+})
+
+test('the rail-collapse toggle folds the buyer rail to glyphs and restores it', async ({ page }) => {
+  /* S17 — the owner's ruling, 2026-09-19: Orders gets the same collapse `#/inventory` has. */
+  await open(page, { orders: threeBuyerPayload() })
+  await expect(page.locator('.browse-map')).toHaveCount(1)
+  await expect(page.locator('.browse-rail-mini')).toHaveCount(0)
+
+  await page.locator('.browse-rail-toggle').click()
+  await expect(page.locator('.browse-body')).toHaveAttribute('data-rail', 'collapsed')
+  await expect(page.locator('.browse-rail-mini')).toHaveCount(1)
+  await expect(page.locator('.browse-map')).toHaveCount(0)
+  const glyphs = page.locator('.browse-boxcell-mini')
+  await expect(glyphs).toHaveCount(3)
+
+  await page.locator('.browse-rail-mini').getByRole('button', { name: 'Expand the buyer rail' }).click()
+  await expect(page.locator('.browse-body')).not.toHaveAttribute('data-rail', 'collapsed')
+  await expect(page.locator('.browse-map')).toHaveCount(1)
+  await expect(page.locator('.browse-rail-mini')).toHaveCount(0)
+})
+
 /* --------------------------------------------------------------------------- J/K, auto-advance */
 
 test('J steps to the next card in the walk list, K steps back', async ({ page }) => {
@@ -3048,3 +3157,4 @@ test('#/inventory renders its own known shell unchanged by any of this', async (
   await expect(page.locator('.browse-map')).toHaveCount(1)
   await expect(page.locator('.browse-boxes.bn-panel')).toHaveCount(1)
 })
+

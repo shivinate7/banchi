@@ -486,9 +486,14 @@ export type OrderWalk = ReturnType<typeof useOrderWalk>
 export function WalkList({
   walk,
   hideSold,
+  collapsed = false,
 }: {
   readonly walk: OrderWalk
   readonly hideSold: boolean
+  /** S5 — folds every section's rows at once. No per-section state: the fold chevron in each
+   *  section head stays decorative, as it always has, and this one flag hides every
+   *  `.browse-group-rows` list rather than tracking which sections are individually open. */
+  readonly collapsed?: boolean
 }) {
   if (walk.loading) {
     return (
@@ -520,38 +525,40 @@ export function WalkList({
           <li className="browse-group" key={section.key}>
             <div className="browse-secthead">
               <span className="browse-sectfold" aria-hidden="true">
-                <Icon name="chevronDown" size={14} className="browse-sectmark" />
+                <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} size={14} className="browse-sectmark" />
                 <span className="browse-secttitle">{section.title}</span>
                 <span className="browse-sectcount">{shown.length}</span>
               </span>
             </div>
-            <ul className="browse-group-rows">
-              {shown.map((row) => {
-                const sold = walk.soldKeys.has(row.copy.key)
-                return (
-                  <li className={sold ? 'browse-rowline is-departed' : 'browse-rowline'} key={row.rowKey}>
-                    <button
-                      className="browse-row"
-                      type="button"
-                      aria-current={row.rowKey === walk.current ? 'true' : undefined}
-                      onClick={() => walk.select(row.rowKey)}
-                    >
-                      <span className="browse-row-position">
-                        <span className="browse-row-slot">{row.copy.place.card === null ? '—' : `#${row.copy.place.card}`}</span>
-                      </span>
-                      <span className={row.take.name === null ? 'browse-row-name is-unnamed' : 'browse-row-name'}>
-                        {row.take.name ?? row.take.sku}
-                      </span>
-                      {sold ? (
-                        <span className="browse-row-badge is-out" aria-hidden="true">
-                          <Icon name="check" size={12} />
+            {collapsed ? null : (
+              <ul className="browse-group-rows">
+                {shown.map((row) => {
+                  const sold = walk.soldKeys.has(row.copy.key)
+                  return (
+                    <li className={sold ? 'browse-rowline is-departed' : 'browse-rowline'} key={row.rowKey}>
+                      <button
+                        className="browse-row"
+                        type="button"
+                        aria-current={row.rowKey === walk.current ? 'true' : undefined}
+                        onClick={() => walk.select(row.rowKey)}
+                      >
+                        <span className="browse-row-position">
+                          <span className="browse-row-slot">{row.copy.place.card === null ? '—' : `#${row.copy.place.card}`}</span>
                         </span>
-                      ) : null}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+                        <span className={row.take.name === null ? 'browse-row-name is-unnamed' : 'browse-row-name'}>
+                          {row.take.name ?? row.take.sku}
+                        </span>
+                        {sold ? (
+                          <span className="browse-row-badge is-out" aria-hidden="true">
+                            <Icon name="check" size={12} />
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </li>
         )
       })}
