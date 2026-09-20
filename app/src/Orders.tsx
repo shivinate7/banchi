@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, Segmented, type IconName, type PillTone } from './kit'
 import { toast } from './kit/toast'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
-import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
+import { isOrderReason, ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
 import { hubState, setHub, touchHub, useHub, type PullFilter, type Stage } from './OrdersHubStore'
 import { isEditableTarget } from './keys'
@@ -863,9 +863,10 @@ const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'p
    draw two identical pills meaning two different things. */
 const ORDER_LANE_LABEL: Record<ShippingLane, string> = { envelope: 'Envelope', parcel: 'Parcel', unjudged: 'Lane undecided' }
 
-/* The six reasons: a short chip label, a tone, an icon, and a phrase for the summary sentence.
-   The long human label (`orderReasonLabel`) and the remedy stay on the line that has the
-   problem, and the machine string rides THERE as a tag — never on the chips. */
+/* The six reasons: a short label for the filter select's own options, a tone and an icon for
+   the line's own reason banner, and a phrase for the summary sentence. The long human label
+   (`orderReasonLabel`) and the remedy stay on the line that has the problem, and the machine
+   string rides THERE as a tag — never on the filter. */
 const REASON_SHORT: Record<OrderLineReason, string> = {
   resolved: 'Every copy found',
   short: 'Short',
@@ -2680,9 +2681,9 @@ function PullStage({
   const groups = useMemo(() => groupBuyers(payload?.orders ?? [], Date.now()), [payload])
   const allGroups = useMemo(() => [...groups.recent, ...groups.earlier], [groups])
 
-  /* THE CHIPS FILTER GROUPS, NOT ORDERS. 'all' is every group carrying an open order; a reason
-     chip narrows to groups whose open orders carry a line with that reason; 'done' is every
-     group with nothing open — which is exactly `groups.recent`'s closed members plus the whole
+  /* THE FILTER SELECT NARROWS GROUPS, NOT ORDERS. 'all' is every group carrying an open order;
+     a reason option narrows to groups whose open orders carry a line with that reason; 'done'
+     is every group with nothing open — which is exactly `groups.recent`'s closed members plus the whole
      of `groups.earlier`, since a group with anything open can never be `earlier` (see
      `orderBuyers.ts`).
 
@@ -2708,7 +2709,7 @@ function PullStage({
     [filter, groups, answers, view.status, view.hideUnknown, query],
   )
   /* THE EARLIER FOLD IS DONE-ONLY. A closed buyer older than `RECENT_DAYS` has nothing an 'all'
-     or reason filter would ever show, so it is drawn nowhere but under the "Done" chip.
+     or reason filter would ever show, so it is drawn nowhere but under the "Done" option.
      THE SEARCH REACHES IT TOO — a Done buyer past the 7-day fold is exactly the one a name
      search has to find, since it is unreachable any other way (the owner's own case: cmd-F-ing
      the page for someone whose only order closed weeks ago). */
@@ -2792,7 +2793,7 @@ function PullStage({
 
   /** THE ROWS IN VIEW THAT CAN HOLD A TICK — both lists the current filter yields, because the
    *  `Earlier` fold is a disclosure and not a filter (it is drawn, and only ever under the
-   *  Done chip). This is the set `Tick all` and `Untick all` act on (§12 answer 1) and the
+   *  Done option). This is the set `Tick all` and `Untick all` act on (§12 answer 1) and the
    *  set the prune below keeps the stored ticks inside. */
   const tickableKeys = useMemo(() => {
     const out = new Set<string>()
@@ -2996,7 +2997,7 @@ function PullStage({
     return (
       <div className="orders-stage orders-skeleton" aria-busy="true" aria-label="Reading orders">
         <span className="bn-skeleton orders-skel-line" />
-        <span className="bn-skeleton orders-skel-chips" />
+        <span className="bn-skeleton orders-skel-filter" />
         <span className="bn-skeleton orders-skel-card" />
         <span className="bn-skeleton orders-skel-card" />
       </div>
@@ -3036,37 +3037,36 @@ function PullStage({
 
   const why = <WhyPanel counts={counts} openByDefault={open.length === 0} />
 
+  const filterOptions: { readonly value: PullFilter; readonly label: string; readonly count: number }[] = [
+    { value: 'all', label: 'All open', count: open.length },
+    ...ORDER_REASONS.filter((reason) => counts[reason] > 0).map((reason) => ({
+      value: reason as PullFilter,
+      label: REASON_SHORT[reason],
+      count: counts[reason],
+    })),
+    { value: 'done', label: 'Done', count: done.length },
+  ]
+
   const chips = (
-    <div className="orders-chips" role="group" aria-label="Show orders by how their lines answered">
-      <button type="button" className="orders-chip" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
-        <Icon name="list" size={13} />
-        All open
-        <span className="orders-chip-count">{open.length}</span>
-      </button>
-      {ORDER_REASONS.filter((reason) => counts[reason] > 0).map((reason) => (
-        <button
-          key={reason}
-          type="button"
-          className={`orders-chip orders-chip-${REASON_TONE[reason]}`}
-          aria-pressed={filter === reason}
-          onClick={() => setFilter(reason)}
-          title={orderReasonLabel(reason)}
-        >
-          <Icon name={REASON_ICON[reason]} size={13} />
-          {REASON_SHORT[reason]}
-          <span className="orders-chip-count">{counts[reason]}</span>
-        </button>
+    <select
+      className="bn-select orders-filter-select"
+      aria-label="Show orders by how their lines answered"
+      value={filter}
+      onChange={(event) => {
+        const next = event.target.value
+        setFilter(next === 'all' || next === 'done' || isOrderReason(next) ? next : 'all')
+      }}
+    >
+      {filterOptions.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label} ({option.count})
+        </option>
       ))}
-      <button type="button" className="orders-chip" aria-pressed={filter === 'done'} onClick={() => setFilter('done')}>
-        <Icon name="check" size={13} />
-        Done
-        <span className="orders-chip-count">{done.length}</span>
-      </button>
-    </div>
+    </select>
   )
 
   /* A SEARCH THAT LEAVES NOTHING GETS ITS OWN SENTENCE, ahead of the filter-shaped ones below
-     — the query is the reason nothing is drawn regardless of which chip is active, and "Clear
+     — the query is the reason nothing is drawn regardless of which filter is chosen, and "Clear
      search" is the one action that actually restores something. */
   const nothingShown =
     query !== '' ? (
