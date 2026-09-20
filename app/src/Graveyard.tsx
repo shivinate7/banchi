@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
 import { describeFailure, getGraveyard, type Failure } from './server'
 import type { DepartedCard } from './types'
 import { Button, EmptyState, Notice, PageHeader, Pill, Segmented, type PillTone } from './kit'
 import { readingAgo, readingExact, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
+import { reasonWord } from './Inventory'
 import './Graveyard.css'
 
 /* GRAVEYARD — D134's whole reason for existing.
@@ -49,11 +50,13 @@ function howIt(row: DepartedCard): ReactNode {
     return row.moved_to === null ? 'Moved' : `Moved to ${positionOf(row.moved_to)}`
   }
   if (row.how === 'retired' && row.retire_reason) {
-    // D218: the reason is its own span; the seam is CSS.
+    // D218: the reason is its own span; the seam is CSS. The word itself reads Inventory's
+    // own label table (UX review, 2026-09-20) rather than the raw enum — "Retired · pulled"
+    // read as an order-fulfilment term, not "taken out of the box".
     return (
       <>
         <span>Retired</span>
-        <span className="graveyard-reason">{row.retire_reason}</span>
+        <span className="graveyard-reason">{reasonWord(row.retire_reason)}</span>
       </>
     )
   }
@@ -220,18 +223,23 @@ export function Graveyard() {
                     <th>Run</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bn-stagger">
                   {visible.map((row, i) => {
                     const key = `${row.how}:${row.buried ? 'b' : 's'}:${row.box}/${row.index}`
                     const stamp = row.buried ? row.buried_at : row.left_at
                     return (
-                      <tr key={key} className={`graveyard-row is-${row.how}`} style={{ animationDelay: `${Math.min(i, 24) * 16}ms` }}>
+                      /* THE SHARED CADENCE (UX review, 2026-09-20), not a hand-rolled one: this
+                         row used to set its own `animationDelay` (16ms * min(i, 24)), a second
+                         copy of the stagger every other list in the product reads off
+                         `--bn-stagger`/`--bn-stagger-cap` (`kit.css:81`). `.bn-stagger` on the
+                         body plus `--i` here is the same mechanism `Orders.tsx` already uses. */
+                      <tr key={key} className={`graveyard-row is-${row.how}`} style={{ '--i': i } as CSSProperties}>
                         <td data-th="Left" className="graveyard-when" title={readingExact(stamp) ?? undefined}>
                           {readingAgo(stamp) ?? <span className="bn-faint">—</span>}
                         </td>
                         <td data-th="Card">
                           <span className="graveyard-card-cell">
-                            <span className="graveyard-name">{row.name ?? <span className="bn-faint">Unidentified</span>}</span>
+                            <span className="graveyard-name">{row.name && row.name.trim() !== '' ? row.name : <span className="bn-faint">Unidentified</span>}</span>
                             <span className="graveyard-sub">
                               {row.number ?? <span className="bn-faint">—</span>}
                               {gameLabel(row.game) !== null ? <Pill size="sm">{gameLabel(row.game)}</Pill> : null}
