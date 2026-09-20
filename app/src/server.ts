@@ -50,6 +50,7 @@ import type {
   MarkdownSummary,
   RunDetail,
   PriceHistoryPayload,
+  ProductHistoryPayload,
   PricingPayload,
   PricingCorpus,
   PricingClearable,
@@ -2643,6 +2644,31 @@ export async function getPriceHistory(
 }
 
 /**
+ * One product's market history, addressed by SKU — the per-product view's own read
+ * (`#/product`, D227).
+ *
+ * ARCHIVE FIRST, LIVE ONLY WHEN THE ARCHIVE HAS NEVER SWEPT THIS SKU. Unlike
+ * `getPriceHistory` above, this call does NOT always leave the machine — read the answer's
+ * own `source` field. A SKU `pkmnscan archive sweep` has already visited answers straight off
+ * `store/pricearchive.py`, no socket opened. Only a SKU the archive has zero rows for at all
+ * reaches the same live reader `getPriceHistory` always does.
+ *
+ * PRESSED ON PAGE LOAD, NOT ON A WALK. This is a per-product PAGE, not a row in a list — one
+ * SKU per navigation, never fifty in a loop, so the "never fired by a walk" rule
+ * `getPriceHistory`'s own docstring states does not need a second press here to hold.
+ *
+ * Refusals worth branching on: `sku_unknown` (no card in this store has ever carried this
+ * SKU), `not_catalogued` (D22's `misc`), and the live-fallback path's own
+ * `history_unresolved` / `history_unreachable` / `history_blocked`.
+ */
+export async function getProductHistory(sku: string): Promise<ProductHistoryPayload> {
+  return (await request(
+    `/pipeline/products/${encodeURIComponent(sku)}/history`,
+    NO_CACHE,
+  )) as ProductHistoryPayload
+}
+
+/**
  * The same reading for MANY SKUs at once — a shape and a sign each, for the strip on the row.
  *
  * D62 NAMED THIS CALL AND THE CONDITION FOR MAKING IT. That entry made the history a press
@@ -2674,6 +2700,38 @@ export async function getPriceTrends(run: string, skus: string[] = []): Promise<
     `/pipeline/runs/${encodeURIComponent(run)}/trends${query === '' ? '' : `?${query}`}`,
     NO_CACHE,
   )) as TrendsPayload
+}
+
+/** One SKU's answer from `getSoldPrices` — a market figure as text, when it dates from as a
+ *  Unix second, and which table answered. `source: 'archive'` is a `price_history` `month`
+ *  bucket (D219), its own calendar day as `at`; `source: 'live'` is a
+ *  `readings` (D189) row, its own fetch/join moment as `at`. The two ages mean different
+ *  things and neither is converted into the other. */
+export type SoldPriceEntry = { market: string; at: number; source: 'archive' | 'live' }
+
+/** `sku -> SoldPriceEntry`, for exactly the SKUs asked. A SKU neither table has ever priced
+ *  is simply ABSENT, never a `null` — `do_pipeline_price_now`'s own contract, D159's
+ *  `no_reading` shape carried over. */
+export type SoldPricesLookup = Record<string, SoldPriceEntry>
+
+/**
+ * Named SKUs, the price-history archive first and the `readings` table as its fallback —
+ * `#/revenue`'s "then against now" over a SKU that may well have LEFT inventory the day it
+ * sold, which `getValuePage`'s on-hand filter would never carry, and which `readings` alone
+ * answered for under 1% of the owner's real gross and NONE of the sealed product that is
+ * most of it (measured; see `do_pipeline_price_now`'s own header for the numbers).
+ *
+ * A PLAIN READ, UNLIKE `getPriceHistory`/`getPriceTrends` ABOVE: neither table leaves the
+ * machine, so D62's cost argument for gating those behind a press does not apply here on its
+ * own terms — the reason THIS call is still a press and not an effect is `#/revenue`'s own
+ * ruling: both tables are caches, however cheap the read is, and a screen that fetched on
+ * mount would draw a number that looks live and is not (D225).
+ */
+export async function getSoldPrices(skus: string[]): Promise<SoldPricesLookup> {
+  if (skus.length === 0) return {}
+  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+  const body = (await request(`/pipeline/price-now?${query}`, NO_CACHE)) as { prices: SoldPricesLookup }
+  return body.prices
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

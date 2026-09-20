@@ -1798,6 +1798,53 @@ export type PriceHistoryPayload = {
   never_sold: boolean
 }
 
+/** ONE RANGE OF ONE SKU, AS THE PER-PRODUCT VIEW READS IT (`#/product`, D227).
+ *
+ *  NOT `HistoryRange` REUSED, ON PURPOSE. The archive-hit path (`source: "archive"`) has no
+ *  `Series` object behind it — only the raw buckets `store/pricearchive.py` stored — so it
+ *  cannot honestly carry `vwap`, `bound` or `momentum`, all of which are computed from a live
+ *  `Series`. `vwap` and `bound` are present only on the live-fallback path
+ *  (`source: "live"`), and a reader must check `source` before reaching for either. */
+export type ProductHistoryRange = {
+  range: string
+  width_days: number | null
+  buckets: number
+  from: string | null
+  to: string | null
+  latest_market: string | null
+  vwap?: string | null
+  bound?: {
+    low: string
+    high: string
+    width_of_vwap: string
+    width_of_low: string
+  } | null
+  points: HistoryPoint[]
+}
+
+/** One product's market history, addressed by SKU rather than by a run
+ *  (`GET /pipeline/products/<sku>/history`, D227).
+ *
+ *  `source` IS THE ONE FIELD A READER MUST BRANCH ON. `"archive"` means every figure came off
+ *  `store/pricearchive.py` with no network reached at all. `"live"` means the archive had
+ *  never swept this SKU and the server reached `pipeline/pricehistory.py:Market` once, the
+ *  same reading `#/pricing`'s panel already draws. Neither path ever writes.
+ *
+ *  `history_begins` IS COMPUTED FROM WHAT WAS ACTUALLY READ, never from the 357-day constant
+ *  — a year of local archive is not a year of market history, and the two must never be
+ *  conflated (`docs/specs/revenue-next.md`). */
+export type ProductHistoryPayload = {
+  sku: string
+  product_id: number | null
+  name: string | null
+  set_name: string | null
+  condition: string | null
+  source: 'archive' | 'live'
+  ranges: ProductHistoryRange[]
+  history_begins: string | null
+  never_sold: boolean
+}
+
 /** ONE RANGE OF ONE SKU AS A ROW DRAWS IT — a shape and a sign, and deliberately no money.
  *
  *  IT IS NOT A SMALLER `HistoryRange` AND MUST NOT GROW INTO ONE. D62's panel is where a

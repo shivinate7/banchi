@@ -1,8 +1,13 @@
 # Sales: the build plan
 
-**Recorded 2026-09-19. Not built.** This is the plan the owner settled by interview on
-2026-09-19. It supersedes nothing. Read `docs/specs/revenue-next.md` first. That file holds the
-findings. This file holds what to do about them.
+**Recorded 2026-09-19.** This is the plan the owner settled by interview on 2026-09-19. It
+supersedes nothing. Read `docs/specs/revenue-next.md` first. That file holds the findings. This
+file holds what to do about them.
+
+**Refunds (§2) and sold-cards then-against-now (§1, first half) are BUILT**, 2026-09-19,
+D225. Six of the §5 ride-along defects rode along with them.
+Unsold-holdings value-over-time (§1, second half), the per-product view (§3) and money
+typography (§5's open question) remain not built.
 
 Build order is deliberately not fixed here. The owner asked to choose it when the work is picked
 up.
@@ -33,7 +38,7 @@ These are separate features with separate rules. Nothing may merge them into one
 
 ### Sold cards: then against now
 
-For a card already sold, compare the price it went for against what the market says today.
+**BUILT 2026-09-19 (`D225`).** For a card already sold, compare the price it went for against what the market says today.
 
 The owner's own sales are exact fills. Each carries a price, a quantity and a date. There are
 1,268 of them. That is a real measurement and not an estimate. This is the half that makes the
@@ -66,6 +71,9 @@ For cards still held, value them at the market and show that value moving.
   all is unresolved. It must be measured before this is designed.
 
 ## 2. Refunds, which are reachable after all
+
+**The first layer is BUILT 2026-09-19 (`D225`).** The second and third stay as
+recorded below.
 
 Three layers, in order of what they cost to reach.
 
@@ -103,6 +111,19 @@ Closing this needs a measurement first. Someone must look at what the feed actua
 refunded order. That comes before anyone designs a state for it.
 
 ## 3. The per product view
+
+**BUILT.** `#/product` (D227). One page per product, deep linkable by
+`?sku=`. It reads `store/pricearchive.py` first. It falls back to a live read through
+`pipeline/pricehistory.py` only for a SKU the archive has never swept. It never writes and
+never triggers a sweep from the screen. `server/pipeline_routes.py:do_product_history` is
+the route. `pipeline/productview.py` is the read it calls. `app/src/ProductHistory.tsx` is
+the screen. Proved by `scripts/product-history-selftest.py`, not wired into `make check` —
+`scripts/pricearchive-selftest.py`'s own precedent.
+
+Off-nav rather than linked from `#/revenue`: that screen was being edited by a parallel
+branch. The decision entry argues the route-versus-lens question. It also argues why the
+link from `#/revenue` is deferred rather than built. The route's own SKU field is the
+control a person who lands here without a query string actually finds.
 
 One page per product, deep linkable. It shows what a product has been selling for. It marks the
 owner's own sales on that line.
@@ -152,17 +173,17 @@ own. That reversal needs its own argument, which nobody has made.
 
 ## 5. Defects to carry into whichever change comes first
 
-None of these justifies a branch of its own. Each rides along with the next change to this screen.
+**All six below are BUILT 2026-09-19**, riding along with `D225`.
 
-- The `lead` string in `compareLine` attributes `So far` to a closed period. Fix the string. Add a
-  test at the default period against a populated prior window.
-- Order numbers clip in the middle of the string at 390 pixels, in the per order drill down.
-- The product name column has no height cap, so numeric baselines drift down the table.
-- The fifth period option wraps onto its own row and sits alone at 390 pixels.
-- `bn-stagger` is absent from the month rows and the product table. The house rule is written and
-  the mechanism exists.
-- The verdict figure carries no weight of its own. Pricing wraps the key figure of every verdict
-  in a strong tag. One tag, no words.
+- ~~The `lead` string in `compareLine` attributes `So far` to a closed period. Fix the string. Add a
+  test at the default period against a populated prior window.~~
+- ~~Order numbers clip in the middle of the string at 390 pixels, in the per order drill down.~~
+- ~~The product name column has no height cap, so numeric baselines drift down the table.~~
+- ~~The fifth period option wraps onto its own row and sits alone at 390 pixels.~~
+- ~~`bn-stagger` is absent from the month rows and the product table. The house rule is written and
+  the mechanism exists.~~
+- ~~The verdict figure carries no weight of its own. Pricing wraps the key figure of every verdict
+  in a strong tag. One tag, no words.~~
 
 Two items are questions rather than defects. They are not for a builder to settle.
 

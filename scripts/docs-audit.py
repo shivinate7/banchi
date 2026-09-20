@@ -2464,6 +2464,12 @@ def _sibling(name: str):
 
         spec = importlib.util.spec_from_file_location(name.replace("-", "_")[:-3], path)
         module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        # Registered in sys.modules BEFORE exec. A sibling with its own `@dataclass` classes
+        # under `from __future__ import annotations` (scripts/ste_measure.py is the first)
+        # resolves its field types by looking itself back up in sys.modules mid-definition;
+        # skipping this step fails with an unrelated-looking AttributeError on the stdlib's
+        # own dataclasses internals rather than on anything this file does.
+        sys.modules[spec.name] = module
         spec.loader.exec_module(module)  # type: ignore[union-attr]
         return module
     except Exception:  # noqa: BLE001 - a broken sibling must not take the audit down
@@ -11868,6 +11874,238 @@ def check_typed_interpunct(report: Report) -> None:
     )
 
 
+# --------------------------------------------------------------- ste ratchet (D226)
+#
+# THE OWNER BELIEVED THIS REPO ALREADY MECHANIZED PROSE CONCISION. It did not: `make vale`
+# carries two style rules and gates nothing (D18, D74 — D74 widened its FILE SCOPE to every
+# tracked `.md`; the "must not gate" argument is D18's, plus the plain fact that Vale is a
+# third-party Go binary the bare-`python3` pre-commit hook cannot depend on being present —
+# see the correction in `check_check_registry`'s own docstring), and `entry budget` counts
+# CHARACTERS of an entry, which is a size proxy, not a prose-tightness one (measured
+# correlation between entry size and this row's own ratio: r = 0.898 for total-errors-per-
+# entry against r = 0.0020 for errors-per-1,000-words — the byte ruler tracks how LONG an
+# entry is, this ruler tracks how TIGHT its prose is, and those are different measurements).
+#
+# THE LINTER IS VENDORED, NOT REFERENCED. `scripts/ste/ste_lint.py` is a byte-for-byte copy of
+# $HOME/.claude/lint/ste_lint.py (MIT, LICENSE-ste_lint beside it, notice retained), copied
+# rather than symlinked (D47: a tracked symlink bakes a path into the tree, and this repo's own
+# clone, every CI runner, and a fresh checkout all lack $HOME/.claude — a gate here cannot
+# depend on a file outside this repo's own tree). Unlike Vale, it is pure standard-library
+# Python — the same interpreter the bare pre-commit hook already runs with nothing else
+# installed — so the toolchain argument against gating (D18's, not D74's) does not transfer:
+# nothing new has to be present on a machine that can already run this hook at all.
+#
+# A RATCHET, NEVER A CLIFF, on the SAME three arguments D194 and D218 already settled: a hard
+# gate over an 11,361-finding backlog blocks every commit on day one; the number may only fall,
+# silently, printed; and a rise is never quiet, however small. `scripts/ste-ratchet.json` pins
+# the total, the four ERROR-severity rules' own counts, and the ruler below, written only by
+# `scripts/ste-ratchet-pin.py --pin` (D18 — this row never writes). `scripts/ste_measure.py` is
+# the one shared measurer both the row and the pin script call, so the two paths cannot drift
+# the way D218's own Python/JS pair had to accept for one regex — there is no language boundary
+# here to force that duplication.
+#
+# THE RULER IS ERRORS PER THOUSAND WORDS, PER BUCKET AND REPO-WIDE, NOT A FLAT COUNT AND NOT
+# BYTES — the owner has ruled a flat byte cap impermissible, and this reads the PROSE rather
+# than the DOCUMENT'S SIZE. See `scripts/ste_measure.py`'s own docstring for exactly which word
+# count (plain, matching `wc -w`) and why it is not `ste_lint.py`'s own STE-adjusted count.
+#
+# EXEMPTIONS ARE A NAMED, MECHANICAL, PROVEN CLASS OR THEY DO NOT EXIST. Four are built —
+# table row, the `(D<n>; …)` citation shorthand, the literal "VS Code", and `via` — three
+# measured against a hand-classified sample in `docs/specs/ste-false-positives.md` before
+# being written, `via` exempt by the OWNER'S ARGUMENT instead (D226, ruling
+# three): STE007's own stated reason for the rule — different readers read a Latin
+# abbreviation differently, and machine translation handles it badly — does not hold for an
+# ordinary English preposition every reader reads the same way. `vs`/`vs.` IS a real
+# abbreviation, of "versus", and stays a finding. Each class is testable alone in
+# `--self-test`.
+#
+# A FIFTH, VERBATIM QUOTATION, WAS BUILT AND REMOVED ON THE OWNER'S RULING (ruling two): the
+# owner chose to rewrite around a quotation that trips a rule, not to exempt it. Most of the
+# cost lands on STE008 (contraction), whose sample was 93.3% this shape — the decision entry
+# names the count before and after.
+#
+# A SIXTH, "an enumeration collapsed into one paragraph", is named in `scripts/ste_measure.py`
+# and left UNBUILT: the sample's own classification rule calls it a proxy ("3 or more
+# semicolons... very likely an enumeration"), not a recognition, and a class this row cannot
+# tell apart from ordinary prose without guessing does not get to exempt anything.
+
+
+# THE SURVEY'S OWN FLOOR (`docs/specs/ste-false-positives.md`), PRINTED BESIDE EVERY COUNT
+# THIS ROW REPORTS — never gated on, because it is an estimate, not a measurement this file
+# can re-derive. Without it, a bare count reads as work nobody did; a reader who does not
+# also see the floor cannot tell the closeable backlog from the residue no rewrite reaches.
+#
+# The survey judged every STE001/006/007/008 finding it sampled GENUINE, ARTIFACT or
+# BORDERLINE, then extrapolated each code's artifact-plus-borderline share onto its full
+# population (STE007's sample WAS its population, so that share is exact, not extrapolated).
+# Judging every borderline case against the writer — the most conservative, highest floor
+# the survey computed — gives roughly 2.714 errors per 1,000 words, combined across the four
+# rules, over the survey's own narrower scope (docs/decisions, docs/specs, CLAUDE.md and
+# README.md — 610,723 words by plain `wc -w`, not this row's full repo-wide corpus). This
+# ratchet's own built exemptions do not chase that number — see the section header above —
+# so this row's repo-wide ratio sits above it, and both are printed together on purpose.
+STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS = 2.714
+
+STE_RATCHET_PIN = ROOT / "scripts" / "ste-ratchet.json"
+
+
+def _read_ste_ratchet_pin(path: Optional[Path] = None) -> Optional[Dict[str, object]]:
+    """The ratchet's pinned ceiling, or None when it cannot be read, is not JSON, or does not
+    carry this ratchet's own shape (`total`, `by_code`, `ratio_per_1k_words`). Mirrors `_read_
+    typed_interpunct_pin`'s None/real-value split: a `0` pin is a real, achievable ceiling and
+    a missing or malformed file is a different answer this row must refuse rather than treat
+    as "nothing is pinned yet, so nothing is a violation".
+
+    `path` defaults to `STE_RATCHET_PIN`; `--self-test` passes a throwaway file so it can
+    exercise every malformed shape without touching the real pin.
+    """
+    path = STE_RATCHET_PIN if path is None else path
+    if not exists(path):
+        return None
+    try:
+        data = json.loads(read(path))
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    total, by_code, ratio = data.get("total"), data.get("by_code"), data.get("ratio_per_1k_words")
+    if not isinstance(total, int) or not isinstance(by_code, dict) or not isinstance(ratio, dict):
+        return None
+    return data
+
+
+def _ste_ratchet_verdict(
+    measured: Dict[str, object], pin: Optional[Dict[str, object]]
+) -> Tuple[str, List[str]]:
+    """`("unpinned" | "rose" | "ok", risen)`. `risen` names every dimension that moved, so a
+    failure reads as "STE001 rose" or "docs/gates ratio rose" rather than merely "something
+    did" — the whole reason to pin three shapes instead of one number. `ok` covers strictly
+    lower AND exactly equal on every dimension at once, mirroring `_typed_interpunct_verdict`'s
+    own rule that a fall is accepted exactly as silently as a tie. A bucket or code the pin has
+    never seen is compared against 0 — a brand-new bucket appearing with a nonzero count is a
+    rise, not a free pass for being new.
+    """
+    if pin is None:
+        return "unpinned", []
+    risen: List[str] = []
+
+    m_total = measured["total"]
+    p_total = pin.get("total", 0)
+    if m_total > p_total:
+        risen.append(f"total: {p_total} pinned, {m_total} now (+{m_total - p_total})")
+
+    m_by_code = measured.get("by_code", {})
+    p_by_code = pin.get("by_code", {}) if isinstance(pin.get("by_code"), dict) else {}
+    for code in sorted(m_by_code):
+        count, p_count = m_by_code[code], p_by_code.get(code, 0)
+        if count > p_count:
+            risen.append(f"{code}: {p_count} pinned, {count} now (+{count - p_count})")
+
+    m_ratio = measured.get("ratio_per_1k_words", {})
+    p_ratio = pin.get("ratio_per_1k_words", {}) if isinstance(pin.get("ratio_per_1k_words"), dict) else {}
+    for bucket in sorted(m_ratio):
+        value, p_value = m_ratio[bucket], p_ratio.get(bucket, 0.0)
+        if value > p_value:
+            risen.append(
+                f"{bucket} ratio: {p_value} pinned, {value} now (+{round(value - p_value, 3)})"
+            )
+
+    return ("rose" if risen else "ok"), risen
+
+
+def check_ste_ratchet(report: Report) -> None:
+    """No user-visible prose regression on the STE floor, ratcheted (D226). See
+    the section header above this function for the whole argument; this docstring is the
+    row's own mechanics.
+
+    READS THE WHOLE TRACKED MARKDOWN TREE EVERY RUN, staged or not — `markdown_files()`
+    already resolves to the committed INDEX under `--staged` (see its own docstring), so this
+    is the tree the commit will carry, not a partial diff of it. A prose ratchet's subject is
+    the corpus, not the files one commit happens to touch — the same choice `check_typed_
+    interpunct` and `check_entry_budget` already made for their own repo-wide subjects.
+
+    THREE STATES, mirroring `_typed_interpunct_verdict` exactly: `unpinned` (no readable pin,
+    or one that does not carry this ratchet's own shape) is its own MECHANICAL failure, never
+    a silent pass over an empty comparison; `rose` names every dimension that moved — the
+    total, a per-code count, or one bucket's ratio — so a reader is told what to look at
+    rather than merely that something did; `ok` covers a fall or an exact match, printed and
+    never a finding.
+    """
+    ste_measure = _sibling("ste_measure.py")
+    if ste_measure is None:
+        report.add(
+            "ste ratchet", MECHANICAL,
+            [
+                Finding(
+                    "scripts/ste_measure.py",
+                    "could not be loaded (or scripts/ste/ste_lint.py under it could not be "
+                    "imported) — nothing was measured. `scripts/ste/` is vendored into this "
+                    "repo (D47) specifically so this never depends on $HOME/.claude.",
+                )
+            ],
+            "measurer unavailable, so nothing was read", scanned=0,
+        )
+        return
+
+    docs = markdown_files()
+    paths = [(rel(p), read(p)) for p in docs]
+    measurement = ste_measure.measure(paths)
+    measured = measurement.to_pin()
+    pin = _read_ste_ratchet_pin()
+    verdict, risen = _ste_ratchet_verdict(measured, pin)
+
+    # PRINTED BESIDE EVERY VERDICT — the survey's own floor beside today's repo-wide ratio,
+    # so a reader never sees the count without also seeing how much of it is not this
+    # ratchet's backlog to close. See STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS's own comment.
+    repo_ratio = measured.get("ratio_per_1k_words", {}).get("repo")
+    floor_note = (
+        f"repo ratio {repo_ratio}/1,000 words against the survey's own floor of "
+        f"~{STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS}/1,000 words "
+        "(docs/specs/ste-false-positives.md) — the residue below that floor is not this "
+        "ratchet's backlog to close."
+    )
+
+    if verdict == "unpinned":
+        report.add(
+            "ste ratchet", MECHANICAL,
+            [
+                Finding(
+                    rel(STE_RATCHET_PIN),
+                    f"no ceiling pinned, or the pin file does not carry this ratchet's shape "
+                    f"— {measurement.total} error-severity STE findings found just now "
+                    f"({measurement.exempted_total} exempted: {measurement.exempted_by_class}). "
+                    f"{floor_note} "
+                    "Run `python3 scripts/ste-ratchet-pin.py --pin` first, on purpose, once — "
+                    "never quietly.",
+                )
+            ],
+            f"no pin — cannot tell a rise from a fall. {floor_note}", scanned=len(paths),
+        )
+        return
+
+    if verdict == "rose":
+        findings = [Finding(rel(STE_RATCHET_PIN), line) for line in risen]
+        report.add(
+            "ste ratchet", MECHANICAL, findings,
+            f"{measurement.total} found, pinned at {pin.get('total')} — rose on "
+            f"{len(risen)} dimension(s). A rise is never quiet — fix the new hit(s), or, if "
+            "the addition is deliberately accepted, run "
+            f"`python3 scripts/ste-ratchet-pin.py --pin` and say why in the commit. {floor_note}",
+            scanned=len(paths),
+        )
+        return
+
+    fell_by = pin.get("total", 0) - measurement.total
+    report.add(
+        "ste ratchet", MECHANICAL, [],
+        f"{measurement.total} error-severity STE findings ({measurement.exempted_total} "
+        f"exempted: {measurement.exempted_by_class}) over {len(paths)} files, ratchet "
+        f"pinned at {pin.get('total')}" + (f", {fell_by} below it" if fell_by > 0 else "")
+        + f". {floor_note}",
+        scanned=len(paths),
+    )
+
+
 def check_views_opsec(report: Report) -> None:
     """D24's standing sentence: scripts/views.txt may never name a URL whose render can
     contain a code card. Enforcement existed for the images (captures/ is gitignored, both
@@ -13353,7 +13591,8 @@ def check_check_registry(report: Report) -> None:
     entry's recipe has to print `NOT A GATE:`, in both directions, so `make explain`, the
     run and the reader agree. A GATING target is never forced to print anything; the point
     is disclosure, not removal, and the owner has ruled prose style worth running and not
-    worth gating (D74).
+    worth gating (D18, plus the bare-`python3` toolchain fact — D74's own text argues only
+    that vale's file scope now matches `.vale.ini`, never that a prose check must not gate).
     """
     recipe = _check_recipe()
     ci_recipe = _ci_check_recipe()
@@ -18023,6 +18262,156 @@ def self_test() -> int:
        "no pin at all is `unpinned`, not `ok` over zero — the same non-vacuity argument "
        "`HARD_RULE_FLOOR` makes for `rule enforcement`")
 
+    # ------------------------------------------------------------------- ste ratchet
+    #
+    # THE RATCHET'S OWN ARITHMETIC, isolated from the linter and from disk, mirroring the
+    # typed-interpunct cases just above: plain dicts in, a verdict and the risen dimensions
+    # out.
+    print("\nste ratchet: the verdict arithmetic, isolated from the linter and the pin file")
+    STEADY = {
+        "total": 100,
+        "by_code": {"STE001": 60, "STE006": 30, "STE007": 5, "STE008": 5},
+        "ratio_per_1k_words": {"repo": 10.0, "docs/decisions": 12.0},
+    }
+    ok(_ste_ratchet_verdict(STEADY, STEADY) == ("ok", []),
+       "measured == pin on every dimension is `ok`, with nothing risen")
+    ok(_ste_ratchet_verdict(dict(STEADY, total=90), STEADY) == ("ok", []),
+       "total FELL and nothing else moved — accepted silently, the ratchet's whole point")
+    risen_total = _ste_ratchet_verdict(dict(STEADY, total=101), STEADY)
+    ok(risen_total[0] == "rose" and any(line.startswith("total:") for line in risen_total[1]),
+       "total ROSE by one — `rose`, and `total` is named",
+       f"got: {risen_total}")
+    risen_code = _ste_ratchet_verdict(
+        {**STEADY, "by_code": {**STEADY["by_code"], "STE006": 31}}, STEADY,
+    )
+    ok(risen_code[0] == "rose" and any(line.startswith("STE006:") for line in risen_code[1]),
+       "a single per-code count rose while the total stayed put (a code the pin's own "
+       "total did not otherwise cover moving) — still `rose`, and `STE006` is named",
+       f"got: {risen_code}")
+    risen_ratio = _ste_ratchet_verdict(
+        {**STEADY, "ratio_per_1k_words": {**STEADY["ratio_per_1k_words"], "docs/decisions": 12.5}},
+        STEADY,
+    )
+    ok(risen_ratio[0] == "rose" and any(line.startswith("docs/decisions ratio:") for line in risen_ratio[1]),
+       "a bucket's ratio rose with the counts unchanged (more words, same errors, is a FALL — "
+       "this is the reverse: same words, one more error) — `rose`, and the bucket is named",
+       f"got: {risen_ratio}")
+    risen_new_bucket = _ste_ratchet_verdict(
+        {**STEADY, "ratio_per_1k_words": {**STEADY["ratio_per_1k_words"], "docs/specs": 3.0}},
+        STEADY,
+    )
+    ok(risen_new_bucket[0] == "rose",
+       "a bucket the pin has never seen appears with a NONZERO ratio — compared against 0, "
+       "so being new is not a free pass",
+       f"got: {risen_new_bucket}")
+    ok(_ste_ratchet_verdict(STEADY, None) == ("unpinned", []),
+       "no pin at all is `unpinned`, not `ok` over an empty comparison")
+
+    ste_measure = _sibling("ste_measure.py")
+    ok(ste_measure is not None,
+       "scripts/ste_measure.py loads",
+       "scripts/ste/ste_lint.py must be vendored beside it for this to succeed")
+    if ste_measure is not None:
+        print("\nste ratchet: the vendored linter loads and its error codes are what this "
+              "ratchet expects")
+        ste_lint = ste_measure.load_ste_lint()
+        ok(ste_measure.error_codes(ste_lint) == ("STE001", "STE006", "STE007", "STE008"),
+           "exactly the four ERROR-severity rules, read from the linter's own RULES table",
+           f"got: {ste_measure.error_codes(ste_lint)}")
+
+        print("\nste ratchet: each built exemption class on one line it must catch and one "
+              "it must not")
+
+        def _finding(code, line, col, excerpt=None):
+            return ste_measure.Finding(code=code, line=line, col=col, excerpt=excerpt)
+
+        table_lines = ["| a; b | vs c |", "a; b, ordinary prose"]
+        ok(ste_measure._table_row(_finding("STE006", 1, 5), table_lines),
+           "a semicolon inside a `|`-delimited row is exempted")
+        ok(not ste_measure._table_row(_finding("STE006", 2, 2), table_lines),
+           "the same character, one line down and outside any `|`, is NOT exempted")
+
+        ok(not hasattr(ste_measure, "_verbatim_quotation"),
+           "the verbatim-quotation exemption stays REMOVED (owner's ruling, D226) "
+           "— a contraction or semicolon inside a quotation counts, same as anywhere else")
+
+        cite_line = "Duplicates aggregate by SKU (D7; amended 2026-09-07) at join time."
+        cite_col = cite_line.index(";") + 1
+        ok(ste_measure._decision_citation(_finding("STE006", 1, cite_col), [cite_line]),
+           "the semicolon inside `(D7; amended ...)` is exempted")
+        other_semicolon = "Two clauses; joined by a semicolon, no citation at all."
+        ok(not ste_measure._decision_citation(
+               _finding("STE006", 1, other_semicolon.index(";") + 1), [other_semicolon]),
+           "an ordinary semicolon with no `(D<n>` anchor is NOT exempted")
+
+        vs_code_line = "Use VS Code for edits, vs a plain text editor."
+        vs_code_col = vs_code_line.index("VS Code") + 1
+        ok(ste_measure._vs_code(_finding("STE007", 1, vs_code_col), [vs_code_line]),
+           "`VS` immediately before `Code` is the editor's name, exempted")
+        bare_vs_col = vs_code_line.rindex(" vs ") + 2
+        ok(not ste_measure._vs_code(_finding("STE007", 1, bare_vs_col), [vs_code_line]),
+           "the SAME line's bare `vs` comparator, not followed by `Code`, is NOT exempted")
+        ok(not ste_measure._vs_code(_finding("STE001", 1, vs_code_col), [vs_code_line]),
+           "the class is scoped to STE007 only — a different code at the identical "
+           "position is left alone")
+
+        ok(ste_measure._via(_finding("STE007", 1, 1, excerpt="via"), []),
+           "`via` is exempt by the owner's argument, not by a measured sample — the line "
+           "is not even consulted")
+        ok(ste_measure._via(_finding("STE007", 1, 1, excerpt="Via"), []),
+           "the excerpt is matched case-insensitively — a sentence-initial `Via` exempts too")
+        ok(not ste_measure._via(_finding("STE007", 1, 1, excerpt="vs"), []),
+           "`vs` stays a real finding — the ruling names it as the opposite case, a true "
+           "abbreviation of \"versus\"")
+        ok(not ste_measure._via(_finding("STE001", 1, 1, excerpt="via"), []),
+           "the class is scoped to STE007 only, the same guard `VS Code` uses")
+
+        print("\nste ratchet: measure() end to end over a tiny synthetic corpus")
+        synthetic = [
+            ("docs/decisions/Dx.md", "A short sentence here; and another one, plainly put.\n"),
+            ("other/readme.md", "| vs | table |\nOrdinary prose with a semicolon; right there.\n"),
+        ]
+        result = ste_measure.measure(synthetic)
+        ok(result.by_code.get("STE006", 0) == 2,
+           "both real semicolons count — neither sits in a table row",
+           f"by_code: {result.by_code}")
+        ok(result.by_code.get("STE007", 0) == 0 and result.exempted_by_class.get("table row", 0) == 1,
+           "the `vs` inside `| vs | table |` is a table cell, exempted rather than counted "
+           "as STE007 — the linter's own STE001/005/014/015/016 skip does not reach this "
+           "word-level rule, which is exactly the gap `table row` closes",
+           f"by_code: {result.by_code}, exempted_by_class: {result.exempted_by_class}")
+        ok("docs/decisions" in result.ratio_per_1k_words and "other" in result.ratio_per_1k_words,
+           "both buckets appear in the ratio table, keyed by the same names `bucket_for` uses",
+           f"ratio_per_1k_words: {result.ratio_per_1k_words}")
+        ok(result.words_by_bucket.get("repo") == (
+               ste_measure.plain_word_count(synthetic[0][1])
+               + ste_measure.plain_word_count(synthetic[1][1])),
+           "the `repo` bucket sums every file's plain word count",
+           f"words_by_bucket: {result.words_by_bucket}")
+
+        print("\nste ratchet: the pin reader refuses a malformed or missing file rather "
+              "than reading it as zero")
+        ok(_read_ste_ratchet_pin() is not None or not exists(STE_RATCHET_PIN),
+           "a real pin file on this tree parses (or truly is not there yet)")
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture_pin = Path(tmp) / "ste-ratchet.json"
+            ok(_read_ste_ratchet_pin(fixture_pin) is None,
+               "a missing pin file reads as None, not as a zero-count pass")
+            fixture_pin.write_text("not json at all")
+            ok(_read_ste_ratchet_pin(fixture_pin) is None,
+               "a pin file that is not JSON reads as None")
+            fixture_pin.write_text(json.dumps({"total": 100}))
+            ok(_read_ste_ratchet_pin(fixture_pin) is None,
+               "a pin file missing `by_code`/`ratio_per_1k_words` reads as None — the "
+               "shape is checked, not only that the file parses")
+            fixture_pin.write_text(
+                json.dumps({"total": 0, "by_code": {}, "ratio_per_1k_words": {}})
+            )
+            ok(_read_ste_ratchet_pin(fixture_pin)
+               == {"total": 0, "by_code": {}, "ratio_per_1k_words": {}},
+               "a real, achievable `0` pin is read as itself, never confused with "
+               "'unreadable'")
+
     # ------------------------------------------------------- code-side agreements
     #
     # Seven arms, each patching its row's own path constant (or, for the table-driven row,
@@ -18392,6 +18781,7 @@ def audit(staged_only: bool) -> Report:
     check_check_census(report)
     check_no_mechanism_on_screen(report)
     check_typed_interpunct(report)
+    check_ste_ratchet(report)
     check_suite_lock(report)
     check_browser_scope(report)
     check_spec_map(report)

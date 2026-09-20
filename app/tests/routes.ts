@@ -106,5 +106,11 @@ export async function routesFromNav(page: Page): Promise<string[]> {
      coverage of a file written after a 41-defect sweep. One named route beside a discovered
      list is not the pinned roster the header refuses: a screen added to the sidebar next month
      is still swept with no edit here. */
-  return [...hashes, '#/gallery']
+  /* `#/product` IS NAMED FOR THE SAME REASON `#/gallery` IS, ONE LINE UP: it is off-nav
+     (D227), reached by `?sku=` rather than the sidebar, so the discovered
+     list above never finds it. It is still an OWNER screen and D194's ratchet is written
+     against "every owner screen", not "every screen the sidebar draws" — dropping it from
+     this list would exempt a real screen from the one rule that keeps this app's copy from
+     growing, by an accident of routing rather than a decision anybody made. */
+  return [...hashes, '#/gallery', '#/product']
 }
