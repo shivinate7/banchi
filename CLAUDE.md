@@ -1,8 +1,15 @@
 # BANCHI
 
 Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and know where
-every card physically is. Two tracks share one rig: singles (this file) and code cards
-(`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
+every card physically is.
+
+**Code cards are a FEATURE of this product, not a second track** (owner's ruling, 2026-09-20,
+replacing D14's framing in prose). The owner has not used it yet. Its rules live in
+`code-card-fork/CLAUDE.md`, auto-loaded in that directory.
+
+D14's structural half is NOT repealed by this line. `codes/` is still its own package.
+`docs/map.py` still carries a `TRACKS` tuple, and `scripts/decision-context.py` still prints a
+track banner. Repealing those is a code change and needs the owner's word on its own.
 
 **Codex reads this same file, not a copy (D135).** `AGENTS.md` at the root and
 `code-card-fork/AGENTS.md` are relative symlinks to the `CLAUDE.md` beside each. `.agents/skills`
@@ -345,8 +352,8 @@ hand-typed hash list.
 §9). It is generated, never hand-edited, reconciled by `make docs-audit`'s `logo parity` row
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
-**The legacy aliases at the foot of tokens.css are dead.** Measured across all 102 files under
-`app/src`: none read the twenty-four old names, against 266 uses of `var(--bn-ink)` alone.
+**The legacy aliases at the foot of tokens.css are dead.** Measured across all 137 files under
+`app/src`: none read the twenty-four old names, against 296 uses of `var(--bn-ink)` alone.
 Kept by design. A new rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
@@ -567,10 +574,6 @@ not rendered — not focusable, not reachable by a screen reader).
   gate. Mechanized for the arithmetic half: `make docs-audit`'s `repo map` row fails a commit
   adding a file with no map entry. `decision index` fails one citing a non-existent entry.
   Whether the reason is good is a person's judgement.
-- No manual third-party UI step inside the autonomous pipeline.
-  **NOT MECHANIZED:** a machine cannot know a step needs a human's hands in a browser. Every
-  pipeline command is re-runnable from the CLI with no prompt. T1 through T9 exercise them
-  that way, which is evidence, not a gate.
 - **FIX THE CAUSE, NEVER THE SYMPTOM. CHECK WHETHER THE PRIMITIVE ALREADY EXISTS FIRST.**
   Owner's standing instruction, 2026-09-11. `make map ARGS=<path>` and
   `scripts/decision-context.py` find the existing primitive before you design around its
@@ -643,10 +646,12 @@ not rendered — not focusable, not reachable by a screen reader).
   knows main moved: serve.py's adoption points, SessionStart, and `make merge`'s local half.
   It refuses on uncommitted tracked work or a mid-rebase. It touches only the primary
   checkout, never a worktree. `PKMNSCAN_SYNC=off`. `make sync-selftest` proves it.
-  **An orchestrating session carries a standing D42 grant as of 2026-09-13.** The owner named
-  the act once for a whole batch. It reaches only that session, and only PRs it planned and
-  reviewed. The one command is `make merge ARGS="<n> --confirm"`, with CI green, never
-  `--admin`.
+  **A session may merge only when the owner has explicitly called it an Orchestrator**
+  (owner's ruling, 2026-09-20, replacing the standing grant of 2026-09-13). The designation is
+  the grant. It is never inherited, never assumed from the shape of the work, and never
+  carried over from an earlier session. A session the owner has not named that way asks for
+  the word every time. Where it holds, it reaches only PRs that session planned and reviewed.
+  The one command is `make merge ARGS="<n> --confirm"`, with CI green, never `--admin`.
 - **No user-visible string may TYPE a middle dot or bullet (U+00B7, U+2022) as a separator.**
   Owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists." D41
   removed the dot-joined address string and moved the separator into CSS

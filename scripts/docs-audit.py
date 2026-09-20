@@ -16741,7 +16741,7 @@ HARD_RULES_HEADING = "## Hard rules"
 # directions fail: build a mechanism and you lower the pin in the same commit; add a rule with
 # no enforcement and you raise it and say why.
 HARD_RULE_FLOOR = 12
-PROSE_ONLY_EXPECTED = 6
+PROSE_ONLY_EXPECTED = 5
 
 # BOLD, AND THAT IS NOT COSMETIC. The sentinel has to be a DECLARATION, so it is matched as
 # the bold run a rule writes it in — otherwise the rule immediately above, which explains the
