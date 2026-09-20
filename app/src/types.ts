@@ -1845,6 +1845,79 @@ export type ProductHistoryPayload = {
   never_sold: boolean
 }
 
+/** ONE RANGE'S NAMES — `GET /pipeline/holdings-value?range=<range>`, D236. UNSOLD STOCK, never
+ *  sold-then-against-now (that is D225's `SoldPricesLookup`, a different figure this must
+ *  never merge with). The four ranges overlap on the calendar and are NEVER merged or
+ *  concatenated (D62) — one range per call, one range on screen at a time. */
+export type HoldingsRange = 'month' | 'quarter' | 'semiannual' | 'annual'
+
+/** ONE BUCKET OF ONE SKU'S HOLDING. `value` is `market` times the SKU's TODAY quantity —
+ *  never a past quantity, this store keeps none. `gap_before` is computed from the
+ *  immediately preceding STORED point, never the calendar day before it: true means this
+ *  point does not continue from the last one, and a screen must break its drawn line there,
+ *  never interpolate. A `null` `value` is a real day the source answered with nothing — never
+ *  a zero, never plotted. */
+export type HoldingsPoint = {
+  start: string
+  market: string | null
+  quantity: number
+  value: string | null
+  gap_before: boolean
+}
+
+/** ONE SKU'S SERIES over the requested range. `points` is ascending, oldest first.
+ *  `latest_value` is null when every point is unpriced — never a zero. */
+export type HoldingsSeries = {
+  sku: string
+  name: string
+  quantity: number
+  latest_value: string | null
+  points: HoldingsPoint[]
+}
+
+/** ONE CALENDAR START'S PORTFOLIO TOTAL — an honest PARTIAL sum, never a rollup. It sums
+ *  only the SKUs actually priced at this exact date; `priced_names` and `unpriced_names`
+ *  state the coverage beside the figure so a smaller later total is never read as a loss.
+ *  NEVER RECOMPUTE THIS BY SUMMING `HoldingsSeries[].points` — that second total could drift
+ *  from the server's own partial-coverage sum, which is the only total this route offers. */
+export type HoldingsTotal = {
+  start: string
+  value: string
+  priced_names: number
+  unpriced_names: number
+  gap_before: boolean
+}
+
+/** `GET /pipeline/holdings-value?range=<range>` (D236) — unsold stock, valued by SKU off the
+ *  price-history archive, one range at a time. THE POSITION IS THE SKU (D212): a holding is
+ *  a quantity, never a slot, a box or a copy list.
+ *
+ *  `sealed_excluded` AND `unmarked` ARE COUNTED, STATED EXCLUSIONS, NEVER ZERO AND NEVER
+ *  OMITTED (owner's ruling, 2026-09-20: "still stands — singles, stated gap"). Sealed product
+ *  has no card record, so this route cannot count what sits on the shelf for it; sales of
+ *  sealed product are known, unsold sealed stock is not counted here. `unmarked.names` is
+ *  on-hand SKUs the archive has never priced in any range — a coverage fact about the sweep,
+ *  never an absent card. */
+export type HoldingsValuePayload = {
+  range: HoldingsRange
+  width_days: number
+  history_begins: string | null
+  /** D236's own entry writes this as a Unix second (`1758345600`). MEASURED AGAINST THE
+   *  ROUTE ITSELF, 2026-09-20: it actually answers an ISO string (`store/master.py:now()`'s
+   *  own return type, carried through `pipeline/holdings.py:HoldingsReport.at` unconverted
+   *  despite that field's `int` type hint there). Typed here as the string the wire actually
+   *  sends — never used by this screen's own render, which reads `history_begins` and
+   *  `totals[]` instead, but a client reading this field must not be handed a number that
+   *  never arrives. Reported rather than "fixed": `pipeline/holdings.py` and its route are
+   *  out of this change's fence. */
+  at: string
+  on_hand_names: number
+  series: HoldingsSeries[]
+  totals: HoldingsTotal[]
+  unmarked: { names: number }
+  sealed_excluded: { names: number; reason: string }
+}
+
 /** ONE RANGE OF ONE SKU AS A ROW DRAWS IT — a shape and a sign, and deliberately no money.
  *
  *  IT IS NOT A SMALLER `HistoryRange` AND MUST NOT GROW INTO ONE. D62's panel is where a

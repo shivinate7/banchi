@@ -90,6 +90,8 @@ import type {
   ValueCopy,
   SubmissionClaims,
   ClaimRelease,
+  HoldingsRange,
+  HoldingsValuePayload,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -2737,6 +2739,23 @@ export async function getSoldPrices(skus: string[]): Promise<SoldPricesLookup> {
   const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
   const body = (await request(`/pipeline/price-now?${query}`, NO_CACHE)) as { prices: SoldPricesLookup }
   return body.prices
+}
+
+/**
+ * UNSOLD stock, valued by SKU off the price-history archive, one range at a time
+ * (`GET /pipeline/holdings-value?range=<range>`, D236). NEVER `#/revenue`'s `getSoldPrices`
+ * figure — that is what already sold; this is what is still on the shelf, and D236 is the
+ * owner's own ruling that the two may never merge into one number.
+ *
+ * A PLAIN READ, LIKE `getPriceHistory`/`getSoldPrices` ABOVE — a press, never a mount, on
+ * this screen's own convention: `#/revenue` fetches this behind an explicit control, not on
+ * load, so opening Sales never gets slower for a report this section does not need yet.
+ */
+export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<HoldingsValuePayload> {
+  return (await request(
+    `/pipeline/holdings-value?range=${encodeURIComponent(range)}`,
+    NO_CACHE,
+  )) as HoldingsValuePayload
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

@@ -3089,7 +3089,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
                                 "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113", "D134",
                                 "D159", "D165", "D167", "D168", "D174", "D189", "D192", "D193",
-                                "D203", "D210", "D225", "D227"],
+                                "D203", "D210", "D225", "D227", "D236"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -5310,7 +5310,7 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227"]},
+                                              "D225", "D227", "D236"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -5403,7 +5403,7 @@ COMPONENTS = [
                                              "D113", "D114", "D115", "D116", "D132", "D134", "D142",
                                              "D145", "D147", "D156", "D159", "D165", "D166", "D168",
                                              "D172", "D174", "D180", "D183", "D193", "D212", "D213",
-                                             "D227"]},
+                                             "D225", "D227", "D236"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -7112,8 +7112,7 @@ COMPONENTS = [
                                         "the URL.",
                                 "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105", "D118",
                                                 "D159", "D189", "D193", "D194", "D201", "D214",
-                                                "D217", "D219",
-                                                "D225"]},
+                                                "D217", "D219", "D225", "D236"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "
                                         "reuses `--bn-accent` rather than naming a color; the "
