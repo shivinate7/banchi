@@ -52,16 +52,21 @@ of the list. Items 1 and 3 are larger and neither is a test.
 
 | Target | Wall clock | What it covers |
 |---|---:|---|
-| `make check` | **187.5 s** | 35 sub-targets, product first then guard selftests (D161) |
+| `make check` | **187.5 s** on 2026-09-17, **163.85 s** on 2026-09-20 | 35 sub-targets then, 39 now, product first then guard selftests (D161) |
 | `make design-check` | **117.5 s** | 648 Playwright cases over 26 spec files, 647 passed / 1 skipped |
 | **both, once** | **305.0 s** | what a maximal agent round pays |
 
 ### Inside `make check`, ranked by cost
 
+**Both wall-clock figures below are real, taken on this Mac on different trees.** 2026-09-17
+measured a tree with `serve-selftest` already skipping and 35 sub-targets. 2026-09-20
+measured a tree with four more sub-targets (`guard-scope-selftest` and three others landed
+since) and `harness` slower by 2.65 s. Section 11 is the newer measurement's own account.
+
 | Target | s | Target | s | Target | s |
 |---|---:|---|---:|---|---:|
 | serve-selftest | 70.12 | janitor-selftest | 4.63 | screen-freshness-selftest | 0.78 |
-| harness | 21.75 | githooks-selftest | 3.48 | screen-freshness | 0.76 |
+| harness | 21.75 (24.4 on 2026-09-20) | githooks-selftest | 3.48 | screen-freshness | 0.76 |
 | reap-selftest | 15.04 | typecheck | 3.34 | cid-selftest | 0.43 |
 | claim-selftest | 14.86 | silent-write-selftest | 2.53 | sigil-check | 0.20 |
 | guard-shell-selftest | 12.11 | lint | 2.09 | ignore-check | 0.15 |
@@ -432,4 +437,49 @@ through something neither `CARRY` nor the three `beyond_carry` entries name. The
 exists to make that a failing commit rather than a quiet skip, and it is the only thing
 standing between this gate and the failure every other path gate in this document was
 rejected for.
+
+---
+
+## 11. The second path gate, 2026-09-20 — the §9 policy reopened, on measurement
+
+**§9 asked for the owner's word again before a second entry, and it was given.** A fresh
+measurement found `make check` at 163.85 s. Fifteen guard self-tests cost 76.6 s of that.
+That is 47%. Four of them alone cost more than double `make harness`. Table 2 above carries
+both dates' figures. `docs/decisions/D-guard-self-test-scope.md` is the full argument. This
+section is the short version.
+
+**A guard self-test proves a mechanism, never the product.** All fifteen build a throwaway
+fixture. That fixture is a temp repository, a temp clone, or a process the test starts and
+kills itself. None opens the real store, server, or a screen. It has something new to say
+only when the guard script, its own fixture, or the wiring recipe changes. That is not a
+flaw. It is what "prove a mechanism" means. It does not describe every check in the suite.
+The harness and `docs-audit` both read the real tree and earn their seconds by a wide
+margin (§4).
+
+**A separate audit graded all 38 targets in `scripts/checks.py:CHECKS`.** Each one was
+checked against a live commit or code path it names. None was found dead weight, these
+fifteen included. This section is a placement change, never a pruning. §9's own rejection
+of general path gating already drew that same distinction.
+
+**`scripts/guard-scope.py` extends `serve-scope.py`'s design rather than copying it
+fifteen times.** Fifteen Makefile recipes each call `classify --target <name>`.
+`serve-scope.py`'s own `SCOPE` is hand-curated. It is reconciled against
+`serve-selftest.py`'s separately hand-curated `CARRY`. `guard-scope.py` derives each
+self-test's subject files from its own source on every call instead. It reads
+local-package imports, `Path`-style chains, and a regex for the four shell scripts. There
+is no second list here to drift. Which fifteen targets are gated at all stays a hand-typed
+roster, on `serve-scope.py`'s own precedent of naming its one target by hand too.
+
+**It fails open exactly like `serve-scope.py`.** No merge-base runs it. An unreadable diff
+runs it. An empty diff runs it. An unscoped target runs it. Any exception runs it.
+`PKMNSCAN_GUARD_SCOPE=off` is the escape hatch, printed in every skip. `make docs-audit`'s
+new `guard scope` row reconciles the roster against the Makefile's wiring, both ways. It
+was mutation-tested by breaking the classifier — it still runs — and by mismatching the
+roster and the wiring, where the row goes red.
+
+**The saving, measured on the branch that built this, on a third machine.** `make check`
+measured 93.3 s with every guard self-test running. One trivial follow-up commit later, the
+same tree measured 66.4 s with all fifteen and `serve-selftest` skipping. That is a
+27-second cut on that hardware. It does not restate the 163.85 s / 76.6 s figures above,
+taken on a different Mac — both are real, independently measured numbers.
 

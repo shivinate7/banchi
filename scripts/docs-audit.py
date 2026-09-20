@@ -15269,6 +15269,7 @@ def check_suite_lock(report: Report) -> None:
 BROWSER_SCOPE_SCRIPT = ROOT / "scripts" / "browser-scope.py"
 SERVE_SCOPE_SCRIPT = ROOT / "scripts" / "serve-scope.py"
 SERVE_SELFTEST_SCRIPT = ROOT / "scripts" / "serve-selftest.py"
+GUARD_SCOPE_SCRIPT = ROOT / "scripts" / "guard-scope.py"
 CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 PLAYWRIGHT_CONFIG = ROOT / "app" / "playwright.config.ts"
 VITE_CONFIG = ROOT / "app" / "vite.config.ts"
@@ -15736,6 +15737,79 @@ def check_serve_scope(report: Report) -> None:
     report.add("serve scope", MECHANICAL, findings,
                f"{len(scope)} entries against {len(carry)} carried names, both ways",
                scanned=len(scope))
+
+
+def check_guard_scope(report: Report) -> None:
+    """`scripts/guard-scope.py:ROSTER` against the Makefile's own wiring, both ways.
+
+    THE SECOND PATH-GATED TARGET, on the owner's word, 2026-09-20 — see
+    `docs/decisions/D-guard-self-test-scope.md`. Unlike `check_serve_scope` above, there is
+    no separate subject list to reconcile here: `guard-scope.py` derives each self-test's
+    subject from its own source on every call, so the only thing left to drift is which
+    targets are gated AT ALL. A roster entry nothing consults is a list, not a gate — `serve
+    scope`'s own wiring check, repeated. A recipe calling this classifier for a target the
+    roster does not name would classify against an empty scope and always RUN, which is safe
+    but silently pointless — the same "green is believed" failure the row exists to catch.
+    """
+    if not exists(GUARD_SCOPE_SCRIPT):
+        report.add("guard scope", MECHANICAL, [Finding(
+            rel(GUARD_SCOPE_SCRIPT),
+            "does not exist, and fifteen Makefile recipes gate on it.")])
+        return
+
+    roster = literals_from_module(GUARD_SCOPE_SCRIPT).get("ROSTER")
+    if not isinstance(roster, tuple) or not roster or not all(
+        isinstance(entry, dict) and isinstance(entry.get("target"), str)
+        and isinstance(entry.get("test"), str) for entry in roster
+    ):
+        report.add("guard scope", MECHANICAL, [Finding(
+            rel(GUARD_SCOPE_SCRIPT),
+            "`ROSTER` is not a tuple of `{\"target\": …, \"test\": …}` literals this row can "
+            "read.")])
+        return
+
+    findings: List[Finding] = []
+    targets = {str(entry["target"]) for entry in roster}
+
+    for entry in roster:
+        test_path = ROOT / str(entry["test"])
+        if not exists(test_path):
+            findings.append(Finding(
+                rel(GUARD_SCOPE_SCRIPT),
+                f"`{entry['target']}`'s `test` names `{entry['test']}`, which does not "
+                "exist."))
+
+    makefile = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
+    wired = set(re.findall(r"guard-scope\.py classify --target (\S+)", makefile))
+
+    for target in sorted(targets - wired):
+        findings.append(Finding(rel(GUARD_SCOPE_SCRIPT), (
+            f"`{target}` is on ROSTER and no Makefile recipe calls "
+            f"`guard-scope.py classify --target {target}`. The roster entry gates nothing.")))
+
+    for target in sorted(wired - targets):
+        findings.append(Finding(
+            "Makefile",
+            f"a recipe calls `guard-scope.py classify --target {target}`, but `{target}` is "
+            "not on ROSTER — it would classify against an unscoped target and always RUN, "
+            "which is safe but means the gate was copied without its subject."))
+
+    for entry in roster:
+        recipe = ""
+        target = str(entry["target"])
+        marker = f"\n{target}:"
+        if marker in ("\n" + makefile):
+            recipe = ("\n" + makefile).split(marker, 1)[1].split("\n\n", 1)[0]
+        if recipe and f"guard-scope.py classify --target {target}" not in recipe:
+            findings.append(Finding(
+                "Makefile",
+                f"the `{target}` recipe exists but does not consult `guard-scope.py` — it "
+                "always runs, ungated."))
+
+    report.add("guard scope", MECHANICAL, findings,
+               f"{len(roster)} roster entries against {len(wired)} wired Makefile recipes, "
+               "both ways",
+               scanned=len(roster))
 
 
 def check_check_census(report: Report) -> None:
@@ -20602,6 +20676,7 @@ def audit(staged_only: bool) -> Report:
     check_browser_scope(report)
     check_spec_map(report)
     check_serve_scope(report)
+    check_guard_scope(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     check_identifier_spelling(report)

@@ -1126,4 +1126,3 @@ event. No reader measured how many entries `governed_by`'s reciprocal direction 
 nobody dry-ran the Bash write-target resolver that build_now ranks 9-12 and 26 all share: its
 parse coverage over real session commands is unmeasured, which is why every clause is specified
 to fail OPEN and why a "guard throws" arm belongs in its self-test.
-

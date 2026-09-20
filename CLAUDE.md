@@ -62,13 +62,30 @@ make serve-scope    # what `make serve-selftest` reads, and whether this branch 
                     #   self-test's own CARRY, reconciled by `make docs-audit`'s `serve scope`
                     #   row BOTH WAYS. Fails open: no merge-base, an unreadable diff and an
                     #   EMPTY diff all run the test.
-                    #   `make serve-selftest` IS THE ONLY PATH-GATED TARGET IN THIS REPO
-                    #   (owner's ruling, 2026-09-17). It is 70.1s of `make check`'s 187.5 and
-                    #   copies the checkout with a STUB app/, so no screen change can reach
-                    #   it. Nine targets in `check` cost under 0.1s each, so a scope list per
-                    #   target would cost more than it saves. A SECOND gated target needs the
-                    #   owner's word again — this recipe is not a pattern to copy.
+                    #   `make serve-selftest` WAS THE ONLY PATH-GATED TARGET, 2026-09-17 to
+                    #   2026-09-20. It is 70.1s of `make check`'s own total and copies the
+                    #   checkout with a STUB app/, so no screen change can reach it.
                     #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
+make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
+                    #   measurement). What each of fifteen guard self-tests reads.
+                    #   ARGS=list [--target <name>], or
+                    #   ARGS="classify --target <name> --base <rev>".
+                    #   `docs/decisions/D-guard-self-test-scope.md` is the argument. A guard
+                    #   self-test proves a MECHANISM, never the product. It cannot go stale
+                    #   between two moments: the guard script it proves changing, or its own
+                    #   fixture changing. THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S
+                    #   OWN SOURCE, never typed beside it — `scripts/guard-scope.py:
+                    #   derive_subjects` reads local-package imports and `Path`-style chains
+                    #   straight out of the test file. Only WHICH fifteen targets are gated
+                    #   is a hand-typed roster, on `serve-scope.py`'s own precedent. Fails
+                    #   open exactly like `serve-scope`: no merge-base, an unreadable diff,
+                    #   an EMPTY diff, an unscoped target, and any exception all run the
+                    #   test. `PKMNSCAN_GUARD_SCOPE=off` runs every gated self-test
+                    #   regardless, printed in every skip. Reconciled BOTH WAYS by
+                    #   `make docs-audit`'s `guard scope` row: every roster target is wired
+                    #   into the Makefile and every wired recipe names a roster target.
+                    #   A THIRD gated target needs the owner's word again — no target here
+                    #   was found dead weight; this is a placement change, not a pruning.
 make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line span, which
                     #   component DRAWS it, and the expression that decides whether it is
                     #   drawn. A renderer — writes nothing, gates nothing, derived every run.
@@ -168,7 +185,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
-                    #   subagent-override-selftest,
+                    #   subagent-override-selftest + guard-scope-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -722,9 +739,8 @@ that evening than every verification target combined (`docs/specs/verification-c
 - `docs/map.py` — the repo as data: built, TBD, and which decisions govern each file. Read it
   before editing under `app/`, `server/`, `pipeline/`, `identify/`, `store/`, `geometry/` or
   `cli/`. Audited by `make docs-audit` — a file added with no entry fails the commit.
-  `make map` is how you look at it (D80). The file is
-  720,000<!-- derived:docs_map_byte_count --> bytes across
-  8173<!-- derived:docs_map_line_count --> lines. Reading it whole spends most of a
+  `make map` is how you look at it (D80). The file is about
+  730,000<!-- derived:docs_map_byte_count --> bytes. Reading it whole spends most of a
   context window. Its token cost is about a quarter of that byte count, at roughly four
   bytes per token. That ratio is an approximation and never a measured count. `make docs-audit`'s `map sections` row fails a commit
   adding a section with no reader.
@@ -738,8 +754,8 @@ that evening than every verification target combined (`docs/specs/verification-c
   reconciles both files, in both directions.
 - `docs/decisions/` — settled decisions and why, one file per entry, indexed by
   `scripts/decisions_corpus.py`. Read before redesigning. **Not `@`-loaded** (D60): the
-  directory is 2,200,000<!-- derived:docs_decisions_byte_count --> bytes across
-  243<!-- derived:docs_decisions_file_count --> files. Loading it all costs about a quarter
+  directory is about 2,200,000<!-- derived:docs_decisions_byte_count --> bytes. Loading it
+  all costs about a quarter
   of that byte count in tokens, before any work. That ratio is an approximation and never a
   measured count.
   `scripts/decision-context.py` names the governing decisions before an edit under a mapped

@@ -3150,7 +3150,7 @@ COMPONENTS = [
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226", "D229"],
+                                "D213", "D215", "D218", "D226", "D229", "D-guard-self-test-scope"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3782,6 +3782,32 @@ COMPONENTS = [
                         "purpose and the file says so — the day `CARRY` gains `app`, the "
                         "`serve scope` audit row fails until this list follows.",
             },
+            "guard-scope.py": {
+                "does": "does this branch reach what one of fifteen guard self-tests proves? "
+                        "THE SECOND PATH GATE IN THIS REPO, on the owner's word, 2026-09-20. "
+                        "`classify --target <name>` exits 0 to run and 3 to skip, and each of "
+                        "the fifteen recipes is its own caller. Unlike `serve-scope.py`'s "
+                        "hand-curated `SCOPE` against a separately hand-curated `CARRY`, "
+                        "`derive_subjects()` reads each self-test's own source on every call — "
+                        "every local-package import and every `Path`-style chain, plus a regex "
+                        "for the four shell scripts — so there is no second list to drift. "
+                        "`ROSTER` names which fifteen targets are gated, on `serve-scope.py`'s "
+                        "own precedent of naming its one target by hand. It imports the "
+                        "globbing and the recipe narrowing from `browser-scope.py`. "
+                        "`PKMNSCAN_GUARD_SCOPE=off` runs every target regardless.",
+                "governed_by": ["D18", "D-guard-self-test-scope"],
+                "note": "docs/decisions/D-guard-self-test-scope.md is the argument: what a "
+                        "guard self-test can and cannot catch, why a separate audit found all "
+                        "38 targets live and none dead weight, and the one derivation gap "
+                        "found (`githooks-selftest.sh` names three of its five hooks only in "
+                        "prose, so a hit under `scripts/githooks/` widens to the whole "
+                        "directory rather than trusting the two literal names). IT FAILS OPEN "
+                        "IN EVERY DIRECTION: no merge-base, an unreadable diff, an EMPTY diff, "
+                        "an unscoped target, and any exception raised while deriving a "
+                        "subject all answer RUN. `make docs-audit`'s `guard scope` row and "
+                        "`scripts/guard-scope.py selftest` both reconcile ROSTER against the "
+                        "Makefile's wiring, in both directions.",
+            },
             "orient.py": {
                 "does": "`make orient <file.tsx>` — every component in a .tsx file, its line "
                         "span, which component draws it, and the expression that decides "
@@ -3886,8 +3912,9 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48",
                                 "D53", "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80",
                                 "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
-                                "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141", "D149",
-                                "D158", "D160", "D171", "D172", "D173", "D176", "D178", "D189", "D215"],
+                                "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141",
+                                "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D178",
+                                "D189", "D215", "D-guard-self-test-scope"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

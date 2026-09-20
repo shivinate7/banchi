@@ -247,19 +247,9 @@ REGISTRY: Dict[str, Derivation] = {
             docs_map_byte_count,
         ),
         Derivation(
-            "docs_map_line_count",
-            "docs/map.py's own line count",
-            docs_map_line_count,
-        ),
-        Derivation(
             "docs_decisions_byte_count",
             "total bytes across every file under docs/decisions/",
             docs_decisions_byte_count,
-        ),
-        Derivation(
-            "docs_decisions_file_count",
-            "every file under docs/decisions/, entries and ORDER.json alike",
-            docs_decisions_file_count,
         ),
     )
 }
