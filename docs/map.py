@@ -3000,7 +3000,7 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D90", "D96"],
+                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D218"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----

@@ -646,6 +646,56 @@ def renumber_map(text: str, claims: Sequence[Claim]) -> str:
     return text
 
 
+def rewrite_decision_paths(text: str, claims: Sequence[Claim]) -> str:
+    """Turn a PATH citation of a decision's own slug-named file into a bare id citation.
+
+    THE THIRD EDIT THAT IS NOT A TOKEN SUBSTITUTION, and it is the one that was missing on
+    2026-09-19: `docs/specs/revenue-plan.md` cited a still-unclaimed entry as
+    `` `docs/decisions/D-<slug>.md` `` — a real path, true the day it was written, because the
+    unclaimed file really is named after its bare slug. `apply_to_text` alone substitutes only
+    the TOKEN inside that path, `D-<slug>` -> `D<n>`, and leaves `` `docs/decisions/D<n>.md` ``
+    behind: a path that has never existed, since `rename_claimed_entries` renames the real
+    file to `D<n>-<slug>.md` in the SAME pass — the number joins the slug, it does not replace
+    it. `make docs-audit`'s `paths` row (a general existence check over every path-shaped
+    token in every markdown file, not a rule aimed at this one shape) correctly refused the
+    dangling path, and the pre-commit hook stopped the claim commit with the tree already
+    rewritten.
+
+    THE FIX IS NOT A BETTER PATH. The global rule this repo already holds
+    (`~/Developer/claude-settings/CLAUDE.md`: "Give each record its own file, one folder per
+    kind. Cite by id, never by path.") is D160's own argument applied a second time
+    (`docs/DEBTS.md`'s header cites it for `DEBT<n>` the same way) — a decision is cited by
+    its bare `D<n>`, the form `Claim.becomes` already carries, and the path is dropped
+    entirely rather than repaired. No new formatter is built for this: `claim.becomes` is
+    already the exact citation form the rest of this file uses everywhere else.
+
+    RUNS BEFORE `apply_to_text`, MATCHING `renumber_gates`/`renumber_map`'s OWN ORDERING, so
+    it still has the slug to find the path by; the generic pass then finds nothing left to
+    double-substitute inside what was the path, and still catches every OTHER, bare citation
+    of the same token elsewhere in the file.
+
+    DECISIONS ONLY. A codes id and a build step have no file of their own to be pointed at —
+    `docs/CODES-DECISIONS.md` and `docs/GATES.md` are one shared file apiece, never a
+    directory with one file per entry — so there is no path shape for either to produce, and
+    none is built here for a citation that cannot exist.
+    """
+    for claim in claims:
+        if claim.kind != "decision":
+            continue
+        # THE FILE'S OWN TAIL, AND NOT ONLY THE BARE `<token>.md`, MATCHING
+        # `rename_claimed_entries`'S OWN RULE: that function finds the pre-claim file by
+        # `n.startswith(claim.slug + "-") or n == claim.slug + ".md"`, because the file a
+        # branch writes may carry more descriptive text after the slug than the slug's own
+        # citation form does. A citation naming that same file has to be found by the same
+        # rule, or a longer-tailed filename would leave its own path citation unrewritten
+        # while the file underneath it renamed. An optional backtick on each side: every
+        # live example in this tree backtick-quotes the path, but the citation is dropped
+        # either way rather than left half-repaired.
+        pattern = re.compile(r"`?docs/decisions/" + re.escape(claim.token) + r"[\w-]*\.md`?")
+        text = pattern.sub(claim.becomes, text)
+    return text
+
+
 def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, str]:
     """Rename each claimed entry's FILE, and rewrite the manifest to match.
 
@@ -718,6 +768,7 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
             after = renumber_gates(after, claims)
         if path == root / MAP:
             after = renumber_map(after, claims)
+        after = rewrite_decision_paths(after, claims)
         after, _ = apply_to_text(after, claims)
         if after == before:
             continue
