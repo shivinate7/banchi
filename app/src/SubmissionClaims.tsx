@@ -213,7 +213,7 @@ export function SubmissionClaims() {
             <div className="claims-what">
               <span className="claims-who">{claim.run ?? 'Starting up'}</span>
               <span className="claims-meta">
-                {cardCount(claim.cards)} · started {started(claim.started_at)}
+                {cardCount(claim.cards)} (started {started(claim.started_at)})
               </span>
               {/* Enough of the positions to recognise which selection this is — two or three
                   is what tells a double-click from a drawer you had forgotten about. */}
