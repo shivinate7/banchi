@@ -51,6 +51,7 @@ from store.cache import Cache
 from store.master import Inventory
 from store.orders import Ledger
 from store.pricearchive import PriceArchive
+from store.postings import Postings
 from store.queues import MAIN, PARKED, Queue
 from store.readings import Readings
 from store.rows import Rows
@@ -82,6 +83,12 @@ class Snapshot:
     # snapshot for the same reason `readings` is: a `Store.write()` from `archive sweep`
     # commits it atomically with everything else D88 already protects.
     archive: PriceArchive
+    # EVERY `TCG Marketplace Price` THIS STORE HAS EVER POSTED (D-a-record-price-postings).
+    # An accumulator like `Inventory.events`, not a `Rows` table — see `store/postings.py`
+    # for why this ledger must never go through `Rows`'s delete-then-upsert flush. Flushed by
+    # `Store.write()` with `db.append_postings`, in the same transaction as everything else
+    # a press touches.
+    postings: Postings
 
     def queue(self, name: str) -> Queue:
         return self.review if name == MAIN else self.parked
@@ -159,6 +166,11 @@ class Store:
                 entries=bound(PriceArchive.ENTRIES, "price_history"),
                 sources=bound(PriceArchive.SOURCES, "price_history_sources"),
             ),
+            # NOT `bound()` — nothing to load, only to append to, exactly like
+            # `snapshot.inventory.events` beside it. A read-only `Store.read()` snapshot gets
+            # one too, empty and unused: nothing here ever calls `.record()` on it, since
+            # nothing writes through a lock-free snapshot.
+            postings=Postings(),
         )
 
     def read(self) -> Snapshot:
@@ -187,11 +199,15 @@ class Store:
                 for rows in snapshot.tables:
                     db.flush_rows(rows)
                 db.append_events(conn, snapshot.inventory.events)
+                # SAME TRANSACTION, SAME REASON: a posted price and the inventory/listing
+                # writes that went with it land together or not at all (D-a-record-price-postings).
+                db.append_postings(conn, snapshot.postings.entries)
                 # BEFORE THE COMMIT, so a box row and the mark that says its id is spent land
                 # together or not at all. `set_box_ids_issued` never lowers the stored figure.
                 db.set_box_ids_issued(conn, snapshot.inventory.box_ids_issued)
                 conn.execute("COMMIT")
                 snapshot.inventory.events = []
+                snapshot.postings.entries = []
             except BaseException:
                 # Best effort on a connection that may already be dead; the raise is the point.
                 with contextlib.suppress(Exception):

@@ -628,6 +628,10 @@ def run(args, say) -> int:
         return 1
 
     emitted = set(listed_skus) | set(sub_skus)
+    # THE SAME MAPPING `import_rows` PRICED FROM, FLATTENED ACROSS GAMES — never a second
+    # computation of a price, only a lookup of the one `priced[game]` already decided
+    # (D-a-record-price-postings). A SKU belongs to exactly one game, so this cannot collide.
+    priced_flat = {sku: price for by_game in priced.values() for sku, price in by_game.items()}
     at_cap = [m for g in resolved.joins.values() for m in g.report.at_cap]
     if at_cap:
         # NAMED PER SKU, because "already at the live cap" is almost never the reason
@@ -772,6 +776,17 @@ def run(args, say) -> int:
                 ).bump(master.PUSHED, copies)
                 pushed += copies
                 pushed_skus += 1
+                # THE PRICE THIS PRESS JUST PUT IN A FILE, RECORDED THE MOMENT THE PUSH IS
+                # COUNTED — never a proposal, because this gate is the one that already
+                # decides a row genuinely reached the file (D-a-record-price-postings). `emit`
+                # tracks no prior asking price, so `replaced` is left unset rather than
+                # guessed at.
+                writable.postings.record(
+                    sku=match.sku,
+                    price=tcgcsv.format_price(priced_flat[match.sku]),
+                    source="emit",
+                    run=run_dir.name,
+                )
         queue_line = writable.queue_summary
         stages = writable.inventory.listing_counts()
 
@@ -1131,6 +1146,16 @@ def run_merged(args, say) -> int:
                 )
                 pushed += copies
                 pushed_skus += 1
+                # THE MERGED PLAN'S OWN PRICE, THE SAME `row.price` `merge.import_rows` WROTE
+                # INTO THE CSV CELL — never recomputed (D-a-record-price-postings). `run` names
+                # every run that contributed a leg to this SKU, since a merged send has no
+                # single run of its own.
+                writable.postings.record(
+                    sku=row.sku,
+                    price=tcgcsv.format_price(row.price),
+                    source="emit-merged",
+                    run=",".join(sorted({leg.run for leg in row.legs})),
+                )
         queue_line = writable.queue_summary
         stages = writable.inventory.listing_counts()
 
