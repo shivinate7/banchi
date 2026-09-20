@@ -41,29 +41,14 @@
   align-items: center;
   gap: var(--bn-2);
 }
-.orders-search {
+/* `SearchField` fills whatever wraps it (`width: 100%`); this is that wrapper, sized to sit
+   beside the status select and sort segmented rather than spanning the row (S1 — parity with
+   Inventory/Sales/Fulfillment, all of which reach for the same component). */
+.orders-search-field {
   flex: 1 1 220px;
   min-width: 160px;
   max-width: 320px;
 }
-.orders-search-input { min-height: var(--bn-control-h-sm); font-size: var(--bn-fs-sm); }
-/* `.bn-input-wrap`'s own right slot is sized for a `<kbd>`; a clear button needs the same spot
-   with a hit target rather than the kbd's tight padding. */
-.orders-search-clear {
-  position: absolute;
-  right: 6px;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--bn-r-sm);
-  color: var(--bn-ink-3);
-  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
-}
-.orders-search-clear:hover { background: var(--bn-surface-2); color: var(--bn-ink); }
-.orders-search-input::-webkit-search-cancel-button { appearance: none; }
-/* Room for the clear button so typed text never runs under it. */
-.orders-search:has(.orders-search-clear) .orders-search-input { padding-right: 26px; }
 
 .orders-status-select { min-height: var(--bn-control-h-sm); font-size: var(--bn-fs-sm); width: auto; min-width: 120px; }
 .orders-sort .bn-seg-item { min-height: var(--bn-control-h-sm); }

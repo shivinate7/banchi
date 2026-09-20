@@ -2386,7 +2386,7 @@ test('the search narrows the buyer list by name, case- and space-insensitively',
   await open(page, { orders: threeBuyerPayload() })
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 
-  const search = page.locator('.orders-search-input')
+  const search = page.locator('.orders-search-field .search-field-input')
   await search.fill('  ALICE ')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
@@ -2397,7 +2397,7 @@ test('the search narrows the buyer list by name, case- and space-insensitively',
 
 test('the search matches an order number too', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-search-input').fill('c0003')
+  await page.locator('.orders-search-field .search-field-input').fill('c0003')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Carol')
 })
@@ -2407,7 +2407,7 @@ test('the search composes with the status select — an AND, never a second gate
   await page.locator('.orders-status-select').selectOption('Ready to Ship')
   await expect(page.locator('.orders-index-row')).toHaveCount(2) // Carol, Alice
 
-  await page.locator('.orders-search-input').fill('bob')
+  await page.locator('.orders-search-field .search-field-input').fill('bob')
   await expect(page.locator('.orders-index-row')).toHaveCount(0)
 })
 
@@ -2424,7 +2424,7 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
   await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
-  await page.locator('.orders-search-input').fill('hopper')
+  await page.locator('.orders-search-field .search-field-input').fill('hopper')
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
   await expect(earlier).toContainText('Grace Hopper')
@@ -2432,13 +2432,13 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
 
 test('a search with nothing left says so by name and offers to clear it', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-search-input').fill('nobody named this')
+  await page.locator('.orders-search-field .search-field-input').fill('nobody named this')
   await expect(page.locator('main.orders')).toContainText('No buyer matches')
   await expect(page.locator('main.orders')).toContainText('nobody named this')
 
   const clear = page.locator('.bn-empty').getByRole('button', { name: 'Clear search' })
   await clear.click()
-  await expect(page.locator('.orders-search-input')).toHaveValue('')
+  await expect(page.locator('.orders-search-field .search-field-input')).toHaveValue('')
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 })
 
@@ -2446,7 +2446,7 @@ test('a changed search is an explicit retake — no stale chip offered', async (
   await open(page, { orders: threeBuyerPayload() })
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
 
-  await page.locator('.orders-search-input').fill('a')
+  await page.locator('.orders-search-field .search-field-input').fill('a')
   await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
 })
 

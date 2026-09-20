@@ -8,6 +8,7 @@ import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilte
 import { hubState, setHub, touchHub, useHub, type PullFilter, type Stage } from './OrdersHubStore'
 import { isEditableTarget } from './keys'
 import { PositionLabel } from './PositionLabel'
+import { SearchField } from './SearchField'
 import { groupBuyers, groupForOrderKey, type BuyerGroup } from './orderBuyers'
 import {
   applyTake,
@@ -895,45 +896,20 @@ const REASON_ICON: Record<OrderLineReason, IconName> = {
   not_a_single: 'package',
 }
 
-function phraseOf(reason: OrderLineReason, n: number): string {
-  const one = n === 1
-  switch (reason) {
-    case 'resolved':
-      return `${n} found every copy`
-    case 'short':
-      return `${n} ${one ? 'is' : 'are'} short`
-    case 'no_copies_on_hand':
-      return `${n} ${one ? 'has' : 'have'} no copies left in the boxes`
-    case 'sku_unknown':
-      return `${n} name${one ? 's' : ''} a SKU no record carries`
-    case 'sku_unseen':
-      return `${n} name${one ? 's' : ''} a SKU the store has never seen`
-    case 'not_a_single':
-      return `${n} ${one ? 'is' : 'are'} not a single`
-  }
-}
-
 function joinPhrases(parts: string[]): string {
   if (parts.length <= 1) return parts.join('')
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 }
 
-/** The summary, drawn as the page's lede once the ledger has answered. */
-function summaryOf(open: OrderRow[], done: OrderRow[], counts: Record<OrderLineReason, number>): ReactNode {
+/** The lede, drawn once the ledger has answered — THE TOTAL ONLY (S3). The open/done
+ *  breakdown and per-reason phrases this used to spell out are the same figures the tab
+ *  pills and the filter select already draw, at 820 and 1440 both; keeping both was two
+ *  sentences for one fact. */
+function summaryOf(counts: Record<OrderLineReason, number>): ReactNode {
   const lineTotal = ORDER_REASONS.reduce((sum, reason) => sum + counts[reason], 0)
-  const phrases = ORDER_REASONS.filter((reason) => counts[reason] > 0).map((reason) => phraseOf(reason, counts[reason]))
-  if (open.length === 0) {
-    return (
-      <>
-        Nothing outstanding — every one of the <strong>{done.length}</strong> order{done.length === 1 ? '' : 's'} has its copies.
-      </>
-    )
-  }
   return (
     <>
-      <strong>{open.length}</strong> open order{open.length === 1 ? '' : 's'}
-      {done.length > 0 ? ` and ${done.length} done` : ''}. Of <strong>{lineTotal}</strong> line{lineTotal === 1 ? '' : 's'},{' '}
-      {joinPhrases(phrases)}.
+      <strong>{lineTotal}</strong> line{lineTotal === 1 ? '' : 's'}
     </>
   )
 }
@@ -2173,7 +2149,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const lede =
     stage === 'pull'
       ? populated && counts !== null
-        ? summaryOf(open, done, counts)
+        ? summaryOf(counts)
         : 'Which copies each buyer gets, and where in the boxes they are. One press per copy, with twenty seconds to take it back.'
       : "TCGplayer's shipping export, sorted into three lanes."
 
@@ -3176,22 +3152,14 @@ function PullStage({
     <div className="orders-toolbar orders-rail-toolbar">
       {chips}
       <div className="orders-view-controls" role="group" aria-label="Sort and narrow the buyer list">
-        <div className="bn-input-wrap orders-search">
-          <Icon name="search" size={16} />
-          <input
-            type="search"
-            className="bn-input orders-search-input"
-            aria-label="Search buyers by name or order number"
-            placeholder="Search buyers or order #"
-            autoComplete="off"
+        <div className="orders-search-field">
+          <SearchField
             value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
+            onChange={onQueryChange}
+            persona="owner"
+            label="Search buyers"
+            placeholder="Search buyers or order #"
           />
-          {query === '' ? null : (
-            <button type="button" className="orders-search-clear" aria-label="Clear search" onClick={() => onQueryChange('')}>
-              <Icon name="x" size={12} />
-            </button>
-          )}
         </div>
         <select
           className="bn-select orders-status-select"
@@ -3199,7 +3167,7 @@ function PullStage({
           value={view.status ?? ''}
           onChange={(event) => onStatusChange(event.target.value === '' ? null : event.target.value)}
         >
-          <option value="">All</option>
+          <option value="">Status</option>
           {statusOptions.map((option) => (
             <option key={option.status} value={option.status}>
               {option.status} ({option.count})
