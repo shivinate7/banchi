@@ -1680,13 +1680,12 @@ function GroupConfirm({
               these cards are each their own single row; the grade is a property of the
               catalogue, and it is stated below as context rather than asked here. */}
           <h2 className="review-question-title">Answer all {offer.rows.length} together?</h2>
-          {/* The pipeline's own reason code (`set_ambiguous` and the like) is a debugging fact,
-              not something a person doing this work needs to read — the sentence already says
-              it in plain English. Kept as a tooltip rather than deleted outright, so support
-              can still find it without it costing a line in the visible flow. */}
-          <p className="review-question-sub" title={`Reason code: ${offer.reason}`}>
-            {reasonLabel(offer.reason)}
-          </p>
+          {/* The pipeline's own reason code (`set_ambiguous` and the like) is a debugging
+              fact, not something a person doing this work needs to read or find — the
+              sentence already says it in plain English, and a `title` is unreliable for a
+              screen reader and unreachable by touch besides. Gone means gone; a raw code
+              wanted for debugging belongs in a log, not in this markup. */}
+          <p className="review-question-sub">{reasonLabel(offer.reason)}</p>
         </div>
         <p className="review-sentence">
           Each card offers one row, for the same reason. One press answers each with its own row — the finish it was sorted and photographed as, all <span className="review-claim">Near Mint</span>, the catalogue's only grade.
@@ -1843,7 +1842,7 @@ function Card({
             {retired ? <Icon name="history" size={20} className="review-question-mark" /> : null}
             {questionFor(entry.reason)}
           </h2>
-          <p className="review-question-sub" title={`Reason code: ${entry.reason}`}>
+          <p className="review-question-sub">
             {reasonLabel(entry.reason)}
             {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
           </p>
