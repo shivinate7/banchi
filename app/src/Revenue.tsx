@@ -558,7 +558,7 @@ export function Revenue() {
 
   const { sales, dropped, refundExcluded, canceledOrders } = useMemo(() => salesOf(orders ?? []), [orders])
 
-  // THE PRESS, NEVER THE MOUNT (D-a-sales-truth, over D189's/D-a-price-history-archive's own
+  // THE PRESS, NEVER THE MOUNT (D-a-sales-truth, over D189's/D219's own
   // tables). `prices` is `null` until pressed once — a screen that fetched it on mount would
   // draw a number that looks live off a table that is really a cache of the last archive
   // sweep, `readings adopt`, or live fetch. `pricesLoading` and `pricesFailure` describe that

@@ -2678,7 +2678,7 @@ export async function getPriceTrends(run: string, skus: string[] = []): Promise<
 
 /** One SKU's answer from `getSoldPrices` — a market figure as text, when it dates from as a
  *  Unix second, and which table answered. `source: 'archive'` is a `price_history` `month`
- *  bucket (D-a-price-history-archive), its own calendar day as `at`; `source: 'live'` is a
+ *  bucket (D219), its own calendar day as `at`; `source: 'live'` is a
  *  `readings` (D189) row, its own fetch/join moment as `at`. The two ages mean different
  *  things and neither is converted into the other. */
 export type SoldPriceEntry = { market: string; at: number; source: 'archive' | 'live' }

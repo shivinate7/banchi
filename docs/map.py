@@ -3983,7 +3983,7 @@ COMPONENTS = [
                                 "D93", "D96", "D100", "D103", "D104", "D108", "D113", "D114",
                                 "D115", "D116", "D132", "D134", "D137", "D138", "D145", "D159",
                                 "D165", "D168", "D172", "D174", "D183", "D189", "D191", "D192",
-                                "D193", "D203", "D212", "D213", "D-a-price-history-archive",
+                                "D193", "D203", "D212", "D213", "D219",
                                 "D-a-sales-truth"],
                 "tested_by": ["T7"],
             },
@@ -4149,7 +4149,7 @@ COMPONENTS = [
                                 "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88",
                                 "D89", "D100", "D103", "D105", "D134", "D137", "D145", "D147",
                                 "D156", "D159", "D163", "D165", "D166", "D168", "D170", "D172",
-                                "D174", "D180", "D188", "D189", "D216", "D-a-price-history-archive",
+                                "D174", "D180", "D188", "D189", "D216", "D219",
                                 "D-a-sales-truth"],
                 "tested_by": ["T7"],
             },
@@ -4800,7 +4800,7 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213",
-                                              "D-a-price-history-archive", "D-a-sales-truth"]},
+                                              "D219", "D-a-sales-truth"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6551,7 +6551,7 @@ COMPONENTS = [
                                         "the URL.",
                                 "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105", "D118",
                                                 "D159", "D189", "D193", "D194", "D201", "D214",
-                                                "D217", "D-a-price-history-archive",
+                                                "D217", "D219",
                                                 "D-a-sales-truth"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "

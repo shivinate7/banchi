@@ -12588,7 +12588,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 )
             if path == "/pipeline/price-now":
                 # NAMED SKUs, THE ARCHIVE FIRST AND `readings` AS ITS FALLBACK
-                # (D-a-price-history-archive, D189) — `#/revenue`'s sold-cards comparison
+                # (D219, D189) — `#/revenue`'s sold-cards comparison
                 # (D-a-sales-truth) over a SKU that has long since left the store, which
                 # `/pipeline/value`'s on-hand filter would silently drop, and which
                 # `readings` ALONE answered for under 1% of the owner's real gross. A plain

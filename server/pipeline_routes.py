@@ -3115,7 +3115,7 @@ def _bucket_at(start: str) -> int:
 def do_pipeline_price_now(skus: Sequence[str]) -> dict:
     """`GET /pipeline/price-now?sku=...` — for each named SKU, the closest thing this store
     has to "what the market says today": the price-history archive's own newest `month`
-    bucket (D-a-price-history-archive) where one exists, and the `readings` table (D189)
+    bucket (D219) where one exists, and the `readings` table (D189)
     where it does not.
 
     **THIS ROUTE REPLACES AN EARLIER, NARROWER ONE.** `#/revenue`'s first cut read `readings`
@@ -3127,7 +3127,7 @@ def do_pipeline_price_now(skus: Sequence[str]) -> dict:
     what this feature was built to cover.
 
     THE ARCHIVE IS TRIED FIRST AND `readings` IS THE FALLBACK, never the reverse and never
-    merged into one average. `pkmnscan archive sweep` (D-a-price-history-archive) walks every
+    merged into one average. `pkmnscan archive sweep` (D219) walks every
     SKU this store has ever recorded, sold or held, across four ranges — sealed product
     included, because unlike `readings` it is not filtered through on-hand inventory or
     `#/pricing`'s own live-export walk. `month` is the finest range the archive keeps, so its
