@@ -244,6 +244,10 @@
     "D235-merge-hang-two-causes.md",
     "D236-a-holdings-value-series.md",
     "D237-archive-refusal-mechanization.md",
-    "D238-archive-refusals-to-review-queue.md"
+    "D238-archive-refusals-to-review-queue.md",
+    "D239-a-archive-store-checks.md",
+    "D240-a-join-time-name-cross-check.md",
+    "D241-archive-live-catalogue-lookup-at-join-time.md",
+    "D242-sku-number-contradictions.md"
   ]
 }

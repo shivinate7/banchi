@@ -228,11 +228,45 @@ COURTESY_DELAY_SECONDS = 0.15
 
 # How long a cached answer is served before it is re-fetched.
 #
-# The catalog is a NIGHTLY mirror of a set list that changes when a set is released, so a
-# week is generous and still self-correcting. The history is the whole point of the module
-# and its finest bucket is a day, so an hour is short enough that nobody reads a stale
-# figure and long enough that re-running an analysis in one sitting costs no requests.
-CATALOG_TTL_SECONDS = 7 * 24 * 60 * 60
+# CATEGORIES, GROUPS AND PRODUCTS NEVER EXPIRE, ON THE OWNER'S OWN RULING (2026-09-20): the
+# set of cards in a catalogue set does not change from pull to pull. Measured independently
+# across settled Pokemon sets: recently-modified products all carry their original low
+# product ids, and no new ids appear — what churn exists is field edits to an existing
+# record, never an addition or removal. `float("inf")` over `_cached`'s own
+# `self._now() - fetched_at > ttl` comparison is always False, so a pulled entry is served
+# forever rather than re-fetched — a NIGHTLY-mirror argument for a one-week TTL used to sit
+# here, and it no longer applies: membership does not drift, so there is nothing for a
+# re-fetch to "self-correct". This also means the catalogue host, `tcgcsv.com`, spends its
+# request budget establishing a fact once rather than re-confirming one that cannot change
+# — worth stating because the OTHER host this module reaches, `infinite-api.tcgplayer.com`
+# (price history), has refused this client outright after enough requests in one sitting,
+# while tcgcsv has throttled nothing across many probes.
+#
+# THE TRADE, NAMED RATHER THAN HIDDEN: a cache that never expires trades correctness-by-
+# expiry for staleness nothing will ever repair on its own, and for a directory that only
+# grows. Today that trade is a clear win — roughly 900 subject SKUs across a handful of
+# sets, a cache small enough that a wrong entry costs one `rm -rf` of a derived directory.
+# What would force a different answer: this cache's size on disk becoming material, or the
+# store covering enough sets that ONE corrupted or partial entry stops being cheap to
+# notice by hand. Neither is true yet. Genuinely unmeasured, and cheap to check later: does
+# the mirror ever CORRECT a collector number on an existing card — the one field
+# `pipeline/join.py` actually reads off it. Two snapshots a week apart would settle that at
+# no request cost. Not chased here.
+#
+# `Market.prices` DOES NOT SHARE THIS CONSTANT, ON PURPOSE, EVEN THOUGH IT USED TO. It
+# answers a group's CURRENT prices, which move daily — a fact this docstring already flagged
+# as unresolved ("it shares the catalog TTL rather than the history one... which argues for
+# a shorter life") before this entry answered the CATALOGUE half of that question. Giving it
+# `CATALOG_TTL_SECONDS` now would silently make daily prices permanent, which is the exact
+# opposite of what the owner asked for — `PRICE_TTL_SECONDS` below is `prices`' own knob,
+# unchanged in VALUE from the old shared constant, so this change touches membership caching
+# only and takes no new position on how fresh a price reading should be.
+#
+# The history is the whole point of the module and its finest bucket is a day, so an hour is
+# short enough that nobody reads a stale figure and long enough that re-running an analysis
+# in one sitting costs no requests.
+CATALOG_TTL_SECONDS = float("inf")
+PRICE_TTL_SECONDS = 7 * 24 * 60 * 60
 HISTORY_TTL_SECONDS = 60 * 60
 
 # tcgcsv's `extendedData` field carrying the printed collector number. Named rather than
@@ -1073,10 +1107,12 @@ class Market:
 
         WHOLE-GROUP AND NOT PER-CARD, because that is the only shape the host offers: there is
         no per-product price route, so one request answers 321 products and asking about a
-        second card in the same set is free. It shares the catalog TTL rather than the history
-        one — the group's PRODUCTS change when a set is released and its PRICES change daily,
-        which argues for a shorter life; a caller that needs today's figure passes a shorter
-        `ttl` rather than this module guessing which of the two it is for.
+        second card in the same set is free. `PRICE_TTL_SECONDS` IS ITS OWN CONSTANT, NEVER
+        `CATALOG_TTL_SECONDS`, even though the two used to be one value — a group's PRODUCTS
+        are fixed once pulled (the owner's own ruling), but its PRICES move daily, and giving
+        this call the catalogue's now-infinite lifetime would silently make a daily price
+        permanent. A caller that needs today's figure passes a shorter `ttl` rather than this
+        module guessing which reading it is for.
 
         There is deliberately no `prices_for_row` twin of `product_id_for_row`. A per-row
         accessor would read as SKU-level, which this is not (see `PrintingPrice`), and the
@@ -1085,7 +1121,7 @@ class Market:
         payload = self.get(
             f"{CATALOG_HOST}/tcgplayer/{int(category_id)}/{int(group_id)}/prices",
             f"tcgcsv/{int(category_id)}/{int(group_id)}/prices",
-            CATALOG_TTL_SECONDS,
+            PRICE_TTL_SECONDS,
         )
         return parse_prices(payload)
 

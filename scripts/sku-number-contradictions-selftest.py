@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`pipeline/sku_number_contradictions.py`, proved against literal fixtures — no store, no
-network (`D-sku-number-contradictions`, kept apart from the four approved stored-data
+network (`D242`, kept apart from the four approved stored-data
 checks, built as a separate, sibling PR, on the owner's own ruling).
 
 NAME AGREEMENT, NOT MERE EXISTENCE. The owner's own measurement killed the first shape of
