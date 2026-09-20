@@ -58,6 +58,17 @@
 .bn-actions-stack > * { justify-self: stretch; }
 .bn-grow { flex: 1 1 auto; min-width: 0; }
 .bn-spacer { flex: 1 1 auto; }
+/* S13: `.bn-truncate` was never used — 10 hand copies of these same three properties exist
+   instead, 4 of which (`.orders-plan-card-name`, `.browse-secttitle`, `.browse-row-slot`,
+   `.browse-boxchip-text`) ALSO write their own `min-width: 0`, which looked at first like a
+   gap this class should close. It is not: a flex or grid item's automatic minimum size is
+   already defined as 0 once its own `overflow` is anything but `visible` (CSS Flexbox §7.1.1 /
+   CSS Grid §6.6, both browser-verified here), and `overflow: hidden` is inseparable from
+   `text-overflow: ellipsis` — you cannot write one without the other. So every one of the 10
+   copies gets the same automatic-zero for free, and the 4 that also spell `min-width: 0`
+   are being redundant, not compensating for something this class lacks. Proved in a real
+   flex row on #/gallery (`gallery.spec.ts`'s truncate case) with `.bn-truncate` exactly as
+   it already stood; nothing added. */
 .bn-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bn-tnum { font-variant-numeric: tabular-nums; }
 .bn-sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -486,6 +497,18 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
 }
+/* THE SMALL SIZE (S10): `.bn-seg`'s 3px padding plus the item's own 28px put a segmented
+   control at 34px total beside 28px search/select controls in the same row. Sized so the
+   two totals match exactly: 2px padding + a 24px item = 28px, `--bn-control-h-sm`'s own
+   figure, read here as the number rather than the token, because the token drives a whole
+   CONTROL's height and this is only half of one (the outer pad is the other half).
+   TWO CLASSES, ONE ON THE CONTAINER AND ONE ON EACH ITEM — never a descendant selector
+   (`.bn-seg-sm .bn-seg-item`) — because a descendant selector would out-specificity the
+   phone thumb-floor rule below, which reads `.bn-seg-item` at the same one-class weight and
+   depends on winning by being LAST in the sheet. Same weight here keeps that ordering
+   intact, so `-sm` still grows to the touch floor under 767px or a coarse pointer. */
+.bn-seg-sm { padding: 2px; gap: 2px; }
+.bn-seg-item-sm { height: 24px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); }
 
 /* ---- tabs (underline) -------------------------------------------------------- */
 .bn-tabs { display: flex; gap: var(--bn-1); border-bottom: 1px solid var(--bn-line); }
@@ -543,6 +566,18 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   color: var(--bn-ink);
 }
 .bn-stat-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+/* TWO SMALLER SIZES (S9): the tile shipped one ratio, 22:12, and two call sites hand-rolled
+   their own — Orders' figure at 14:11 and Inventory's box count at 11:11 (bare, no visual
+   split between value and unit at all). Both are additive: the base rule above is untouched,
+   so every existing `<Stat>` keeps its 22:12 reading. `-sm` reads Orders' own two tokens
+   (`--bn-fs-base` for the value, `--bn-fs-xs` for the label); `-xs` reads Inventory's single
+   token for both, dropping the weight to 600 rather than the base's 800 because Inventory's
+   figure was never bold — a plain number beside a plain unit. */
+.bn-stat-sm .bn-stat-value { font-size: var(--bn-fs-base); }
+.bn-stat-sm .bn-stat-label { font-size: var(--bn-fs-xs); }
+.bn-stat-xs .bn-stat-value { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: normal; }
+.bn-stat-xs .bn-stat-label { font-size: var(--bn-fs-xs); }
 
 /* A ROW OF STATS, THE LAYOUT HALF OF THE SAME PRIMITIVE (D41's census-triad). Wraps rather
    than truncates, because a rail that can no longer fit every figure on one line should stack
@@ -709,6 +744,15 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-progress { height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; }
 .bn-progress > span { display: block; height: 100%; border-radius: 3px; background: var(--bn-accent); transition: width var(--bn-t-slow) var(--bn-ease); }
 .bn-progress-ok > span { background: var(--bn-ok); }
+/* A SMALL SIZE (S9), read off the two hand-rolled bars this composes with: Orders' own
+   `.orders-order-progress .bn-progress` override (height: 5px) and Inventory's
+   `.browse-boxcell-bar` (44x5, accent only, no `-ok` modifier at all — the reason its bar
+   can never turn green). `-sm` gives the kit bar Inventory's own height so a later rewiring
+   pass can drop the hand-rolled class and inherit `-ok` for free; the width stays the
+   caller's own concern, exactly as it already is for the base size. Composes with
+   `-ok` unchanged, since that modifier only ever touches the fill's color. */
+.bn-progress-sm { height: 5px; border-radius: 2px; }
+.bn-progress-sm > span { border-radius: 2px; }
 
 /* ---- menu / popover -------------------------------------------------------------------- */
 .bn-menu {

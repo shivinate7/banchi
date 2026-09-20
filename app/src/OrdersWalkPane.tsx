@@ -27,14 +27,15 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { CardDetailsSection, CardHeroHead, PhotoPanel, type Row } from './CardHero'
+import { CardDetailsSection, CardHeroHead, marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
 import { CardLocations } from './CardLocations'
 import { Overlay } from './InventoryOverlay'
 import { Button, Icon, Pill } from './kit'
-import { describeFailure, photoUrl, walkPlan } from './server'
+import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
+  Listing,
   OrderRow,
   Place,
   PullRefresh,
@@ -486,9 +487,14 @@ export type OrderWalk = ReturnType<typeof useOrderWalk>
 export function WalkList({
   walk,
   hideSold,
+  collapsed = false,
 }: {
   readonly walk: OrderWalk
   readonly hideSold: boolean
+  /** S5 — folds every section's rows at once. No per-section state: the fold chevron in each
+   *  section head stays decorative, as it always has, and this one flag hides every
+   *  `.browse-group-rows` list rather than tracking which sections are individually open. */
+  readonly collapsed?: boolean
 }) {
   if (walk.loading) {
     return (
@@ -520,38 +526,40 @@ export function WalkList({
           <li className="browse-group" key={section.key}>
             <div className="browse-secthead">
               <span className="browse-sectfold" aria-hidden="true">
-                <Icon name="chevronDown" size={14} className="browse-sectmark" />
+                <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} size={14} className="browse-sectmark" />
                 <span className="browse-secttitle">{section.title}</span>
                 <span className="browse-sectcount">{shown.length}</span>
               </span>
             </div>
-            <ul className="browse-group-rows">
-              {shown.map((row) => {
-                const sold = walk.soldKeys.has(row.copy.key)
-                return (
-                  <li className={sold ? 'browse-rowline is-departed' : 'browse-rowline'} key={row.rowKey}>
-                    <button
-                      className="browse-row"
-                      type="button"
-                      aria-current={row.rowKey === walk.current ? 'true' : undefined}
-                      onClick={() => walk.select(row.rowKey)}
-                    >
-                      <span className="browse-row-position">
-                        <span className="browse-row-slot">{row.copy.place.card === null ? '—' : `#${row.copy.place.card}`}</span>
-                      </span>
-                      <span className={row.take.name === null ? 'browse-row-name is-unnamed' : 'browse-row-name'}>
-                        {row.take.name ?? row.take.sku}
-                      </span>
-                      {sold ? (
-                        <span className="browse-row-badge is-out" aria-hidden="true">
-                          <Icon name="check" size={12} />
+            {collapsed ? null : (
+              <ul className="browse-group-rows">
+                {shown.map((row) => {
+                  const sold = walk.soldKeys.has(row.copy.key)
+                  return (
+                    <li className={sold ? 'browse-rowline is-departed' : 'browse-rowline'} key={row.rowKey}>
+                      <button
+                        className="browse-row"
+                        type="button"
+                        aria-current={row.rowKey === walk.current ? 'true' : undefined}
+                        onClick={() => walk.select(row.rowKey)}
+                      >
+                        <span className="browse-row-position">
+                          <span className="browse-row-slot">{row.copy.place.card === null ? '—' : `#${row.copy.place.card}`}</span>
                         </span>
-                      ) : null}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+                        <span className={row.take.name === null ? 'browse-row-name is-unnamed' : 'browse-row-name'}>
+                          {row.take.name ?? row.take.sku}
+                        </span>
+                        {sold ? (
+                          <span className="browse-row-badge is-out" aria-hidden="true">
+                            <Icon name="check" size={12} />
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </li>
         )
       })}
@@ -603,16 +611,35 @@ function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: Se
  *  LEFT OUT, BY NAME, AND ONLY BECAUSE THEY EDIT: `CardOps`'s menu (correct claims, retire,
  *  remove) and the re-shoot control. Both change a card's own record — identification,
  *  position, the stored photograph — which is Inventory's job and not a fulfillment walk's;
- *  neither is passed to `CardHeroHead` or `PhotoPanel` here. `market` (a run's own pricing
- *  join) and `listings` (`GET /inventory`'s own map) are not data this screen reads either, so
- *  `CardDetailsSection` gets `undefined`/`{}` — the same honest-empty state those facts already
- *  draw on `#/inventory` before either has loaded.
+ *  neither is passed to `CardHeroHead` or `PhotoPanel` here.
+ *
+ *  `market` AND `listings` REACH `CardDetailsSection` THE SAME PATH `BoxBrowse.tsx` USES,
+ *  COPIED RATHER THAN REINVENTED (the market-and-listings parity task, queued after D220 —
+ *  the owner reversed D220's own "ships with its empty states" call). `listings` arrives from
+ *  `Orders.tsx`, the free third face of the same `POST /inventory/copies` read that already
+ *  answers `rawCards` — never a second fetch. `market` is a per-run cache, `BoxBrowse.tsx`'s
+ *  own `priced`/`asked` pair restated here over `currentCard.run` instead of a selected box
+ *  row's: a run is asked for AT MOST ONCE per mount, and never asked for at all when the
+ *  current card has no run yet (`marketText` already draws "not joined yet" for that case, so
+ *  asking would only spend a fetch on an answer this pane already knows). D62/D79 keep price
+ *  TREND on the pricing screen — this wires the single reading and the live-listing fact only.
  *
  *  BEFORE `rawCards` HAS ANSWERED FOR THIS ROW (the first render of a freshly landed plan),
  *  there is no full `InventoryCard` yet — the synthesised take-level header stands in, off the
  *  same wire fields the old `TakeBlock` used, so the pane is never blank while the read
- *  catches up. */
-export function WalkMainPane({ walk, phone }: { readonly walk: OrderWalk; readonly phone: boolean }) {
+ *  catches up. `market`/`listings` are drawn only once a real card has landed (`row !== null`),
+ *  same as `CardDetailsSection` itself. */
+export function WalkMainPane({
+  walk,
+  phone,
+  listings,
+}: {
+  readonly walk: OrderWalk
+  readonly phone: boolean
+  /** `Orders.tsx`'s own read — `POST /inventory/copies`' `listings`, narrowed server-side to
+   *  the SKUs any open order names. */
+  readonly listings: Readonly<Record<string, Listing>>
+}) {
   const { currentRow, currentGroup, currentCard } = walk
   const [broken, setBroken] = useState(false)
   const [zoomed, setZoomed] = useState(false)
@@ -620,6 +647,32 @@ export function WalkMainPane({ walk, phone }: { readonly walk: OrderWalk; readon
     setBroken(false)
     setZoomed(false)
   }, [currentRow?.copy.key])
+
+  /* THE PER-RUN MARKET CACHE, COPIED FROM `BoxBrowse.tsx` (see this component's own docstring
+   *  above). `pricedRun` is read off `currentCard` — the real `InventoryCard`, never the
+   *  synthesised take — so a row with no `InventoryCard` yet asks for nothing rather than
+   *  guessing. */
+  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
+  const asked = useRef<Set<string>>(new Set())
+  const pricedRun = currentCard?.run ?? null
+  useEffect(() => {
+    if (pricedRun === null) return
+    if (asked.current.has(pricedRun)) return
+    asked.current.add(pricedRun)
+    let live = true
+    getPricing(pricedRun)
+      .then((payload) => {
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
+      })
+      .catch((error: unknown) => {
+        const why =
+          describeFailure(error).code === 'pricing_not_written' ? 'join this run' : 'could not be read'
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why } }))
+      })
+    return () => {
+      live = false
+    }
+  }, [pricedRun])
 
   if (currentGroup === null || currentRow === null) return null
 
@@ -714,7 +767,14 @@ export function WalkMainPane({ walk, phone }: { readonly walk: OrderWalk; readon
           was clipping hero, band and Details together to one box; the scroll fix above means
           that box no longer has to stretch to fit an overflowing list, but the DOM shape still
           owed inventory's own, one section shallower than this pane drew it. */}
-      {row === null ? null : <CardDetailsSection card={row.card} market={undefined} listings={{}} phone={phone} />}
+      {row === null ? null : (
+        <CardDetailsSection
+          card={row.card}
+          market={row.card.run === null ? undefined : priced[row.card.run]}
+          listings={listings}
+          phone={phone}
+        />
+      )}
       {!zoomed || row === null ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt={`The card at ${currentRow.copy.place.label ?? row.key}`} />

@@ -1801,7 +1801,15 @@ export function BoxBrowse({
                     ? 'Pooled cards, which have no box'
                     : cell === 'unplaced'
                       ? 'Records with no readable box'
-                      : `Box ${cell}${sealed ? ', sealed' : ''}`
+                      : /* The bare figure in `.browse-boxcell-count` (`record.cards`) has no
+                         unit of its own — a screen reader would otherwise read the button's
+                         name and then a naked number. Naming it here, in the one aria-label
+                         the button already carries, rather than a second aria-label on the
+                         count span, which a button's own explicit aria-label would swallow
+                         (S16). SEALED STAYS LAST: `inventory.spec.ts`'s own sealed-row case
+                         reads `/sealed$/` off this string, so the captured count is inserted
+                         before it rather than appended after. */
+                        `Box ${cell}${record ? `, ${record.cards.toLocaleString()} captured` : ''}${sealed ? ', sealed' : ''}`
                 }
                 aria-current={cell === shelf ? 'true' : undefined}
                 disabled={!reachable}

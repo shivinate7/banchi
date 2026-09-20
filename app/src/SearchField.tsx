@@ -33,6 +33,10 @@ export type SearchFieldProps = {
 
   placeholder?: string
 
+  /** Overrides the per-persona default below. A screen searching something other than
+   *  cards — an order, a buyer — names its own field rather than inheriting "Search cards". */
+  label?: string
+
   /** Off by default — see the header. */
   debounceMs?: number
 }
@@ -43,6 +47,7 @@ export function SearchField({
   persona,
   autoFocus,
   placeholder = 'Card name, number or SKU',
+  label,
   debounceMs = 0,
 }: SearchFieldProps) {
   const id = useId()
@@ -131,7 +136,7 @@ export function SearchField({
       {/* A real <label> in both skins, hidden visually on the owner's rather than replaced by an
           aria-label. */}
       <label className="search-field-label" htmlFor={id}>
-        {LABEL[persona]}
+        {label ?? LABEL[persona]}
       </label>
 
       <div className="search-field-box">

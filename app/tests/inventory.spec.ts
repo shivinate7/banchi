@@ -5759,8 +5759,11 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
      recent; 9 and 7 both hold 12 — 9 is the only one left of the pair here). */
   await expect(names).toHaveText(['Box 7', 'Bulk', 'Twelve too', 'ME01 commons'])
   await expect(page.locator('.browse-boxcell-num')).toHaveCount(0)
-  /* The number survives where it is READ rather than looked at. */
-  await expect(page.locator('.browse-boxcell').nth(1)).toHaveAttribute('aria-label', 'Box 6')
+  /* The number survives where it is READ rather than looked at. `, 40 captured` is S16's own
+     fix, landed beside this test: the bare `.browse-boxcell-count` figure had no unit and no
+     accessible name of its own, so the count is now named in the one aria-label the button
+     already carries (Bulk holds 40 cards per its own fixture, above). */
+  await expect(page.locator('.browse-boxcell').nth(1)).toHaveAttribute('aria-label', 'Box 6, 40 captured')
 
   /* A PAGE LOAD IS NOT AN OPENING: the walk landed on box 7 (recency put it first) and the
      order is exactly what storage said, untouched. A press IS one — open Bulk and it leads. */

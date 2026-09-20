@@ -65,6 +65,21 @@ python3 "$janitor" --teardown "$tree" 2>/dev/null || true
 # noise on every session end when a hook did. Ask git first, quietly.
 if git -C "$tree" rev-parse --show-toplevel >/dev/null 2>&1; then
   python3 "$janitor" --root "$tree" --tier1 2>/dev/null || true
+
+  # AND THE ONE PART OF TIER 2 THAT DESTROYS NOTHING. A branch reaches this list only when main
+  # is a descendant of every commit on it, so `git branch -D` removes a label and no object.
+  # The word tier 2 waits on is about the other two halves of it — removing a worktree can cost
+  # uncommitted work, stopping a process can cost a run somebody wanted — and holding a
+  # lossless act behind the same word as a lossy one is what left nine merged branches on this
+  # disk with nobody to press it.
+  #
+  # HERE RATHER THAN ONLY ON A SCHEDULE, because this is the moment the branch became cuttable:
+  # a tree going is what releases its branch from `held`. The daily agent is the backstop for
+  # the events this misses, which `.claude/settings.json` already says are many.
+  #
+  # `--branches` READS THE CLONE'S OWN LAYOUT AND REFUSES WHEN IT CANNOT. See
+  # `cut_merged_branches`: no worktree list means no branch is protected, so it keeps every one.
+  python3 "$janitor" --root "$tree" --branches --confirm 2>/dev/null || true
 fi
 
 exit 0

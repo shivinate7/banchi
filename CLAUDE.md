@@ -87,6 +87,16 @@ make up             # THE server, detached — ONE PROCESS (D138). Serves app/di
                     #   WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D53).
                     #   `PKMNSCAN_SERVE_MAIN=off` overrides, printed in every refusal.
                     #   Silent on any branch in a LINKED WORKTREE (D43).
+make janitor        # what a finished session left behind. PREVIEWS both tiers, presses
+                    #   nothing. ARGS=--confirm reaps tier 2: worktrees, loose processes and
+                    #   branches. Runs from no hook and no schedule.
+make janitor-agent  # that sweep DAILY and unattended, as a launch agent, with
+                    #   `.serve/janitor.log` as its receipt. MAIN TREE ONLY — a plist naming a
+                    #   worktree outlives the worktree. ARGS=--remove. The backstop for the two
+                    #   events that already run the cheap half and are both known to miss.
+                    #   `janitor.py --branches` is the one part of tier 2 that destroys
+                    #   nothing, so the session-end hook runs it with no word: a branch reaches
+                    #   it only when main already carries every commit on it.
 make launch-agent   # start at login. MAIN TREE ONLY: its plist would outlive a worktree.
                     #   ARGS=--remove. The Dock app is a CLIENT of this, via Chrome's
                     #   "Install page as app" (D108), never a second copy. No `make` target
@@ -150,7 +160,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
-                    #   sync-selftest + verdict-selftest + js-breakpoints-selftest,
+                    #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
+                    #   subagent-override-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -927,6 +938,7 @@ D228 The claim is spent only on a merge that can happen, and the loser of a race
 D229 The prose ratchet is pinned per file, because a repo-wide number is one every merge takes from somebody
 D230 The sweep's own resume window is six days, not one hour
 D231 The subject list widens to the order ledger, and sealed product joins it
+D232 The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
 D233 A card row that refuses retries the ledger's own row
 ```
 

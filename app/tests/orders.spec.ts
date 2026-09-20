@@ -5,6 +5,7 @@ import { settleMotion } from './motionSettled'
 
 import type {
   InventoryCard,
+  Listing,
   OrderRow,
   OrdersPayload,
   Place,
@@ -329,6 +330,18 @@ async function open(
     /* `POST /inventory/copies`'s answer — see the route below for why this exists. Keyed
        `box/index`, matching `getInventoryCopies`'s own wire shape. */
     inventoryCards?: Record<string, InventoryCard>
+    /* THE SAME ROUTE'S THIRD FACE (the market-and-listings parity task) — `listings`, keyed
+       by SKU, exactly `do_inventory_copies`'s own narrowed shape. Empty by default, matching
+       every case that never asks — the honest "no import row yet" `listingFact` already
+       draws for a SKU with no entry. */
+    inventoryListings?: Record<string, Listing>
+    /* `GET /pipeline/runs/<name>/pricing` — `WalkMainPane`'s own per-run market cache (copied
+       from `BoxBrowse.tsx`). A function sees the run name asked for, so one case can answer
+       two different runs differently; a static object answers every run the same way. Every
+       call is logged into `wire` (`path` carries the run name), which is what the "fires
+       once"/"fires twice"/"never fires" cases assert on — a call COUNT, not a screen text,
+       is the only thing that tells "asked the SAME run twice" apart from "asked once". */
+    pricing?: unknown | ((name: string) => unknown)
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -478,8 +491,20 @@ async function open(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ cards: options.inventoryCards ?? {} }),
+      body: JSON.stringify({ cards: options.inventoryCards ?? {}, listings: options.inventoryListings ?? {} }),
     })
+  })
+
+  /* THE WALK PANE'S OWN PER-RUN MARKET CACHE (`WalkMainPane`, copied from `BoxBrowse.tsx`) —
+   *  `GET /pipeline/runs/<name>/pricing`. Every call is pushed into `wire` so a case can count
+   *  them: "fires once", "fires twice", "never fires" are all about how many requests this
+   *  route saw, never about what the screen drew. Answers nothing by default (an empty
+   *  `PricingPayload`), matching every case that never asks. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/pricing$/, async (route) => {
+    const name = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[3] ?? '')
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: null })
+    const answer = typeof options.pricing === 'function' ? (options.pricing as (n: string) => unknown)(name) : (options.pricing ?? { pricing: null, decisions: null, written_at: null })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
   })
 
   /* THE WALK'S OWN READ, ALSO UNCONDITIONALLY (§13): selecting a buyer starts their walk at
@@ -1080,13 +1105,13 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
 
-  await page.getByRole('searchbox', { name: 'Search buyers by name or order number' }).click()
+  await page.getByRole('searchbox', { name: 'Search buyers' }).click()
   await page.keyboard.press('u')
 
   // No second `/orders/pull` call — the field ate the key.
   await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toHaveCount(0)
   expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
-  await expect(page.getByRole('searchbox', { name: 'Search buyers by name or order number' })).toHaveValue('u')
+  await expect(page.getByRole('searchbox', { name: 'Search buyers' })).toHaveValue('u')
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
@@ -2121,7 +2146,7 @@ test('Untick shown is disabled with nothing ticked, and enables only once a tick
 test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const options = page.locator('.orders-status-select option')
-  await expect(options).toContainText(['All', 'Ready to Ship (2)', 'Zorbo Pending (1)'])
+  await expect(options).toContainText(['Status', 'Ready to Ship (2)', 'Zorbo Pending (1)'])
 })
 
 test('each control narrows; they compose', async ({ page }) => {
@@ -2386,7 +2411,7 @@ test('the search narrows the buyer list by name, case- and space-insensitively',
   await open(page, { orders: threeBuyerPayload() })
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 
-  const search = page.locator('.orders-search-input')
+  const search = page.locator('.orders-search-field .search-field-input')
   await search.fill('  ALICE ')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
@@ -2397,7 +2422,7 @@ test('the search narrows the buyer list by name, case- and space-insensitively',
 
 test('the search matches an order number too', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-search-input').fill('c0003')
+  await page.locator('.orders-search-field .search-field-input').fill('c0003')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Carol')
 })
@@ -2407,7 +2432,7 @@ test('the search composes with the status select — an AND, never a second gate
   await page.locator('.orders-status-select').selectOption('Ready to Ship')
   await expect(page.locator('.orders-index-row')).toHaveCount(2) // Carol, Alice
 
-  await page.locator('.orders-search-input').fill('bob')
+  await page.locator('.orders-search-field .search-field-input').fill('bob')
   await expect(page.locator('.orders-index-row')).toHaveCount(0)
 })
 
@@ -2424,7 +2449,7 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
   await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
-  await page.locator('.orders-search-input').fill('hopper')
+  await page.locator('.orders-search-field .search-field-input').fill('hopper')
   const earlier = page.locator('.orders-earlier')
   await expect(earlier).toBeVisible()
   await expect(earlier).toContainText('Grace Hopper')
@@ -2432,13 +2457,13 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
 
 test('a search with nothing left says so by name and offers to clear it', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-search-input').fill('nobody named this')
+  await page.locator('.orders-search-field .search-field-input').fill('nobody named this')
   await expect(page.locator('main.orders')).toContainText('No buyer matches')
   await expect(page.locator('main.orders')).toContainText('nobody named this')
 
   const clear = page.locator('.bn-empty').getByRole('button', { name: 'Clear search' })
   await clear.click()
-  await expect(page.locator('.orders-search-input')).toHaveValue('')
+  await expect(page.locator('.orders-search-field .search-field-input')).toHaveValue('')
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 })
 
@@ -2446,7 +2471,7 @@ test('a changed search is an explicit retake — no stale chip offered', async (
   await open(page, { orders: threeBuyerPayload() })
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
 
-  await page.locator('.orders-search-input').fill('a')
+  await page.locator('.orders-search-field .search-field-input').fill('a')
   await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
 })
 
@@ -2737,6 +2762,293 @@ test('the walk pane is inventory\'s own card pane: the same header, photo, copie
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
 })
 
+/* ---------------------------------------------------------- market and listings parity ---- */
+
+/* THE MARKET-AND-LISTINGS PARITY TASK, queued after D220. `#/orders` reused `#/inventory`'s
+ * card pane whole but passed `market={undefined}`/`listings={{}}` into it unconditionally
+ * (D220's own §9a ruling: "not wired for Orders in this build... ship as is"). The owner has
+ * since reversed that. `WalkMainPane` now reads `listings` from `Orders.tsx` — the free third
+ * face of the same `POST /inventory/copies` read that already answers `rawCards` — and keeps
+ * a per-run market cache copied from `BoxBrowse.tsx`'s own `priced`/`asked` pair, keyed off
+ * the CURRENT row's real `InventoryCard.run` rather than the synthesised take.
+ *
+ * TWO DAYS OLD, THE SAME CONVENTION `inventory.spec.ts`'s OWN `PRICED_AT` USES — a reading
+ * this stable never crosses a "N days"/"N+1 days" boundary between two reads taken moments
+ * apart in one test, which is what the parity case below depends on: it reads the SAME
+ * timestamp through TWO separate renders and asserts the two ages print identically. */
+const PARITY_RUN = '2026-09-01-box3-01'
+const PARITY_AT = Math.floor((Date.now() - 2 * 86400000) / 1000)
+const PARITY_MARKET = {
+  run: PARITY_RUN,
+  pricing: {
+    run: PARITY_RUN,
+    threshold: '0.40',
+    floor: '0.40',
+    rule: 'match',
+    basis: 'market',
+    presets: [],
+    games: [],
+    bands: [],
+    skus: [
+      {
+        sku: SKU,
+        game: 'pokemon',
+        row: {},
+        bucket: 'listable',
+        copies: 1,
+        add_to_quantity: 1,
+        backstock: 0,
+        live_before: 0,
+        committed: 0,
+        at_cap: false,
+        condition: 'Near Mint',
+        set_name: 'ME01',
+        name: 'Volcanion',
+        snap: { market: '12.34', direct_low: null, low: '12.34', low_with_shipping: null, now: null },
+        presets: {},
+        rule_price: '12.34',
+        positions: [{ box: 3, index: 21, label: 'Box 3 · Section 2 · Card 17' }],
+        listing: null,
+      },
+    ],
+  },
+  decisions: null,
+  written_at: PARITY_AT,
+}
+const PARITY_LISTING: Listing = {
+  sku: SKU,
+  condition: 'Near Mint',
+  pushed: 5,
+  staged: 0,
+  live: 5,
+  at: null,
+  staged_at: null,
+  live_as_of: new Date(PARITY_AT * 1000).toISOString(),
+  sold_here: 0,
+  sold_here_at: null,
+}
+
+/** `.browse-fact` for one label, matched on the `dt` EXACTLY rather than on the whole row's
+ *  text — `inventory.spec.ts`'s own `hasText` shorthand also matches "Listed" against the
+ *  State fact's own VALUE (`inventoryCard()`'s default `state: 'listed'` renders "Listed"),
+ *  so a loose filter here resolves to two rows and Playwright refuses the strict-mode
+ *  ambiguity rather than silently picking one. */
+function factDD(page: Page, label: string) {
+  return page.locator('.browse-fact').filter({ has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }) }).locator('dd')
+}
+
+test('a copy on a priced run with a live listing: Details draws a money figure and a live-listing fact', async ({
+  page,
+}) => {
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard({ run: PARITY_RUN }) },
+    inventoryListings: { [SKU]: PARITY_LISTING },
+    pricing: PARITY_MARKET,
+  })
+
+  const market = factDD(page, 'Market')
+  await expect(market.locator('.bn-tnum')).toHaveText('$12.34')
+  await expect(market).toContainText('read 2 days ago')
+
+  const listed = factDD(page, 'Listed')
+  await expect(listed.locator('.bn-tnum')).toHaveText('5')
+  await expect(listed).toContainText('live')
+  await expect(listed).toContainText('read 2 days ago')
+})
+
+test('with the options omitted, the honest empty strings still render', async ({ page }) => {
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard() },
+    /* NEITHER `inventoryListings` NOR `pricing` IS PASSED — the run is `null` (`inventoryCard`'s
+       own default), so the market cache never fires (see the two cases below this one) and
+       `listings` answers empty. Both facts draw their honest empty strings, unchanged from
+       before this task — the wiring adds a real path, never a new empty state. */
+  })
+
+  await expect(factDD(page, 'Market')).toHaveText('not joined yet')
+  await expect(factDD(page, 'Listed')).toHaveText('no import row yet')
+})
+
+test('two copies on ONE run: the pricing route fires once', async ({ page }) => {
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  const copies = [
+    walkPlanCopy({ index: 21, card: 17, capture_id: 'cap-a' }),
+    walkPlanCopy({ index: 22, card: 18, capture_id: 'cap-b', place: { card: 18, slot: 18, fraction: 0.14 } }),
+  ]
+  const plan = walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 2, copies })] })])
+  /* THE SAME RUN'S TABLE, WITH BOTH POSITIONS — `PARITY_MARKET`'s own single position (3/21)
+     would leave the second card reading "no row in this run" once the walk steps to it, which
+     is a true fact about that fixture and not about the caching this case is testing. */
+  const SAME_RUN_MARKET = {
+    ...PARITY_MARKET,
+    pricing: {
+      ...PARITY_MARKET.pricing,
+      skus: [{ ...PARITY_MARKET.pricing.skus[0]!, positions: [{ box: 3, index: 21, label: 'Box 3 · Section 2 · Card 17' }, { box: 3, index: 22, label: 'Box 3 · Section 2 · Card 18' }] }],
+    },
+  }
+  const wire = await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: plan,
+    inventoryCards: {
+      '3/21': inventoryCard({ run: PARITY_RUN }),
+      '3/22': inventoryCard({ box: 3, index: 22, run: PARITY_RUN, label: 'Box 3 · Section 2 · Card 18', card: 18, name: 'Sunrise' }),
+    },
+    pricing: SAME_RUN_MARKET,
+  })
+
+  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
+  const pricingCalls = () => wire.filter((call) => call.path.includes('/pricing')).length
+  await expect.poll(pricingCalls).toBe(1)
+
+  /* STEP TO THE SECOND ROW — the same run, already cached — and the count must not move. Off
+     the heading, not the focused checkbox/row `open()` left behind — `J`/`K`'s own listener
+     yields to any `INPUT`, `J steps to the next card…`'s own case names the same guard. */
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  const firstName = await page.locator('.orders-walk-card .browse-hero-name').textContent()
+  await page.keyboard.press('j')
+  await expect
+    .poll(async () => page.locator('.orders-walk-card .browse-hero-name').textContent())
+    .not.toBe(firstName)
+  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
+  expect(pricingCalls()).toBe(1)
+})
+
+test('two copies on TWO runs: it fires twice', async ({ page }) => {
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  const SECOND_RUN = '2026-09-05-box3-02'
+  const SECOND_MARKET = {
+    ...PARITY_MARKET,
+    run: SECOND_RUN,
+    pricing: {
+      ...PARITY_MARKET.pricing,
+      run: SECOND_RUN,
+      skus: [
+        {
+          ...PARITY_MARKET.pricing.skus[0]!,
+          snap: { market: '9.00', direct_low: null, low: '9.00', low_with_shipping: null, now: null },
+          positions: [{ box: 3, index: 22, label: 'Box 3 · Section 2 · Card 18' }],
+        },
+      ],
+    },
+  }
+  const copies = [
+    walkPlanCopy({ index: 21, card: 17, capture_id: 'cap-a' }),
+    walkPlanCopy({ index: 22, card: 18, capture_id: 'cap-b', place: { card: 18, slot: 18, fraction: 0.14 } }),
+  ]
+  const plan = walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 2, copies })] })])
+  const wire = await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: plan,
+    inventoryCards: {
+      '3/21': inventoryCard({ run: PARITY_RUN }),
+      '3/22': inventoryCard({ box: 3, index: 22, run: SECOND_RUN, label: 'Box 3 · Section 2 · Card 18', card: 18, name: 'Sunrise' }),
+    },
+    pricing: (name: string) => (name === SECOND_RUN ? SECOND_MARKET : PARITY_MARKET),
+  })
+
+  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
+  const pricingCalls = () => wire.filter((call) => call.path.includes('/pricing')).length
+  await expect.poll(pricingCalls).toBe(1)
+
+  /* STEP TO THE SECOND ROW — a DIFFERENT run, never asked for yet. */
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  const firstName = await page.locator('.orders-walk-card .browse-hero-name').textContent()
+  await page.keyboard.press('j')
+  await expect
+    .poll(async () => page.locator('.orders-walk-card .browse-hero-name').textContent())
+    .not.toBe(firstName)
+  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$9.00')
+  await expect.poll(pricingCalls).toBe(2)
+})
+
+test('a copy whose run is null: the pricing route never fires', async ({ page }) => {
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  const wire = await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard({ run: null }) },
+  })
+
+  await expect(factDD(page, 'Market')).toHaveText('not joined yet')
+  expect(wire.filter((call) => call.path.includes('/pricing'))).toHaveLength(0)
+})
+
+test('Orders and Inventory draw the SAME strings for the identical card — the parity claim', async ({
+  page,
+}) => {
+  /* THE CASE THAT PROVES THE TASK. The card, the run, the market table and the listing are all
+     IDENTICAL to the ones above — only the SCREEN changes. Rendering the second screen in the
+     SAME test, over the SAME `page`, is what makes this a real cross-screen check rather than
+     two specs that happen to expect the same string. */
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard({ run: PARITY_RUN }) },
+    inventoryListings: { [SKU]: PARITY_LISTING },
+    pricing: PARITY_MARKET,
+  })
+  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
+  const ordersMarket = await factDD(page, 'Market').innerText()
+  const ordersListed = await factDD(page, 'Listed').innerText()
+
+  /* NOW `#/inventory`, OVER THE SAME BOX/CARD/RUN/LISTING — the minimal route set `BoxBrowse.tsx`
+     actually reads on mount (`getBoxes`, `getInventoryBox`, `getQueues`, the same pricing
+     route), registered fresh so the newer handler wins (Playwright matches most-recently
+     registered first). */
+  await page.route(/\/boxes(\?.*)?$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        boxes: [
+          {
+            box: 3, name: 'RB Epics', sections: [2], state: 'open', capacity: null,
+            fill: 1, next_index: 22, cards: 1, on_hand: 1, sold: 0, retired: 0, moved: 0, listed: 0,
+            sections_detail: [{ section: 2, start: 12, end: null, count: 1 }],
+          },
+        ],
+      }),
+    }),
+  )
+  await page.route(/\/inventory\/3$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        version: 2,
+        cards: { '3/21': inventoryCard({ run: PARITY_RUN }) },
+        listings: { [SKU]: PARITY_LISTING },
+      }),
+    }),
+  )
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: [], parked: [] }) }),
+  )
+  /* THE RUN PANEL'S OWN READ ON MOUNT (`inventory.spec.ts`'s own comment on the same route) —
+     empty, because the run list is not this case's subject. */
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs": []}' }),
+  )
+
+  await page.goto('/#/inventory')
+  await expect(page.locator('main.inventory')).toBeVisible()
+  await expect(page.locator('.browse-hero-head .browse-hero-name')).toContainText('Volcanion')
+  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
+
+  const inventoryMarket = await factDD(page, 'Market').innerText()
+  const inventoryListed = await factDD(page, 'Listed').innerText()
+
+  expect(ordersMarket).toBe(inventoryMarket)
+  expect(ordersListed).toBe(inventoryListed)
+})
+
 test('D218: the reused card pane\'s Details hint draws the separator, never types it', async ({
   page,
 }) => {
@@ -2920,6 +3232,115 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
   expect(after).toEqual(before)
 })
 
+/* ---------------------------------------------------------------- the sidebar-review "Should" pass */
+
+test('the buyer search is SearchField: 40px, and "/" jumps into it', async ({ page }) => {
+  /* S1 — Orders' own search used to be a raw 28px input. `SearchField` is the shared
+   *  component `#/inventory`, `#/revenue` and the Fulfiller's screen all reach for; this
+   *  asserts the box itself clears the 40px floor and that the owner's "/" hotkey (off on
+   *  every other input, per `SearchField`'s own guard) lands in it. */
+  await open(page, { orders: threeBuyerPayload() })
+  const box = page.locator('.orders-search-field .search-field-box')
+  await expect(box).toBeVisible()
+  const height = await box.evaluate((el) => el.getBoundingClientRect().height)
+  expect(height).toBeGreaterThanOrEqual(40)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('/')
+  await expect(page.locator('.orders-search-field .search-field-input')).toBeFocused()
+})
+
+test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
+  /* S4, D50 — one grammar with `#/inventory`'s own `.browse-row`/`.browse-boxcell`: a tint
+   *  plus an accent spine (`::before`, opacity/scale toggled), never a `box-shadow` ring. */
+  await open(page, { orders: threeBuyerPayload() })
+  const selected = page.locator('.orders-index-row[aria-current="true"]')
+  await expect(selected).toHaveCount(1)
+  const before = await selected.evaluate((el) => {
+    const style = getComputedStyle(el, '::before')
+    return { opacity: style.opacity, background: style.backgroundColor, position: style.position }
+  })
+  expect(before.opacity).toBe('1')
+  expect(before.position).toBe('absolute')
+  expect(before.background).not.toBe('rgba(0, 0, 0, 0)')
+  const ownStyle = await selected.evaluate((el) => getComputedStyle(el).boxShadow)
+  expect(ownStyle).toBe('none')
+})
+
+test('the walk panel folds every section at once, and Hide sold carries a count', async ({ page }) => {
+  /* S5 — "N sections" becomes a real collapse-all/expand-all control, and the Hide sold chip
+   *  now carries how many rows it would hide, matching `#/inventory`'s own `departedHere`. */
+  const wire = await open(page, {
+    orders: secondBuyerPayload().payload,
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+  })
+  await stubWalkPlan(page, bothPlan())
+  await startWalk(page)
+  await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
+  await expect(page.locator('.browse-list')).toContainText('Sunrise')
+
+  const foldButton = page.locator('.browse-status').getByRole('button', { name: /collapse all|expand all/ })
+  await expect(foldButton).toContainText('2 sections')
+  await expect(page.locator('.browse-group-rows')).toHaveCount(2)
+  await foldButton.click()
+  await expect(page.locator('.browse-group-rows')).toHaveCount(0)
+  await expect(foldButton).toContainText('expand all')
+  await foldButton.click()
+  await expect(page.locator('.browse-group-rows')).toHaveCount(2)
+
+  await expect(page.locator('.browse-hidesold .bn-chip-count')).toHaveText('0')
+  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
+  await expect
+    .poll(async () => (await page.locator('.orders-walk-card .browse-hero-name').textContent()) ?? '')
+    .not.toBe('Volcanion')
+  await expect(page.locator('.browse-hidesold .bn-chip-count')).toHaveText('1')
+  void wire
+})
+
+test('the ORDER id stays on one line and in the mono face, however long it is', async ({ page }) => {
+  /* S8, D221 — `.boxops-identity-num` was built for "Box 3" and wrapped a real order id
+   *  mid-identifier; the id now gets its own nowrap/ellipsis span in the mono face. */
+  const longId = 'A2FFC195-0000F4-006AC'
+  const rows = [
+    order({
+      key: `TCGplayer:${longId}`,
+      number: longId,
+      buyer: 'Alice',
+      lines: [line({ order: longId, order_key: `TCGplayer:${longId}` }).line],
+    }),
+  ]
+  const resolved = [
+    { key: rows[0]!.key, number: longId, complete: false, outstanding: 1, lines: [line({ order: longId, order_key: rows[0]!.key })] },
+  ]
+  await open(page, { orders: payloadOf(rows, resolved) })
+  const idSpan = page.locator('.orders-buyer-order-id')
+  await expect(idSpan).toHaveText(longId)
+  const box = await idSpan.evaluate((el) => el.getBoundingClientRect())
+  expect(box.height).toBeLessThan(24)
+  const style = await idSpan.evaluate((el) => getComputedStyle(el))
+  expect(style.whiteSpace).toBe('nowrap')
+  expect(style.fontFamily).toContain('JetBrains')
+})
+
+test('the rail-collapse toggle folds the buyer rail to glyphs and restores it', async ({ page }) => {
+  /* S17 — the owner's ruling, 2026-09-19: Orders gets the same collapse `#/inventory` has. */
+  await open(page, { orders: threeBuyerPayload() })
+  await expect(page.locator('.browse-map')).toHaveCount(1)
+  await expect(page.locator('.browse-rail-mini')).toHaveCount(0)
+
+  await page.locator('.browse-rail-toggle').click()
+  await expect(page.locator('.browse-body')).toHaveAttribute('data-rail', 'collapsed')
+  await expect(page.locator('.browse-rail-mini')).toHaveCount(1)
+  await expect(page.locator('.browse-map')).toHaveCount(0)
+  const glyphs = page.locator('.browse-boxcell-mini')
+  await expect(glyphs).toHaveCount(3)
+
+  await page.locator('.browse-rail-mini').getByRole('button', { name: 'Expand the buyer rail' }).click()
+  await expect(page.locator('.browse-body')).not.toHaveAttribute('data-rail', 'collapsed')
+  await expect(page.locator('.browse-map')).toHaveCount(1)
+  await expect(page.locator('.browse-rail-mini')).toHaveCount(0)
+})
+
 /* --------------------------------------------------------------------------- J/K, auto-advance */
 
 test('J steps to the next card in the walk list, K steps back', async ({ page }) => {
@@ -3048,3 +3469,4 @@ test('#/inventory renders its own known shell unchanged by any of this', async (
   await expect(page.locator('.browse-map')).toHaveCount(1)
   await expect(page.locator('.browse-boxes.bn-panel')).toHaveCount(1)
 })
+
