@@ -469,6 +469,20 @@ def selftest() -> int:
     ok(recipe is not None and "NPM_GUARD" in recipe and "app/node_modules" in recipe,
        "`$(NPM_GUARD)` is expanded one level into the text compared")
 
+    print("\nimport resolution, over the real tree")
+    # THE AMBIGUOUS SPECIFIER: `app/src/kit/` is a directory AND `app/src/kit.css` is a
+    # stylesheet beside it, so `from './kit'` is exactly the shape a fixed extension order
+    # decides wrongly. The bundler's answer is the directory's entry file. Both halves of
+    # the precondition are asserted, so this case can never pass by the files being absent.
+    ok((ROOT / "app/src/kit/index.tsx").is_file() and (ROOT / "app/src/kit.css").is_file(),
+       "the ambiguous pair exists: `app/src/kit/index.tsx` beside `app/src/kit.css`")
+    ok(resolve_relative("app/src/Inventory.tsx", "./kit") == "app/src/kit/index.tsx",
+       "a bare `./kit` resolves to the directory's entry file, not the stylesheet beside it")
+    ok(resolve_relative("app/src/Inventory.tsx", "./kit.css") == "app/src/kit.css",
+       "`./kit.css`, named in full, still resolves to the stylesheet")
+    ok("app/src/kit/index.tsx" in import_closure(["app/src/Inventory.tsx"]),
+       "so the kit's own components are inside a screen's import closure")
+
     print("\nthe spec map (D215), over the real tree")
     inventory_verdict = classify_specs(["app/src/Inventory.tsx"])
     ok("app/tests/inventory.spec.ts" in inventory_verdict.specs,
@@ -576,13 +590,30 @@ def strip_comments(text: str) -> str:
 _IMPORT_RE = re.compile(
     r"""(?:import|export)\s+(?:type\s+)?(?:[\w*${},\s]+\s+from\s+)?['"](\.[^'"]+)['"]""")
 _CSS_IMPORT_RE = re.compile(r"""@import\s+['"](\.[^'"]+)['"]""")
-_RELATIVE_EXTENSIONS = ("", ".tsx", ".ts", ".css", ".jsx", ".js", "/index.tsx", "/index.ts")
+# THE ORDER IS THE BUNDLER'S, NOT A CONVENIENT ONE. A module specifier carries no
+# extension, so what it names is decided by the order these are tried, and the first hit
+# wins. Vite resolves a JS/TS specifier by extension and then by the directory's own entry
+# file; `.css` is not in its extension list at all — a stylesheet is imported by its full
+# name. So `from './kit'` names `app/src/kit/index.tsx`, NEVER `app/src/kit.css`, and a
+# list that tried `.css` before `/index.tsx` answered with the stylesheet wherever a
+# directory and a same-named stylesheet both exist. `.css` stays on the JS list, LAST, as
+# a fail-open tail rather than a resolution rule: this reader's whole discipline is that a
+# miss silently narrows what gets tested, so an edge it cannot name properly is still
+# better followed than dropped. A CSS `@import` is a different grammar and gets its own
+# list, where `.css` is what the specifier means.
+_JS_EXTENSIONS = (
+    "", ".tsx", ".ts", ".jsx", ".js",
+    "/index.tsx", "/index.ts", "/index.jsx", "/index.js",
+    ".css",
+)
+_CSS_EXTENSIONS = ("", ".css", "/index.css")
 
 
-def resolve_relative(from_path: str, module: str) -> Optional[str]:
-    """A relative import (`./Foo`, `../kit`) resolved to a tracked repo-relative path."""
+def resolve_relative(from_path: str, module: str, css: bool = False) -> Optional[str]:
+    """A relative import (`./Foo`, `../kit`) resolved to a tracked repo-relative path.
+    `css` says the specifier came from a CSS `@import`, which resolves by its own rules."""
     base = (ROOT / from_path).parent
-    for ext in _RELATIVE_EXTENSIONS:
+    for ext in (_CSS_EXTENSIONS if css else _JS_EXTENSIONS):
         candidate = (base / (module + ext)).resolve()
         try:
             candidate_rel = candidate.relative_to(ROOT).as_posix()
@@ -604,12 +635,12 @@ def file_imports(path: str) -> List[str]:
         text = strip_comments(full.read_text(encoding="utf-8", errors="replace"))
     except OSError:
         return []
-    modules = _IMPORT_RE.findall(text)
+    found = [(module, False) for module in _IMPORT_RE.findall(text)]
     if path.endswith(".css"):
-        modules = modules + _CSS_IMPORT_RE.findall(text)
+        found += [(module, True) for module in _CSS_IMPORT_RE.findall(text)]
     out: List[str] = []
-    for module in modules:
-        resolved = resolve_relative(path, module)
+    for module, css in found:
+        resolved = resolve_relative(path, module, css=css)
         if resolved is not None:
             out.append(resolved)
     return out
