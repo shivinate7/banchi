@@ -1,17 +1,1824 @@
 {
-  "by_code": {
-    "STE001": 8127,
-    "STE006": 2812,
-    "STE007": 72,
-    "STE008": 155
-  },
-  "ratio_per_1k_words": {
-    "docs/debts": 16.271,
-    "docs/decisions": 17.578,
-    "docs/gates": 19.449,
-    "docs/specs": 14.263,
-    "other": 8.772,
-    "repo": 15.72
-  },
-  "total": 11166
+  "files": {
+    ".claude/commands/docs-audit.md": {
+      "errors": 11,
+      "ratio_per_1k_words": 14.493,
+      "words": 759
+    },
+    ".claude/skills/tcgplayer-csv/SKILL.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 5.263,
+      "words": 570
+    },
+    "AGENTS.md": {
+      "errors": 17,
+      "ratio_per_1k_words": 1.476,
+      "words": 11517
+    },
+    "CLAUDE.md": {
+      "errors": 17,
+      "ratio_per_1k_words": 1.476,
+      "words": 11517
+    },
+    "README.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 10.417,
+      "words": 2784
+    },
+    "code-card-fork/AGENTS.md": {
+      "errors": 9,
+      "ratio_per_1k_words": 11.378,
+      "words": 791
+    },
+    "code-card-fork/CLAUDE.md": {
+      "errors": 9,
+      "ratio_per_1k_words": 11.378,
+      "words": 791
+    },
+    "docs/ADVANCES.md": {
+      "errors": 20,
+      "ratio_per_1k_words": 19.782,
+      "words": 1011
+    },
+    "docs/CODES-DECISIONS.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 15.93,
+      "words": 2511
+    },
+    "docs/DEBTS.md": {
+      "errors": 2,
+      "ratio_per_1k_words": 1.972,
+      "words": 1014
+    },
+    "docs/DECISIONS.md": {
+      "errors": 7,
+      "ratio_per_1k_words": 20.115,
+      "words": 348
+    },
+    "docs/DESIGN.md": {
+      "errors": 252,
+      "ratio_per_1k_words": 18.1,
+      "words": 13923
+    },
+    "docs/GATES.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 742
+    },
+    "docs/debts/001-the-reverse-direction-five-checks-walk-docs-code-and.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 15.182,
+      "words": 988
+    },
+    "docs/debts/002-the-maps-reach.md": {
+      "errors": 12,
+      "ratio_per_1k_words": 16.76,
+      "words": 716
+    },
+    "docs/debts/003-the-claim-chain.md": {
+      "errors": 19,
+      "ratio_per_1k_words": 12.266,
+      "words": 1549
+    },
+    "docs/debts/004-criteria-and-evidence-nine-ways-a-row-goes-quiet.md": {
+      "errors": 10,
+      "ratio_per_1k_words": 10.593,
+      "words": 944
+    },
+    "docs/debts/005-the-departed-card-on-screen.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 17.434,
+      "words": 1434
+    },
+    "docs/debts/006-measured-against-one-rig-or-not-at-all-closed-2026-09-09.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 17.06,
+      "words": 762
+    },
+    "docs/debts/007-the-preview-crops-the-card-and-the-one-check-that-looks.md": {
+      "errors": 16,
+      "ratio_per_1k_words": 20.46,
+      "words": 782
+    },
+    "docs/debts/008-recorded-and-correctly-unfixed.md": {
+      "errors": 90,
+      "ratio_per_1k_words": 18.386,
+      "words": 4895
+    },
+    "docs/debts/009-the-sigil-check-matches-text-so-a-renamed-local-walks.md": {
+      "errors": 16,
+      "ratio_per_1k_words": 18.265,
+      "words": 876
+    },
+    "docs/debts/010-an-order-arriving-mid-pass-is-walked-but-never-counted.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 16.216,
+      "words": 925
+    },
+    "docs/debts/011-the-capture-server-bounds-concurrent-requests-not-threads.md": {
+      "errors": 61,
+      "ratio_per_1k_words": 18.149,
+      "words": 3361
+    },
+    "docs/debts/012-ten-decision-entries-are-over-budget-on-purpose-and-the.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 9.96,
+      "words": 502
+    },
+    "docs/debts/013-the-commit-gate-was-measured-and-it-is-the-checks-off-it.md": {
+      "errors": 8,
+      "ratio_per_1k_words": 10.512,
+      "words": 761
+    },
+    "docs/debts/014-a-pooled-card-reaches-the-pricing-table-and-the-box-walk.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 12.446,
+      "words": 1848
+    },
+    "docs/debts/016-the-browser-fleet-is-locked-and-the-rest-of-the-load-is.md": {
+      "errors": 9,
+      "ratio_per_1k_words": 12.587,
+      "words": 715
+    },
+    "docs/debts/017-four-blocks-still-ask-the-viewport-a-question-only-their.md": {
+      "errors": 7,
+      "ratio_per_1k_words": 15.217,
+      "words": 460
+    },
+    "docs/debts/018-the-suite-fetches-three-typefaces-from-google-fonts-on.md": {
+      "errors": 12,
+      "ratio_per_1k_words": 18.433,
+      "words": 651
+    },
+    "docs/debts/019-the-revert-guard-is-exact-and-three-shapes-of-reversal.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 18.587,
+      "words": 269
+    },
+    "docs/debts/020-two-liveness-oracles-read-a-pid-and-a-recycled-one-lies.md": {
+      "errors": 2,
+      "ratio_per_1k_words": 5.78,
+      "words": 346
+    },
+    "docs/debts/021-the-double-click-guard-cannot-see-a-run-started-in-a.md": {
+      "errors": 4,
+      "ratio_per_1k_words": 21.505,
+      "words": 186
+    },
+    "docs/debts/022-a-control-shrunk-inside-its-own-sticky-bar-is-invisible.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 21.807,
+      "words": 642
+    },
+    "docs/debts/023-a-sale-fixture-that-moves-after-the-press-is-only-wrong.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 19.108,
+      "words": 785
+    },
+    "docs/debts/024-a-zero-reading-cannot-tell-a-sold-out-listing-from-an.md": {
+      "errors": 9,
+      "ratio_per_1k_words": 16.636,
+      "words": 541
+    },
+    "docs/debts/025-a-cited-section-number-still-resolves-when-it-is-the.md": {
+      "errors": 17,
+      "ratio_per_1k_words": 17.653,
+      "words": 963
+    },
+    "docs/debts/026-the-intelligent-mail-barcode-encoder-is-written-correct.md": {
+      "errors": 21,
+      "ratio_per_1k_words": 16.773,
+      "words": 1252
+    },
+    "docs/debts/027-two-get-inventory-call-sites-were-store-wide-site-1-is.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 20.913,
+      "words": 1052
+    },
+    "docs/debts/028-pkmnscan-rescue-is-reachable-from-no-screen-and-the.md": {
+      "errors": 10,
+      "ratio_per_1k_words": 27.855,
+      "words": 359
+    },
+    "docs/debts/029-the-drawers-tap-sweep-is-skipped-because-it-races-itself.md": {
+      "errors": 8,
+      "ratio_per_1k_words": 19.95,
+      "words": 401
+    },
+    "docs/debts/030-the-copies-panel-flash-guard-is-shelved-on-the-owners-word.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 655
+    },
+    "docs/debts/031-twelve-decisions-are-cited-by-path-one-of-them-dead-and.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 629
+    },
+    "docs/debts/_preamble.md": {
+      "errors": 6,
+      "ratio_per_1k_words": 13.857,
+      "words": 433
+    },
+    "docs/decisions/D-a-ratchet-per-file.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 910
+    },
+    "docs/decisions/D001-two-phase-architecture.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 23.81,
+      "words": 42
+    },
+    "docs/decisions/D002-identification-is-claude-haiku-vision-owned-end-to-end.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 12.097,
+      "words": 248
+    },
+    "docs/decisions/D003-variant-resolution-ladder.md": {
+      "errors": 47,
+      "ratio_per_1k_words": 22.727,
+      "words": 2068
+    },
+    "docs/decisions/D004-review-queue-is-digital-only.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 20.833,
+      "words": 48
+    },
+    "docs/decisions/D005-two-personas.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 45
+    },
+    "docs/decisions/D006-photo-service-and-pull-preview.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 16.129,
+      "words": 62
+    },
+    "docs/decisions/D007-duplicates-aggregate-by-sku-at-join-time.md": {
+      "errors": 86,
+      "ratio_per_1k_words": 21.256,
+      "words": 4046
+    },
+    "docs/decisions/D008-pricing-source-is-the-tcgplayer-filtered-csv-export-itself.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 9.174,
+      "words": 109
+    },
+    "docs/decisions/D009-threshold-and-floor-are-both-0-40.md": {
+      "errors": 20,
+      "ratio_per_1k_words": 18.467,
+      "words": 1083
+    },
+    "docs/decisions/D010-inventory-model.md": {
+      "errors": 43,
+      "ratio_per_1k_words": 17.776,
+      "words": 2419
+    },
+    "docs/decisions/D011-listing-path-is-a-catalog-join-never-a-from-scratch-csv.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 69
+    },
+    "docs/decisions/D012-scope.md": {
+      "errors": 4,
+      "ratio_per_1k_words": 13.289,
+      "words": 301
+    },
+    "docs/decisions/D013-stack.md": {
+      "errors": 24,
+      "ratio_per_1k_words": 21.525,
+      "words": 1115
+    },
+    "docs/decisions/D014-two-tracks-one-rig.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 76
+    },
+    "docs/decisions/D015-catalog-data-is-vendored-not-fetched.md": {
+      "errors": 6,
+      "ratio_per_1k_words": 11.429,
+      "words": 525
+    },
+    "docs/decisions/D016-the-docs-are-checked-mechanically-the-prose-is-checked-by.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 18.208,
+      "words": 2087
+    },
+    "docs/decisions/D017-the-repo-describes-itself-in-docs-map-py-and-the-map-is.md": {
+      "errors": 11,
+      "ratio_per_1k_words": 20.716,
+      "words": 531
+    },
+    "docs/decisions/D018-a-generator-may-write-nothing-that-writes-may-gate-a.md": {
+      "errors": 18,
+      "ratio_per_1k_words": 14.599,
+      "words": 1233
+    },
+    "docs/decisions/D019-motion-capture-live-fire-behind-the-seam-a-trace-for.md": {
+      "errors": 17,
+      "ratio_per_1k_words": 18.319,
+      "words": 928
+    },
+    "docs/decisions/D020-a-box-is-an-object-and-its-capacity-is-retroactive.md": {
+      "errors": 43,
+      "ratio_per_1k_words": 19.01,
+      "words": 2262
+    },
+    "docs/decisions/D021-game-is-a-per-card-claim-not-a-mode.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 10.417,
+      "words": 288
+    },
+    "docs/decisions/D022-taxonomies-are-hand-authored-per-game-and-audited-so-they.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 17.45,
+      "words": 745
+    },
+    "docs/decisions/D023-the-rarity-claim-does-three-jobs-and-one-of-them-pays-for.md": {
+      "errors": 11,
+      "ratio_per_1k_words": 17.054,
+      "words": 645
+    },
+    "docs/decisions/D024-code-cards-are-pooled-inventory-not-located.md": {
+      "errors": 9,
+      "ratio_per_1k_words": 12.212,
+      "words": 737
+    },
+    "docs/decisions/D025-the-join-partitions-by-game-and-product-line-becomes-a.md": {
+      "errors": 6,
+      "ratio_per_1k_words": 15.831,
+      "words": 379
+    },
+    "docs/decisions/D026-a-card-leaves-inventory-by-a-state-retired-and-a-bad.md": {
+      "errors": 8,
+      "ratio_per_1k_words": 13.136,
+      "words": 609
+    },
+    "docs/decisions/D027-session-state-is-device-local-and-may-be-persisted.md": {
+      "errors": 24,
+      "ratio_per_1k_words": 19.786,
+      "words": 1213
+    },
+    "docs/decisions/D028-the-review-answer-gets-an-undo-window-and-the-list-stops.md": {
+      "errors": 8,
+      "ratio_per_1k_words": 19.417,
+      "words": 412
+    },
+    "docs/decisions/D029-a-homogeneous-queue-may-be-answered-as-a-group.md": {
+      "errors": 7,
+      "ratio_per_1k_words": 23.411,
+      "words": 299
+    },
+    "docs/decisions/D030-the-physical-convention-for-a-gap.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 15.713,
+      "words": 1591
+    },
+    "docs/decisions/D031-one-owner-side-view-of-stored-cards-and-the-fulfiller.md": {
+      "errors": 27,
+      "ratio_per_1k_words": 17.763,
+      "words": 1520
+    },
+    "docs/decisions/D032-the-pixel-budget-is-spent-on-the-card-not-the-desk.md": {
+      "errors": 53,
+      "ratio_per_1k_words": 18.107,
+      "words": 2927
+    },
+    "docs/decisions/D033-the-pipeline-is-reachable-from-a-screen-and-one-route-can.md": {
+      "errors": 47,
+      "ratio_per_1k_words": 18.651,
+      "words": 2520
+    },
+    "docs/decisions/D034-a-listing-hold-is-released-against-the-releasing-boxs-own.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 16.098,
+      "words": 1553
+    },
+    "docs/decisions/D035-a-number-that-cannot-be-read-falls-back-to-the-name-and.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 22.099,
+      "words": 1810
+    },
+    "docs/decisions/D036-the-run-says-what-the-model-read-the-store-says-which.md": {
+      "errors": 28,
+      "ratio_per_1k_words": 23.237,
+      "words": 1205
+    },
+    "docs/decisions/D037-a-queued-question-can-be-closed-without-answering-it-and.md": {
+      "errors": 18,
+      "ratio_per_1k_words": 16.26,
+      "words": 1107
+    },
+    "docs/decisions/D038-the-photograph-is-sized-by-the-rows-beside-it-and-the-box.md": {
+      "errors": 67,
+      "ratio_per_1k_words": 18.705,
+      "words": 3582
+    },
+    "docs/decisions/D039-the-pipeline-gets-a-route-and-the-selection-is-handed-to.md": {
+      "errors": 27,
+      "ratio_per_1k_words": 18.659,
+      "words": 1447
+    },
+    "docs/decisions/D040-the-screen-is-three-columns-the-box-the-card-and-where.md": {
+      "errors": 24,
+      "ratio_per_1k_words": 13.158,
+      "words": 1824
+    },
+    "docs/decisions/D041-the-address-is-a-rank-not-a-list-and-the-separator-is.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 18.307,
+      "words": 2185
+    },
+    "docs/decisions/D042-main-moves-by-pull-request-and-the-guard-is-local-because.md": {
+      "errors": 50,
+      "ratio_per_1k_words": 12.713,
+      "words": 3933
+    },
+    "docs/decisions/D043-the-port-follows-the-store-because-the-store-was-already.md": {
+      "errors": 52,
+      "ratio_per_1k_words": 19.069,
+      "words": 2727
+    },
+    "docs/decisions/D044-an-icloud-conflict-copy-is-refused-at-the-commit-and.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 15.012,
+      "words": 866
+    },
+    "docs/decisions/D045-the-copies-list-is-a-way-back-into-the-walk-and-the.md": {
+      "errors": 52,
+      "ratio_per_1k_words": 24.367,
+      "words": 2134
+    },
+    "docs/decisions/D046-a-card-the-pipeline-could-not-place-is-offered-the.md": {
+      "errors": 19,
+      "ratio_per_1k_words": 17.056,
+      "words": 1114
+    },
+    "docs/decisions/D047-a-tracked-symlink-is-a-path-baked-into-the-tree-and-a.md": {
+      "errors": 46,
+      "ratio_per_1k_words": 16.203,
+      "words": 2839
+    },
+    "docs/decisions/D048-a-send-is-a-cart-of-boxes-a-run-is-still-one-box.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 20.999,
+      "words": 1381
+    },
+    "docs/decisions/D049-the-pricing-answer-is-one-file-and-a-card-can-be-held.md": {
+      "errors": 53,
+      "ratio_per_1k_words": 16.825,
+      "words": 3150
+    },
+    "docs/decisions/D050-an-interactive-elements-feedback-is-the-products-not-each.md": {
+      "errors": 81,
+      "ratio_per_1k_words": 20.517,
+      "words": 3948
+    },
+    "docs/decisions/D051-cmd-arrow-steps-the-strip-in-the-order-it-is-drawn-and-it.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 24.188,
+      "words": 1571
+    },
+    "docs/decisions/D052-the-photo-url-names-a-photograph-because-a-slots-occupant.md": {
+      "errors": 20,
+      "ratio_per_1k_words": 17.094,
+      "words": 1170
+    },
+    "docs/decisions/D053-one-link-always-live-and-the-restart-discipline-becomes.md": {
+      "errors": 67,
+      "ratio_per_1k_words": 18.098,
+      "words": 3702
+    },
+    "docs/decisions/D054-a-re-emit-adds-it-never-subtracts.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 19.32,
+      "words": 1294
+    },
+    "docs/decisions/D055-a-set-code-the-model-glued-on-is-removed-by-shape-and.md": {
+      "errors": 18,
+      "ratio_per_1k_words": 14.938,
+      "words": 1205
+    },
+    "docs/decisions/D056-a-run-names-the-drawer-it-was-over-and-the-name-is-joined.md": {
+      "errors": 46,
+      "ratio_per_1k_words": 23.197,
+      "words": 1983
+    },
+    "docs/decisions/D057-the-sale-is-one-press-and-the-button-becomes-the-way-back.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 13.725,
+      "words": 1020
+    },
+    "docs/decisions/D058-a-cards-number-counts-the-cards-in-the-box-not-the-slots.md": {
+      "errors": 47,
+      "ratio_per_1k_words": 15.42,
+      "words": 3048
+    },
+    "docs/decisions/D059-the-live-cap-is-a-per-sku-quantity-and-a-count-of-one.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 16.427,
+      "words": 2435
+    },
+    "docs/decisions/D060-the-loaded-docs-are-dense-american-technical-english-and.md": {
+      "errors": 31,
+      "ratio_per_1k_words": 17.184,
+      "words": 1804
+    },
+    "docs/decisions/D061-the-shipping-lane-is-three-lanes-and-the-third-answer-is.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 14.486,
+      "words": 2002
+    },
+    "docs/decisions/D062-the-price-history-is-reachable-and-it-is-drawn-beside-the.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 17.544,
+      "words": 2166
+    },
+    "docs/decisions/D063-the-order-ledger-is-two-maps-and-the-sync-writes-only-one.md": {
+      "errors": 57,
+      "ratio_per_1k_words": 18.543,
+      "words": 3074
+    },
+    "docs/decisions/D064-the-filtered-export-is-fetched-and-completeness-is-a.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 15.755,
+      "words": 2412
+    },
+    "docs/decisions/D065-the-export-is-asked-for-and-the-boxs-own-claims-are-the.md": {
+      "errors": 52,
+      "ratio_per_1k_words": 16.22,
+      "words": 3206
+    },
+    "docs/decisions/D066-the-order-screen-comes-before-the-transport-and-the.md": {
+      "errors": 20,
+      "ratio_per_1k_words": 18.85,
+      "words": 1061
+    },
+    "docs/decisions/D067-the-number-a-screen-draws-is-composed-once-and-the-set.md": {
+      "errors": 26,
+      "ratio_per_1k_words": 24.209,
+      "words": 1074
+    },
+    "docs/decisions/D068-a-departed-cards-label-names-the-record-because-two-of.md": {
+      "errors": 45,
+      "ratio_per_1k_words": 21.018,
+      "words": 2141
+    },
+    "docs/decisions/D069-the-order-screen-and-the-shipping-lane-get-a-route-each.md": {
+      "errors": 32,
+      "ratio_per_1k_words": 17.837,
+      "words": 1794
+    },
+    "docs/decisions/D070-the-qr-is-the-whole-identification-the-product-is-a-claim.md": {
+      "errors": 24,
+      "ratio_per_1k_words": 13.289,
+      "words": 1806
+    },
+    "docs/decisions/D071-a-card-with-no-slot-is-ranked-like-every-other-and-it-is.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 18.472,
+      "words": 1191
+    },
+    "docs/decisions/D072-a-renumbered-entry-takes-its-citations-with-it-and-the.md": {
+      "errors": 36,
+      "ratio_per_1k_words": 19.661,
+      "words": 1831
+    },
+    "docs/decisions/D073-the-boot-header-says-the-code-changed-nothing-says-the.md": {
+      "errors": 37,
+      "ratio_per_1k_words": 16.637,
+      "words": 2224
+    },
+    "docs/decisions/D074-a-document-is-checked-as-a-document-and-every-markdown.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 14.799,
+      "words": 946
+    },
+    "docs/decisions/D075-a-detector-that-cannot-say-wrong-is-asked-a-second.md": {
+      "errors": 30,
+      "ratio_per_1k_words": 15.898,
+      "words": 1887
+    },
+    "docs/decisions/D076-a-hint-is-evidence-about-its-own-card-and-how-wide-to-ask.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 21.805,
+      "words": 1330
+    },
+    "docs/decisions/D077-the-pipelines-rows-can-be-the-wrong-card-so-the-export-is.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 19.904,
+      "words": 1256
+    },
+    "docs/decisions/D078-a-runs-reason-for-adding-nothing-is-a-heading-the-rows.md": {
+      "errors": 26,
+      "ratio_per_1k_words": 20.249,
+      "words": 1284
+    },
+    "docs/decisions/D079-the-reading-goes-on-every-row-because-the-operator.md": {
+      "errors": 32,
+      "ratio_per_1k_words": 21.592,
+      "words": 1482
+    },
+    "docs/decisions/D080-a-section-with-no-reader-is-deleted-or-given-one-the.md": {
+      "errors": 34,
+      "ratio_per_1k_words": 19.34,
+      "words": 1758
+    },
+    "docs/decisions/D081-the-presence-gate-is-a-distance-from-this-sessions-own.md": {
+      "errors": 26,
+      "ratio_per_1k_words": 17.82,
+      "words": 1459
+    },
+    "docs/decisions/D082-ruff-is-adopted-on-the-slice-this-session-measured-not-on.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 19.506,
+      "words": 769
+    },
+    "docs/decisions/D083-a-card-leaves-a-box-through-a-third-door-moved-not-sold.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 25.71,
+      "words": 1478
+    },
+    "docs/decisions/D084-a-settle-is-a-count-over-a-window-the-stall-clock-is.md": {
+      "errors": 18,
+      "ratio_per_1k_words": 15.491,
+      "words": 1162
+    },
+    "docs/decisions/D085-the-corner-is-settled-by-geometry-and-a-variable-nothing.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 15.294,
+      "words": 850
+    },
+    "docs/decisions/D086-the-pricing-answer-is-one-file-for-the-store-and-the.md": {
+      "errors": 76,
+      "ratio_per_1k_words": 19.226,
+      "words": 3953
+    },
+    "docs/decisions/D087-the-reconcile-is-store-wide-and-what-it-writes-is-live.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 16.272,
+      "words": 1352
+    },
+    "docs/decisions/D088-the-store-of-record-is-sqlite-and-a-write-is-one.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 20.742,
+      "words": 1832
+    },
+    "docs/decisions/D089-a-sold-cards-photograph-is-reclaimed-on-purpose-and-the.md": {
+      "errors": 20,
+      "ratio_per_1k_words": 21.763,
+      "words": 919
+    },
+    "docs/decisions/D090-the-envelope-is-the-unit-of-the-write-and-an-order-drives.md": {
+      "errors": 62,
+      "ratio_per_1k_words": 17.066,
+      "words": 3633
+    },
+    "docs/decisions/D091-the-window-is-the-range-the-status-is-the-filter-and-the.md": {
+      "errors": 24,
+      "ratio_per_1k_words": 20.979,
+      "words": 1144
+    },
+    "docs/decisions/D092-a-bare-is-the-count-the-key-carries-a-sigil-and-the-check.md": {
+      "errors": 32,
+      "ratio_per_1k_words": 15.238,
+      "words": 2100
+    },
+    "docs/decisions/D093-the-copies-panel-is-the-picker-and-a-full-line-refuses.md": {
+      "errors": 33,
+      "ratio_per_1k_words": 20.586,
+      "words": 1603
+    },
+    "docs/decisions/D094-banchi-is-the-products-name-and-bn-is-the-vocabulary.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 23.77,
+      "words": 1220
+    },
+    "docs/decisions/D095-the-shell-is-a-rail-a-palette-and-a-reference-sheet-and.md": {
+      "errors": 19,
+      "ratio_per_1k_words": 22.248,
+      "words": 854
+    },
+    "docs/decisions/D096-the-screens-answer-to-the-owners-interview-and-mains.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 18.322,
+      "words": 2074
+    },
+    "docs/decisions/D097-the-copy-map-ranks-and-never-picks-and-a-line-says-what.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 16.291,
+      "words": 798
+    },
+    "docs/decisions/D098-the-cheap-card-figure-is-the-control-the-floor-choice-is.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 26.069,
+      "words": 959
+    },
+    "docs/decisions/D099-the-cut-off-is-a-figure-the-operator-sets-and-one-press.md": {
+      "errors": 34,
+      "ratio_per_1k_words": 23.004,
+      "words": 1478
+    },
+    "docs/decisions/D100-nothing-is-deleted-to-lower-a-price-the-quantity-is-not-a.md": {
+      "errors": 41,
+      "ratio_per_1k_words": 17.951,
+      "words": 2284
+    },
+    "docs/decisions/D101-a-claim-a-screen-names-is-a-claim-a-screen-can-fix-and.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 15.012,
+      "words": 866
+    },
+    "docs/decisions/D102-the-mark-is-an-illustration-with-its-own-palette-and-the.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 18.82,
+      "words": 1169
+    },
+    "docs/decisions/D103-staleness-is-a-filter-and-not-a-gate-the-record-holds.md": {
+      "errors": 61,
+      "ratio_per_1k_words": 18.122,
+      "words": 3366
+    },
+    "docs/decisions/D104-the-live-export-is-fetched-and-the-second-standing.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 14.997,
+      "words": 1467
+    },
+    "docs/decisions/D105-the-markdown-lives-where-prices-are-decided-and-one-file.md": {
+      "errors": 9,
+      "ratio_per_1k_words": 8.712,
+      "words": 1033
+    },
+    "docs/decisions/D106-the-push-and-the-publish-are-two-presses-and-the-second.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 11.746,
+      "words": 1277
+    },
+    "docs/decisions/D107-the-rule-only-ever-marks-down-the-operator-may-point.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 19.074,
+      "words": 734
+    },
+    "docs/decisions/D108-the-dock-app-is-the-page-chrome-already-renders-and-the.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 17.606,
+      "words": 2272
+    },
+    "docs/decisions/D109-a-price-is-a-fact-about-a-listing-and-the-store-remembers.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 15.374,
+      "words": 1496
+    },
+    "docs/decisions/D110-a-hover-is-an-alpha-because-the-same-paint-over-three.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 15.054,
+      "words": 930
+    },
+    "docs/decisions/D111-cleanup-is-a-sweep-not-a-step-in-the-merge-and-liveness.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 20.644,
+      "words": 1211
+    },
+    "docs/decisions/D112-the-labels-are-tracked-the-images-are-not-and-an-unmoved.md": {
+      "errors": 12,
+      "ratio_per_1k_words": 16.393,
+      "words": 732
+    },
+    "docs/decisions/D113-a-line-closes-three-ways-and-only-one-of-them-claims-a.md": {
+      "errors": 35,
+      "ratio_per_1k_words": 14.868,
+      "words": 2354
+    },
+    "docs/decisions/D114-the-status-requirement-is-answered-by-a-remembered-tick.md": {
+      "errors": 30,
+      "ratio_per_1k_words": 16.722,
+      "words": 1794
+    },
+    "docs/decisions/D115-the-reading-is-what-the-export-said-and-what-has-sold.md": {
+      "errors": 42,
+      "ratio_per_1k_words": 18.758,
+      "words": 2239
+    },
+    "docs/decisions/D116-a-card-nobody-has-named-is-not-a-landmark-and-the.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 16.06,
+      "words": 934
+    },
+    "docs/decisions/D117-the-thumb-floor-is-the-kits-the-measurement-is-the-hit.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 19.399,
+      "words": 2062
+    },
+    "docs/decisions/D118-a-press-changes-what-is-on-the-screen-never-where-the.md": {
+      "errors": 48,
+      "ratio_per_1k_words": 10.292,
+      "words": 4664
+    },
+    "docs/decisions/D119-the-copy-the-walk-stands-on-is-a-row-like-every-other-and.md": {
+      "errors": 44,
+      "ratio_per_1k_words": 20.784,
+      "words": 2117
+    },
+    "docs/decisions/D120-the-shell-speaks-one-brand-at-every-width-and-the-phone.md": {
+      "errors": 19,
+      "ratio_per_1k_words": 23.75,
+      "words": 800
+    },
+    "docs/decisions/D121-the-front-page-says-what-is-owed-and-the-library-is-drawn.md": {
+      "errors": 27,
+      "ratio_per_1k_words": 21.739,
+      "words": 1242
+    },
+    "docs/decisions/D122-the-suite-takes-a-machine-wide-lock-because-the-cpu-is.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 18.182,
+      "words": 1265
+    },
+    "docs/decisions/D123-above-the-desk-a-screen-asks-its-column-and-browser-zoom.md": {
+      "errors": 20,
+      "ratio_per_1k_words": 17.467,
+      "words": 1145
+    },
+    "docs/decisions/D124-the-faces-are-vendored-and-the-suites-allow-list-is-two.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 19.409,
+      "words": 1185
+    },
+    "docs/decisions/D125-the-photograph-is-cropped-to-the-card-the-focus-is.md": {
+      "errors": 36,
+      "ratio_per_1k_words": 14.803,
+      "words": 2432
+    },
+    "docs/decisions/D126-the-demo-inflates-its-own-history-and-the-present-is-left.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 10.687,
+      "words": 1310
+    },
+    "docs/decisions/D127-a-session-may-stop-what-it-started-and-the-checkout-is.md": {
+      "errors": 37,
+      "ratio_per_1k_words": 17.874,
+      "words": 2070
+    },
+    "docs/decisions/D128-the-key-listener-is-attached-before-the-paint-because-a.md": {
+      "errors": 18,
+      "ratio_per_1k_words": 17.699,
+      "words": 1017
+    },
+    "docs/decisions/D129-the-verdicts-line-is-fixed-by-the-first-playwright-that.md": {
+      "errors": 28,
+      "ratio_per_1k_words": 27.027,
+      "words": 1036
+    },
+    "docs/decisions/D130-a-feeder-that-never-rests-gets-a-second-trigger-and-the.md": {
+      "errors": 21,
+      "ratio_per_1k_words": 18.584,
+      "words": 1130
+    },
+    "docs/decisions/D131-the-ratchet-gets-an-escape-a-settle-is-one-quiet-frame-of.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 26.511,
+      "words": 943
+    },
+    "docs/decisions/D132-sold-is-folded-away-by-default-the-address-leads-with-the.md": {
+      "errors": 33,
+      "ratio_per_1k_words": 21.167,
+      "words": 1559
+    },
+    "docs/decisions/D133-a-branch-is-judged-by-what-it-lands-and-a-file-put-back.md": {
+      "errors": 60,
+      "ratio_per_1k_words": 28.156,
+      "words": 2131
+    },
+    "docs/decisions/D134-a-departed-record-is-buried-not-kept-the-box-goes-and-the.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 21.14,
+      "words": 1088
+    },
+    "docs/decisions/D135-codex-reads-the-same-rules-a-claude-code-session-does.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 25.375,
+      "words": 867
+    },
+    "docs/decisions/D136-the-suite-is-sharded-and-never-widened-a-sleep-is-a-wait.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 18.382,
+      "words": 2176
+    },
+    "docs/decisions/D137-the-catalog-is-near-mint-by-rule-because-it-was-only-ever.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 15.161,
+      "words": 1649
+    },
+    "docs/decisions/D138-one-process-serves-the-product-vite-compiles-and-never.md": {
+      "errors": 32,
+      "ratio_per_1k_words": 23.81,
+      "words": 1344
+    },
+    "docs/decisions/D139-which-branch-the-primary-checkout-stands-on-is-a-fact.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 19.163,
+      "words": 1983
+    },
+    "docs/decisions/D140-the-number-is-claimed-at-the-merge-because-what-main-has.md": {
+      "errors": 48,
+      "ratio_per_1k_words": 17.784,
+      "words": 2699
+    },
+    "docs/decisions/D141-the-browser-matrix-runs-when-the-change-reaches-what-a.md": {
+      "errors": 49,
+      "ratio_per_1k_words": 23.356,
+      "words": 2098
+    },
+    "docs/decisions/D142-the-setup-outlives-the-browser-the-box-list-is-ordered-by.md": {
+      "errors": 46,
+      "ratio_per_1k_words": 19.55,
+      "words": 2353
+    },
+    "docs/decisions/D143-the-claim-reads-the-checked-out-tree-so-which-tree-that.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 17.969,
+      "words": 1280
+    },
+    "docs/decisions/D144-a-card-that-will-not-settle-is-photographed-off-the.md": {
+      "errors": 45,
+      "ratio_per_1k_words": 21.781,
+      "words": 2066
+    },
+    "docs/decisions/D145-a-box-has-an-index-nobody-sees-because-the-number-on-the.md": {
+      "errors": 35,
+      "ratio_per_1k_words": 20.858,
+      "words": 1678
+    },
+    "docs/decisions/D146-two-agreeing-signals-release-the-rarity-claim-and-the.md": {
+      "errors": 21,
+      "ratio_per_1k_words": 13.907,
+      "words": 1510
+    },
+    "docs/decisions/D147-the-claim-is-spent-on-the-oldest-copies-because-a-card.md": {
+      "errors": 21,
+      "ratio_per_1k_words": 15.441,
+      "words": 1360
+    },
+    "docs/decisions/D148-the-wait-is-about-the-claim-commit-and-an-answer-it-has.md": {
+      "errors": 46,
+      "ratio_per_1k_words": 18.004,
+      "words": 2555
+    },
+    "docs/decisions/D149-a-section-number-that-resolves-is-not-a-citation-that-is.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 17.927,
+      "words": 1283
+    },
+    "docs/decisions/D150-a-reading-taken-after-a-sale-is-that-sales-own-result-and.md": {
+      "errors": 17,
+      "ratio_per_1k_words": 12.454,
+      "words": 1365
+    },
+    "docs/decisions/D151-the-merge-is-run-by-a-checkout-so-the-checkout-is-asked.md": {
+      "errors": 27,
+      "ratio_per_1k_words": 18.595,
+      "words": 1452
+    },
+    "docs/decisions/D152-every-row-in-the-collapsed-rail-draws-one-glyph-on-one.md": {
+      "errors": 21,
+      "ratio_per_1k_words": 23.307,
+      "words": 901
+    },
+    "docs/decisions/D153-the-restore-asks-which-drawer-not-which-number-and-the.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 15.516,
+      "words": 1869
+    },
+    "docs/decisions/D154-the-cameras-automatic-functions-are-inputs-to-the.md": {
+      "errors": 28,
+      "ratio_per_1k_words": 19.929,
+      "words": 1405
+    },
+    "docs/decisions/D155-the-section-is-the-ruler-and-the-box-is-the-margin-note.md": {
+      "errors": 52,
+      "ratio_per_1k_words": 22.678,
+      "words": 2293
+    },
+    "docs/decisions/D156-every-copy-tcgplayer-does-not-hold-is-one-worklist-and-a.md": {
+      "errors": 42,
+      "ratio_per_1k_words": 26.006,
+      "words": 1615
+    },
+    "docs/decisions/D157-the-fixture-carries-a-per-run-name-because-the-process.md": {
+      "errors": 18,
+      "ratio_per_1k_words": 18.256,
+      "words": 986
+    },
+    "docs/decisions/D158-the-refusal-goes-where-the-damage-is-so-the-primary.md": {
+      "errors": 44,
+      "ratio_per_1k_words": 19.775,
+      "words": 2225
+    },
+    "docs/decisions/D159-the-band-is-copies-rather-than-skus-the-drawer-is-the.md": {
+      "errors": 16,
+      "ratio_per_1k_words": 8.984,
+      "words": 1781
+    },
+    "docs/decisions/D160-the-corpus-is-a-directory.md": {
+      "errors": 12,
+      "ratio_per_1k_words": 11.204,
+      "words": 1071
+    },
+    "docs/decisions/D161-the-product-is-checked-before-the-tooling.md": {
+      "errors": 9,
+      "ratio_per_1k_words": 15.437,
+      "words": 583
+    },
+    "docs/decisions/D162-name-beats-a-disputed-number.md": {
+      "errors": 33,
+      "ratio_per_1k_words": 15.988,
+      "words": 2064
+    },
+    "docs/decisions/D163-hash-before-decode.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 15.278,
+      "words": 1440
+    },
+    "docs/decisions/D164-the-undo-stack-is-the-sitting-not-the-drawer.md": {
+      "errors": 31,
+      "ratio_per_1k_words": 19.291,
+      "words": 1607
+    },
+    "docs/decisions/D165-run-binds-to-bid.md": {
+      "errors": 47,
+      "ratio_per_1k_words": 21.481,
+      "words": 2188
+    },
+    "docs/decisions/D166-the-export-is-a-property-of-the-game.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 17.171,
+      "words": 2213
+    },
+    "docs/decisions/D167-the-queue-is-refreshed-where-it-stands.md": {
+      "errors": 54,
+      "ratio_per_1k_words": 20.729,
+      "words": 2605
+    },
+    "docs/decisions/D168-a-typed-price-is-cleared-by-a-press.md": {
+      "errors": 39,
+      "ratio_per_1k_words": 14.818,
+      "words": 2632
+    },
+    "docs/decisions/D169-the-sweep-asks-what-the-verdict-answers.md": {
+      "errors": 27,
+      "ratio_per_1k_words": 16.364,
+      "words": 1650
+    },
+    "docs/decisions/D170-a-pokemon-run-names-its-sets-or-the-fetch-refuses.md": {
+      "errors": 34,
+      "ratio_per_1k_words": 22.295,
+      "words": 1525
+    },
+    "docs/decisions/D171-a-refusal-that-reaches-nobody.md": {
+      "errors": 37,
+      "ratio_per_1k_words": 15.559,
+      "words": 2378
+    },
+    "docs/decisions/D172-the-first-photograph-is-the-name.md": {
+      "errors": 31,
+      "ratio_per_1k_words": 20.0,
+      "words": 1550
+    },
+    "docs/decisions/D173-a-rule-with-no-reader-is-advice.md": {
+      "errors": 17,
+      "ratio_per_1k_words": 13.471,
+      "words": 1262
+    },
+    "docs/decisions/D174-a-claim-on-the-cards.md": {
+      "errors": 59,
+      "ratio_per_1k_words": 18.904,
+      "words": 3121
+    },
+    "docs/decisions/D175-a-loop-nobody-is-listening-to.md": {
+      "errors": 27,
+      "ratio_per_1k_words": 16.139,
+      "words": 1673
+    },
+    "docs/decisions/D176-the-primary-checkout-syncs-itself.md": {
+      "errors": 52,
+      "ratio_per_1k_words": 17.562,
+      "words": 2961
+    },
+    "docs/decisions/D177-the-corpus-answers-for-listings-no-camera-saw.md": {
+      "errors": 12,
+      "ratio_per_1k_words": 11.505,
+      "words": 1043
+    },
+    "docs/decisions/D178-a-name-can-be-marked-not-yet.md": {
+      "errors": 20,
+      "ratio_per_1k_words": 20.899,
+      "words": 957
+    },
+    "docs/decisions/D179-five-shell-mistakes.md": {
+      "errors": 61,
+      "ratio_per_1k_words": 16.8,
+      "words": 3631
+    },
+    "docs/decisions/D180-a-selection-of-cards.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 13.913,
+      "words": 2875
+    },
+    "docs/decisions/D181-the-order-is-taken-once-and-a-sale-may-not-retake-it.md": {
+      "errors": 40,
+      "ratio_per_1k_words": 15.804,
+      "words": 2531
+    },
+    "docs/decisions/D182-a-slug-does-not-need-a-shared-line.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 25.025,
+      "words": 999
+    },
+    "docs/decisions/D183-a-number-a-person-reads-is-never-a-key.md": {
+      "errors": 35,
+      "ratio_per_1k_words": 19.466,
+      "words": 1798
+    },
+    "docs/decisions/D184-a-gain-step-is-the-stand-rescaled.md": {
+      "errors": 32,
+      "ratio_per_1k_words": 24.115,
+      "words": 1327
+    },
+    "docs/decisions/D185-a-row-that-examined-nothing-says-so.md": {
+      "errors": 24,
+      "ratio_per_1k_words": 16.713,
+      "words": 1436
+    },
+    "docs/decisions/D186-a-cache-hit-is-not-a-divisor.md": {
+      "errors": 11,
+      "ratio_per_1k_words": 13.269,
+      "words": 829
+    },
+    "docs/decisions/D187-a-slug-two-branches-both-still-hold-unclaimed.md": {
+      "errors": 10,
+      "ratio_per_1k_words": 21.053,
+      "words": 475
+    },
+    "docs/decisions/D188-a-join-with-no-run-directory.md": {
+      "errors": 37,
+      "ratio_per_1k_words": 20.274,
+      "words": 1825
+    },
+    "docs/decisions/D189-readings-table.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 18.795,
+      "words": 1543
+    },
+    "docs/decisions/D190-unclaim-completes-the-remedy.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 22.772,
+      "words": 1010
+    },
+    "docs/decisions/D191-history-scoped-to-box.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 21.782,
+      "words": 1010
+    },
+    "docs/decisions/D192-per-box-read.md": {
+      "errors": 33,
+      "ratio_per_1k_words": 19.504,
+      "words": 1692
+    },
+    "docs/decisions/D193-the-ledger-names-the-buyer.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 23.947,
+      "words": 1211
+    },
+    "docs/decisions/D194-copy-ratchet.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 16.999,
+      "words": 1353
+    },
+    "docs/decisions/D195-equal-width-action-stacks.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 17.931,
+      "words": 725
+    },
+    "docs/decisions/D196-no-mechanism-on-screen.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 22.727,
+      "words": 660
+    },
+    "docs/decisions/D197-one-left-edge.md": {
+      "errors": 10,
+      "ratio_per_1k_words": 17.153,
+      "words": 583
+    },
+    "docs/decisions/D198-home-review-tile-counts-both-queues.md": {
+      "errors": 8,
+      "ratio_per_1k_words": 16.632,
+      "words": 481
+    },
+    "docs/decisions/D199-run-phase-treats-joined-as-identified.md": {
+      "errors": 8,
+      "ratio_per_1k_words": 15.779,
+      "words": 507
+    },
+    "docs/decisions/D200-heartbeat-is-a-caller.md": {
+      "errors": 16,
+      "ratio_per_1k_words": 16.931,
+      "words": 945
+    },
+    "docs/decisions/D201-a-route-change-lands-at-the-top.md": {
+      "errors": 11,
+      "ratio_per_1k_words": 17.268,
+      "words": 637
+    },
+    "docs/decisions/D202-home-counts-only-open-orders.md": {
+      "errors": 11,
+      "ratio_per_1k_words": 22.541,
+      "words": 488
+    },
+    "docs/decisions/D203-orders-backlog-reconcile.md": {
+      "errors": 18,
+      "ratio_per_1k_words": 26.277,
+      "words": 685
+    },
+    "docs/decisions/D204-the-drawer-scrolls-above-its-foot.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 15.608,
+      "words": 897
+    },
+    "docs/decisions/D205-the-tab-bar-has-one-height.md": {
+      "errors": 19,
+      "ratio_per_1k_words": 23.171,
+      "words": 820
+    },
+    "docs/decisions/D206-vendor-catalog-snapshot-and-index.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 14.925,
+      "words": 1474
+    },
+    "docs/decisions/D207-one-poller.md": {
+      "errors": 21,
+      "ratio_per_1k_words": 24.59,
+      "words": 854
+    },
+    "docs/decisions/D208-one-verdict-on-pricing.md": {
+      "errors": 27,
+      "ratio_per_1k_words": 24.954,
+      "words": 1082
+    },
+    "docs/decisions/D209-orders-sort-filter.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 26.69,
+      "words": 562
+    },
+    "docs/decisions/D210-rescue-is-a-press.md": {
+      "errors": 25,
+      "ratio_per_1k_words": 24.95,
+      "words": 1002
+    },
+    "docs/decisions/D211-the-rig-panel-folds-once-a-box-is-known.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 28.926,
+      "words": 484
+    },
+    "docs/decisions/D212-no-order-claims-a-copy.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1335
+    },
+    "docs/decisions/D213-the-set-is-a-stored-fact-and-the-hint-was-never-one.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1610
+    },
+    "docs/decisions/D214-gross-sales-retrospective.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 4.812,
+      "words": 1039
+    },
+    "docs/decisions/D215-browser-spec-allow-list.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 0.838,
+      "words": 1193
+    },
+    "docs/decisions/D216-tcg-price-history-user-agent-block.md": {
+      "errors": 10,
+      "ratio_per_1k_words": 9.2,
+      "words": 1087
+    },
+    "docs/decisions/D217-revenue-slice.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1731
+    },
+    "docs/decisions/D218-no-typed-interpunct-on-screen.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1462
+    },
+    "docs/decisions/D219-a-price-history-archive.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 885
+    },
+    "docs/decisions/D220-orders-is-inventory.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 745
+    },
+    "docs/decisions/D221-money-stays-mono.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 579
+    },
+    "docs/decisions/D222-a-archive-press-pace.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 681
+    },
+    "docs/decisions/D223-a-archive-press-priority.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 733
+    },
+    "docs/decisions/D224-a-archive-press-resume.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 853
+    },
+    "docs/decisions/D225-a-sales-truth.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1280
+    },
+    "docs/decisions/D226-a-ste-ratchet.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 2046
+    },
+    "docs/decisions/D227-a-product-price-view.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 924
+    },
+    "docs/decisions/_deferred-argued-not-gated-nothing-here-is-blocked-and.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 18.587,
+      "words": 269
+    },
+    "docs/decisions/_preamble.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 45
+    },
+    "docs/decisions/_someday-worth-doing-blocking-nothing.md": {
+      "errors": 59,
+      "ratio_per_1k_words": 16.384,
+      "words": 3601
+    },
+    "docs/decisions/_v1-bugs-do-not-reintroduce.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 104
+    },
+    "docs/design-refs/README.md": {
+      "errors": 9,
+      "ratio_per_1k_words": 11.494,
+      "words": 783
+    },
+    "docs/gates/_preamble.md": {
+      "errors": 7,
+      "ratio_per_1k_words": 33.981,
+      "words": 206
+    },
+    "docs/gates/contract/T1-ground-truth-id-eval.md": {
+      "errors": 28,
+      "ratio_per_1k_words": 25.524,
+      "words": 1097
+    },
+    "docs/gates/contract/T11-the-order-walk-plan.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 837
+    },
+    "docs/gates/contract/T2-fixture-round-trip.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 10.638,
+      "words": 94
+    },
+    "docs/gates/contract/T3-join-coverage.md": {
+      "errors": 11,
+      "ratio_per_1k_words": 16.296,
+      "words": 675
+    },
+    "docs/gates/contract/T4-variant-ladder.md": {
+      "errors": 7,
+      "ratio_per_1k_words": 13.592,
+      "words": 515
+    },
+    "docs/gates/contract/T5-pricing-rules.md": {
+      "errors": 6,
+      "ratio_per_1k_words": 32.432,
+      "words": 185
+    },
+    "docs/gates/contract/T6-card-geometry.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 25.641,
+      "words": 858
+    },
+    "docs/gates/contract/T7-inventory-store-capture-server-and-the-command-seams.md": {
+      "errors": 102,
+      "ratio_per_1k_words": 18.62,
+      "words": 5478
+    },
+    "docs/gates/contract/T8-code-cards-qr-decode-product-tier-ledger-and-the-channel.md": {
+      "errors": 12,
+      "ratio_per_1k_words": 25.0,
+      "words": 480
+    },
+    "docs/gates/contract/T9-motion-trigger-against-twenty-recorded-rig-sessions.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 22.798,
+      "words": 965
+    },
+    "docs/gates/contract/_the-harness-is-the-contract.md": {
+      "errors": 6,
+      "ratio_per_1k_words": 17.699,
+      "words": 339
+    },
+    "docs/gates/gate-runs/GateA-tcgplayer-seam-passed-2026-07-26.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 34
+    },
+    "docs/gates/gate-runs/GateB-20-card-end-to-end-smoke-test-passed-2026-08-22.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 30.753,
+      "words": 943
+    },
+    "docs/gates/gate-runs/GateB-note1-box-2-544-cards-and-the-first-ground-truth-about-finish.md": {
+      "errors": 6,
+      "ratio_per_1k_words": 13.129,
+      "words": 457
+    },
+    "docs/gates/gate-runs/GateC-feeder-integration-passed-2026-08-22.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 16.163,
+      "words": 1423
+    },
+    "docs/gates/gate-runs/GateC-note1-the-per-run-reading-900-against-1200-priced-and-powered.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 20.484,
+      "words": 1074
+    },
+    "docs/gates/gate-runs/_gates.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 2
+    },
+    "docs/gates/steps/_what-is-open.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 43
+    },
+    "docs/gates/steps/_what-shipped.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 16.667,
+      "words": 300
+    },
+    "docs/gates/steps/step001-repo-init-fixtures-committed-git-from-commit-zero-done.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 11
+    },
+    "docs/gates/steps/step002-scaffolding-makefile-claude-settings-json-hooks-scripts.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 23
+    },
+    "docs/gates/steps/step003-verification-harness-t1-t4-done-t5-and-t6-arrived-with.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 76.923,
+      "words": 13
+    },
+    "docs/gates/steps/step004-batch-script-v2-batch-api-variant-ladder-catalog-join.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 20.27,
+      "words": 148
+    },
+    "docs/gates/steps/step005-capture-server-post-capture-position-ordered-filenames.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 13.333,
+      "words": 225
+    },
+    "docs/gates/steps/step006-design-tokens-locked-and-one-component-built-against-them.md": {
+      "errors": 4,
+      "ratio_per_1k_words": 43.956,
+      "words": 91
+    },
+    "docs/gates/steps/step007-vite-capture-app-device-picker-manual-capture-set-hint.md": {
+      "errors": 17,
+      "ratio_per_1k_words": 19.123,
+      "words": 889
+    },
+    "docs/gates/steps/step008-gate-b-smoke-test-passed-2026-08-22-53-cards-end-to-end.md": {
+      "errors": 2,
+      "ratio_per_1k_words": 51.282,
+      "words": 39
+    },
+    "docs/gates/steps/step009-vendor-the-pokemontcg-io-catalog-see-d15-three-pieces-in.md": {
+      "errors": 7,
+      "ratio_per_1k_words": 16.827,
+      "words": 416
+    },
+    "docs/gates/steps/step010-feeder-integration-gate-c-passed-2026-08-22-and-tuned-at.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 20.833,
+      "words": 48
+    },
+    "docs/gates/steps/step011-get-the-free-pokemontcg-io-key-at-dev-pokemontcg-io-done.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 31.25,
+      "words": 32
+    },
+    "docs/gates/steps/step013-order-flow-boxes-and-search-done-2026-08-23-spec-at-docs.md": {
+      "errors": 4,
+      "ratio_per_1k_words": 14.652,
+      "words": 273
+    },
+    "docs/gates/steps/step014-multi-game-done-2026-08-24-spec-at-docs-specs-multi-game.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 16.447,
+      "words": 304
+    },
+    "docs/gates/steps/step015-the-pipeline-seam-the-four-commands-reachable-from-a.md": {
+      "errors": 10,
+      "ratio_per_1k_words": 18.018,
+      "words": 555
+    },
+    "docs/gates/steps/step016-hand-pricing-the-price-a-listing-goes-out-at-set-by-a.md": {
+      "errors": 2,
+      "ratio_per_1k_words": 22.222,
+      "words": 90
+    },
+    "docs/gates/steps/step017-the-order-pipeline-the-ledger-the-order-screen-the.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 8.333,
+      "words": 120
+    },
+    "docs/gates/steps/step018-the-code-card-track-reaches-a-screen-done-2026-08-30-d70.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 28.846,
+      "words": 104
+    },
+    "docs/gates/steps/step019-the-rigs-guards-and-the-docs-that-check-themselves-done.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 37.313,
+      "words": 134
+    },
+    "docs/gates/steps/step020-the-shipped-status-and-the-tracking-write-back-steps-13.md": {
+      "errors": 4,
+      "ratio_per_1k_words": 29.63,
+      "words": 135
+    },
+    "docs/gates/steps/step021-the-store-of-record-is-sqlite-and-a-sold-cards-photograph.md": {
+      "errors": 4,
+      "ratio_per_1k_words": 27.397,
+      "words": 146
+    },
+    "docs/gates/steps/step022-one-process-serves-the-product-done-2026-09-11-d138-three.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 15.625,
+      "words": 192
+    },
+    "docs/gates/steps/step023-the-number-is-claimed-at-the-merge-not-guessed-on-the.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 24.59,
+      "words": 122
+    },
+    "docs/gates/steps/step024-a-durable-scheduled-heartbeat-that-watches-repo-state.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 15.385,
+      "words": 195
+    },
+    "docs/specs/audit-retirement.md": {
+      "errors": 111,
+      "ratio_per_1k_words": 17.414,
+      "words": 6374
+    },
+    "docs/specs/batch-script.md": {
+      "errors": 122,
+      "ratio_per_1k_words": 14.5,
+      "words": 8414
+    },
+    "docs/specs/box-drawings.md": {
+      "errors": 31,
+      "ratio_per_1k_words": 22.286,
+      "words": 1391
+    },
+    "docs/specs/capture-app.md": {
+      "errors": 178,
+      "ratio_per_1k_words": 18.286,
+      "words": 9734
+    },
+    "docs/specs/capture-server.md": {
+      "errors": 134,
+      "ratio_per_1k_words": 15.673,
+      "words": 8550
+    },
+    "docs/specs/card-variants.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 882
+    },
+    "docs/specs/code-cards.md": {
+      "errors": 46,
+      "ratio_per_1k_words": 11.675,
+      "words": 3940
+    },
+    "docs/specs/corpus-pruning.md": {
+      "errors": 45,
+      "ratio_per_1k_words": 11.236,
+      "words": 4005
+    },
+    "docs/specs/criteria-binding.md": {
+      "errors": 17,
+      "ratio_per_1k_words": 14.63,
+      "words": 1162
+    },
+    "docs/specs/demo.md": {
+      "errors": 46,
+      "ratio_per_1k_words": 19.032,
+      "words": 2417
+    },
+    "docs/specs/emit-reconcile-placement.md": {
+      "errors": 44,
+      "ratio_per_1k_words": 15.862,
+      "words": 2774
+    },
+    "docs/specs/logo.md": {
+      "errors": 328,
+      "ratio_per_1k_words": 13.391,
+      "words": 24494
+    },
+    "docs/specs/mechanization-backlog.md": {
+      "errors": 300,
+      "ratio_per_1k_words": 20.228,
+      "words": 14831
+    },
+    "docs/specs/motion-trigger.md": {
+      "errors": 191,
+      "ratio_per_1k_words": 15.786,
+      "words": 12099
+    },
+    "docs/specs/multi-game.md": {
+      "errors": 121,
+      "ratio_per_1k_words": 18.989,
+      "words": 6372
+    },
+    "docs/specs/one-process.md": {
+      "errors": 87,
+      "ratio_per_1k_words": 19.908,
+      "words": 4370
+    },
+    "docs/specs/order-flow.md": {
+      "errors": 192,
+      "ratio_per_1k_words": 19.584,
+      "words": 9804
+    },
+    "docs/specs/order-pipeline.md": {
+      "errors": 235,
+      "ratio_per_1k_words": 18.302,
+      "words": 12840
+    },
+    "docs/specs/order-walk-plan.md": {
+      "errors": 111,
+      "ratio_per_1k_words": 10.125,
+      "words": 10963
+    },
+    "docs/specs/revenue-next.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 2944
+    },
+    "docs/specs/revenue-plan.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1786
+    },
+    "docs/specs/revenue.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 931
+    },
+    "docs/specs/shipping-export.md": {
+      "errors": 15,
+      "ratio_per_1k_words": 10.345,
+      "words": 1450
+    },
+    "docs/specs/stable-card-id.md": {
+      "errors": 212,
+      "ratio_per_1k_words": 14.636,
+      "words": 14485
+    },
+    "docs/specs/stale-listings.md": {
+      "errors": 102,
+      "ratio_per_1k_words": 15.794,
+      "words": 6458
+    },
+    "docs/specs/ste-false-positives.md": {
+      "errors": 31,
+      "ratio_per_1k_words": 3.16,
+      "words": 9809
+    },
+    "docs/specs/store-scaling.md": {
+      "errors": 75,
+      "ratio_per_1k_words": 20.107,
+      "words": 3730
+    },
+    "docs/specs/store-scaling/00-phases.md": {
+      "errors": 19,
+      "ratio_per_1k_words": 13.428,
+      "words": 1415
+    },
+    "docs/specs/store-scaling/01-guard.md": {
+      "errors": 73,
+      "ratio_per_1k_words": 12.432,
+      "words": 5872
+    },
+    "docs/specs/store-scaling/02-per-box-read.md": {
+      "errors": 123,
+      "ratio_per_1k_words": 11.133,
+      "words": 11048
+    },
+    "docs/specs/store-scaling/03-history.md": {
+      "errors": 98,
+      "ratio_per_1k_words": 13.924,
+      "words": 7038
+    },
+    "docs/specs/store-scaling/04-copies-out.md": {
+      "errors": 108,
+      "ratio_per_1k_words": 15.894,
+      "words": 6795
+    },
+    "docs/specs/store-scaling/05-readings-writer.md": {
+      "errors": 51,
+      "ratio_per_1k_words": 9.597,
+      "words": 5314
+    },
+    "docs/specs/store-scaling/06-orders.md": {
+      "errors": 87,
+      "ratio_per_1k_words": 15.228,
+      "words": 5713
+    },
+    "docs/specs/store-scaling/07-value-and-aggregates.md": {
+      "errors": 113,
+      "ratio_per_1k_words": 13.985,
+      "words": 8080
+    },
+    "docs/specs/store-scaling/08-search-fts5.md": {
+      "errors": 96,
+      "ratio_per_1k_words": 12.627,
+      "words": 7603
+    },
+    "docs/specs/tcgplayer-portal-api.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 9.373,
+      "words": 1387
+    },
+    "docs/specs/ui-redesign-options.md": {
+      "errors": 103,
+      "ratio_per_1k_words": 13.921,
+      "words": 7399
+    },
+    "docs/specs/ui-research.md": {
+      "errors": 75,
+      "ratio_per_1k_words": 14.454,
+      "words": 5189
+    },
+    "docs/specs/undo.md": {
+      "errors": 19,
+      "ratio_per_1k_words": 9.572,
+      "words": 1985
+    },
+    "docs/specs/ux-walkthrough-2026-09-13.md": {
+      "errors": 24,
+      "ratio_per_1k_words": 14.109,
+      "words": 1701
+    },
+    "docs/specs/verification-cost.md": {
+      "errors": 38,
+      "ratio_per_1k_words": 9.418,
+      "words": 4035
+    },
+    "harness/results/README.md": {
+      "errors": 3,
+      "ratio_per_1k_words": 16.484,
+      "words": 182
+    },
+    "vendor/pokemon-tcg-data/UPSTREAM-README.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 3.623,
+      "words": 276
+    }
+  }
 }

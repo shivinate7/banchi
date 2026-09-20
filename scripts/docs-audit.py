@@ -5473,6 +5473,23 @@ BINARY_SUFFIXES = frozenset({
 })
 
 
+# A GENERATED INDEX WHOSE KEYS ARE PATHS CITES NOTHING, and this is the same argument
+# `BINARY_SUFFIXES` above makes one shape along. `scripts/ste-ratchet.json` carries one entry
+# per tracked markdown file since D226 was amended, so its keys now include every entry file
+# in `docs/decisions/`, each one named after the id it holds. A number spelled in a comment is
+# a CITATION in this repo, so this one is not spelled: the example above is the shape, and
+# writing a real id here would make this very comment the defect it describes. Every one of
+# those keys is a FILENAME a generator wrote, not a citation a person chose. Reading them as
+# citations demands a
+# `governed_by` naming every decision in the repo — which is the remedy this row prints, and
+# which nobody would choose.
+#
+# NAMED ONE FILE AT A TIME, NEVER BY SUFFIX. "Generated" is not readable from a path, and a
+# blanket `.json` skip would silence real citations in the hand-written config this repo also
+# keeps. A file earns its place here by being written only by a generator AND keyed by paths.
+PATH_INDEX_FILES = frozenset({"scripts/ste-ratchet.json"})
+
+
 def cited_decisions(path: Path) -> Set[str]:
     """Every decision id a file cites, suppressions excluded.
 
@@ -5494,6 +5511,8 @@ def cited_decisions(path: Path) -> Set[str]:
     with no text to read has written none.
     """
     if path.suffix.lower() in BINARY_SUFFIXES:
+        return set()
+    if rel(path) in PATH_INDEX_FILES:
         return set()
     lines = (without_noqa(line) for line in read(path).splitlines())
     return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
@@ -11968,49 +11987,67 @@ def _read_ste_ratchet_pin(path: Optional[Path] = None) -> Optional[Dict[str, obj
         return None
     if not isinstance(data, dict):
         return None
-    total, by_code, ratio = data.get("total"), data.get("by_code"), data.get("ratio_per_1k_words")
-    if not isinstance(total, int) or not isinstance(by_code, dict) or not isinstance(ratio, dict):
+    # THE SHAPE IS `files`, AND THE OLD REPO-WIDE SHAPE IS NOT ACCEPTED (D226, amended). A
+    # pin carrying `total`/`by_code`/`ratio_per_1k_words` is the scalar this amendment
+    # removed, and reading it would silently gate on the thing that made every branch a
+    # party to every other branch's merge. It lands in `unpinned`, which says to re-pin once.
+    files = data.get("files")
+    if not isinstance(files, dict):
         return None
+    for figures in files.values():
+        if not isinstance(figures, dict) or not isinstance(
+                figures.get("ratio_per_1k_words"), (int, float)):
+            return None
     return data
 
 
 def _ste_ratchet_verdict(
     measured: Dict[str, object], pin: Optional[Dict[str, object]]
-) -> Tuple[str, List[str]]:
-    """`("unpinned" | "rose" | "ok", risen)`. `risen` names every dimension that moved, so a
-    failure reads as "STE001 rose" or "docs/gates ratio rose" rather than merely "something
-    did" — the whole reason to pin three shapes instead of one number. `ok` covers strictly
-    lower AND exactly equal on every dimension at once, mirroring `_typed_interpunct_verdict`'s
-    own rule that a fall is accepted exactly as silently as a tie. A bucket or code the pin has
-    never seen is compared against 0 — a brand-new bucket appearing with a nonzero count is a
-    rise, not a free pass for being new.
+) -> Tuple[str, List[str], List[str]]:
+    """`("unpinned" | "rose" | "ok", risen, unpinned_files)`.
+
+    ONE COMPARISON PER FILE, AGAINST THAT FILE'S OWN PIN (D226, amended). `risen` names every
+    FILE whose ratio moved up, so a failure reads as the path a person can open. The old
+    verdict compared a repo total, four per-code counts and six bucket ratios, and every one
+    of those moved when any branch anywhere merged markdown.
+
+    A FILE THE PIN HAS NEVER SEEN IS ACCEPTED AND NAMED, WHICH IS THE ONE PLACE THIS IS
+    DELIBERATELY LOOSER THAN THE OLD SHAPE. A ratchet says a number may only go down, and a
+    file that did not exist has no number to go down from. Refusing it would force a re-pin
+    on every branch that adds a document, which is the cost this amendment exists to remove.
+    It is returned separately so the row prints it rather than swallowing it.
+
+    A PIN WHOSE FILE IS GONE IS NOT A FAILURE EITHER. The branch deleted the file, which is
+    a fall to nothing. `--pin` prunes the entry the next time somebody runs it, and until
+    then a stale key gates nothing and forces no re-pin.
+
+    `ok` COVERS STRICTLY LOWER AND EXACTLY EQUAL, on every file at once, mirroring
+    `_typed_interpunct_verdict`'s own rule that a fall is accepted exactly as silently as a
+    tie.
     """
     if pin is None:
-        return "unpinned", []
+        return "unpinned", [], []
+    pinned = pin.get("files", {}) if isinstance(pin.get("files"), dict) else {}
+    measured_files = measured.get("files", {}) if isinstance(measured.get("files"), dict) else {}
+
     risen: List[str] = []
-
-    m_total = measured["total"]
-    p_total = pin.get("total", 0)
-    if m_total > p_total:
-        risen.append(f"total: {p_total} pinned, {m_total} now (+{m_total - p_total})")
-
-    m_by_code = measured.get("by_code", {})
-    p_by_code = pin.get("by_code", {}) if isinstance(pin.get("by_code"), dict) else {}
-    for code in sorted(m_by_code):
-        count, p_count = m_by_code[code], p_by_code.get(code, 0)
-        if count > p_count:
-            risen.append(f"{code}: {p_count} pinned, {count} now (+{count - p_count})")
-
-    m_ratio = measured.get("ratio_per_1k_words", {})
-    p_ratio = pin.get("ratio_per_1k_words", {}) if isinstance(pin.get("ratio_per_1k_words"), dict) else {}
-    for bucket in sorted(m_ratio):
-        value, p_value = m_ratio[bucket], p_ratio.get(bucket, 0.0)
-        if value > p_value:
+    fresh: List[str] = []
+    for path in sorted(measured_files):
+        now = measured_files[path]
+        was = pinned.get(path)
+        if not isinstance(was, dict):
+            fresh.append(path)
+            continue
+        value = now.get("ratio_per_1k_words", 0.0)
+        ceiling = was.get("ratio_per_1k_words", 0.0)
+        if value > ceiling:
             risen.append(
-                f"{bucket} ratio: {p_value} pinned, {value} now (+{round(value - p_value, 3)})"
+                f"{path}: {ceiling}/1,000 words pinned, {value} now "
+                f"(+{round(value - ceiling, 3)}; {was.get('errors')} errors pinned, "
+                f"{now.get('errors')} now)"
             )
 
-    return ("rose" if risen else "ok"), risen
+    return ("rose" if risen else "ok"), risen, fresh
 
 
 def check_ste_ratchet(report: Report) -> None:
@@ -12026,10 +12063,14 @@ def check_ste_ratchet(report: Report) -> None:
 
     THREE STATES, mirroring `_typed_interpunct_verdict` exactly: `unpinned` (no readable pin,
     or one that does not carry this ratchet's own shape) is its own MECHANICAL failure, never
-    a silent pass over an empty comparison; `rose` names every dimension that moved — the
-    total, a per-code count, or one bucket's ratio — so a reader is told what to look at
-    rather than merely that something did; `ok` covers a fall or an exact match, printed and
-    never a finding.
+    a silent pass over an empty comparison; `rose` names every FILE whose ratio moved, so a
+    reader is told which document to open rather than merely that something moved; `ok`
+    covers a fall or an exact match, printed and never a finding.
+
+    THE REPO-WIDE FIGURES ARE STILL READ AND ARE NO LONGER GATED (D226, amended). The total,
+    the four per-code counts and the six bucket ratios are printed on every run, because a
+    reader wants them. They pin nothing, because a scalar every branch has to write is a
+    scalar every merge takes from somebody.
     """
     ste_measure = _sibling("ste_measure.py")
     if ste_measure is None:
@@ -12052,12 +12093,22 @@ def check_ste_ratchet(report: Report) -> None:
     measurement = ste_measure.measure(paths)
     measured = measurement.to_pin()
     pin = _read_ste_ratchet_pin()
-    verdict, risen = _ste_ratchet_verdict(measured, pin)
+    verdict, risen, fresh = _ste_ratchet_verdict(measured, pin)
+    # NAMED, NEVER SWALLOWED. A file with no pin of its own passes, so the one thing this
+    # row may not do is stay quiet about which files those were.
+    fresh_note = (
+        " {0} file(s) carry no pin of their own yet and were accepted: {1}{2}.".format(
+            len(fresh), ", ".join(fresh[:3]), " and more" if len(fresh) > 3 else "")
+        if fresh else "")
 
     # PRINTED BESIDE EVERY VERDICT — the survey's own floor beside today's repo-wide ratio,
     # so a reader never sees the count without also seeing how much of it is not this
     # ratchet's backlog to close. See STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS's own comment.
-    repo_ratio = measured.get("ratio_per_1k_words", {}).get("repo")
+    # FROM THE MEASUREMENT, NEVER FROM THE PIN'S OWN SHAPE (D226, amended). `to_pin()` now
+    # carries files and nothing else, so a reader that went through it would print `None`
+    # here and read as a row that had stopped measuring. The repo-wide ratio is still
+    # measured on every run. It is simply not something any branch has to write down.
+    repo_ratio = measurement.ratio_per_1k_words.get("repo")
     floor_note = (
         f"repo ratio {repo_ratio}/1,000 words against the survey's own floor of "
         f"~{STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS}/1,000 words "
@@ -12071,7 +12122,9 @@ def check_ste_ratchet(report: Report) -> None:
             [
                 Finding(
                     rel(STE_RATCHET_PIN),
-                    f"no ceiling pinned, or the pin file does not carry this ratchet's shape "
+                    f"no ceiling pinned, or the pin file does not carry this ratchet's "
+                    f"per-file shape (D226, amended: a `files` map, never the repo-wide "
+                    f"`total`/`by_code`/`ratio_per_1k_words` this replaced) "
                     f"— {measurement.total} error-severity STE findings found just now "
                     f"({measurement.exempted_total} exempted: {measurement.exempted_by_class}). "
                     f"{floor_note} "
@@ -12087,21 +12140,22 @@ def check_ste_ratchet(report: Report) -> None:
         findings = [Finding(rel(STE_RATCHET_PIN), line) for line in risen]
         report.add(
             "ste ratchet", MECHANICAL, findings,
-            f"{measurement.total} found, pinned at {pin.get('total')} — rose on "
-            f"{len(risen)} dimension(s). A rise is never quiet — fix the new hit(s), or, if "
-            "the addition is deliberately accepted, run "
-            f"`python3 scripts/ste-ratchet-pin.py --pin` and say why in the commit. {floor_note}",
+            f"{measurement.total} error-severity findings over {len(paths)} files — "
+            f"{len(risen)} file(s) got looser. A rise is never quiet: tighten the prose in "
+            "the file(s) named, or, if the addition is deliberately accepted, run "
+            "`python3 scripts/ste-ratchet-pin.py --pin` and say why in the commit. Only the "
+            f"file(s) you changed move.{fresh_note} {floor_note}",
             scanned=len(paths),
         )
         return
 
-    fell_by = pin.get("total", 0) - measurement.total
+    pinned_files = pin.get("files", {}) if isinstance(pin.get("files"), dict) else {}
     report.add(
         "ste ratchet", MECHANICAL, [],
         f"{measurement.total} error-severity STE findings ({measurement.exempted_total} "
-        f"exempted: {measurement.exempted_by_class}) over {len(paths)} files, ratchet "
-        f"pinned at {pin.get('total')}" + (f", {fell_by} below it" if fell_by > 0 else "")
-        + f". {floor_note}",
+        f"exempted: {measurement.exempted_by_class}) over {len(paths)} files, every one at "
+        f"or under its own pinned ratio ({len(pinned_files)} pinned)."
+        f"{fresh_note} {floor_note}",
         scanned=len(paths),
     )
 
@@ -18268,44 +18322,127 @@ def self_test() -> int:
     # typed-interpunct cases just above: plain dicts in, a verdict and the risen dimensions
     # out.
     print("\nste ratchet: the verdict arithmetic, isolated from the linter and the pin file")
-    STEADY = {
-        "total": 100,
-        "by_code": {"STE001": 60, "STE006": 30, "STE007": 5, "STE008": 5},
-        "ratio_per_1k_words": {"repo": 10.0, "docs/decisions": 12.0},
-    }
-    ok(_ste_ratchet_verdict(STEADY, STEADY) == ("ok", []),
-       "measured == pin on every dimension is `ok`, with nothing risen")
-    ok(_ste_ratchet_verdict(dict(STEADY, total=90), STEADY) == ("ok", []),
-       "total FELL and nothing else moved — accepted silently, the ratchet's whole point")
-    risen_total = _ste_ratchet_verdict(dict(STEADY, total=101), STEADY)
-    ok(risen_total[0] == "rose" and any(line.startswith("total:") for line in risen_total[1]),
-       "total ROSE by one — `rose`, and `total` is named",
-       f"got: {risen_total}")
-    risen_code = _ste_ratchet_verdict(
-        {**STEADY, "by_code": {**STEADY["by_code"], "STE006": 31}}, STEADY,
-    )
-    ok(risen_code[0] == "rose" and any(line.startswith("STE006:") for line in risen_code[1]),
-       "a single per-code count rose while the total stayed put (a code the pin's own "
-       "total did not otherwise cover moving) — still `rose`, and `STE006` is named",
-       f"got: {risen_code}")
-    risen_ratio = _ste_ratchet_verdict(
-        {**STEADY, "ratio_per_1k_words": {**STEADY["ratio_per_1k_words"], "docs/decisions": 12.5}},
-        STEADY,
-    )
-    ok(risen_ratio[0] == "rose" and any(line.startswith("docs/decisions ratio:") for line in risen_ratio[1]),
-       "a bucket's ratio rose with the counts unchanged (more words, same errors, is a FALL — "
-       "this is the reverse: same words, one more error) — `rose`, and the bucket is named",
-       f"got: {risen_ratio}")
-    risen_new_bucket = _ste_ratchet_verdict(
-        {**STEADY, "ratio_per_1k_words": {**STEADY["ratio_per_1k_words"], "docs/specs": 3.0}},
-        STEADY,
-    )
-    ok(risen_new_bucket[0] == "rose",
-       "a bucket the pin has never seen appears with a NONZERO ratio — compared against 0, "
-       "so being new is not a free pass",
-       f"got: {risen_new_bucket}")
-    ok(_ste_ratchet_verdict(STEADY, None) == ("unpinned", []),
+
+    def _pin(**files):
+        """A pin in the shipped shape: one entry per file, each with its own three figures."""
+        return {"files": {path: {"errors": errors, "words": words,
+                                 "ratio_per_1k_words": round(errors / words * 1000.0, 3)}
+                          for path, (errors, words) in files.items()}}
+
+    STEADY = _pin(**{"docs/decisions/Da.md": (12, 1000), "docs/specs/one.md": (5, 1000)})
+
+    ok(_ste_ratchet_verdict(STEADY, STEADY) == ("ok", [], []),
+       "measured == pin on every file is `ok`, with nothing risen and nothing unpinned")
+
+    fell = _pin(**{"docs/decisions/Da.md": (9, 1000), "docs/specs/one.md": (5, 1000)})
+    ok(_ste_ratchet_verdict(fell, STEADY) == ("ok", [], []),
+       "one file got tighter and nothing else moved — accepted silently, the ratchet's "
+       "whole point")
+
+    # THE RULER IS THE RATIO AND NOT THE COUNT, and this arm is the one that can tell the
+    # two apart. The file grew from 1,000 words to 3,000 and its errors rose from 12 to 20,
+    # so a raw-count ratchet fails it. Its ratio fell from 12.0 to 6.667, so this one is
+    # silent. D226 measured why: a count tracks how LONG a document is (r = 0.898 against
+    # entry size) rather than how tight its prose is (r = 0.0020). This amendment changes
+    # the ratchet's SCOPE and leaves its ruler exactly where that entry put it.
+    grew = _pin(**{"docs/decisions/Da.md": (20, 3000), "docs/specs/one.md": (5, 1000)})
+    ok(_ste_ratchet_verdict(grew, STEADY) == ("ok", [], []),
+       "a file grew by two thirds and gained 8 errors, and its RATIO fell — accepted in "
+       "silence. A raw-count ratchet fails this exact case, which is the difference "
+       "between D226's ruler and the size proxy it rejected",
+       f"got: {_ste_ratchet_verdict(grew, STEADY)}")
+
+    # AND THE REVERSE, so the arm above cannot be read as "growth is always forgiven".
+    tighter_looking = _pin(**{"docs/decisions/Da.md": (13, 1000),
+                              "docs/specs/one.md": (5, 1000)})
+    ok(_ste_ratchet_verdict(tighter_looking, STEADY)[0] == "rose",
+       "the same file at the same length with one more error is a rise — the ratio is a "
+       "ruler, never an excuse")
+
+    rose = _pin(**{"docs/decisions/Da.md": (13, 1000), "docs/specs/one.md": (5, 1000)})
+    verdict, risen, fresh = _ste_ratchet_verdict(rose, STEADY)
+    ok(verdict == "rose" and len(risen) == 1
+       and risen[0].startswith("docs/decisions/Da.md:") and not fresh,
+       "one file got looser — `rose`, and the finding names the PATH a person can open "
+       "rather than a bucket or a repo total",
+       f"got: {(verdict, risen, fresh)}")
+
+    # THE PROPERTY THIS AMENDMENT EXISTS FOR, asserted rather than argued. Another branch
+    # merges and its own file gets looser. Under the repo-wide pin that moved `total`,
+    # `by_code` and two bucket ratios, and every branch in flight had to re-pin. Here it
+    # moves one key this branch never writes.
+    elsewhere = _pin(**{"docs/decisions/Da.md": (12, 1000), "docs/specs/one.md": (99, 1000)})
+    verdict, risen, _ = _ste_ratchet_verdict(elsewhere, STEADY)
+    ok(verdict == "rose" and len(risen) == 1 and "docs/specs/one.md" in risen[0]
+       and not any("docs/decisions/Da.md" in line for line in risen),
+       "a rise in an UNRELATED file names that file alone and says nothing about this "
+       "branch's own — under the repo-wide pin the same change moved the total, two "
+       "per-code counts and two bucket ratios, and every branch in flight had to re-pin",
+       f"got: {(verdict, risen)}")
+
+    # EACH FILE IS JUDGED AGAINST ITS OWN PIN, NOT AGAINST THE LOOSEST ONE. Da.md is pinned
+    # at 12.0 and one.md at 5.0. A tight file drifting to 9.0 is a rise even though a looser
+    # file in the same repo sits above it. Without this arm, a verdict that compared every
+    # file against one shared ceiling would pass every case above — which is the shared
+    # scalar this whole amendment removes, rebuilt one level down.
+    drifted = _pin(**{"docs/decisions/Da.md": (12, 1000), "docs/specs/one.md": (9, 1000)})
+    verdict, risen, _ = _ste_ratchet_verdict(drifted, STEADY)
+    ok(verdict == "rose" and len(risen) == 1 and "docs/specs/one.md" in risen[0],
+       "a file pinned TIGHTER than another is held to its own number — 9.0 against its own "
+       "5.0 is a rise, even though the repo's other file is pinned at 12.0",
+       f"got: {(verdict, risen)}")
+
+    added = _pin(**{"docs/decisions/Da.md": (12, 1000), "docs/specs/one.md": (5, 1000),
+                    "docs/specs/brand-new.md": (40, 1000)})
+    verdict, risen, fresh = _ste_ratchet_verdict(added, STEADY)
+    ok(verdict == "ok" and not risen and fresh == ["docs/specs/brand-new.md"],
+       "a file the pin has never seen is ACCEPTED and NAMED — a ratchet says a number may "
+       "only go down, and a file that did not exist has no number to go down from. "
+       "Refusing it would force a re-pin on every branch that adds a document",
+       f"got: {(verdict, risen, fresh)}")
+
+    removed = _pin(**{"docs/decisions/Da.md": (12, 1000)})
+    ok(_ste_ratchet_verdict(removed, STEADY) == ("ok", [], []),
+       "a pin whose file is GONE is not a failure and forces no re-pin — the branch "
+       "deleted it, which is a fall to nothing, and `--pin` prunes the key next time")
+
+    ok(_ste_ratchet_verdict(STEADY, None) == ("unpinned", [], []),
        "no pin at all is `unpinned`, not `ok` over an empty comparison")
+
+    # THE PIN FILE IS A PATH INDEX AND CITES NOTHING. Its keys are every tracked markdown
+    # file, which includes every entry in `docs/decisions/`, each named after the id it
+    # holds. Without the exclusion `repo map` reads those filenames as citations and demands
+    # a `governed_by` naming every decision in the repo — measured, on the first run after
+    # the pin went per-file.
+    ok(rel(STE_RATCHET_PIN) in PATH_INDEX_FILES,
+       "the ratchet's own pin file is named as a path index, so its filenames are not read "
+       "as citations")
+    ok(cited_decisions(STE_RATCHET_PIN) == set(),
+       "and the reader really returns nothing for it, over the REAL pin file on this tree",
+       f"got: {sorted(cited_decisions(STE_RATCHET_PIN))[:6]}")
+    ok(cited_decisions(ROOT / "scripts" / "ste_measure.py") != set()
+       or not exists(ROOT / "scripts" / "ste_measure.py"),
+       "while an ordinary source file beside it still reports its own citations — the "
+       "exclusion is one named file, never a suffix or a directory")
+
+    # THE OLD REPO-WIDE SHAPE IS NOT SILENTLY HONOURED. A pin carrying `total`/`by_code`/
+    # `ratio_per_1k_words` is the scalar this amendment removed, and accepting it would gate
+    # on the thing that made every branch a party to every other branch's merge.
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+        handle.write(json.dumps({"total": 100, "by_code": {"STE001": 60},
+                                 "ratio_per_1k_words": {"repo": 10.0}}))
+        legacy_pin = Path(handle.name)
+    ok(_read_ste_ratchet_pin(legacy_pin) is None,
+       "the OLD repo-wide pin shape reads as no pin at all, so the row refuses and says "
+       "to re-pin once, rather than quietly gating on the scalar this replaced")
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+        handle.write(json.dumps(STEADY))
+        good_pin = Path(handle.name)
+    ok(_read_ste_ratchet_pin(good_pin) is not None,
+       "and the per-file shape reads back, so the refusal above is about the SHAPE and not "
+       "about the reader being broken")
+    legacy_pin.unlink(missing_ok=True)
+    good_pin.unlink(missing_ok=True)
 
     ste_measure = _sibling("ste_measure.py")
     ok(ste_measure is not None,
@@ -18383,6 +18520,17 @@ def self_test() -> int:
         ok("docs/decisions" in result.ratio_per_1k_words and "other" in result.ratio_per_1k_words,
            "both buckets appear in the ratio table, keyed by the same names `bucket_for` uses",
            f"ratio_per_1k_words: {result.ratio_per_1k_words}")
+        ok(set(result.to_pin()["files"]) == {"docs/decisions/Dx.md", "other/readme.md"},
+           "and the PIN carries one entry per file and nothing repo-wide — the buckets and "
+           "the total above are still measured, and are printed rather than pinned",
+           f"to_pin: {result.to_pin()}")
+        ok(result.to_pin()["files"]["docs/decisions/Dx.md"]["errors"] == 1,
+           "each entry carries that file's own error count as a receipt beside its ratio",
+           f"to_pin: {result.to_pin()}")
+        empty = ste_measure.measure([("docs/empty.md", "")])
+        ok(empty.to_pin()["files"]["docs/empty.md"]["ratio_per_1k_words"] == 0.0,
+           "a file with no words is pinned at 0.0 rather than dividing by its word count",
+           f"to_pin: {empty.to_pin()}")
         ok(result.words_by_bucket.get("repo") == (
                ste_measure.plain_word_count(synthetic[0][1])
                + ste_measure.plain_word_count(synthetic[1][1])),
@@ -18402,15 +18550,22 @@ def self_test() -> int:
                "a pin file that is not JSON reads as None")
             fixture_pin.write_text(json.dumps({"total": 100}))
             ok(_read_ste_ratchet_pin(fixture_pin) is None,
-               "a pin file missing `by_code`/`ratio_per_1k_words` reads as None — the "
-               "shape is checked, not only that the file parses")
-            fixture_pin.write_text(
-                json.dumps({"total": 0, "by_code": {}, "ratio_per_1k_words": {}})
-            )
-            ok(_read_ste_ratchet_pin(fixture_pin)
-               == {"total": 0, "by_code": {}, "ratio_per_1k_words": {}},
+               "a pin file with no `files` map reads as None — the shape is checked, not "
+               "only that the file parses")
+            fixture_pin.write_text(json.dumps({"files": {"a.md": {"errors": 1}}}))
+            ok(_read_ste_ratchet_pin(fixture_pin) is None,
+               "and an entry with no `ratio_per_1k_words` of its own reads as None too — "
+               "the ruler is what this row gates on, so an entry missing it is a pin that "
+               "cannot answer the question")
+            zeroed = {"files": {"a.md": {"errors": 0, "words": 40,
+                                         "ratio_per_1k_words": 0.0}}}
+            fixture_pin.write_text(json.dumps(zeroed))
+            ok(_read_ste_ratchet_pin(fixture_pin) == zeroed,
                "a real, achievable `0` pin is read as itself, never confused with "
                "'unreadable'")
+            ok(_ste_ratchet_verdict(zeroed, zeroed) == ("ok", [], []),
+               "and a file pinned at 0.0 stays `ok` at 0.0 — the ratchet's floor is "
+               "reachable rather than a number nothing can sit on")
 
     # ------------------------------------------------------- code-side agreements
     #
