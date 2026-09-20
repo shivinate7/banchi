@@ -31,16 +31,75 @@ NEITHER FUNCTION IMPORTS `pipeline/pricehistory.py:Market` BY NAME IN ITS SIGNAT
 duck-types on `.readings_for_rows(rows, ranges=...)`, which is exactly `Market`'s own method
 — this is so a test can hand it a stand-in with no network underneath, per `CLAUDE.md`'s "no
 network call in a test" rule, without this module importing anything from `unittest.mock`.
+
+--------------------------------------------------------------------------------------
+FOUR THINGS `cli/cmd_pricearchive.py` LAYERS ON TOP OF `sweep`, ALL IN THIS FILE AS PURE,
+TESTABLE FUNCTIONS SO THE CLI ITSELF STAYS A THIN DRIVER (D-a-archive-press-priority,
+D-a-archive-press-pace):
+
+  1. RANKED SUBJECTS. `rows_from_store` orders its answer by what the ledger says that SKU
+     has actually earned, sold value first (`revenue_by_sku`, `rank_by_revenue`) — a pass
+     that gets cut off partway should have spent its requests on what matters, not on
+     whatever order `cards.select` happened to return.
+  2. RESUME WITHOUT RE-FETCHING. `freshness_index` and `split_by_freshness` read the
+     archive itself (never a second, ephemeral cache) to decide which SKUs this pass can
+     skip because they were already read recently enough to trust.
+  3. COMMIT-SIZED CHUNKS. `chunk_rows` splits an already-ranked subject dict into pieces a
+     caller commits one at a time, so an interrupt loses at most one chunk's reads, never
+     the whole pass — and it never re-sorts, because re-sorting here would silently undo
+     the ranking `rows_from_store` already chose.
+  4. A THROTTLE THAT KNOWS ITS OWN NAME. `classify_refusals` rewrites a 403 that follows
+     earlier success in the same pass into what it actually is — the host's own rate limit,
+     not `pipeline/pricehistory.py:Blocked`'s authorization message, which this pass has
+     already disproved by the time it fires. `measured_pace` turns a real, measured count
+     of requests-before-block into the next pace, never a guessed number; `load_pace` and
+     `save_pace` carry that measurement from one press to the next.
 """
 
 from __future__ import annotations
 
+import json
 import time
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
 from pipeline import games, tcgcsv
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, Source, _key
 from store.session import Store
+
+# How many subject SKUs one `sweep()` call and one Store commit cover — chosen so an
+# interrupt between two commits loses at most this many SKUs' worth of reads, never the
+# whole pass (D-a-archive-press-pace). Not tuned to network throughput; `measured_pace`
+# below is what answers "how fast", this only answers "how much unwritten work at once".
+CHUNK_SKUS = 20
+
+# `pipeline/pricehistory.py:COURTESY_DELAY_SECONDS`, copied rather than imported — this
+# module still takes no hard dependency on `pricehistory` (the `market` argument stays
+# duck-typed throughout), so the naive first guess has to live here too, for a checkout
+# that has never measured a real throttle yet.
+DEFAULT_COURTESY_DELAY_SECONDS = 0.15
+
+# How much slower than the rate that just got a session blocked the next attempt goes.
+# ARGUED, NOT PROVEN OPTIMAL (D-a-archive-press-pace): doubling the interval a run
+# demonstrably survived only PART of is a conservative first correction, not a claim about
+# the host's real limit — which this module has no way to learn except by trying and is
+# never going to get from a constant somebody typed.
+THROTTLE_BACKOFF_FACTOR = 2.0
+
+# The one sentence `pipeline/pricehistory.py:fetch_json` raises `Blocked` with for an HTTP
+# 403 (see its own docstring). Matched by substring rather than by exception type, because
+# `readings_for_rows` already folds `Blocked` into a plain string per SKU before this
+# module ever sees it (see the header above) — this file may not change
+# `pipeline/pricehistory.py`'s exceptions, and a fixed substring of an already-fixed
+# sentence is a fact this module can rely on without a second, drifting copy of it.
+BLOCKED_SIGNATURE = "answered HTTP 403"
+
+# `app/src/Revenue.tsx:isCanceled`'s own rule, read here rather than a second copy of the
+# feed: trimmed and case-folded, because the vocabulary is the marketplace's and "Canceled"
+# and "canceled " are one fact about an order to a person, exactly `store/orders.py`'s own
+# `TERMINAL_STATUSES` comparison one register over.
+CANCELED_STATUS = "canceled"
 
 
 class _MarketLike(Protocol):
@@ -71,8 +130,64 @@ def _export_row(sku: str, name: str, number: str, set_name: str, condition: str,
     }
 
 
+def revenue_by_sku(ledger) -> Dict[str, Decimal]:
+    """Gross revenue per SKU, canceled orders excluded — `app/src/Revenue.tsx`'s own rule
+    (D214), read off the ledger directly rather than a second copy of it: `unit_price *
+    quantity`, summed over every line of every order whose own `status` is not
+    `CANCELED_STATUS` once trimmed and case-folded.
+
+    THIS IS THE ONLY THING A SEALED-PRODUCT SKU IS EVER WORTH TO THIS MODULE. Sealed
+    product is never captured (`pipeline/games.py`'s own line for it) and so has no row in
+    `cards` and never will — `store/orders.py:982` says the same of a sealed Holiday
+    Calendar's fulfilment record. A sealed SKU's revenue is computed here anyway, because
+    `rank_by_revenue` is handed EVERY key this function can answer for, not only the ones
+    `rows_from_store`'s own subject set happens to contain — the gap between the two is
+    exactly the reachability limit `docs/decisions/D-a-archive-press-priority.md` argues
+    about and does not solve.
+
+    A LINE WITH NO READABLE `unit_price` CONTRIBUTES NOTHING AND IS NEVER AN ERROR — D9's
+    reading of a blank market cell, applied to a feed cell this module does not own and
+    cannot demand a shape from.
+    """
+    totals: Dict[str, Decimal] = {}
+    for order in ledger.orders.values():
+        status = str(getattr(order, "status", "") or "").strip().casefold()
+        if status == CANCELED_STATUS:
+            continue
+        for line in getattr(order, "lines", ()) or ():
+            sku = str(getattr(line, "sku", "") or "").strip()
+            if not sku:
+                continue
+            try:
+                price = Decimal(str(line.unit_price))
+            except (InvalidOperation, ValueError, TypeError):
+                continue
+            quantity = max(0, int(getattr(line, "quantity", 0) or 0))
+            if quantity == 0:
+                continue
+            totals[sku] = totals.get(sku, Decimal(0)) + price * quantity
+    return totals
+
+
+def rank_by_revenue(skus: Iterable[str], revenue: Dict[str, Decimal]) -> List[str]:
+    """Every SKU in `skus`, sold value first (D-a-archive-press-priority).
+
+    A pass that gets cut off partway — D-a-archive-press-pace's whole subject, and the
+    NORMAL case measured 2026-09-19, not the exception — should have spent its requests on
+    what the owner has actually sold, never on whatever order `cards.select` returned. A
+    SKU this ledger never sold reads as zero and sorts last, among itself in SKU order —
+    stable and cheap to reproduce, which is what lets `chunk_rows` and the resume logic
+    both mean the same thing by "the Nth chunk" across two runs over an unchanged store.
+    """
+    return sorted(skus, key=lambda sku: (-(revenue.get(sku) or Decimal(0)), sku))
+
+
 def rows_from_store(snapshot=None) -> Dict[str, dict]:
-    """`sku -> export-shaped row`, one per distinct SKU the `cards` table has ever named.
+    """`sku -> export-shaped row`, one per distinct SKU the `cards` table has ever named,
+    ORDERED BY WHAT THAT SKU HAS ACTUALLY SOLD FOR
+    (`rank_by_revenue`, D-a-archive-press-priority) — a plain `dict` preserves the order it
+    is built in, so a caller that chunks or iterates this in order walks the highest-value
+    subjects first with no second sort.
 
     A FULL-TABLE `select`, NOT `.values()` — `select` hands back only the six columns this
     needs as plain tuples, never a `Card` object per row (`store-scaling` item 2's own
@@ -86,15 +201,17 @@ def rows_from_store(snapshot=None) -> Dict[str, dict]:
     two together no longer resolve.
     """
     snapshot = snapshot if snapshot is not None else Store().read()
-    rows: Dict[str, dict] = {}
+    unranked: Dict[str, dict] = {}
     columns = ("sku", "name", "number", "set_name", "condition", "game")
     for _, values in snapshot.inventory.cards.select(columns):
         sku, name, number, set_name, condition, game = values
         sku = str(sku or "").strip()
         if not sku:
             continue
-        rows[sku] = _export_row(sku, name, number, set_name, condition, game)
-    return rows
+        unranked[sku] = _export_row(sku, name, number, set_name, condition, game)
+
+    revenue = revenue_by_sku(snapshot.ledger)
+    return {sku: unranked[sku] for sku in rank_by_revenue(unranked.keys(), revenue)}
 
 
 def sweep(
@@ -167,3 +284,167 @@ def sweep(
         for range_ in ranges
     ]
     return buckets, sources, refusals
+
+
+# ------------------------------------------------------------------------------ resuming
+
+
+def freshness_index(existing: Iterable[Bucket]) -> Dict[str, Dict[str, int]]:
+    """`sku -> {range: latest 'at' this archive holds}`, built in ONE pass over the whole
+    table — never once per subject SKU. `store-scaling` item 2's own complaint about a
+    full-table walk repeated per row (measured on `cli/resolve.py:_copies_out`, ~1s per
+    call on the owner's real store) is exactly the mistake this function exists to avoid:
+    `PriceArchive.for_sku` is a full scan of `entries`, and calling it once per subject
+    across a 900-SKU pass would be 900 scans of a table this same pass keeps growing.
+    """
+    index: Dict[str, Dict[str, int]] = {}
+    for bucket in existing:
+        by_range = index.setdefault(bucket.sku, {})
+        if bucket.at > by_range.get(bucket.range, -1):
+            by_range[bucket.range] = bucket.at
+    return index
+
+
+def split_by_freshness(
+    rows: Dict[str, dict],
+    index: Dict[str, Dict[str, int]],
+    ranges: Tuple[str, ...],
+    now: int,
+    ttl_seconds: int,
+) -> Tuple[Dict[str, dict], List[str]]:
+    """`(needs_fetch, already_fresh_skus)` (D-a-archive-press-resume).
+
+    A SKU IS FRESH ONLY WHEN EVERY RANGE THIS PASS ASKS ABOUT ALREADY HAS A BUCKET READ
+    WITHIN `ttl_seconds` OF `now`. `Market.readings_for_rows` fetches every range for a
+    product in one request regardless of how many of them a caller still needs, so splitting
+    one SKU's own ranges between "keep" and "re-fetch" would not save a request — it would
+    only give this module a second, partial code path for nothing. One stale or missing
+    range sends the whole SKU back to be read.
+
+    A SKU WITH GENUINELY NO SALES THIS PERIOD NEVER LOOKS FRESH BY THIS TEST, because an
+    empty series writes no bucket row and so leaves no `at` to check — `sweep`'s own loop
+    only ever creates a `Bucket` for a candidate the endpoint actually returned
+    (`saw_bucket`). That is the safe direction to be wrong in: such a SKU is re-read every
+    pass rather than silently skipped, which costs a request and never costs data.
+
+    ORDER IS PRESERVED. `rows` arrives ranked by `rank_by_revenue`; both outputs walk it in
+    the same order they found it in, so a caller chunking `needs_fetch` still reads the
+    highest-value subjects first.
+    """
+    needs: Dict[str, dict] = {}
+    fresh: List[str] = []
+    floor = -(10 ** 12)
+    for sku, row in rows.items():
+        seen = index.get(sku)
+        if seen and ranges and all(now - seen.get(r, floor) < ttl_seconds for r in ranges):
+            fresh.append(sku)
+        else:
+            needs[sku] = row
+    return needs, fresh
+
+
+def chunk_rows(rows: Dict[str, dict], size: int) -> List[Dict[str, dict]]:
+    """`rows` split into ordered pieces of at most `size`, IN THE CALLER'S OWN ORDER —
+    never re-sorted here. `rows_from_store` orders by sold revenue
+    (D-a-archive-press-priority); re-sorting alphabetically in this function would silently
+    undo that ranking, which is exactly the kind of defect `CLAUDE.md` asks to be named
+    rather than reintroduced by a "helper" three lines away from the decision it defeats.
+    """
+    items = list(rows.items())
+    return [dict(items[i:i + size]) for i in range(0, len(items), size)]
+
+
+# ------------------------------------------------------------------------------- pacing
+
+
+def classify_refusals(
+    refusals: Dict[str, str], had_earlier_success: bool
+) -> Tuple[Dict[str, str], int]:
+    """Rewrite a chunk's refusal messages, and answer how many were the host BLOCKING this
+    session outright (D-a-archive-press-pace).
+
+    A 403 THAT ARRIVES AFTER THIS PASS HAS ALREADY READ AT LEAST ONE SKU SUCCESSFULLY IS A
+    THROTTLE, NEVER AN AUTHORIZATION PROBLEM — measured 2026-09-19: product 652771 answered
+    HTTP 200 minutes into a run and HTTP 403 later in the SAME session, with the same
+    working `PKMNSCAN_TCG_USER_AGENT` and nothing about the request changed but the volume
+    already sent. Telling that operator to set the User-Agent again sends them to fix
+    something the run itself already proved was not broken — `CLAUDE.md`'s rule that a
+    refusal must name its remedy cuts both ways: naming the WRONG remedy is worse than
+    naming none.
+
+    A 403 WITH NO EARLIER SUCCESS THIS PASS IS LEFT EXACTLY AS `Blocked` PHRASED IT — this
+    function has no evidence yet to call it a throttle instead of what it might genuinely
+    be, an authorization problem, and `Blocked`'s own remedy (D216) is still the honest
+    first guess for that case.
+    """
+    rewritten: Dict[str, str] = {}
+    blocked = 0
+    for sku, message in refusals.items():
+        if BLOCKED_SIGNATURE in message:
+            blocked += 1
+            if had_earlier_success:
+                rewritten[sku] = (
+                    "the host answered HTTP 403 after this pass had already read other "
+                    "SKUs successfully — a throttle, not an authorization problem. Re-run "
+                    "`archive sweep --write` later; it will not re-read what this pass "
+                    "already archived."
+                )
+                continue
+        rewritten[sku] = message
+    return rewritten, blocked
+
+
+def measured_pace(
+    requests_made: int, elapsed_seconds: float, floor: float = DEFAULT_COURTESY_DELAY_SECONDS
+) -> float:
+    """Seconds to wait between requests, derived from what THIS pass actually measured
+    before the host cut it off — never a guessed number (D-a-archive-press-pace).
+
+    `requests_made` and `elapsed_seconds` are this pass's own count and clock up to the
+    moment a throttle was first seen, so `elapsed_seconds / requests_made` is the average
+    interval a real run of THIS session survived. `THROTTLE_BACKOFF_FACTOR` doubles it: the
+    rate that was just measured is the rate that got this session blocked, not a rate proven
+    safe, so the next attempt goes slower than what merely worked "so far".
+    """
+    if requests_made <= 0 or elapsed_seconds <= 0:
+        return floor
+    observed = elapsed_seconds / requests_made
+    return max(observed * THROTTLE_BACKOFF_FACTOR, floor)
+
+
+def load_pace(path: Path, default: float = DEFAULT_COURTESY_DELAY_SECONDS) -> float:
+    """The courtesy delay a PAST throttle measured, or `default` if this checkout has never
+    hit one. Read once at the start of a sweep so even the FIRST request of a new press
+    paces itself on real evidence rather than the naive constant, once any exists.
+    """
+    try:
+        payload = json.loads(path.read_text("utf-8"))
+        value = float(payload.get("courtesy_delay_seconds"))
+    except (OSError, ValueError, TypeError, KeyError):
+        return default
+    return value if value > 0 else default
+
+
+def save_pace(
+    path: Path, courtesy_delay: float, *, requests_made: int, elapsed_seconds: float, at: int
+) -> None:
+    """Persist a throttle measurement so the NEXT press — this one resumed, or a wholly new
+    one — starts paced on it. Same-directory temp-then-`replace` (`Market._store`'s own
+    pattern, not reused by import because this module may not depend on
+    `pipeline/pricehistory.py`'s internals): a reader must never see a half-written file,
+    and a cache that cannot be written is slower, never wrong, so any `OSError` here is
+    swallowed.
+    """
+    payload = {
+        "courtesy_delay_seconds": courtesy_delay,
+        "measured_from_requests": requests_made,
+        "measured_over_seconds": round(elapsed_seconds, 1),
+        "at": at,
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(payload), "utf-8")
+        temporary.replace(path)
+    except OSError:
+        pass

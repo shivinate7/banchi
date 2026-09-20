@@ -221,10 +221,21 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
 ./pkmnscan archive  sweep [--write] # THE PRICE-HISTORY ARCHIVE (D219).
                                    #   The source's 357-day window slides. This press reads
                                    #   every range for every sku this store has sold or holds,
-                                   #   and keeps a copy past that ceiling. Previews. UNLIKE
-                                   #   `readings adopt`, `--write` NEVER clears a row a pass
-                                   #   did not mention. A bucket that ages out of the source
-                                   #   is never deleted here. No timer runs this. It is a press.
+                                   #   sold value first (D-a-archive-press-priority), and
+                                   #   keeps a copy past that ceiling. PREVIEWS WITH NO NETWORK
+                                   #   CALL (D-a-archive-press-resume): subject count, what the
+                                   #   archive already holds, what is fresh enough to skip.
+                                   #   `--write` commits in small chunks as it reads, never
+                                   #   once at the end, so an interrupt loses at most one
+                                   #   chunk. A resumed pass never re-reads a sku it already
+                                   #   holds fresh from this same pass. UNLIKE `readings
+                                   #   adopt`, `--write` NEVER clears a row a pass did not
+                                   #   mention. A bucket that ages out of the source is never
+                                   #   deleted here. The press paces itself on a MEASURED
+                                   #   interval and backs off once on a throttle
+                                   #   (D-a-archive-press-pace), naming it correctly rather
+                                   #   than as an authorization problem. No timer runs this.
+                                   #   It is a press.
 ./pkmnscan archive  show [--sku ID] # what the archive holds, and which ranges were last
                                    #   swept. `--sku` also prints one sku's own buckets.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]

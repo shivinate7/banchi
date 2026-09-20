@@ -1,19 +1,59 @@
 """`pkmnscan archive` — the price-history archive: sweep the live endpoint into it, or look
-at what it holds (D219).
+at what it holds (D219, D-a-archive-press-resume, D-a-archive-press-priority,
+D-a-archive-press-pace).
 
 WHY THIS COMMAND EXISTS. `pipeline/pricehistory.py`'s history endpoint has a hard ceiling of
 357 days; everything older is already gone, and everything not captured from here ages out on
 the same schedule. `sweep` is the one press that reads it and keeps a copy this store owns
-past that ceiling. Modelled on `pkmnscan readings adopt` (`cli/cmd_readings.py`), and
-DELIBERATELY DIFFERENT FROM IT IN ONE RESPECT: `readings adopt --write` is a full replace,
-because `readings` is a cache of files still on disk. `archive sweep --write` is never a
-replace — see `store/pricearchive.py`'s module docstring for why a bucket this pass did not
-mention must survive untouched, forever, once the source can no longer reproduce it.
+past that ceiling. Modelled on `pkmnscan readings adopt` (`cli/cmd_readings.py`).
 
-`sweep` PREVIEWS BY DEFAULT, for the property every free, re-runnable press in this repo
-shares — a write nobody watched is how a session finds out a table changed only after
-something downstream reads it — even though, like `readings adopt`, there is no operator
-JUDGEMENT inside this walk to protect: what it reads is what the endpoint said.
+THIS PRESS TALKS AS IT WORKS, NEVER ONLY AT THE END. Measured 2026-09-19 against the owner's
+real store: 914 SKUs over 4 ranges printed nothing for over ten minutes and then the whole
+report at once — silence and a hang look identical from outside. `_sweep` says the subject
+count and the range list before it does anything, then reports one line per commit as the
+pass goes.
+
+`sweep` PREVIEWS BY DEFAULT AND THE PREVIEW MAKES NO NETWORK CALL. It used to run the WHOLE
+walk and only skip the final write — measured the same day, a dry run made all 3,656
+requests. `_preview` below reads only the archive and the subject list: how many SKUs, how
+many already carry a bucket, how many are fresh enough that a `--write` pass would not
+re-read them. That is the shape every other free, re-runnable press in this repo shares
+(`reprice list`, `prices adopt`, `reconcile --live`), and it is honest about what it can say
+for nothing: what the archive already holds, never a live figure it did not pay to fetch.
+
+`--write` COMMITS AS IT GOES, IN CHUNKS OF `pipeline.pricearchive.CHUNK_SKUS`, RATHER THAN
+ONCE AT THE END. Measured the same day: `archive show` read 0 buckets while a sweep was an
+hour into running, because the store was never written to until the whole walk finished. One
+Ctrl-C or one dropped connection lost every read that hour — and the source this archive
+exists to outlast ages out for good, so a lost read can be unrecoverable at any later date.
+Each chunk's buckets and running accounting land in their own `Store.write()` transaction
+(D88: many small transactions, not one enormous one), so an interrupt loses at most one
+chunk's reads.
+
+A RESUMED SWEEP DOES NOT RE-READ WHAT IT ALREADY HOLDS FROM THIS SAME SESSION.
+`pipeline.pricearchive.freshness_index` and `split_by_freshness` check the archive itself —
+not a second, ephemeral cache — before asking the market for anything, using
+`pipeline.pricehistory.HISTORY_TTL_SECONDS` as "recently read enough to trust", the same
+number that module already argues is short enough nobody reads a stale figure and long
+enough that re-running a pass in one sitting costs no requests.
+
+THE SUBJECT ORDER IS SOLD VALUE FIRST, NOT WHATEVER `cards.select` RETURNED
+(`pipeline.pricearchive.rows_from_store`/`rank_by_revenue`, D-a-archive-press-priority).
+Measured 2026-09-19: an unranked pass answered for 206 of 914 SKUs before the host throttled
+it, and only 37 of those 206 were SKUs the owner had ever actually sold. A pass that gets cut
+off should have spent its requests on what earns.
+
+THE HOST THROTTLES THIS SESSION, AND THAT IS THE NORMAL CASE, NOT AN EXCEPTION
+(D-a-archive-press-pace). Measured 2026-09-19 with a working `PKMNSCAN_TCG_USER_AGENT`: the
+same product answered HTTP 200 minutes into a run and HTTP 403 later in the same session,
+with nothing about the request different but the volume already sent. `_sweep` paces itself
+on a measured interval (`pipeline.pricearchive.measured_pace`, persisted by `load_pace` /
+`save_pace` under `market_cache_dir()`) rather than a guessed number, backs off once if the
+host cuts it off after this pass has already read something successfully, and stops the pass
+cleanly — never hammering a host that will just refuse the rest — if backing off does not
+clear it. `pipeline.pricearchive.classify_refusals` rewrites a throttle's own refusal message
+so it stops pointing the operator at `PKMNSCAN_TCG_USER_AGENT`, which this pass has already
+proven is not the problem.
 
 `show` IS READ-ONLY: how many buckets the archive holds, which ranges were last swept and
 when, and (with `--sku`) one SKU's own buckets across every range it has been read in.
@@ -26,9 +66,13 @@ nobody has made yet.
 
 from __future__ import annotations
 
+import time
+from typing import Dict
+
 from pipeline import pricearchive as archive_walk
 from pipeline import pricehistory
 from store import files
+from store.pricearchive import Source
 from store.session import Store
 
 
@@ -37,6 +81,14 @@ def market_cache_dir():
     `server/pipeline_routes.py:market_cache_dir` names, so a sweep run from the CLI is warm
     against a fetch the server already made this hour, and vice versa."""
     return files.inventory_dir() / ".market-cache"
+
+
+def _pace_file():
+    """Where a throttle's own measurement lives (`pipeline.pricearchive.save_pace`/
+    `load_pace`) — beside the market cache rather than inside it, so `Market`'s own
+    `_cache_path` glob over that directory never has to know this file is not one of its
+    payloads."""
+    return market_cache_dir() / "throttle-pace.json"
 
 
 def _user_agent() -> str:
@@ -52,51 +104,177 @@ def _user_agent() -> str:
     return (envfile.get_live(tcg_export.AGENT_ENV) or "").strip() or pricehistory.USER_AGENT
 
 
+def _read_archive(say):
+    try:
+        return Store().read().archive
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        say(f"the store could not be read: {exc}")
+        return None
+
+
+def _preview(rows: Dict[str, dict], ranges, say) -> int:
+    """No network call. Names the subjects, the ranges, and what the archive already holds
+    for them — the shape every other free press in this repo previews with."""
+    current = _read_archive(say)
+    if current is None:
+        return 1
+
+    index = archive_walk.freshness_index(current.entries.values())
+    now = int(time.time())
+    ttl = pricehistory.HISTORY_TTL_SECONDS
+    needed, fresh_skus = archive_walk.split_by_freshness(rows, index, ranges, now, ttl)
+    covered = sum(1 for sku in rows if sku in index)
+
+    say("")
+    say(f"{len(current.entries)} bucket(s) already archived, over "
+        f"{len(current.sources_payload())} range(s) last swept")
+    say(f"{covered} of {len(rows)} sku(s) already carry at least one bucket, of any age")
+    say(f"{len(fresh_skus)} sku(s) read within the last {ttl // 60} minute(s) — a --write "
+        f"pass would not re-read them")
+    say(f"{len(needed)} sku(s) would be read fresh, up to {len(needed) * len(ranges)} "
+        f"request(s), highest-sold-value first")
+    say("")
+    say("DRY RUN — no network call was made. This preview reads only the archive and the "
+        "store. Re-run with --write to sweep.")
+    return 0
+
+
 def _sweep(args, say) -> int:
     rows = archive_walk.rows_from_store()
+    ranges = pricehistory.RANGES
     if not rows:
         say("no card in this store carries a SKU — nothing to sweep")
         return 0
 
-    market = pricehistory.Market(cache_dir=market_cache_dir(), user_agent=_user_agent())
-    buckets, sources, refusals = archive_walk.sweep(rows, market, ranges=pricehistory.RANGES)
+    say(f"{len(rows)} sku(s) subject to this pass, over {len(ranges)} range(s) "
+        f"({', '.join(ranges)}) — sold value first")
+    say(f"up to {len(rows) * len(ranges)} request(s) if none of it is already archived")
 
-    say(f"{len(rows)} sku(s) asked about -> {len(buckets)} bucket(s) read, "
-        f"over {len(sources)} range(s)")
-    for source in sources:
-        say(f"  {source.range:<10} {source.answered}/{source.requested} sku(s) answered, "
-            f"{source.refused} refused")
+    if not args.write:
+        return _preview(rows, ranges, say)
+
+    current = _read_archive(say)
+    if current is None:
+        return 1
+
+    index = archive_walk.freshness_index(current.entries.values())
+    now = int(time.time())
+    ttl = pricehistory.HISTORY_TTL_SECONDS
+    needed, fresh_skus = archive_walk.split_by_freshness(rows, index, ranges, now, ttl)
 
     say("")
-    if refusals:
-        say(f"{len(refusals)} sku(s) asked for and never answered:")
-        for sku in sorted(refusals)[:20]:
-            say(f"  {sku}  {refusals[sku]}")
-        if len(refusals) > 20:
-            say(f"  ... and {len(refusals) - 20} more")
+    if fresh_skus:
+        say(f"{len(fresh_skus)} sku(s) already read within the last {ttl // 60} minute(s) "
+            "— not re-read this pass")
+    if not needed:
+        say("nothing left to read — every subject is already fresh")
+        return 0
+
+    chunks = archive_walk.chunk_rows(needed, archive_walk.CHUNK_SKUS)
+    say(f"{len(needed)} sku(s) left to read, in {len(chunks)} batch(es) of up to "
+        f"{archive_walk.CHUNK_SKUS}")
+    say("")
+
+    pace_file = _pace_file()
+    starting_delay = archive_walk.load_pace(pace_file)
+    market = pricehistory.Market(
+        cache_dir=market_cache_dir(), user_agent=_user_agent(), courtesy_delay=starting_delay,
+    )
+
+    totals = {r: {"answered": len(fresh_skus), "refused": 0} for r in ranges}
+    all_refusals: Dict[str, str] = {}
+    total_buckets = 0
+    done = 0
+    answered_so_far = 0
+    requests_baseline = 0
+    backed_off_already = False
+    pass_start = time.time()
+    stopped_early = False
+
+    for i, chunk in enumerate(chunks, start=1):
+        buckets, sources, refusals = archive_walk.sweep(chunk, market, ranges=ranges)
+        # ONE SIGNAL, USED TWICE — whether to rewrite a 403's message and whether to treat
+        # it as a throttle worth backing off for. Computed from THIS chunk's own answered
+        # count too, not only earlier chunks', so a chunk that itself answers some SKUs
+        # before getting others blocked is not told two different stories about the same
+        # pass.
+        this_chunk_answered = len(chunk) - len(refusals)
+        had_signal = answered_so_far > 0 or this_chunk_answered > 0
+        refusals, blocked_count = archive_walk.classify_refusals(
+            refusals, had_earlier_success=had_signal
+        )
+        for source in sources:
+            totals[source.range]["answered"] += source.answered
+            totals[source.range]["refused"] += source.refused
+        all_refusals.update(refusals)
+        total_buckets += len(buckets)
+        done += len(chunk)
+        answered_so_far += this_chunk_answered
+
+        commit_sources = [
+            Source(range=r, at=int(time.time()), requested=len(rows),
+                   answered=t["answered"], refused=t["refused"])
+            for r, t in totals.items()
+        ]
+        with Store().write() as snapshot:
+            snapshot.archive.upsert(buckets)
+            snapshot.archive.record_pass(commit_sources)
+
+        say(f"  [{i}/{len(chunks)}] {len(chunk)} sku(s) read -> {len(buckets)} bucket(s), "
+            f"{len(refusals)} refused  ({done}/{len(needed)} done)")
+
+        if blocked_count and had_signal:
+            elapsed = time.time() - pass_start
+            requests_made = requests_baseline + market.requests
+            new_delay = archive_walk.measured_pace(requests_made, elapsed)
+            say("")
+            say(f"the host throttled this session: {blocked_count} sku(s) answered HTTP "
+                f"403 after {requests_made} request(s) over {elapsed:.0f}s this pass")
+            archive_walk.save_pace(
+                pace_file, new_delay, requests_made=requests_made,
+                elapsed_seconds=elapsed, at=int(time.time()),
+            )
+            if backed_off_already:
+                say(f"still throttled at {new_delay:.2f}s between requests — stopping this "
+                    "pass here.")
+                say("every bucket committed above is safe. Re-run `archive sweep --write` "
+                    "later to resume; it will not re-read what this pass already archived.")
+                stopped_early = True
+                break
+            say(f"pacing to {new_delay:.2f}s between requests (was "
+                f"{starting_delay:.2f}s) and continuing")
+            requests_baseline = requests_made
+            market = pricehistory.Market(
+                cache_dir=market_cache_dir(), user_agent=_user_agent(),
+                courtesy_delay=new_delay,
+            )
+            backed_off_already = True
+
+    say("")
+    say(f"{total_buckets} bucket(s) read this pass, over {len(ranges)} range(s)")
+    for r in ranges:
+        t = totals[r]
+        say(f"  {r:<10} {t['answered']}/{len(rows)} sku(s) answered, {t['refused']} refused")
+
+    say("")
+    if all_refusals:
+        say(f"{len(all_refusals)} sku(s) asked for and never answered:")
+        for sku in sorted(all_refusals)[:20]:
+            say(f"  {sku}  {all_refusals[sku]}")
+        if len(all_refusals) > 20:
+            say(f"  ... and {len(all_refusals) - 20} more")
     else:
         say("every sku asked for came back with an answer or a known reason it could not")
 
-    if not args.write:
-        say("")
-        say("DRY RUN — nothing written. Re-run with --write to archive what was read.")
-        return 0
-
-    with Store().write() as snapshot:
-        snapshot.archive.upsert(buckets)
-        snapshot.archive.record_pass(sources)
-
     say("")
-    say(f"written          {len(buckets)} bucket(s) folded in, never deleting one this pass "
-        "did not mention")
-    return 0
+    say(f"written          {total_buckets} bucket(s) folded in across up to {len(chunks)} "
+        "commit(s), never deleting one this pass did not mention")
+    return 1 if stopped_early else 0
 
 
 def _show(args, say) -> int:
-    try:
-        current = Store().read().archive
-    except (files.StoreError, OSError, ValueError, TypeError) as exc:
-        say(f"the store could not be read: {exc}")
+    current = _read_archive(say)
+    if current is None:
         return 1
 
     entries = dict(current.entries)
