@@ -2639,12 +2639,24 @@ def _corpus():
 
 
 def decision_files() -> List[Path]:
-    """Every file holding a `## D<id>` entry, in corpus order. Empty if unreadable."""
+    """Every file holding a `## D<id>` entry, in corpus order. Empty if unreadable.
+
+    THE COMPLEMENT, NOT `_ID_ANY`. A file is included the moment its first heading opens
+    `## D` followed by a digit or a hyphen — never by first requiring the id to already be a
+    clean number or a properly-shaped SLUG. `_ID_ANY` used to gate this list directly, which
+    made a MALFORMED heading (mixed case, a doubled hyphen, a digit where a segment was
+    meant) invisible a step earlier than the `id claims` row's own loose/strict check could
+    ever see it: excluded here, that file never reaches the per-line scan that would have
+    reported it as `not a claimable id`, and `decision structure`/`decision index`/`entry
+    budget` silently drop it from their own counts too. A properly numbered or properly
+    slugged heading still passes `_ID_ANY` downstream wherever that distinction matters;
+    this list is only ever asked to be a superset of it.
+    """
     corpus = _corpus()
     if corpus is None:
         return []
     try:
-        head = re.compile(r"^##\s+(D" + _ID_ANY + r")\b")
+        head = re.compile(r"^##\s+D[0-9-]")
         return [p for p in corpus.files() if head.match(read(p).split("\n", 1)[0])]
     except Exception:
         return []

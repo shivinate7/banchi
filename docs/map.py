@@ -3289,10 +3289,9 @@ COMPONENTS = [
                 # D160, D186 and D188 are the same worked example claim-ids.py's own entry
                 # carries — the fixture's directory-corpus arms build a real D160 shape, and
                 # the incident arm's own prose names the two real, landed entries it replays.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
-                                "D143", "D148",
-                                "D151", "D160", "D185", "D186", "D188",
-                                "D190"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141", "D143",
+                                "D148", "D151", "D160", "D185", "D186", "D188", "D190",
+                                "D-unclaimed-headings-are-found-by-complement"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
