@@ -17,7 +17,7 @@ import type {
   ServerStatus,
 } from './types'
 import { useCardCrop } from './cardCrop'
-import { Button, cropStyle, Icon, type IconName } from './kit'
+import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
 import { standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
@@ -215,7 +215,12 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
       </span>
       {say.href === null ? null : (
         <span className="home-standing-go">
-          {say.kbd === null ? null : <kbd className="bn-kbd">{say.kbd}</kbd>}
+          {/* The shortcut chip is a hint, not the label — `Kbd` already keeps it out of the
+              accessible name (see `kit`'s own component); the sr-only span gives a first-time
+              reader (screen reader or eye) the word the chevron alone does not carry, without
+              adding a visible word to the row (D194). */}
+          <span className="bn-sr">Go to it</span>
+          {say.kbd === null ? null : <Kbd>{say.kbd}</Kbd>}
           <Icon name="chevronRight" size={16} />
         </span>
       )}

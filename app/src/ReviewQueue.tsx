@@ -1680,9 +1680,12 @@ function GroupConfirm({
               these cards are each their own single row; the grade is a property of the
               catalogue, and it is stated below as context rather than asked here. */}
           <h2 className="review-question-title">Answer all {offer.rows.length} together?</h2>
-          <p className="review-question-sub">
+          {/* The pipeline's own reason code (`set_ambiguous` and the like) is a debugging fact,
+              not something a person doing this work needs to read — the sentence already says
+              it in plain English. Kept as a tooltip rather than deleted outright, so support
+              can still find it without it costing a line in the visible flow. */}
+          <p className="review-question-sub" title={`Reason code: ${offer.reason}`}>
             {reasonLabel(offer.reason)}
-            <span className="review-code">{offer.reason}</span>
           </p>
         </div>
         <p className="review-sentence">
@@ -1840,11 +1843,8 @@ function Card({
             {retired ? <Icon name="history" size={20} className="review-question-mark" /> : null}
             {questionFor(entry.reason)}
           </h2>
-          <p className="review-question-sub">
+          <p className="review-question-sub" title={`Reason code: ${entry.reason}`}>
             {reasonLabel(entry.reason)}
-            <span className="review-code" title="Reason code">
-              {entry.reason}
-            </span>
             {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
           </p>
         </div>
