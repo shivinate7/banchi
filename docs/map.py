@@ -597,7 +597,7 @@ COMPONENTS = [
                                         "undoes the markdown.",
                                "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86",
                                                "D100", "D103", "D87", "D106", "D107", "D109",
-                                               "D-a-record-price-postings"],
+                                               "D243"],
                                "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
                                     "is unanswered. ONE PRESS WRITES ONE SPREADSHEET (D99) — "
@@ -644,7 +644,7 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99", "D172", "D213", "D-a-record-price-postings"], "tested_by": ["T7"]},
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99", "D172", "D213", "D243"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
@@ -1751,7 +1751,7 @@ COMPONENTS = [
                                                 "D189"],
                                 "note": "PROVED BY `make pricearchive-selftest` — 17 "
                                         "assertions, no network, over a throwaway store."},
-            # THE PRICE-POSTINGS LEDGER (D-a-record-price-postings). Unlike `pricearchive.py`
+            # THE PRICE-POSTINGS LEDGER (D243). Unlike `pricearchive.py`
             # and `readings.py`, this one is NEVER an upsert — see the module docstring for
             # why a posted price has no live source to be re-read from, so a second posting
             # of a SKU must be a second row, always.
@@ -1763,7 +1763,7 @@ COMPONENTS = [
                                     "`UPDATE` or a `DELETE`. No caller yet: `emit` and "
                                     "`reprice apply` call `.record()` at the moment each "
                                     "already decides a price reached a file.",
-                             "governed_by": ["D-a-record-price-postings", "D88", "D212",
+                             "governed_by": ["D243", "D88", "D212",
                                              "D219", "D189", "D86"],
                              "note": "PROVED BY `make price-postings-selftest`, and by "
                                      "`--mutate-to-upsert` (a real mutation test): rewriting "
@@ -1786,7 +1786,7 @@ COMPONENTS = [
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
                            "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189", "D191", "D219", "D-a-record-price-postings"],
+                                           "D189", "D191", "D219", "D243"],
                            "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
@@ -1803,7 +1803,7 @@ COMPONENTS = [
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
                       "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D166", "D172",
-                                      "D174", "D189", "D192", "D213", "D219", "D-a-record-price-postings"],
+                                      "D174", "D189", "D192", "D213", "D219", "D243"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -2632,7 +2632,7 @@ COMPONENTS = [
             },
             "price-postings-selftest.py": {
                 "does": "proves store/postings.py's `price_postings` table against a "
-                        "throwaway store, no network (D-a-record-price-postings). Posts one "
+                        "throwaway store, no network (D243). Posts one "
                         "price, posts a second price for the SAME SKU, and asserts two rows "
                         "survive with distinct ids and their own prices — never one row "
                         "overwritten. Asserts `replaced` is only set when the caller gives "
@@ -2646,7 +2646,7 @@ COMPONENTS = [
                         "only property is not being tested at all. Not wired into "
                         "`make check` — `make pricearchive-selftest`'s own precedent, a "
                         "package with no caller a screen reaches yet.",
-                "governed_by": ["D-a-record-price-postings", "D88", "D212", "D219", "D189"],
+                "governed_by": ["D243", "D88", "D212", "D219", "D189"],
             },
             "price-postings-recovery.py": {
                 "does": "read-only measurement against the owner's real "
@@ -2660,7 +2660,7 @@ COMPONENTS = [
                         "population (distinct `cards.sku`) beside the recoverable count, and "
                         "says plainly that a recovered receipt is one later snapshot, never a "
                         "history, and that every SKU's first posted price is gone either way.",
-                "governed_by": ["D-a-record-price-postings"],
+                "governed_by": ["D243"],
             },
             "sku-number-contradictions-selftest.py": {
                 "does": "proves pipeline/sku_number_contradictions.py against literal "

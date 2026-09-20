@@ -83,7 +83,7 @@ class Snapshot:
     # snapshot for the same reason `readings` is: a `Store.write()` from `archive sweep`
     # commits it atomically with everything else D88 already protects.
     archive: PriceArchive
-    # EVERY `TCG Marketplace Price` THIS STORE HAS EVER POSTED (D-a-record-price-postings).
+    # EVERY `TCG Marketplace Price` THIS STORE HAS EVER POSTED (D243).
     # An accumulator like `Inventory.events`, not a `Rows` table — see `store/postings.py`
     # for why this ledger must never go through `Rows`'s delete-then-upsert flush. Flushed by
     # `Store.write()` with `db.append_postings`, in the same transaction as everything else
@@ -200,7 +200,7 @@ class Store:
                     db.flush_rows(rows)
                 db.append_events(conn, snapshot.inventory.events)
                 # SAME TRANSACTION, SAME REASON: a posted price and the inventory/listing
-                # writes that went with it land together or not at all (D-a-record-price-postings).
+                # writes that went with it land together or not at all (D243).
                 db.append_postings(conn, snapshot.postings.entries)
                 # BEFORE THE COMMIT, so a box row and the mark that says its id is spent land
                 # together or not at all. `set_box_ids_issued` never lowers the stored figure.

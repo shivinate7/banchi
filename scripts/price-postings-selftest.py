@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`store/postings.py` and `store/db.py`'s `price_postings` table, proved against a throwaway
-store (D-a-record-price-postings).
+store (D243).
 
 THE ARM THIS FILE EXISTS FOR is the append-only property itself — the whole value of this
 feature and the one way it silently becomes useless (the task brief's own words). It is proved

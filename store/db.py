@@ -126,7 +126,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # press: the source's own 357-day window means there was nothing this build could have
 # captured before this table existed either.
 #
-# TEN, FOR D-a-record-price-postings. `_add_price_postings` adds `price_postings` — one row per
+# TEN, FOR D243. `_add_price_postings` adds `price_postings` — one row per
 # SKU per press that actually wrote a `TCG Marketplace Price` into a file, never cleared and
 # never updated (see `store/postings.py`'s module docstring for why this one can never be an
 # upsert the way `price_history` and `readings` correctly are). Built like `events` rather
@@ -243,7 +243,7 @@ _CID_INDEXES = (
     "CREATE INDEX IF NOT EXISTS cards_cid_missing ON cards(key) WHERE cid IS NULL",
 )
 
-# D-a-record-price-postings. Shaped like `events`'s own DDL and not like `TABLES`'s —
+# D243. Shaped like `events`'s own DDL and not like `TABLES`'s —
 # autoincrement id, one raw `INSERT`, never an `UPDATE` or a `DELETE` anywhere in this
 # module — because `store/postings.py`'s whole argument is that this table must never be
 # reachable through `Rows`'s delete-then-upsert-by-key flush. See that module's docstring.
@@ -453,7 +453,7 @@ def _upgrade(
             if stored < 9:
                 _add_price_history(conn)     # D219
             if stored < 10:
-                _add_price_postings(conn)    # D-a-record-price-postings
+                _add_price_postings(conn)    # D243
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1192,7 +1192,7 @@ def _add_price_history(conn: sqlite3.Connection) -> None:
 
 
 def _add_price_postings(conn: sqlite3.Connection) -> None:
-    """Schema 10: `price_postings` (D-a-record-price-postings).
+    """Schema 10: `price_postings` (D243).
 
     THE SAME PURELY-ADDITIVE SHAPE `_add_readings` AND `_add_price_history` USED, one table
     nothing older has, so there is nothing to backfill and nothing to read wrong: an

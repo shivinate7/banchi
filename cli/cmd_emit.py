@@ -630,7 +630,7 @@ def run(args, say) -> int:
     emitted = set(listed_skus) | set(sub_skus)
     # THE SAME MAPPING `import_rows` PRICED FROM, FLATTENED ACROSS GAMES — never a second
     # computation of a price, only a lookup of the one `priced[game]` already decided
-    # (D-a-record-price-postings). A SKU belongs to exactly one game, so this cannot collide.
+    # (D243). A SKU belongs to exactly one game, so this cannot collide.
     priced_flat = {sku: price for by_game in priced.values() for sku, price in by_game.items()}
     at_cap = [m for g in resolved.joins.values() for m in g.report.at_cap]
     if at_cap:
@@ -778,7 +778,7 @@ def run(args, say) -> int:
                 pushed_skus += 1
                 # THE PRICE THIS PRESS JUST PUT IN A FILE, RECORDED THE MOMENT THE PUSH IS
                 # COUNTED — never a proposal, because this gate is the one that already
-                # decides a row genuinely reached the file (D-a-record-price-postings). `emit`
+                # decides a row genuinely reached the file (D243). `emit`
                 # tracks no prior asking price, so `replaced` is left unset rather than
                 # guessed at.
                 writable.postings.record(
@@ -1147,7 +1147,7 @@ def run_merged(args, say) -> int:
                 pushed += copies
                 pushed_skus += 1
                 # THE MERGED PLAN'S OWN PRICE, THE SAME `row.price` `merge.import_rows` WROTE
-                # INTO THE CSV CELL — never recomputed (D-a-record-price-postings). `run` names
+                # INTO THE CSV CELL — never recomputed (D243). `run` names
                 # every run that contributed a leg to this SKU, since a merged send has no
                 # single run of its own.
                 writable.postings.record(

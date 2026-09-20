@@ -820,7 +820,7 @@ def _apply(args, say) -> int:
     # THIS IS THE ROUND THE OWNER ASKED ABOUT — a SKU marked down a second, third or fourth
     # time. `edit.was` is the price this markdown replaces, already in hand from the
     # worklist's own manifest read, so `replaced` is never a guess or a second store lookup
-    # (D-a-record-price-postings). `run` names the markdown by its own folder stamp, since a
+    # (D243). `run` names the markdown by its own folder stamp, since a
     # reprice apply has no run directory of its own.
     with Store().write() as writable:
         for edit in application.edits:

@@ -1,5 +1,5 @@
 """`price_postings` — every `TCG Marketplace Price` this store has ever written into a file
-bound for the marketplace, kept forever (D-a-record-price-postings).
+bound for the marketplace, kept forever (D243).
 
 WHY THIS TABLE EXISTS AT ALL. Measured on the owner's real store, 2026-09-20: the `events`
 ledger carries 143 `pushed` lines and none of them names a price — the payload is `at`,

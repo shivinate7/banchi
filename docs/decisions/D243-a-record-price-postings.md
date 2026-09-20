@@ -1,4 +1,4 @@
-## D-a-record-price-postings — Every posted price is recorded, and the row is never touched again
+## D243 — Every posted price is recorded, and the row is never touched again
 
 **The gap, measured on the owner's real store, 2026-09-20.** The owner cannot answer "what
 have I asked for this card over time." The `events` ledger carries 143 `pushed` lines. None

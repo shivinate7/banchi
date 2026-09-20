@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """How much price HISTORY can be recovered from what already survives, read-only, against
-the owner's real store (D-a-record-price-postings).
+the owner's real store (D243).
 
 READ-ONLY BY CONSTRUCTION. This opens `inventory/store.sqlite` with `sqlite3.connect(...,
 uri=True)` in mode `ro` — a connection SQLite itself refuses to write through — and it never

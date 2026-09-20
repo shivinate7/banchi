@@ -957,6 +957,7 @@ D239 Four stored-data checks, built whole, from D237
 D240 Measured, not shipped: the join trusts a number that resolves, and the owner asked why
 D241 Recorded, not built: ask the catalogue earlier than the archive does
 D242 Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
+D243 Every posted price is recorded, and the row is never touched again
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

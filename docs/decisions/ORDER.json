@@ -248,6 +248,7 @@
     "D239-a-archive-store-checks.md",
     "D240-a-join-time-name-cross-check.md",
     "D241-archive-live-catalogue-lookup-at-join-time.md",
-    "D242-sku-number-contradictions.md"
+    "D242-sku-number-contradictions.md",
+    "D243-a-record-price-postings.md"
   ]
 }
