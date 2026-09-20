@@ -18039,20 +18039,22 @@ def self_test() -> int:
         )
 
     print("\nderived numbers: the real tree, end to end, unpatched")
-    # AND ON THE REAL TREE: CLAUDE.md's own three markers, against this checkout as it
+    # AND ON THE REAL TREE: CLAUDE.md's own markers, against this checkout as it
     # actually stands right now — the row this task exists to add, proving the exact digit
-    # rot it was asked to fix is now caught rather than believed.
+    # rot it was asked to fix is now caught rather than believed. Started at three (the
+    # worked example's app/src trio); a later pass added the docs/map.py and
+    # docs/decisions/ byte and line/file counts, for seven.
     real_report = Report()
     check_derived_numbers(real_report, [ROOT / "CLAUDE.md"])
     ok(
         real_report.checks[0].findings == [],
-        "the real tree has zero findings on `derived numbers` (CLAUDE.md's three markers "
+        "the real tree has zero findings on `derived numbers` (CLAUDE.md's markers "
         "all agree with the checked-out tree)",
         str(real_report.checks[0].findings),
     )
     ok(
-        real_report.checks[0].scanned == 3,
-        "CLAUDE.md carries exactly the three markers this task's worked example named",
+        real_report.checks[0].scanned == 7,
+        "CLAUDE.md carries exactly the seven markers currently registered",
         f"scanned={real_report.checks[0].scanned}",
     )
 

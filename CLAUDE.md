@@ -464,7 +464,7 @@ not rendered — not focusable, not reachable by a screen reader).
 - **A run directory's slot numbers are not the truth. The photograph is** (D36).
   `cli/resolve.py:realign` re-binds every record to its digest's current slot. It refuses on
   ambiguity and on a box whose number was deleted and reused after the run
-  (`store/master.py:refuse_reallocated`, D36 amended).
+  (`cli/resolve.refuse_reallocated`, D36 amended).
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`.
   `TCGplayer Id` is never modified.
 - **Batch API, not sequential calls.** Model: `claude-haiku-4-5-20251001`.
@@ -504,7 +504,9 @@ not rendered — not focusable, not reachable by a screen reader).
   route and the CLI.
 - **A card's number counts the cards in the box, not the slots** (D58). Sell card 17, and the
   next card becomes 17. The STORED index (`/inventory/<box>/<index>`) never moves. A departed
-  card renders `join.departed_label` (`Box 3 · departed`).
+  card renders `pipeline/join.departed_label` (`Box 3 · departed · B3 #96`). D68 added the
+  store key: a bare `Box 3 · departed` once drew two sold copies in one box as one
+  indistinguishable string.
 - **A set hint on some cards narrows nothing. How wide to ask is a per-game rule** (D76).
   Widening may fire only when EVERY card of a game is hinted and every hint resolves.
   Pokemon's whole category is 32,629,598 B against a 33,554,432 B cap — 97.24%, measured
@@ -680,12 +682,13 @@ Three practices, each earned by a lost round on 2026-09-17. Together they cost m
 that evening than every verification target combined (`docs/specs/verification-cost.md`).
 
 - **Name the rendering component, and the state that selects it.** Not "fix the walk
-  sentence" but "in `#/orders`, with `hidePicks` true, `WalkGroups` renders the walk
-  sentence — change it there." Mechanized: `make orient ARGS=app/src/Orders.tsx --name
-  WalkGroups` prints which component draws it and under which expression. Run it before the
-  brief is written. Where two components can render the same thing, the brief says which and
-  why. The round this cost: a fix briefed against `CopyMapView`, which `hidePicks` suppresses
-  in exactly the state the owner was looking at. Correct, and invisible.
+  sentence" but "in `#/orders`, with `hidePicks` false, `OrderLineRow` draws `CopyMapView`,
+  and `CopyMapView` renders the walk sentence — change it there." Mechanized: `make orient
+  ARGS=app/src/Orders.tsx --name CopyMapView` prints which component draws it and under
+  which expression. Run it before the brief is written. Where two components can render the
+  same thing, the brief says which and why. The round this cost: a fix briefed against
+  `CopyMapView`, which `hidePicks` suppresses in exactly the state the owner was looking at.
+  Correct in general, and invisible there.
 - **Never ask an agent to reconstruct a state it has already left.** A "before" image is
   captured before the edit or not at all. Wanting one afterwards is the orchestrator's job,
   in a separate clean checkout — never the working agent, never in a shared tree. The round
@@ -719,18 +722,28 @@ that evening than every verification target combined (`docs/specs/verification-c
 - `docs/map.py` — the repo as data: built, TBD, and which decisions govern each file. Read it
   before editing under `app/`, `server/`, `pipeline/`, `identify/`, `store/`, `geometry/` or
   `cli/`. Audited by `make docs-audit` — a file added with no entry fails the commit.
-  `make map` is how you look at it (D80). At ~56,000 tokens, reading it whole spends a fifth
-  of a context window. `make docs-audit`'s `map sections` row fails a commit adding a section
-  with no reader.
+  `make map` is how you look at it (D80). The file is
+  724,760<!-- derived:docs_map_byte_count --> bytes across
+  8,174<!-- derived:docs_map_line_count --> lines. Reading it whole costs roughly 181,000
+  tokens at four bytes per token, an approximation, never a measured count. Reading it whole
+  spends most of a context window. `make docs-audit`'s `map sections` row fails a commit
+  adding a section with no reader.
   **The build order is two lists, `SHIPPED` and `OPEN`, not a numbered sequence** (D80).
-  `OPEN` has no `next`. Ranking two open items is yours. `n` is a stable id, never renumbered
-  — 218 references live in this tree. `make docs-audit`'s `build order mirror` row
+  `OPEN` has no `next`. Ranking two open items is yours. `n` is a stable id, never renumbered.
+  This file no longer publishes how many references that id has in the tree. Three scans for
+  "step N" citations gave three different counts, none near each other. A bare "step N"
+  matches ordinary prose too — one spec alone numbers 27 of its own unrelated steps. A
+  trustworthy count needs a citation registry for step ids, the way decisions and debts
+  already have one, not built yet. `make docs-audit`'s `build order mirror` row
   reconciles both files, in both directions.
 - `docs/decisions/` — settled decisions and why, one file per entry, indexed by
-  `scripts/decisions_corpus.py`. Read before redesigning. **Not `@`-loaded** (D60): at
-  ~627KB, loading it all would cost ~163,000 tokens before any work. `scripts/decision-context.py`
-  names the governing decisions before an edit under a mapped directory. The index below is a
-  table of contents, never a substitute for the entry's own argument.
+  `scripts/decisions_corpus.py`. Read before redesigning. **Not `@`-loaded** (D60): the
+  directory is 2,157,517<!-- derived:docs_decisions_byte_count --> bytes across
+  242<!-- derived:docs_decisions_file_count --> files. Loading it all costs roughly 539,000
+  tokens at four bytes per token, an approximation, never a measured count, before any work.
+  `scripts/decision-context.py` names the governing decisions before an edit under a mapped
+  directory. The index below is a table of contents, never a substitute for the entry's own
+  argument.
 
 ```
 D1   Two-phase architecture
@@ -911,7 +924,7 @@ D175 Ownership is read the way liveness is, and a process a session no longer ow
 D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
 D177 The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
 D178 A document may name what it would create, and the marking expires by itself
-D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
+D179 Shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 D180 A press names the cards it is over, and the drawer is one of the names
 D181 The order is taken once, and a sale may not retake it
 D182 An unclaimed slug is not required in the shared index it will replace itself out of
@@ -1012,8 +1025,11 @@ adopting some and deferring others (D99 sits where it does because main took D90
   dropdown since 2026-09-19, which settled its place at 390. Which order a press records
   against is ANSWERED. D212 rules every copy fungible, so a sale records against an owing
   order, and D220 built it.
-- `docs/specs/stable-card-id.md` — SPECIFIED, NOT BUILT (D172). No store carries `cards.cid`
-  yet. The measurement — 2,535 of 2,535 digests match — is real.
+- `docs/specs/stable-card-id.md` — BUILT (D172). `store/db.py` carries the `cid` column, the
+  unique index, the backfill index, and the migration. The `cards name/audit/photos`
+  subcommands in the Commands block above are this spec's own delivery. Still open: the
+  batch's own `custom_id`, the `identifications` re-key, the order-ledger repair, and the
+  position key itself. The measurement — 2,535 of 2,535 digests match — is real.
 - `docs/specs/capture-app.md` — step 7. 7a and 7b are both built. Gate B ran them 2026-08-22.
 - `docs/specs/motion-trigger.md` — Gate C's auto-capture. Built, tuned, and twice corrected
   (D81, D84), with a ratchet escape and a rescue (D131). One trigger only — D130 deleted the
