@@ -817,6 +817,21 @@ def _apply(args, say) -> int:
     target = path.parent / IMPORT
     tcgcsv.write_csv(target, tcgcsv.CANONICAL_HEADER, rows)
 
+    # THIS IS THE ROUND THE OWNER ASKED ABOUT — a SKU marked down a second, third or fourth
+    # time. `edit.was` is the price this markdown replaces, already in hand from the
+    # worklist's own manifest read, so `replaced` is never a guess or a second store lookup
+    # (D243). `run` names the markdown by its own folder stamp, since a
+    # reprice apply has no run directory of its own.
+    with Store().write() as writable:
+        for edit in application.edits:
+            writable.postings.record(
+                sku=edit.sku,
+                price=tcgcsv.format_price(edit.now),
+                source="reprice",
+                run=path.parent.name,
+                replaced=tcgcsv.format_price(edit.was) if edit.was is not None else None,
+            )
+
     # THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without this the next `emit` over
     # another copy of the same card re-lists it at the rule price and quietly undoes the
     # markdown — the marked-down price is the store's price for that SKU from now on, not a
