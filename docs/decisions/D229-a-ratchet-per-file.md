@@ -1,4 +1,4 @@
-## D-a-ratchet-per-file — The prose ratchet is pinned per file, because a repo-wide number is one every merge takes from somebody
+## D229 — The prose ratchet is pinned per file, because a repo-wide number is one every merge takes from somebody
 
 **AMENDS D226, WHICH IS OTHERWISE UNCHANGED.** The vendored linter, the four error rules, the
 four exemption classes, the survey floor and the ruler all stay exactly as that entry settled

@@ -220,7 +220,7 @@
       "ratio_per_1k_words": 13.857,
       "words": 433
     },
-    "docs/decisions/D-a-ratchet-per-file.md": {
+    "D229": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 910

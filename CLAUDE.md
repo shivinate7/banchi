@@ -923,6 +923,7 @@ D225 Sales stops counting a refund as revenue, and a shortfall against today's m
 D226 A prose ratchet gets a reader, and bytes are not the ruler
 D227 A route, not a lens, and never one line for two kinds of observation
 D228 The claim is spent only on a merge that can happen, and the loser of a race backs itself out
+D229 The prose ratchet is pinned per file, because a repo-wide number is one every merge takes from somebody
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

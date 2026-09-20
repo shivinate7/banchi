@@ -44,7 +44,7 @@ entry pinned a repo-wide total, four per-rule counts and six bucket ratios. Ever
 those is a number each branch writes and any merge moves. That forced three re-pins in one
 evening, none of them caused by the branch's own prose. The pin now carries one entry per
 tracked markdown file. The repo-wide figures below are measured and printed rather than
-gated. See [[D-a-ratchet-per-file]].
+gated. See [[D229]].
 
 The measure is STE errors per thousand words, per bucket and repo-wide. A flat byte cap was
 ruled out. This ruler reads the prose, not the document's size. Word count is plain
