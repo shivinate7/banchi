@@ -7700,9 +7700,8 @@ COMPONENTS = [
                 # answers the largest cluster anchored on the card in front of you rather than
                 # an all-or-nothing worklist — two entries out of a hundred and one used to
                 # suppress it for the other ninety-nine.
-                "governed_by": ["D4", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D16",
-                                "D41", "D37", "D46", "D77", "D136",
-                                "D146", "D194"],
+                "governed_by": ["D4", "D13", "D16", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
+                                "D41", "D46", "D77", "D136", "D146", "D194", "D218"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

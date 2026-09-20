@@ -487,12 +487,17 @@ function sinceText(raw: string): string {
 }
 
 /** How long this card has been waiting — the server's arithmetic, never this file's. */
-function seenText(entry: QueueEntryWire): string {
+function seenText(entry: QueueEntryWire): ReactNode {
   const raw = text(entry.first_seen)
   const since = raw === null ? 'not recorded' : `since ${sinceText(raw)}`
   const age = entry.age_days
   if (typeof age !== 'number') return raw === null ? since : since
-  return `${age}d · ${since}`
+  return (
+    <span className="review-fact-multi">
+      <span>{age}d</span>
+      <span>{since}</span>
+    </span>
+  )
 }
 
 function ageText(entry: QueueEntryWire): string | null {
@@ -1034,7 +1039,7 @@ export function ReviewQueue() {
               position: member.position,
               label: labels.get(member.position) ?? member.position,
             })),
-            label: `${result.count} cards · ${result.reason}`,
+            label: `${result.count} cards ${result.reason}`,
             dropped,
             at,
             said: `Answered all ${result.count} together`,
@@ -1339,7 +1344,7 @@ export function ReviewQueue() {
                   Card <strong>{Math.min(done + 1, total)}</strong> of <strong>{total}</strong>
                 </>
               )}
-              {counts !== null && counts.parked > 0 ? <span className="review-progress-parked"> · {counts.parked} parked</span> : null}
+              {counts !== null && counts.parked > 0 ? <span className="review-progress-parked">{counts.parked} parked</span> : null}
             </span>
             {total === 0 ? null : (
               <span className="bn-progress review-progress-bar" aria-hidden="true">
@@ -1535,7 +1540,7 @@ function Tray({
 function RefusalNotice({ refusal, onReload, onDismiss, disabled }: { refusal: Refusal; onReload: () => void; onDismiss: () => void; disabled: boolean }) {
   const stale = STALE_CODES.has(refusal.failure.code)
   return (
-    <Notice tone="danger" title={refusal.failure.message} code={`${refusal.failure.code}${refusal.at === null ? '' : ` · ${refusal.at}`}`} className="review-refusal review-note">
+    <Notice tone="danger" title={refusal.failure.message} code={`${refusal.failure.code}${refusal.at === null ? '' : ` ${refusal.at}`}`} className="review-refusal review-note">
       <span className="review-refusal-actions">
         {stale ? (
           <Button size="sm" icon="refresh" kbd={RELOAD_KEY_LABEL} onClick={onReload} disabled={disabled}>
@@ -1586,9 +1591,15 @@ function SessionList({ receipts, onUndo, disabled, limit }: { receipts: readonly
 function Done({ tally, startedAt, receipts, onUndo, disabled }: { tally: Tally; startedAt: number; receipts: readonly Receipt[]; onUndo: (receipt: Receipt) => void; disabled: boolean }) {
   const done = tally.answered + tally.closed
   const body =
-    done === 0
-      ? 'When a run leaves a card in doubt, it lands here for one answer.'
-      : `You answered ${tally.answered} ${tally.answered === 1 ? 'card' : 'cards'} in ${durationText(Date.now() - startedAt)}${tally.closed > 0 ? ` · ${tally.closed} closed` : ''}${tally.skipped > 0 ? ` · ${tally.skipped} skipped` : ''}.`
+    done === 0 ? (
+      'When a run leaves a card in doubt, it lands here for one answer.'
+    ) : (
+      <>
+        {`You answered ${tally.answered} ${tally.answered === 1 ? 'card' : 'cards'} in ${durationText(Date.now() - startedAt)}`}
+        {tally.closed > 0 ? <span className="review-done-tally">{tally.closed} closed</span> : null}
+        {tally.skipped > 0 ? <span className="review-done-tally">{tally.skipped} skipped</span> : null}.
+      </>
+    )
   return (
     <section className="review-done bn-panel">
       <EmptyState
@@ -1714,7 +1725,9 @@ function GroupConfirm({
                 }
               />
             )}
-            <span className="review-group-pos">{row.entry.label}</span>
+            <span className="review-group-pos">
+              <PositionLabel label={row.entry.label} flow="run" />
+            </span>
           </li>
         ))}
       </ul>
@@ -1808,7 +1821,7 @@ function Card({
     <section className="review-card">
       <div className="review-stage">
         <Photo row={row} absent={photoAbsent} onAbsent={onPhotoAbsent} />
-        <p className="review-next" title={next === null ? undefined : `${text(next.entry.read.name) ?? 'not identified'} · ${priceText(next.entry.market)} · ${reasonLabel(next.entry.reason)}`}>
+        <p className="review-next" title={next === null ? undefined : `${text(next.entry.read.name) ?? 'not identified'} ${priceText(next.entry.market)} ${reasonLabel(next.entry.reason)}`}>
           {next === null ? (
             <span className="review-next-empty">Last in the queue</span>
           ) : (
@@ -1864,7 +1877,8 @@ function Card({
               <div className="review-shared">
                 <span className="review-shared-name">{head.name}</span>
                 <span className="review-shared-meta">
-                  {head.set} · {head.number}
+                  <span>{head.set}</span>
+                  <span>{head.number}</span>
                 </span>
               </div>
             )}
@@ -1993,7 +2007,11 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
               at the SAME word count (D194's ratchet forbids a route's words rising), and the
               `title` above still spells the whole sentence out for a hover. */}
           <span className="review-chip-key">Rarity</span>
-          <span className="review-chip-value">{claimed.map(humanize).join(' · ')}</span>
+          <span className="review-chip-value">
+            {claimed.map((one, at) => (
+              <span key={at}>{humanize(one)}</span>
+            ))}
+          </span>
         </span>,
       )
     }
@@ -2042,7 +2060,7 @@ function CandidateButton({
         {shared ? (
           <span className="review-candidate-name review-candidate-condition">
             {/* The card is named once above the rows; it stays in each row's accessible name. */}
-            <span className="bn-sr">{candidate.name} · </span>
+            <span className="bn-sr">{candidate.name} </span>
             {candidate.condition}
           </span>
         ) : (
@@ -2050,8 +2068,8 @@ function CandidateButton({
             <span className="review-candidate-name">{candidate.name}</span>
             <span className="review-candidate-meta">
               <span className="review-candidate-condition">{candidate.condition}</span>
-              {' · '}
-              {candidate.set} · {candidate.number}
+              <span>{candidate.set}</span>
+              <span>{candidate.number}</span>
             </span>
           </>
         )}
@@ -2235,15 +2253,40 @@ function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoose, over
 
 function Facts({ row }: { row: Row }) {
   const { entry } = row
-  const facts: { label: string; value: string; mono?: boolean }[] = [
+  const facts: { label: string; value: ReactNode; mono?: boolean }[] = [
     { label: 'Card', value: text(entry.read.name) ?? 'not identified' },
     { label: 'Number', value: collectorNumber(entry.read) ?? 'none', mono: true },
     { label: 'Market', value: priceText(entry.market), mono: true },
     { label: 'Confidence', value: humanize(text(entry.confidence) ?? 'none recorded') },
     { label: 'Set hint', value: text(entry.read.set_hint) ?? 'none', mono: true },
-    { label: 'Sorted as', value: claimMembers(entry.read.metadata_finish)?.join(' · ') ?? 'no claim', mono: true },
+    {
+      label: 'Sorted as',
+      value: (() => {
+        const members = claimMembers(entry.read.metadata_finish)
+        if (members === null) return 'no claim'
+        return (
+          <span className="review-fact-multi">
+            {members.map((member, at) => (
+              <span key={at}>{member}</span>
+            ))}
+          </span>
+        )
+      })(),
+      mono: true,
+    },
     { label: 'Photo read', value: text(entry.read.detected_finish) ?? 'none', mono: true },
-    { label: 'Queue', value: row.shadow === undefined ? humanize(row.queue) : `${humanize(row.queue)} · also ${humanize(row.shadow)}` },
+    {
+      label: 'Queue',
+      value:
+        row.shadow === undefined ? (
+          humanize(row.queue)
+        ) : (
+          <span className="review-fact-multi">
+            <span>{humanize(row.queue)}</span>
+            <span>also {humanize(row.shadow)}</span>
+          </span>
+        ),
+    },
     { label: 'Waiting', value: seenText(entry) },
     { label: 'Position', value: entry.label },
   ]
@@ -2284,7 +2327,16 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
 
   if (entry.box < 1) {
     return (
-      <AbsentPhoto title="No position, so no photograph" detail={`box ${entry.box} · index ${entry.index}`} label={entry.label}>
+      <AbsentPhoto
+        title="No position, so no photograph"
+        detail={
+          <span className="review-fact-multi">
+            <span>box {entry.box}</span>
+            <span>index {entry.index}</span>
+          </span>
+        }
+        label={entry.label}
+      >
         This entry reached the queue before it was given a place in a box.
       </AbsentPhoto>
     )
@@ -2349,7 +2401,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
   )
 }
 
-function AbsentPhoto({ title, detail, label, box, children }: { title: string; detail: string; label: string; box?: number; children: ReactNode }) {
+function AbsentPhoto({ title, detail, label, box, children }: { title: string; detail: ReactNode; label: string; box?: number; children: ReactNode }) {
   return (
     <div className="review-absent">
       <span className="review-absent-art">
@@ -2455,9 +2507,9 @@ function Waiting({
           <div className="review-session-head">
             <span className="bn-label">This session</span>
             <span className="review-session-tally bn-tnum">
-              {tally.answered} answered
-              {tally.closed > 0 ? ` · ${tally.closed} closed` : ''}
-              {tally.skipped > 0 ? ` · ${tally.skipped} skipped` : ''}
+              <span>{tally.answered} answered</span>
+              {tally.closed > 0 ? <span>{tally.closed} closed</span> : null}
+              {tally.skipped > 0 ? <span>{tally.skipped} skipped</span> : null}
             </span>
           </div>
           <SessionList receipts={receipts} onUndo={onUndo} disabled={disabled} limit={3} />
@@ -2480,6 +2532,12 @@ function Waiting({
               data-rule={rule ? 'parked' : undefined}
               aria-current={row.key === currentKey ? 'true' : undefined}
             >
+              {rule ? (
+                <span className="review-row-parked-label">
+                  <span>Parked</span>
+                  <span>under the threshold</span>
+                </span>
+              ) : null}
               <span className="review-row-main">
                 <span className="review-row-name" title={text(row.entry.read.name) ?? undefined}>
                   {text(row.entry.read.name) ?? 'not identified'}
@@ -2487,7 +2545,9 @@ function Waiting({
                 <span className="review-row-price">{priceText(row.entry.market)}</span>
               </span>
               <span className="review-row-sub">
-                <span className="review-row-position">{row.entry.label}</span>
+                <span className="review-row-position">
+                  <PositionLabel label={row.entry.label} flow="run" />
+                </span>
                 <span className="review-row-reason" title={row.entry.reason}>
                   {reasonLabel(row.entry.reason)}
                 </span>
@@ -2619,7 +2679,10 @@ function QueueRefresh({
       >
         <header className="review-recheck-top">
           <div className="review-recheck-heading">
-            <span className="bn-eyebrow">Store-wide · free</span>
+            <span className="bn-eyebrow review-fact-multi">
+              <span>Store-wide</span>
+              <span>free</span>
+            </span>
             <h2 className="review-recheck-head" id="review-recheck-head">
               Re-check every waiting card
             </h2>
