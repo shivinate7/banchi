@@ -61,6 +61,18 @@ kit page uses to sweep the whole `--bn-*` family and which this checker does not
 resolve) all pass unseen. Narrower than a real CSS engine and cheaper than one; the four real
 patterns measured above are what this repo's screens actually do.
 
+A REGEX LITERAL CONTAINING A QUOTE, INSIDE A `style={{...}}` SPAN, IS A NAMED LIMIT AND NOT A
+BUG THIS CHECK CATCHES: `_style_span_end` has no notion of a regex literal, so a quote inside
+one (`/['"]/ `) opens what it reads as a string that never closes on its own terms — it runs
+past the attribute's real end and swallows whatever object literal follows, whose keys then
+count as definitions and can mask a genuinely undefined `var()` elsewhere. The check reports
+clean when it should report a finding, owner's ruling 2026-09-20: written down rather than
+chased. A regex carrying only a brace (`/}/`, `/\{/`) does NOT do this — the brace is merely
+over-counted, which can only widen the span, never mask anything inside it — which is why the
+limit is exactly this narrow. No such shape exists in `app/src` today; full regex-versus-divide
+disambiguation was judged not worth the brittleness it would add to a guard whose only value
+is that its green can be trusted.
+
 Writes nothing, ever — a gate, and a gate that writes is refused in this repo (D18).
 
     make css-var-check                    scan app/src
