@@ -1641,8 +1641,12 @@ test('a nameless order groups on its own, drawing the composed date_id label and
   await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
   /* `placed_at` is `2026-08-29T10:00:00+00:00` and the id's last 5 characters are `006AC`
-     (the fixture's own default, `routeFixtures.ts:order`) — `unnamedBuyerLabel` reads UTC so
-     this is stable regardless of which timezone the runner sits in. */
+     (the fixture's own default, `routeFixtures.ts:order`). `unnamedBuyerLabel` reads the
+     LOCAL clock, so this typed date is safe only because the browser's zone is pinned to
+     `America/Chicago` in `playwright.config.ts` and 10:00 UTC is 05:00 there, the same
+     calendar day. The margin is ten hours: a pinned zone further behind UTC than that would
+     move this date, and the case below derives its own expectation in the browser instead of
+     relying on the margin. */
   const row = page.locator('.orders-index-row').first()
   await expect(row).toContainText('08-29-26_006AC')
   await expect(row).not.toContainText(ORDER_NUMBER)
@@ -1683,19 +1687,26 @@ test('two unnamed buyers with different placed dates draw different name-slot la
      two different days for one event. A typed `07-15-26` would therefore pass only in a
      zone at or east of UTC, and these fixtures sit at midnight. Compose the expectation the
      way the product composes it, so this case asserts the FORMAT and the DISTINCTNESS
-     rather than the runner's timezone. */
-  const localLabel = (iso: string): string => {
-    const at = new Date(iso)
-    const mm = String(at.getMonth() + 1).padStart(2, '0')
-    const dd = String(at.getDate()).padStart(2, '0')
-    const yy = String(at.getFullYear() % 100).padStart(2, '0')
-    return `${mm}-${dd}-${yy}`
-  }
+     rather than the runner's timezone.
+
+     AND IT IS DERIVED IN THE BROWSER, NOT IN NODE. `playwright.config.ts` pins the browser to
+     `America/Chicago` on purpose, so a person sees their own zone. Node ran in a different
+     one on CI, computed `07-15` and failed against a page that correctly drew `07-14-26`
+     beside its own `placed Jul 14`. The two dates on the row agreeing is the whole point of
+     the fix, so the expectation is computed where the product computes it. */
+  const localLabel = (iso: string): Promise<string> =>
+    page.evaluate((value: string) => {
+      const at = new Date(value)
+      const mm = String(at.getMonth() + 1).padStart(2, '0')
+      const dd = String(at.getDate()).padStart(2, '0')
+      const yy = String(at.getFullYear() % 100).padStart(2, '0')
+      return `${mm}-${dd}-${yy}`
+    }, iso)
   const rows = page.locator('.orders-index-row')
   await expect(rows).toHaveCount(2)
   const texts = await rows.allTextContents()
-  expect(texts[0]).toContain(`${localLabel('2026-07-15T00:00:00+00:00')}_00002`)
-  expect(texts[1]).toContain(`${localLabel('2026-07-01T00:00:00+00:00')}_00001`)
+  expect(texts[0]).toContain(`${await localLabel('2026-07-15T00:00:00+00:00')}_00002`)
+  expect(texts[1]).toContain(`${await localLabel('2026-07-01T00:00:00+00:00')}_00001`)
   expect(texts[0]).not.toEqual(texts[1])
   for (const text of texts) {
     expect(text).not.toContain(firstNumber)
