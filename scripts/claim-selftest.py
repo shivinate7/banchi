@@ -1311,6 +1311,116 @@ def main() -> int:
            "a claimer that cannot answer is REPORTED, never read as a clean main", out)
 
         # ------------------------------------------------------------------------------
+        # D-unclaimed-headings-are-found-by-complement: THE REAL 2026-09-20 ESCAPE.
+        #
+        # A branch adding a decision entry touches only its own FILE, by design — the
+        # manifest is settled at claim time, never before (`corpus_order`'s own docstring).
+        # `--landed`/`landed_half` ask a REF what it carries, and `corpus_text_at` used to
+        # trust that REF's own `ORDER.json` alone, with no `git ls-tree` fallback for the
+        # file the manifest had never heard of. A correctly-slugged, unclaimed entry reached
+        # `origin/main` this way and both readers reported it clean.
+        print("\n  -- the real escape: an unregistered entry FILE, read from a REF --")
+        esc = tmp / "escape"
+        esc.mkdir()
+        escaped = build_split(esc)
+        with_claimer(escaped)
+        git(escaped, "add", "-A")
+        git(escaped, "commit", "-qm", "the checkout carries the claimer")
+        git(escaped, "push", "-q", "origin", "main")
+        git(escaped, "checkout", "-q", "-b", "feature")
+        esc_entry = "D-" + "a-real-escape"
+        write(escaped, f"docs/decisions/{esc_entry}.md",
+              f"## {esc_entry} — A real escape\n\nbody\n")
+        git(escaped, "add", "-A")
+        git(escaped, "commit", "-qm", "a branch adds an entry, and never touches ORDER.json")
+        escape_rev = git(escaped, "rev-parse", "HEAD").strip()
+        # fast-forward main onto it WITH NO CLAIM EVER RUN — the scenario `--landed` exists
+        # to catch after the fact.
+        git(escaped, "checkout", "-q", "main")
+        git(escaped, "merge", "-q", "--ff-only", "feature")
+
+        before_fix = claim_rc(escaped, "--landed", escape_rev)
+        ok(before_fix[1] == 3 and esc_entry in before_fix[0],
+           "THE DEFECT, REPRODUCED: an unregistered decision FILE reaches `origin/main` "
+           "and `--landed` — the merge's own backstop — must not read it as clean, because "
+           "ORDER.json alone does not name it", before_fix[0])
+
+        out, code = drive_landed_half(escaped, escape_rev)
+        ok(code == 1 and esc_entry in out,
+           "and `make merge`'s own `landed_half`, what a real merge actually calls, catches "
+           "the same escape", out)
+
+        # ---- recognition is by the COMPLEMENT, not by SLUG's own shape ----
+        #
+        # Each arm below is its own commit on its own branch, one malformed heading at a
+        # time, checked with `--landed` against a REF that already has the file (so the
+        # `corpus_order_at` fix above is not what is under test here — the manifest DOES
+        # name these files).
+        def landed_repo(tmp_dir: Path, heading: str) -> Tuple[Path, str]:
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            work = build_split(tmp_dir)
+            with_claimer(work)
+            entry_slug = "D-" + "a-shape-arm"
+            write(work, f"docs/decisions/{entry_slug}.md", f"{heading}\n\nbody\n")
+            write(work, "docs/decisions/ORDER.json", json.dumps({
+                "source": "docs/DECISIONS.md",
+                "order": ["_preamble.md", "D001-first.md", "D002-second.md",
+                          f"{entry_slug}.md"],
+            }, indent=2) + "\n")
+            git(work, "add", "-A")
+            git(work, "commit", "-qm", "a malformed heading, already in the manifest")
+            rev = git(work, "rev-parse", "HEAD").strip()
+            return work, rev
+
+        print("\n  -- a mixed-case slug heading is unclaimed, not invisible --")
+        upper = "## D-" + "A-shape-arm"
+        work, rev = landed_repo(tmp / "upper", upper)
+        out, code = claim_rc(work, "--landed", rev)
+        ok(code == 3 and "-A-shape-arm" in out,
+           "`DECISION_HEADING`'s SLUG alternative is lowercase-only and would have rejected "
+           "this heading outright — the complement flags it unclaimed instead of walking "
+           "past it silently", out)
+
+        print("\n  -- a doubled-hyphen slug heading is unclaimed, not invisible --")
+        doubled = "## D-" + "a--shape-arm"
+        work, rev = landed_repo(tmp / "doubled", doubled)
+        out, code = claim_rc(work, "--landed", rev)
+        ok(code == 3 and "a--shape-arm" in out,
+           "a doubled hyphen is not the SLUG grammar either, and the complement still "
+           "refuses rather than reading the commit clean", out)
+
+        print("\n  -- a leading-zero heading matches neither alternative, and is unclaimed --")
+        zeroed = "## D0227"
+        work, rev = landed_repo(tmp / "zeroed", zeroed)
+        out, code = claim_rc(work, "--landed", rev)
+        ok(code == 3 and "D0227" in out,
+           "`D0227` fits neither the NUMBER alternative (a leading zero) nor the SLUG one "
+           "(no hyphen) — the old code walked past it as neither claimed nor pending, and "
+           "the complement now names it", out)
+
+        print("\n  -- a `## Deferred`-shaped heading is NOT falsely reported --")
+        deferred = "## Deferred — argued, not gated"
+        work, rev = landed_repo(tmp / "deferred", deferred)
+        out, code = claim_rc(work, "--landed", rev)
+        ok(code == 0,
+           "the character after `D` is `e`, neither a digit nor a hyphen — a subsection-"
+           "shaped heading that merely starts with the letter is not mistaken for an "
+           "unclaimed id", out)
+
+        print("\n  -- positive control: an ordinary numbered heading stays clean --")
+        numbered = f"## {D(3)} — An ordinary numbered entry"
+        work, rev = landed_repo(tmp / "numbered", numbered)
+        out, code = claim_rc(work, "--landed", rev)
+        ok(code == 0, "a clean numbered heading is not swept up by the broader match", out)
+
+        print("\n  -- positive control: an ordinary properly-slugged heading is still caught --")
+        proper = "## D-" + "a-shape-arm"
+        work, rev = landed_repo(tmp / "proper", proper)
+        out, code = claim_rc(work, "--landed", rev)
+        ok(code == 3 and "a-shape-arm" in out,
+           "a heading the OLD code already recognised is still recognised", out)
+
+        # ------------------------------------------------------------------------------
         # THE CORPUS AS A DIRECTORY, which is the shape the product actually has now.
         #
         # EVERY ARM ABOVE WRITES `docs/DECISIONS.md` AS ONE FILE, and they all still pass —

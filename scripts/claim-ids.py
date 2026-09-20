@@ -185,7 +185,54 @@ def ceiling_at(ref: str, cwd: Optional[str] = None) -> Dict[str, int]:
 # ------------------------------------------------------------------------- what is unclaimed
 
 
-def pending_in(decisions: str, codes: str, gates: str) -> Dict[str, List[str]]:
+# RECOGNITION IS BY THE COMPLEMENT, NOT BY SLUG'S OWN SHAPE. `DECISION_HEADING`/`CODES_HEADING`
+# accept a NUMBER or a proper two-segment lowercase SLUG and nothing else, which would ALSO
+# miss a heading whose slug is merely irregular: mixed case, a doubled hyphen, a digit where
+# a letter was meant. An unrecognised `D`-prefixed heading must refuse, never pass silently,
+# so `unclaimed_from_pieces`/`unclaimed_from_flat` ask the complement instead: does this
+# heading open `<letter><digit-or-hyphen>` and fail to be a clean, unpadded number? If so it
+# is unclaimed, whatever shape the rest of it is in — a defense the real 2026-09-20 incident
+# (below, `corpus_order_at`) did not itself need, since its slug was properly shaped, but
+# which the next one may.
+_NUMBER = re.compile(r"^[1-9][0-9]*$")
+
+
+def unclaimed_from_pieces(pieces: List[str], letter: str) -> List[str]:
+    """The unclaimed id on each entry's OWN FIRST heading, for a corpus split one file per
+    entry (decisions, since D160).
+
+    SCOPED TO THE FIRST LINE OF EACH FILE, NEVER ANY `##` LINE FURTHER DOWN. An entry can
+    hold an internal subsection that also starts with the letter — `_deferred-…md`'s entire
+    content is the heading `## Deferred — argued, not gated: …`, which starts with `D` — and
+    scanning every `##` line in the corpus rather than each file's own first would report
+    that as a second unclaimed decision beside itself. `Deferred` does not match here because
+    the character right after `D` is `e`, neither a digit nor a hyphen.
+    """
+    pattern = re.compile(r"^##\s+" + letter + r"([0-9-]\S*)")
+    out: List[str] = []
+    for piece in pieces:
+        first = piece.split("\n", 1)[0]
+        match = pattern.match(first)
+        if not match:
+            continue
+        token = match.group(1)
+        if not _NUMBER.fullmatch(token):
+            out.append(letter + token)
+    return out
+
+
+def unclaimed_from_flat(text: str, letter: str) -> List[str]:
+    """`unclaimed_from_pieces`'s own question, for a corpus that stays ONE shared file
+    (the code-card ledger; decisions before D160). Every line starting `## <letter><digit-or-
+    hyphen>` really is its own entry heading there, so scanning every line carries none of
+    the subsection risk `unclaimed_from_pieces` guards against.
+    """
+    pattern = re.compile(r"^##\s+" + letter + r"([0-9-]\S*)", re.M)
+    return [letter + token for token in pattern.findall(text) if not _NUMBER.fullmatch(token)]
+
+
+def pending_in(decisions: str, codes: str, gates: str,
+                decision_pieces: Optional[List[str]] = None) -> Dict[str, List[str]]:
     """Every slug HEADING in these three texts, by kind, in the order they declare them.
 
     Headings rather than citations: a citation of a slug that has no heading is a dangling
@@ -195,10 +242,21 @@ def pending_in(decisions: str, codes: str, gates: str) -> Dict[str, List[str]]:
     hands it a working tree and `pending_at` hands it `git show` output, and the grammar is
     declared once for both. A second declaration of these three patterns is how a heading
     shape that one reader accepts becomes one the other cannot see.
+
+    `decision_pieces`, WHEN GIVEN, IS THE SPLIT CORPUS'S OWN ANSWER (`unclaimed_from_pieces`)
+    AND `decisions` IS IGNORED FOR THAT KIND. `None` means there is no split corpus at all —
+    the pre-D160 shape, one flat `docs/DECISIONS.md` — and that path keeps `DECISION_HEADING`'s
+    narrower, SLUG-only match on purpose: a one-segment heading pasted into that flat file's
+    prose (`D-pad`) is deliberately not an id, `docs-audit`'s `id claims` row is what reports
+    it as unreachable, and a real per-file entry cannot be shaped that way to begin with —
+    D160's own naming convention already forces a multi-segment slug at file-creation.
     """
     out: Dict[str, List[str]] = {"decision": [], "codes": [], "step": []}
-    out["decision"] = [f"D{i}" for i in DECISION_HEADING.findall(decisions) if i.startswith("-")]
-    out["codes"] = [f"C{i}" for i in CODES_HEADING.findall(codes) if i.startswith("-")]
+    if decision_pieces is not None:
+        out["decision"] = unclaimed_from_pieces(decision_pieces, "D")
+    else:
+        out["decision"] = [f"D{i}" for i in DECISION_HEADING.findall(decisions) if i.startswith("-")]
+    out["codes"] = unclaimed_from_flat(codes, "C")
     out["step"] = re.findall(r"^0\.\s+`step (" + SLUG + r")`", gates, re.M)
     for kind in out:
         seen: List[str] = []
@@ -245,30 +303,74 @@ def corpus_order(root: Path) -> List[str]:
     return listed + extra
 
 
+def corpus_pieces(root: Path) -> Optional[List[str]]:
+    """Each entry's own file text, in corpus order. `None` when there is no split corpus at
+    all (no manifest) — the caller's cue to fall back to the flat `docs/DECISIONS.md`.
+    """
+    if not (root / DECISIONS_MANIFEST).exists():
+        return None
+    return [read(root / DECISIONS_DIR / name)
+            for name in corpus_order(root)
+            if (root / DECISIONS_DIR / name).exists()]
+
+
 def corpus_text(root: Path) -> str:
     """The entries of a working tree, concatenated in corpus order."""
-    if not (root / DECISIONS_MANIFEST).exists():
+    pieces = corpus_pieces(root)
+    if pieces is None:
         return read(root / DECISIONS) if (root / DECISIONS).exists() else ""
-    return "\n".join(read(root / DECISIONS_DIR / name)
-                     for name in corpus_order(root)
-                     if (root / DECISIONS_DIR / name).exists())
+    return "\n".join(pieces)
+
+
+def corpus_order_at(rev: str, cwd: Optional[str] = None) -> List[str]:
+    """`corpus_order`'s own question, asked of a REF instead of a working tree.
+
+    A REF HAS NO WORKING DIRECTORY TO `Path.glob` OVER, so `corpus_order`'s trick — list the
+    manifest, then add whatever the directory holds that the manifest does not name — has to
+    be done with `git ls-tree` instead of a glob. Skipping this and trusting the manifest
+    ALONE is exactly the shape that let a real, correctly-slugged entry reach `origin/main`
+    on 2026-09-20 unclaimed and invisible: the file was on that commit's own tree, the
+    manifest never named it (by design — `settle_corpus` writes the manifest at CLAIM time,
+    so an entry-adding branch never touches it), and `report_landed`/`landed_half` — the one
+    reader whose whole job is asking a REF what it carries — read the manifest's list alone
+    and reported the commit clean.
+    """
+    manifest = git("show", f"{rev}:{DECISIONS_MANIFEST}", cwd=cwd)
+    listing = git("ls-tree", "-r", "--name-only", rev, "--", DECISIONS_DIR, cwd=cwd)
+    on_disk = sorted(Path(p).name for p in listing.splitlines() if p.endswith(".md"))
+    if not manifest.strip():
+        return on_disk
+    try:
+        listed = json.loads(manifest)["order"]
+    except Exception:
+        return on_disk
+    known = set(listed)
+    extra = sorted(name for name in on_disk if name not in known)
+    return listed + extra
+
+
+def corpus_pieces_at(rev: str, cwd: Optional[str] = None) -> Optional[List[str]]:
+    """`corpus_pieces`'s own question, asked of a REF. `None` when that rev has no split
+    corpus at all (pre-D160, or the manifest blob does not exist there).
+    """
+    manifest = git("show", f"{rev}:{DECISIONS_MANIFEST}", cwd=cwd)
+    if not manifest.strip():
+        return None
+    return [git("show", f"{rev}:{DECISIONS_DIR}/{name}", cwd=cwd)
+            for name in corpus_order_at(rev, cwd=cwd)]
 
 
 def corpus_text_at(rev: str, cwd: Optional[str] = None) -> str:
-    """The entries AT A COMMIT, concatenated in that commit's own manifest order.
+    """The entries AT A COMMIT, concatenated in that commit's own corpus order.
 
     Falls back to that commit's `docs/DECISIONS.md` when it has no manifest, which is every
     commit before the split — so `ceiling_at` and `pending_at` keep answering across the
     boundary rather than reporting a repository with no decisions in it.
     """
-    manifest = git("show", f"{rev}:{DECISIONS_MANIFEST}", cwd=cwd)
-    if not manifest.strip():
+    pieces = corpus_pieces_at(rev, cwd=cwd)
+    if pieces is None:
         return git("show", f"{rev}:{DECISIONS}", cwd=cwd)
-    try:
-        order = json.loads(manifest)["order"]
-    except Exception:
-        return git("show", f"{rev}:{DECISIONS}", cwd=cwd)
-    return "\n".join(git("show", f"{rev}:{DECISIONS_DIR}/{name}", cwd=cwd) for name in order)
+    return "\n".join(pieces)
 
 
 def pending(root: Path) -> Dict[str, List[str]]:
@@ -277,6 +379,7 @@ def pending(root: Path) -> Dict[str, List[str]]:
         corpus_text(root),
         read(root / CODES_DECISIONS) if (root / CODES_DECISIONS).exists() else "",
         read(root / GATES) if (root / GATES).exists() else "",
+        decision_pieces=corpus_pieces(root),
     )
 
 
@@ -293,6 +396,7 @@ def pending_at(rev: str, cwd: Optional[str] = None) -> Dict[str, List[str]]:
         corpus_text_at(rev, cwd=cwd),
         git("show", f"{rev}:{CODES_DECISIONS}", cwd=cwd),
         git("show", f"{rev}:{GATES}", cwd=cwd),
+        decision_pieces=corpus_pieces_at(rev, cwd=cwd),
     )
 
 
