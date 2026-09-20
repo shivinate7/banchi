@@ -38,3 +38,13 @@ One pane means one place where a card's copies, position and details are drawn. 
 ### What is still open
 
 Which order a press records against when one card serves several buyers is answered by D212. No order claims a copy, and the write is the only refusal. D96's lost pass figure stays open in the spec. Amended 2026-09-19: the filter strip became a native dropdown on the owner's word, and its place at 390 is discharged with it. The selected order's text in the pane's top-right corner was dropped by the owner the same day.
+
+### Amended 2026-09-20: the nameless buyer's own label, and four small readings fixed with it
+
+Three places drew a nameless buyer's NAME slot as `No name` then a typed dot then the order's own full id. This typed the separator D218 refuses. It also repeated the full order id twice, once in the number slot and once in the name slot.
+
+**The name slot now reads `MM-DD-YY_XXXXX`.** That is the group's own `latest` placed date in UTC, an underscore, then the last five characters of the group's most recent order id. UTC keeps the label stable across viewers. `app/src/orderView.ts:unnamedBuyerLabel` composes it. `BuyerRow`, `OrderPanel`, the phone rail chip and the Manage sheet's title all read it now, instead of building the same string apart. It takes the mono face (D221). A composed id is a machine string, the same reason a SKU takes it.
+
+A nameless group can only ever hold one order. `orderBuyers.ts` keys a nameless order on itself. It never merges two. "Several orders, several dates" cannot happen today. The helper still falls back to the most recent order if that changes. That is the same order `latest` is already computed across. A shorter id draws whole, never padded. The full id stays in the order slot alone. It is never repeated here (`OrderPanel`'s `ORDER <number>` / `<n> ORDERS`).
+
+Landing this also surfaced four small readings on the same screen. Each was fixed in the same pass. A buyer row's per-order pill drew the order's own number, not its status word. "Hide unknown SKUs" named the wrong reason. It filters `sku_unseen`, the "Never seen" chip's own reason. It never filtered `sku_unknown`. "Tick all" and "Untick all" over-claimed their reach. Both act on the rows in view. Both now read "Tick shown" and "Untick shown", matching `#/inventory`'s own wording. "Untick shown" also read the wrong set for its disabled state. The step-through arrow-key hint rendered below phone width, where its handler is gated off.

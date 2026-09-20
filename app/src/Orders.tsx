@@ -21,6 +21,7 @@ import {
   statusVocabulary,
   takeOrder,
   TAKE_IS_CURRENT,
+  unnamedBuyerLabel,
   type OrderSort,
   type OrderTake,
   type OrderView,
@@ -3134,11 +3135,19 @@ function PullStage({
     )
   }
 
-  /** TICK ALL / UNTICK ALL, OVER THE ROWS IN VIEW AND ONLY THOSE (§12 answer 1). Always drawn,
-   *  so neither its arrival nor its departure can move the list beneath it (D118); disabled
-   *  where the current filter leaves nothing that can hold a tick.
+  /** TICK SHOWN / UNTICK SHOWN, OVER THE ROWS IN VIEW AND ONLY THOSE (§12 answer 1). Named
+   *  after the reach it actually has — "all" over-claimed a filter it never crossed, the same
+   *  wording `#/inventory` already uses for this capability. Always drawn, so neither its
+   *  arrival nor its departure can move the list beneath it (D118).
    *
-   *  `Untick all` SUBTRACTS the rows in view rather than clearing the set. The prune above
+   *  THE TWO BUTTONS READ TWO DIFFERENT SETS FOR THEIR DISABLED STATE, because they act on
+   *  two different sets. `Tick shown` disables on `tickableKeys` (nothing in view can hold a
+   *  tick, so there is nothing to add) and `Untick shown` disables on `walkTicked` (nothing is
+   *  ticked at all, in view or out of it, so there is nothing to remove) — reading `tickableKeys`
+   *  for both left `Untick shown` enabled with an empty tick set whenever the view held a
+   *  walkable row, a press that would visibly do nothing.
+   *
+   *  `Untick shown` SUBTRACTS the rows in view rather than clearing the set. The prune above
    *  keeps the stored set inside the visible one, so the two are the same thing today — but
    *  the subtraction is the RULE, and a clear would only happen to agree with it. */
   const selectBar = (
@@ -3148,14 +3157,14 @@ function PullStage({
         disabled={tickableKeys.size === 0}
         onClick={() => setWalkTicked((prev) => new Set([...prev, ...tickableKeys]))}
       >
-        Tick all
+        Tick shown
       </Button>
       <Button
         size="sm"
-        disabled={tickableKeys.size === 0}
+        disabled={walkTicked.size === 0}
         onClick={() => setWalkTicked((prev) => new Set([...prev].filter((key) => !tickableKeys.has(key))))}
       >
-        Untick all
+        Untick shown
       </Button>
     </div>
   )
@@ -3209,7 +3218,7 @@ function PullStage({
         />
         <label className="orders-hide-unknown">
           <input type="checkbox" checked={view.hideUnknown} onChange={(event) => onHideUnknownChange(event.target.checked)} />
-          Hide unknown SKUs
+          Hide never-seen SKUs
         </label>
         <span className="orders-resort-slot">
           {staleSentence === null ? null : (
@@ -3252,10 +3261,12 @@ function PullStage({
             </ol>
           </details>
         )}
-        <p className="orders-index-hint">
-          <Kbd>↑</Kbd>
-          <Kbd>↓</Kbd> step through the buyers
-        </p>
+        {phone ? null : (
+          <p className="orders-index-hint">
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd> step through buyers
+          </p>
+        )}
       </>
     )
 
@@ -3358,8 +3369,8 @@ function PullStage({
             onClick={() => setRailOpen(true)}
           >
             <Icon name="list" size={16} />
-            <span className="browse-boxchip-text">
-              {selectedGroup === null ? 'Choose a buyer' : selectedGroup.name ?? `No name · #${selectedGroup.number}`}
+            <span className={`browse-boxchip-text${selectedGroup !== null && selectedGroup.name === null ? ' bn-mono' : ''}`}>
+              {selectedGroup === null ? 'Choose a buyer' : selectedGroup.name ?? unnamedBuyerLabel(selectedGroup)}
             </span>
             <Icon name="chevronDown" size={14} className="browse-boxchip-chev" />
           </button>
@@ -3415,7 +3426,9 @@ function PullStage({
               set of pressable copy rows for the same card. */}
           {selectedGroup === null ? null : (
             <div className="orders-manage-orders">
-              <span className="bn-section-title">{selectedGroup.name ?? `No name · #${selectedGroup.number}`}'s orders</span>
+              <span className="bn-section-title">
+                {selectedGroup.name ?? <span className="bn-mono">{unnamedBuyerLabel(selectedGroup)}</span>}'s orders
+              </span>
               {selectedGroup.orders.map((order) => (
                 <OrderDetail
                   key={order.key}
@@ -3507,7 +3520,8 @@ function BuyerRow({
   readonly expanded?: boolean
   readonly onSelect: () => void
 }) {
-  const heading = group.name ?? `No name · #${group.number}`
+  const unnamed = group.name === null
+  const heading = group.name ?? unnamedBuyerLabel(group)
   const status = worstStatus(group, answers)
   const placed = whenLabel(group.latest)
   const pct = group.wanted > 0 ? Math.min(100, Math.round((group.recorded / group.wanted) * 100)) : 0
@@ -3529,7 +3543,7 @@ function BuyerRow({
     >
       <span className={`orders-index-dot orders-index-dot-${STATUS_DOT[status]}`} aria-hidden="true" />
       <span className="orders-index-main">
-        <span className="orders-index-number">{heading}</span>
+        <span className={`orders-index-number${unnamed ? ' bn-mono' : ''}`}>{heading}</span>
         <span className="orders-index-meta">
           {/* THE SECOND >1 SIGNAL LIVES IN THE DETAIL HEADER; THIS ONE IS THE FIRST. Drawn only
               when there is something to count — a single order's row looks exactly as it always
@@ -3546,7 +3560,7 @@ function BuyerRow({
             const pill = STATUS_PILL[orderStatus]
             return (
               <Pill key={order.key} size="sm" tone={pill.tone} icon={pill.icon}>
-                {order.number}
+                {pill.label}
               </Pill>
             )
           })}
@@ -3614,7 +3628,9 @@ function OrderPanel({
       <div className="boxops-identity-top">
         <div className="boxops-identity-text">
           <span className="boxops-identity-num">{label}</span>
-          <h2 className="boxops-identity-name">{group.name ?? `No name · #${group.number}`}</h2>
+          <h2 className={`boxops-identity-name${group.name === null ? ' bn-mono' : ''}`}>
+            {group.name ?? unnamedBuyerLabel(group)}
+          </h2>
         </div>
         <Button variant="quiet" size="sm" icon="settings" className="browse-manage" aria-haspopup="dialog" onClick={onManage}>
           Manage

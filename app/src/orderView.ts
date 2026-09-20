@@ -191,3 +191,47 @@ export function orderStalenessSentence(groups: number): string | null {
   if (groups <= 0) return null
   return `Order is ${groups} ${groups === 1 ? 'buyer' : 'buyers'} stale`
 }
+
+/* --------------------------------------------------------------------- the unnamed label */
+
+/** UTC, not the viewer's clock. The date is a fact the feed sent about when an order was
+ *  placed — it should read the same label on every screen that opens it, not one that shifts
+ *  a day depending on which timezone happens to be looking. */
+function shortDate(iso: string): string | null {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return null
+  const mm = String(at.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(at.getUTCDate()).padStart(2, '0')
+  const yy = String(at.getUTCFullYear() % 100).padStart(2, '0')
+  return `${mm}-${dd}-${yy}`
+}
+
+/** The label a nameless buyer draws in the NAME slot — never a typed dot, never the order's
+ *  full id (the owner's ruling, 2026-09-19). It reads `MM-DD-YY_XXXXX`: the group's own
+ *  `latest` placed date, then the tail of an order id — the same two facts `BuyerRow` and
+ *  `OrderPanel` already draw beside it, composed once here rather than three times.
+ *
+ *  ONE ORDER IS READ, NOT AVERAGED. `orderBuyers.ts:groupBuyers` never merges two nameless
+ *  orders into one group (each keys on its own order), so today a nameless `group.orders`
+ *  is always length 1 and this question does not arise in practice. If that invariant ever
+ *  changes, this reads `orders[0]` — the most recent by `placed_at`, the same order `latest`
+ *  is computed across and the same one a NAMED group's own `name` is read off — rather than
+ *  averaging or concatenating several dates and ids into one string nobody could parse back.
+ *
+ *  THE TAIL IS THE LAST 5 CHARACTERS of that order's id, or the whole id when it is shorter
+ *  than 5 — never padded, never repeated, so a 3-character id draws as itself rather than as
+ *  a 5-character lie. This is a SHORT LABEL, not the id: the full id stays in the ORDER slot
+ *  (`OrderPanel`'s own `ORDER <number>` / `<n> ORDERS`), never here.
+ *
+ *  `null` when there is neither a date nor an id to draw from — a group this bare has nothing
+ *  this label can say, and an empty string is `BuyerRow`'s and `OrderPanel`'s own cue to fall
+ *  back further (nothing here invents a placeholder date or id). */
+export function unnamedBuyerLabel(group: BuyerGroup): string {
+  const order = group.orders[0]
+  const id = order?.number ?? group.number ?? ''
+  const tail = id.length > 5 ? id.slice(-5) : id
+  const date = group.latest === null ? null : shortDate(group.latest)
+  if (date === null) return tail
+  if (tail === '') return date
+  return `${date}_${tail}`
+}
