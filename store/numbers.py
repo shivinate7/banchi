@@ -37,7 +37,7 @@ from typing import Optional
 #   at most five   Nothing measured needs more, and an unbounded run of letters would start
 #                  eating names the day something hands this a title by mistake.
 #
-# A FOURTH SHAPE, ADDED BY D-archive-number-composition: the separator can be a plain space
+# A FOURTH SHAPE, ADDED BY D234: the separator can be a plain space
 # with no punctuation at all (`SPD 208/221`), which the original three bounds did not cover
 # because they required one of `•·/-` between the letters and the digits. The
 # space-only branch requires an actual space (`\s+`, never `\s*`) immediately before a
@@ -107,7 +107,7 @@ def strip_set_code(text) -> str:
     the owner's own 676 numbered records (at that measurement) it changed exactly **10**, and
     all ten were the glued reads it exists to remove.
 
-    D-archive-number-composition WIDENS THE SEPARATOR TO ALSO ACCEPT A BARE SPACE
+    D234 WIDENS THE SEPARATOR TO ALSO ACCEPT A BARE SPACE
     (`SPD 208/221`), re-measured the same way: still ZERO across the four committed exports,
     and 41 additional real cases on the owner's own store (3,299 numbered records as of
     2026-09-20), none of them a real printed code — see `_SET_CODE_PREFIX`'s own comment for

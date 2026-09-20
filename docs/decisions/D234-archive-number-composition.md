@@ -1,4 +1,4 @@
-## D-archive-number-composition — The archive reads the store's own composed number, and the glued-code repair reaches it too
+## D234 — The archive reads the store's own composed number, and the glued-code repair reaches it too
 
 **THE CAUSE, IN ONE SENTENCE.** `pipeline/pricearchive.py:rows_from_store` built its
 synthetic export row from the bare `cards.number` alone. It never read the composed

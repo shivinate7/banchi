@@ -137,7 +137,7 @@ def _export_row(
     repo backfills an unset `game` (`store/master.py:Card.game`'s own docstring).
 
     THE NUMBER CELL PREFERS THE STORE'S OWN `number_key` OVER THE BARE `number`
-    (D-archive-number-composition), AND THE PRIMITIVE ALREADY EXISTED — it was never
+    (D234), AND THE PRIMITIVE ALREADY EXISTED — it was never
     called from here. `cards.number` is stored bare by design (measured: 542 of 542
     Pokemon cards with a SKU carry a number with no `/` in it), but `store/master.py`'s
     own write path (`_card_columns`, store-scaling item 8) already composes and STORES

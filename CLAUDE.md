@@ -940,6 +940,7 @@ D230 The sweep's own resume window is six days, not one hour
 D231 The subject list widens to the order ledger, and sealed product joins it
 D232 The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
 D233 A card row that refuses retries the ledger's own row
+D234 The archive reads the store's own composed number, and the glued-code repair reaches it too
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

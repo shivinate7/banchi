@@ -717,7 +717,7 @@ class ProductIndex:
 
         A NUMBER-KEY MISS GETS ONE REPAIR BEFORE THE NAME RUNG, THE SAME ORDER
         `pipeline/join.py:_walk` ALREADY USES FOR THE REAL LISTING JOIN
-        (D-archive-number-composition). D55's `strip_set_code` removes a set code the model glued onto the
+        (D234). D55's `strip_set_code` removes a set code the model glued onto the
         front of a Riftbound read (`SFD • 013/221` -> `013/221`) — the mechanism was
         never broken, it was simply never REACHED here: this accessor folded the raw
         `number` through `number_index_key` and fell straight to the ambiguity-prone name

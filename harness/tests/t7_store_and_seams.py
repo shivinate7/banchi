@@ -27445,7 +27445,7 @@ def check_price_history(checks: Checks) -> None:
     )
 
     # THE GLUED-SET-CODE REPAIR, REACHED ON A MISS BEFORE THE NAME RUNG
-    # (D-archive-number-composition). `pipeline/join.py:_walk` has always tried
+    # (D234). `pipeline/join.py:_walk` has always tried
     # `_repair_set_code` before falling to the name rung; `ProductIndex.find` did not, so a
     # Riftbound read glued a set code onto the front of (`SFD • 013/221`,
     # `SPD 208/221`) refused here even though the SAME shape resolves cleanly in the real

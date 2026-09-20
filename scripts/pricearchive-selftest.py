@@ -347,7 +347,7 @@ def main() -> int:
            "the export-shaped row carries the card's own name and resolved product line",
            rows["444"])
 
-        # ------------------- rows_from_store composes the number, D-archive-number-composition
+        # ------------------- rows_from_store composes the number, D234
         #
         # THE REAL SHAPE (`Bulbasaur` `001` in `ME01: Mega Evolution`, measured 2026-09-20):
         # `cards.number` is stored bare (542 of 542 Pokemon cards with a SKU carry no `/`),
@@ -717,7 +717,7 @@ def main() -> int:
            no_fallback_refusals)
         ok(not no_fallback_resolved, "and nothing is reported as fallback-resolved")
 
-        # A DIRECT-RESOLUTION ARM, NOT A FALLBACK ONE (D-archive-number-composition): a
+        # A DIRECT-RESOLUTION ARM, NOT A FALLBACK ONE (D234): a
         # glued-on set code (`OGN • 200/298`) is repaired by `ProductIndex.find` itself,
         # from the card row alone, with no ledger fallback offered at all — the mechanism
         # this task adds, proven distinct from D233's own fallback.
