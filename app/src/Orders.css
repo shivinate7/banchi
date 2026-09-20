@@ -5,10 +5,37 @@
 /* The order pane is `1fr` beside a clamped index, so the page's surplus all lands in it: at
    the shell's ceiling it is 1196px, and `.orders-line-top` puts the card name at one end of
    that and the figure at the other. */
-.orders-hub { display: flex; flex-direction: column; gap: var(--bn-4); --bn-page-max: var(--bn-page-w-rows); }
+.orders-hub { display: flex; flex-direction: column; gap: var(--bn-4); }
+/* THE CAP IS PER STAGE, NOT PER ROUTE. Shipping is a list of rows — three lanes of them — so
+   it takes the rows cap, same as Pricing and Codes; the Pull stage now takes Inventory's own
+   rail-and-pane skeleton (§13) and has no reason to be narrower than the screen it copies,
+   which sets no cap at all and falls back to `--bn-page-w`'s full 1600px. */
+.orders-hub.shipping { --bn-page-max: var(--bn-page-w-rows); }
 .orders-hub .bn-head { margin-bottom: 0; }
 .orders-hub .bn-lede strong { color: var(--bn-ink); font-weight: 600; }
 .orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); }
+
+/* THE SKIP LINK (interaction review, "32 tab stops"). Invisible until it holds keyboard
+   focus, same idiom as a page's own "skip to main content" — a Tab-only pass lands on it
+   FIRST, before the buyer rail's search, filters and every row, and one more Tab or a press
+   moves focus straight to `.browse-side` (`tabIndex={-1}` there is the landing spot, not a
+   real stop). Fixed rather than `position: absolute` so it cannot be clipped by an ancestor's
+   own overflow, which `.orders-index`'s scroller sets a few rules down. */
+.orders-skip-link {
+  position: fixed;
+  top: var(--bn-2);
+  left: var(--bn-2);
+  z-index: 100;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  transform: translateY(-200%);
+  transition: transform var(--bn-t-fast) var(--bn-ease);
+}
+.orders-skip-link:focus-visible { transform: none; }
 
 /* ---- the two routes as tabs ------------------------------------------------- */
 .orders-tabs { margin-top: var(--bn-1); }
@@ -233,7 +260,9 @@
   gap: var(--bn-3);
   width: 100%;
   padding: 10px var(--bn-3);
-  border-radius: var(--bn-r-lg);
+  /* D50: one grammar for a rail's index row — `.browse-boxcell`'s own radius, matched
+     rather than the lg token an accordion card wants. */
+  border-radius: var(--bn-r);
   text-align: left;
   color: var(--bn-ink);
   background: transparent;
