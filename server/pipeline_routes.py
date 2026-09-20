@@ -153,6 +153,8 @@ from server import tcg_import  # noqa: E402
 # because Pillow may genuinely be absent, and there is no equivalent risk here.
 from pipeline import pricehistory  # noqa: E402
 from pipeline import productview  # noqa: E402
+from pipeline import holdings  # noqa: E402
+from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
 # reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
 # in it, so this costs one stdlib module. The command module could not be imported for them:
@@ -3440,6 +3442,114 @@ def _boxes_payload(tally: Dict[int, dict], names: Dict[int, "BoxFacts"]) -> List
         }
         for box, seat in sorted(tally.items())
     ]
+
+
+#: `RANGE_WIDTH_DAYS`'s own keys, spelled out so a request naming anything else gets a
+#: `range_unknown` refusal that names the choices, rather than a `KeyError` from
+#: `pipeline/holdings.py:build_holdings_report`.
+_HOLDINGS_RANGES = tuple(sorted(RANGE_WIDTH_DAYS))
+_HOLDINGS_DEFAULT_RANGE = "month"
+
+
+def _holdings_point_payload(point: "holdings.SeriesPoint") -> dict:
+    return {
+        "start": point.start,
+        "market": point.market,
+        "quantity": point.quantity,
+        "value": point.value,
+        "gap_before": point.gap_before,
+    }
+
+
+def _holdings_series_payload(series: "holdings.SkuSeries") -> dict:
+    return {
+        "sku": series.sku,
+        "name": series.name,
+        "quantity": series.quantity,
+        "latest_value": series.latest_value,
+        "points": [_holdings_point_payload(p) for p in series.points],
+    }
+
+
+def _holdings_total_payload(total: "holdings.TotalPoint") -> dict:
+    return {
+        "start": total.start,
+        "value": total.value,
+        "priced_names": total.priced_names,
+        "unpriced_names": total.unpriced_names,
+        "gap_before": total.gap_before,
+    }
+
+
+def do_pipeline_holdings_value(range_: str) -> dict:
+    """`GET /pipeline/holdings-value?range=<range>` — unsold stock, valued at market and
+    drawn as a series over time (`docs/specs/revenue-plan.md` section 1, second half; D225
+    already built the sold-cards half above this one).
+
+    NOT YET REACHABLE FROM A SCREEN. This route, `pipeline/holdings.py`'s computation behind
+    it, and the tests over both are the whole of what this change builds — no client function
+    in `app/src/server.ts`, no wire type in `app/src/types.ts`, no control anywhere in `#/revenue`.
+    By this repo's own rule (`CLAUDE.md`'s route-is-not-a-feature paragraph) that means the
+    capability is not built yet, only reachable over the wire, and this docstring says so
+    rather than leaving it to be discovered.
+
+    THE POSITION IS THE SKU (D212), READ FROM THE `cards` TABLE'S OWN STATE, NEVER THE
+    MARKETPLACE'S MIRROR — `pipeline/holdings.py:on_hand_quantities`'s whole argument, this
+    route's own copy of `do_pipeline_value`'s `Listing.live` warning.
+
+    THE SERIES SOURCE IS THE ARCHIVE (D219), ONE RANGE AT A TIME, NEVER MERGED (D62). `range`
+    defaults to `month`, the finest range the archive keeps and the closest thing to a daily
+    mark; the other three ranges answer to the same route, one call each, never combined into
+    one series here or anywhere downstream.
+
+    SEALED PRODUCT IS A NAMED, COUNTABLE EXCLUSION, STATED ON THIS PAYLOAD RATHER THAN A
+    FOOTNOTE A SCREEN MIGHT DROP (the owner's ruling, 2026-09-20: *"still stands — singles,
+    stated gap"*). `sealed_excluded` names the count and the reason together, so a caller
+    cannot forward the number without the sentence that makes it honest.
+
+    A PLAIN READ, LIKE `do_pipeline_price_now` AND `do_product_history` BEFORE IT: no socket,
+    no run, no write to the archive or to the corpus. `at` carries this read's own moment —
+    the SERIES' own dates are what age, one range at a time, never this route's clock.
+    """
+    if range_ not in _HOLDINGS_RANGES:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "range_unknown",
+            f"{range_!r} is not an archived range. Choose one of {', '.join(_HOLDINGS_RANGES)}.",
+        )
+    try:
+        snapshot = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "store_unreadable",
+            f"The store could not be read, so nothing can be valued: {exc}",
+        ) from None
+
+    report = holdings.build_holdings_report(
+        snapshot.inventory, snapshot.archive, snapshot.ledger, range_, master.now()
+    )
+
+    return {
+        "range": report.range,
+        "width_days": report.width_days,
+        "history_begins": report.history_begins,
+        "at": report.at,
+        "on_hand_names": report.on_hand_count,
+        "series": [_holdings_series_payload(s) for s in report.series],
+        "totals": [_holdings_total_payload(t) for t in report.totals],
+        "unmarked": {
+            "names": report.unmarked_count,
+        },
+        "sealed_excluded": {
+            "names": report.sealed_excluded_count,
+            "reason": (
+                "Sealed product has no card record, so this store cannot count what is on "
+                "the shelf. Only sales of sealed product are known; unsold sealed stock is "
+                "not counted here."
+            ),
+        },
+    }
 
 
 def do_pipeline_value() -> dict:

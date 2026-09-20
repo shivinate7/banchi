@@ -1113,6 +1113,42 @@ COMPONENTS = [
                                 "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
                                         "and by `app/tests/product-history.spec.ts`. No "
                                         "network call in the archive-hit path."},
+            # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/revenue-plan.md` section 1,
+            # second half; `D236`). The position is the SKU
+            # (D212); quantity is the `cards` table's own state, never the marketplace
+            # mirror. The series source is the archive (D219), one range at a time,
+            # never merged (D62).
+            "holdings.py": {"does": "`on_hand_quantities`/`on_hand_names` walk the `cards` "
+                                    "table once for every SKU not in `TERMINAL_STATES`. "
+                                    "`sealed_excluded_count` counts a distinct ledger SKU "
+                                    "the `cards` table has never recorded in any state — "
+                                    "sealed product, named and countable rather than "
+                                    "dropped. `sku_series` reads one SKU's already-filtered, "
+                                    "already-sorted archive buckets for one range and "
+                                    "values each at today's on-hand quantity, marking "
+                                    "`gap_before` wherever two stored points are not exactly "
+                                    "one bucket-width apart — the signal a screen must break "
+                                    "its line at, covering both a bucket priced `None` and a "
+                                    "date no sweep ever wrote a row for at all. "
+                                    "`aggregate_totals` sums every SKU priced at exactly one "
+                                    "calendar start into one honest, partial portfolio "
+                                    "total, carrying `priced_names`/`unpriced_names` beside "
+                                    "it. `build_holdings_report` is the one entry point: one "
+                                    "range in, a `HoldingsReport` out.",
+                                "governed_by": ["D62", "D159", "D189", "D212", "D219", "D225",
+                                                "D236"],
+                                "note": "PROVED BY `make holdings-selftest`, not in `make "
+                                        "check` — no store on disk, no network, "
+                                        "`pricearchive-selftest.py`'s own precedent. Two "
+                                        "mutation arms: `_adjacent` forced to always answer "
+                                        "`True` (the gap interpolates) and "
+                                        "`sealed_excluded_count` forced to always answer `0` "
+                                        "(the exclusion is dropped), each proven to turn its "
+                                        "own assertion red. `GET /pipeline/holdings-value` "
+                                        "(`server/pipeline_routes.py:"
+                                        "do_pipeline_holdings_value`) is the one route over "
+                                        "this module; NOT YET REACHABLE FROM A SCREEN — no "
+                                        "client function, no wire type, no control."},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -1984,12 +2020,8 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D139", "D140",
-                                "D141", "D143", "D148",
-                                "D151", "D158", "D176",
-                                # Unclaimed at this branch's own claim — the stale_claim
-                                # refusal now names `--unclaim` by its real command.
-                                "D190"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D136", "D139", "D140", "D141",
+                                "D143", "D148", "D151", "D158", "D176", "D190", "D228"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -2528,6 +2560,27 @@ COMPONENTS = [
                         "passing. Not wired into `make check` — the same precedent this "
                         "file's own sibling above sets.",
                 "governed_by": ["D227", "D62", "D18", "D22"],
+            },
+            "holdings-selftest.py": {
+                "does": "proves pipeline/holdings.py against fixtures built in the file "
+                        "(`D236`) — no store on disk, no network. "
+                        "Covers: on-hand quantity honors `TERMINAL_STATES` and never counts "
+                        "a SOLD copy; a name with an archived reading produces a correctly "
+                        "valued point; a name with no reading at all is counted in "
+                        "`unmarked`, never a zero; a genuine calendar gap between two "
+                        "archived buckets sets `gap_before` on the point after it and on "
+                        "the matching aggregate total point, with no value interpolated "
+                        "into the gap; a priced-None bucket carries no value but no gap "
+                        "either side, since the missing price and a missing day are two "
+                        "different facts; and a sealed ledger SKU absent from `cards` is "
+                        "counted rather than dropped. Two mutation arms, each proved to "
+                        "fail once the guard it checks is defeated: forcing `_adjacent` to "
+                        "always answer `True` (the gap interpolates) and forcing "
+                        "`sealed_excluded_count` to always answer `0` (the exclusion is "
+                        "dropped). 28 assertions, all passing. Not wired into `make check` "
+                        "— `pricearchive-selftest.py`'s own precedent.",
+                "governed_by": ["D62", "D159", "D189", "D212", "D219", "D18",
+                                "D236"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -4427,8 +4480,8 @@ COMPONENTS = [
                                 "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88",
                                 "D89", "D100", "D103", "D105", "D134", "D137", "D145", "D147",
                                 "D156", "D159", "D163", "D165", "D166", "D168", "D170", "D172",
-                                "D174", "D180", "D188", "D189", "D216", "D219",
-                                "D225", "D227"],
+                                "D174", "D180", "D188", "D189", "D212", "D216", "D219",
+                                "D225", "D227", "D236"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

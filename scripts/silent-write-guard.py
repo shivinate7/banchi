@@ -280,6 +280,13 @@ def _where(where: Redirect) -> str:
     return where.kind
 
 
+# THE VERBS IN THE ROSTER ABOVE THAT BLOCK AND NARRATE. One entry, and `refusal` says why it
+# has to exist at all. It mirrors `scripts/guard-shell.py`'s `NARRATORS`, deliberately as a
+# short literal rather than an import: this guard has to work with that file absent, and a
+# wrong answer here costs one line of advice rather than a wrong verdict.
+_NARRATED = frozenset({"make merge"})
+
+
 def refusal(silenced: Sequence[Silenced]) -> str:
     lines = ["BLOCKED: this would perform a git write and throw away the only evidence of "
              "what it did."]
@@ -303,8 +310,22 @@ def refusal(silenced: Sequence[Silenced]) -> str:
     lines.append("")
     lines.append("  Run it and READ the output. If it is too long, keep it and read it — "
                  "never drop it:")
-    lines.append("      <the command> 2>&1 | tail -40        # a git write does not block, "
-                 "so this is safe")
+    # THE TWO GUARDS MUST NOT CONTRADICT EACH OTHER. `make merge --confirm` blocks for
+    # minutes and narrates a heartbeat while it waits, and `scripts/guard-shell.py`'s ninth
+    # clause refuses a pipe into `tail` over exactly that. Handing a session that command
+    # here would be handing it something its neighbour refuses one call later — which is how
+    # a session concludes the guards are noise. So the advice is conditional on what was
+    # silenced, and the blocking case gets the advice that is right for it.
+    if any(item.verb in _NARRATED for item in silenced):
+        lines.append("      <the command>                        # nothing after it: this "
+                     "one waits for MINUTES and")
+        lines.append("                                           # narrates while it does, "
+                     "so a pipe hides the")
+        lines.append("                                           # heartbeat until it is "
+                     "over")
+    else:
+        lines.append("      <the command> 2>&1 | tail -40        # a git write does not "
+                     "block, so this is safe")
     lines.append("  and if you truly want only the outcome, ask for the outcome rather than "
                  "hiding it:")
     lines.append("      git commit -F - && git log --oneline -1")

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Refuse eight shell mistakes this repo has already made and paid for.
+"""Refuse nine shell mistakes this repo has already made and paid for.
 
 EVERY CLAUSE HERE HAS AN INCIDENT BEHIND IT, and not one of them was a lapse of care: each
 was a rule somebody had already written down, in a memory file or in CLAUDE.md, and then
 broken by a session that had read it. That is not a reason to write the rule again; it is
 what D171 rules a rule IS. A rule is read once, at the start, and then competes with the
-work. So these six are mechanical.
+work. So these nine are mechanical.
 
     1. `git checkout <path>` / `git restore <path>` over a file with uncommitted changes
        2026-09-06: three mutation cases used `sed -i.bak` and the fourth used
@@ -72,15 +72,31 @@ work. So these six are mechanical.
        "reverts to HEAD, silently, without asking" shape rank 1's `git checkout` already
        covers for a single path, one level up: the whole tree instead of one file.
 
+    9. A command that waits for minutes and NARRATES while it does, piped into `tail` or
+       redirected away
+       2026-09-20. `make merge` pushes a claim commit and waits for that commit's checks;
+       `check.yml` takes four to five minutes, measured across 12 consecutive runs the same
+       day, and the wait prints a line a minute saying what it is waiting on. Sessions
+       habitually type `… 2>&1 | tail -18`, which block-buffers that heartbeat and then keeps
+       only the end of it, so five to twenty minutes of correct waiting is indistinguishable
+       from a hang. One session did it twice in an evening while knowing better, and other
+       sessions reached the same wrong conclusion about the same working merge. The parent
+       rule "never discard a command's output" already covers this in spirit — but a pipe to
+       `tail` does not READ as discarding, which is why the rule alone stopped nobody.
+       THIS ONE CLAUSE DOES NOT RESOLVE ITS SUBJECT FROM THE SYSTEM and says so in its own
+       section: whether a command blocks and narrates is not a question the filesystem or the
+       process table can answer in advance, so the roster is named, short, per-incident, and
+       reconciled by the self-test against the heartbeat constant in the file that runs it.
+
 THE STANDARD IS `scripts/reap.py:hook`'S AND IT IS NOT NEGOTIABLE HERE EITHER:
 
     a broken GUARD fails OPEN — any parse error, any bug here, an unreadable payload, a
                                 missing `git`: exit 0 and refuse nothing
     an unreadable TARGET fails CLOSED — but only where "unreadable" is this file being right
                                 that it does not know AND the harm is unrecoverable, which is
-                                true of none of these six: every one of them RESOLVES its
-                                subject, and a subject it cannot resolve is a command it has
-                                no opinion about
+                                true of none of these nine: each of the first eight RESOLVES
+                                its subject and the ninth names a roster of two, and a subject
+                                a clause cannot resolve is a command it has no opinion about
 
 RESOLUTION, NEVER SPELLING, wherever the question has a real answer. `git checkout main` and
 `git checkout CLAUDE.md` are the same six characters of verb: the first is a branch and the
@@ -88,7 +104,8 @@ second destroys work, and only the filesystem and `git status` can say which. `l
 right on Monday and wrong on Tuesday depending on whether `b` exists. `git push origin HEAD`
 is right when the upstream is named the same and wrong when it is not, and only
 `branch.<name>.merge` can say which. That is reap.py's whole argument, applied to five more
-commands.
+commands — and clause 9, which cannot be resolved that way, argues its own roster instead of
+pretending otherwise.
 
 FALSE POSITIVES ARE THE ONLY WAY A GUARD LIKE THIS DIES, and it dies silently — the hatch
 goes into a shell profile and nobody ever sees the refusal again. So every clause is narrow on
@@ -96,10 +113,10 @@ purpose, every legitimate shape this repo actually types is pinned as PASSING in
 `scripts/guard-shell-selftest.sh`, and each is RUN there before it is scored, because a case
 that is secretly a typo passes for the wrong reason.
 
-EIGHT CLAUSES, EIGHT HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
+NINE CLAUSES, NINE HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
 disarming the destructive-checkout clause in order to make a symlink, which is how a guard
 stops being one. Each refusal prints only its own, each is honoured in the environment and
-inline, and all eight are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
+inline, and all nine are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
 a variable the code reads and no markdown names).
 
     scripts/guard-shell.py --hook            the PreToolUse hook. Payload on stdin.
@@ -166,6 +183,9 @@ CLAUSES = (
     Clause("reset", "PKMNSCAN_RESET",
            "never `git reset --hard`/`--merge`/`--keep` over a tree that still holds "
            "uncommitted tracked changes"),
+    Clause("narrate", "PKMNSCAN_NARRATE",
+           "never hide the heartbeat of a command that waits for minutes — let its output "
+           "reach the session as it happens"),
 )
 
 HATCH = {clause.name: clause.hatch for clause in CLAUSES}
@@ -1539,6 +1559,172 @@ def clause_reset(reading: "shell_parse.Reading", cwd: str) -> Verdict:
     return Verdict(refusals, notes)
 
 
+# ------------------------------------------------ 9. a narrated wait with nobody watching it
+#
+# `make merge` pushes a claim commit and then waits for THAT COMMIT's checks, which take four
+# to five minutes on this repo (measured across 12 consecutive runs, 2026-09-20). Five to ten
+# minutes of waiting is CORRECT and this clause does not touch it. What it refuses is the one
+# spelling that makes correct waiting indistinguishable from a hang:
+#
+#     make merge ARGS="437 --confirm" 2>&1 | tail -18
+#
+# The wait narrates — `CHECK_HEARTBEAT_SECONDS = 60`, a line a minute naming what it is
+# waiting on. A pipe makes the writer's stdout a pipe, Python block-buffers it, and `tail`
+# then keeps only the last few lines of whatever finally arrives. Both halves of the
+# heartbeat's job are lost: nothing appears WHILE it waits, and most of it is thrown away when
+# it ends. On 2026-09-20 one session did this twice in an evening while knowing better, and
+# the owner reports other sessions reaching the same conclusion — that the merge had hung —
+# about a merge that was working.
+#
+# THE ROSTER IS NAMED AND IT IS DELIBERATELY SHORT, and this is the one clause in this file
+# that does NOT resolve its subject from the system. It cannot: "does this command block for
+# minutes while printing a heartbeat" is not a question the filesystem, `git` or the process
+# table can answer about an arbitrary command before it runs. The alternative — refuse every
+# pipe into `tail` — would fire on `git log | tail`, `make check | tail -40` and a hundred
+# honest lines a day, and the house rule is explicit that a guard which goes red when nothing
+# is wrong is SPENT, because the reader learns to scroll past it. So this follows
+# `silent-write-guard.py`'s precedent instead: a roster of the acts that have actually gone
+# wrong, one entry per incident, and a new entry when something new goes wrong through one.
+# `make design-check` is the nearest candidate and is deliberately absent — it BACKGROUNDS
+# itself and writes `.serve/design-check.json`, so its verdict survives a pipe.
+#
+# AND THE ROSTER IS RECONCILED RATHER THAN TRUSTED. `scripts/guard-shell-selftest.sh` asserts
+# that every command named here still carries a heartbeat constant in the file that runs it —
+# an entry that stops narrating stops being this clause's business, and that is a failing case
+# rather than a stale sentence.
+#
+# WHAT COUNTS AS LOSING IT: stdout discarded (`/dev/null`, a closed descriptor, a file nothing
+# in the same command reads back), or piped into a filter that keeps only an end of the
+# stream. `| tee <file>` is NOT refused: it delays the narration but keeps every byte of it,
+# and refusing the careful spelling of "keep the output" is how a guard teaches people to
+# switch it off.
+
+_TRUNCATING = {"tail", "head"}
+
+# THE TABLE IS THE ROSTER, AND THE RESOLVER BELOW READS IT rather than carrying its own copy
+# of the same names — the house rule that an allow list points at the constant the code emits,
+# never at a duplicate of it. Each entry: the name a refusal prints, the `make` goal that runs
+# it, the script that runs underneath that goal, and the heartbeat constant the self-test
+# reconciles the entry against.
+NARRATORS = (
+    ("make merge", "merge", "scripts/merge-pr.py", "CHECK_HEARTBEAT_SECONDS"),
+)
+
+
+def _narrating(argv: Sequence[str]) -> str:
+    """The name of the long, heartbeat-emitting command this stage runs, or `""`.
+
+    `merge` EXACTLY, the way `silent-write-guard.py` reads the same word: `make
+    merge-selftest` is a test of the wrapper and is over in seconds, and a prefix match would
+    refuse it for being quiet — which is the finding that teaches a session to reach for the
+    hatch.
+    """
+    argv = list(argv)
+    if not argv:
+        return ""
+    # A PREVIEW IS NOT A WAIT, and that is resolved rather than assumed. `make merge ARGS=437`
+    # presses nothing, asks GitHub two questions and returns in seconds — there is no
+    # heartbeat to hide, so piping it is not this clause's business. Only `--confirm` reaches
+    # the claim commit's wait. This is the narrowest the clause can be while still covering
+    # the act that went wrong.
+    if not any("--confirm" in word for word in argv):
+        return ""
+    head = argv[0]
+    if head == "make" or head.endswith("/make"):
+        goals = [word for word in argv[1:]
+                 if not word.startswith("-") and not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", word)]
+        for name, goal, _, _ in NARRATORS:
+            if goal in goals:
+                return name
+        return ""
+    # THE SCRIPT RUN DIRECTLY IS THE SAME ACT. `make merge` is a two-line recipe around
+    # `python3 scripts/merge-pr.py`, and a session that has been refused the first spelling
+    # reaches for the second.
+    for _, _, script, _ in NARRATORS:
+        base = os.path.basename(script)
+        if any(word.endswith(base) for word in argv):
+            return script
+    return ""
+
+
+def _sink(placed: "shell_parse.Placed", every: Sequence["shell_parse.Stage"]) -> Tuple[str, str]:
+    """Where this stage's narration actually goes: `("", "")` when the session gets it.
+
+    THE FATE IS THE PIPELINE'S AND NOT THE STAGE'S, which is why this takes a `Placed` rather
+    than a `Stage` — `silent-write-guard.py` learned the same thing about the same parser.
+
+    THE LINE IS LOSS, NEVER DELAY, and drawing it anywhere else makes this clause fire on
+    honest work. `| tee <file>` and `> <file>` followed by a read of that same file both
+    BUFFER the heartbeat — neither delivers it while the waiting is happening — and neither
+    loses a byte of it. Refusing the careful spelling of "keep the output" is how a guard
+    teaches a session to reach for its hatch. What is refused is the narration being GONE:
+    thrown away, or cut down to one end of itself. (This is a different line from
+    `silent-write-guard.py`'s, which asks whether EVIDENCE survives rather than whether a
+    stream arrives, and the two agree on the file case for different reasons.)
+    """
+    where = placed.stage.fd1
+    if where.kind == shell_parse.NULL:
+        return "discarded", "/dev/null"
+    if where.kind == shell_parse.CLOSED:
+        return "discarded", "a closed descriptor"
+    if where.kind == shell_parse.FILE:
+        for other in every:
+            if other is not placed.stage and where.path in other.argv:
+                return "", ""
+        return "redirected", "`{0}`, which nothing in this command reads back".format(where.path)
+    if placed.pipe_op in shell_parse.PIPE_OPS:
+        tail = shell_parse.strip_prefixes(placed.tail.argv)
+        word = os.path.basename(tail[0]) if tail else ""
+        if word in _TRUNCATING:
+            return "truncated", "`{0}`, which keeps one end of the stream".format(word)
+    return "", ""
+
+
+def clause_narrate(reading: "shell_parse.Reading") -> Verdict:
+    refusals: List[Refusal] = []
+    seen: Set[str] = set()
+    for placed in reading.placed:
+        name = _narrating(shell_parse.strip_prefixes(placed.stage.argv))
+        if not name:
+            continue
+        how, detail = _sink(placed, reading.every)
+        if not how or name in seen:
+            continue
+        seen.add(name)
+        refusals.append(Refusal("narrate", [
+            "  {0}".format(shell_parse.short(placed.stage.text)),
+            "      `{0}` blocks for MINUTES and narrates while it does — a line a minute "
+            "naming".format(name),
+            "      what it is waiting on. Here its stdout is {0} to {1}.".format(how, detail),
+            "",
+            "  A pipe or a redirect makes that stdout a pipe or a file, so Python "
+            "block-buffers it:",
+            "  nothing appears until the command EXITS, and a truncating filter then keeps "
+            "only the",
+            "  end of what finally arrives. Correct waiting and a hang look identical from "
+            "outside.",
+            "",
+            "  THE WAIT IS NOT THE PROBLEM AND IS NOT WORTH SHORTENING. `check.yml` takes "
+            "four to",
+            "  five minutes, measured across 12 consecutive runs on 2026-09-20, and the "
+            "claim commit's",
+            "  checks are what a merge is waiting for. Five to ten minutes is the job "
+            "working.",
+            "",
+            "  Run it so its output reaches you as it happens: nothing after it — no pipe, "
+            "no redirect,",
+            "  no filter. Read the heartbeat. It says which checks are still running and "
+            "how long it",
+            "  has been.",
+            "",
+            "  If you truly need a copy on disk afterwards, `tee` keeps every byte and is "
+            "not refused",
+            "  here — but it buffers too, so the heartbeat still will not reach you while "
+            "it waits.",
+        ], "BLOCKED: this would hide the heartbeat of a command that waits for minutes."))
+    return Verdict(refusals, [])
+
+
 # ------------------------------------------------------------------------------ the verdict
 
 def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
@@ -1556,7 +1742,8 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     # and let the four-hour runaway through. Measured as a failing case in the self-test
     # before this line existed.
     if not detached(command, backgrounded) and not any(word in command for word in
-                                ("git", "gh ", "ln ", "tee", "while", "until", ">", "cd")):
+                                ("git", "gh ", "ln ", "tee", "while", "until", ">", "cd",
+                                 "merge")):
         return Verdict([], [])
 
     reading = shell_parse.read(command)
@@ -1575,6 +1762,7 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
         ("push", lambda: clause_push(reading, cwd)),
         ("stash", lambda: clause_stash(reading, cwd)),
         ("reset", lambda: clause_reset(reading, cwd)),
+        ("narrate", lambda: clause_narrate(reading)),
     ):
         if _off(clause, command):
             continue
@@ -1644,7 +1832,7 @@ def explain(command: str, write: str, cwd: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="guard-shell",
-        description="Refuse eight shell mistakes this repo has already paid for.",
+        description="Refuse nine shell mistakes this repo has already paid for.",
     )
     parser.add_argument("--hook", action="store_true",
                         help="run as a PreToolUse hook; reads the payload on stdin")

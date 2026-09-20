@@ -597,7 +597,7 @@ not rendered — not focusable, not reachable by a screen reader).
 - **Opsec, repo-wide.** A live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Mechanized by
   `scripts/githooks/pre-commit`, armed by `make hooks`.
-- **Eight shell mistakes are refused before they run**, by `scripts/guard-shell.py --hook` on
+- **Nine shell mistakes are refused before they run**, by `scripts/guard-shell.py --hook` on
   Bash and on Write/Edit, armed in both rosters (D135). Each clause resolves what a command
   would DO rather than matching what it says, carries its own escape hatch, and fails open on
   its own bugs: `PKMNSCAN_CHECKOUT` (a `git checkout`/`restore` over a modified file),
@@ -606,8 +606,16 @@ not rendered — not focusable, not reachable by a screen reader).
   `PKMNSCAN_PUSH` (a push to a differently-named upstream), `PKMNSCAN_STASH` (a bare
   `git stash`, or a `pop`/`clear`/`drop` OVER A NON-EMPTY STACK — the stack is shared by
   every worktree of this clone, and an empty one is no subject to refuse over) and `PKMNSCAN_RESET` (`git reset --hard`/`--merge`/`--keep`
-  over uncommitted tracked work). `make guard-shell-selftest` proves each one by committing
-  its mistake in a throwaway repository.
+  over uncommitted tracked work) and `PKMNSCAN_NARRATE` (hiding the heartbeat of a command
+  that waits for minutes — `make merge ARGS="<n> --confirm"` piped into `tail`/`head` or
+  redirected away). `make guard-shell-selftest` proves each one by committing its mistake in
+  a throwaway repository.
+  **The ninth clause NAMES its subjects instead of resolving them, alone among the nine.**
+  D235 argues why. No reader can say before a command runs whether it
+  blocks and narrates. A clause firing on every pipe into `tail` would be spent on day one.
+  So the roster is short and per-incident. It is also reconciled. The self-test asserts every
+  command it names still carries a heartbeat constant in the file that runs it. A preview
+  (`ARGS=<n>` with no `--confirm`) never waits, and is never this clause's business.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
   light and dark. `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
   locks every name and hex both ways.
@@ -941,6 +949,8 @@ D231 The subject list widens to the order ledger, and sealed product joins it
 D232 The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
 D233 A card row that refuses retries the ledger's own row
 D234 The archive reads the store's own composed number, and the glued-code repair reaches it too
+D235 The heartbeat is refused a pipe, and the wait learns the other half of its own question
+D236 Unsold stock is valued by SKU off the archive, one range at a time, and sealed stock is a counted gap
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
