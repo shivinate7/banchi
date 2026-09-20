@@ -3036,6 +3036,23 @@ COMPONENTS = [
                         "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
                         "row only reads it, since that row sits on the commit path (D18).",
                 "governed_by": ["D18", "D226"]},
+            "line-anchors-pin.py": {
+                "does": "`python3 scripts/line-anchors-pin.py --pin` re-measures every "
+                        "tracked markdown file's RAW `path:N`/`path:N-M` line-anchor count "
+                        "via `docs-audit.py`'s own `_line_anchor_counts()` — the same "
+                        "function the `line anchor ratchet` row calls — and rewrites "
+                        "`scripts/line-anchors.json`. Contains no counting logic of its "
+                        "own. D18: a generator may write, on no `make` target and no hook; "
+                        "`git diff scripts/line-anchors.json` is the receipt, mirroring "
+                        "`ste-ratchet-pin.py`'s own discipline exactly, one ruler over.",
+                "governed_by": ["D18", "D218", "D226", "D229"]},
+            "line-anchors.json": {
+                "does": "the line-anchor ratchet's pinned ceiling: one `path -> count` "
+                        "entry per tracked markdown file carrying at least one line "
+                        "anchor. Written only by `line-anchors-pin.py --pin`; "
+                        "`scripts/docs-audit.py`'s `line anchor ratchet` row only reads "
+                        "it, since that row sits on the commit path (D18).",
+                "governed_by": ["D18", "D111", "D149", "D163", "D180", "D221", "D225", "D229"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -3111,7 +3128,7 @@ COMPONENTS = [
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226"],
+                                "D213", "D215", "D218", "D226", "D229"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3293,6 +3310,18 @@ COMPONENTS = [
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D90", "D96", "D218"],
+            },
+            "docs-audit-line-allow.txt": {
+                "does": "`path:N`/`path:N-M` line anchors the `line anchors` row's Clause A "
+                        "would otherwise flag as past their target's end, one "
+                        "`candidate  # reason` line each. Self-cleaning, mirroring "
+                        "`docs-audit-allow.txt`'s own discipline: `check_line_anchor_"
+                        "allowlist` fails when a listed anchor's number resolves again. "
+                        "Its four entries are one record — docs/decisions/D149's own "
+                        "citation of four wrong `docs/DECISIONS.md` line numbers, kept as "
+                        "history rather than corrected, because correcting them would "
+                        "falsify what D149 is an account of.",
+                "governed_by": ["D16", "D136", "D141", "D149", "D229"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----

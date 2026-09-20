@@ -181,6 +181,10 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
     # `harness tests` at zero means TESTS is empty, `pkmnscan commands` at zero means
     # COMMANDS is, and `decision ids` at zero means the corpus is unreadable.
     "paths": ("staged", "counts the references it resolved out of the staged documents"),
+    "line anchors": (
+        "staged",
+        "counts the `path:N`/`path:N-M` line anchors it found in the staged documents",
+    ),
     "make targets": ("staged", "counts the `make` references it found in the staged documents"),
     "env vars": ("staged", "counts the variables the staged documents name"),
     "doc hygiene": ("staged", "its subject IS the staged markdown list"),
@@ -190,6 +194,10 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
     "allowlist": (
         "always",
         "an empty docs-audit-allow.txt is the ideal state, not a broken reader",
+    ),
+    "line anchor allowlist": (
+        "always",
+        "an empty docs-audit-line-allow.txt is the ideal state, not a broken reader",
     ),
     "evidence freshness": (
         "always",
@@ -589,6 +597,64 @@ def path_candidates(line: str) -> List[str]:
     return out
 
 
+# ------------------------------------------------------------------- line anchors
+
+# `path:N` and `path:N-M` — a citation naming a specific line or range inside a file, and
+# `path_candidates` above cannot see the suffix at all: `:` is not in `_CANDIDATE_RE`'s
+# character class, so `docs/GATES.md:884` is extracted as the bare path `docs/GATES.md`
+# and the `paths` row above reports "references resolve" having never read the `:884`.
+# Measured over the staged docs: 713 line-anchored references, 13 past their target's end,
+# and — the narrower, structurally blind case Clause B exists for — 2 landing on a real
+# line of a split-record stub whose content moved elsewhere in the same split.
+#
+# A NEW EXTRACTOR, NOT A WIDENED `_CANDIDATE_RE`. Three call sites depend on
+# `path_candidates` returning a list of plain strings, and folding a line-suffix onto that
+# shape would either break them or bolt a second meaning onto the same return type. This
+# reuses the same path-shaped character classes and the same three suppressions
+# (`_ROUTE`, `_QUOTED_ROUTE`, `_PLACEHOLDER`) so a route or a placeholder is still not a
+# path here either, and returns a distinct, richer type instead.
+_LINE_ANCHOR_RE = re.compile(
+    r"(?P<path>@?(?:\.\./)*[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]*):"
+    r"(?P<start>[0-9]+)(?:-(?P<end>[0-9]+))?"
+)
+
+
+class LineAnchor(NamedTuple):
+    """One `path:N` or `path:N-M` citation extracted from a line of prose. `end` is
+    `None` for a single-line anchor."""
+
+    path: str
+    start: int
+    end: Optional[int]
+
+
+def line_anchor_candidates(line: str) -> List[LineAnchor]:
+    """Extract `path:N` / `path:N-M` line-anchored citations from one line.
+
+    Pure — no Report, no filesystem access — so `--self-test` can drive it directly, the
+    same shape `unscoped_walk_sites` already uses and for the reason its own docstring
+    gives: the return value is the thing under test, not a side effect two frames away.
+
+    The path portion is not stripped or validated here — `resolve_candidate` already does
+    that (the `@` and `../` handling), and duplicating it would be the second copy this
+    file's own header warns against.
+    """
+    text = _ROUTE.sub(" ", line)
+    text = _QUOTED_ROUTE.sub(" ", text)
+    if _PLACEHOLDER.search(text):
+        text = _PLACEHOLDER.sub(" ", text)
+    out: List[LineAnchor] = []
+    for match in _LINE_ANCHOR_RE.finditer(text):
+        out.append(
+            LineAnchor(
+                match.group("path"),
+                int(match.group("start")),
+                int(match.group("end")) if match.group("end") else None,
+            )
+        )
+    return out
+
+
 def module_attributes(path: Path) -> Set[str]:
     """Top-level names a Python module defines, read statically."""
     try:
@@ -605,6 +671,45 @@ def module_attributes(path: Path) -> Set[str]:
                     names.add(target.id)
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             names.add(node.target.id)
+    return names
+
+
+_TS_SYMBOL_RE = re.compile(
+    r"^(?:export\s+default\s+)?(?:export\s+)?(?:declare\s+)?(?:async\s+)?"
+    r"(?:function\*?|class|interface|type|const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+)
+
+
+def ts_symbols(path: Path) -> Set[str]:
+    """Top-level TypeScript/TSX symbols, read statically — `module_attributes`'s own
+    promise, one language over. Line-anchored regex, no parser, no `tsc`, no subprocess:
+    this script does not run project code, the same reason it parses Python with `ast`
+    instead of importing it.
+
+    Recognises a top-level (column-0) `export function`, `function`, `export default
+    function`, `const`/`let`/`var`, `class`, `interface` and `type` declaration, with or
+    without `export`/`declare`/`async` in front. Column-0 only, on purpose — the same
+    "top-level names" scope `module_attributes` keeps for Python, so a name nested inside
+    a function body is not claimed as a module export just because this reader saw it.
+
+    WHAT THIS CANNOT SEE, and it must not claim otherwise: a symbol built by a generic
+    factory (`export const foo = makeThing()` is seen as the NAME `foo`, never what it
+    resolves to); a re-export (`export { foo } from "./bar"` is invisible — it never
+    starts with one of the keywords above); and a name assembled at runtime (a
+    dynamically keyed object, a `Proxy`, `Object.assign(exports, {...})`). A hit here
+    means the file's text names this symbol at column 0; a miss means only that this
+    static reader could not find it, never that the symbol does not exist by some other
+    construction.
+    """
+    if not exists(path):
+        return set()
+    names: Set[str] = set()
+    for line in read(path).splitlines():
+        if not line or line[0].isspace():
+            continue
+        match = _TS_SYMBOL_RE.match(line)
+        if match:
+            names.add(match.group(1))
     return names
 
 
@@ -834,9 +939,9 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
         # read as a plain missing file.
         suffix = target.suffix
         if suffix and suffix not in KNOWN_SUFFIXES:
+            attribute = suffix[1:]
             module = target.with_suffix(".py")
             if exists(module):
-                attribute = suffix[1:]
                 if attribute in module_attributes(module):
                     continue
                 findings.append(
@@ -844,6 +949,40 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
                         f"{rel(doc)}:{number}",
                         f"`{candidate}` — {rel(module)} exists but defines no "
                         f"`{attribute}`.",
+                    )
+                )
+                continue
+
+            # THE SAME FORM, FOR TYPESCRIPT. `.ts`/`.tsx` are already in KNOWN_SUFFIXES,
+            # so `app/src/server.ts.walkPlan` reads its OWN final dot as the attribute
+            # (`.walkPlan`) and `app/src/server.ts` as the module — this fallback used to
+            # try only `.py` for that module, so every TS `module.attribute` citation fell
+            # through to "does not exist" no matter how real the symbol was. `ts_symbols()`
+            # is the durable-citation form's TS reader; see its own docstring for what a
+            # static reader over TypeScript cannot see.
+            #
+            # STRIP, NEVER APPEND, WHEN THE MODULE ALREADY CARRIES ITS OWN `.ts`/`.tsx`.
+            # `target.with_suffix(".ts")` on `app/src/server.ts.walkPlan` would REPLACE the
+            # `.walkPlan` suffix with `.ts` and land on `server.ts.ts` — the bare form
+            # (`target.with_suffix("")`) is the module whenever it already ends in `.ts` or
+            # `.tsx`; only a module with no extension of its own (`app/src/server.walkPlan`)
+            # needs one appended.
+            bare = target.with_suffix("")
+            ts_candidates = (
+                [bare] if bare.suffix in (".ts", ".tsx")
+                else [bare.with_suffix(".ts"), bare.with_suffix(".tsx")]
+            )
+            ts_module = next((candidate for candidate in ts_candidates if exists(candidate)), None)
+            if ts_module is not None:
+                if attribute in ts_symbols(ts_module):
+                    continue
+                findings.append(
+                    Finding(
+                        f"{rel(doc)}:{number}",
+                        f"`{candidate}` — {rel(ts_module)} exists but defines no "
+                        f"`{attribute}` this static reader can see (a factory-built, "
+                        f"re-exported, or runtime-assembled name is invisible to it — "
+                        f"see `ts_symbols()`'s own docstring).",
                     )
                 )
                 continue
@@ -917,6 +1056,564 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
             )
     report.add("allowlist", MECHANICAL, findings, f"{len(allowed)} entries, none stale",
                scanned=len(allowed))
+
+
+# --------------------------------------------------------------------- line anchors
+
+# THE STUB ROSTER, DERIVED FROM THE CORPUS MODULES THAT REPLACED EACH STUB, NEVER TYPED.
+# `docs/DECISIONS.md`, `docs/DEBTS.md` and `docs/GATES.md` are index stubs since the split
+# (D160 and its two siblings): their records live one file each under `docs/decisions/`,
+# `docs/debts/` and `docs/gates/`, and each corpus module names both halves itself —
+# `STUB` (the file that is read by nothing) and `DIRECTORY` (where the content actually
+# lives) — because a reader that wrote its own reason for that had already drifted once.
+# A typed three-filename list here would be a fourth copy of a fact the repo already
+# states twice; reading `STUB` off the modules keeps this row unable to disagree with
+# them, at the cost of failing outright — never guessing a name — the moment one of the
+# three is missing or has lost that shape.
+_STUB_CORPUS_MODULES: Tuple[str, ...] = (
+    "decisions_corpus.py", "debts_corpus.py", "gates_corpus.py",
+)
+
+
+def _split_record_stubs() -> Optional[Set[Path]]:
+    """Every split-record stub path, or `None` when the roster could not be derived.
+
+    `None` is not "no stubs" — it is "this row cannot say", the same split every corpus
+    reader in this file already makes for `corpus_is_empty`. A caller that treated a
+    failed import as zero stubs would silently stop checking Clause B the moment one of
+    the three sibling modules broke, which is exactly the kind of quiet narrowing this
+    whole task exists to remove one level up.
+    """
+    stubs: Set[Path] = set()
+    for name in _STUB_CORPUS_MODULES:
+        module = _sibling(name)
+        if module is None:
+            return None
+        stub = getattr(module, "STUB", None)
+        directory = getattr(module, "DIRECTORY", None)
+        if not isinstance(stub, Path) or not isinstance(directory, Path):
+            return None
+        stubs.add(stub)
+    return stubs
+
+
+class ResolvedAnchor(NamedTuple):
+    """One line-anchored citation, resolved to a real repo path the same way `check_paths`
+    resolves a bare one — `.git/` excluded, a first segment outside `top_level_names()`
+    dropped. `sentence` is the doc's own line text, kept for the rot reader below so it
+    never has to re-walk the documents a second time."""
+
+    doc: Path
+    line: int
+    candidate: str
+    target: Path
+    start: int
+    end: Optional[int]
+    sentence: str
+
+
+def resolved_line_anchors(docs: Sequence[Path]) -> List[ResolvedAnchor]:
+    """Every line anchor in `docs`, resolved. Pure over its arguments plus the real repo's
+    `top_level_names()` — no Report — so `--self-test` can call it once and feed the
+    result to `line_anchor_findings` and `line_anchor_rot` without re-walking `docs`
+    three times for three different questions."""
+    tops = top_level_names()
+    out: List[ResolvedAnchor] = []
+    for doc in docs:
+        for number, line in enumerate(read(doc).splitlines(), start=1):
+            for anchor in line_anchor_candidates(line):
+                target = resolve_candidate(anchor.path, doc, tops)
+                if target is None:
+                    continue
+                # Same exclusion `check_paths` makes, for the same reason — see its own
+                # comment: `.git` is git's own storage, not repo content, and a linked
+                # worktree makes `.git` a FILE rather than a directory.
+                if rel(target).split("/")[0] == ".git":
+                    continue
+                candidate_text = f"{anchor.path}:{anchor.start}"
+                if anchor.end is not None:
+                    candidate_text += f"-{anchor.end}"
+                out.append(
+                    ResolvedAnchor(
+                        doc, number, candidate_text, target, anchor.start, anchor.end, line,
+                    )
+                )
+    return out
+
+
+def line_anchor_findings(
+    anchors: Sequence[ResolvedAnchor], stubs: Set[Path]
+) -> Tuple[List[Tuple[ResolvedAnchor, Finding]], List[Finding]]:
+    """(Clause A findings paired with their anchor, Clause B findings) for anchors whose
+    TARGET FILE ALREADY EXISTS — a line anchor into a file that does not exist at all is
+    the `paths` row's own finding, and is never re-reported here.
+
+    Clause A pairs each finding with its anchor so the caller can apply
+    `scripts/docs-audit-line-allow.txt` — keyed on the CITATION TEXT, one specific number,
+    never a bare path — without this function knowing the allowlist exists.
+
+    Clause B fires only on an anchor Clause A did NOT already catch: an anchor whose
+    number is past the stub's end is Clause A's finding, and Clause B exists precisely for
+    the anchor that survives that check because the stub happens to still be long enough
+    to contain the number — a real line, holding unrelated text, because the record it
+    once held moved to another file in the same split. Checking both unconditionally would
+    double-report the same citation under two clauses for no new information.
+
+    SHAPE ONLY. Clause A and Clause B both answer "does this number make sense", never
+    "is this the right number" — see `check_line_anchors`'s own docstring for the
+    measurement that answers the second question and the row that reports it without
+    gating on it.
+    """
+    clause_a: List[Tuple[ResolvedAnchor, Finding]] = []
+    clause_b: List[Finding] = []
+    for anchor in anchors:
+        if not exists(anchor.target):
+            continue
+        total = len(read(anchor.target).splitlines())
+        upper = anchor.end if anchor.end is not None else anchor.start
+        if anchor.start > total or upper > total:
+            clause_a.append((
+                anchor,
+                Finding(
+                    f"{rel(anchor.doc)}:{anchor.line}",
+                    f"`{anchor.candidate}` cites line {anchor.candidate.split(':', 1)[1]} "
+                    f"of {rel(anchor.target)}, which has only {total} line(s).\n"
+                    f"Fix the reference, or add it to "
+                    f"scripts/docs-audit-line-allow.txt with a reason if it is a "
+                    f"deliberate record of a past citation.",
+                ),
+            ))
+            continue
+        if anchor.target in stubs:
+            clause_b.append(
+                Finding(
+                    f"{rel(anchor.doc)}:{anchor.line}",
+                    f"`{anchor.candidate}` is a line anchor into {rel(anchor.target)}, a "
+                    f"split-record stub — its records live one file each under the "
+                    f"directory beside it, so a line number into the stub is never the "
+                    f"content it names, even when the number itself resolves.",
+                )
+            )
+    return clause_a, clause_b
+
+
+LINE_ANCHOR_ALLOWLIST = ROOT / "scripts" / "docs-audit-line-allow.txt"
+
+
+def load_line_allowlist() -> Dict[str, str]:
+    """Same shape and the same self-cleaning discipline as `load_allowlist()` (see
+    `scripts/docs-audit-allow.txt`'s own header), keyed on the CITATION TEXT
+    (`path:N`/`path:N-M`) rather than a bare path — Clause A's subject is one specific
+    number, and two different anchors into the same file are two different claims, each
+    needing its own reason and its own staleness check."""
+    if not exists(LINE_ANCHOR_ALLOWLIST):
+        return {}
+    entries: Dict[str, str] = {}
+    for line in read(LINE_ANCHOR_ALLOWLIST).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        path, _, reason = stripped.partition("#")
+        entries[path.strip()] = reason.strip()
+    return entries
+
+
+def check_line_anchor_allowlist(report: Report, allowed: Dict[str, str]) -> None:
+    """Self-cleaning, mirroring `check_allowlist` for this file's one entry kind: an
+    anchor that WAS past its target's end and now is not, because the target grew (or the
+    citation was corrected) underneath it. There is no test-id or identifier kind here —
+    every entry in this file is a line anchor, or it is not a valid entry at all."""
+    tops = top_level_names()
+    findings: List[Finding] = []
+    for entry, reason in sorted(allowed.items()):
+        match = _LINE_ANCHOR_RE.fullmatch(entry)
+        if match is None:
+            findings.append(
+                Finding(
+                    rel(LINE_ANCHOR_ALLOWLIST),
+                    f"`{entry}` is not shaped like a `path:N` or `path:N-M` line anchor, "
+                    f"so this file cannot say whether it is stale.",
+                )
+            )
+            continue
+        target = resolve_candidate(match.group("path"), ROOT / "docs" / "DECISIONS.md", tops)
+        if target is None or not exists(target):
+            continue
+        total = len(read(target).splitlines())
+        start = int(match.group("start"))
+        upper = int(match.group("end")) if match.group("end") else start
+        if start <= total and upper <= total:
+            findings.append(
+                Finding(
+                    rel(LINE_ANCHOR_ALLOWLIST),
+                    f"`{entry}` now resolves — {rel(target)} has {total} line(s) — so the "
+                    f"entry is stale — delete the line.\n"
+                    f"It was allowed because: {reason or '(no reason recorded)'}",
+                )
+            )
+    report.add(
+        "line anchor allowlist", MECHANICAL, findings,
+        f"{len(allowed)} entries, none stale", scanned=len(allowed),
+    )
+
+
+# THE ROT READER. A MEASUREMENT, NEVER A GATE — added on the coordinator's own instruction
+# that a published number needs a checked reader (D173; CLAUDE.md's "give every published
+# number and path a checked reader"), so the rot rate this task's own brief quotes (89% of
+# 206 checkable code anchors) is RECOMPUTED here rather than typed into a decision entry
+# and left to rot exactly like the citations it describes.
+#
+# THE PROBE CHECKS SHAPE-ADJACENT EVIDENCE, NEVER MEANING. D149 measured the nearest
+# mechanical proxy for "is this citation about what it says it is" — matching a quoted
+# span against a section — at one genuine catch against three false alarms, over 38 real
+# citations, and declined to build it: "no check can read what a sentence is about." This
+# reader is the same kind of proxy, one step narrower (an identifier the sentence already
+# names in backticks, not a quoted phrase), and it inherits the same limit. A MISS IS
+# EVIDENCE, NOT PROOF: a sentence may legitimately name a symbol that lives a few lines
+# away from where it happens to be discussed, or in a caller, a type, or a sibling
+# function the cited line calls. Four hand checks during this task were all genuine
+# misses (`_blank_number_by_name` cited at 1192, really at 1384; `do_pipeline_scope` at
+# 2455, really 6537; `bandOf` at 340, really 472; `pokemon_code` at 689, absent) — four is
+# a spot check, not a validation of this probe, and this docstring says so rather than
+# letting the row's own green or red text imply more than four data points support.
+_ROT_WINDOW = 5
+_ROT_NOISE = {"self", "None", "True", "False", "cls"}
+_BACKTICK_SPAN_RE = re.compile(r"`([^`]*)`")
+_ROT_TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _path_derived_tokens(path_text: str) -> Set[str]:
+    """Identifiers this reader must never award as evidence, because they come from the
+    CITATION'S OWN PATH rather than from anything the sentence says about the code.
+
+    MEASURED, AND IT IS NOT A SMALL EFFECT. Before this exclusion existed, `` `pipeline/
+    join.py:1192-1195` `` contributed the tokens `pipeline` and `join`, and `join` matches
+    near almost any line of `join.py` by construction — the file's own name is not
+    evidence that the CITED LINE is the right one. Over this repo's real corpus: 59 of 155
+    raw hits (38%) were carried SOLELY by a token derived from the anchor's own path, and
+    excluding them also moves the not-checkable count from 14 to 132 — 118 sentences name
+    no identifier at all except the citation itself, and counting those as checkable was
+    the same failure from the other direction: folding "nothing to check" into a passing
+    denominator, which is exactly what D149's own closing line warns against ("a pattern
+    that finds nothing reports nothing, and nothing reads as green").
+
+    Every 4+ character word out of the full path text AND its bare filename/stem — a
+    citation of `server/capture_server.py:200` must not score a hit on the word `server`
+    or `capture_server` appearing near line 200 of that same file, which it almost always
+    will.
+    """
+    tokens: Set[str] = set()
+    for text in (path_text, Path(path_text).name, Path(path_text).stem):
+        tokens.update(token for token in _ROT_TOKEN_RE.findall(text) if len(token) >= 4)
+    return tokens
+
+
+def _rot_identifiers(sentence: str, exclude: Set[str] = frozenset()) -> List[str]:
+    """Identifiers (4+ characters) the citing sentence names in backticks, in order, de-
+    duplicated, obvious noise excluded, and — since the fix above — every token in
+    `exclude` (the anchor's own path-derived tokens, from `_path_derived_tokens`) also
+    excluded. Returns `[]` when the sentence names nothing else — the caller's job is to
+    count that as NOT CHECKABLE and never fold it into the denominator as a pass, which is
+    D149's own closing lesson: "a pattern that finds nothing reports nothing, and nothing
+    reads as green.\""""
+    out: List[str] = []
+    seen: Set[str] = set()
+    for span in _BACKTICK_SPAN_RE.findall(sentence):
+        for token in _ROT_TOKEN_RE.findall(span):
+            if len(token) < 4 or token in _ROT_NOISE or token in seen or token in exclude:
+                continue
+            seen.add(token)
+            out.append(token)
+    return out
+
+
+def _rot_verdict(
+    lines: Sequence[str], start: int, end: Optional[int], identifiers: Sequence[str]
+) -> str:
+    """`"hit"` | `"miss"` | `"not-checkable"` | `"past-eof"` for one line anchor into code
+    whose target file exists, isolated from I/O so `--self-test` can drive it with plain
+    lists rather than real files on disk.
+
+    `"not-checkable"` when the sentence names no identifier — never silently treated as a
+    pass. `"past-eof"` when the anchor's own number is beyond the file (Clause A's own
+    question, answered again here because this reader is handed the raw line count rather
+    than `check_line_anchors`'s own Clause A verdict, and the two must never be able to
+    disagree about the same anchor). Otherwise a WINDOW of `_ROT_WINDOW` lines on each side
+    of the cited line or range — "in either direction", per the brief — is searched for any
+    named identifier as a whole word; any match is a `"hit"`, and none is a `"miss"`.
+    """
+    if not identifiers:
+        return "not-checkable"
+    upper = end if end is not None else start
+    if start > len(lines) or upper > len(lines):
+        return "past-eof"
+    lo = max(1, start - _ROT_WINDOW)
+    hi = min(len(lines), upper + _ROT_WINDOW)
+    window = "\n".join(lines[lo - 1:hi])
+    for ident in identifiers:
+        if re.search(r"\b" + re.escape(ident) + r"\b", window):
+            return "hit"
+    return "miss"
+
+
+def line_anchor_rot(anchors: Sequence[ResolvedAnchor]) -> Dict[str, object]:
+    """hit / miss / not-checkable / past-eof counts and the miss RATE, over line anchors
+    into CODE (target suffix is not `.md`) whose target file exists.
+
+    EVERY IDENTIFIER DERIVED FROM THE ANCHOR'S OWN PATH IS EXCLUDED before the window
+    search (`_path_derived_tokens`) — see that function's own docstring for the measured
+    reason (59 of 155 raw hits, 38%, were carried solely by the citation naming its own
+    file). Without the exclusion this reader answers a different, easier question — "does
+    this file's own name appear near the line it names itself" — which is nearly always
+    yes and proves nothing about whether the LINE NUMBER is right.
+
+    `rate` is `miss / (hit + miss)` — `not-checkable` and `past-eof` anchors are excluded
+    from both the numerator and the denominator, never counted as a pass. `rate` is `None`
+    when nothing was checkable, which the caller must print as `n/a`, never as `0%` — a
+    probe that found nothing to check is not evidence of a clean corpus. The exclusion
+    above also moves the not-checkable count up (14 → 132, measured): a sentence whose
+    ONLY backticked content is the citation itself now correctly reports it has named no
+    OTHER identifier, rather than crediting the citation with checking itself.
+    """
+    counts: Dict[str, int] = {"hit": 0, "miss": 0, "not-checkable": 0, "past-eof": 0}
+    for anchor in anchors:
+        if anchor.target.suffix == ".md" or not exists(anchor.target):
+            continue
+        exclude = _path_derived_tokens(anchor.candidate.split(":", 1)[0])
+        identifiers = _rot_identifiers(anchor.sentence, exclude)
+        lines = read(anchor.target).splitlines()
+        verdict = _rot_verdict(lines, anchor.start, anchor.end, identifiers)
+        counts[verdict] += 1
+    checkable = counts["hit"] + counts["miss"]
+    rate = round(counts["miss"] / checkable, 3) if checkable else None
+    result: Dict[str, object] = dict(counts)
+    result["checkable"] = checkable
+    result["rate"] = rate
+    return result
+
+
+def check_line_anchors(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
+    """`:N` and `:N-M` line-anchor citations, over Clause A (the line must exist) and
+    Clause B (never into a split-record stub) — see the section header above this
+    function's own neighbours for the measurement, and D149 for the boundary this row
+    deliberately does not cross (see the next paragraph).
+
+    SHAPE ONLY, AND THIS ROW MUST NEVER BE READ AS MORE THAN THAT. A citation pointing at
+    a real line whose content has since moved is INVISIBLE to Clause A and Clause B alike,
+    and this row reports every one of them green, correctly, because neither clause's job
+    is to read what the cited line says. Clause B is the one slice where shape and meaning
+    happen to coincide: a stub is ALWAYS the wrong file for a record's content,
+    independent of what the number is, so "shape" (which file) is enough to answer
+    "meaning" (is the citation right) for that one case only. The `line anchor rot`
+    figures folded into this row's own summary are a MEASUREMENT of the gap this
+    paragraph names, never a gate on it — see `line_anchor_rot`'s own docstring.
+
+    TWO HONEST NUMBERS, NOT ONE, AND THEY ARE NOT RECONCILED. The task's own brief quoted
+    89% (183 of 206) from a STRICTER probe — a backtick span that is a single bare
+    identifier, denominator 206. `line_anchor_rot` below is a LOOSER probe — any 4+ char
+    identifier anywhere in a backtick span, path-derived tokens excluded, denominator 317
+    — and measures roughly 70% (221 of 317) on the same tree. The two populations
+    genuinely differ (a citing sentence with a bare identifier alongside other backticked
+    text is checkable to the second probe and not the first), so this docstring reports a
+    RANGE with both definitions named rather than picking one number to publish. What is
+    not in doubt, under either definition, is the direction: most checkable line anchors
+    on this tree name a symbol that has moved.
+    """
+    stubs = _split_record_stubs()
+    if stubs is None:
+        report.add(
+            "line anchors", MECHANICAL,
+            [
+                Finding(
+                    "scripts/decisions_corpus.py",
+                    "the split-record stub roster could not be derived from "
+                    "decisions_corpus.py, debts_corpus.py and gates_corpus.py — one is "
+                    "missing, or does not carry both STUB and DIRECTORY. Clause B (a line "
+                    "anchor into a split-record stub) cannot run without it.",
+                )
+            ],
+            "stub roster unavailable, so nothing was checked", scanned=0,
+        )
+        return
+
+    anchors = resolved_line_anchors(docs)
+    clause_a_all, clause_b = line_anchor_findings(anchors, stubs)
+    clause_a = [finding for anchor, finding in clause_a_all if anchor.candidate not in allowed]
+    allowed_count = len(clause_a_all) - len(clause_a)
+    findings = clause_a + clause_b
+
+    rot = line_anchor_rot(anchors)
+    rate = rot["rate"]
+    rate_note = f"{rate * 100:.1f}%" if rate is not None else "n/a"
+    summary = (
+        f"{len(anchors)} line anchors checked, {len(clause_a)} past the target's end "
+        f"({allowed_count} allowed), {len(clause_b)} into a split-record stub. "
+        f"MEASURED, NEVER GATED: of {rot['checkable']} checkable code anchors (naming an "
+        f"identifier of 4+ chars in backticks), {rot['miss']} land away from it "
+        f"({rate_note} miss rate) — {rot['not-checkable']} named no identifier and are not "
+        f"counted, {rot['past-eof']} are past the target's end and already counted above. "
+        f"A miss is evidence, not proof — see `line_anchor_rot`'s own docstring."
+    )
+    report.add("line anchors", MECHANICAL, findings, summary, scanned=len(anchors))
+
+
+# --------------------------------------------------------------- line anchor ratchet (D229)
+
+# CLAUSE C: A PER-FILE RATCHET ON THE ANCHOR COUNT, NEVER A REPO-WIDE ONE — D229's own
+# ruling, and the reasoning is D226's, mirrored exactly: a repo-wide number is one every
+# merge takes from somebody, so the pin is one entry per CITING markdown file, and only a
+# RISE in that file's own count is a failure. D218 is the closer model of the two — it is
+# the newer discipline the owner named — but the SHAPE (a `files` map, not a scalar) is
+# D226's amendment, because "leave nothing alone" (the owner's ruling for this clause) means
+# every anchor, resolving or not, docs-target or code-target, counts toward the ratchet: a
+# citation that goes from resolving to dangling is still a line anchor someone wrote, and
+# Clause A/B already have their own findings for the dangling case.
+#
+# READS THE WHOLE TRACKED MARKDOWN TREE, staged or not — `check_ste_ratchet`'s own reasoning:
+# a backlog ratchet's subject is the corpus, not the files one commit happens to touch.
+#
+# ONE RULE DOES NOT MIRROR D226: A FILE THE PIN HAS NEVER SEEN IS HELD TO ZERO, NEVER
+# ACCEPTED AT ITS OWN RATE. `_ste_ratchet_verdict` treats an unseen file as free because its
+# subject is a RATIO over prose that already exists. This ratchet counts an ABSOLUTE NUMBER
+# of a thing the owner ruled should only fall, and a new markdown file is exactly where a
+# new line anchor is written — accepting it unseen would leave the inflow this clause exists
+# to stop wide open. See `_line_anchor_ratchet_verdict`'s own docstring.
+LINE_ANCHOR_RATCHET_PIN = ROOT / "scripts" / "line-anchors.json"
+
+
+def _line_anchor_counts(docs: Sequence[Path]) -> Dict[str, int]:
+    """path -> RAW line-anchor count in that document's own prose — every candidate
+    `line_anchor_candidates` extracts, whether or not it resolves to a real file today.
+    Files with zero anchors are omitted, the same "only what it counts" discipline
+    `_ste_ratchet_verdict`'s own `files` map keeps."""
+    counts: Dict[str, int] = {}
+    for doc in docs:
+        total = 0
+        for line in read(doc).splitlines():
+            total += len(line_anchor_candidates(line))
+        if total:
+            counts[rel(doc)] = total
+    return counts
+
+
+def _read_line_anchor_pin(path: Optional[Path] = None) -> Optional[Dict[str, object]]:
+    """The ratchet's pinned per-file ceiling, or `None` when it cannot be read, is not
+    JSON, or does not carry this ratchet's own shape (a `files` map of path -> int).
+    Mirrors `_read_ste_ratchet_pin`'s `None`/real-value split exactly: `0` is a real,
+    achievable ceiling for a file and a missing or malformed pin is a different answer
+    this row must refuse rather than silently treat as "nothing pinned yet, so nothing is
+    a violation".
+    """
+    path = LINE_ANCHOR_RATCHET_PIN if path is None else path
+    if not exists(path):
+        return None
+    try:
+        data = json.loads(read(path))
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    files = data.get("files")
+    if not isinstance(files, dict):
+        return None
+    for value in files.values():
+        if not isinstance(value, int):
+            return None
+    return data
+
+
+def _line_anchor_ratchet_verdict(
+    counts: Dict[str, int], pin: Optional[Dict[str, object]]
+) -> Tuple[str, List[str]]:
+    """`("unpinned" | "rose" | "ok", risen)` — one comparison per file, against that
+    file's OWN pin.
+
+    DELIBERATELY NOT `_ste_ratchet_verdict`'s OWN RULE FOR AN UNSEEN FILE, and the reason
+    is the coordinator's own catch: that ratchet accepts a file the pin has never seen at
+    its OWN natural rate, because its subject is a RATIO over prose that already exists —
+    a new file starting at its own rate is reasonable there. This ratchet counts an
+    ABSOLUTE NUMBER of a thing the owner ruled should only fall ("leave nothing alone"),
+    and a new markdown file is exactly where a new line anchor gets written — accepting
+    it unseen would leave open the one inflow this clause exists to close. So a file the
+    pin has never seen is held to ZERO: any anchor in it is a finding, naming the count
+    and telling the author to pin deliberately with the generator. D229 still holds — the
+    pin stays per file, so the diff for a new file belongs to the branch that added it,
+    never a scalar taken from somebody else's file.
+
+    A pin whose file dropped to zero anchors (or was deleted) is still a fall to nothing,
+    never a failure — that half of `_ste_ratchet_verdict`'s reasoning DOES transfer,
+    because a fall is a fall under either ratchet's own rule. `ok` covers strictly lower
+    and exactly equal, for a file the pin already knows.
+    """
+    if pin is None:
+        return "unpinned", []
+    pinned_files = pin.get("files", {})
+    pinned_files = pinned_files if isinstance(pinned_files, dict) else {}
+    risen: List[str] = []
+    for path in sorted(counts):
+        now = counts[path]
+        was = pinned_files.get(path)
+        if was is None:
+            risen.append(
+                f"{path}: no pin (new file) — {now} line anchor(s), held to zero. Pin "
+                f"it deliberately: `python3 scripts/line-anchors-pin.py --pin`."
+            )
+            continue
+        if now > was:
+            risen.append(f"{path}: {was} pinned, {now} now (+{now - was})")
+    return ("rose" if risen else "ok"), risen
+
+
+def check_line_anchor_ratchet(report: Report) -> None:
+    """Clause C. See the section header above for the whole argument; this docstring is
+    the row's own mechanics, one ruler over from `check_ste_ratchet` and DELIBERATELY
+    NOT ITS TWIN on the unseen-file rule — see `_line_anchor_ratchet_verdict`'s own
+    docstring for why.
+
+    `scripts/line-anchors.json` is pinned only by `scripts/line-anchors-pin.py --pin`, a
+    person, on purpose, once (D18: a generator may write, and nothing that writes may
+    gate a commit — this row never writes)."""
+    counts = _line_anchor_counts(markdown_files())
+    pin = _read_line_anchor_pin()
+    verdict, risen = _line_anchor_ratchet_verdict(counts, pin)
+
+    if verdict == "unpinned":
+        report.add(
+            "line anchor ratchet", MECHANICAL,
+            [
+                Finding(
+                    rel(LINE_ANCHOR_RATCHET_PIN),
+                    f"no ceiling pinned, or the pin file does not carry this ratchet's "
+                    f"per-file shape (a `files` map of path -> int) — "
+                    f"{sum(counts.values())} line anchors found just now across "
+                    f"{len(counts)} files. Run `python3 scripts/line-anchors-pin.py "
+                    f"--pin` first, on purpose, once — never quietly.",
+                )
+            ],
+            "no pin — cannot tell a rise from a fall", scanned=len(counts),
+        )
+        return
+
+    if verdict == "rose":
+        findings = [Finding(rel(LINE_ANCHOR_RATCHET_PIN), line) for line in risen]
+        report.add(
+            "line anchor ratchet", MECHANICAL, findings,
+            f"{sum(counts.values())} line anchors over {len(counts)} files — "
+            f"{len(risen)} file(s) rose (a new, unpinned file with any anchor counts as "
+            f"a rise from zero). Fix the new anchor(s) named below, or, if the addition "
+            "is deliberately accepted, run `python3 scripts/line-anchors-pin.py --pin` "
+            "and say why in the commit.",
+            scanned=len(counts),
+        )
+        return
+
+    pinned_files = pin.get("files", {}) if isinstance(pin.get("files"), dict) else {}
+    report.add(
+        "line anchor ratchet", MECHANICAL, [],
+        f"{sum(counts.values())} line anchors over {len(counts)} files, every one at or "
+        f"under its own pinned ceiling ({len(pinned_files)} pinned).",
+        scanned=len(counts),
+    )
 
 
 # ----------------------------------------------------------------------- make targets
@@ -16925,6 +17622,45 @@ def self_test() -> int:
         findings = report.checks[0].findings
         ok(len(findings) == 1, "a function that is not defined is reported", str(findings))
 
+    print("\nmodule.attribute falls through to TypeScript when no .py module exists")
+    with tempfile.TemporaryDirectory() as tmp:
+        doc = Path(tmp) / "fake.md"
+        # `app/src/server.ts.describeFailure` — the exact shape the fallback used to get
+        # wrong: `.describeFailure` is not in KNOWN_SUFFIXES, so `target.with_suffix(".py")`
+        # is tried first (never exists here), and the reader must move on to `.ts` rather
+        # than reporting a missing file over a symbol that is real.
+        doc.write_text("`app/src/server.ts.describeFailure` formats the toast.\n", encoding="utf-8")
+        report = Report()
+        check_paths(report, [doc], {})
+        ok(not report.checks[0].findings,
+           "a real exported TS function resolves through the .ts fallback",
+           str(report.checks[0].findings))
+
+        doc.write_text("`app/src/server.ts.noSuchExport` formats the toast.\n", encoding="utf-8")
+        report = Report()
+        check_paths(report, [doc], {})
+        ok(len(report.checks[0].findings) == 1,
+           "a TS symbol that is not defined is reported, not silently accepted",
+           str(report.checks[0].findings))
+
+    print("\nts_symbols reads top-level exports and refuses what it cannot see")
+    with tempfile.TemporaryDirectory() as tmp:
+        ts = Path(tmp) / "thing.ts"
+        ts.write_text(
+            "export function realOne() { return 1; }\n"
+            "const notExported = 2;\n"
+            "  function indented() { return 3; }\n"  # not column-0: must be invisible
+            "export const anotherReal = 4;\n",
+            encoding="utf-8",
+        )
+        names = ts_symbols(ts)
+        ok("realOne" in names and "anotherReal" in names,
+           "top-level export function and export const are both found", str(names))
+        ok("indented" not in names,
+           "an indented (non-top-level) function is not claimed", str(names))
+        ok("neverDefined" not in names,
+           "an absent symbol is refused, not guessed", str(names))
+
     print("\nallowlist is self-cleaning")
     report = Report()
     check_allowlist(report, {"harness/run.py": "pretend this is planned"})
@@ -16934,6 +17670,217 @@ def self_test() -> int:
     check_allowlist(report, {"harness/not_yet.py": "genuinely planned"})
     findings = report.checks[0].findings
     ok(not findings, "absent path in the allowlist is fine", str(findings))
+
+    print("\nline anchor extractor: path:N and path:N-M, routes and placeholders still suppressed")
+    ok(
+        line_anchor_candidates("see `docs/GATES.md:884` for the record")
+        == [LineAnchor("docs/GATES.md", 884, None)],
+        "a single-line anchor is extracted",
+    )
+    ok(
+        line_anchor_candidates("`docs/GATES.md:5-7` covers the whole run")
+        == [LineAnchor("docs/GATES.md", 5, 7)],
+        "a range anchor is extracted",
+    )
+    ok(
+        not line_anchor_candidates("POST /pipeline/value:200 is not a real shape anyway"),
+        "a method-prefixed route is not read as a line anchor",
+    )
+    ok(
+        not line_anchor_candidates("GET /photo/<box>/<index>:5 is a placeholder, not a path"),
+        "a placeholder segment suppresses the match, same as `path_candidates`",
+    )
+
+    print("\nline anchors: Clause A fires past the target's end, in range is clean")
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "target.py"
+        target.write_text("\n".join(f"line {n}" for n in range(1, 11)) + "\n", encoding="utf-8")
+        doc = Path(tmp) / "fake.md"
+
+        in_range = ResolvedAnchor(doc, 1, "target.py:10", target, 10, None, "cites `target.py:10`")
+        past_end = ResolvedAnchor(doc, 2, "target.py:11", target, 11, None, "cites `target.py:11`")
+        clause_a, clause_b = line_anchor_findings([in_range, past_end], set())
+        ok(len(clause_a) == 1 and clause_a[0][0] is past_end,
+           "only the past-the-end anchor is a Clause A finding", str(clause_a))
+        ok(not clause_b, "no stub involved, so Clause B is silent")
+
+        print("\nline anchors: a range anchor's UPPER bound past the end fires, not just the lower")
+        range_ok = ResolvedAnchor(doc, 3, "target.py:8-10", target, 8, 10, "cites `target.py:8-10`")
+        range_past = ResolvedAnchor(doc, 4, "target.py:8-11", target, 8, 11, "cites `target.py:8-11`")
+        clause_a, _ = line_anchor_findings([range_ok, range_past], set())
+        ok(len(clause_a) == 1 and clause_a[0][0] is range_past,
+           "the range whose upper bound is past the end is the one finding", str(clause_a))
+
+        print("\nline anchors: Clause B fires on a stub even when the number resolves")
+        stub_hit = ResolvedAnchor(doc, 5, "target.py:3", target, 3, None, "cites `target.py:3`")
+        clause_a, clause_b = line_anchor_findings([stub_hit], {target})
+        ok(not clause_a, "the number is in range, so Clause A is silent", str(clause_a))
+        ok(len(clause_b) == 1, "the target is a registered stub, so Clause B fires", str(clause_b))
+
+        # THE SAME ANCHOR, PAST THE END *AND* INTO A STUB, IS CLAUSE A'S ALONE — Clause B
+        # only answers for an anchor Clause A did not already catch, so double-reporting
+        # one citation under two clauses never happens.
+        stub_and_past = ResolvedAnchor(doc, 6, "target.py:99", target, 99, None, "x")
+        clause_a, clause_b = line_anchor_findings([stub_and_past], {target})
+        ok(len(clause_a) == 1 and not clause_b,
+           "past-the-end wins over stub membership — one finding, not two",
+           f"clause_a={clause_a} clause_b={clause_b}")
+
+    print("\nline anchors: the stub roster is derived from the corpus modules, never typed")
+    stubs = _split_record_stubs()
+    ok(stubs is not None, "the roster derives from decisions/debts/gates_corpus.py", str(stubs))
+    if stubs is not None:
+        ok(
+            {ROOT / "docs" / "DECISIONS.md", ROOT / "docs" / "DEBTS.md", ROOT / "docs" / "GATES.md"}
+            == stubs,
+            "the three known stubs, exactly",
+            str(stubs),
+        )
+
+    print("\nline anchor allowlist is self-cleaning, mirroring check_allowlist's own discipline")
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "short.md"
+        target.write_text("one\ntwo\nthree\n", encoding="utf-8")
+        # A REAL REPO PATH IS NEEDED for `resolve_candidate` to accept the entry at all —
+        # `docs/DECISIONS.md` is a real, small, stable file (the split-record stub itself),
+        # the same trick `check_paths`'s own self-test uses real repo files for.
+        real_target = ROOT / "docs" / "DECISIONS.md"
+        real_total = len(read(real_target).splitlines())
+
+        report = Report()
+        check_line_anchor_allowlist(report, {f"docs/DECISIONS.md:{real_total + 500}": "test"})
+        ok(not report.checks[0].findings,
+           "an entry still past the end is not stale", str(report.checks[0].findings))
+
+        report = Report()
+        check_line_anchor_allowlist(report, {"docs/DECISIONS.md:1": "test"})
+        ok(len(report.checks[0].findings) == 1,
+           "an entry whose anchor now resolves is reported stale",
+           str(report.checks[0].findings))
+
+        report = Report()
+        check_line_anchor_allowlist(report, {"not a line anchor at all": "test"})
+        ok(len(report.checks[0].findings) == 1,
+           "a malformed entry is reported rather than silently ignored",
+           str(report.checks[0].findings))
+
+    print("\nline anchor ratchet: the verdict arithmetic, isolated from the file walk and the pin file")
+    ok(_line_anchor_ratchet_verdict({"a.md": 3}, None) == ("unpinned", []),
+       "no pin at all is its own state, never treated as zero")
+    ok(_line_anchor_ratchet_verdict({"a.md": 3}, {"files": {"a.md": 3}}) == ("ok", []),
+       "an exact match is accepted silently")
+    ok(_line_anchor_ratchet_verdict({"a.md": 2}, {"files": {"a.md": 3}}) == ("ok", []),
+       "a fall is accepted exactly as silently as a tie")
+    verdict, risen = _line_anchor_ratchet_verdict({"a.md": 4}, {"files": {"a.md": 3}})
+    ok(verdict == "rose" and len(risen) == 1 and "a.md" in risen[0],
+       "a raised per-file count is a rise, and names the file", f"{verdict} {risen}")
+    # THE COORDINATOR'S OWN CATCH: an unseen file is HELD TO ZERO, unlike
+    # `_ste_ratchet_verdict`'s own rule — new anchors in a brand-new file must be a rise,
+    # never an accepted freebie, or the ratchet is open on exactly the inflow it exists
+    # to stop.
+    verdict, risen = _line_anchor_ratchet_verdict(
+        {"a.md": 4, "b.md": 1}, {"files": {"a.md": 5}})
+    ok(verdict == "rose" and any("b.md" in line for line in risen),
+       "a file the pin has never seen is a rise, named, held to zero — never accepted "
+       "at its own rate",
+       f"{verdict} {risen}")
+    verdict, risen = _line_anchor_ratchet_verdict({"a.md": 3}, {"files": {"a.md": 3, "gone.md": 9}})
+    ok(verdict == "ok", "a pin whose file is gone (fell to zero anchors) is not a failure",
+       f"{verdict} {risen}")
+
+    print("\nrot probe: identifiers, the verdict, and the arm that fails on purpose")
+    ok(_rot_identifiers("no backticks here at all") == [],
+       "a sentence with no backticked span names no identifier")
+    ok(_rot_identifiers("uses `self`, `None` and `abc` — all too short or noise") == [],
+       "noise and short tokens are excluded even inside backticks",
+       str(_rot_identifiers("uses `self`, `None` and `abc` — all too short or noise")))
+    ok(_rot_identifiers("calls `do_pipeline_scope()` from the route") == ["do_pipeline_scope"],
+       "a real identifier inside a call expression is extracted",
+       str(_rot_identifiers("calls `do_pipeline_scope()` from the route")))
+
+    print("\nrot probe: the citation's own path never counts as its own evidence")
+    ok(_path_derived_tokens("pipeline/join.py") == {"pipeline", "join"},
+       "the full path and its stem both contribute tokens",
+       str(_path_derived_tokens("pipeline/join.py")))
+    exclude = _path_derived_tokens("pipeline/join.py")
+    # THE COORDINATOR'S OWN FIXTURE: a sentence whose ONLY backticked span IS the
+    # citation must score NOT-CHECKABLE, never a hit carried by the file naming itself.
+    ok(_rot_identifiers("see `pipeline/join.py:1192-1195`", exclude) == [],
+       "a sentence with no OTHER identifier than the citation itself names nothing "
+       "checkable — `join` and `pipeline` are excluded as path-derived",
+       str(_rot_identifiers("see `pipeline/join.py:1192-1195`", exclude)))
+    # AND A REAL, OTHER IDENTIFIER BESIDE THE CITATION STILL COUNTS.
+    ok(_rot_identifiers(
+        "`pipeline/join.py:1192` calls `do_pipeline_scope`", exclude
+    ) == ["do_pipeline_scope"],
+       "a genuine second identifier beside the citation is still extracted",
+       str(_rot_identifiers("`pipeline/join.py:1192` calls `do_pipeline_scope`", exclude)))
+
+    join_lines = [f"line {n}" for n in range(1, 2000)]
+    join_lines[1191] = "def join_positions():"  # line 1192 — the word `join` sits right here
+    citation_only_anchor = ResolvedAnchor(
+        Path("x.md"), 1, "pipeline/join.py:1192", Path("pipeline/join.py"), 1192, None,
+        "see `pipeline/join.py:1192` for the join key",
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        code = Path(tmp) / "join.py"
+        code.write_text("\n".join(join_lines) + "\n", encoding="utf-8")
+        anchor = citation_only_anchor._replace(target=code)
+        rot = line_anchor_rot([anchor])
+        # THE ARM THAT FAILS ON PURPOSE, PER THE COORDINATOR: an implementation that
+        # scores this as a hit is exactly the bug reported (the file's own name matching
+        # near the cited line). The fixed reader must call it not-checkable.
+        ok(rot["not-checkable"] == 1 and rot["hit"] == 0 and rot["miss"] == 0,
+           "a citation whose only backticked identifier is its own path scores "
+           "not-checkable, never a free hit off the filename",
+           str(rot))
+
+    rot_lines = [f"line {n}" for n in range(1, 31)]
+    rot_lines[19] = "def do_pipeline_scope():"  # line 20, 1-indexed
+    ok(_rot_verdict(rot_lines, 20, None, ["do_pipeline_scope"]) == "hit",
+       "the identifier sits exactly on the cited line")
+    ok(_rot_verdict(rot_lines, 15, None, ["do_pipeline_scope"]) == "hit",
+       "the identifier is within the window, a few lines off the cited one")
+    # THE ARM THAT FAILS ON PURPOSE. A prober that always answered "hit" — the exact
+    # failure D149 records for its own broken JSON-key probe, where "a pattern that finds
+    # nothing reports nothing, and nothing reads as green" — would pass every case above
+    # AND this one. This fixture cites a real identifier that is genuinely nowhere near
+    # the cited line, and the real prober must say so.
+    ok(_rot_verdict(rot_lines, 1, None, ["do_pipeline_scope"]) == "miss",
+       "an identifier far from the cited line is a genuine miss — "
+       "a naive always-hit stand-in would pass this fixture and every one above it, "
+       "which is exactly why this fixture exists")
+    ok(_rot_verdict(rot_lines, 20, None, []) == "not-checkable",
+       "no identifier at all is NOT CHECKABLE, never silently a hit")
+    ok(_rot_verdict(rot_lines, 100, None, ["do_pipeline_scope"]) == "past-eof",
+       "a start past the file's own length is past-eof, not a miss")
+    ok(_rot_verdict(rot_lines, 25, 100, ["do_pipeline_scope"]) == "past-eof",
+       "a range whose upper bound is past the end is past-eof too")
+
+    print("\nrot probe: the aggregate excludes docs targets, not-checkable and past-eof from the rate")
+    with tempfile.TemporaryDirectory() as tmp:
+        code = Path(tmp) / "code.py"
+        code.write_text("\n".join(rot_lines) + "\n", encoding="utf-8")
+        doc_target = Path(tmp) / "some.md"
+        doc_target.write_text("\n".join(rot_lines) + "\n", encoding="utf-8")
+        anchors = [
+            ResolvedAnchor(doc, 1, "code.py:20", code, 20, None,
+                            "cites `do_pipeline_scope` at code.py:20"),  # hit
+            ResolvedAnchor(doc, 2, "code.py:1", code, 1, None,
+                            "cites `do_pipeline_scope` at code.py:1"),  # miss
+            ResolvedAnchor(doc, 3, "code.py:5", code, 5, None, "no identifier here"),  # not-checkable
+            ResolvedAnchor(doc, 4, "code.py:500", code, 500, None,
+                            "cites `do_pipeline_scope` at code.py:500"),  # past-eof
+            ResolvedAnchor(doc, 5, "some.md:20", doc_target, 20, None,
+                            "cites `do_pipeline_scope` at some.md:20"),  # excluded: docs target
+        ]
+        rot = line_anchor_rot(anchors)
+        ok(rot["hit"] == 1 and rot["miss"] == 1 and rot["not-checkable"] == 1
+           and rot["past-eof"] == 1,
+           "each bucket counts exactly the fixture built for it", str(rot))
+        ok(rot["checkable"] == 2 and rot["rate"] == 0.5,
+           "the rate is miss / (hit + miss) only — not-checkable, past-eof and the "
+           "docs-target anchor never enter the denominator", str(rot))
 
     print("\nast readers handle the real files")
     runner = ROOT / "harness" / "run.py"
@@ -19226,6 +20173,10 @@ def audit(staged_only: bool) -> Report:
 
     check_paths(report, docs, allowed)
     check_allowlist(report, allowed)
+    line_allowed = load_line_allowlist()
+    check_line_anchors(report, docs, line_allowed)
+    check_line_anchor_allowlist(report, line_allowed)
+    check_line_anchor_ratchet(report)
     check_make_targets(report, docs)
     check_pkmnscan_commands(report, docs, all_docs)
     check_harness_tests(report, docs, allowed)

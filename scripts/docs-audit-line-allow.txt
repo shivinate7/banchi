@@ -1,0 +1,17 @@
+# Line-anchored citations (`path:N` / `path:N-M`) that name a specific number this row
+# would otherwise flag as past their target's end (Clause A only — see
+# scripts/docs-audit.py's `check_line_anchors`). One `candidate  # reason` per line.
+#
+# SELF-CLEANING, the same discipline scripts/docs-audit-allow.txt's own header states:
+# `check_line_anchor_allowlist` FAILS when a listed anchor's number resolves again, so
+# the entry has to be deleted at the moment it stops being true. A reason is not optional.
+#
+# Clause B (a line anchor into a split-record stub) has no allowlist. A stub is always
+# the wrong file for a record's content, independent of the number, so there is no state
+# in which one of those citations becomes correct — nothing to wait out.
+#
+# ALL FOUR ENTRIES BELOW ARE ONE RECORD, docs/decisions/D149-a-section-number-that-resolves-is-not-a-citation-that-is.md's own account of "The five files": a citation this row's number would flag is transcribed at its lines 7, 9, 11 and 13, verbatim, as evidence of a mistake that predates the docs/DECISIONS.md split. Two of the four (lines 9 and 11) share the same candidate text, so they collapse to one key here — the file still lists both source lines, because the record names both.
+docs/DECISIONS.md:9522  # D149 §"The five files", line 7 of that entry: one of the seven wrong citations of DEBT11 the section kept as history. Rewriting it falsifies the record.
+docs/DECISIONS.md:6111  # D149 §"The five files", line 9 of that entry (D136's own citation). See the header note above — this key also covers the entry's line 13.
+docs/DECISIONS.md:6111  # D149 §"The five files", line 13 of that entry — the second of the two sites sharing this candidate text.
+docs/DECISIONS.md:10084  # D149 §"The five files", line 11 of that entry (D141's own citation).

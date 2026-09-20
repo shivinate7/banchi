@@ -12,13 +12,13 @@
     },
     "AGENTS.md": {
       "errors": 17,
-      "ratio_per_1k_words": 1.452,
-      "words": 11709
+      "ratio_per_1k_words": 1.427,
+      "words": 11913
     },
     "CLAUDE.md": {
       "errors": 17,
-      "ratio_per_1k_words": 1.452,
-      "words": 11709
+      "ratio_per_1k_words": 1.427,
+      "words": 11913
     },
     "README.md": {
       "errors": 29,
@@ -219,11 +219,6 @@
       "errors": 6,
       "ratio_per_1k_words": 13.857,
       "words": 433
-    },
-    "D232": {
-      "errors": 0,
-      "ratio_per_1k_words": 0.0,
-      "words": 891
     },
     "docs/decisions/D001-two-phase-architecture.md": {
       "errors": 1,
@@ -1323,7 +1318,7 @@
     "docs/decisions/D220-orders-is-inventory.md": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
-      "words": 745
+      "words": 1324
     },
     "docs/decisions/D221-money-stays-mono.md": {
       "errors": 0,
@@ -1333,7 +1328,7 @@
     "docs/decisions/D222-a-archive-press-pace.md": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
-      "words": 681
+      "words": 1089
     },
     "docs/decisions/D223-a-archive-press-priority.md": {
       "errors": 0,
@@ -1378,7 +1373,32 @@
     "docs/decisions/D231-a-sealed-ledger-archive-subjects.md": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
-      "words": 929
+      "words": 1344
+    },
+    "docs/decisions/D232-a-janitor-autonomy.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1014
+    },
+    "docs/decisions/D233-a-card-row-ledger-fallback.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 670
+    },
+    "docs/decisions/D234-archive-number-composition.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 651
+    },
+    "docs/decisions/D235-merge-hang-two-causes.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1478
+    },
+    "docs/decisions/D236-a-holdings-value-series.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1563
     },
     "docs/decisions/_deferred-argued-not-gated-nothing-here-is-blocked-and.md": {
       "errors": 5,
@@ -1642,8 +1662,8 @@
     },
     "docs/specs/capture-server.md": {
       "errors": 134,
-      "ratio_per_1k_words": 15.673,
-      "words": 8550
+      "ratio_per_1k_words": 15.549,
+      "words": 8618
     },
     "docs/specs/card-variants.md": {
       "errors": 0,
@@ -1682,8 +1702,8 @@
     },
     "docs/specs/mechanization-backlog.md": {
       "errors": 300,
-      "ratio_per_1k_words": 20.228,
-      "words": 14831
+      "ratio_per_1k_words": 20.225,
+      "words": 14833
     },
     "docs/specs/motion-trigger.md": {
       "errors": 191,
@@ -1711,9 +1731,9 @@
       "words": 12840
     },
     "docs/specs/order-walk-plan.md": {
-      "errors": 111,
-      "ratio_per_1k_words": 10.125,
-      "words": 10963
+      "errors": 108,
+      "ratio_per_1k_words": 9.53,
+      "words": 11333
     },
     "docs/specs/revenue-next.md": {
       "errors": 0,
@@ -1792,8 +1812,8 @@
     },
     "docs/specs/store-scaling/07-value-and-aggregates.md": {
       "errors": 113,
-      "ratio_per_1k_words": 13.985,
-      "words": 8080
+      "ratio_per_1k_words": 14.018,
+      "words": 8061
     },
     "docs/specs/store-scaling/08-search-fts5.md": {
       "errors": 96,
@@ -1817,8 +1837,8 @@
     },
     "docs/specs/undo.md": {
       "errors": 19,
-      "ratio_per_1k_words": 9.572,
-      "words": 1985
+      "ratio_per_1k_words": 8.151,
+      "words": 2331
     },
     "docs/specs/ux-walkthrough-2026-09-13.md": {
       "errors": 24,

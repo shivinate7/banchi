@@ -616,6 +616,15 @@ not rendered — not focusable, not reachable by a screen reader).
   So the roster is short and per-incident. It is also reconciled. The self-test asserts every
   command it names still carries a heartbeat constant in the file that runs it. A preview
   (`ARGS=<n>` with no `--confirm`) never waits, and is never this clause's business.
+- **A CITATION NAMES A SYMBOL, NEVER A LINE.** A line number rots on the next edit above it.
+  Measured 2026-09-20: of 313 checkable code anchors, 219 point at the wrong line. Write a
+  decision id, a section, or the `module.symbol` form the `paths` row verifies. That form
+  takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line anchors`
+  refuses a line past the file's end, and any anchor into a split-record stub. `line anchor
+  ratchet` is per file, in D229's shape. A file its pin has never seen is held to zero.
+  `line anchor allowlist` refuses an exemption that has stopped being true. The rot rate
+  printed beside them is MEASURED and never gated. A citation pointing at a real line whose
+  content has moved stays invisible, which D149 ruled no check can see.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
   light and dark. `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
   locks every name and hex both ways.
