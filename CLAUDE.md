@@ -963,8 +963,8 @@ adopting some and deferring others (D99 sits where it does because main took D90
   pull, §8's 2026-09-19 ruling: RANKING is frozen for the pass, where a card physically sits is
   not. STILL OPEN, recorded in the spec: D96's lost pass figure. The filter strip is a native
   dropdown since 2026-09-19, which settled its place at 390. Which order a press records
-  against is ANSWERED (D212: every copy is fungible, so a sale records against an owing order;
-  D220 built it).
+  against is ANSWERED. D212 rules every copy fungible, so a sale records against an owing
+  order, and D220 built it.
 - `docs/specs/stable-card-id.md` — SPECIFIED, NOT BUILT (D172). No store carries `cards.cid`
   yet. The measurement — 2,535 of 2,535 digests match — is real.
 - `docs/specs/capture-app.md` — step 7. 7a and 7b are both built. Gate B ran them 2026-08-22.
