@@ -1,6 +1,6 @@
 """The sweep `pkmnscan archive sweep` runs: read `pipeline/pricehistory.py`'s live endpoint
 for every name the owner has sold or holds, and hand what came back to `store/pricearchive.py`
-(D-a-price-history-archive).
+(D219).
 
 TWO STEPS, KEPT APART SO THE FIRST NEEDS NO NETWORK. `rows_from_store` reads the store alone
 and answers "which SKUs is this pass over, and what does the export-shaped row for each one

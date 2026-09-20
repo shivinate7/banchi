@@ -1,0 +1,29 @@
+/* app/src/OrdersWalkPane.css — the walk's own card pane, over the shell `BoxBrowse.css` already
+ * gives every `.browse-*` class it draws (`.browse-card`, `.browse-hero-head`, `.browse-band`,
+ * `.browse-shot`, `.browse-under`, `.browse-list`, `.browse-group`, `.browse-row`). This file
+ * adds only what this screen draws that no other screen already has a rule for: the lead
+ * photograph (`Inventory.tsx`'s and the old `OrdersWalk.tsx`'s own image, restated) and the
+ * `Sold` receipt drain-bar borrowed from `Inventory.css` by class name. */
+
+.orders-walk-photo {
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  border-radius: var(--bn-radius-md);
+  background: var(--bn-surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--bn-ink-3);
+}
+
+.orders-walk-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.orders-walk-card .browse-hero-chips:empty {
+  display: none;
+}

@@ -14164,7 +14164,7 @@ def check_cli_refusals(checks: Checks) -> None:
     # so it is the one command here that previews by habit rather than because a real
     # decision hides inside it.
     #
-    # `archive` IS THE TWELFTH, AND IT ARRIVED WITH D-a-price-history-archive. `archive
+    # `archive` IS THE TWELFTH, AND IT ARRIVED WITH D219. `archive
     # sweep` writes the price-history archive on `--write` and nowhere else, and `archive
     # show` only reads. Unlike `readings adopt`, `sweep --write` is never a full replace —
     # a bucket a pass does not mention survives, because the source's own 357-day window
