@@ -235,6 +235,22 @@ EXEMPTIONS: Tuple[Exemption, ...] = (
 # ratchet exempts only what it can tell apart from ordinary prose without guessing, so this
 # class stays a named gap rather than an approximated exemption. It accounted for 4 of 45
 # STE006 and 2 of 45 STE001 sample findings.
+#
+# TWO MORE SHAPES THE SAMPLE NAMED, ALSO NOT BUILT. Both are ARTIFACT calls in the sample
+# (`scratchpad/lane2-falsepositives.md`), and neither gets a recogniser here because neither
+# has one this file's own bar calls obvious:
+#
+# - An UNDER-FENCED SHELL EXAMPLE, where the semicolons are shell syntax leaking out of a
+#   command that was never wrapped in a proper code fence (STE006 sample #27,
+#   `>/dev/null; do sleep 5; done`). Telling "this text is shell syntax" from "this text is
+#   prose with a semicolon" needs the same kind of guess the enumeration proxy above already
+#   declines to make — a line full of shell tokens still contains no marker this file can
+#   read as "not prose" without a second parser.
+# - The ACADEMIC "et al." CITATION CONVENTION (STE007 sample #34, "<Author> et al." naming a
+#   paper's authors). A single occurrence in the whole 130-item STE007 population is not
+#   enough to justify a class, and the boundary — a capitalized word before "et al." is not
+#   reliably a surname rather than an ordinary sentence — is not obvious enough to build on
+#   one example.
 
 
 @dataclass

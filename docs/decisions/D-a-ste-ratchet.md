@@ -71,11 +71,23 @@ A sixth class, verbatim quotation, was built and then removed. See "Ruling two" 
 `vs` in ordinary prose stays counted. Over half the sampled Latin-abbreviation findings were
 this shape. Whether swapping the word reads better is a style call, not a mechanical one.
 
+**Two more shapes the survey named, also left unbuilt.** An under-fenced shell example,
+where the semicolons are shell syntax rather than prose punctuation. It leaked out of a
+command that was never wrapped in a proper code fence. Telling shell syntax from prose with
+a semicolon needs the same kind of guess the enumeration proxy already declines to make. The
+academic `et al.` citation convention is the other. One occurrence in the whole
+STE007 population is not enough to build a class on. Neither recogniser is obvious. Neither
+is built.
+
 ### The floor this leaves, named rather than hidden
 
 The survey's own extrapolated floor, judging every borderline case against the writer, was
 roughly 2.7 errors per 1,000 words, combined across the four rules. That figure predates the
 rulings below. It is kept here as the survey's own number, not restated against today's pin.
+
+**This floor is printed, not only argued.** `scripts/docs-audit.py`'s `ste ratchet` row
+prints today's repo-wide ratio beside this floor, in its own summary line, on every run. A
+reader never sees the bare count without the floor beside it.
 
 This repo's built, MECHANICAL exemptions do not chase that floor. They remove two things
 only: what a machine can prove, and what the owner has ruled by argument. They never remove
@@ -165,6 +177,26 @@ discipline for their own ratchets.
 `scripts/ste_measure.py` is the one shared measurer. Both the row and the pin script call
 it. Neither reimplements it. No language boundary forces the one duplicated regex D218's
 own pair had to accept.
+
+### Mutation proof, and what it does not cover
+
+`python3 scripts/docs-audit.py --self-test` asserts each built exemption on a line it must
+catch and one it must not, and asserts the verdict function on all three states. That is a
+claim of coverage, not only a claim of behavior, so it was checked by breaking the code.
+
+Each of the four recognisers (`_table_row`, `_decision_citation`, `_vs_code`, `_via`) was
+mutated in turn to always return `False`. Each mutation turned the matching self-test case
+red, and named which one. The verdict function, `_ste_ratchet_verdict`, was mutated to
+always return `"ok"`. That mutation turned all four of its rise-detecting cases red at once.
+Every mutation was reverted before commit. None of this proof is checked into the repo as a
+script. It was run by hand, once, and is recorded here as its own evidence.
+
+**What this does not cover.** The mutation round touched the five functions above only. It
+did not touch `measure()`'s own aggregation loop, `plain_word_count`, `bucket_for`, or
+`to_pin()`'s serialization. The synthetic end-to-end `measure()` test in `--self-test`
+exercises all four, but no mutation was run against them directly. A break in one of those
+four could, in principle, pass every per-recogniser assertion while still reporting a wrong
+total. This is an argued gap, not a hidden one.
 
 ### Scope
 

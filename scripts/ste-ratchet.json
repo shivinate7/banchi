@@ -7,11 +7,11 @@
   },
   "ratio_per_1k_words": {
     "docs/debts": 16.634,
-    "docs/decisions": 17.691,
+    "docs/decisions": 17.645,
     "docs/gates": 19.449,
     "docs/specs": 14.677,
     "other": 8.812,
-    "repo": 15.965
+    "repo": 15.945
   },
   "total": 11117
 }

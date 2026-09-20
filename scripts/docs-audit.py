@@ -11930,6 +11930,22 @@ def check_typed_interpunct(report: Report) -> None:
 # tell apart from ordinary prose without guessing does not get to exempt anything.
 
 
+# THE SURVEY'S OWN FLOOR (`scratchpad/lane2-falsepositives.md`), PRINTED BESIDE EVERY COUNT
+# THIS ROW REPORTS — never gated on, because it is an estimate, not a measurement this file
+# can re-derive. Without it, a bare count reads as work nobody did; a reader who does not
+# also see the floor cannot tell the closeable backlog from the residue no rewrite reaches.
+#
+# The survey judged every STE001/006/007/008 finding it sampled GENUINE, ARTIFACT or
+# BORDERLINE, then extrapolated each code's artifact-plus-borderline share onto its full
+# population (STE007's sample WAS its population, so that share is exact, not extrapolated).
+# Judging every borderline case against the writer — the most conservative, highest floor
+# the survey computed — gives roughly 2.714 errors per 1,000 words, combined across the four
+# rules, over the survey's own narrower scope (docs/decisions, docs/specs, CLAUDE.md and
+# README.md — 610,723 words by plain `wc -w`, not this row's full repo-wide corpus). This
+# ratchet's own built exemptions do not chase that number — see the section header above —
+# so this row's repo-wide ratio sits above it, and both are printed together on purpose.
+STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS = 2.714
+
 STE_RATCHET_PIN = ROOT / "scripts" / "ste-ratchet.json"
 
 
@@ -12038,6 +12054,17 @@ def check_ste_ratchet(report: Report) -> None:
     pin = _read_ste_ratchet_pin()
     verdict, risen = _ste_ratchet_verdict(measured, pin)
 
+    # PRINTED BESIDE EVERY VERDICT — the survey's own floor beside today's repo-wide ratio,
+    # so a reader never sees the count without also seeing how much of it is not this
+    # ratchet's backlog to close. See STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS's own comment.
+    repo_ratio = measured.get("ratio_per_1k_words", {}).get("repo")
+    floor_note = (
+        f"repo ratio {repo_ratio}/1,000 words against the survey's own floor of "
+        f"~{STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS}/1,000 words "
+        "(scratchpad/lane2-falsepositives.md) — the residue below that floor is not this "
+        "ratchet's backlog to close."
+    )
+
     if verdict == "unpinned":
         report.add(
             "ste ratchet", MECHANICAL,
@@ -12047,11 +12074,12 @@ def check_ste_ratchet(report: Report) -> None:
                     f"no ceiling pinned, or the pin file does not carry this ratchet's shape "
                     f"— {measurement.total} error-severity STE findings found just now "
                     f"({measurement.exempted_total} exempted: {measurement.exempted_by_class}). "
+                    f"{floor_note} "
                     "Run `python3 scripts/ste-ratchet-pin.py --pin` first, on purpose, once — "
                     "never quietly.",
                 )
             ],
-            "no pin — cannot tell a rise from a fall", scanned=len(paths),
+            f"no pin — cannot tell a rise from a fall. {floor_note}", scanned=len(paths),
         )
         return
 
@@ -12062,7 +12090,7 @@ def check_ste_ratchet(report: Report) -> None:
             f"{measurement.total} found, pinned at {pin.get('total')} — rose on "
             f"{len(risen)} dimension(s). A rise is never quiet — fix the new hit(s), or, if "
             "the addition is deliberately accepted, run "
-            "`python3 scripts/ste-ratchet-pin.py --pin` and say why in the commit.",
+            f"`python3 scripts/ste-ratchet-pin.py --pin` and say why in the commit. {floor_note}",
             scanned=len(paths),
         )
         return
@@ -12072,7 +12100,8 @@ def check_ste_ratchet(report: Report) -> None:
         "ste ratchet", MECHANICAL, [],
         f"{measurement.total} error-severity STE findings ({measurement.exempted_total} "
         f"exempted: {measurement.exempted_by_class}) over {len(paths)} files, ratchet "
-        f"pinned at {pin.get('total')}" + (f", {fell_by} below it" if fell_by > 0 else ""),
+        f"pinned at {pin.get('total')}" + (f", {fell_by} below it" if fell_by > 0 else "")
+        + f". {floor_note}",
         scanned=len(paths),
     )
 
