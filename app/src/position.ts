@@ -182,8 +182,8 @@ export function sectionBlankSentence(place: Place, persona: Persona = 'owner'): 
 /**
  * A section is `growing` when the box is open AND its declared end reaches or passes what the
  * box currently holds — the last section, the one the next capture lands in. A growing section
- * is measured against its fill so far and says `so far`; a settled one against its declared
- * width and says `slots`.
+ * is measured against its fill and says only the count (the owner's ruling, 2026-09-19: no
+ * `so far` anywhere); a settled one against its declared width and says `slots`.
  */
 export function sectionDepthOf(place: Place): SectionDepth | null {
   if (place.located === false) return null
@@ -191,8 +191,8 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   const { card: slot, section, section_start: start, section_end: end, box_total: total } = place
   const gone = isDeparted(place)
   if (section === null) return null
-  /* THE SECTION'S NAME IS SAID WITH ITS NUMBER (D132) — `Section 6 · Rares · card 54 of 153
-     so far`. The number is what a hand counts to and the name is what the owner calls it. */
+  /* THE SECTION'S NAME IS SAID WITH ITS NUMBER (D132) — `Section 6 · Rares · card 54 of 153`.
+     The number is what a hand counts to and the name is what the owner calls it. */
   const named = place.section_name ? `Section ${section} · ${place.section_name}` : `Section ${section}`
   /* A DEPARTED COPY KEEPS THE SECOND SCALE AND LOSES ONLY ITS MARK (D118). `card` is null the
      moment it leaves, and returning null here used to take the whole zoom block with it — 40 of
@@ -219,7 +219,7 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
 
   if (gone || slot === null) {
     const tail = growing
-      ? ` · ${of} cards so far · this copy is not among them`
+      ? ` · ${of} cards · this copy is not among them`
       : ` · ${of} slots · this copy is not in one`
     return {
       slot: null,
@@ -234,7 +234,7 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
     }
   }
 
-  const tail = growing ? ` · card ${slot} of ${of} so far` : ` · card ${slot} of ${of} slots`
+  const tail = growing ? ` · card ${slot} of ${of}` : ` · card ${slot} of ${of} slots`
   return {
     slot,
     of,

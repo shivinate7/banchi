@@ -2569,15 +2569,16 @@ test('the last section of an open box counts what is in it, and the box line dro
    * that argument outright — `sentenceOf`'s own `soFar` flag was never wired to `false` by any
    * caller in the first place, so the box line had been reading `so far` unconditionally on
    * EVERY open box, walk included, the whole time; the flag is deleted rather than fixed
-   * forward. This case is now the opposite guard: the box line never says it again, and the
-   * section line's own "so far" (a different, live feature, D020's "growing" rule) still does. */
+   * forward. This case is now the opposite guard: neither line says it again. The owner's
+   * second ruling the same evening — "drop it everywhere" — reached the section line too: a
+   * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#5 of 5')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2 · card 2 of 2 so far')
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2 · card 2 of 2')
 
   /* One accessible name carrying both, because `role="img"` hides every descendant — a screen
      reader is told the second scale here or not at all. */
-  await expect(bar).toHaveAttribute('aria-label', '#5 of 5 · Section 2 · card 2 of 2 so far')
+  await expect(bar).toHaveAttribute('aria-label', '#5 of 5 · Section 2 · card 2 of 2')
 })
 
 test('the card with no group gets both depths too', async ({ page }) => {
