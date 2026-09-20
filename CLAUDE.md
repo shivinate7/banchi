@@ -939,9 +939,10 @@ adopting some and deferring others (D99 sits where it does because main took D90
   one screen (the orders list IS the selection, no mode strip, no `PullMode`, no `WalkSelect`),
   and section 9a's findings 1-4. The walk carries real positional facts and refreshes them on a
   pull, §8's 2026-09-19 ruling: RANKING is frozen for the pass, where a card physically sits is
-  not. STILL OPEN, both recorded in the spec: the filter strip's place at 390 and D96's lost
-  pass figure. Which order a press records against is ANSWERED (D212: every copy is fungible,
-  so a sale records against an owing order; D220 built it).
+  not. STILL OPEN, recorded in the spec: D96's lost pass figure. The filter strip is a native
+  dropdown since 2026-09-19, which settled its place at 390. Which order a press records
+  against is ANSWERED (D212: every copy is fungible, so a sale records against an owing order;
+  D220 built it).
 - `docs/specs/stable-card-id.md` — SPECIFIED, NOT BUILT (D172). No store carries `cards.cid`
   yet. The measurement — 2,535 of 2,535 digests match — is real.
 - `docs/specs/capture-app.md` — step 7. 7a and 7b are both built. Gate B ran them 2026-08-22.
