@@ -1027,3 +1027,29 @@ freeze ruling above it.
 **Unchanged, and asserted so:** the drawers, the cards, the stop order, the row order and the
 copy order. The rule that packed sections rank higher is untouched. `pipeline/walkplan.py` is
 not edited by this work.
+
+### The nameless buyer's own label, and four small readings — FIXED 2026-09-20
+
+**A nameless buyer's NAME slot reads `MM-DD-YY_XXXXX`, never `No name` and a typed dot.**
+`app/src/orderView.ts:unnamedBuyerLabel` composes it once. The pieces are the group's own
+`latest` placed date in UTC, an underscore, then the last five characters of the group's
+most recent order id. `BuyerRow`, `OrderPanel`, the phone rail chip and the Manage sheet's
+title all read it.
+
+Before this fix each of the four built the same `No name · #<n>` string apart. That typed
+the separator D218 refuses. It also repeated the row's full id in both the number slot and
+the name slot.
+
+A nameless group holds exactly one order today, by construction. `orderBuyers.ts` keys a
+nameless order on itself and never merges two. So several dates in one group cannot arise.
+The helper still falls back to the most recent order if that ever changes. A shorter id
+draws whole rather than padded. The full id is never drawn here. It stays in the order slot
+alone. See D220's own amendment for the fuller argument.
+
+**Four small readings, fixed in the same pass, each a defect and not a redesign.** A buyer
+row's per-order pill drew the order's own number instead of its status word. "Hide unknown
+SKUs" named the wrong reason. It filters `sku_unseen`, the "Never seen" chip's own reason.
+It never filtered `sku_unknown`. "Tick all" and "Untick all" are now "Tick shown" and
+"Untick shown", matching `#/inventory`'s own wording for the same reach. "Untick shown" now
+reads the ticked set for its disabled state, not the shown set. The step-through hint no
+longer renders below phone width, where its arrow-key handler is gated off.

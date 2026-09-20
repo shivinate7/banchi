@@ -160,7 +160,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
-                    #   sync-selftest + verdict-selftest, IN THIS ORDER (D161): product
+                    #   sync-selftest + verdict-selftest + js-breakpoints-selftest,
+                    #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.

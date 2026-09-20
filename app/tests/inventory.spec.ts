@@ -7039,3 +7039,53 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
   expect(await sheet.innerText()).not.toMatch(/[·•]/)
 })
 
+/* THE LOCK'S OWN HORIZONTAL FORM OF D118. `.browse-boxcell`'s grid is `minmax(0, 1fr) auto auto
+ * auto`, and `.browse-boxcell-lock` used to be a grid item ONLY on a sealed row — an absent item
+ * is an absent auto column, so the row's remaining `1fr` column resolved to a different width on
+ * a sealed row than on an open one, and everything after the name (the bar, the count) sat up to
+ * 12px further left on the sealed row. The fix gives the lock a fixed-size track on every record
+ * row and hides only the glyph inside it when the box is not sealed.
+ *
+ * OBSERVED RED BEFORE IT WAS KEPT: reverting `BoxBrowse.tsx` to render the lock span only when
+ * `sealed` (the defect's own shape) fails this case — the name and the bar both shift left on
+ * the sealed row, past the one-pixel budget below. */
+test('a sealed row and an unsealed row agree on the name and bar left edge', async ({ page }) => {
+  const boxes = {
+    boxes: [
+      BOXES.boxes[0],
+      {
+        box: 6,
+        name: 'ETB codes',
+        sections: [1],
+        state: 'closed',
+        capacity: 10,
+        fill: 10,
+        next_index: 11,
+        cards: 10,
+        on_hand: 10,
+        sold: 0,
+        retired: 0,
+        moved: 0,
+        listed: 0,
+        sections_detail: [{ section: 1, start: 1, end: 10, count: 10 }],
+      },
+    ],
+  }
+  await open(page, boxes, STORE, () => PRICING, SALE, { settle: '.browse-boxcell' })
+  await settleFonts(page)
+
+  const openRow = page.locator('.browse-boxcell[aria-label^="Box 2"]')
+  const sealedRow = page.locator('.browse-boxcell[aria-label^="Box 6"]')
+  await expect(sealedRow).toHaveAttribute('aria-label', /sealed$/)
+
+  const openName = (await openRow.locator('.browse-boxcell-name').boundingBox())?.x ?? -1
+  const sealedName = (await sealedRow.locator('.browse-boxcell-name').boundingBox())?.x ?? -2
+  const openBar = (await openRow.locator('.browse-boxcell-bar').boundingBox())?.x ?? -1
+  const sealedBar = (await sealedRow.locator('.browse-boxcell-bar').boundingBox())?.x ?? -2
+
+  expect(Math.abs(openName - sealedName), 'the name column shifts between a sealed and an open row')
+    .toBeLessThanOrEqual(1)
+  expect(Math.abs(openBar - sealedBar), 'the bar column shifts between a sealed and an open row')
+    .toBeLessThanOrEqual(1)
+})
+

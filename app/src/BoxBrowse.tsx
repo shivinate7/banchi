@@ -1841,9 +1841,16 @@ export function BoxBrowse({
                     <span style={{ width: `${pct}%` }} />
                   </span>
                 ) : null}
-                {sealed ? (
-                  <span className="browse-boxcell-lock" title="Sealed">
-                    <Icon name="lock" size={12} />
+                {record ? (
+                  // The track exists on every record row, sealed or not (the lock's own
+                  // horizontal form of D118: a row's geometry may not depend on which of its
+                  // states is drawn). Only the glyph inside is conditional.
+                  <span
+                    className="browse-boxcell-lock"
+                    title={sealed ? 'Sealed' : undefined}
+                    aria-hidden={sealed ? undefined : 'true'}
+                  >
+                    {sealed ? <Icon name="lock" size={12} /> : null}
                   </span>
                 ) : null}
                 {record ? <span className="browse-boxcell-count">{record.cards.toLocaleString()}</span> : null}

@@ -21,6 +21,7 @@ import {
   statusVocabulary,
   takeOrder,
   TAKE_IS_CURRENT,
+  unnamedBuyerLabel,
   type OrderSort,
   type OrderTake,
   type OrderView,
@@ -1312,7 +1313,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const live = useRef(true)
   const pasteBox = useRef<HTMLTextAreaElement>(null)
   const phone = useMediaQuery('(max-width: 767px)')
-  const wide = useMediaQuery('(min-width: 1024px)')
 
   useEffect(() => {
     live.current = true
@@ -2265,7 +2265,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           busy={busy}
           filter={hub.filter}
           selected={hub.selected}
-          wide={wide}
+          phone={phone}
           well={wellOf(true)}
           emptyWell={wellOf(false)}
           /* The empty state draws its own primary Fetch, so it needs the narrowing beside it —
@@ -2468,7 +2468,7 @@ function PullStage({
   busy,
   filter,
   selected,
-  wide,
+  phone,
   well,
   emptyWell,
   receipt,
@@ -2498,7 +2498,7 @@ function PullStage({
   readonly busy: string | null
   readonly filter: PullFilter
   readonly selected: string | null
-  readonly wide: boolean
+  readonly phone: boolean
   readonly well: ReactNode
   readonly emptyWell: ReactNode
   /** The last fetch's receipt, or null before one has been pressed. */
@@ -2758,6 +2758,14 @@ function PullStage({
    *  other slot for them; this is the same move for the ledger. */
   const [manageOpen, setManageOpen] = useState(false)
 
+  /** THE PHONE RAIL SHEET (defect fix, this pass) — `BoxBrowse.tsx`'s own `railOpen`, over the
+   *  buyer picker rather than the box list. Below 768px `.browse-body > .browse-map` is hidden
+   *  by `BoxBrowse.css` (already imported here), so the search slot, the select bar and the
+   *  buyer list — otherwise part of that column — would have no way onto the screen at all.
+   *  This chip and bottom sheet are that way back in, exactly `BoxBrowse.css`'s
+   *  `.browse-railsheet` styling, not a second stylesheet for the same shape. */
+  const [railOpen, setRailOpen] = useState(false)
+
   /** Hide sold (D132) — `#/inventory`'s own persisted `banchi.inventory.hide-sold`, on the
    *  owner's word: same preference, same screen family, one key. No new key. */
   const [hideSold, setHideSoldState] = useState<boolean>(() => storedHideSold())
@@ -2934,7 +2942,7 @@ function PullStage({
    *  answer to the same bare letters. `↑`/`↓` keep doing what `J`/`K` used to for buyers; the
    *  reference sheet (`App.tsx`'s `SHORTCUTS`) says so. */
   useEffect(() => {
-    if (!wide || shownGroups.length === 0) return
+    if (phone || shownGroups.length === 0) return
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
@@ -2949,7 +2957,7 @@ function PullStage({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [wide, shownGroups, selectedKey])
+  }, [phone, shownGroups, selectedKey])
 
   /* `J`/`K` STEP THE WALK LIST (§13). Same guard rules as the buyer list's own arrows. */
   useEffect(() => {
@@ -2968,7 +2976,12 @@ function PullStage({
   }, [walk])
 
   const setFilter = (next: PullFilter) => setHub({ filter: next })
-  const select = (key: string) => setHub({ selected: key })
+  /* The phone's rail sheet closes once a buyer is chosen (`BoxBrowse.tsx`'s own `pickRow`) —
+   *  picking a buyer is this sheet's one job, unlike the box picker it mirrors. */
+  const select = (key: string) => {
+    setHub({ selected: key })
+    if (phone) setRailOpen(false)
+  }
 
   if (failure !== null && payload === null) {
     return (
@@ -3122,11 +3135,19 @@ function PullStage({
     )
   }
 
-  /** TICK ALL / UNTICK ALL, OVER THE ROWS IN VIEW AND ONLY THOSE (§12 answer 1). Always drawn,
-   *  so neither its arrival nor its departure can move the list beneath it (D118); disabled
-   *  where the current filter leaves nothing that can hold a tick.
+  /** TICK SHOWN / UNTICK SHOWN, OVER THE ROWS IN VIEW AND ONLY THOSE (§12 answer 1). Named
+   *  after the reach it actually has — "all" over-claimed a filter it never crossed, the same
+   *  wording `#/inventory` already uses for this capability. Always drawn, so neither its
+   *  arrival nor its departure can move the list beneath it (D118).
    *
-   *  `Untick all` SUBTRACTS the rows in view rather than clearing the set. The prune above
+   *  THE TWO BUTTONS READ TWO DIFFERENT SETS FOR THEIR DISABLED STATE, because they act on
+   *  two different sets. `Tick shown` disables on `tickableKeys` (nothing in view can hold a
+   *  tick, so there is nothing to add) and `Untick shown` disables on `walkTicked` (nothing is
+   *  ticked at all, in view or out of it, so there is nothing to remove) — reading `tickableKeys`
+   *  for both left `Untick shown` enabled with an empty tick set whenever the view held a
+   *  walkable row, a press that would visibly do nothing.
+   *
+   *  `Untick shown` SUBTRACTS the rows in view rather than clearing the set. The prune above
    *  keeps the stored set inside the visible one, so the two are the same thing today — but
    *  the subtraction is the RULE, and a clear would only happen to agree with it. */
   const selectBar = (
@@ -3136,21 +3157,21 @@ function PullStage({
         disabled={tickableKeys.size === 0}
         onClick={() => setWalkTicked((prev) => new Set([...prev, ...tickableKeys]))}
       >
-        Tick all
+        Tick shown
       </Button>
       <Button
         size="sm"
-        disabled={tickableKeys.size === 0}
+        disabled={walkTicked.size === 0}
         onClick={() => setWalkTicked((prev) => new Set([...prev].filter((key) => !tickableKeys.has(key))))}
       >
-        Untick all
+        Untick shown
       </Button>
     </div>
   )
 
   /** THE RAIL'S SEARCH/STATUS/SORT SLOT (§13, point 1) — exactly section 12's own controls,
-   *  restated as a fragment so both the wide rail and the phone layout below draw the same
-   *  markup rather than two hand-kept copies. */
+   *  restated as a fragment so both the rail and the phone rail sheet draw the same markup
+   *  rather than two hand-kept copies. */
   const searchSlot = (
     <div className="orders-toolbar orders-rail-toolbar">
       {chips}
@@ -3197,7 +3218,7 @@ function PullStage({
         />
         <label className="orders-hide-unknown">
           <input type="checkbox" checked={view.hideUnknown} onChange={(event) => onHideUnknownChange(event.target.checked)} />
-          Hide unknown SKUs
+          Hide never-seen SKUs
         </label>
         <span className="orders-resort-slot">
           {staleSentence === null ? null : (
@@ -3240,10 +3261,12 @@ function PullStage({
             </ol>
           </details>
         )}
-        <p className="orders-index-hint">
-          <Kbd>↑</Kbd>
-          <Kbd>↓</Kbd> step through the buyers
-        </p>
+        {phone ? null : (
+          <p className="orders-index-hint">
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd> step through buyers
+          </p>
+        )}
       </>
     )
 
@@ -3285,6 +3308,26 @@ function PullStage({
     </div>
   )
 
+  /** THE RAIL, BUILT ONCE (`BoxBrowse.tsx:1707`'s own `const rail = (...)`) — the search slot,
+   *  the buyer-list panel and the selected buyer's own walk panel, exactly what `.browse-map`
+   *  held before the phone sheet existed. Rendered in `.browse-map` OR inside the phone's
+   *  `Overlay`, never both: the two are mutually exclusive on `phone` below, so this single
+   *  React element is only ever mounted in one place at a time. Writing this out twice (this
+   *  file's own first draft of the fix) put a second `role="group"` with the identical
+   *  `aria-label`, and every id and aria-label inside `searchSlot`, into the SAME document
+   *  whenever the phone sheet was open — `.browse-map`'s copy is CSS-hidden, not unmounted, so
+   *  a hidden duplicate was still in the DOM beside the sheet's own. One value closes that. */
+  const rail = (
+    <>
+      {searchSlot}
+      <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
+        {selectBar}
+        {ordersList}
+      </div>
+      {railWalkPanel}
+    </>
+  )
+
   return (
     <div className="orders-stage">
       {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
@@ -3306,34 +3349,52 @@ function PullStage({
       {/* `#/orders` TAKES INVENTORY'S EXACT SKELETON (§13): `.browse-body`'s rail and pane, the
           same widths and breakpoints `BoxBrowse.css` already gives `#/inventory`. The rail is
           orders where inventory has boxes; the pane is the selected card's `CardLocations`,
-          reused rather than rebuilt (`OrdersWalkPane.tsx`). */}
-      {wide ? (
-        <div className="browse-body">
-          <div className="browse-map">
-            {searchSlot}
-            <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
-              {selectBar}
-              {ordersList}
-            </div>
-            {railWalkPanel}
-          </div>
-          <div className="browse-side">
-            <WalkMainPane walk={walk} phone={!wide} />
-            {why}
-          </div>
+          reused rather than rebuilt (`OrdersWalkPane.tsx`).
+
+          ONE STRUCTURE, ALWAYS — never a second branch picked in JavaScript (D123: a screen
+          asks its column, browser zoom is not the lever). `.browse-body`'s own breakpoints
+          (`BoxBrowse.css:12-26`, already imported here) collapse the rail below 768px; there is
+          no 1024px reader left in this file to disagree with them. */}
+      {/* THE PHONE RAIL CHIP — below 768px `.browse-body > .browse-map` below is hidden by
+          that same CSS, so the buyer picker needs its own way onto the screen: the chip
+          `BoxBrowse.tsx`'s own `.browse-mobilebar` opens its rail sheet from, sibling to
+          `.browse-body` for the same reason theirs is (the chip's sticky-top and bleed
+          margin read the page's own padding, not a grid column's). */}
+      {phone ? (
+        <div className="browse-mobilebar">
+          <button
+            type="button"
+            className="browse-boxchip"
+            aria-haspopup="dialog"
+            onClick={() => setRailOpen(true)}
+          >
+            <Icon name="list" size={16} />
+            <span className={`browse-boxchip-text${selectedGroup !== null && selectedGroup.name === null ? ' bn-mono' : ''}`}>
+              {selectedGroup === null ? 'Choose a buyer' : selectedGroup.name ?? unnamedBuyerLabel(selectedGroup)}
+            </span>
+            <Icon name="chevronDown" size={14} className="browse-boxchip-chev" />
+          </button>
         </div>
-      ) : (
-        <>
-          {searchSlot}
-          <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
-            {selectBar}
-            {ordersList}
-          </div>
-          {railWalkPanel}
-          <WalkMainPane walk={walk} phone={!wide} />
+      ) : null}
+
+      <div className="browse-body">
+        {/* ONE VALUE, RENDERED IN EXACTLY ONE PLACE AT A TIME (see `rail`'s own comment above):
+            `phone` picks between here and the `Overlay` below, the same way `BoxBrowse.tsx`
+            picks between its rail and `miniRail`/`null`. Below 768px this slot draws nothing —
+            `.browse-body > .browse-map`'s own CSS already hides it, and now there is nothing
+            duplicated underneath for that CSS to be hiding. */}
+        <div className="browse-map">{phone ? null : rail}</div>
+        <div className="browse-side">
+          <WalkMainPane walk={walk} phone={phone} />
           {why}
-        </>
-      )}
+        </div>
+      </div>
+
+      {phone && railOpen ? (
+        <Overlay kind="bottom" label="Choose a buyer" onClose={() => setRailOpen(false)} passKeys className="browse-railsheet">
+          {rail}
+        </Overlay>
+      ) : null}
 
       {!manageOpen ? null : (
         <Overlay kind="sheet" label="Manage orders" onClose={() => setManageOpen(false)} className="orders-manage-sheet">
@@ -3365,7 +3426,9 @@ function PullStage({
               set of pressable copy rows for the same card. */}
           {selectedGroup === null ? null : (
             <div className="orders-manage-orders">
-              <span className="bn-section-title">{selectedGroup.name ?? `No name · #${selectedGroup.number}`}'s orders</span>
+              <span className="bn-section-title">
+                {selectedGroup.name ?? <span className="bn-mono">{unnamedBuyerLabel(selectedGroup)}</span>}'s orders
+              </span>
               {selectedGroup.orders.map((order) => (
                 <OrderDetail
                   key={order.key}
@@ -3457,7 +3520,8 @@ function BuyerRow({
   readonly expanded?: boolean
   readonly onSelect: () => void
 }) {
-  const heading = group.name ?? `No name · #${group.number}`
+  const unnamed = group.name === null
+  const heading = group.name ?? unnamedBuyerLabel(group)
   const status = worstStatus(group, answers)
   const placed = whenLabel(group.latest)
   const pct = group.wanted > 0 ? Math.min(100, Math.round((group.recorded / group.wanted) * 100)) : 0
@@ -3479,7 +3543,7 @@ function BuyerRow({
     >
       <span className={`orders-index-dot orders-index-dot-${STATUS_DOT[status]}`} aria-hidden="true" />
       <span className="orders-index-main">
-        <span className="orders-index-number">{heading}</span>
+        <span className={`orders-index-number${unnamed ? ' bn-mono' : ''}`}>{heading}</span>
         <span className="orders-index-meta">
           {/* THE SECOND >1 SIGNAL LIVES IN THE DETAIL HEADER; THIS ONE IS THE FIRST. Drawn only
               when there is something to count — a single order's row looks exactly as it always
@@ -3496,7 +3560,7 @@ function BuyerRow({
             const pill = STATUS_PILL[orderStatus]
             return (
               <Pill key={order.key} size="sm" tone={pill.tone} icon={pill.icon}>
-                {order.number}
+                {pill.label}
               </Pill>
             )
           })}
@@ -3564,7 +3628,9 @@ function OrderPanel({
       <div className="boxops-identity-top">
         <div className="boxops-identity-text">
           <span className="boxops-identity-num">{label}</span>
-          <h2 className="boxops-identity-name">{group.name ?? `No name · #${group.number}`}</h2>
+          <h2 className={`boxops-identity-name${group.name === null ? ' bn-mono' : ''}`}>
+            {group.name ?? unnamedBuyerLabel(group)}
+          </h2>
         </div>
         <Button variant="quiet" size="sm" icon="settings" className="browse-manage" aria-haspopup="dialog" onClick={onManage}>
           Manage

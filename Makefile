@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -114,6 +114,9 @@ help:
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make browser-scope-selftest  the browser-matrix classifier's spec map, on"
 	@echo "                    fixtures and on the real tree (D-browser-spec-allow-list)."
+	@echo "  make js-breakpoints-selftest  a JS media query's viewport width against what"
+	@echo "                    the stylesheets declare (D123), proved by violating it then"
+	@echo "                    fixing it. python3 only, no browser."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
 	@echo "                    PATH GATED (the only one): skipped when nothing in the branch"
@@ -162,7 +165,8 @@ help:
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
 	@echo "                    browser-scope-selftest +"
-	@echo "                    serve-selftest + sync-selftest + verdict-selftest"
+	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
+	@echo "                    js-breakpoints-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -518,6 +522,7 @@ check:
 	@$(MAKE) --no-print-directory serve-selftest
 	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
+	@$(MAKE) --no-print-directory js-breakpoints-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -565,6 +570,7 @@ ci-check:
 	@$(MAKE) --no-print-directory serve-selftest
 	@$(MAKE) --no-print-directory sync-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
+	@$(MAKE) --no-print-directory js-breakpoints-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -1256,6 +1262,13 @@ suite-lock-selftest:
 # the other guard selftests rather than on the commit path (D18).
 browser-scope-selftest:
 	@python3 scripts/browser-scope.py selftest
+
+# A JS media query's viewport width against what a stylesheet under app/src declares
+# (D123): the pure extraction and comparison `make docs-audit`'s `js breakpoints` row
+# imports, proved on fixtures by violating it and then fixing it, plus a read of the real
+# tree. Reads only; nothing here writes, so it sits beside the other guard selftests.
+js-breakpoints-selftest:
+	@python3 scripts/js-breakpoints.py selftest
 
 # The same run with the 450-line progress stream dropped — same tests, same assertions,
 # same `.serve/design-check.json`. The progress is only useful to a human watching live,
