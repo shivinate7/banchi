@@ -83,6 +83,9 @@ from store import files
 from store.pricearchive import Source
 from store.session import Store
 
+from cli import archive_review
+from cli import resolve as run_resolve
+
 
 def market_cache_dir():
     """Where a sweep's fetches are cached, per checkout (D43) — the same directory
@@ -317,6 +320,36 @@ def _sweep(args, say) -> int:
             say(f"  {line}")
     else:
         say("every sku asked for came back with an answer or a known reason it could not")
+
+    # A REFUSAL THAT NAMES THE CARD'S OWN IDENTIFICATION, NEVER ONE ABOUT THE NETWORK, GOES
+    # TO THE REVIEW QUEUE WITH ITS PHOTO (`cli/archive_review.py`, this task's own rule off
+    # `CLAUDE.md`: "ambiguity goes to the review queue with its photo"). `Queue.upsert`
+    # (D167's own primitive) makes this idempotent for free — an already-queued position is
+    # refreshed in place rather than duplicated, and an answered one is never re-asked.
+    id_refusals = {
+        sku: message
+        for sku, message in all_refusals.items()
+        if archive_review.is_identification_refusal(message)
+    }
+    if id_refusals:
+        inventory = Store().read().inventory
+        matches = archive_review.cards_for_refusals(inventory, rows, id_refusals)
+        boxes = {match.card.box for match in matches}
+        views = run_resolve.box_views(inventory, boxes=boxes)
+        entries = archive_review.queue_entries(matches, views)
+        if entries:
+            with Store().write() as writable:
+                added = archive_review.apply(writable.review, entries)
+            say("")
+            say(
+                f"queued           {added} card(s) sent to the review queue, "
+                f"identification unresolved, with their photograph"
+            )
+            if added < len(entries):
+                say(
+                    f"                   {len(entries) - added} already queued or answered — "
+                    "left exactly as they stand (D167)"
+                )
 
     say("")
     say(f"written          {total_buckets} bucket(s) folded in across up to {len(chunks)} "
