@@ -56,10 +56,34 @@ FILE = "file"         # a path
 
 DEV_NULL = ("/dev/null", "/dev/zero")
 
-# Shell words that precede the real command and say nothing about it. `reap.py:_strip_prefixes`
-# carries the same list for the same reason.
-PREFIXES = {"sudo", "env", "time", "nohup", "command", "exec", "builtin", "then", "do", "else",
-            "!", "{", "}"}
+# ------------------------------------------------ lifted from the parent's hooks/guard.py
+#
+# THREE THINGS BELOW ARE COPIED FROM `~/Developer/claude-settings/hooks/guard.py` AND NOT
+# RE-DERIVED: `split_segments`, `resolve_command` with its three constants, and
+# `strip_heredoc_bodies`. The parent's decision `a-gates-allow-list-is-the-constant.md`
+# (pattern 1) records why: its own `lint/report_gate.py` had this file's 2026-09-19 defect, a
+# hand-rolled piece of the resolver fixed it, and the hand-rolled piece then produced a false
+# NEGATIVE on `git -C <dir> commit`. Importing the whole resolver is what closed it. When one
+# of these needs to change, change it THERE first and copy the result back.
+
+# A leading `VAR=value` assignment, which is not a segment's command.
+ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+# A wrapper that runs another program in its place, so the CALLED program is a segment's real
+# command word, not the wrapper. `xargs pkill foo` runs pkill, so `xargs` unwraps the same as
+# the rest: the token after it, once its own flags are skipped, is what actually runs.
+# `exec` and `builtin` are this repo's additions — `reap.py:_strip_prefixes` carried them.
+COMMAND_WRAPPERS = {"sudo", "env", "command", "nohup", "nice", "time", "doas", "xargs",
+                    "exec", "builtin"}
+
+# A leading shell keyword that opens or joins a control-flow block, never a command itself.
+# MEASURED in the parent against its live guard: `while ! pgrep -f server; do sleep 1; done`
+# allowed the sleep, because the segment `do sleep 1` resolved to `do` as its command word.
+# `!` and `}` are this repo's additions, for the same reason as above.
+LOOP_KEYWORDS = {"do", "then", "else", "elif", "while", "until", "if", "{", "(", "!", "}"}
+
+# The old roster, kept as a name for any reader that still spells it; derived, never edited.
+PREFIXES = COMMAND_WRAPPERS | LOOP_KEYWORDS
 
 PIPE_OPS = {"|", "|&"}
 
@@ -107,33 +131,146 @@ class Reading(NamedTuple):
 
 # ------------------------------------------------------------------------------ the parsing
 
-_HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_-]*)\1")
+HEREDOC_HEADER = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+INTERPRETER_HEREDOC = re.compile(
+    r"\b(bash|sh|zsh|dash|ksh|python3?|perl|ruby|node)\b[^\n]*<<"
+)
 
 
-def strip_heredocs(command: str) -> str:
-    """The command with every heredoc BODY removed, and every other byte kept.
+def strip_heredoc_bodies(cmd: str) -> str:
+    """Drop the body of every heredoc, and keep every header line.
+
+    LIFTED from the parent's `hooks/guard.py:strip_heredoc_bodies`, and it replaces this
+    file's own `strip_heredocs` for one reason the old one lacked: a heredoc fed to an
+    INTERPRETER can be executed, so its body stays under inspection. `bash <<'EOF'` with an
+    `echo x > <other checkout>/file` inside it was a write this guard could not see, measured
+    2026-09-19 against the live guard: ALLOWED.
+
+    The parent's argument for the rest, unchanged: a heredoc body is DATA being written, not a
+    command being run. A commit message that DISCUSSES a refused command must not trip the
+    guard. The header line is kept, so a redirect in the header still counts as a write:
+    `cat <<'EOF' > .claude/settings.json` writes the settings file.
 
     `reap.py:_segments` truncates at the first `<<` instead, and that is right for its
-    question and wrong for this one. The body of a commit heredoc is a COMMIT MESSAGE, and a
-    message about a guard contains the command that guard refuses. Reading a document as a
-    command is how a guard fires on the one thing that cannot fail. Dropping only the body
-    keeps both: the redirections on either side are still judged, and the prose is never read.
-
-    An unterminated heredoc drops the remainder of the command. That is the fail-open
-    direction — a command this file never sees is one it never refuses — and it is the only
-    honest reading of a string whose quoting does not close.
+    question and wrong for this one: a write AFTER the terminator is still a write.
     """
-    kept: List[str] = []
-    pending: List[str] = []
-    for line in command.split("\n"):
-        if pending:
-            if line.strip() == pending[0]:
-                pending.pop(0)
-            continue                      # a body line, or its terminator; dropped either way
+    if INTERPRETER_HEREDOC.search(cmd):
+        return cmd  # the body may be executed, so keep it under inspection
+    lines = cmd.split("\n")
+    kept = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
         kept.append(line)
-        for match in _HEREDOC_RE.finditer(line):
-            pending.append(match.group(2))
+        match = HEREDOC_HEADER.search(line)
+        index += 1
+        if not match:
+            continue
+        delimiter = match.group(2)
+        while index < len(lines) and lines[index].strip() != delimiter:
+            index += 1
+        if index < len(lines):
+            index += 1  # drop the closing delimiter line too
     return "\n".join(kept)
+
+
+strip_heredocs = strip_heredoc_bodies    # the name this file shipped under, 2026-09-12
+
+
+def split_segments(cmd: str, delimiters: Sequence[str] = (";", "|", "&&", "\n")) -> List[str]:
+    """Split into shell segments on unquoted `;`, `|`, `||`, `&&`, and newline.
+
+    LIFTED from the parent's `hooks/guard.py:split_segments`. Quoted text, single or double,
+    is copied whole into the current segment, so a delimiter inside a quote never starts a
+    new one. An unterminated quote runs to the end of the string, which keeps the remainder
+    inside it rather than guessing where it would have closed.
+
+    THE ONE ADDITION IS `delimiters`. `tokenize` below passes `("\n",)` and nothing else:
+    inside a line, `shlex` with `punctuation_chars` already returns `|`, `;` and `&&` as
+    operator tokens, and `silent-write-guard.py` needs the pipe kept to say where a stream
+    ended up. What this file could not do before today was carry QUOTE STATE ACROSS A
+    NEWLINE — a multi-line `node -e '…'` was fed to shlex one line at a time, and the middle
+    line of the script, quoted as far as the shell is concerned, tokenized as a command with
+    a `>` in it. The parent's loop is what carries that state; the set it cuts on is the
+    caller's.
+
+    THE ONE AMENDMENT IS THE COMMENT RULE, and it was measured before it was written: the
+    parent's loop reads the `'` in `# The merge driver's shape` as opening a quote that runs
+    to the end of the file, and `guard-shell-selftest.sh`'s runaway-driver fixture — a script
+    whose second line is exactly that comment — went from refused to ALLOWED the moment this
+    function replaced the per-line reader. A `#` that is unquoted and starts a word is a
+    comment to the end of its line, which is the shell's own rule; `fix#3` and `'#300'` are
+    not comments under it either. The parent has the same blind spot and is told so in this
+    change's report, because the copy is not the place to fix it first.
+    """
+    segments = []
+    current = []
+    quote = ""
+    index = 0
+    length = len(cmd)
+    while index < length:
+        char = cmd[index]
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = ""
+            index += 1
+            continue
+        if char == "#" and (index == 0 or cmd[index - 1] in " \t\n;|&("):
+            while index < length and cmd[index] != "\n":
+                index += 1
+            continue
+        if char in ("'", '"'):
+            quote = char
+            current.append(char)
+            index += 1
+            continue
+        if char == "&" and cmd[index:index + 2] == "&&" and "&&" in delimiters:
+            segments.append("".join(current))
+            current = []
+            index += 2
+            continue
+        if char == "|" and "|" in delimiters:
+            index += 2 if cmd[index:index + 2] == "||" else 1
+            segments.append("".join(current))
+            current = []
+            continue
+        if char in (";", "\n") and char in delimiters:
+            segments.append("".join(current))
+            current = []
+            index += 1
+            continue
+        current.append(char)
+        index += 1
+    segments.append("".join(current))
+    return segments
+
+
+def resolve_command(tokens: Sequence[str]) -> Optional[int]:
+    """Return the index of the command word in a tokenized segment, or None when it names none.
+
+    LIFTED from the parent's `hooks/guard.py:resolve_command`. Skips leading `VAR=value`
+    assignments and leading loop keywords, then unwraps command wrappers along with each
+    wrapper's own flags and any assignment it takes ahead of the program name, so the index
+    returned is the program that actually runs, never the keyword or the wrapper carrying it
+    there. `strip_prefixes` used to stop at a wrapper's FLAG: `sudo -u root tee <path>`
+    resolved to `-u`, and every clause reading a command word was blind to it.
+    """
+    index = 0
+    end = len(tokens)
+    while index < end and (ASSIGNMENT.match(tokens[index]) or tokens[index] in LOOP_KEYWORDS):
+        index += 1
+    while index < end and _basename(tokens[index]) in COMMAND_WRAPPERS:
+        index += 1
+        while index < end and tokens[index].startswith("-"):
+            index += 1
+        while index < end and ASSIGNMENT.match(tokens[index]):
+            index += 1
+    return index if index < end else None
+
+
+def _basename(token: str) -> str:
+    return token.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
 
 
 def tokenize_line(line: str) -> Optional[List[str]]:
@@ -185,11 +322,15 @@ def tokenize(command: str) -> Tuple[List[str], int]:
 
     Returns the tokens and the number of lines that could not be read at all.
     """
-    text = strip_heredocs(command)
+    text = strip_heredoc_bodies(command)
     text = re.sub(r"\\\n", " ", text)
     tokens: List[str] = []
     unreadable = 0
-    for line in text.split("\n"):
+    # A "LINE" IS AN UNQUOTED NEWLINE'S WORTH, not a byte-level one. `split_segments` carries
+    # quote state across the newline, so the body of a multi-line `node -e '…'` stays one
+    # word and nothing inside it is ever a redirection. Measured 2026-09-19: fed line by line,
+    # `const hits=s.filter(i=>/[·•]/.test(…))` tokenized as a write to `/[·•]/.test`.
+    for line in split_segments(text, ("\n",)):
         if not line.strip():
             continue
         words = tokenize_line(line)
@@ -300,12 +441,10 @@ def pipelines(tokens: Sequence[str]) -> List[List[Tuple[List[str], str]]]:
 
 
 def strip_prefixes(argv: Sequence[str]) -> List[str]:
-    """argv with `sudo`, `env`, a `VAR=value` assignment and friends stepped over."""
-    out = list(argv)
-    while out and (out[0] in PREFIXES
-                   or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", out[0])):
-        out.pop(0)
-    return out
+    """argv from its real command word: wrappers, their flags, assignments and loop
+    keywords stepped over, by the lifted `resolve_command`."""
+    index = resolve_command(argv)
+    return [] if index is None else list(argv[index:])
 
 
 def read(command: str) -> Reading:
