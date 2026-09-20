@@ -21,7 +21,7 @@ self-contradiction check (two copies of one SKU disagreeing about the card's num
 different, more speculative build, kept separate on the owner's own ruling; it lives in
 `pipeline/sku_contradictions.py`, not here.
 
-Cites D146, D173, D234, D237, D-archive-store-checks (this
+Cites D146, D173, D234, D237, D-a-archive-store-checks (this
 module's own decision entry).
 """
 

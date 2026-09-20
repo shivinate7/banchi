@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`pipeline/identity_checks.py`, proved against literal fixtures — no store, no network
-(D-archive-store-checks).
+(D-a-archive-store-checks).
 
 EACH CHECK IS PROVED THE WAY `CLAUDE.md` DEMANDS: shown to catch its own named defect, and
 shown NOT to fire on the clean data beside it. A guard that has never gone red on the thing

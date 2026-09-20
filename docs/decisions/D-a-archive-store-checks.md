@@ -1,4 +1,4 @@
-## D-archive-store-checks — Four stored-data checks, built whole, from D237
+## D-a-archive-store-checks — Four stored-data checks, built whole, from D237
 
 **What this builds.** The four checks D237 named. Each is
 mechanizable from stored data, with no catalogue and no network. The owner took all four.

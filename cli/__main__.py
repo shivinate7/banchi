@@ -267,7 +267,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="the card's stable name: preview it, audit it, move the photographs.",
     )
     cards_sub = cards.add_subparsers(
-        dest="cards_action", metavar="<name|audit|checks|photos|variants>"
+        dest="cards_action", metavar="<name|audit|checks|contradictions|photos|variants>"
     )
     cards_sub.add_parser(
         "name",
@@ -285,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cards_checks = cards_sub.add_parser(
         "checks",
-        help="four stored-data identification checks (D-archive-store-checks): a name too "
+        help="four stored-data identification checks (D-a-archive-store-checks): a name too "
         "long to be a name, a denominator that disagrees with its set, more digits than "
         "the set has cards, a name one edit from a sibling in the same set. Read-only "
         "review signals, never repairs, never a catalogue call.",
@@ -294,6 +294,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--verbose",
         action="store_true",
         help="list every flagged card as well as counting them.",
+    )
+    cards_contradictions = cards_sub.add_parser(
+        "contradictions",
+        help="two copies of one SKU disagreeing about the card's number "
+        "(D-sku-number-contradictions). Preview is read-only and opens no socket. "
+        "`--resolve` asks the live catalogue to tell a misread from a shared SKU, only "
+        "for the SKUs that need it.",
+    )
+    cards_contradictions.add_argument(
+        "--verbose",
+        action="store_true",
+        help="list every disagreeing SKU as well as counting them.",
+    )
+    cards_contradictions.add_argument(
+        "--resolve",
+        action="store_true",
+        help="ask the live catalogue to settle the SKUs that share a denominator. Costs "
+        "one request per distinct (game, set) among them. Without this, no socket opens.",
     )
     cards_photos = cards_sub.add_parser(
         "photos",
