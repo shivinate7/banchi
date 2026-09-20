@@ -50,10 +50,6 @@ import type {
 import './Inventory.css'
 import './OrdersWalkPane.css'
 
-/** `Inventory.tsx`'s own number, restated here for the reason every late-decorated file in
- *  this product restates it rather than importing across screens for one constant. */
-const UNDO_WINDOW_MS = 20_000
-
 export type WalkPullOutcome =
   | { readonly ok: true; readonly place: string; readonly refreshed: readonly Place[] }
   | { readonly ok: false; readonly failure: Failure }
@@ -169,7 +165,11 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
 
 /* ------------------------------------------------------------------ one receipt (a Mark sold) */
 
-type Receipt = { readonly at: number; readonly canUndo: boolean; readonly target: PullTarget; readonly place: string; readonly orderKey: string }
+/** ONE PULL, RECORDED — no clock (`docs/specs/undo.md` §2-3, D164): a receipt names the write a
+ *  copy's `Undo` would reverse, and `at` orders receipts against each other, never against a
+ *  deadline. What ends a copy's OWN reversal is not this record aging out; it is a newer pull
+ *  taking the "newest" rank away from it (below), or the walk itself resetting. */
+type Receipt = { readonly at: number; readonly target: PullTarget; readonly place: string; readonly orderKey: string }
 
 /* ------------------------------------------------------------------------ the walk, as a hook */
 
@@ -248,7 +248,6 @@ export function useOrderWalk({
   const [recorded, setRecorded] = useState<ReadonlyMap<string, ReadonlyMap<string, number>>>(new Map())
   const [receipts, setReceipts] = useState<ReadonlyMap<string, Receipt>>(new Map())
   const [busyCopy, setBusyCopy] = useState<string | null>(null)
-  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     setFacts(new Map())
@@ -257,19 +256,23 @@ export function useOrderWalk({
     setBusyCopy(null)
   }, [keysSig])
 
-  /* Ticks twice a second, only while some receipt's own undo window is still open — an idle
-     walk pays for no timer. */
-  const anyPending = useMemo(() => {
-    for (const receipt of receipts.values()) if (now - receipt.at < UNDO_WINDOW_MS) return true
-    return false
-  }, [receipts, now])
-  useEffect(() => {
-    if (!anyPending) return
-    const id = window.setInterval(() => setNow(Date.now()), 500)
-    return () => window.clearInterval(id)
-  }, [anyPending])
-
   const soldKeys = useMemo(() => new Set(receipts.keys()), [receipts])
+
+  /** NO CLOCK (`docs/specs/undo.md` §3, D164): only the NEWEST pull this walk made stays
+   *  undoable from its own row — the owner declined per-copy granularity here, so an older
+   *  sold copy is drawn `Sold` and its way back is the card, on `#/inventory`'s departed row
+   *  (§4), never a second Undo left standing beside it. A pull loses "newest" the instant a
+   *  later one is recorded, not after any span of time. */
+  const newestUndoKey = useMemo(() => {
+    let key: string | null = null
+    let latest = -Infinity
+    for (const [candidate, receipt] of receipts) {
+      if (receipt.at <= latest) continue
+      latest = receipt.at
+      key = candidate
+    }
+    return key
+  }, [receipts])
 
   const currentRow = rows.find((row) => row.rowKey === current) ?? rows[0] ?? null
 
@@ -409,7 +412,7 @@ export function useOrderWalk({
           return next
         })
         const justSold = new Set([...soldKeys, copy.key])
-        setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), canUndo: true, target, place: outcome.place, orderKey: order.key }))
+        setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), target, place: outcome.place, orderKey: order.key }))
         const satisfied = totalRecorded(take.sku) + 1 >= take.wanted
         /* `stopKey` names which stop this row belongs to, kept for a future refinement that
            needs it; the advance itself only reads `rows`. */
@@ -422,7 +425,10 @@ export function useOrderWalk({
 
   const undoCopy = (copyKey: string) => {
     const receipt = receipts.get(copyKey)
-    if (receipt === undefined || busyCopy !== null) return
+    /* Only the newest pull is undoable from its own row (no clock, see `newestUndoKey` above).
+       `RowAction` only ever wires this to the newest copy's own button, and this guard is the
+       same rule enforced a second time, defensively, rather than trusted to the caller. */
+    if (receipt === undefined || busyCopy !== null || copyKey !== newestUndoKey) return
     const row = rows.find((candidate) => candidate.copy.key === copyKey)
     if (row === undefined) return
     setBusyCopy(copyKey)
@@ -471,7 +477,7 @@ export function useOrderWalk({
     busyCopy,
     receipts,
     soldKeys,
-    now,
+    newestUndoKey,
   }
 }
 
@@ -569,18 +575,19 @@ export function WalkList({
 
 /* -------------------------------------------------------------------------------- the main pane */
 
-/** The action every row in the pane offers — `Mark sold`, an `Undo` inside its own window, or a
- *  `Sold` pill past it, the same three states `Inventory.tsx`'s own `Action` draws, restated
- *  because this screen's write is `WalkPullFn`/`WalkUndoFn` rather than `markSold`/`undoSale`. */
+/** The action every row in the pane offers — `Mark sold`, an `Undo` on the newest pull this walk
+ *  made, or a `Sold` pill on an older one. NO CLOCK (`docs/specs/undo.md` §3, D164): the row that
+ *  carries `Undo` is picked by RANK, not by a countdown — it is whichever sold copy is newest,
+ *  and it stops being that the instant a later pull is recorded, never after any span of time.
+ *  An older `Sold` copy's way back is the card, on `#/inventory`'s departed row (§4) — this pane
+ *  offers only the one door the owner kept here. */
 function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: SearchCopy }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key
   if (receipt !== undefined) {
-    const within = walk.now - receipt.at < UNDO_WINDOW_MS
-    if (!within) return <Pill tone="ok" icon="check">Sold</Pill>
+    if (copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
     return (
-      <span className="inventory-copy-actions inventory-receipt" style={{ ['--receipt-ms' as string]: `${UNDO_WINDOW_MS}ms` }}>
-        <span className="bn-receipt-bar" aria-hidden="true" />
+      <span className="inventory-copy-actions inventory-receipt">
         <Button
           size="sm"
           icon="undo"
