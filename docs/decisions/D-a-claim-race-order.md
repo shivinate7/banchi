@@ -41,11 +41,14 @@ pushed. Three orders were weighed:
 moments after a push answers `UNKNOWN` for a few seconds. So it is re-read until it answers or
 a deadline passes. A deadline that passes REFUSES.
 
-**OWNER'S RULING, 2026-09-19: wait longer, then refuse.** The first build proceeded on
-`UNKNOWN` with the uncertainty printed, on the grounds that the backout covered it. That was
-overruled. The cost of waiting is a slow merge on a slow day. The cost of proceeding is a
+**DECIDED WHILE BUILDING THIS, AND NOT RULED ON.** The first version proceeded on `UNKNOWN`
+with the uncertainty printed, on the grounds that the backout covered it. This one waits and
+then refuses. The cost of waiting is a slow merge on a slow day. The cost of proceeding is a
 claim, a push and a CI wait spent on a state nobody read. That is this same incident, one
 remove further out. A claim is never spent on a guess.
+
+**Either reading is defensible and the owner has not picked one.** `MERGEABILITY_DEADLINE` is
+where the choice lives. Say the word and it goes back to proceeding.
 
 **The gate does not close the race, and saying so is the point.** The claim's own CI wait is
 minutes long. A merge that lands during it turns a `MERGEABLE` answer stale while this is
@@ -72,13 +75,17 @@ like it never was.
 resolved. That is a person's judgement rather than a lookup. So it backs out, names what it
 did, and stops.
 
-**OWNER'S RULING, 2026-09-19: any claim that does not reach a merge goes back.** The first
-build backed out only on the GitHub half's refusal. `claim_half` also refuses for a red check
-on the claim commit, for a push that failed, and for a sha it could not read back. None of
-those is a lost race. Each one left the claim standing, while the text told the reader to fix
-the branch and run again. A number held by a branch that is not about to land is a number
-another branch can take from under it. That is the whole incident. So every one of those
-paths backs the claim out now, and the refusals say so.
+**ANY CLAIM THAT DOES NOT REACH A MERGE GOES BACK.**
+Decided while building this, and not ruled on. The first version backed out only on the GitHub half's refusal. `claim_half` also
+refuses for a red check on the claim commit, for a push that failed, and for a sha it could
+not read back. None of those is a lost race. Each one left the claim standing, while the text
+told the reader to fix the branch and run again. A number held by a branch that is not about
+to land is a number another branch can take from under it. That is the whole incident. So
+every one of those paths backs the claim out now, and the refusals say so.
+
+**The narrower reading is the alternative, and the owner has not picked between them.** Back
+out only on a lost race, and leave a red claim commit standing for a fix-forward push. It
+costs a re-claim on every red. It also holds a number while the branch is red.
 
 ### `--unclaim` resolves which entry is this branch's
 

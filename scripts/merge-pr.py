@@ -954,10 +954,10 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
         return refuse(
             "PR #{0}'s claim commit {1} is not green.".format(number, sha[:9]),
             "",
-            "Main has NOT moved, and the claim is backed out below — owner's ruling,",
-            "2026-09-19: a claim that does not reach a merge does not stay. Fix the branch",
-            "and run this again; the claim then allocates a number against main as it",
-            "stands at that moment rather than at this one.",
+            "Main has NOT moved, and the claim is backed out below: a claim that does not",
+            "reach a merge does not stay. Fix the branch and run this again; the claim then",
+            "allocates a number against main as it stands at that moment rather than at",
+            "this one.",
             "",
             "A wait that ENDED WITHOUT AN ANSWER lands here too, and that is the point: an",
             "empty answer, an unreadable one and a deadline are all `not known yet`, and",
@@ -990,11 +990,14 @@ def claim_half(root: str, number: int, branch: str, confirm: bool) -> int:
 # seconds. It is re-read until it answers or the deadline passes, and a deadline that passes
 # REFUSES.
 #
-# OWNER'S RULING, 2026-09-19: wait longer, then refuse. The alternative shipped for an hour
-# and was overruled — proceed on `UNKNOWN` and let the backout cover it. The cost of waiting
-# is a slow merge on a slow day. The cost of proceeding is a claim, a push and a CI wait
-# spent on a state nobody read, which is the incident this section exists for, one remove
-# further out. A claim is never spent on a guess.
+# DECIDED WHILE BUILDING THIS, 2026-09-19, AND NOT RULED ON BY THE OWNER. The first version
+# proceeded on `UNKNOWN` and let the backout cover it. This one waits and then refuses. The
+# cost of waiting is a slow merge on a slow day. The cost of proceeding is a claim, a push
+# and a CI wait spent on a state nobody read, which is the incident this section exists for,
+# one remove further out. A claim is never spent on a guess.
+#
+# EITHER IS DEFENSIBLE AND THE OWNER HAS NOT PICKED ONE. `MERGEABILITY_DEADLINE` is where
+# that choice lives, and the entry names both sides. Do not read this comment as a ruling.
 
 MERGEABILITY_DEADLINE = 120.0
 MERGEABILITY_PAUSE = 5.0
@@ -1279,12 +1282,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             now = head_of(root, "HEAD")
             claimed = now if now and now != was else ""
             if code:
-                # OWNER'S RULING, 2026-09-19: ANY CLAIM THAT DOES NOT REACH A MERGE GOES
-                # BACK. This half refuses for a red check on the claim commit, a push that
-                # failed, and a SHA it could not read back. None of those is a lost race, and
-                # the older text told the reader to fix the branch and run again with the
-                # claim left standing. A number held by a branch that is not about to land is
-                # a number another branch can take from under it, which is the whole incident.
+                # ANY CLAIM THAT DOES NOT REACH A MERGE GOES BACK — decided while building
+                # this, 2026-09-19, and not ruled on by the owner. This half refuses for a red
+                # check on the claim commit, a push that failed, and a SHA it could not read
+                # back. None of those is a lost race, and the first version left the claim
+                # standing for all three. A number held by a branch that is not about to land
+                # is a number another branch can take from under it, which is the whole
+                # incident. The narrower reading — back out only on a lost race — is the
+                # alternative, and the entry names it.
                 if claimed:
                     rollback_claim(root, args.pr, claimed, branch)
                 return code

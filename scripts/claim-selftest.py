@@ -1824,8 +1824,8 @@ def main() -> int:
         unknown = dict(mergeable, mergeable="UNKNOWN", mergeStateStatus="UNKNOWN")
         out, code, seen = drive_main(gate_repo, unknown, (None, 0), claims=False)
         ok(code != 0 and "still UNKNOWN" in out,
-           "an UNKNOWN that never resolves REFUSES — owner's ruling, 2026-09-19: wait "
-           "longer, then refuse. An unread state is not a mergeable one", out)
+           "an UNKNOWN that never resolves REFUSES rather than proceeding — an unread "
+           "state is not a mergeable one, and a claim is never spent on a guess", out)
         ok(seen["claim"] == 0 and "NOTHING HAS BEEN CLAIMED" in out,
            "and nothing is claimed for it, which is the whole difference between this and "
            "proceeding on a guess", out)
@@ -1834,11 +1834,11 @@ def main() -> int:
            str(seen["reads"]))
 
         print("\n  -- any claim that does not reach a merge goes back, not only a lost race --")
-        # OWNER'S RULING, 2026-09-19. `claim_half` also refuses for a RED check on the claim
-        # commit, a push that failed, and a sha it could not read back. None of those is a
-        # lost race, and each used to leave the claim standing on the branch while the older
-        # text said to fix it and run again. A number held by a branch that is not about to
-        # land is a number another branch can take from under it.
+        # `claim_half` also refuses for a RED check on the claim commit, a push that failed,
+        # and a sha it could not read back. None of those is a lost race, and the first
+        # version left the claim standing for all three while telling the reader to fix it
+        # and run again. A number held by a branch that is not about to land is a number
+        # another branch can take from under it.
         red_before = git(gate_repo, "rev-parse", "HEAD").strip()
         out, code, seen = drive_main(gate_repo, mergeable, (None, 0), claims=True,
                                      claim_code=1)
