@@ -17,13 +17,25 @@ never a finding — the fallback IS the definition, and a screen that means to f
 literal is doing nothing wrong. This cannot tell "meant to fall back" from "typo with a
 coincidentally plausible second argument"; it only tells "unset variable, no escape."
 
+A REFERENCE IS NOT ONLY `var(--x)` IN A STYLESHEET, EITHER. `app/src/**/*.{ts,tsx}` writes
+`var(--x)` inside plain string and template-literal style values too — Gallery's kit page
+alone carries five (`'var(--bn-surface)'`, `'var(--bn-font-display)'`, `'var(--bn-font-ui)'`,
+`'var(--bn-font-mono)'`, `'var(--bn-ok)'`) — and a checker that read only `.css` would call an
+undefined one clean. FIXED 2026-09-20, the day this check landed: it shipped scanning `.ts`/
+`.tsx` for definitions only, and a reviewer's mutation of `--bn-ok` to a typo on Gallery.tsx's
+own receipt swatch exited 0. References are now read from both.
+
 A DEFINITION IS NOT ONLY `--x: ...;` IN A STYLESHEET. `app/src/**/*.{ts,tsx}` sets a handful of
 these at runtime — `style={{ '--x': ... }}`, `style={{ ['--x' as string]: ... }}`, and
 `el.style.setProperty('--x', ...)` — measured across the tree before these patterns were
 chosen (`--cap-halt-h`, `--pricing-ship-h`, `--receipt-ms`, `--i`, `--n`, `--pos-slot`, and
 others, all real and all otherwise invisible to a checker that reads only `.css`). Missing any
 one of those three shapes would report a false positive on every property it sets, so all
-three are matched.
+three are matched. THE FIRST TWO ARE READ ONLY INSIDE A `style={{...}}` SPAN — found by
+brace-counting from each `style={` — and not anywhere a quoted key meets a colon: an unrelated
+object literal whose key happens to be spelled like a token name would otherwise silently mask
+a real finding, which is exactly how a definition-side check goes quiet. No such collision
+exists in this tree today; the span restriction is here so one landing tomorrow still counts.
 
 COMMENTS ARE STRIPPED BEFORE EITHER SIDE IS COLLECTED — a reference or a definition written
 only in prose (this very docstring names five properties by their `--` spelling) is neither a
@@ -126,10 +138,13 @@ def css_definitions(cleaned: str) -> Iterable[str]:
         yield match.group(1)
 
 
-def css_references(path: str, cleaned: str) -> List[Reference]:
+def references(path: str, cleaned: str) -> List[Reference]:
+    """Every `var(--x)` with no fallback, CSS or TS/TSX alike — a reference written inside a
+    plain or template-literal string is not stripped (only comments are), so this same scan
+    finds `'var(--bn-ok)'` in a `.tsx` file exactly as it finds `var(--bn-ok)` in a `.css`
+    one."""
     raw_lines = cleaned.splitlines()
     out: List[Reference] = []
-    line = 1
     for match in VAR_REF.finditer(cleaned):
         line = cleaned.count("\n", 0, match.start()) + 1
         if match.group(2) == ",":
@@ -140,10 +155,36 @@ def css_references(path: str, cleaned: str) -> List[Reference]:
     return out
 
 
+def style_object_spans(cleaned: str) -> Iterable[str]:
+    """Each `style={...}` JSX attribute's own text, `style=` through its matching closing
+    brace — found by counting braces rather than assuming a shape, so `style={{ ['--x' as
+    string]: n } as CSSProperties}`'s trailing cast stays inside the span it belongs to.
+
+    THIS IS WHAT KEEPS `TS_DEF_PLAIN_KEY`/`TS_DEF_BRACKET_KEY` FROM READING AN UNRELATED
+    OBJECT LITERAL AS A DEFINITION: a quoted key followed by `:` is common in this tree (route
+    payloads, wire records) and only means a custom property inside a `style` attribute. No
+    such collision exists today — this is here so a future one is still refused rather than
+    silently masking a real finding.
+    """
+    for match in re.finditer(r"style\s*=\s*\{", cleaned):
+        depth = 1  # the brace `style=\{` already consumed
+        i = match.end()
+        while i < len(cleaned) and depth > 0:
+            if cleaned[i] == "{":
+                depth += 1
+            elif cleaned[i] == "}":
+                depth -= 1
+            i += 1
+        yield cleaned[match.start():i]
+
+
 def ts_definitions(cleaned: str) -> Iterable[str]:
-    for pattern in (TS_DEF_PLAIN_KEY, TS_DEF_BRACKET_KEY, TS_DEF_SET_PROPERTY):
-        for match in pattern.finditer(cleaned):
-            yield match.group(2)
+    for span in style_object_spans(cleaned):
+        for pattern in (TS_DEF_PLAIN_KEY, TS_DEF_BRACKET_KEY):
+            for match in pattern.finditer(span):
+                yield match.group(2)
+    for match in TS_DEF_SET_PROPERTY.finditer(cleaned):
+        yield match.group(2)
 
 
 def files(base_dir: str, suffixes: Sequence[str]) -> Iterable[Path]:
@@ -164,24 +205,25 @@ def scan_sources(
     """The pure half: (path, raw text) pairs in, findings out. No filesystem, so the
     self-test exercises exactly what a real run exercises."""
     defined = set()
-    cleaned_css: List[Tuple[str, str]] = []
+    cleaned_all: List[Tuple[str, str]] = []
     for path, source in css_sources:
         cleaned = strip_css_comments(source)
-        cleaned_css.append((path, cleaned))
+        cleaned_all.append((path, cleaned))
         defined.update(css_definitions(cleaned))
-    for _path, source in ts_sources:
+    for path, source in ts_sources:
         cleaned = strip_ts_comments(source)
+        cleaned_all.append((path, cleaned))
         defined.update(ts_definitions(cleaned))
 
     findings: List[Reference] = []
-    for path, cleaned in cleaned_css:
-        for ref in css_references(path, cleaned):
+    for path, cleaned in cleaned_all:
+        for ref in references(path, cleaned):
             if ref.name not in defined:
                 findings.append(ref)
     return findings, len(defined)
 
 
-def scan() -> Tuple[List[Reference], int, int]:
+def scan() -> Tuple[List[Reference], int, int, int]:
     css_sources = [
         (str(p.relative_to(ROOT)), p.read_text(encoding="utf-8"))
         for p in files(CSS_DIR, CSS_SUFFIXES)
@@ -191,7 +233,7 @@ def scan() -> Tuple[List[Reference], int, int]:
         for p in files(TS_DIR, TS_SUFFIXES)
     ]
     findings, defined_count = scan_sources(css_sources, ts_sources)
-    return findings, len(css_sources), defined_count
+    return findings, len(css_sources), len(ts_sources), defined_count
 
 
 # ------------------------------------------------------------------------------ self-test
@@ -288,6 +330,33 @@ SELF_TEST: Tuple[SelfCase, ...] = (
         [],
         2,
     ),
+    (
+        "an undefined var() inside a TSX inline style string is a finding — the Gallery.tsx "
+        "gap: a reference was read from .css only, so a reviewer's mutation of --bn-ok to a "
+        "typo on a TSX line exited 0",
+        [],
+        [("f.tsx", "<Icon style={{ color: 'var(--bn-nope-typo)' }} />")],
+        1,
+    ),
+    (
+        "the same reference, over a token defined elsewhere, is not a finding",
+        [("tokens.css", ":root { --bn-ok: #15803d; }")],
+        [("f.tsx", "<Icon style={{ color: 'var(--bn-ok)' }} />")],
+        0,
+    ),
+    (
+        "a quoted key outside any style={{...}} does not count as a definition — the "
+        "second gap: an unrelated object literal must not mask a real finding",
+        [("f.css", ".x { color: var(--bn-nope); }")],
+        [("f.tsx", "const payload = { '--bn-nope': 1 }")],
+        1,
+    ),
+    (
+        "the same key, inside a real style={{...}}, still counts as a definition",
+        [("f.css", ".x { color: var(--bn-nope); }")],
+        [("f.tsx", "<div style={{ '--bn-nope': 1 } as CSSProperties} />")],
+        0,
+    ),
 )
 
 
@@ -318,12 +387,12 @@ def main(argv: Sequence[str]) -> int:
         print(f"css-var-check: skipped ({HATCH}=off).")
         return 0
 
-    findings, scanned, defined_count = scan()
+    findings, css_scanned, ts_scanned, defined_count = scan()
     if not findings:
         print(
-            f"css-var-check: {scanned} stylesheet(s), {defined_count} custom propert"
-            f"{'y' if defined_count == 1 else 'ies'} defined, no undefined `var()` with no "
-            f"fallback."
+            f"css-var-check: {css_scanned} stylesheet(s), {ts_scanned} TS/TSX file(s), "
+            f"{defined_count} custom propert{'y' if defined_count == 1 else 'ies'} defined, "
+            f"no undefined `var()` with no fallback."
         )
         return 0
 

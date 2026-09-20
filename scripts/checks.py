@@ -253,12 +253,18 @@ CHECKS = (
         "asserts": "A `var(--x)` with no fallback, where `--x` is defined nowhere — the whole "
                    "declaration drops silently, with no console warning. Five of these "
                    "accumulated across four screens (2026-09-20 UX review, Tier 1 item 1): two "
-                   "misspellings of a real token, three reaching for a token never defined. A "
-                   "definition is collected from a `.css` declaration or from TS/TSX runtime "
-                   "sets (`style={{ '--x': ... }}`, a bracket computed key, "
-                   "`.setProperty('--x', ...)`), measured across the tree before those three "
-                   "shapes were chosen. `var(--x, fallback)` is never a finding — the fallback "
-                   "IS the definition.",
+                   "misspellings of a real token, three reaching for a token never defined. "
+                   "References are read from BOTH `.css` and `.ts`/`.tsx` (a plain or "
+                   "template-literal string such as `'var(--bn-ok)'` is not stripped, only "
+                   "comments are) — the check shipped reading `.css` only, and a reviewer's "
+                   "mutation of a real Gallery.tsx reference exited 0 the same day. A "
+                   "definition is collected from a `.css` declaration or from a TS/TSX "
+                   "`style={{...}}` span's own runtime set (`style={{ '--x': ... }}`, a "
+                   "bracket computed key, `.setProperty('--x', ...)`), measured across the "
+                   "tree before those three shapes were chosen — the first two are read only "
+                   "inside that span, by brace-counting, so an unrelated object literal whose "
+                   "key happens to be spelled like a token cannot mask a real finding. "
+                   "`var(--x, fallback)` is never a finding — the fallback IS the definition.",
         "needs": ("python3",),
         "writes": "",
         "commit_path": False,
@@ -274,9 +280,12 @@ CHECKS = (
         "asserts": "the guard sees its own subject before it is trusted: a genuinely undefined "
                    "`var()` fails, one with a fallback passes, one defined only from TSX "
                    "passes, a reference or definition written only in a comment is ignored, "
-                   "an `@media` block is scanned like anywhere else, and the two real "
+                   "an `@media` block is scanned like anywhere else, the two real "
                    "misspellings this check was built to catch (`--bn-r-md`, "
-                   "`--bn-radius-md`) are caught.",
+                   "`--bn-radius-md`) are caught, an undefined `var()` inside a TSX inline "
+                   "style STRING is caught (the Gallery.tsx gap a reviewer found), and a "
+                   "quoted key outside any `style={{...}}` span does not count as a "
+                   "definition (the latent gap the same review named).",
         "needs": ("python3",),
         "writes": "",
         "commit_path": False,
