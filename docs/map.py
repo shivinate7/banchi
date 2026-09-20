@@ -473,19 +473,35 @@ COMPONENTS = [
                                              "D26", "D88", "D89",
                                              "D213"],
                              "tested_by": ["T7"]},
-            # THE PRESS `pkmnscan archive sweep` RUNS (D219). Argument
-            # parsing and the preview/--write/show split; the walk itself is
+            # THE PRESS `pkmnscan archive sweep` RUNS (D219,
+            # D224, D223, D222).
+            # Argument parsing, the network-free preview, the chunked commit-as-you-go
+            # write, and the throttle backoff; the walk itself is
             # `pipeline/pricearchive.py`, proved independently by `make pricearchive-selftest`.
-            "cmd_pricearchive.py": {"does": "`pkmnscan archive sweep` runs "
-                                            "`pipeline/pricearchive.py:sweep` over "
-                                            "`rows_from_store()` and folds the result into "
-                                            "`price_history` with `PriceArchive.upsert()` — "
-                                            "which NEVER clears a row a pass did not mention, "
-                                            "unlike `readings adopt`'s full replace. Previews "
-                                            "by default. `archive show [--sku]` reads the "
-                                            "table and writes nothing.",
-                                    "governed_by": ["D219", "D62", "D86",
-                                                    "D43"],
+            "cmd_pricearchive.py": {"does": "`archive sweep` reads `rows_from_store()` "
+                                            "(sold value first) and previews with NO "
+                                            "network call: subject count, what the archive "
+                                            "already holds, what is fresh enough to skip. "
+                                            "`--write` splits the subject list into chunks "
+                                            "of `pipeline.pricearchive.CHUNK_SKUS`, skips "
+                                            "any already fresh, and commits each chunk's "
+                                            "buckets in its own `Store().write()` — an "
+                                            "interrupt loses at most one chunk, never the "
+                                            "whole pass. `PriceArchive.upsert()` never clears "
+                                            "a row a pass did not mention, unlike `readings "
+                                            "adopt`'s full replace. A 403 following an "
+                                            "earlier success this pass is reclassified as a "
+                                            "throttle rather than left as `Blocked`'s "
+                                            "authorization message; the press backs off once "
+                                            "to a measured pace and stops cleanly if still "
+                                            "blocked, persisting the measurement for the next "
+                                            "press. `archive show [--sku]` reads the table "
+                                            "and writes nothing.",
+                                    "governed_by": ["D219",
+                                                    "D224",
+                                                    "D223",
+                                                    "D222",
+                                                    "D62", "D86", "D43", "D88"],
                                     "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
@@ -1002,28 +1018,48 @@ COMPONENTS = [
                                     "directly, so `tested_by` is empty rather than a "
                                     "citation nothing backs — `check_readings_adopt_cli` in "
                                     "T7 exercises it only through the CLI dispatch."},
-            # THE SWEEP `pkmnscan archive sweep` RUNS (D219). Reads
-            # `pipeline/pricehistory.py`'s live endpoint for every SKU `rows_from_store` names
-            # and hands `store/pricearchive.py` what came back, keyed so D62's overlapping
-            # ranges never collide.
+            # THE SWEEP `pkmnscan archive sweep` RUNS (D219,
+            # D224, D223, D222).
+            # Reads `pipeline/pricehistory.py`'s live endpoint for every SKU
+            # `rows_from_store` names and hands `store/pricearchive.py` what came back,
+            # keyed so D62's overlapping ranges never collide.
             "pricearchive.py": {"does": "`rows_from_store` reads only the `cards` table for "
-                                        "every distinct, non-empty SKU and builds one "
+                                        "every distinct, non-empty SKU, builds one "
                                         "export-shaped row per SKU (Product Line resolved "
-                                        "through `pipeline/games.py`). `sweep` takes those "
-                                        "rows and anything shaped like "
-                                        "`pipeline/pricehistory.py:Market` and turns every "
-                                        "range's buckets into `store/pricearchive.py:Bucket` "
-                                        "rows, keyed `(sku, range, start)` — never "
-                                        "`width_days`, because `semiannual` and `annual` are "
-                                        "both seven-day buckets and a width-only key would "
-                                        "collide them. Reports refusals by SKU, never drops "
-                                        "one.",
-                                "governed_by": ["D62", "D26", "D134", "D219"],
+                                        "through `pipeline/games.py`), and orders them by "
+                                        "`rank_by_revenue` over `revenue_by_sku` — sold "
+                                        "value first, canceled orders excluded, ties broken "
+                                        "on the SKU string. `sweep` takes a subject dict and "
+                                        "anything shaped like `pipeline/pricehistory.py:"
+                                        "Market` and turns every range's buckets into "
+                                        "`store/pricearchive.py:Bucket` rows, keyed `(sku, "
+                                        "range, start)` — never `width_days`, because "
+                                        "`semiannual` and `annual` are both seven-day "
+                                        "buckets and a width-only key would collide them. "
+                                        "Reports refusals by SKU, never drops one. "
+                                        "`freshness_index`/`split_by_freshness` read the "
+                                        "archive to answer which subjects a resumed pass can "
+                                        "skip; `chunk_rows` splits an already-ranked subject "
+                                        "dict into commit-sized, order-preserving pieces; "
+                                        "`classify_refusals` rewrites a 403 that follows "
+                                        "earlier success this pass into a throttle rather "
+                                        "than `Blocked`'s authorization message; "
+                                        "`measured_pace`/`load_pace`/`save_pace` turn a "
+                                        "measured requests-before-block count into the next "
+                                        "press's pace, persisted on disk.",
+                                "governed_by": ["D62", "D26", "D134", "D9", "D214", "D216",
+                                                "D219",
+                                                "D224",
+                                                "D223",
+                                                "D222"],
                                 "note": "PROVED BY `make pricearchive-selftest`, not in "
-                                        "`make check` — no network call, a FakeMarket stand-in, "
-                                        "17 assertions including the D62 collision arm run both "
-                                        "ways (the real key keeps two rows, a width-only key "
-                                        "collapses them to one)."},
+                                        "`make check` — no network call. A FakeMarket and a "
+                                        "RecordingMarket stand in for the network; 48 "
+                                        "assertions, including the D62 collision arm run "
+                                        "both ways, an interrupted one-shot sweep proven to "
+                                        "lose everything BEFORE the chunked fix is proven to "
+                                        "keep what it already committed, and a resumed pass "
+                                        "proven to never re-ask for an already-fresh SKU."},
             # THE PER-PRODUCT VIEW'S OWN READ (D-a-product-price-view). Archive-first,
             # live-fallback only when `store/pricearchive.py` has never seen the SKU at all.
             # Never writes — a sweep is still a press, never this route.
@@ -2343,15 +2379,28 @@ COMPONENTS = [
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
                         "throwaway store, no network (D219). A "
                         "FakeMarket duck-types `Market.readings_for_rows` over canned "
-                        "pipeline/pricehistory.py objects. Proves the D62 key argument both "
-                        "ways: the real (sku, range, start) key keeps two rows for the same "
-                        "calendar day read from `semiannual` and `annual`, and a width-only "
-                        "key is shown, in the same run, to collapse them into one. Proves "
-                        "the never-delete rule: a later sweep over a narrower selection, or "
-                        "one that resolves nothing, never removes an earlier pass's rows. "
-                        "Seventeen assertions, all passing. Not wired into `make check` — "
+                        "pipeline/pricehistory.py objects; a RecordingMarket adds an "
+                        "assertable list of every SKU it was asked about and can raise on a "
+                        "named one, standing in for a dropped connection. Proves the D62 key "
+                        "argument both ways: the real (sku, range, start) key keeps two rows "
+                        "for the same calendar day read from `semiannual` and `annual`, and "
+                        "a width-only key is shown, in the same run, to collapse them into "
+                        "one. Proves the never-delete rule. Proves ranking "
+                        "(D223): `revenue_by_sku` excludes canceled "
+                        "orders, `rank_by_revenue` sorts sold value first. Proves resume "
+                        "(D224): `freshness_index`/`split_by_freshness` "
+                        "skip a fresh SKU, and — proven to fail FIRST — a one-shot `sweep()` "
+                        "over every row loses everything to a mid-pass exception while a "
+                        "chunked, commit-per-chunk walk keeps every chunk read before the "
+                        "drop and a resumed pass never re-asks for what survived. Proves "
+                        "pacing (D222): `classify_refusals` rewrites a 403 "
+                        "only with evidence of an earlier success this pass, and "
+                        "`measured_pace`/`load_pace`/`save_pace` are exercised directly. "
+                        "Forty-eight assertions, all passing. Not wired into `make check` — "
                         "`make catalog-index-selftest`'s own precedent.",
-                "governed_by": ["D219", "D62", "D18"],
+                "governed_by": ["D219", "D224",
+                                "D223", "D222",
+                                "D62", "D18"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
@@ -2658,9 +2707,9 @@ COMPONENTS = [
                 # the queue refresh (D167), the push/publish pair (D106), the live export
                 # (D104) and the seven order-line closers (D113).
                 "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
-                                "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
-                                "D134", "D159", "D167", "D168", "D174", "D192",
-                                "D193", "D203", "D165", "D210", "D-a-product-price-view"],
+                                "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113", "D134",
+                                "D159", "D165", "D167", "D168", "D174", "D189", "D192", "D193",
+                                "D203", "D210", "D225", "D-a-product-price-view"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -3032,7 +3081,7 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D90", "D96"],
+                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D218"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -4007,17 +4056,17 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D145", "D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11",
-                                "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26",
-                                "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43",
-                                "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61",
-                                "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
-                                "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
-                                "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D113",
-                                "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D159",
-                                "D165", "D168", "D174", "D183", "D172", "D192", "D191",
-                                "D193", "D203", "D212",
-                                "D213", "D-a-product-price-view"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
+                                "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28",
+                                "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45",
+                                "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62",
+                                "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76", "D77",
+                                "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92",
+                                "D93", "D96", "D100", "D103", "D104", "D108", "D113", "D114",
+                                "D115", "D116", "D132", "D134", "D137", "D138", "D145", "D159",
+                                "D165", "D168", "D172", "D174", "D183", "D189", "D191", "D192",
+                                "D193", "D203", "D212", "D213", "D219",
+                                "D225", "D-a-product-price-view"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4176,15 +4225,14 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
-                                "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33",
-                                "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56",
-                                "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78",
-                                "D79", "D86", "D87", "D88", "D89", "D100", "D103", "D105",
-                                "D134", "D137", "D145", "D147", "D156", "D159", "D163",
-                                "D165", "D166", "D168", "D170", "D172", "D174", "D180",
-                                "D188", "D189", "D216", "D-a-product-price-view",
-                                "D219"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20",
+                                "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36",
+                                "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62",
+                                "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88",
+                                "D89", "D100", "D103", "D105", "D134", "D137", "D145", "D147",
+                                "D156", "D159", "D163", "D165", "D166", "D168", "D170", "D172",
+                                "D174", "D180", "D188", "D189", "D216", "D219",
+                                "D225", "D-a-product-price-view"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -4832,9 +4880,9 @@ COMPONENTS = [
                                               "D69", "D70", "D73", "D76", "D79", "D83", "D86",
                                               "D87", "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D104", "D113", "D116", "D132", "D134", "D159",
-                                              "D165", "D168", "D172", "D174", "D180", "D192",
-                                              "D193", "D203", "D207", "D213",
-                                              "D-a-product-price-view"]},
+                                              "D165", "D168", "D172", "D174", "D180", "D189",
+                                              "D192", "D193", "D203", "D207", "D213", "D219",
+                                              "D225", "D-a-product-price-view"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6617,9 +6665,10 @@ COMPONENTS = [
                                         "the in-progress bucket is marked, and period, sort, "
                                         "search and the active bucket all round-trip through "
                                         "the URL.",
-                                "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105",
-                                                 "D118", "D159", "D193", "D194", "D201",
-                                                 "D214", "D217"]},
+                                "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105", "D118",
+                                                "D159", "D189", "D193", "D194", "D201", "D214",
+                                                "D217", "D219",
+                                                "D225"]},
             "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
                                         "own layout, `--bn-*` only. The sparkline's polyline "
                                         "reuses `--bn-accent` rather than naming a color; the "
@@ -7556,8 +7605,8 @@ COMPONENTS = [
                         "does not. A dedicated case pins the 390px overflow this build found "
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
-                "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201",
-                                 "D214", "D217"],
+                "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
+                                "D217", "D225"],
             },
             "tests/product-history.spec.ts": {
                 "does": "`#/product`'s own hard rule (D-a-product-price-view): the market "

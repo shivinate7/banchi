@@ -221,10 +221,21 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
 ./pkmnscan archive  sweep [--write] # THE PRICE-HISTORY ARCHIVE (D219).
                                    #   The source's 357-day window slides. This press reads
                                    #   every range for every sku this store has sold or holds,
-                                   #   and keeps a copy past that ceiling. Previews. UNLIKE
-                                   #   `readings adopt`, `--write` NEVER clears a row a pass
-                                   #   did not mention. A bucket that ages out of the source
-                                   #   is never deleted here. No timer runs this. It is a press.
+                                   #   sold value first (D223), and
+                                   #   keeps a copy past that ceiling. PREVIEWS WITH NO NETWORK
+                                   #   CALL (D224): subject count, what the
+                                   #   archive already holds, what is fresh enough to skip.
+                                   #   `--write` commits in small chunks as it reads, never
+                                   #   once at the end, so an interrupt loses at most one
+                                   #   chunk. A resumed pass never re-reads a sku it already
+                                   #   holds fresh from this same pass. UNLIKE `readings
+                                   #   adopt`, `--write` NEVER clears a row a pass did not
+                                   #   mention. A bucket that ages out of the source is never
+                                   #   deleted here. The press paces itself on a MEASURED
+                                   #   interval and backs off once on a throttle
+                                   #   (D222), naming it correctly rather
+                                   #   than as an authorization problem. No timer runs this.
+                                   #   It is a press.
 ./pkmnscan archive  show [--sku ID] # what the archive holds, and which ranges were last
                                    #   swept. `--sku` also prints one sku's own buckets.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]
@@ -332,7 +343,12 @@ first paint, cross-faded as one mechanism. A screen not looked at in dark is not
 
 **Type has three roles**: `--bn-font-display` (Manrope, headings), `--bn-font-ui` (Inter,
 everything), `--bn-font-mono` (JetBrains Mono, machine strings only — SKUs, run names, reason
-codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono. Body is 14px.
+codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono, except
+money: a dollar figure takes the mono face through `.bn-money`, never a hand-rolled
+declaration (D221). **NOT MECHANIZED:** a machine cannot tell a dollar figure
+from another tabular machine string by its CSS alone. Mono, 600-weight and tabular-nums
+already mark SKUs, run ids and card numbers throughout `app/src`. Which face a span deserves
+is read from what it holds, never from its declaration. Body is 14px.
 
 **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders all of it. Reach for
 the kit before writing a primitive. A fourth hand-rolled button is how a design system dies.
@@ -899,6 +915,11 @@ D217 Sales becomes a tool: sort, filter, cross-filter, drill down and deep-link,
 D218 A typed dot is a defect wherever it is typed, and the reader is the mechanism this time, not the sweep
 D219 The archive key carries the range, and the archive never deletes
 D220 Orders is inventory's screen with orders in the rail, and the walk is a mode of it
+D221 Money stays mono, and the rule is amended to match
+D222 The press paces itself on a measurement, and names a throttle
+D223 Sold value goes first, and sealed product is a named gap
+D224 The preview costs nothing, and the press commits as it goes
+D225 Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
