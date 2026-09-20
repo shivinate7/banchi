@@ -27188,6 +27188,9 @@ def check_inventory_copies_route(checks: Checks) -> None:
       3. a GONE copy (sold) of a requested SKU is excluded
       4. the place block on each returned card equals what `_Places` renders for that same
          position independently — the two must agree on `slot`/`label`/`section`/`card`
+      5. `listings` carries the shared SKU's own record, narrowed to what the scan matched —
+         the market-and-listings parity task (`#/orders` reusing `#/inventory`'s card pane)
+      6. and excludes the unrelated SKU's listing, proving the narrowing runs both ways
     """
     checks.note("")
     checks.note("POST /inventory/copies — DEBT27, site 1")
@@ -27223,6 +27226,12 @@ def check_inventory_copies_route(checks: Checks) -> None:
                 printed_total="100", confidence="high",
             )
             snapshot.inventory.cards["2/1"].sku = "9191999"
+            # BOTH SKUs carry a listing record — the unrelated one's must still be excluded,
+            # because it is a record the store holds and not a record this request asked
+            # about, which is the one shape a "narrow to `wanted`, never to what matched"
+            # mistake and a "return everything the store holds" mistake would both pass.
+            snapshot.inventory.listing("9191486").set(master.LIVE, 4)
+            snapshot.inventory.listing("9191999").set(master.LIVE, 9)
         # box 1's second copy is now sold — a GONE copy, requested-SKU or not.
         capture_server.do_mark_sold(1, 2, {})
 
@@ -27270,6 +27279,26 @@ def check_inventory_copies_route(checks: Checks) -> None:
                 f"the place block {key} carries agrees with an independently built "
                 "`_Places.for_keys` over the same position",
             )
+
+        # --------------------------------------------------------------- Assertions 5 and 6
+        #
+        # THE MARKET-AND-LISTINGS PARITY TASK: `#/orders` reuses `#/inventory`'s card pane,
+        # and this route is the copies path `Orders.tsx` reads its listings map through — a
+        # dictionary lookup over `inventory.listings`, not a second scan, so the `unscoped
+        # walk` allow list must not move.
+        listings = answer["listings"]
+        checks.equal(
+            sorted(listings.keys()), ["9191486"],
+            "the shared SKU's own listing record is in the map, and the unrelated SKU's is "
+            "not — narrowed the same way `do_inventory_box`'s own `listings` is, to the SKUs "
+            "the scan actually matched",
+        )
+        # GUARDED, NOT INDEXED BLIND — the assertion above already fails by name on a
+        # missing or extra key, and a defect there must not also crash this one.
+        checks.equal(
+            listings.get("9191486", {}).get("live"), 4,
+            "and the record itself is the one this store actually holds, not a placeholder",
+        )
 
         # --------------------------------------------------------------- refusals
         refusal(

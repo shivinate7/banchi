@@ -791,15 +791,20 @@ export async function getRecentCards(limit: number): Promise<{ cards: Record<str
  *
  *  WRITE-SHAPED BUT WRITES NOTHING: a POST because the SKU list is too big for a query
  *  string, exactly `fetchOrders`'s own reason. `do_inventory_copies` opens `Store().read()`,
- *  never `Store().write()` — no `screen-freshness.mjs` re-read or invalidation is owed. */
+ *  never `Store().write()` — no `screen-freshness.mjs` re-read or invalidation is owed.
+ *
+ *  `listings` RIDES ALONG THE SAME WAY `getInventoryBox`'s DOES (the market-and-listings
+ *  parity task): narrowed server-side to the SKUs the scan actually matched, never to
+ *  every SKU this store has ever listed — `Orders.tsx` reads it into the same
+ *  `Record<string, Listing>` shape `#/inventory` already threads into `CardDetailsSection`. */
 export async function getInventoryCopies(
   skus: readonly string[],
-): Promise<{ cards: Record<string, InventoryCard> }> {
+): Promise<Pick<Inventory, 'cards' | 'listings'>> {
   return (await request('/inventory/copies', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ skus }),
-  })) as { cards: Record<string, InventoryCard> }
+  })) as Pick<Inventory, 'cards' | 'listings'>
 }
 
 /**

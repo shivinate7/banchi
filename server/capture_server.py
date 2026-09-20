@@ -3504,6 +3504,7 @@ def do_inventory_copies(payload: dict) -> dict:
     # nothing written into `Rows._loaded`.
     matched: list = []
     keys: set = set()
+    skus: set = set()
     for key, (sku, state, box, index) in inventory.cards.select(
         ("sku", "state", "box", "idx")
     ):
@@ -3513,6 +3514,7 @@ def do_inventory_copies(payload: dict) -> dict:
             continue
         matched.append(key)
         keys.add((box, index))
+        skus.add(str(sku).strip())
 
     # THE BOX SET IS DERIVED FROM THE SCAN ABOVE, NEVER FROM THE REQUEST — see the
     # docstring's "why this is safe" paragraph.
@@ -3536,7 +3538,19 @@ def do_inventory_copies(payload: dict) -> dict:
             record.update(_flat_place(place))
         record["place"] = place
         cards[key] = record
-    return {"cards": cards}
+
+    # `listings` RIDES ALONG THE SAME WAY `do_inventory_box`'s DOES: narrowed to the SKUs the
+    # scan above actually matched, never to `wanted` (the request), so a SKU asked about but
+    # not on hand anywhere never gets a listing entry either — `wanted` can name a SKU this
+    # store has never captured a card for. A DICTIONARY LOOKUP over `inventory.listings`, the
+    # same `Rows` object the scan above already read `Store().read()` for — never a second
+    # scan, and the `unscoped walk` allow list does not move.
+    listings = {
+        sku: asdict(inventory.listings[sku])
+        for sku in skus
+        if sku in inventory.listings
+    }
+    return {"cards": cards, "listings": listings}
 
 
 def do_put_card(box: int, index: int, payload: dict) -> dict:
