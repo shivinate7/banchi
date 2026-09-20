@@ -12,13 +12,13 @@
     },
     "AGENTS.md": {
       "errors": 17,
-      "ratio_per_1k_words": 1.476,
-      "words": 11517
+      "ratio_per_1k_words": 1.473,
+      "words": 11544
     },
     "CLAUDE.md": {
       "errors": 17,
-      "ratio_per_1k_words": 1.476,
-      "words": 11517
+      "ratio_per_1k_words": 1.473,
+      "words": 11544
     },
     "README.md": {
       "errors": 29,
@@ -1117,8 +1117,8 @@
     },
     "docs/decisions/D179-five-shell-mistakes.md": {
       "errors": 61,
-      "ratio_per_1k_words": 16.8,
-      "words": 3631
+      "ratio_per_1k_words": 14.479,
+      "words": 4213
     },
     "docs/decisions/D180-a-selection-of-cards.md": {
       "errors": 40,
@@ -1359,6 +1359,11 @@
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 924
+    },
+    "docs/decisions/D228-a-claim-race-order.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1791
     },
     "docs/decisions/_deferred-argued-not-gated-nothing-here-is-blocked-and.md": {
       "errors": 5,
