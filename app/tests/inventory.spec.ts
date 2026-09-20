@@ -5301,7 +5301,7 @@ test('a card with an open question in the queue says so, and says whether it can
      already on this panel. `POST /review/<box>/<index>/answer` refuses such an entry outright. */
   await expect(block).toContainText('cannot be answered')
   await expect(block.locator('.bn-notice-code')).toHaveText(
-    'no_catalog_row, review queue, 0 candidates',
+    'no_catalog_row, review, 0 candidates',
   )
 })
 
