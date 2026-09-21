@@ -40,6 +40,15 @@ recovered or confirmed empty before stopping. Nothing is lost.
 6. **Delete `make orient-selftest`** — it fails on the live tree, asserting against
    `WalkGroups`, deleted weeks ago, and nothing noticed because it sits outside `make check`.
 
+## Follow-up owed on work that landed
+
+`commit path` (commit `394f2abb`) reads the AST for writes and reconciles both directions.
+Only ONE direction was mutation-proven before it landed: a `writes` field declaring a write
+the code does not make goes red. **The other direction is unproven** — code that writes while
+its field is empty, which is the direction the row exists for. The agent that built it died
+on a spend limit before its own final verification. Add that arm to `self_test()` and confirm
+the mutation applies before reading the verdict.
+
 ## Open findings nobody has actioned
 
 - `docs/specs/store-scaling/02-per-box-read.md` says "Nothing below is built" while D192 shipped it.
