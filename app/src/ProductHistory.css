@@ -72,7 +72,7 @@
   gap: var(--bn-2);
   padding: var(--bn-4);
   border-radius: var(--bn-r);
-  border: 1px solid var(--bn-border);
+  border: 1px solid var(--bn-line);
   background: var(--bn-surface);
 }
 .producthistory-range-head {

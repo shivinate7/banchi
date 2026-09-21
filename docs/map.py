@@ -4032,6 +4032,33 @@ COMPONENTS = [
                 # script's premise stale rather than merely its prose. D18 is why it may sit on
                 # the commit path at all; D16 is the placement of its self-test.
                 "governed_by": ["D16", "D18", "D45", "D58", "D68", "D92"]},
+            "css-var-check.py": {
+                "does": "`make css-var-check` — a `var(--x)` with no fallback, where `--x` "
+                        "is defined nowhere, drops the whole declaration silently. Five of "
+                        "these accumulated across four screens (2026-09-20 UX review, Tier 1 "
+                        "item 1) before anyone saw them, confirmed live by reading "
+                        "`getComputedStyle` in the running app. REFERENCES are read from BOTH "
+                        "`.css` and `.ts`/`.tsx` (a plain or template-literal string is not "
+                        "stripped, only comments are) — it shipped reading `.css` only, and a "
+                        "reviewer's mutation of a real `Gallery.tsx` reference "
+                        "(`var(--bn-ok)` → a typo) exited 0 the same day it landed. A "
+                        "DEFINITION is collected from a `.css` declaration OR from a TS/TSX "
+                        "`style={{...}}` span's own runtime set — `style={{ '--x': ... }}`, a "
+                        "bracket computed key, `.setProperty('--x', ...)` — measured across "
+                        "app/src before those three shapes were chosen, or every property "
+                        "Banchi sets at runtime would be a false positive. The first two are "
+                        "read ONLY inside a `style={{...}}` span, found by brace-counting, so "
+                        "an unrelated object literal whose key happens to be spelled like a "
+                        "token cannot mask a real finding. `var(--x, fallback)` is never a "
+                        "finding: the fallback IS the definition. Comments are stripped "
+                        "before either side is collected; `@media`/`@supports` are scanned "
+                        "like anywhere else. In `make check`, not on the git commit path — "
+                        "unlike sigil-check, it is not (yet) armed in "
+                        "scripts/githooks/pre-commit.",
+                # D18 is why it may sit on the commit path at all (it writes nothing); D173 is
+                # the mechanization rule this check exists to satisfy for a defect class that
+                # was, until now, only found by hand.
+                "governed_by": ["D18", "D173"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
