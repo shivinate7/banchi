@@ -3362,7 +3362,7 @@ COMPONENTS = [
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226", "D229", "D-guard-self-test-scope"],
+                                "D213", "D215", "D218", "D226", "D229", "D247"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3525,7 +3525,7 @@ COMPONENTS = [
                 # the incident arm's own prose names the two real, landed entries it replays.
                 "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141", "D143",
                                 "D148", "D151", "D160", "D185", "D186", "D188", "D190",
-                                "D-unclaimed-headings-are-found-by-complement"],
+                                "D249"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -3558,7 +3558,7 @@ COMPONENTS = [
                         "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
                         "backlog.md, from before the harness left turn end.",
                 "governed_by": ["D16", "D136", "D141", "D149", "D229",
-                                "D-turn-end-drops-the-harness-and-code-cards-fold-in"],
+                                "D248"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -3623,7 +3623,7 @@ COMPONENTS = [
                 # settles about this file is what may NOT be put behind it: a docs check
                 # here would fire at the end of every turn, including turns that touched no
                 # markdown. That reasoning still argues against putting anything back.
-                "governed_by": ["D16", "D-turn-end-drops-the-harness-and-code-cards-fold-in"],
+                "governed_by": ["D16", "D248"],
             },
             "guard-opsec.sh": {
                 "does": "the PreToolUse opsec twin — RE-ENABLED 2026-08-23 with a narrowed "
@@ -4012,8 +4012,8 @@ COMPONENTS = [
                         "own precedent of naming its one target by hand. It imports the "
                         "globbing and the recipe narrowing from `browser-scope.py`. "
                         "`PKMNSCAN_GUARD_SCOPE=off` runs every target regardless.",
-                "governed_by": ["D18", "D-guard-self-test-scope"],
-                "note": "docs/decisions/D-guard-self-test-scope.md is the argument: what a "
+                "governed_by": ["D18", "D247"],
+                "note": "D247 is the argument: what a "
                         "guard self-test can and cannot catch, why a separate audit found all "
                         "38 targets live and none dead weight, and the one derivation gap "
                         "found (`githooks-selftest.sh` names three of its five hooks only in "
@@ -4158,7 +4158,7 @@ COMPONENTS = [
                                 "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
                                 "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141",
                                 "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D178",
-                                "D189", "D215", "D-guard-self-test-scope"],
+                                "D189", "D215", "D247"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

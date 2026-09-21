@@ -1,4 +1,4 @@
-## D-unclaimed-headings-are-found-by-complement — Recognition by the complement, never by the expected pattern
+## D249 — Recognition by the complement, never by the expected pattern
 
 **Reproduced 2026-09-20.** A real, correctly-slugged decision entry reached `origin/main` unclaimed. The branch that added it never touched `docs/decisions/ORDER.json`, by design. `settle_corpus` writes that manifest at CLAIM time, not before. `scripts/claim-ids.py --landed <rev>` and `make merge`'s own `landed_half` both read that commit. Both are the one backstop whose whole job is asking a REF what it carries. Both reported **"carries no unclaimed id — every heading in it is a number."** `make claim-stale` reported "nothing has gone stale" too. That was correct. Staleness asks a different question: does a NUMBER this branch adds collide with one `ref` has since taken? It never asks about an unclaimed slug at all. It was never blind to this. It was simply never the tool for it. `make docs-audit`'s `id claims` row caught it, unprompted, the moment it ran against that commit's checkout.
 

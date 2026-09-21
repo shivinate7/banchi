@@ -16089,7 +16089,7 @@ def check_guard_scope(report: Report) -> None:
     """`scripts/guard-scope.py:ROSTER` against the Makefile's own wiring, both ways.
 
     THE SECOND PATH-GATED TARGET, on the owner's word, 2026-09-20 — see
-    `docs/decisions/D-guard-self-test-scope.md`. Unlike `check_serve_scope` above, there is
+    D247. Unlike `check_serve_scope` above, there is
     no separate subject list to reconcile here: `guard-scope.py` derives each self-test's
     subject from its own source on every call, so the only thing left to drift is which
     targets are gated AT ALL. A roster entry nothing consults is a list, not a gate — `serve

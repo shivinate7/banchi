@@ -240,27 +240,27 @@
       "ratio_per_1k_words": 13.857,
       "words": 433
     },
-    "docs/decisions/D-a-citation-names-a-symbol.md": {
+    "D245": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 1419
     },
-    "docs/decisions/D-commit-path-writes-reads-the-ast.md": {
+    "D246": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 837
     },
-    "docs/decisions/D-guard-self-test-scope.md": {
+    "D247": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 1146
     },
-    "docs/decisions/D-turn-end-drops-the-harness-and-code-cards-fold-in.md": {
+    "D248": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 979
     },
-    "docs/decisions/D-unclaimed-headings-are-found-by-complement.md": {
+    "D249": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 877

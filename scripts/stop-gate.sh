@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stop hook. USED TO run the harness before letting a turn end. Owner's ruling, 2026-09-20
-# (see D-turn-end-drops-the-harness-and-code-cards-fold-in, docs/decisions/): the harness runs on the commit path
+# (see D248, docs/decisions/): the harness runs on the commit path
 # and in CI only, never at turn end. Measured cost of the old behaviour: 23-24s on every
 # single turn, whether or not the turn touched code the harness could catch anything in.
 #
@@ -26,10 +26,10 @@ cd "$(dirname "$0")/.." || exit 0
 # the retired arming logic's own order.
 disarmed_reason() {
   if [ "${PKMNSCAN_GATE:-}" = "off" ]; then
-    echo "PKMNSCAN_GATE=off (redundant now — the harness left turn end entirely, D-turn-end-drops-the-harness-and-code-cards-fold-in)"
+    echo "PKMNSCAN_GATE=off (redundant now — the harness left turn end entirely, D248)"
     return
   fi
-  echo "harness moved off turn end — commit path and CI only (D-turn-end-drops-the-harness-and-code-cards-fold-in)"
+  echo "harness moved off turn end — commit path and CI only (D248)"
 }
 
 reason="$(disarmed_reason)"

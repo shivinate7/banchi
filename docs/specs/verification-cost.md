@@ -445,7 +445,7 @@ rejected for.
 **§9 asked for the owner's word again before a second entry, and it was given.** A fresh
 measurement found `make check` at 163.85 s. Fifteen guard self-tests cost 76.6 s of that.
 That is 47%. Four of them alone cost more than double `make harness`. Table 2 above carries
-both dates' figures. `docs/decisions/D-guard-self-test-scope.md` is the full argument. This
+both dates' figures. D247 is the full argument. This
 section is the short version.
 
 **A guard self-test proves a mechanism, never the product.** All fifteen build a throwaway

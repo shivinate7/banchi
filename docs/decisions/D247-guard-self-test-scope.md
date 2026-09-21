@@ -1,4 +1,4 @@
-## D-guard-self-test-scope — Fifteen guard self-tests are path-gated, and no target was found dead
+## D247 — Fifteen guard self-tests are path-gated, and no target was found dead
 
 **THE MEASUREMENT THAT REOPENED THE CLOSE.** `scripts/serve-scope.py`'s header says a
 second path-gated target needs the owner's word again. That word was asked for and given,

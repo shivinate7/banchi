@@ -1,4 +1,4 @@
-## D-commit-path-writes-reads-the-ast — `commit path writes` reads the code, not `checks.py`'s own sentence about itself
+## D246 — `commit path writes` reads the code, not `checks.py`'s own sentence about itself
 
 **THE DEFECT.** `scripts/checks.py` gives each check a `writes` field. Its own comment says
 the field is a sentence, not a flag. Before this entry, `check_commit_path` in

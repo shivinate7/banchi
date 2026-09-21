@@ -1,4 +1,4 @@
-## D-turn-end-drops-the-harness-and-code-cards-fold-in — The harness leaves turn end, and code cards fold into one rules file
+## D248 — The harness leaves turn end, and code cards fold into one rules file
 
 **TWO RULINGS, ONE SESSION, 2026-09-20.** Both change how a session runs, not what the
 product does. Both are recorded here together. Both are the owner reshaping process

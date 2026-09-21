@@ -1,4 +1,4 @@
-## D-a-citation-names-a-symbol — A citation names a symbol, not a line, and a line-number row sees only the half that shrank
+## D245 — A citation names a symbol, not a line, and a line-number row sees only the half that shrank
 
 **Unreadable.** A citation written `path:N` was invisible to every row in this repo.
 `scripts/docs-audit.py`'s `_CANDIDATE_RE` carries no `:` in its character class. So line 884

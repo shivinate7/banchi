@@ -72,7 +72,7 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   measurement). What each of fifteen guard self-tests reads.
                     #   ARGS=list [--target <name>], or
                     #   ARGS="classify --target <name> --base <rev>".
-                    #   `docs/decisions/D-guard-self-test-scope.md` is the argument. A guard
+                    #   D247 is the argument. A guard
                     #   self-test proves a MECHANISM, never the product. It cannot go stale
                     #   between two moments: the guard script it proves changing, or its own
                     #   fixture changing. THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S
@@ -1093,6 +1093,11 @@ D241 Recorded, not built: ask the catalogue earlier than the archive does
 D242 Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
 D243 Every posted price is recorded, and the row is never touched again
 D244 The posted-price view is wanted, and it is shelved until there is a history to draw
+D245 A citation names a symbol, not a line, and a line-number row sees only the half that shrank
+D246 `commit path writes` reads the code, not `checks.py`'s own sentence about itself
+D247 Fifteen guard self-tests are path-gated, and no target was found dead
+D248 The harness leaves turn end, and code cards fold into one rules file
+D249 Recognition by the complement, never by the expected pattern
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

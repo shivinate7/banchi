@@ -8,7 +8,7 @@ Measured on this Mac, 2026-09-20: `make check` is 163.85s. Fifteen guard self-te
 `screen-freshness-selftest` and `cid-selftest` — cost 76.6s of that, 47%, against a
 ten-test product harness of 21.75s. A guard self-test proves a MECHANISM. It cannot catch a
 product defect, and it has something new to say only when the guard it proves, or this
-classifier, or the recipe that runs it, changes. `docs/decisions/D-guard-self-test-scope.md`
+classifier, or the recipe that runs it, changes. D247
 is the argument; `docs/specs/verification-cost.md` §11 is the measurement.
 
 THE OWNER RULED A SECOND PATH-GATED TARGET IN, 2026-09-20, on that measurement.

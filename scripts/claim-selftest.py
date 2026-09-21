@@ -1311,7 +1311,7 @@ def main() -> int:
            "a claimer that cannot answer is REPORTED, never read as a clean main", out)
 
         # ------------------------------------------------------------------------------
-        # D-unclaimed-headings-are-found-by-complement: THE REAL 2026-09-20 ESCAPE.
+        # D249: THE REAL 2026-09-20 ESCAPE.
         #
         # A branch adding a decision entry touches only its own FILE, by design — the
         # manifest is settled at claim time, never before (`corpus_order`'s own docstring).

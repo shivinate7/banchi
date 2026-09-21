@@ -928,7 +928,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — same standing as serve-scope-selftest's own row, "
                                "which this one is the sibling of.",
         "gates": True,
-        "governed_by": ("D18", "D-guard-self-test-scope"),
+        "governed_by": ("D18", "D247"),
     },
 )
 

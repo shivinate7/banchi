@@ -250,6 +250,11 @@
     "D241-archive-live-catalogue-lookup-at-join-time.md",
     "D242-sku-number-contradictions.md",
     "D243-a-record-price-postings.md",
-    "D244-a-postings-view-shelved.md"
+    "D244-a-postings-view-shelved.md",
+    "D245-a-citation-names-a-symbol.md",
+    "D246-commit-path-writes-reads-the-ast.md",
+    "D247-guard-self-test-scope.md",
+    "D248-turn-end-drops-the-harness-and-code-cards-fold-in.md",
+    "D249-unclaimed-headings-are-found-by-complement.md"
   ]
 }
