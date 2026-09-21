@@ -1,9 +1,18 @@
 # Handoff — rot-reduction session, 2026-09-20
 
-Branch `claude/docs-audit-line-refs-1bc6c4`, 16 commits, `make check` green, tree clean.
-NOT pushed and NOT merged. The owner ruled: keep accumulating, one PR at the end.
+**MERGED.** PR #450 landed on main as `90bad231f`, 2026-09-21, after two red CI rounds that
+were both real defects in this branch's own new rows. Five slugs claimed at the merge:
+D245 (a citation names a symbol), D246 (commit path reads the AST), D247 (guard self-test
+scope), D248 (turn end drops the harness, code cards fold in), D249 (unclaimed headings by
+complement).
 
-The session stopped on a monthly spend limit. Two subagents died mid-flight; their work was
+**CI caught what local runs could not, twice.** First, `derived numbers` went red because
+merging a moved main grew `docs/map.py` past its pin. It also published that one drift four
+times, through CLAUDE.md's three symlinks. Second, the mutation arm hardcoded `137` and
+stopped applying once `app/src` gained a file. Both are fixed. Every figure in this branch
+was measured on macOS. The Linux runner is what found these.
+
+The session stopped on a monthly spend limit. Two subagents died mid-flight. their work was
 recovered or confirmed empty before stopping. Nothing is lost.
 
 ## What landed
@@ -11,7 +20,7 @@ recovered or confirmed empty before stopping. Nothing is lost.
 | Change | Measured result |
 |---|---|
 | `line anchors` row reads the `:N` in a citation | 69.7% of checkable code anchors pointed at the wrong line |
-| `derived numbers` registry + generator | tree-describing figures cannot rot; 3 were already wrong |
+| `derived numbers` registry + generator | tree-describing figures cannot rot, and 3 were already wrong |
 | `Report.as_json()` withholds a clean summary beside findings | `views exposure` had published "no manifest view can draw a stored photo" next to 7 saying it can |
 | 15 guard self-tests path-gated (`scripts/guard-scope.py`) | `make check` 163.85s to 116.7s |
 | harness dropped from turn end (`scripts/stop-gate.sh`) | 24.85s to 0.006s per turn |
@@ -40,7 +49,7 @@ recovered or confirmed empty before stopping. Nothing is lost.
 6. **Delete `make orient-selftest`** — it fails on the live tree, asserting against
    `WalkGroups`, deleted weeks ago, and nothing noticed because it sits outside `make check`.
 
-## Follow-up owed on work that landed
+## Follow-up owed on work that landed (all of it now ON MAIN)
 
 `commit path` (commit `394f2abb`) reads the AST for writes and reconciles both directions.
 Only ONE direction was mutation-proven before it landed: a `writes` field declaring a write
