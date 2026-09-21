@@ -18518,8 +18518,19 @@ def self_test() -> int:
     bak_path = claude_md.with_suffix(".md.bak")
     bak_path.write_text(original_text, encoding="utf-8")
     try:
+        # READ THE PUBLISHED VALUE, NEVER TYPE IT. This arm hardcoded `137` and went red
+        # the first time `app/src` gained a file, because its own mutation then matched
+        # nothing and never applied. An arm that fails when the tree changes honestly is
+        # the cry-wolf guard this file refuses everywhere else — and the lesson is the one
+        # the row itself exists to teach: derive the expectation from the tree.
+        _dn_mod = _derived_numbers()
+        _live = next(
+            m for m in _dn_mod.MARKER_RE.finditer(original_text)
+            if m.group("name") == "app_src_file_count"
+        )
+        published = _live.group("number")
         mutated = original_text.replace(
-            "137<!-- derived:app_src_file_count -->",
+            f"{published}<!-- derived:app_src_file_count -->",
             "999<!-- derived:app_src_file_count -->",
             1,
         )
@@ -18530,8 +18541,9 @@ def self_test() -> int:
         check_derived_numbers(mutated_report, [claude_md])
         findings = mutated_report.checks[0].findings
         ok(
-            len(findings) == 1 and "999" in findings[0].message and "137" in findings[0].message,
-            "a hand-mutated CLAUDE.md (137 -> 999) fails `derived numbers`, naming both "
+            len(findings) == 1 and "999" in findings[0].message
+            and published.replace(",", "") in findings[0].message.replace(",", ""),
+            f"a hand-mutated CLAUDE.md ({published} -> 999) fails `derived numbers`, naming both "
             "the stale published number and the tree's real count",
             str(findings),
         )
