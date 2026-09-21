@@ -3528,6 +3528,13 @@ export function Pricing() {
                           title={`${column.column}: ${sku.row[column.column] || '—'}, press ${column.key.toUpperCase()} to use it`}
                         >
                           <span className="pricing-ref-label">{column.label} </span>
+                          {/* NOT `money()` (defect noted, UX review 2026-09-20): `sku.snap[field]`
+                              is the exact string the M/D/L/N shortcuts write verbatim into the
+                              editable price field (`snap()` above, `input.value = value`). This
+                              span has to show that same string, unreformatted, or a press could
+                              write a figure that disagrees with what was just read on screen.
+                              The type's own comment already states the server sends it
+                              pre-rendered to two decimals, which is why this has read fine. */}
                           {sku.snap[column.field] === null ? '—' : `$${sku.snap[column.field]}`}
                         </span>
                       ))}
@@ -4242,7 +4249,7 @@ function CutoffPanel({
 
   return (
     <section
-      className="bn-panel pricing-cheap"
+      className="pricing-cheap"
       data-written={written ? 'yes' : 'no'}
       data-override={overridden ? 'true' : undefined}
       aria-label="The cut-off"
@@ -4443,7 +4450,7 @@ function MarkdownPanel({
   const counts = table?.counts ?? {}
   return (
     <section
-      className="bn-panel pricing-verdict"
+      className="pricing-verdict"
       data-ready={raises === 0 ? 'true' : 'false'}
       aria-label="What this export says, and what would be pushed"
     >
@@ -4637,7 +4644,7 @@ function ReadyPanel({
         ? 'Writes at the rule’s price.'
         : `Writes at ${cheapMoney}.`
   return (
-    <section className="bn-panel pricing-verdict" data-ready={ready ? 'true' : 'false'} aria-label="Whether the import files can be written">
+    <section className="pricing-verdict" data-ready={ready ? 'true' : 'false'} aria-label="Whether the import files can be written">
       <header className="pricing-deck-head">
         <span className="pricing-deck-mark">
           <Icon name={ready ? 'check' : 'alert'} size={16} />

@@ -307,23 +307,57 @@
 .pricing-deck {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--bn-4);
-  /* THE SHORTER PANEL IS SIMPLY SHORTER. Stretching them to a common height, with the facts
-     strip bottom-anchored to fill the difference, opened a 136px hollow band in the middle of
-     the readiness panel in exactly the states the deck exists for — which reads as content
-     that failed to load rather than as alignment. */
-  align-items: start;
+  /* ONE SHARED SURFACE, NOT TWO. Stretching two SEPARATE bordered, shadowed cards to a common
+     height was tried and reverted — the taller card's own boundary made its unfilled space
+     read as content that failed to load. The two panels used to each carry `bn-panel` (its own
+     background, radius and shadow); that is now carried here, once, and `.pricing-cheap` /
+     `.pricing-verdict` are plain columns inside it. A height difference between two columns of
+     one card reads as "this side has less to say" — a shorter column never gets its own edge
+     to fall short of.
+
+     A REAL VOID SURVIVES WHEN `.pricing-verdict` IS THE SHORTER COLUMN, and this is an
+     accepted tradeoff rather than an oversight. `.pricing-cheap` self-fills because its own
+     trailing box, `.pricing-cheap-run` ("THIS RUN ONLY"), already carries `margin-top: auto`
+     for an unrelated reason — it is a self-contained, dashed sub-panel that reads fine
+     anywhere in the column. `.pricing-verdict`'s three renderers (`MarkdownPanel`, `ReadyPanel`
+     and its not-ready branch) end on a plain sentence, one of several read top to bottom as
+     one narrative — anchoring the LAST one to the bottom would pull it visually away from the
+     sentence just above it, trading a blank void beneath the card for a floating, disconnected
+     line inside it. The void is quiet, on-brand empty space in a card whose own shared surface
+     already argues "this side has less to say"; a manufactured anchor would argue something
+     the content does not say. Given that trade, the void stands, over three verdict shapes,
+     until one of them earns a real trailing sub-panel of its own. */
+  background: var(--bn-surface);
+  border-radius: var(--bn-r-lg);
+  box-shadow: var(--bn-shadow-1);
+  overflow: hidden;
+  align-items: stretch;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
   animation-delay: 40ms;
 }
 @container pricing (min-width: 880px) {
   .pricing-deck[data-cards='two'] { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  /* the divider between the two columns, only where they sit side by side */
+  .pricing-deck[data-cards='two'] > .pricing-cheap { border-right: 1px solid var(--bn-line); }
+}
+/* stacked (narrow container): the same hairline, moved to the seam between rows.
+   DEFENSIVE, CURRENTLY UNREACHED: `data-cards` is hardcoded `"two"` at the one call site
+   (`Pricing.tsx`'s `<div className="pricing-deck" ... data-cards="two">`) and exactly one of
+   `MarkdownPanel`/`ReadyPanel` always renders beside `CutoffPanel`, so this deck never draws
+   fewer than two cards or more than two — the `:last-child` guard below has no state to fire
+   on today. Kept rather than deleted because the two-value `data-cards` attribute already
+   exists to say this, and removing the rule would silently re-open the single-card case
+   (announced border-bottom permanently on) the day a third landing state is added. */
+.pricing-deck > .pricing-cheap:not(:last-child) { border-bottom: 1px solid var(--bn-line); }
+@container pricing (min-width: 880px) {
+  .pricing-deck[data-cards='two'] > .pricing-cheap { border-bottom: 0; }
 }
 /* pressed from the ship bar at the foot of the list: the deck says which one answered */
-.pricing-deck.is-flash > .bn-panel { animation: pricing-deck-flash 1200ms var(--bn-ease-out) both; }
+.pricing-deck.is-flash > .pricing-cheap,
+.pricing-deck.is-flash > .pricing-verdict { animation: pricing-deck-flash 1200ms var(--bn-ease-out) both; }
 @keyframes pricing-deck-flash {
-  0%, 100% { box-shadow: var(--bn-shadow-1); }
-  12%, 55% { box-shadow: var(--bn-shadow-1), 0 0 0 3px var(--bn-accent-tint-2); }
+  0%, 100% { box-shadow: none; }
+  12%, 55% { box-shadow: inset 0 0 0 3px var(--bn-accent-tint-2); }
 }
 
 .pricing-cheap,

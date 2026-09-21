@@ -137,7 +137,18 @@
 .codes-dup-link:hover { color: var(--bn-accent); text-decoration: none; }
 
 /* ---- hero: the pile ------------------------------------------------------- */
-.codes-pile { display: grid; grid-template-columns: minmax(0, 1fr) 332px; }
+/* ONE HATCH, NOT TWO (defect fix, UX review 2026-09-20). The lane bar's stripe and the
+ * legend dot's stripe were two hand-authored `repeating-linear-gradient()` literals with two
+ * different pitches — proportional to the two elements' sizes, so nothing looked wrong, but a
+ * future change to the angle, colour or density had two places to update and nothing that
+ * checked they stayed in step. One image, defined once at the pitch the (larger) lane bar
+ * segment draws at; the legend dot reuses the same image and halves it with `background-size`
+ * instead of authoring its own smaller gradient. */
+.codes-pile {
+  --codes-hatch-unclaimed: repeating-linear-gradient(-45deg, var(--bn-warn) 0 4px, transparent 4px 8px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 332px;
+}
 .codes-pile-main {
   display: flex;
   flex-direction: column;
@@ -225,7 +236,7 @@
 .codes-lanebar-seg.is-premium { background: var(--bn-accent); }
 .codes-lanebar-seg.is-bulk { background: var(--bn-ink-4); }
 .codes-lanebar-seg.is-unclaimed {
-  background: repeating-linear-gradient(-45deg, var(--bn-warn) 0 4px, transparent 4px 8px), var(--bn-warn-tint);
+  background: var(--codes-hatch-unclaimed), var(--bn-warn-tint);
 }
 @keyframes codes-grow { from { transform: scaleX(0); opacity: 0.4; } to { transform: none; opacity: 1; } }
 
@@ -233,7 +244,12 @@
 .codes-legend-item { display: inline-flex; align-items: center; gap: 7px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); }
 .codes-legend-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--bn-ink-4); flex: none; }
 .codes-legend-item.is-premium .codes-legend-dot { background: var(--bn-accent); }
-.codes-legend-item.is-unclaimed .codes-legend-dot { background: repeating-linear-gradient(-45deg, var(--bn-warn) 0 2px, transparent 2px 4px), var(--bn-warn-tint); }
+/* Half the lane bar's own pitch, by scaling the SAME image rather than authoring a second
+ * gradient at half the stop widths — one hatch, read at two sizes. */
+.codes-legend-item.is-unclaimed .codes-legend-dot {
+  background: var(--codes-hatch-unclaimed), var(--bn-warn-tint);
+  background-size: 50% 50%, 100% 100%;
+}
 .codes-legend-n { font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 
 /* by product — the pile's right-hand column */
