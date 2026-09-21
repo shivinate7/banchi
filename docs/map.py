@@ -5219,11 +5219,11 @@ COMPONENTS = [
                                     "spoke a different brand depending on the window's width; "
                                     "`every card has an address` left the product with that "
                                     "edit and is no longer copy anywhere.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
-                                            "D28", "D31", "D33", "D39", "D49", "D51", "D53",
-                                            "D57", "D61", "D63", "D66", "D69", "D70", "D94",
-                                            "D95", "D100", "D105", "D109", "D120", "D134",
-                                            "D159", "D207", "D227"]},
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28",
+                                            "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61",
+                                            "D63", "D66", "D69", "D70", "D94", "D95", "D100",
+                                            "D105", "D109", "D120", "D123", "D134", "D159", "D207",
+                                            "D227"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -5268,8 +5268,8 @@ COMPONENTS = [
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51",
-                                            "D94", "D95", "D110", "D117", "D118", "D134", "D152",
-                                            "D204", "D205", "D218"]},
+                                            "D94", "D95", "D110", "D117", "D118", "D123", "D134",
+                                            "D152", "D204", "D205", "D218"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a

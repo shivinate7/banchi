@@ -17,7 +17,7 @@ import type {
   ServerStatus,
 } from './types'
 import { useCardCrop } from './cardCrop'
-import { Button, cropStyle, Icon, type IconName } from './kit'
+import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
 import { standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
@@ -214,8 +214,18 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
         )}
       </span>
       {say.href === null ? null : (
-        <span className="home-standing-go">
-          {say.kbd === null ? null : <kbd className="bn-kbd">{say.kbd}</kbd>}
+        <span className="home-standing-go" aria-label="Go to it">
+          {/* The shortcut chip is a hint, not the label. This span is decoration — a kbd
+              chip and an arrow, nothing a sighted reader reads as words — so `aria-label`
+              names the AFFORDANCE directly rather than parking a phrase in the reading order
+              for content that has no textual reading order of its own. It replaces this
+              span's own contribution to the row's accessible name (an ancestor's
+              name-from-content computation reads a labelled descendant's `aria-label` in
+              place of its subtree text), so a screen reader hears "go to it" once, appended
+              to the row's sentence, instead of the raw shortcut string. `Kbd` still carries
+              its own `aria-hidden`, matching every other kbd chip in the app; redundant
+              under this label, kept for consistency. */}
+          {say.kbd === null ? null : <Kbd>{say.kbd}</Kbd>}
           <Icon name="chevronRight" size={16} />
         </span>
       )}
