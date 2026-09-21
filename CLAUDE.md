@@ -958,6 +958,7 @@ D240 Measured, not shipped: the join trusts a number that resolves, and the owne
 D241 Recorded, not built: ask the catalogue earlier than the archive does
 D242 Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
 D243 Every posted price is recorded, and the row is never touched again
+D245 Unsold stock reaches `#/revenue`, and D236's wire is spent exactly as written
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
