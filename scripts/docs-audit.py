@@ -181,7 +181,15 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
     # `harness tests` at zero means TESTS is empty, `pkmnscan commands` at zero means
     # COMMANDS is, and `decision ids` at zero means the corpus is unreadable.
     "paths": ("staged", "counts the references it resolved out of the staged documents"),
+    "line anchors": (
+        "staged",
+        "counts the `path:N`/`path:N-M` line anchors it found in the staged documents",
+    ),
     "make targets": ("staged", "counts the `make` references it found in the staged documents"),
+    "derived numbers": (
+        "staged",
+        "counts the `<!-- derived:<name> -->` markers it found in the staged documents",
+    ),
     "env vars": ("staged", "counts the variables the staged documents name"),
     "doc hygiene": ("staged", "its subject IS the staged markdown list"),
     "check numbering": ("staged", "its subject IS the staged markdown list"),
@@ -190,6 +198,10 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
     "allowlist": (
         "always",
         "an empty docs-audit-allow.txt is the ideal state, not a broken reader",
+    ),
+    "line anchor allowlist": (
+        "always",
+        "an empty docs-audit-line-allow.txt is the ideal state, not a broken reader",
     ),
     "evidence freshness": (
         "always",
@@ -247,8 +259,19 @@ class Report:
         # session greps instead of reading ~100 rows, so the distinction between "examined
         # everything" and "examined nothing" has to be an integer on this surface and not
         # a word in the render.
+        # A SUMMARY IS A CLEAN VERDICT AND IS WITHHELD WHEN THE ROW HAS FINDINGS.
+        # `render()` above already does this — it prints the summary only in the `not
+        # findings` branch, and a tag plus a count otherwise. This surface did not, and
+        # emitted both, so the row contradicted itself in the one place a session greps.
+        # Measured 2026-09-20: `views exposure` published "no manifest view can draw a
+        # stored photo" beside 7 findings each naming a view that can, and `doc hygiene`
+        # published "373 markdown files well-formed as documents" beside 10 saying they
+        # are not. Most rows compose the summary unconditionally, so this is the shape of
+        # every row and not a typo in two — which is why it is fixed here, once, rather
+        # than in 200-odd `report.add` call sites.
         rows = [
-            {"label": row.check, "severity": row.severity, "summary": row.summary,
+            {"label": row.check, "severity": row.severity,
+             "summary": row.summary if not row.findings else None,
              "scanned": row.scanned, "vacuous": row.scanned == 0,
              "findings": [finding._asdict() for finding in row.findings]}
             for row in self.checks
@@ -589,6 +612,64 @@ def path_candidates(line: str) -> List[str]:
     return out
 
 
+# ------------------------------------------------------------------- line anchors
+
+# `path:N` and `path:N-M` — a citation naming a specific line or range inside a file, and
+# `path_candidates` above cannot see the suffix at all: `:` is not in `_CANDIDATE_RE`'s
+# character class, so `docs/GATES.md:884` is extracted as the bare path `docs/GATES.md`
+# and the `paths` row above reports "references resolve" having never read the `:884`.
+# Measured over the staged docs: 713 line-anchored references, 13 past their target's end,
+# and — the narrower, structurally blind case Clause B exists for — 2 landing on a real
+# line of a split-record stub whose content moved elsewhere in the same split.
+#
+# A NEW EXTRACTOR, NOT A WIDENED `_CANDIDATE_RE`. Three call sites depend on
+# `path_candidates` returning a list of plain strings, and folding a line-suffix onto that
+# shape would either break them or bolt a second meaning onto the same return type. This
+# reuses the same path-shaped character classes and the same three suppressions
+# (`_ROUTE`, `_QUOTED_ROUTE`, `_PLACEHOLDER`) so a route or a placeholder is still not a
+# path here either, and returns a distinct, richer type instead.
+_LINE_ANCHOR_RE = re.compile(
+    r"(?P<path>@?(?:\.\./)*[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]*):"
+    r"(?P<start>[0-9]+)(?:-(?P<end>[0-9]+))?"
+)
+
+
+class LineAnchor(NamedTuple):
+    """One `path:N` or `path:N-M` citation extracted from a line of prose. `end` is
+    `None` for a single-line anchor."""
+
+    path: str
+    start: int
+    end: Optional[int]
+
+
+def line_anchor_candidates(line: str) -> List[LineAnchor]:
+    """Extract `path:N` / `path:N-M` line-anchored citations from one line.
+
+    Pure — no Report, no filesystem access — so `--self-test` can drive it directly, the
+    same shape `unscoped_walk_sites` already uses and for the reason its own docstring
+    gives: the return value is the thing under test, not a side effect two frames away.
+
+    The path portion is not stripped or validated here — `resolve_candidate` already does
+    that (the `@` and `../` handling), and duplicating it would be the second copy this
+    file's own header warns against.
+    """
+    text = _ROUTE.sub(" ", line)
+    text = _QUOTED_ROUTE.sub(" ", text)
+    if _PLACEHOLDER.search(text):
+        text = _PLACEHOLDER.sub(" ", text)
+    out: List[LineAnchor] = []
+    for match in _LINE_ANCHOR_RE.finditer(text):
+        out.append(
+            LineAnchor(
+                match.group("path"),
+                int(match.group("start")),
+                int(match.group("end")) if match.group("end") else None,
+            )
+        )
+    return out
+
+
 def module_attributes(path: Path) -> Set[str]:
     """Top-level names a Python module defines, read statically."""
     try:
@@ -605,6 +686,45 @@ def module_attributes(path: Path) -> Set[str]:
                     names.add(target.id)
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             names.add(node.target.id)
+    return names
+
+
+_TS_SYMBOL_RE = re.compile(
+    r"^(?:export\s+default\s+)?(?:export\s+)?(?:declare\s+)?(?:async\s+)?"
+    r"(?:function\*?|class|interface|type|const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+)
+
+
+def ts_symbols(path: Path) -> Set[str]:
+    """Top-level TypeScript/TSX symbols, read statically — `module_attributes`'s own
+    promise, one language over. Line-anchored regex, no parser, no `tsc`, no subprocess:
+    this script does not run project code, the same reason it parses Python with `ast`
+    instead of importing it.
+
+    Recognises a top-level (column-0) `export function`, `function`, `export default
+    function`, `const`/`let`/`var`, `class`, `interface` and `type` declaration, with or
+    without `export`/`declare`/`async` in front. Column-0 only, on purpose — the same
+    "top-level names" scope `module_attributes` keeps for Python, so a name nested inside
+    a function body is not claimed as a module export just because this reader saw it.
+
+    WHAT THIS CANNOT SEE, and it must not claim otherwise: a symbol built by a generic
+    factory (`export const foo = makeThing()` is seen as the NAME `foo`, never what it
+    resolves to); a re-export (`export { foo } from "./bar"` is invisible — it never
+    starts with one of the keywords above); and a name assembled at runtime (a
+    dynamically keyed object, a `Proxy`, `Object.assign(exports, {...})`). A hit here
+    means the file's text names this symbol at column 0; a miss means only that this
+    static reader could not find it, never that the symbol does not exist by some other
+    construction.
+    """
+    if not exists(path):
+        return set()
+    names: Set[str] = set()
+    for line in read(path).splitlines():
+        if not line or line[0].isspace():
+            continue
+        match = _TS_SYMBOL_RE.match(line)
+        if match:
+            names.add(match.group(1))
     return names
 
 
@@ -834,9 +954,9 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
         # read as a plain missing file.
         suffix = target.suffix
         if suffix and suffix not in KNOWN_SUFFIXES:
+            attribute = suffix[1:]
             module = target.with_suffix(".py")
             if exists(module):
-                attribute = suffix[1:]
                 if attribute in module_attributes(module):
                     continue
                 findings.append(
@@ -844,6 +964,40 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
                         f"{rel(doc)}:{number}",
                         f"`{candidate}` — {rel(module)} exists but defines no "
                         f"`{attribute}`.",
+                    )
+                )
+                continue
+
+            # THE SAME FORM, FOR TYPESCRIPT. `.ts`/`.tsx` are already in KNOWN_SUFFIXES,
+            # so `app/src/server.ts.walkPlan` reads its OWN final dot as the attribute
+            # (`.walkPlan`) and `app/src/server.ts` as the module — this fallback used to
+            # try only `.py` for that module, so every TS `module.attribute` citation fell
+            # through to "does not exist" no matter how real the symbol was. `ts_symbols()`
+            # is the durable-citation form's TS reader; see its own docstring for what a
+            # static reader over TypeScript cannot see.
+            #
+            # STRIP, NEVER APPEND, WHEN THE MODULE ALREADY CARRIES ITS OWN `.ts`/`.tsx`.
+            # `target.with_suffix(".ts")` on `app/src/server.ts.walkPlan` would REPLACE the
+            # `.walkPlan` suffix with `.ts` and land on `server.ts.ts` — the bare form
+            # (`target.with_suffix("")`) is the module whenever it already ends in `.ts` or
+            # `.tsx`; only a module with no extension of its own (`app/src/server.walkPlan`)
+            # needs one appended.
+            bare = target.with_suffix("")
+            ts_candidates = (
+                [bare] if bare.suffix in (".ts", ".tsx")
+                else [bare.with_suffix(".ts"), bare.with_suffix(".tsx")]
+            )
+            ts_module = next((candidate for candidate in ts_candidates if exists(candidate)), None)
+            if ts_module is not None:
+                if attribute in ts_symbols(ts_module):
+                    continue
+                findings.append(
+                    Finding(
+                        f"{rel(doc)}:{number}",
+                        f"`{candidate}` — {rel(ts_module)} exists but defines no "
+                        f"`{attribute}` this static reader can see (a factory-built, "
+                        f"re-exported, or runtime-assembled name is invisible to it — "
+                        f"see `ts_symbols()`'s own docstring).",
                     )
                 )
                 continue
@@ -917,6 +1071,688 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
             )
     report.add("allowlist", MECHANICAL, findings, f"{len(allowed)} entries, none stale",
                scanned=len(allowed))
+
+
+# --------------------------------------------------------------------- line anchors
+
+# THE STUB ROSTER, DERIVED FROM THE CORPUS MODULES THAT REPLACED EACH STUB, NEVER TYPED.
+# `docs/DECISIONS.md`, `docs/DEBTS.md` and `docs/GATES.md` are index stubs since the split
+# (D160 and its two siblings): their records live one file each under `docs/decisions/`,
+# `docs/debts/` and `docs/gates/`, and each corpus module names both halves itself —
+# `STUB` (the file that is read by nothing) and `DIRECTORY` (where the content actually
+# lives) — because a reader that wrote its own reason for that had already drifted once.
+# A typed three-filename list here would be a fourth copy of a fact the repo already
+# states twice; reading `STUB` off the modules keeps this row unable to disagree with
+# them, at the cost of failing outright — never guessing a name — the moment one of the
+# three is missing or has lost that shape.
+_STUB_CORPUS_MODULES: Tuple[str, ...] = (
+    "decisions_corpus.py", "debts_corpus.py", "gates_corpus.py",
+)
+
+
+def _split_record_stubs() -> Optional[Set[Path]]:
+    """Every split-record stub path, or `None` when the roster could not be derived.
+
+    `None` is not "no stubs" — it is "this row cannot say", the same split every corpus
+    reader in this file already makes for `corpus_is_empty`. A caller that treated a
+    failed import as zero stubs would silently stop checking Clause B the moment one of
+    the three sibling modules broke, which is exactly the kind of quiet narrowing this
+    whole task exists to remove one level up.
+    """
+    stubs: Set[Path] = set()
+    for name in _STUB_CORPUS_MODULES:
+        module = _sibling(name)
+        if module is None:
+            return None
+        stub = getattr(module, "STUB", None)
+        directory = getattr(module, "DIRECTORY", None)
+        if not isinstance(stub, Path) or not isinstance(directory, Path):
+            return None
+        stubs.add(stub)
+    return stubs
+
+
+class ResolvedAnchor(NamedTuple):
+    """One line-anchored citation, resolved to a real repo path the same way `check_paths`
+    resolves a bare one — `.git/` excluded, a first segment outside `top_level_names()`
+    dropped. `sentence` is the doc's own line text, kept for the rot reader below so it
+    never has to re-walk the documents a second time."""
+
+    doc: Path
+    line: int
+    candidate: str
+    target: Path
+    start: int
+    end: Optional[int]
+    sentence: str
+
+
+def resolved_line_anchors(docs: Sequence[Path]) -> List[ResolvedAnchor]:
+    """Every line anchor in `docs`, resolved. Pure over its arguments plus the real repo's
+    `top_level_names()` — no Report — so `--self-test` can call it once and feed the
+    result to `line_anchor_findings` and `line_anchor_rot` without re-walking `docs`
+    three times for three different questions."""
+    tops = top_level_names()
+    out: List[ResolvedAnchor] = []
+    for doc in docs:
+        for number, line in enumerate(read(doc).splitlines(), start=1):
+            for anchor in line_anchor_candidates(line):
+                target = resolve_candidate(anchor.path, doc, tops)
+                if target is None:
+                    continue
+                # Same exclusion `check_paths` makes, for the same reason — see its own
+                # comment: `.git` is git's own storage, not repo content, and a linked
+                # worktree makes `.git` a FILE rather than a directory.
+                if rel(target).split("/")[0] == ".git":
+                    continue
+                candidate_text = f"{anchor.path}:{anchor.start}"
+                if anchor.end is not None:
+                    candidate_text += f"-{anchor.end}"
+                out.append(
+                    ResolvedAnchor(
+                        doc, number, candidate_text, target, anchor.start, anchor.end, line,
+                    )
+                )
+    return out
+
+
+def line_anchor_findings(
+    anchors: Sequence[ResolvedAnchor], stubs: Set[Path]
+) -> Tuple[List[Tuple[ResolvedAnchor, Finding]], List[Finding]]:
+    """(Clause A findings paired with their anchor, Clause B findings) for anchors whose
+    TARGET FILE ALREADY EXISTS — a line anchor into a file that does not exist at all is
+    the `paths` row's own finding, and is never re-reported here.
+
+    Clause A pairs each finding with its anchor so the caller can apply
+    `scripts/docs-audit-line-allow.txt` — keyed on the CITATION TEXT, one specific number,
+    never a bare path — without this function knowing the allowlist exists.
+
+    Clause B fires only on an anchor Clause A did NOT already catch: an anchor whose
+    number is past the stub's end is Clause A's finding, and Clause B exists precisely for
+    the anchor that survives that check because the stub happens to still be long enough
+    to contain the number — a real line, holding unrelated text, because the record it
+    once held moved to another file in the same split. Checking both unconditionally would
+    double-report the same citation under two clauses for no new information.
+
+    SHAPE ONLY. Clause A and Clause B both answer "does this number make sense", never
+    "is this the right number" — see `check_line_anchors`'s own docstring for the
+    measurement that answers the second question and the row that reports it without
+    gating on it.
+    """
+    clause_a: List[Tuple[ResolvedAnchor, Finding]] = []
+    clause_b: List[Finding] = []
+    for anchor in anchors:
+        if not exists(anchor.target):
+            continue
+        total = len(read(anchor.target).splitlines())
+        upper = anchor.end if anchor.end is not None else anchor.start
+        if anchor.start > total or upper > total:
+            clause_a.append((
+                anchor,
+                Finding(
+                    f"{rel(anchor.doc)}:{anchor.line}",
+                    f"`{anchor.candidate}` cites line {anchor.candidate.split(':', 1)[1]} "
+                    f"of {rel(anchor.target)}, which has only {total} line(s).\n"
+                    f"Fix the reference, or add it to "
+                    f"scripts/docs-audit-line-allow.txt with a reason if it is a "
+                    f"deliberate record of a past citation.",
+                ),
+            ))
+            continue
+        if anchor.target in stubs:
+            clause_b.append(
+                Finding(
+                    f"{rel(anchor.doc)}:{anchor.line}",
+                    f"`{anchor.candidate}` is a line anchor into {rel(anchor.target)}, a "
+                    f"split-record stub — its records live one file each under the "
+                    f"directory beside it, so a line number into the stub is never the "
+                    f"content it names, even when the number itself resolves.",
+                )
+            )
+    return clause_a, clause_b
+
+
+LINE_ANCHOR_ALLOWLIST = ROOT / "scripts" / "docs-audit-line-allow.txt"
+
+
+def load_line_allowlist() -> Dict[str, str]:
+    """Same shape and the same self-cleaning discipline as `load_allowlist()` (see
+    `scripts/docs-audit-allow.txt`'s own header), keyed on the CITATION TEXT
+    (`path:N`/`path:N-M`) rather than a bare path — Clause A's subject is one specific
+    number, and two different anchors into the same file are two different claims, each
+    needing its own reason and its own staleness check."""
+    if not exists(LINE_ANCHOR_ALLOWLIST):
+        return {}
+    entries: Dict[str, str] = {}
+    for line in read(LINE_ANCHOR_ALLOWLIST).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        path, _, reason = stripped.partition("#")
+        entries[path.strip()] = reason.strip()
+    return entries
+
+
+def check_line_anchor_allowlist(report: Report, allowed: Dict[str, str]) -> None:
+    """Self-cleaning, mirroring `check_allowlist` for this file's one entry kind: an
+    anchor that WAS past its target's end and now is not, because the target grew (or the
+    citation was corrected) underneath it. There is no test-id or identifier kind here —
+    every entry in this file is a line anchor, or it is not a valid entry at all."""
+    tops = top_level_names()
+    findings: List[Finding] = []
+    for entry, reason in sorted(allowed.items()):
+        match = _LINE_ANCHOR_RE.fullmatch(entry)
+        if match is None:
+            findings.append(
+                Finding(
+                    rel(LINE_ANCHOR_ALLOWLIST),
+                    f"`{entry}` is not shaped like a `path:N` or `path:N-M` line anchor, "
+                    f"so this file cannot say whether it is stale.",
+                )
+            )
+            continue
+        target = resolve_candidate(match.group("path"), ROOT / "docs" / "DECISIONS.md", tops)
+        if target is None or not exists(target):
+            continue
+        total = len(read(target).splitlines())
+        start = int(match.group("start"))
+        upper = int(match.group("end")) if match.group("end") else start
+        if start <= total and upper <= total:
+            findings.append(
+                Finding(
+                    rel(LINE_ANCHOR_ALLOWLIST),
+                    f"`{entry}` now resolves — {rel(target)} has {total} line(s) — so the "
+                    f"entry is stale — delete the line.\n"
+                    f"It was allowed because: {reason or '(no reason recorded)'}",
+                )
+            )
+    report.add(
+        "line anchor allowlist", MECHANICAL, findings,
+        f"{len(allowed)} entries, none stale", scanned=len(allowed),
+    )
+
+
+# THE ROT READER. A MEASUREMENT, NEVER A GATE — added on the coordinator's own instruction
+# that a published number needs a checked reader (D173; CLAUDE.md's "give every published
+# number and path a checked reader"), so the rot rate this task's own brief quotes (89% of
+# 206 checkable code anchors) is RECOMPUTED here rather than typed into a decision entry
+# and left to rot exactly like the citations it describes.
+#
+# THE PROBE CHECKS SHAPE-ADJACENT EVIDENCE, NEVER MEANING. D149 measured the nearest
+# mechanical proxy for "is this citation about what it says it is" — matching a quoted
+# span against a section — at one genuine catch against three false alarms, over 38 real
+# citations, and declined to build it: "no check can read what a sentence is about." This
+# reader is the same kind of proxy, one step narrower (an identifier the sentence already
+# names in backticks, not a quoted phrase), and it inherits the same limit. A MISS IS
+# EVIDENCE, NOT PROOF: a sentence may legitimately name a symbol that lives a few lines
+# away from where it happens to be discussed, or in a caller, a type, or a sibling
+# function the cited line calls. Four hand checks during this task were all genuine
+# misses (`_blank_number_by_name` cited at 1192, really at 1384; `do_pipeline_scope` at
+# 2455, really 6537; `bandOf` at 340, really 472; `pokemon_code` at 689, absent) — four is
+# a spot check, not a validation of this probe, and this docstring says so rather than
+# letting the row's own green or red text imply more than four data points support.
+_ROT_WINDOW = 5
+_ROT_NOISE = {"self", "None", "True", "False", "cls"}
+_BACKTICK_SPAN_RE = re.compile(r"`([^`]*)`")
+_ROT_TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _path_derived_tokens(path_text: str) -> Set[str]:
+    """Identifiers this reader must never award as evidence, because they come from the
+    CITATION'S OWN PATH rather than from anything the sentence says about the code.
+
+    MEASURED, AND IT IS NOT A SMALL EFFECT. Before this exclusion existed, `` `pipeline/
+    join.py:1192-1195` `` contributed the tokens `pipeline` and `join`, and `join` matches
+    near almost any line of `join.py` by construction — the file's own name is not
+    evidence that the CITED LINE is the right one. Over this repo's real corpus: 59 of 155
+    raw hits (38%) were carried SOLELY by a token derived from the anchor's own path, and
+    excluding them also moves the not-checkable count from 14 to 132 — 118 sentences name
+    no identifier at all except the citation itself, and counting those as checkable was
+    the same failure from the other direction: folding "nothing to check" into a passing
+    denominator, which is exactly what D149's own closing line warns against ("a pattern
+    that finds nothing reports nothing, and nothing reads as green").
+
+    Every 4+ character word out of the full path text AND its bare filename/stem — a
+    citation of `server/capture_server.py:200` must not score a hit on the word `server`
+    or `capture_server` appearing near line 200 of that same file, which it almost always
+    will.
+    """
+    tokens: Set[str] = set()
+    for text in (path_text, Path(path_text).name, Path(path_text).stem):
+        tokens.update(token for token in _ROT_TOKEN_RE.findall(text) if len(token) >= 4)
+    return tokens
+
+
+def _rot_identifiers(sentence: str, exclude: Set[str] = frozenset()) -> List[str]:
+    """Identifiers (4+ characters) the citing sentence names in backticks, in order, de-
+    duplicated, obvious noise excluded, and — since the fix above — every token in
+    `exclude` (the anchor's own path-derived tokens, from `_path_derived_tokens`) also
+    excluded. Returns `[]` when the sentence names nothing else — the caller's job is to
+    count that as NOT CHECKABLE and never fold it into the denominator as a pass, which is
+    D149's own closing lesson: "a pattern that finds nothing reports nothing, and nothing
+    reads as green.\""""
+    out: List[str] = []
+    seen: Set[str] = set()
+    for span in _BACKTICK_SPAN_RE.findall(sentence):
+        for token in _ROT_TOKEN_RE.findall(span):
+            if len(token) < 4 or token in _ROT_NOISE or token in seen or token in exclude:
+                continue
+            seen.add(token)
+            out.append(token)
+    return out
+
+
+def _rot_verdict(
+    lines: Sequence[str], start: int, end: Optional[int], identifiers: Sequence[str]
+) -> str:
+    """`"hit"` | `"miss"` | `"not-checkable"` | `"past-eof"` for one line anchor into code
+    whose target file exists, isolated from I/O so `--self-test` can drive it with plain
+    lists rather than real files on disk.
+
+    `"not-checkable"` when the sentence names no identifier — never silently treated as a
+    pass. `"past-eof"` when the anchor's own number is beyond the file (Clause A's own
+    question, answered again here because this reader is handed the raw line count rather
+    than `check_line_anchors`'s own Clause A verdict, and the two must never be able to
+    disagree about the same anchor). Otherwise a WINDOW of `_ROT_WINDOW` lines on each side
+    of the cited line or range — "in either direction", per the brief — is searched for any
+    named identifier as a whole word; any match is a `"hit"`, and none is a `"miss"`.
+    """
+    if not identifiers:
+        return "not-checkable"
+    upper = end if end is not None else start
+    if start > len(lines) or upper > len(lines):
+        return "past-eof"
+    lo = max(1, start - _ROT_WINDOW)
+    hi = min(len(lines), upper + _ROT_WINDOW)
+    window = "\n".join(lines[lo - 1:hi])
+    for ident in identifiers:
+        if re.search(r"\b" + re.escape(ident) + r"\b", window):
+            return "hit"
+    return "miss"
+
+
+def line_anchor_rot(anchors: Sequence[ResolvedAnchor]) -> Dict[str, object]:
+    """hit / miss / not-checkable / past-eof counts and the miss RATE, over line anchors
+    into CODE (target suffix is not `.md`) whose target file exists.
+
+    EVERY IDENTIFIER DERIVED FROM THE ANCHOR'S OWN PATH IS EXCLUDED before the window
+    search (`_path_derived_tokens`) — see that function's own docstring for the measured
+    reason (59 of 155 raw hits, 38%, were carried solely by the citation naming its own
+    file). Without the exclusion this reader answers a different, easier question — "does
+    this file's own name appear near the line it names itself" — which is nearly always
+    yes and proves nothing about whether the LINE NUMBER is right.
+
+    `rate` is `miss / (hit + miss)` — `not-checkable` and `past-eof` anchors are excluded
+    from both the numerator and the denominator, never counted as a pass. `rate` is `None`
+    when nothing was checkable, which the caller must print as `n/a`, never as `0%` — a
+    probe that found nothing to check is not evidence of a clean corpus. The exclusion
+    above also moves the not-checkable count up (14 → 132, measured): a sentence whose
+    ONLY backticked content is the citation itself now correctly reports it has named no
+    OTHER identifier, rather than crediting the citation with checking itself.
+    """
+    counts: Dict[str, int] = {"hit": 0, "miss": 0, "not-checkable": 0, "past-eof": 0}
+    for anchor in anchors:
+        if anchor.target.suffix == ".md" or not exists(anchor.target):
+            continue
+        exclude = _path_derived_tokens(anchor.candidate.split(":", 1)[0])
+        identifiers = _rot_identifiers(anchor.sentence, exclude)
+        lines = read(anchor.target).splitlines()
+        verdict = _rot_verdict(lines, anchor.start, anchor.end, identifiers)
+        counts[verdict] += 1
+    checkable = counts["hit"] + counts["miss"]
+    rate = round(counts["miss"] / checkable, 3) if checkable else None
+    result: Dict[str, object] = dict(counts)
+    result["checkable"] = checkable
+    result["rate"] = rate
+    return result
+
+
+def check_line_anchors(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
+    """`:N` and `:N-M` line-anchor citations, over Clause A (the line must exist) and
+    Clause B (never into a split-record stub) — see the section header above this
+    function's own neighbours for the measurement, and D149 for the boundary this row
+    deliberately does not cross (see the next paragraph).
+
+    SHAPE ONLY, AND THIS ROW MUST NEVER BE READ AS MORE THAN THAT. A citation pointing at
+    a real line whose content has since moved is INVISIBLE to Clause A and Clause B alike,
+    and this row reports every one of them green, correctly, because neither clause's job
+    is to read what the cited line says. Clause B is the one slice where shape and meaning
+    happen to coincide: a stub is ALWAYS the wrong file for a record's content,
+    independent of what the number is, so "shape" (which file) is enough to answer
+    "meaning" (is the citation right) for that one case only. The `line anchor rot`
+    figures folded into this row's own summary are a MEASUREMENT of the gap this
+    paragraph names, never a gate on it — see `line_anchor_rot`'s own docstring.
+
+    TWO HONEST NUMBERS, NOT ONE, AND THEY ARE NOT RECONCILED. The task's own brief quoted
+    89% (183 of 206) from a STRICTER probe — a backtick span that is a single bare
+    identifier, denominator 206. `line_anchor_rot` below is a LOOSER probe — any 4+ char
+    identifier anywhere in a backtick span, path-derived tokens excluded, denominator 317
+    — and measures roughly 70% (221 of 317) on the same tree. The two populations
+    genuinely differ (a citing sentence with a bare identifier alongside other backticked
+    text is checkable to the second probe and not the first), so this docstring reports a
+    RANGE with both definitions named rather than picking one number to publish. What is
+    not in doubt, under either definition, is the direction: most checkable line anchors
+    on this tree name a symbol that has moved.
+    """
+    stubs = _split_record_stubs()
+    if stubs is None:
+        report.add(
+            "line anchors", MECHANICAL,
+            [
+                Finding(
+                    "scripts/decisions_corpus.py",
+                    "the split-record stub roster could not be derived from "
+                    "decisions_corpus.py, debts_corpus.py and gates_corpus.py — one is "
+                    "missing, or does not carry both STUB and DIRECTORY. Clause B (a line "
+                    "anchor into a split-record stub) cannot run without it.",
+                )
+            ],
+            "stub roster unavailable, so nothing was checked", scanned=0,
+        )
+        return
+
+    anchors = resolved_line_anchors(docs)
+    clause_a_all, clause_b = line_anchor_findings(anchors, stubs)
+    clause_a = [finding for anchor, finding in clause_a_all if anchor.candidate not in allowed]
+    allowed_count = len(clause_a_all) - len(clause_a)
+    findings = clause_a + clause_b
+
+    rot = line_anchor_rot(anchors)
+    rate = rot["rate"]
+    rate_note = f"{rate * 100:.1f}%" if rate is not None else "n/a"
+    summary = (
+        f"{len(anchors)} line anchors checked, {len(clause_a)} past the target's end "
+        f"({allowed_count} allowed), {len(clause_b)} into a split-record stub. "
+        f"MEASURED, NEVER GATED: of {rot['checkable']} checkable code anchors (naming an "
+        f"identifier of 4+ chars in backticks), {rot['miss']} land away from it "
+        f"({rate_note} miss rate) — {rot['not-checkable']} named no identifier and are not "
+        f"counted, {rot['past-eof']} are past the target's end and already counted above. "
+        f"A miss is evidence, not proof — see `line_anchor_rot`'s own docstring."
+    )
+    report.add("line anchors", MECHANICAL, findings, summary, scanned=len(anchors))
+
+
+# --------------------------------------------------------------- line anchor ratchet (D229)
+
+# CLAUSE C: A PER-FILE RATCHET ON THE ANCHOR COUNT, NEVER A REPO-WIDE ONE — D229's own
+# ruling, and the reasoning is D226's, mirrored exactly: a repo-wide number is one every
+# merge takes from somebody, so the pin is one entry per CITING markdown file, and only a
+# RISE in that file's own count is a failure. D218 is the closer model of the two — it is
+# the newer discipline the owner named — but the SHAPE (a `files` map, not a scalar) is
+# D226's amendment, because "leave nothing alone" (the owner's ruling for this clause) means
+# every anchor, resolving or not, docs-target or code-target, counts toward the ratchet: a
+# citation that goes from resolving to dangling is still a line anchor someone wrote, and
+# Clause A/B already have their own findings for the dangling case.
+#
+# READS THE WHOLE TRACKED MARKDOWN TREE, staged or not — `check_ste_ratchet`'s own reasoning:
+# a backlog ratchet's subject is the corpus, not the files one commit happens to touch.
+#
+# ONE RULE DOES NOT MIRROR D226: A FILE THE PIN HAS NEVER SEEN IS HELD TO ZERO, NEVER
+# ACCEPTED AT ITS OWN RATE. `_ste_ratchet_verdict` treats an unseen file as free because its
+# subject is a RATIO over prose that already exists. This ratchet counts an ABSOLUTE NUMBER
+# of a thing the owner ruled should only fall, and a new markdown file is exactly where a
+# new line anchor is written — accepting it unseen would leave the inflow this clause exists
+# to stop wide open. See `_line_anchor_ratchet_verdict`'s own docstring.
+LINE_ANCHOR_RATCHET_PIN = ROOT / "scripts" / "line-anchors.json"
+
+
+def _line_anchor_counts(docs: Sequence[Path]) -> Dict[str, int]:
+    """path -> RAW line-anchor count in that document's own prose — every candidate
+    `line_anchor_candidates` extracts, whether or not it resolves to a real file today.
+    Files with zero anchors are omitted, the same "only what it counts" discipline
+    `_ste_ratchet_verdict`'s own `files` map keeps."""
+    counts: Dict[str, int] = {}
+    for doc in docs:
+        total = 0
+        for line in read(doc).splitlines():
+            total += len(line_anchor_candidates(line))
+        if total:
+            counts[rel(doc)] = total
+    return counts
+
+
+def _read_line_anchor_pin(path: Optional[Path] = None) -> Optional[Dict[str, object]]:
+    """The ratchet's pinned per-file ceiling, or `None` when it cannot be read, is not
+    JSON, or does not carry this ratchet's own shape (a `files` map of path -> int).
+    Mirrors `_read_ste_ratchet_pin`'s `None`/real-value split exactly: `0` is a real,
+    achievable ceiling for a file and a missing or malformed pin is a different answer
+    this row must refuse rather than silently treat as "nothing pinned yet, so nothing is
+    a violation".
+    """
+    path = LINE_ANCHOR_RATCHET_PIN if path is None else path
+    if not exists(path):
+        return None
+    try:
+        data = json.loads(read(path))
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    files = data.get("files")
+    if not isinstance(files, dict):
+        return None
+    for value in files.values():
+        if not isinstance(value, int):
+            return None
+    return data
+
+
+def _line_anchor_ratchet_verdict(
+    counts: Dict[str, int], pin: Optional[Dict[str, object]]
+) -> Tuple[str, List[str]]:
+    """`("unpinned" | "rose" | "ok", risen)` — one comparison per file, against that
+    file's OWN pin.
+
+    DELIBERATELY NOT `_ste_ratchet_verdict`'s OWN RULE FOR AN UNSEEN FILE, and the reason
+    is the coordinator's own catch: that ratchet accepts a file the pin has never seen at
+    its OWN natural rate, because its subject is a RATIO over prose that already exists —
+    a new file starting at its own rate is reasonable there. This ratchet counts an
+    ABSOLUTE NUMBER of a thing the owner ruled should only fall ("leave nothing alone"),
+    and a new markdown file is exactly where a new line anchor gets written — accepting
+    it unseen would leave open the one inflow this clause exists to close. So a file the
+    pin has never seen is held to ZERO: any anchor in it is a finding, naming the count
+    and telling the author to pin deliberately with the generator. D229 still holds — the
+    pin stays per file, so the diff for a new file belongs to the branch that added it,
+    never a scalar taken from somebody else's file.
+
+    A pin whose file dropped to zero anchors (or was deleted) is still a fall to nothing,
+    never a failure — that half of `_ste_ratchet_verdict`'s reasoning DOES transfer,
+    because a fall is a fall under either ratchet's own rule. `ok` covers strictly lower
+    and exactly equal, for a file the pin already knows.
+    """
+    if pin is None:
+        return "unpinned", []
+    pinned_files = pin.get("files", {})
+    pinned_files = pinned_files if isinstance(pinned_files, dict) else {}
+    risen: List[str] = []
+    for path in sorted(counts):
+        now = counts[path]
+        was = pinned_files.get(path)
+        if was is None:
+            risen.append(
+                f"{path}: no pin (new file) — {now} line anchor(s), held to zero. Pin "
+                f"it deliberately: `python3 scripts/line-anchors-pin.py --pin`."
+            )
+            continue
+        if now > was:
+            risen.append(f"{path}: {was} pinned, {now} now (+{now - was})")
+    return ("rose" if risen else "ok"), risen
+
+
+def check_line_anchor_ratchet(report: Report) -> None:
+    """Clause C. See the section header above for the whole argument; this docstring is
+    the row's own mechanics, one ruler over from `check_ste_ratchet` and DELIBERATELY
+    NOT ITS TWIN on the unseen-file rule — see `_line_anchor_ratchet_verdict`'s own
+    docstring for why.
+
+    `scripts/line-anchors.json` is pinned only by `scripts/line-anchors-pin.py --pin`, a
+    person, on purpose, once (D18: a generator may write, and nothing that writes may
+    gate a commit — this row never writes)."""
+    counts = _line_anchor_counts(markdown_files())
+    pin = _read_line_anchor_pin()
+    verdict, risen = _line_anchor_ratchet_verdict(counts, pin)
+
+    if verdict == "unpinned":
+        report.add(
+            "line anchor ratchet", MECHANICAL,
+            [
+                Finding(
+                    rel(LINE_ANCHOR_RATCHET_PIN),
+                    f"no ceiling pinned, or the pin file does not carry this ratchet's "
+                    f"per-file shape (a `files` map of path -> int) — "
+                    f"{sum(counts.values())} line anchors found just now across "
+                    f"{len(counts)} files. Run `python3 scripts/line-anchors-pin.py "
+                    f"--pin` first, on purpose, once — never quietly.",
+                )
+            ],
+            "no pin — cannot tell a rise from a fall", scanned=len(counts),
+        )
+        return
+
+    if verdict == "rose":
+        findings = [Finding(rel(LINE_ANCHOR_RATCHET_PIN), line) for line in risen]
+        report.add(
+            "line anchor ratchet", MECHANICAL, findings,
+            f"{sum(counts.values())} line anchors over {len(counts)} files — "
+            f"{len(risen)} file(s) rose (a new, unpinned file with any anchor counts as "
+            f"a rise from zero). Fix the new anchor(s) named below, or, if the addition "
+            "is deliberately accepted, run `python3 scripts/line-anchors-pin.py --pin` "
+            "and say why in the commit.",
+            scanned=len(counts),
+        )
+        return
+
+    pinned_files = pin.get("files", {}) if isinstance(pin.get("files"), dict) else {}
+    report.add(
+        "line anchor ratchet", MECHANICAL, [],
+        f"{sum(counts.values())} line anchors over {len(counts)} files, every one at or "
+        f"under its own pinned ceiling ({len(pinned_files)} pinned).",
+        scanned=len(counts),
+    )
+
+
+# ------------------------------------------------------------------ derived numbers (2026-09-20)
+
+# `<!-- derived:<name> -->`, immediately after the number it describes, on the same line.
+# Owner's ruling: every number in CLAUDE.md that describes the tree as it stands must be a
+# derived, auto-updating value, never a hand-typed count that rots the moment the tree
+# moves — see `scripts/derived_numbers.py`'s own module docstring for the registry, the
+# marker syntax, and — the load-bearing half — the argument for which figures may NEVER be
+# marked this way (a record of a past event: a gate run, an incident measurement, a fixed
+# test's result). That distinction is enforced by construction rather than by this row's own
+# judgement: `REGISTRY` carries no entry for a historical figure, so a marker naming one
+# finds nothing to compute and fails exactly like a typo — this row cannot tell "someone
+# marked a historical number" from "someone misspelled a name" and does not need to, because
+# neither has a way to pass.
+def _derived_numbers():
+    """scripts/derived_numbers.py, or None."""
+    return _sibling("derived_numbers.py")
+
+
+def check_derived_numbers(report: Report, docs: List[Path], root: Path = ROOT) -> None:
+    """Every `<!-- derived:<name> -->` marker in the tracked markdown, against
+    `scripts/derived_numbers.py:REGISTRY[<name>].compute(root)` run over THIS checkout.
+
+    THREE WAYS TO DISAGREE, and each is its own finding rather than one summary line,
+    because a reader fixing one should not have to guess whether there are others:
+
+      - the number written in prose no longer matches what `compute` returns for the tree
+        as it stands (digit rot — the defect this whole task exists to end).
+      - `<name>` names no entry in `REGISTRY` at all: a typo, or — the case the registry's
+        own docstring calls out by name — someone building `--write`'s twin for a figure
+        that must never be recomputed. Both look identical from here, which is correct:
+        neither should pass.
+      - the named derivation exists but raises reading THIS tree (a moved or malformed
+        file the function depends on) — reported with the exception's own message rather
+        than silently treated as agreement or crashing the whole audit for every other row.
+
+    MECHANICAL: `compute(root)` is decidable on the committed tree with no judgement call,
+    exactly `unscoped_walk_sites`'s own shape, which is why this row's logic is a thin loop
+    around `scripts/derived_numbers.py` rather than a second copy of its counting.
+
+    D18 IS ABSOLUTE HERE, same as every other ratchet in this file: this row reads and
+    compares, `scripts/derived-numbers-pin.py --write` is the only thing that edits a
+    marked number, and it runs on nobody's schedule but a person's.
+    """
+    dn = _derived_numbers()
+    if dn is None:
+        report.add(
+            "derived numbers", MECHANICAL,
+            [
+                Finding(
+                    "scripts/derived_numbers.py",
+                    "could not be loaded, so no marked figure in the tree could be "
+                    "checked against its own derivation.",
+                )
+            ],
+            "registry unavailable, so nothing was checked", scanned=0,
+        )
+        return
+
+    findings: List[Finding] = []
+    scanned = 0
+    # ONE DEFECT REPORTS ONCE. `CLAUDE.md` is reached by three symlinks — `AGENTS.md`,
+    # `code-card-fork/CLAUDE.md` and `code-card-fork/AGENTS.md` (D135) — so a single drifted
+    # marker was published four times on CI, which reads as four defects and is one. A row
+    # that multiplies its own findings by the repo's link layout is noise about itself.
+    # Resolved paths, so a link and its target collapse to the same entry.
+    seen_real: Set[str] = set()
+    for doc in docs:
+        try:
+            real = str(Path(doc).resolve())
+        except OSError:
+            real = str(doc)
+        if real in seen_real:
+            continue
+        seen_real.add(real)
+        if not exists(doc):
+            continue
+        for lineno, line in enumerate(read(doc).splitlines(), start=1):
+            for match in dn.find_markers(line):
+                scanned += 1
+                where = f"{rel(doc)}:{lineno}"
+                name = match.group("name")
+                published = int(match.group("number").replace(",", ""))
+                entry = dn.REGISTRY.get(name)
+                if entry is None:
+                    findings.append(
+                        Finding(
+                            where,
+                            f"`<!-- derived:{name} -->` names no derivation this registry "
+                            f"carries. Known names: "
+                            f"{', '.join(sorted(dn.REGISTRY)) or '(none registered)'}. If "
+                            f"`{name}` records a past event rather than a live property of "
+                            f"the tree, it belongs in prose, never behind this marker — "
+                            f"see scripts/derived_numbers.py's own module docstring.",
+                        )
+                    )
+                    continue
+                try:
+                    computed = entry.compute(root)
+                except Exception as exc:  # noqa: BLE001 - report, never crash the audit
+                    findings.append(
+                        Finding(
+                            where,
+                            f"`{name}` could not be computed from this tree: {exc}",
+                        )
+                    )
+                    continue
+                if computed != published:
+                    findings.append(
+                        Finding(
+                            where,
+                            f"published {published}, the tree now says {computed} "
+                            f"({entry.about}). Run `python3 "
+                            f"scripts/derived-numbers-pin.py --write`.",
+                        )
+                    )
+
+    report.add(
+        "derived numbers", MECHANICAL, findings,
+        f"{scanned} marked figure(s) checked against the tree, "
+        f"{len(dn.REGISTRY)} derivation(s) registered",
+        scanned=scanned,
+    )
 
 
 # ----------------------------------------------------------------------- make targets
@@ -1931,12 +2767,24 @@ def _corpus():
 
 
 def decision_files() -> List[Path]:
-    """Every file holding a `## D<id>` entry, in corpus order. Empty if unreadable."""
+    """Every file holding a `## D<id>` entry, in corpus order. Empty if unreadable.
+
+    THE COMPLEMENT, NOT `_ID_ANY`. A file is included the moment its first heading opens
+    `## D` followed by a digit or a hyphen — never by first requiring the id to already be a
+    clean number or a properly-shaped SLUG. `_ID_ANY` used to gate this list directly, which
+    made a MALFORMED heading (mixed case, a doubled hyphen, a digit where a segment was
+    meant) invisible a step earlier than the `id claims` row's own loose/strict check could
+    ever see it: excluded here, that file never reaches the per-line scan that would have
+    reported it as `not a claimable id`, and `decision structure`/`decision index`/`entry
+    budget` silently drop it from their own counts too. A properly numbered or properly
+    slugged heading still passes `_ID_ANY` downstream wherever that distinction matters;
+    this list is only ever asked to be a superset of it.
+    """
     corpus = _corpus()
     if corpus is None:
         return []
     try:
-        head = re.compile(r"^##\s+(D" + _ID_ANY + r")\b")
+        head = re.compile(r"^##\s+D[0-9-]")
         return [p for p in corpus.files() if head.match(read(p).split("\n", 1)[0])]
     except Exception:
         return []
@@ -14150,6 +14998,302 @@ def check_check_registry(report: Report) -> None:
                scanned=len(recipe))
 
 
+## ---- commit-path writes, read from the AST rather than from `checks.py`'s own sentence ----
+#
+# The row below used to take `writes` on faith: an empty string passed, any text failed. That
+# reads the registry's OPINION of itself, never the check's actual Python — a check on the
+# commit path could open a file for writing and this row would still print "none of them
+# writing", because `writes` and this row's verdict were the same claim typed twice.
+#
+# WHAT COUNTS AS A WRITE, decided here because it is the hard part:
+#
+#   - `open(...)` (or its `mode=` keyword) with a mode containing "w", "a", "x" or "+".
+#   - `Path`-shaped methods, matched BY NAME because AST carries no types: `write_text`,
+#     `write_bytes`, `write`, `writelines`, `touch`, `unlink`, `rmdir`, `mkdir`, `rename`,
+#     `chmod`, `symlink_to`, `hardlink_to`. `replace` is dropped from this unresolved-name
+#     bucket on purpose — `str.replace()` is common through this file and `Path.replace()` is
+#     not, so counting it here would fail the row on ordinary string code. It is still caught
+#     as `os.replace(...)`, which is unambiguous.
+#   - `os.remove/replace/rename/mkdir/makedirs/rmdir/unlink/chmod/symlink/system/popen`, and
+#     `shutil.copy*/move/rmtree/make_archive`, resolved through the file's own top-level
+#     `import os` / `import shutil` (or `as` alias) so a same-named method on an unrelated
+#     object is not mistaken for the stdlib one.
+#   - `subprocess.run/call/Popen/check_call/check_output`, but ONLY when every element of its
+#     argv is a literal string and one of those literals is a write-shaped git verb (commit,
+#     push, checkout, reset, merge, rm, mv, stash, rebase, cherry-pick, apply, clean, gc,
+#     prune, init, add). An argv built from a variable, `*args`, or an f-string is invisible
+#     to this reader — see the blind spots below, it is not treated as clean.
+#
+# MODE-SCOPED, NOT WHOLE-FILE: `docs-audit.py` dispatches on `args.self_test` inside `main()`
+# and only ONE branch runs for a given invocation. Scanning the whole file would find every
+# `write_text` call inside `--self-test`'s own fixtures and blame them on the plain
+# `python3 scripts/docs-audit.py` invocation that never reaches that branch — the same shape
+# of false claim this row exists to stop, aimed at itself. So this walks `main()`'s own
+# top-level `if` statements, keeps only the branch(es) whose test names a flag this
+# INVOCATION actually passes (an `if` testing no flag is not a mode gate and both its arms are
+# kept), takes the calls named there as seeds, and closes over every LOCALLY DEFINED function
+# reachable from those seeds by a plain `name(...)` call — recursively, so `audit()`'s ~90
+# `check_*` calls all pull their own bodies in. Module top-level statements (imports, regex
+# `re.compile`, constant tables) are always included; they run at import time regardless of
+# mode.
+#
+# WHAT THIS CANNOT SEE, stated rather than assumed away:
+#   - A write behind an alias this file cannot resolve: `f = Path.write_text; f(p, s)`,
+#     or a write reached only through a base class's overridden method (argparse calling
+#     `self.error()`, which calls `sys.stderr.write()`, is invisible here for exactly that
+#     reason — it is never named as a plain call in this file's own control flow).
+#   - A write inside a called LIBRARY. `json.dumps` is read, not written; if a project
+#     dependency writes a file on its own initiative, nothing here follows it in.
+#   - A write performed by a `subprocess` call whose argv is computed — `git(*args)` in this
+#     very file is exactly that shape, called throughout with read-only git subcommands, and
+#     every one of those calls is invisible to this reader rather than cleared by it.
+#   - A dispatch this file's `main()` does not shape as "an `if` testing a flag, calling one
+#     function, then returning" — a script with a different mode-switch shape gets read as
+#     whole-file, which over-reports rather than under-reports.
+#   - Mode-scoping ITSELF only runs on the invoked script's own `main()`. A write two calls
+#     deep inside a function that is only reachable from a *different* branch than the one
+#     analyzed is correctly excluded; a write reachable from BOTH branches by different
+#     names (unusual) is correctly included once either branch is taken.
+#
+# Measured against the two checks this applies to today: `docs-audit` (`python3
+# scripts/docs-audit.py`, no flags) closes over 316 locally defined functions and finds no
+# write evidence — `self_test()` and its fixture writers are provably excluded, not merely
+# assumed off-path, and the two opaque `subprocess` calls in its reachable set (`git(*args)`
+# and a `node scripts/user-strings.mjs ...` invocation whose argv is spread from a `*args`
+# parameter) are named above rather than cleared. `sigil-check` (both `--self-test` and its
+# bare invocation, since the hook runs both) closes over 4-5 functions each and contains no
+# write-shaped call of any kind — it does not import `os`, `shutil` or `subprocess` at all.
+# So `scripts/docs-audit.py`'s own docstring claim, "THE AUDIT NEVER WRITES", HOLDS for the
+# reachable code this reads, with the blind spots above never having been asked to clear it.
+
+_WRITE_METHODS_UNRESOLVED_ROOT = frozenset({
+    "write_text", "write_bytes", "write", "writelines", "touch",
+    "unlink", "rmdir", "mkdir", "rename", "chmod", "symlink_to", "hardlink_to",
+})
+_OS_WRITE_FUNCS = frozenset({
+    "remove", "replace", "rename", "mkdir", "makedirs", "rmdir", "unlink",
+    "chmod", "symlink", "system", "popen",
+})
+_SHUTIL_WRITE_FUNCS = frozenset({"copy", "copyfile", "copy2", "copytree", "move", "rmtree",
+                                 "make_archive"})
+_SUBPROCESS_FUNCS = frozenset({"run", "call", "Popen", "check_call", "check_output"})
+_SUBPROCESS_WRITE_TOKENS = frozenset({
+    "commit", "push", "checkout", "reset", "merge", "rm", "mv", "stash", "rebase",
+    "cherry-pick", "apply", "clean", "gc", "prune", "init", "add",
+})
+
+
+def _import_aliases(tree: ast.Module) -> Dict[str, str]:
+    """Every `import x` / `import x as y` in the file -> real module name, for `os`/`shutil`/
+    etc. Walked over the WHOLE module rather than only its top level, because a local
+    `import shutil as _sh` inside a function is exactly as real as one at the top."""
+    aliases: Dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".")[0]
+                aliases[alias.asname or root] = root
+    return aliases
+
+
+def _attr_root_module(value: ast.expr, aliases: Dict[str, str]) -> Optional[str]:
+    """For `os.remove(...)`'s `os`, the real module name behind the name — or None."""
+    if isinstance(value, ast.Name):
+        return aliases.get(value.id)
+    return None
+
+
+def _static_str_list(node: Optional[ast.expr]) -> Optional[List[str]]:
+    """A `[...]`/`(...)` of only string literals, or None if any element is not one."""
+    if not isinstance(node, (ast.List, ast.Tuple)):
+        return None
+    out: List[str] = []
+    for elt in node.elts:
+        if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+            out.append(elt.value)
+        else:
+            return None
+    return out
+
+
+def _write_evidence(nodes: Iterable[ast.AST], aliases: Dict[str, str]) -> List[str]:
+    """Write-shaped `Call` nodes under `nodes`, per the vocabulary argued above."""
+    evidence: List[str] = []
+    for root in nodes:
+        for node in ast.walk(root):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            line = getattr(node, "lineno", "?")
+            if isinstance(func, ast.Name) and func.id == "open":
+                mode = None
+                if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+                    mode = node.args[1].value
+                for kw in node.keywords:
+                    if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                        mode = kw.value.value
+                if isinstance(mode, str) and any(c in mode for c in "wax+"):
+                    evidence.append("open(..., mode={0!r}) at line {1}".format(mode, line))
+                continue
+            if not isinstance(func, ast.Attribute):
+                continue
+            attr = func.attr
+            root_mod = _attr_root_module(func.value, aliases)
+            if root_mod == "os" and attr in _OS_WRITE_FUNCS:
+                evidence.append("os.{0}(...) at line {1}".format(attr, line))
+            elif root_mod == "shutil" and attr in _SHUTIL_WRITE_FUNCS:
+                evidence.append("shutil.{0}(...) at line {1}".format(attr, line))
+            elif root_mod == "subprocess" and attr in _SUBPROCESS_FUNCS:
+                argv = _static_str_list(node.args[0] if node.args else None)
+                if argv is None:
+                    continue  # opaque argv — a named blind spot, never counted as clean
+                if any(tok in _SUBPROCESS_WRITE_TOKENS for tok in argv):
+                    evidence.append("subprocess.{0}({1!r}) at line {2}".format(attr, argv, line))
+            elif root_mod is None and attr in _WRITE_METHODS_UNRESOLVED_ROOT:
+                evidence.append(".{0}(...) at line {1}".format(attr, line))
+    return sorted(set(evidence))
+
+
+def _mode_test_flags(test: ast.expr) -> Set[str]:
+    """Flags an `if` test names, either as a literal (`"--self-test" in argv`) or as an
+    `args.<dest>` attribute (`if args.self_test:`), normalized to `--dashed-form`."""
+    flags: Set[str] = set()
+    for node in ast.walk(test):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if node.value.startswith("--"):
+                flags.add(node.value)
+        elif isinstance(node, ast.Attribute) and not node.attr.startswith("__"):
+            flags.add("--" + node.attr.replace("_", "-"))
+    return flags
+
+
+def _calls_in(stmts: Sequence[ast.stmt]) -> Set[str]:
+    """Plain `name(...)` call targets under `stmts` — never `obj.method(...)`, which this
+    reader cannot resolve to a local function without running the program."""
+    names: Set[str] = set()
+    for stmt in stmts:
+        for node in ast.walk(stmt):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+    return names
+
+
+def _has_return(stmts: Sequence[ast.stmt]) -> bool:
+    return any(isinstance(n, ast.Return) for stmt in stmts for n in ast.walk(stmt))
+
+
+def _entry_point_seeds(main_fn: ast.FunctionDef, invocation_flags: FrozenSet[str]) -> Set[str]:
+    """Which of `main()`'s own calls actually run for one invocation, given its flags.
+
+    Reads `main()`'s top-level statements in order. A plain statement always contributes its
+    calls. An `if` whose test names no flag (`_mode_test_flags` finds nothing) is not a mode
+    gate — both its arms are read, conservatively, since this reader cannot evaluate the
+    condition. An `if` that DOES name a flag is a mode gate: its body's calls are taken only
+    when that flag is in `invocation_flags`, and if that body contains a `return`, nothing
+    after it in `main()` runs for this invocation either (the common `if args.x: return y()`
+    early-exit shape both scripts here use).
+    """
+    seeds: Set[str] = set()
+    for stmt in main_fn.body:
+        if isinstance(stmt, ast.If):
+            flags_here = _mode_test_flags(stmt.test)
+            if not flags_here:
+                seeds |= _calls_in(stmt.body)
+                seeds |= _calls_in(stmt.orelse)
+                continue
+            if flags_here & invocation_flags:
+                seeds |= _calls_in(stmt.body)
+                if _has_return(stmt.body):
+                    return seeds
+            continue
+        seeds |= _calls_in([stmt])
+    return seeds
+
+
+def _local_functions(tree: ast.Module) -> Dict[str, ast.AST]:
+    return {n.name: n for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def _call_closure(seed_names: Iterable[str], funcs: Dict[str, ast.AST]) -> List[ast.AST]:
+    """Every locally defined function reachable from `seed_names` by a `name(...)` call,
+    transitively. `obj.method(...)` calls are not followed — see the blind spots above."""
+    visited: Set[str] = set()
+    frontier: Set[str] = set(seed_names)
+    nodes: List[ast.AST] = []
+    while frontier:
+        name = frontier.pop()
+        if name in visited:
+            continue
+        visited.add(name)
+        fn = funcs.get(name)
+        if fn is None:
+            continue
+        nodes.append(fn)
+        for node in ast.walk(fn):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id not in visited):
+                frontier.add(node.func.id)
+    return nodes
+
+
+def _split_invocations(runs: str) -> List[Tuple[str, FrozenSet[str]]]:
+    """`entry["runs"]` into (script path, flags) pairs, one per `&&`/`;`-joined command.
+
+    `sigil-check` runs its script TWICE in one hook step, once with `--self-test` and once
+    bare, and the hook literally executes both — so both are separate invocations to analyze,
+    not one union of flags. A `|` pipeline or a subshell would not be split correctly; neither
+    shape appears in `scripts/checks.py` today.
+    """
+    out: List[Tuple[str, FrozenSet[str]]] = []
+    for part in re.split(r"&&|;", runs):
+        paths = _RUNS_PATH_RE.findall(part)
+        script = next((p for p in paths if p.endswith(".py")), None)
+        if script is None:
+            continue
+        flags = frozenset(_RUNS_FLAG_RE.findall(part))
+        out.append((script, flags))
+    return out
+
+
+def _commit_path_write_evidence(entry: dict) -> Optional[List[str]]:
+    """Write evidence for one `checks.py` entry's `runs`, mode-scoped per invocation.
+
+    None means no `.py` invocation could be read at all (a shell pipeline, a missing file,
+    a syntax error) — the caller reports that as its own finding rather than guessing clean.
+    """
+    invocations = _split_invocations(str(entry.get("runs", "")))
+    if not invocations:
+        return None
+    evidence: List[str] = []
+    saw_any = False
+    for script, flags in invocations:
+        path = ROOT / script
+        if not exists(path):
+            continue
+        try:
+            tree = ast.parse(read(path))
+        except SyntaxError:
+            continue
+        saw_any = True
+        aliases = _import_aliases(tree)
+        funcs = _local_functions(tree)
+        main_fn = funcs.get("main")
+        top_level = [s for s in tree.body
+                     if not isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                            ast.ClassDef, ast.Import, ast.ImportFrom))]
+        if main_fn is None:
+            # No `main()` to mode-scope from — read the whole module rather than guess a mode.
+            nodes = list(funcs.values()) + top_level
+        else:
+            seeds = _entry_point_seeds(main_fn, flags)
+            nodes = _call_closure(seeds, funcs) + top_level
+        evidence.extend(_write_evidence(nodes, aliases))
+    if not saw_any:
+        return None
+    return sorted(set(evidence))
+
+
 def check_commit_path(report: Report) -> None:
     """D18, asserted mechanically for the first time.
 
@@ -14158,7 +15302,9 @@ def check_commit_path(report: Report) -> None:
     header of every self-test it governs — and until this row it was enforced by nobody. It is
     the most-cited rule in this repo with the least machinery behind it.
 
-    Three claims, and the third is the one with teeth:
+    Four claims, and the fourth is the one with teeth — and reads the CODE, not `checks.py`'s
+    own sentence about itself (see the block comment above this function for what "reads" is
+    defined to mean, and what it cannot see):
 
       1. `commit_path` agrees with `scripts/githooks/pre-commit`. Asked of the SCRIPT the
          entry runs and never of the target name: the hook invokes
@@ -14166,7 +15312,13 @@ def check_commit_path(report: Report) -> None:
          entry that is genuinely on that path.
       2. `why_off_commit_path` is present exactly where `commit_path` is false. An entry
          claiming both, or neither, is describing nothing.
-      3. Nothing on the commit path writes.
+      3. A commit-path entry whose AST shows write evidence and whose `writes` field is empty
+         fails. This is the defect this row exists to fix: `writes` was read as true/false
+         with nobody ever inspecting the source it claims to summarize.
+      4. A commit-path entry whose `writes` field is non-empty and whose AST shows no write
+         evidence fails too — a stale declaration is checked in both directions, the same
+         discipline `t3_join_coverage`'s own docstring argues for the join
+         ("a one-directional check passes on that bug").
 
     A check whose `runs` names no repository path — `npm --prefix app run lint`, the vale
     pipeline — cannot be on the commit path, because the hook runs a bare python3 with nothing
@@ -14188,6 +15340,7 @@ def check_commit_path(report: Report) -> None:
     hook = read(PRE_COMMIT)
     findings: List[Finding] = []
     on_path = 0
+    verified = 0
 
     for entry in entries:
         if not all(key in entry for key in CHECK_ENTRY_KEYS):
@@ -14214,12 +15367,39 @@ def check_commit_path(report: Report) -> None:
 
         if claimed:
             on_path += 1
-            if entry["writes"]:
+            declared_writes = bool(entry["writes"])
+            evidence = _commit_path_write_evidence(entry)
+            if evidence is None:
                 findings.append(Finding(where, (
-                    "IS ON THE COMMIT PATH AND WRITES: {0}\n"
-                    "  D18: nothing that writes may run on the path that decides whether a\n"
-                    "  commit proceeds. An agent that can edit what its own gate reads will."
-                ).format(entry["writes"])))
+                    "claims the commit path, and no `.py` invocation in `runs` could be "
+                    "parsed to check it — nothing here says clean, and this row will not "
+                    "guess. Fix `runs`, or read it by hand and record why not.")))
+            else:
+                verified += 1
+                code_writes = bool(evidence)
+                if code_writes and declared_writes:
+                    findings.append(Finding(where, (
+                        "IS ON THE COMMIT PATH AND WRITES: {0}\n"
+                        "  D18: nothing that writes may run on the path that decides whether "
+                        "a\n  commit proceeds. An agent that can edit what its own gate reads "
+                        "will."
+                    ).format(entry["writes"])))
+                elif code_writes and not declared_writes:
+                    findings.append(Finding(where, (
+                        "IS ON THE COMMIT PATH AND WRITES, AND `writes` SAYS NOTHING: {0}\n"
+                        "  This is the defect `commit path` exists to catch: `writes` was "
+                        "read\n  as true/false with nobody inspecting the source it claims "
+                        "to summarize.\n  D18: nothing that writes may run on the path that "
+                        "decides whether a\n  commit proceeds."
+                    ).format("; ".join(evidence))))
+                elif declared_writes and not code_writes:
+                    findings.append(Finding(where, (
+                        "declares `writes`: {0!r}, and the AST reads no write on this "
+                        "invocation's reachable path.\n"
+                        "  A stale declaration is checked in both directions here — see this "
+                        "row's own comment for what the read can and cannot see before "
+                        "trusting either side."
+                    ).format(entry["writes"])))
             if entry["why_off_commit_path"]:
                 findings.append(Finding(where, (
                     "claims the commit path and also carries `why_off_commit_path`.")))
@@ -14230,7 +15410,8 @@ def check_commit_path(report: Report) -> None:
                 "  the field that stops one being moved back on to the path by tidiness.")))
 
     report.add("commit path", MECHANICAL, findings,
-               "{0} of {1} on the commit path, none of them writing".format(on_path, len(entries)),
+               "{0} of {1} on the commit path, {2} of them read against source, none "
+               "writing".format(on_path, len(entries), verified),
                scanned=len(entries))
 
 
@@ -14434,6 +15615,7 @@ def check_suite_lock(report: Report) -> None:
 BROWSER_SCOPE_SCRIPT = ROOT / "scripts" / "browser-scope.py"
 SERVE_SCOPE_SCRIPT = ROOT / "scripts" / "serve-scope.py"
 SERVE_SELFTEST_SCRIPT = ROOT / "scripts" / "serve-selftest.py"
+GUARD_SCOPE_SCRIPT = ROOT / "scripts" / "guard-scope.py"
 CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 PLAYWRIGHT_CONFIG = ROOT / "app" / "playwright.config.ts"
 VITE_CONFIG = ROOT / "app" / "vite.config.ts"
@@ -14901,6 +16083,79 @@ def check_serve_scope(report: Report) -> None:
     report.add("serve scope", MECHANICAL, findings,
                f"{len(scope)} entries against {len(carry)} carried names, both ways",
                scanned=len(scope))
+
+
+def check_guard_scope(report: Report) -> None:
+    """`scripts/guard-scope.py:ROSTER` against the Makefile's own wiring, both ways.
+
+    THE SECOND PATH-GATED TARGET, on the owner's word, 2026-09-20 — see
+    D247. Unlike `check_serve_scope` above, there is
+    no separate subject list to reconcile here: `guard-scope.py` derives each self-test's
+    subject from its own source on every call, so the only thing left to drift is which
+    targets are gated AT ALL. A roster entry nothing consults is a list, not a gate — `serve
+    scope`'s own wiring check, repeated. A recipe calling this classifier for a target the
+    roster does not name would classify against an empty scope and always RUN, which is safe
+    but silently pointless — the same "green is believed" failure the row exists to catch.
+    """
+    if not exists(GUARD_SCOPE_SCRIPT):
+        report.add("guard scope", MECHANICAL, [Finding(
+            rel(GUARD_SCOPE_SCRIPT),
+            "does not exist, and fifteen Makefile recipes gate on it.")])
+        return
+
+    roster = literals_from_module(GUARD_SCOPE_SCRIPT).get("ROSTER")
+    if not isinstance(roster, tuple) or not roster or not all(
+        isinstance(entry, dict) and isinstance(entry.get("target"), str)
+        and isinstance(entry.get("test"), str) for entry in roster
+    ):
+        report.add("guard scope", MECHANICAL, [Finding(
+            rel(GUARD_SCOPE_SCRIPT),
+            "`ROSTER` is not a tuple of `{\"target\": …, \"test\": …}` literals this row can "
+            "read.")])
+        return
+
+    findings: List[Finding] = []
+    targets = {str(entry["target"]) for entry in roster}
+
+    for entry in roster:
+        test_path = ROOT / str(entry["test"])
+        if not exists(test_path):
+            findings.append(Finding(
+                rel(GUARD_SCOPE_SCRIPT),
+                f"`{entry['target']}`'s `test` names `{entry['test']}`, which does not "
+                "exist."))
+
+    makefile = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
+    wired = set(re.findall(r"guard-scope\.py classify --target (\S+)", makefile))
+
+    for target in sorted(targets - wired):
+        findings.append(Finding(rel(GUARD_SCOPE_SCRIPT), (
+            f"`{target}` is on ROSTER and no Makefile recipe calls "
+            f"`guard-scope.py classify --target {target}`. The roster entry gates nothing.")))
+
+    for target in sorted(wired - targets):
+        findings.append(Finding(
+            "Makefile",
+            f"a recipe calls `guard-scope.py classify --target {target}`, but `{target}` is "
+            "not on ROSTER — it would classify against an unscoped target and always RUN, "
+            "which is safe but means the gate was copied without its subject."))
+
+    for entry in roster:
+        recipe = ""
+        target = str(entry["target"])
+        marker = f"\n{target}:"
+        if marker in ("\n" + makefile):
+            recipe = ("\n" + makefile).split(marker, 1)[1].split("\n\n", 1)[0]
+        if recipe and f"guard-scope.py classify --target {target}" not in recipe:
+            findings.append(Finding(
+                "Makefile",
+                f"the `{target}` recipe exists but does not consult `guard-scope.py` — it "
+                "always runs, ungated."))
+
+    report.add("guard scope", MECHANICAL, findings,
+               f"{len(roster)} roster entries against {len(wired)} wired Makefile recipes, "
+               "both ways",
+               scanned=len(roster))
 
 
 def check_check_census(report: Report) -> None:
@@ -16044,7 +17299,7 @@ HARD_RULES_HEADING = "## Hard rules"
 # directions fail: build a mechanism and you lower the pin in the same commit; add a rule with
 # no enforcement and you raise it and say why.
 HARD_RULE_FLOOR = 12
-PROSE_ONLY_EXPECTED = 6
+PROSE_ONLY_EXPECTED = 5
 
 # BOLD, AND THAT IS NOT COSMETIC. The sentinel has to be a DECLARATION, so it is matched as
 # the bold run a rule writes it in — otherwise the rule immediately above, which explains the
@@ -16925,6 +18180,45 @@ def self_test() -> int:
         findings = report.checks[0].findings
         ok(len(findings) == 1, "a function that is not defined is reported", str(findings))
 
+    print("\nmodule.attribute falls through to TypeScript when no .py module exists")
+    with tempfile.TemporaryDirectory() as tmp:
+        doc = Path(tmp) / "fake.md"
+        # `app/src/server.ts.describeFailure` — the exact shape the fallback used to get
+        # wrong: `.describeFailure` is not in KNOWN_SUFFIXES, so `target.with_suffix(".py")`
+        # is tried first (never exists here), and the reader must move on to `.ts` rather
+        # than reporting a missing file over a symbol that is real.
+        doc.write_text("`app/src/server.ts.describeFailure` formats the toast.\n", encoding="utf-8")
+        report = Report()
+        check_paths(report, [doc], {})
+        ok(not report.checks[0].findings,
+           "a real exported TS function resolves through the .ts fallback",
+           str(report.checks[0].findings))
+
+        doc.write_text("`app/src/server.ts.noSuchExport` formats the toast.\n", encoding="utf-8")
+        report = Report()
+        check_paths(report, [doc], {})
+        ok(len(report.checks[0].findings) == 1,
+           "a TS symbol that is not defined is reported, not silently accepted",
+           str(report.checks[0].findings))
+
+    print("\nts_symbols reads top-level exports and refuses what it cannot see")
+    with tempfile.TemporaryDirectory() as tmp:
+        ts = Path(tmp) / "thing.ts"
+        ts.write_text(
+            "export function realOne() { return 1; }\n"
+            "const notExported = 2;\n"
+            "  function indented() { return 3; }\n"  # not column-0: must be invisible
+            "export const anotherReal = 4;\n",
+            encoding="utf-8",
+        )
+        names = ts_symbols(ts)
+        ok("realOne" in names and "anotherReal" in names,
+           "top-level export function and export const are both found", str(names))
+        ok("indented" not in names,
+           "an indented (non-top-level) function is not claimed", str(names))
+        ok("neverDefined" not in names,
+           "an absent symbol is refused, not guessed", str(names))
+
     print("\nallowlist is self-cleaning")
     report = Report()
     check_allowlist(report, {"harness/run.py": "pretend this is planned"})
@@ -16934,6 +18228,429 @@ def self_test() -> int:
     check_allowlist(report, {"harness/not_yet.py": "genuinely planned"})
     findings = report.checks[0].findings
     ok(not findings, "absent path in the allowlist is fine", str(findings))
+
+    print("\nline anchor extractor: path:N and path:N-M, routes and placeholders still suppressed")
+    ok(
+        line_anchor_candidates("see `docs/GATES.md:884` for the record")
+        == [LineAnchor("docs/GATES.md", 884, None)],
+        "a single-line anchor is extracted",
+    )
+    ok(
+        line_anchor_candidates("`docs/GATES.md:5-7` covers the whole run")
+        == [LineAnchor("docs/GATES.md", 5, 7)],
+        "a range anchor is extracted",
+    )
+    ok(
+        not line_anchor_candidates("POST /pipeline/value:200 is not a real shape anyway"),
+        "a method-prefixed route is not read as a line anchor",
+    )
+    ok(
+        not line_anchor_candidates("GET /photo/<box>/<index>:5 is a placeholder, not a path"),
+        "a placeholder segment suppresses the match, same as `path_candidates`",
+    )
+
+    print("\nline anchors: Clause A fires past the target's end, in range is clean")
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "target.py"
+        target.write_text("\n".join(f"line {n}" for n in range(1, 11)) + "\n", encoding="utf-8")
+        doc = Path(tmp) / "fake.md"
+
+        in_range = ResolvedAnchor(doc, 1, "target.py:10", target, 10, None, "cites `target.py:10`")
+        past_end = ResolvedAnchor(doc, 2, "target.py:11", target, 11, None, "cites `target.py:11`")
+        clause_a, clause_b = line_anchor_findings([in_range, past_end], set())
+        ok(len(clause_a) == 1 and clause_a[0][0] is past_end,
+           "only the past-the-end anchor is a Clause A finding", str(clause_a))
+        ok(not clause_b, "no stub involved, so Clause B is silent")
+
+        print("\nline anchors: a range anchor's UPPER bound past the end fires, not just the lower")
+        range_ok = ResolvedAnchor(doc, 3, "target.py:8-10", target, 8, 10, "cites `target.py:8-10`")
+        range_past = ResolvedAnchor(doc, 4, "target.py:8-11", target, 8, 11, "cites `target.py:8-11`")
+        clause_a, _ = line_anchor_findings([range_ok, range_past], set())
+        ok(len(clause_a) == 1 and clause_a[0][0] is range_past,
+           "the range whose upper bound is past the end is the one finding", str(clause_a))
+
+        print("\nline anchors: Clause B fires on a stub even when the number resolves")
+        stub_hit = ResolvedAnchor(doc, 5, "target.py:3", target, 3, None, "cites `target.py:3`")
+        clause_a, clause_b = line_anchor_findings([stub_hit], {target})
+        ok(not clause_a, "the number is in range, so Clause A is silent", str(clause_a))
+        ok(len(clause_b) == 1, "the target is a registered stub, so Clause B fires", str(clause_b))
+
+        # THE SAME ANCHOR, PAST THE END *AND* INTO A STUB, IS CLAUSE A'S ALONE — Clause B
+        # only answers for an anchor Clause A did not already catch, so double-reporting
+        # one citation under two clauses never happens.
+        stub_and_past = ResolvedAnchor(doc, 6, "target.py:99", target, 99, None, "x")
+        clause_a, clause_b = line_anchor_findings([stub_and_past], {target})
+        ok(len(clause_a) == 1 and not clause_b,
+           "past-the-end wins over stub membership — one finding, not two",
+           f"clause_a={clause_a} clause_b={clause_b}")
+
+    print("\nline anchors: the stub roster is derived from the corpus modules, never typed")
+    stubs = _split_record_stubs()
+    ok(stubs is not None, "the roster derives from decisions/debts/gates_corpus.py", str(stubs))
+    if stubs is not None:
+        ok(
+            {ROOT / "docs" / "DECISIONS.md", ROOT / "docs" / "DEBTS.md", ROOT / "docs" / "GATES.md"}
+            == stubs,
+            "the three known stubs, exactly",
+            str(stubs),
+        )
+
+    print("\nline anchor allowlist is self-cleaning, mirroring check_allowlist's own discipline")
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "short.md"
+        target.write_text("one\ntwo\nthree\n", encoding="utf-8")
+        # A REAL REPO PATH IS NEEDED for `resolve_candidate` to accept the entry at all —
+        # `docs/DECISIONS.md` is a real, small, stable file (the split-record stub itself),
+        # the same trick `check_paths`'s own self-test uses real repo files for.
+        real_target = ROOT / "docs" / "DECISIONS.md"
+        real_total = len(read(real_target).splitlines())
+
+        report = Report()
+        check_line_anchor_allowlist(report, {f"docs/DECISIONS.md:{real_total + 500}": "test"})
+        ok(not report.checks[0].findings,
+           "an entry still past the end is not stale", str(report.checks[0].findings))
+
+        report = Report()
+        check_line_anchor_allowlist(report, {"docs/DECISIONS.md:1": "test"})
+        ok(len(report.checks[0].findings) == 1,
+           "an entry whose anchor now resolves is reported stale",
+           str(report.checks[0].findings))
+
+        report = Report()
+        check_line_anchor_allowlist(report, {"not a line anchor at all": "test"})
+        ok(len(report.checks[0].findings) == 1,
+           "a malformed entry is reported rather than silently ignored",
+           str(report.checks[0].findings))
+
+    print("\nline anchor ratchet: the verdict arithmetic, isolated from the file walk and the pin file")
+    ok(_line_anchor_ratchet_verdict({"a.md": 3}, None) == ("unpinned", []),
+       "no pin at all is its own state, never treated as zero")
+    ok(_line_anchor_ratchet_verdict({"a.md": 3}, {"files": {"a.md": 3}}) == ("ok", []),
+       "an exact match is accepted silently")
+    ok(_line_anchor_ratchet_verdict({"a.md": 2}, {"files": {"a.md": 3}}) == ("ok", []),
+       "a fall is accepted exactly as silently as a tie")
+    verdict, risen = _line_anchor_ratchet_verdict({"a.md": 4}, {"files": {"a.md": 3}})
+    ok(verdict == "rose" and len(risen) == 1 and "a.md" in risen[0],
+       "a raised per-file count is a rise, and names the file", f"{verdict} {risen}")
+    # THE COORDINATOR'S OWN CATCH: an unseen file is HELD TO ZERO, unlike
+    # `_ste_ratchet_verdict`'s own rule — new anchors in a brand-new file must be a rise,
+    # never an accepted freebie, or the ratchet is open on exactly the inflow it exists
+    # to stop.
+    verdict, risen = _line_anchor_ratchet_verdict(
+        {"a.md": 4, "b.md": 1}, {"files": {"a.md": 5}})
+    ok(verdict == "rose" and any("b.md" in line for line in risen),
+       "a file the pin has never seen is a rise, named, held to zero — never accepted "
+       "at its own rate",
+       f"{verdict} {risen}")
+    verdict, risen = _line_anchor_ratchet_verdict({"a.md": 3}, {"files": {"a.md": 3, "gone.md": 9}})
+    ok(verdict == "ok", "a pin whose file is gone (fell to zero anchors) is not a failure",
+       f"{verdict} {risen}")
+
+    print("\nderived numbers: marker extraction, isolated from the file walk")
+    dn_module = _derived_numbers()
+    ok(dn_module is not None, "scripts/derived_numbers.py loads as a sibling module")
+    if dn_module is not None:
+        ok(
+            [m.group("number") for m in dn_module.find_markers(
+                "Measured across all 137<!-- derived:app_src_file_count --> files."
+            )] == ["137"],
+            "a marker right after its number is found, and the number is captured",
+        )
+        ok(
+            dn_module.find_markers("296 uses of `var(--bn-ink)` alone, no marker here.") == [],
+            "a bare number with no marker names no derivation",
+        )
+        ok(
+            "app_src_file_count" in dn_module.REGISTRY
+            and "bn_ink_var_uses" in dn_module.REGISTRY
+            and "tokens_css_legacy_alias_count" in dn_module.REGISTRY,
+            "the four seeded figures this task named are all registered",
+            str(sorted(dn_module.REGISTRY)),
+        )
+        # THE ONE-SENTENCE PROOF THIS TASK RESTS ON: the exact 137/296/25 measurement,
+        # against the real checked-out tree, so a future change to app/src that nobody
+        # remarries to CLAUDE.md's own prose is caught by the row rather than believed.
+        ok(dn_module.app_src_file_count(ROOT) >= 1, "app_src_file_count reads the real tree")
+        ok(dn_module.bn_ink_var_uses(ROOT) >= 1, "bn_ink_var_uses reads the real tree")
+        ok(dn_module.tokens_css_legacy_alias_count(ROOT) >= 1,
+           "tokens_css_legacy_alias_count reads the real tree")
+
+    print("\nderived numbers: the audit row, on synthetic fixtures — never on the real count")
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture_root = Path(tmp) / "tree"
+        (fixture_root / "app" / "src" / "sub").mkdir(parents=True)
+        (fixture_root / "app" / "src" / "a.ts").write_text("one\n", encoding="utf-8")
+        (fixture_root / "app" / "src" / "sub" / "b.ts").write_text("two\n", encoding="utf-8")
+        (fixture_root / "app" / "src" / "sub" / "c.ts").write_text("three\n", encoding="utf-8")
+        # THE REAL REGISTRY FUNCTIONS, OVER A FIXTURE ROOT — not a stand-in count, so this
+        # arm proves the ROW's wiring (marker -> name -> compute -> compare), never a
+        # second copy of what `derived_numbers.py`'s own unit lines above already prove.
+        ok(dn_module.app_src_file_count(fixture_root) == 3,
+           "the fixture's own file count is exactly 3, so a published 3 must pass and "
+           "anything else must fail — the arms below depend on this")
+
+        docs_dir = Path(tmp) / "docs"
+        docs_dir.mkdir()
+
+        # ARM A: a published number that drifts from its derivation goes red.
+        drift_doc = docs_dir / "drift.md"
+        drift_doc.write_text(
+            "Measured: 3<!-- derived:app_src_file_count --> files today.\n",
+            encoding="utf-8",
+        )
+        report = Report()
+        check_derived_numbers(report, [drift_doc], root=fixture_root)
+        findings = report.checks[0].findings
+        ok(findings == [], "a published number that MATCHES its derivation passes clean",
+           str(findings))
+
+        drift_doc.write_text(
+            "Measured: 999<!-- derived:app_src_file_count --> files today.\n",
+            encoding="utf-8",
+        )
+        report = Report()
+        check_derived_numbers(report, [drift_doc], root=fixture_root)
+        findings = report.checks[0].findings
+        ok(
+            len(findings) == 1 and "999" in findings[0].message and "3" in findings[0].message,
+            "ARM A (mutation): a published number that has drifted from what the tree now "
+            "says is a MECHANICAL finding naming both numbers",
+            str(findings),
+        )
+
+        # ARM B: a marker whose name is not in REGISTRY goes red — the same failure mode
+        # as a typo, on purpose (see derived_numbers.py's own module docstring).
+        unknown_doc = docs_dir / "unknown.md"
+        unknown_doc.write_text(
+            "Somebody wrote 7<!-- derived:not_a_real_name --> here.\n", encoding="utf-8"
+        )
+        report = Report()
+        check_derived_numbers(report, [unknown_doc], root=fixture_root)
+        findings = report.checks[0].findings
+        ok(
+            len(findings) == 1 and "not_a_real_name" in findings[0].message,
+            "ARM B (mutation): an unknown derivation name is a MECHANICAL finding, "
+            "naming the marker rather than silently passing",
+            str(findings),
+        )
+
+        # ARM C: A HISTORICAL MEASUREMENT CANNOT BE MARKED, BY CONSTRUCTION. This registry
+        # never grows an entry for a past event (a gate run, an incident measurement) — see
+        # derived_numbers.py's own docstring for the argument and the examples. Proved two
+        # ways: the names are statically absent from REGISTRY, so nothing this task could
+        # have wired up by accident computes them; and marking one anyway hits the exact
+        # same refusal ARM B already demonstrated, because from this row's point of view an
+        # unregistered historical figure and a typo are indistinguishable ON PURPOSE.
+        historical_names = (
+            "gate_b_card_count",       # Gate B's 53 cards, docs/gates/gate-runs/
+            "gate_c_run_count",        # Gate C's two 85-card feeder runs
+            "playwright_thread_incident",  # "969 threads, 338% CPU" at 80 browsers
+            "join_zero_joined_rows",   # the join bug that "silently zero-joined 950 rows"
+            "corpus_pruning_examined", # "430 answers examined, 0 safe to auto-prune"
+            "qr_decode_rate",          # QR decode at "140/140"
+        )
+        ok(
+            all(name not in dn_module.REGISTRY for name in historical_names),
+            "every named historical measurement this task called out is statically "
+            "absent from REGISTRY — there is no function to compute any of them",
+            str([n for n in historical_names if n in dn_module.REGISTRY]),
+        )
+        historical_doc = docs_dir / "historical.md"
+        historical_doc.write_text(
+            "Gate B ran 53<!-- derived:gate_b_card_count --> cards end to end.\n",
+            encoding="utf-8",
+        )
+        report = Report()
+        check_derived_numbers(report, [historical_doc], root=fixture_root)
+        findings = report.checks[0].findings
+        ok(
+            len(findings) == 1 and "gate_b_card_count" in findings[0].message,
+            "ARM C: marking a historical figure is refused the same way an unknown name "
+            "is — impossible by construction, never a silent pass",
+            str(findings),
+        )
+
+    print("\nderived numbers: the real tree, end to end, unpatched")
+    # AND ON THE REAL TREE: CLAUDE.md's own markers, against this checkout as it
+    # actually stands right now — the row this task exists to add, proving the exact digit
+    # rot it was asked to fix is now caught rather than believed. Started at three (the
+    # worked example's app/src trio); a later pass added the docs/map.py and
+    # docs/decisions/ byte and line/file counts, for seven.
+    real_report = Report()
+    check_derived_numbers(real_report, [ROOT / "CLAUDE.md"])
+    ok(
+        real_report.checks[0].findings == [],
+        "the real tree has zero findings on `derived numbers` (CLAUDE.md's markers "
+        "all agree with the checked-out tree)",
+        str(real_report.checks[0].findings),
+    )
+    # DERIVE THE EXPECTATION, NEVER TYPE IT — the rule this row exists to enforce, turned
+    # on its own self-test. A pinned `scanned == 7` records how many derivations existed
+    # the day it was written and goes red on an honest eighth, so it cries wolf on correct
+    # work. A bare `scanned >= 1` is the opposite failure: it passes while six of the seven
+    # derivations are dead, which is the vacuity this file refuses everywhere else.
+    #
+    # The property that is both true and stable: EVERY REGISTERED DERIVATION IS ACTUALLY
+    # REFERENCED BY A MARKER, and every marker resolves to a registered derivation. That
+    # catches a registry entry nothing reads — dead code whose rot no row would report —
+    # and it grows by itself as derivations are added.
+    _dn = _derived_numbers()
+    _used = {
+        name
+        for doc in markdown_files()
+        if exists(doc)
+        for name in (m.group("name") for m in _dn.MARKER_RE.finditer(read(doc)))
+    }
+    ok(
+        _used == set(_dn.REGISTRY),
+        "every registered derivation is referenced by a marker, and every marker resolves",
+        f"registered but unused: {sorted(set(_dn.REGISTRY) - _used)}; "
+        f"marked but unregistered: {sorted(_used - set(_dn.REGISTRY))}",
+    )
+
+    print("\nderived numbers: MUTATION-TESTED against the real file, via a .bak copy")
+    # NEVER `git checkout <path>` TO UNDO A MUTATION (a lesson this repo's own MEMORY paid
+    # for) — a `.bak` copy is the restore. This is the row actually going red on the exact
+    # defect it exists to guard: a real published number in the real CLAUDE.md, hand-edited
+    # to disagree with the tree, must fail; restored, it must pass again.
+    claude_md = ROOT / "CLAUDE.md"
+    original_text = claude_md.read_text(encoding="utf-8")
+    bak_path = claude_md.with_suffix(".md.bak")
+    bak_path.write_text(original_text, encoding="utf-8")
+    try:
+        # READ THE PUBLISHED VALUE, NEVER TYPE IT. This arm hardcoded `137` and went red
+        # the first time `app/src` gained a file, because its own mutation then matched
+        # nothing and never applied. An arm that fails when the tree changes honestly is
+        # the cry-wolf guard this file refuses everywhere else — and the lesson is the one
+        # the row itself exists to teach: derive the expectation from the tree.
+        _dn_mod = _derived_numbers()
+        _live = next(
+            m for m in _dn_mod.MARKER_RE.finditer(original_text)
+            if m.group("name") == "app_src_file_count"
+        )
+        published = _live.group("number")
+        mutated = original_text.replace(
+            f"{published}<!-- derived:app_src_file_count -->",
+            "999<!-- derived:app_src_file_count -->",
+            1,
+        )
+        ok(mutated != original_text,
+           "the mutation actually changed the file (the marker text is still present)")
+        claude_md.write_text(mutated, encoding="utf-8")
+        mutated_report = Report()
+        check_derived_numbers(mutated_report, [claude_md])
+        findings = mutated_report.checks[0].findings
+        ok(
+            len(findings) == 1 and "999" in findings[0].message
+            and published.replace(",", "") in findings[0].message.replace(",", ""),
+            f"a hand-mutated CLAUDE.md ({published} -> 999) fails `derived numbers`, naming both "
+            "the stale published number and the tree's real count",
+            str(findings),
+        )
+    finally:
+        claude_md.write_text(original_text, encoding="utf-8")
+        bak_path.unlink()
+    restored_report = Report()
+    check_derived_numbers(restored_report, [claude_md])
+    ok(
+        restored_report.checks[0].findings == [],
+        "restored from the .bak copy, CLAUDE.md passes clean again",
+        str(restored_report.checks[0].findings),
+    )
+
+    print("\nrot probe: identifiers, the verdict, and the arm that fails on purpose")
+    ok(_rot_identifiers("no backticks here at all") == [],
+       "a sentence with no backticked span names no identifier")
+    ok(_rot_identifiers("uses `self`, `None` and `abc` — all too short or noise") == [],
+       "noise and short tokens are excluded even inside backticks",
+       str(_rot_identifiers("uses `self`, `None` and `abc` — all too short or noise")))
+    ok(_rot_identifiers("calls `do_pipeline_scope()` from the route") == ["do_pipeline_scope"],
+       "a real identifier inside a call expression is extracted",
+       str(_rot_identifiers("calls `do_pipeline_scope()` from the route")))
+
+    print("\nrot probe: the citation's own path never counts as its own evidence")
+    ok(_path_derived_tokens("pipeline/join.py") == {"pipeline", "join"},
+       "the full path and its stem both contribute tokens",
+       str(_path_derived_tokens("pipeline/join.py")))
+    exclude = _path_derived_tokens("pipeline/join.py")
+    # THE COORDINATOR'S OWN FIXTURE: a sentence whose ONLY backticked span IS the
+    # citation must score NOT-CHECKABLE, never a hit carried by the file naming itself.
+    ok(_rot_identifiers("see `pipeline/join.py:1192-1195`", exclude) == [],
+       "a sentence with no OTHER identifier than the citation itself names nothing "
+       "checkable — `join` and `pipeline` are excluded as path-derived",
+       str(_rot_identifiers("see `pipeline/join.py:1192-1195`", exclude)))
+    # AND A REAL, OTHER IDENTIFIER BESIDE THE CITATION STILL COUNTS.
+    ok(_rot_identifiers(
+        "`pipeline/join.py:1192` calls `do_pipeline_scope`", exclude
+    ) == ["do_pipeline_scope"],
+       "a genuine second identifier beside the citation is still extracted",
+       str(_rot_identifiers("`pipeline/join.py:1192` calls `do_pipeline_scope`", exclude)))
+
+    join_lines = [f"line {n}" for n in range(1, 2000)]
+    join_lines[1191] = "def join_positions():"  # line 1192 — the word `join` sits right here
+    citation_only_anchor = ResolvedAnchor(
+        Path("x.md"), 1, "pipeline/join.py:1192", Path("pipeline/join.py"), 1192, None,
+        "see `pipeline/join.py:1192` for the join key",
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        code = Path(tmp) / "join.py"
+        code.write_text("\n".join(join_lines) + "\n", encoding="utf-8")
+        anchor = citation_only_anchor._replace(target=code)
+        rot = line_anchor_rot([anchor])
+        # THE ARM THAT FAILS ON PURPOSE, PER THE COORDINATOR: an implementation that
+        # scores this as a hit is exactly the bug reported (the file's own name matching
+        # near the cited line). The fixed reader must call it not-checkable.
+        ok(rot["not-checkable"] == 1 and rot["hit"] == 0 and rot["miss"] == 0,
+           "a citation whose only backticked identifier is its own path scores "
+           "not-checkable, never a free hit off the filename",
+           str(rot))
+
+    rot_lines = [f"line {n}" for n in range(1, 31)]
+    rot_lines[19] = "def do_pipeline_scope():"  # line 20, 1-indexed
+    ok(_rot_verdict(rot_lines, 20, None, ["do_pipeline_scope"]) == "hit",
+       "the identifier sits exactly on the cited line")
+    ok(_rot_verdict(rot_lines, 15, None, ["do_pipeline_scope"]) == "hit",
+       "the identifier is within the window, a few lines off the cited one")
+    # THE ARM THAT FAILS ON PURPOSE. A prober that always answered "hit" — the exact
+    # failure D149 records for its own broken JSON-key probe, where "a pattern that finds
+    # nothing reports nothing, and nothing reads as green" — would pass every case above
+    # AND this one. This fixture cites a real identifier that is genuinely nowhere near
+    # the cited line, and the real prober must say so.
+    ok(_rot_verdict(rot_lines, 1, None, ["do_pipeline_scope"]) == "miss",
+       "an identifier far from the cited line is a genuine miss — "
+       "a naive always-hit stand-in would pass this fixture and every one above it, "
+       "which is exactly why this fixture exists")
+    ok(_rot_verdict(rot_lines, 20, None, []) == "not-checkable",
+       "no identifier at all is NOT CHECKABLE, never silently a hit")
+    ok(_rot_verdict(rot_lines, 100, None, ["do_pipeline_scope"]) == "past-eof",
+       "a start past the file's own length is past-eof, not a miss")
+    ok(_rot_verdict(rot_lines, 25, 100, ["do_pipeline_scope"]) == "past-eof",
+       "a range whose upper bound is past the end is past-eof too")
+
+    print("\nrot probe: the aggregate excludes docs targets, not-checkable and past-eof from the rate")
+    with tempfile.TemporaryDirectory() as tmp:
+        code = Path(tmp) / "code.py"
+        code.write_text("\n".join(rot_lines) + "\n", encoding="utf-8")
+        doc_target = Path(tmp) / "some.md"
+        doc_target.write_text("\n".join(rot_lines) + "\n", encoding="utf-8")
+        anchors = [
+            ResolvedAnchor(doc, 1, "code.py:20", code, 20, None,
+                            "cites `do_pipeline_scope` at code.py:20"),  # hit
+            ResolvedAnchor(doc, 2, "code.py:1", code, 1, None,
+                            "cites `do_pipeline_scope` at code.py:1"),  # miss
+            ResolvedAnchor(doc, 3, "code.py:5", code, 5, None, "no identifier here"),  # not-checkable
+            ResolvedAnchor(doc, 4, "code.py:500", code, 500, None,
+                            "cites `do_pipeline_scope` at code.py:500"),  # past-eof
+            ResolvedAnchor(doc, 5, "some.md:20", doc_target, 20, None,
+                            "cites `do_pipeline_scope` at some.md:20"),  # excluded: docs target
+        ]
+        rot = line_anchor_rot(anchors)
+        ok(rot["hit"] == 1 and rot["miss"] == 1 and rot["not-checkable"] == 1
+           and rot["past-eof"] == 1,
+           "each bucket counts exactly the fixture built for it", str(rot))
+        ok(rot["checkable"] == 2 and rot["rate"] == 0.5,
+           "the rate is miss / (hit + miss) only — not-checkable, past-eof and the "
+           "docs-target anchor never enter the denominator", str(rot))
 
     print("\nast readers handle the real files")
     runner = ROOT / "harness" / "run.py"
@@ -19198,6 +20915,141 @@ def self_test() -> int:
     for label in ("column count", "threshold agreement", "dist path agreement", "import filename agreement", "duplicated measurements"):
         ok(not by_label[label], f"the real tree has zero findings on `{label}`", str(by_label[label]))
 
+    print("\ncommit path: the AST reads the code, MUTATION-TESTED against the real files, "
+          "via .bak copies")
+    # This is `commit path` going red on the exact defect it exists to guard: `writes` was
+    # a sentence nobody checked against the source. Two real, on-commit-path files are
+    # mutated in turn — `scripts/sigil-check.py` (to make code write) and `scripts/checks.py`
+    # (to make the field lie the other way) — never `git checkout <path>` to undo either,
+    # a `.bak` copy is the restore, same discipline as `derived numbers` above.
+    sigil_path = ROOT / "scripts" / "sigil-check.py"
+    sigil_original = sigil_path.read_text(encoding="utf-8")
+    sigil_bak = sigil_path.with_suffix(".py.bak")
+
+    def _run_commit_path() -> List[Finding]:
+        fresh = Report()
+        check_commit_path(fresh)
+        by = {row.check: row.findings for row in fresh.checks}
+        return by.get("commit path", [])
+
+    # Arm 1: the founding defect. Code writes; `writes` in checks.py stays "". Two separate
+    # mutants, so this is a real kill count and not one lucky match.
+    arm1_kills = 0
+    arm1_mutants = [
+        ('def scan() -> List[Finding]:\n',
+         'def scan() -> List[Finding]:\n'
+         '    Path("/tmp/sigil-check-selftest-mutant").write_text("mutated")\n'),
+        ('def files() -> Iterable[Path]:\n',
+         'def files() -> Iterable[Path]:\n'
+         '    import shutil as _sh; _sh.copy(__file__, __file__ + ".selftest-mutant")\n'),
+    ]
+    for old, new in arm1_mutants:
+        assert old in sigil_original, "sigil-check.py no longer has the shape this arm mutates"
+        mutated = sigil_original.replace(old, new, 1)
+        ok(mutated != sigil_original,
+           "arm 1 mutation actually changed scripts/sigil-check.py")
+        sigil_bak.write_text(sigil_original, encoding="utf-8")
+        try:
+            sigil_path.write_text(mutated, encoding="utf-8")
+            findings = _run_commit_path()
+        finally:
+            sigil_path.write_text(sigil_original, encoding="utf-8")
+            sigil_bak.unlink()
+        hit = [f for f in findings
+               if f.where.endswith("sigil-check") and "SAYS NOTHING" in f.message]
+        if hit:
+            arm1_kills += 1
+        ok(bool(hit), "a commit-path check whose source now writes, with `writes` still "
+           "empty, goes red", str(findings))
+    ok(arm1_kills == len(arm1_mutants),
+       "arm 1: every write-shaped mutant was killed",
+       f"killed {arm1_kills} of {len(arm1_mutants)}")
+
+    # Restored, the real sigil-check.py is clean again on this arm.
+    ok(not [f for f in _run_commit_path() if f.where.endswith("sigil-check")],
+       "restored from the .bak copy, scripts/sigil-check.py passes `commit path` clean again",
+       str(_run_commit_path()))
+
+    # Arm 2: the other direction. `writes` claims something; the real source makes no write
+    # this reader can see. `t3_join_coverage`'s own docstring is the argument for checking
+    # both ways: "a one-directional check passes on that bug."
+    checks_path = CHECKS_REGISTRY
+    checks_original = checks_path.read_text(encoding="utf-8")
+    checks_bak = checks_path.with_suffix(".py.bak")
+    old_field = (
+        '        "target": "sigil-check",\n'
+        '        "runs": "python3 scripts/sigil-check.py --self-test && python3 '
+        'scripts/sigil-check.py",\n'
+    )
+    assert old_field in checks_original, "sigil-check's entry moved; update this arm's anchor"
+    # Flip its OWN `writes: ""` (searched from this anchor forward) to a false claim,
+    # leaving every other entry's field untouched.
+    anchor = checks_original.index(old_field)
+    field_at = checks_original.index('"writes": ""', anchor)
+    mutated_checks = (
+        checks_original[:field_at]
+        + '"writes": "a fixture, invented for this self-test only."'
+        + checks_original[field_at + len('"writes": ""'):]
+    )
+    ok(mutated_checks != checks_original,
+       "arm 2 mutation actually changed scripts/checks.py")
+    checks_bak.write_text(checks_original, encoding="utf-8")
+    try:
+        checks_path.write_text(mutated_checks, encoding="utf-8")
+        findings = _run_commit_path()
+    finally:
+        checks_path.write_text(checks_original, encoding="utf-8")
+        checks_bak.unlink()
+    hit2 = [f for f in findings
+            if f.where.endswith("sigil-check") and "reads no write" in f.message]
+    ok(bool(hit2),
+       "a commit-path check declaring `writes` the AST cannot find on the real source "
+       "goes red",
+       str(findings))
+    ok(not [f for f in _run_commit_path() if f.where.endswith("sigil-check")],
+       "restored from the .bak copy, scripts/checks.py passes `commit path` clean again",
+       str(_run_commit_path()))
+
+    # Arm 3: scope. The same write-shaped mutant, planted in an OFF-commit-path script,
+    # is not this row's business — `claim_stale`'s entry carries `commit_path: False` and a
+    # `why_off_commit_path`, and this row must not start grading its writes.
+    claim_ids_path = ROOT / "scripts" / "claim-ids.py"
+    if claim_ids_path.exists():
+        claim_original = claim_ids_path.read_text(encoding="utf-8")
+        claim_bak = claim_ids_path.with_suffix(".py.bak")
+        needle = "def main("
+        idx = claim_original.find(needle)
+        ok(idx != -1, "scripts/claim-ids.py has a main() this arm can mutate near")
+        if idx != -1:
+            insertion_point = claim_original.index("\n", idx) + 1
+            mutated_claim = (
+                claim_original[:insertion_point]
+                + '    Path("/tmp/claim-ids-selftest-mutant").write_text("mutated")\n'
+                + claim_original[insertion_point:]
+            )
+            ok(mutated_claim != claim_original,
+               "arm 3 mutation actually changed scripts/claim-ids.py")
+            claim_bak.write_text(claim_original, encoding="utf-8")
+            try:
+                claim_ids_path.write_text(mutated_claim, encoding="utf-8")
+                findings = _run_commit_path()
+            finally:
+                claim_ids_path.write_text(claim_original, encoding="utf-8")
+                claim_bak.unlink()
+            ok(not [f for f in findings if "claim-stale" in f.where],
+               "an off-commit-path check writing is not this row's business — no finding "
+               "names it",
+               str(findings))
+
+    # Arm 4: the honest pair, unmutated. `docs-audit` and `sigil-check` are the only two
+    # entries `commit_path: True` names today, and neither should ever produce a finding
+    # on a clean tree.
+    clean_findings = _run_commit_path()
+    ok(clean_findings == [],
+       "the real tree's two commit-path checks (docs-audit, sigil-check) pass `commit "
+       "path` with zero findings",
+       str(clean_findings))
+
     print("\n" + "=" * 72)
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
@@ -19226,6 +21078,11 @@ def audit(staged_only: bool) -> Report:
 
     check_paths(report, docs, allowed)
     check_allowlist(report, allowed)
+    line_allowed = load_line_allowlist()
+    check_line_anchors(report, docs, line_allowed)
+    check_line_anchor_allowlist(report, line_allowed)
+    check_line_anchor_ratchet(report)
+    check_derived_numbers(report, docs)
     check_make_targets(report, docs)
     check_pkmnscan_commands(report, docs, all_docs)
     check_harness_tests(report, docs, allowed)
@@ -19312,6 +21169,7 @@ def audit(staged_only: bool) -> Report:
     check_browser_scope(report)
     check_spec_map(report)
     check_serve_scope(report)
+    check_guard_scope(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     check_identifier_spelling(report)

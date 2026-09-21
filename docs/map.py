@@ -3248,6 +3248,45 @@ COMPONENTS = [
                         "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
                         "row only reads it, since that row sits on the commit path (D18).",
                 "governed_by": ["D18", "D226"]},
+            "line-anchors-pin.py": {
+                "does": "`python3 scripts/line-anchors-pin.py --pin` re-measures every "
+                        "tracked markdown file's RAW `path:N`/`path:N-M` line-anchor count "
+                        "via `docs-audit.py`'s own `_line_anchor_counts()` — the same "
+                        "function the `line anchor ratchet` row calls — and rewrites "
+                        "`scripts/line-anchors.json`. Contains no counting logic of its "
+                        "own. D18: a generator may write, on no `make` target and no hook; "
+                        "`git diff scripts/line-anchors.json` is the receipt, mirroring "
+                        "`ste-ratchet-pin.py`'s own discipline exactly, one ruler over.",
+                "governed_by": ["D18", "D218", "D226", "D229"]},
+            "line-anchors.json": {
+                "does": "the line-anchor ratchet's pinned ceiling: one `path -> count` "
+                        "entry per tracked markdown file carrying at least one line "
+                        "anchor. Written only by `line-anchors-pin.py --pin`; "
+                        "`scripts/docs-audit.py`'s `line anchor ratchet` row only reads "
+                        "it, since that row sits on the commit path (D18).",
+                "governed_by": ["D18", "D111", "D149", "D163", "D180", "D221", "D225", "D229"]},
+            "derived_numbers.py": {
+                "does": "a named registry of tree-descriptive numbers: one pure "
+                        "`compute(root) -> int` function per figure, called by both "
+                        "`scripts/docs-audit.py`'s `derived numbers` row (read-only) and "
+                        "`scripts/derived-numbers-pin.py --write` (the writer, D18) — no "
+                        "counting logic is duplicated between them. Also carries "
+                        "`MARKER_RE`/`find_markers()`, the `<!-- derived:<name> -->` marker "
+                        "syntax a number in prose uses to name its own derivation, and the "
+                        "module's own docstring is the argument for the one rule that "
+                        "matters here: a figure recording a past event (a gate run, an "
+                        "incident measurement) may NEVER get an entry, because rewriting "
+                        "one would falsify a record rather than fix rot.",
+                "governed_by": ["D18"]},
+            "derived-numbers-pin.py": {
+                "does": "`python3 scripts/derived-numbers-pin.py --write` rewrites every "
+                        "`<!-- derived:<name> -->`-marked number in the tracked markdown "
+                        "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)` — "
+                        "the same call the row itself makes. Contains no counting logic of "
+                        "its own. D18: a generator may write, on no `make` target and no "
+                        "hook; `git diff` is the receipt, mirroring `ste-ratchet-pin.py`'s "
+                        "own discipline exactly.",
+                "governed_by": ["D18"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -3323,7 +3362,7 @@ COMPONENTS = [
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226"],
+                                "D213", "D215", "D218", "D226", "D229", "D247"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3484,10 +3523,9 @@ COMPONENTS = [
                 # D160, D186 and D188 are the same worked example claim-ids.py's own entry
                 # carries — the fixture's directory-corpus arms build a real D160 shape, and
                 # the incident arm's own prose names the two real, landed entries it replays.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141",
-                                "D143", "D148",
-                                "D151", "D160", "D185", "D186", "D188",
-                                "D190"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141", "D143",
+                                "D148", "D151", "D160", "D185", "D186", "D188", "D190",
+                                "D249"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -3505,6 +3543,22 @@ COMPONENTS = [
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D90", "D96", "D218"],
+            },
+            "docs-audit-line-allow.txt": {
+                "does": "`path:N`/`path:N-M` line anchors the `line anchors` row's Clause A "
+                        "would otherwise flag as past their target's end, one "
+                        "`candidate  # reason` line each. Self-cleaning, mirroring "
+                        "`docs-audit-allow.txt`'s own discipline: `check_line_anchor_"
+                        "allowlist` fails when a listed anchor's number resolves again. "
+                        "Its four entries are one record — docs/decisions/D149's own "
+                        "citation of four wrong `docs/DECISIONS.md` line numbers, kept as "
+                        "history rather than corrected, because correcting them would "
+                        "falsify what D149 is an account of. A fifth entry, added "
+                        "2026-09-20, is the same shape for a different record: "
+                        "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
+                        "backlog.md, from before the harness left turn end.",
+                "governed_by": ["D16", "D136", "D141", "D149", "D229",
+                                "D248"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -3558,17 +3612,18 @@ COMPONENTS = [
                 "governed_by": ["D18", "D47"],
             },
             "stop-gate.sh": {
-                "does": "the Stop hook: runs `make harness` at turn end and refuses to let "
-                        "the turn end on a failure. Arms itself on the absence of the last "
-                        "NOT_IMPLEMENTED marker rather than on a toggle, so nobody has to "
-                        "remember to switch it on; PKMNSCAN_GATE=off is the visible escape "
-                        "hatch, and `--status` says armed or disarmed and why.",
-                # Thin on purpose rather than padded. The contract it runs is docs/GATES.md,
-                # which is prose and not a numbered decision, so what D16 settles about this
-                # file is what may NOT be put behind it: a docs check here would fire at the
-                # end of every turn, including turns that touched no markdown. That is the
-                # whole reason the audit is commit-time and on-demand.
-                "governed_by": ["D16"],
+                "does": "the Stop hook. RUNS NOTHING as of 2026-09-20 — the owner's ruling "
+                        "moved the harness off turn end entirely, onto the commit path and "
+                        "CI only (see the decision entry). It stays on the Stop hook roster "
+                        "so `--status` can answer 'what runs at turn end' honestly instead "
+                        "of the roster falling silent; `make status`'s 'turn gate' line reads "
+                        "it. PKMNSCAN_GATE=off is kept, recognised but no longer load-bearing.",
+                # Thin on purpose rather than padded. The contract it USED TO run is
+                # docs/GATES.md, which is prose and not a numbered decision, so what D16
+                # settles about this file is what may NOT be put behind it: a docs check
+                # here would fire at the end of every turn, including turns that touched no
+                # markdown. That reasoning still argues against putting anything back.
+                "governed_by": ["D16", "D248"],
             },
             "guard-opsec.sh": {
                 "does": "the PreToolUse opsec twin — RE-ENABLED 2026-08-23 with a narrowed "
@@ -3944,6 +3999,32 @@ COMPONENTS = [
                         "purpose and the file says so — the day `CARRY` gains `app`, the "
                         "`serve scope` audit row fails until this list follows.",
             },
+            "guard-scope.py": {
+                "does": "does this branch reach what one of fifteen guard self-tests proves? "
+                        "THE SECOND PATH GATE IN THIS REPO, on the owner's word, 2026-09-20. "
+                        "`classify --target <name>` exits 0 to run and 3 to skip, and each of "
+                        "the fifteen recipes is its own caller. Unlike `serve-scope.py`'s "
+                        "hand-curated `SCOPE` against a separately hand-curated `CARRY`, "
+                        "`derive_subjects()` reads each self-test's own source on every call — "
+                        "every local-package import and every `Path`-style chain, plus a regex "
+                        "for the four shell scripts — so there is no second list to drift. "
+                        "`ROSTER` names which fifteen targets are gated, on `serve-scope.py`'s "
+                        "own precedent of naming its one target by hand. It imports the "
+                        "globbing and the recipe narrowing from `browser-scope.py`. "
+                        "`PKMNSCAN_GUARD_SCOPE=off` runs every target regardless.",
+                "governed_by": ["D18", "D247"],
+                "note": "D247 is the argument: what a "
+                        "guard self-test can and cannot catch, why a separate audit found all "
+                        "38 targets live and none dead weight, and the one derivation gap "
+                        "found (`githooks-selftest.sh` names three of its five hooks only in "
+                        "prose, so a hit under `scripts/githooks/` widens to the whole "
+                        "directory rather than trusting the two literal names). IT FAILS OPEN "
+                        "IN EVERY DIRECTION: no merge-base, an unreadable diff, an EMPTY diff, "
+                        "an unscoped target, and any exception raised while deriving a "
+                        "subject all answer RUN. `make docs-audit`'s `guard scope` row and "
+                        "`scripts/guard-scope.py selftest` both reconcile ROSTER against the "
+                        "Makefile's wiring, in both directions.",
+            },
             "orient.py": {
                 "does": "`make orient <file.tsx>` — every component in a .tsx file, its line "
                         "span, which component draws it, and the expression that decides "
@@ -4075,8 +4156,9 @@ COMPONENTS = [
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48",
                                 "D53", "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80",
                                 "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
-                                "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141", "D149",
-                                "D158", "D160", "D171", "D172", "D173", "D176", "D178", "D189", "D215"],
+                                "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141",
+                                "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D178",
+                                "D189", "D215", "D247"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

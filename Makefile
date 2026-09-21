@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check css-var-check css-var-check-selftest suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -123,11 +123,16 @@ help:
 	@echo "                    an expired or too-far-dated one is red again."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
-	@echo "                    PATH GATED (the only one): skipped when nothing in the branch"
-	@echo "                    reaches it. PKMNSCAN_SERVE_SCOPE=off runs it regardless."
+	@echo "                    PATH GATED: skipped when nothing in the branch reaches it."
+	@echo "                    PKMNSCAN_SERVE_SCOPE=off runs it regardless."
 	@echo "  make serve-scope   what serve-selftest reads, and whether this branch touches it."
 	@echo "                    ARGS=list | ARGS=\"classify --base <rev>\". Fails open."
 	@echo "  make serve-scope-selftest  that gate, including a CARRY drift it must catch."
+	@echo "  make guard-scope   the SECOND path gate: what each of 15 guard self-tests reads,"
+	@echo "                    derived from its own source. ARGS=list [--target <name>] |"
+	@echo "                    ARGS=\"classify --target <name> --base <rev>\". Fails open."
+	@echo "                    PKMNSCAN_GUARD_SCOPE=off runs every gated self-test regardless."
+	@echo "  make guard-scope-selftest  that gate, both-ways wiring included."
 	@echo "  make sync-selftest  the primary checkout's self-sync, proved by violating it."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
@@ -175,7 +180,8 @@ help:
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
 	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
-	@echo "                    js-breakpoints-selftest + subagent-override-selftest"
+	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
+	@echo "                    guard-scope-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -535,6 +541,7 @@ check:
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory js-breakpoints-selftest
 	@$(MAKE) --no-print-directory subagent-override-selftest
+	@$(MAKE) --no-print-directory guard-scope-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -584,6 +591,7 @@ ci-check:
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory js-breakpoints-selftest
 	@$(MAKE) --no-print-directory subagent-override-selftest
+	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -617,11 +625,19 @@ ignore-check:
 # In `check` and `ci-check`, never in the git hook: D18, it writes.
 verdict-selftest:
 	$(NPM_GUARD)
-	@python3 scripts/verdict-selftest.py
+	@if python3 scripts/guard-scope.py classify --target verdict-selftest --base origin/main; then \
+		python3 scripts/verdict-selftest.py; \
+	else \
+		echo "verdict-selftest: SKIPPED — nothing in this branch reaches app/design-check-reporter.ts. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
 audit-self-test:
-	@python3 scripts/docs-audit.py --self-test
+	@if python3 scripts/guard-scope.py classify --target audit-self-test --base origin/main; then \
+		python3 scripts/docs-audit.py --self-test; \
+	else \
+		echo "audit-self-test: SKIPPED — this branch does not touch scripts/docs-audit.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # D92 — a bare `#` on an owner-side screen is D58's COUNT, and three renderers spelled the
 # store key the same way. ON THE COMMIT PATH, unlike its neighbours here: it writes nothing,
@@ -658,7 +674,11 @@ css-var-check-selftest:
 # it exercises the guard by VIOLATING it, so a version wired into the commit path would be
 # refusing its own commits.
 githooks-selftest:
-	@bash scripts/githooks-selftest.sh
+	@if python3 scripts/guard-scope.py classify --target githooks-selftest --base origin/main; then \
+		bash scripts/githooks-selftest.sh; \
+	else \
+		echo "githooks-selftest: SKIPPED — nothing in this branch reaches scripts/githooks/. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # THE HALF NOBODY CAN REMEMBER, DONE BY A MACHINE. D42 settles that a session performs both
 # halves of a merge on the owner's word — `gh pr merge`, then the local fast-forward — and the
@@ -680,7 +700,11 @@ merge:
 # writes a bare repo, a clone and a linked worktree; and because it drives the thing that moves
 # main, so a version on the commit path would be exercising that against the real one.
 merge-selftest:
-	@bash scripts/merge-selftest.sh
+	@if python3 scripts/guard-scope.py classify --target merge-selftest --base origin/main; then \
+		bash scripts/merge-selftest.sh; \
+	else \
+		echo "merge-selftest: SKIPPED — nothing in this branch reaches scripts/merge-pr.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # A MERGE CAN UNDO A RULING WITHOUT ANYBODY WRITING A LINE (D133). PR #221 landed on main from
 # a tree that still held the pre-#218 copy of ten files, its message about `--cap` wording, and
@@ -707,7 +731,11 @@ revert-guard:
 # it writes a repository under `mktemp -d`; and githooks-selftest's second reason, it drives
 # the guard by defeating it.
 revert-selftest:
-	@python3 scripts/revert-audit.py selftest
+	@if python3 scripts/guard-scope.py classify --target revert-selftest --base origin/main; then \
+		python3 scripts/revert-audit.py selftest; \
+	else \
+		echo "revert-selftest: SKIPPED — this branch does not touch scripts/revert-audit.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # A BRANCH DOES NOT TAKE A DECISION NUMBER (D-merge-time-ids). It writes a slug and this
 # allocates the number against main INSIDE `make merge`, which is the first moment the
@@ -738,7 +766,11 @@ claim-stale:
 # The claimer, proved where it can actually be wrong: a throwaway repository in which main
 # moves underneath the branch. In `check`, never in the git hook — it writes (D18).
 claim-selftest:
-	@python3 scripts/claim-selftest.py
+	@if python3 scripts/guard-scope.py classify --target claim-selftest --base origin/main; then \
+		python3 scripts/claim-selftest.py; \
+	else \
+		echo "claim-selftest: SKIPPED — nothing in this branch reaches scripts/claim-ids.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # THE CORPUS IS COMPLETE AND STILL ROUND-TRIPS. `docs/decisions/` is one file per entry and
 # was one 1.4 MB document; this asserts the set is whole — every file the manifest names is
@@ -858,7 +890,11 @@ screen-freshness:
 # reason, one line up.
 screen-freshness-selftest:
 	$(NPM_GUARD)
-	@node scripts/screen-freshness.mjs --self-test
+	@if python3 scripts/guard-scope.py classify --target screen-freshness-selftest --base origin/main; then \
+		node scripts/screen-freshness.mjs --self-test; \
+	else \
+		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # NOT IN `check`, AND NOT IN THE GIT HOOK. It is the one target here that can DELETE a file,
 # so D18's rule applies at its strongest: nothing that writes may run on the path that decides
@@ -906,7 +942,11 @@ janitor-agent:
 # In `check`, never in the git hook: it writes a temp tree and signals the processes it spawned
 # there, which is D18's line. Same standing as merge-selftest and githooks-selftest.
 janitor-selftest:
-	@bash scripts/janitor-selftest.sh
+	@if python3 scripts/guard-scope.py classify --target janitor-selftest --base origin/main; then \
+		bash scripts/janitor-selftest.sh; \
+	else \
+		echo "janitor-selftest: SKIPPED — nothing in this branch reaches scripts/janitor.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # THE SUPERVISOR'S BUILD JOB (D138), against a throwaway tree with a stub `vite build`. Same
 # standing and the same reason as the three self-tests around it: it starts and stops real
@@ -937,12 +977,22 @@ serve-scope:
 serve-scope-selftest:
 	@python3 scripts/serve-scope.py selftest
 
+guard-scope:
+	@python3 scripts/guard-scope.py $(ARGS)
+
+guard-scope-selftest:
+	@python3 scripts/guard-scope.py selftest
+
 # THE PRIMARY CHECKOUT'S SELF-SYNC, proved by violating it in throwaway clones. It switches
 # branches and moves `refs/heads/main`, which is exactly why it may never be pointed at this
 # clone: the subject of a sync is the PRIMARY tree, and on this machine that is the owner's live
 # rig. In `check` and never in the git hook — D18, the same standing as merge-selftest.
 sync-selftest:
-	@$(PYTHON) scripts/sync-selftest.py
+	@if python3 scripts/guard-scope.py classify --target sync-selftest --base origin/main; then \
+		$(PYTHON) scripts/sync-selftest.py; \
+	else \
+		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
 # machine-wide, and both were used to clean up a session's own dev servers on 2026-09-10: the
@@ -972,7 +1022,11 @@ reap:
 # Its fixture spawned every subject by an ABSOLUTE path until 2026-09-12, which is why thirteen
 # arms could not see the bare sweep's blind spot — `spawn_relative` is the subject it lacked.
 reap-selftest:
-	@bash scripts/reap-selftest.sh
+	@if python3 scripts/guard-scope.py classify --target reap-selftest --base origin/main; then \
+		bash scripts/reap-selftest.sh; \
+	else \
+		echo "reap-selftest: SKIPPED — nothing in this branch reaches scripts/reap.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 .PHONY: reap reap-selftest
 
@@ -992,7 +1046,11 @@ reap-selftest:
 # examining nothing, which is the shape `Report.render` printing `ok` for an empty findings
 # list has on this side of the fence.
 submission-selftest:
-	@$(PYTHON) scripts/submission-selftest.py
+	@if python3 scripts/guard-scope.py classify --target submission-selftest --base origin/main; then \
+		$(PYTHON) scripts/submission-selftest.py; \
+	else \
+		echo "submission-selftest: SKIPPED — this branch does not touch the claim table it proves. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # D172'S TWO TARGETS, AND ONLY ONE OF THEM IS IN `check`.
 #
@@ -1005,7 +1063,11 @@ submission-selftest:
 # from the tree alone — which is `make lan-check`'s reason, not a weaker one. It is its
 # own target and `make status` reports when it has never been run against this store.
 cid-selftest:
-	@$(PYTHON) scripts/cid-selftest.py
+	@if python3 scripts/guard-scope.py classify --target cid-selftest --base origin/main; then \
+		$(PYTHON) scripts/cid-selftest.py; \
+	else \
+		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 cid-audit:
 	@./pkmnscan cards audit
@@ -1042,7 +1104,11 @@ readings-selftest:
 # `make mutate-guards` carries 7 anchored arms over this guard — a mechanized subset of the
 # twenty-one, not a replacement for them.
 silent-write-selftest:
-	@bash scripts/silent-write-selftest.sh
+	@if python3 scripts/guard-scope.py classify --target silent-write-selftest --base origin/main; then \
+		bash scripts/silent-write-selftest.sh; \
+	else \
+		echo "silent-write-selftest: SKIPPED — nothing in this branch reaches scripts/silent-write-guard.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 .PHONY: silent-write-selftest
 
@@ -1072,7 +1138,11 @@ silent-write-selftest:
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).
 guard-shell-selftest:
-	@bash scripts/guard-shell-selftest.sh
+	@if python3 scripts/guard-scope.py classify --target guard-shell-selftest --base origin/main; then \
+		bash scripts/guard-shell-selftest.sh; \
+	else \
+		echo "guard-shell-selftest: SKIPPED — nothing in this branch reaches scripts/guard-shell.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 .PHONY: guard-shell-selftest
 
@@ -1290,7 +1360,11 @@ design-check:
 # spawns processes and writes a lock directory under `mktemp -d`, which is D18's line. Same
 # standing as janitor-selftest, merge-selftest and githooks-selftest.
 suite-lock-selftest:
-	@python3 scripts/suite-lock.py selftest
+	@if python3 scripts/guard-scope.py classify --target suite-lock-selftest --base origin/main; then \
+		python3 scripts/suite-lock.py selftest; \
+	else \
+		echo "suite-lock-selftest: SKIPPED — this branch does not touch scripts/suite-lock.py. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # The classifier's own matcher, recipe narrowing and spec map, proved on fixtures and on the
 # real tree (D-browser-spec-allow-list). Reads only; nothing here writes, so it sits beside

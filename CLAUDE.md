@@ -1,22 +1,31 @@
 # BANCHI
 
 Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and know where
-every card physically is. Two tracks share one rig: singles (this file) and code cards
-(`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
+every card physically is.
 
-**Codex reads this same file, not a copy (D135).** `AGENTS.md` at the root and
-`code-card-fork/AGENTS.md` are relative symlinks to the `CLAUDE.md` beside each. `.agents/skills`
-is a directory symlink to `.claude/skills`. `.codex/hooks.json` mirrors `.claude/settings.json`'s
-hooks. `make docs-audit`'s `codex hooks` row checks both directions. `.codex/config.toml` stays
-untracked, like `.claude/settings.local.json`.
+**Code cards are a FEATURE of this product, not a second track** (owner's ruling, 2026-09-20,
+replacing D14's framing in prose). The owner has not used it yet. The feature is DORMANT as
+of 2026-09-20 — "Code cards (dormant feature)" below is the one place that says so. Its rules
+live in this file now, not in a second document.
+
+D14's structural half is NOT repealed by this line. `codes/` is still its own package.
+`docs/map.py` still carries a `TRACKS` tuple, and `scripts/decision-context.py` still prints a
+track banner. Repealing those is a code change and needs the owner's word on its own.
+
+**Codex reads this same file, not a copy (D135).** `AGENTS.md` at the root is a relative
+symlink to `CLAUDE.md`. `code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are both
+relative symlinks to this same file too, since 2026-09-20 — the fold above, not a new
+exception. `.agents/skills` is a directory symlink to `.claude/skills`. `.codex/hooks.json`
+mirrors `.claude/settings.json`'s hooks. `make docs-audit`'s `codex hooks` row checks both
+directions. `.codex/config.toml` stays untracked, like `.claude/settings.local.json`.
 
 ## The name is the app's, and nothing beneath it (D94)
 
 **Banchi** (a lot number, 番地) names the product: the web app under `app/`. Everything beneath
-the app keeps its old name. That includes the checkout (`~/Developer/pkmnscan`), the CLI
-`./pkmnscan`, the Python packages (`server/ store/ pipeline/ identify/ geometry/ codes/ cli/`),
-the store on disk (`inventory/store.sqlite`), `PKMNSCAN_HOME`, every wire route,
-`PKMNSCAN_MAIN=off`, the harness, the fixtures, `docs/`, and `make` itself. Renaming any of
+the app keeps its old name. That covers the checkout (`~/Developer/pkmnscan`) and the CLI
+`./pkmnscan`. It covers the Python packages (`server/ store/ pipeline/ identify/ geometry/
+codes/ cli/`), the store on disk (`inventory/store.sqlite`) and `PKMNSCAN_HOME`. It covers
+every wire route, `PKMNSCAN_MAIN=off`, the harness, the fixtures, `docs/`, and `make` itself. Renaming any of
 these is a defect.
 
 **The GitHub repository is the one exception.** It was renamed
@@ -55,13 +64,30 @@ make serve-scope    # what `make serve-selftest` reads, and whether this branch 
                     #   self-test's own CARRY, reconciled by `make docs-audit`'s `serve scope`
                     #   row BOTH WAYS. Fails open: no merge-base, an unreadable diff and an
                     #   EMPTY diff all run the test.
-                    #   `make serve-selftest` IS THE ONLY PATH-GATED TARGET IN THIS REPO
-                    #   (owner's ruling, 2026-09-17). It is 70.1s of `make check`'s 187.5 and
-                    #   copies the checkout with a STUB app/, so no screen change can reach
-                    #   it. Nine targets in `check` cost under 0.1s each, so a scope list per
-                    #   target would cost more than it saves. A SECOND gated target needs the
-                    #   owner's word again — this recipe is not a pattern to copy.
+                    #   `make serve-selftest` WAS THE ONLY PATH-GATED TARGET, 2026-09-17 to
+                    #   2026-09-20. It is 70.1s of `make check`'s own total and copies the
+                    #   checkout with a STUB app/, so no screen change can reach it.
                     #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
+make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
+                    #   measurement). What each of fifteen guard self-tests reads.
+                    #   ARGS=list [--target <name>], or
+                    #   ARGS="classify --target <name> --base <rev>".
+                    #   D247 is the argument. A guard
+                    #   self-test proves a MECHANISM, never the product. It cannot go stale
+                    #   between two moments: the guard script it proves changing, or its own
+                    #   fixture changing. THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S
+                    #   OWN SOURCE, never typed beside it — `scripts/guard-scope.py:
+                    #   derive_subjects` reads local-package imports and `Path`-style chains
+                    #   straight out of the test file. Only WHICH fifteen targets are gated
+                    #   is a hand-typed roster, on `serve-scope.py`'s own precedent. Fails
+                    #   open exactly like `serve-scope`: no merge-base, an unreadable diff,
+                    #   an EMPTY diff, an unscoped target, and any exception all run the
+                    #   test. `PKMNSCAN_GUARD_SCOPE=off` runs every gated self-test
+                    #   regardless, printed in every skip. Reconciled BOTH WAYS by
+                    #   `make docs-audit`'s `guard scope` row: every roster target is wired
+                    #   into the Makefile and every wired recipe names a roster target.
+                    #   A THIRD gated target needs the owner's word again — no target here
+                    #   was found dead weight; this is a placement change, not a pruning.
 make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line span, which
                     #   component DRAWS it, and the expression that decides whether it is
                     #   drawn. A renderer — writes nothing, gates nothing, derived every run.
@@ -162,7 +188,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
-                    #   subagent-override-selftest,
+                    #   subagent-override-selftest + guard-scope-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -342,8 +368,8 @@ by SKU, never a destination anyone browses to cold. All three stay registered ro
 reachable from elsewhere.
 
 **The census.** Every route or screen count in this file, README.md and docs/map.py is
-reconciled against `ROUTES` by `make docs-audit`'s `route census` row, and every spec's pinned
-roster by `route rosters`. `app/tests/cursor.spec.ts` reads the nav strip rather than a
+reconciled against `ROUTES` by `make docs-audit`'s `route census` row. Every spec's pinned
+roster is reconciled by `route rosters`. `app/tests/cursor.spec.ts` reads the nav strip rather than a
 hand-typed hash list.
 
 ### The design system
@@ -353,9 +379,11 @@ hand-typed hash list.
 §9). It is generated, never hand-edited, reconciled by `make docs-audit`'s `logo parity` row
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
-**The legacy aliases at the foot of tokens.css are dead.** Measured across all 102 files under
-`app/src`: none read the twenty-four old names, against 266 uses of `var(--bn-ink)` alone.
-Kept by design. A new rule may not read one.
+**The legacy aliases at the foot of tokens.css are dead.** Measured across all
+138<!-- derived:app_src_file_count --> files under `app/src`: none read the
+25<!-- derived:tokens_css_legacy_alias_count --> old names, against
+294<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
 first paint, cross-faded as one mechanism. A screen not looked at in dark is not verified.
@@ -403,12 +431,12 @@ routes and both rail states. `#/fulfillment` is excluded — no shell (D5).
 
 **Three more rules, each silent when broken.** A component's own `transition` REPLACES the
 floor's — name every animated property. `background-image` cannot animate — a hover
-compositing a gradient uses an inset `box-shadow` instead. The press dip is `translate`; a
+compositing a gradient uses an inset `box-shadow` instead. The press dip is `translate`. A
 screen's own emphasis is `transform: scale()`. Never `translateY`, which doubles the dip. A
 control may not ease the movement its own `:active` rule makes (D118).
 
 **A fifth floor beside stability: same-role buttons stacked in one sector share a width**
-(D195). Asserted in a real browser by `app/tests/button-stack.spec.ts`, via
+(D195). Asserted in a real browser by `app/tests/button-stack.spec.ts`, through
 `.bn-actions-stack` and `.capture-block-list`'s CSS Grid trick, discovered per group and never
 read off a declared class.
 
@@ -427,7 +455,7 @@ not rendered — not focusable, not reachable by a screen reader).
 - A keyboard reference sheet on `?`, the one unmodified key the shell takes, yielding to
   typing (`app/src/keys.ts`). A new binding is not done until it is in `SHORTCUTS`.
 - An error boundary per route, two shapes. The owner's crash page offers reload or home. The
-  Fulfiller's `plain` variant offers one button, no brand, no error text — a crash is the
+  Fulfiller's `plain` variant offers one button, no brand and no error text. A crash is the
   moment he is most likely to press whatever is offered.
 - A toast stack, an offline banner, the document title.
 
@@ -440,6 +468,84 @@ not rendered — not focusable, not reachable by a screen reader).
   body, 32px position labels, 320px photograph, 44px targets, 7:1 contrast, no jargon, no
   route out.
 
+## Code cards (dormant feature) — DORMANT as of 2026-09-20
+
+Code cards share the rig, the capture server, and the capture app shell with singles.
+Everything downstream is separate: data model, identification, sales channel, and
+fulfillment (D14's structural half, untouched — see the opening section above).
+
+**DORMANT MEANS THIS: the owner has not run this feature yet, and no session should read it
+as active work unless the owner names it.** `codes/`, the `#/codes` route, harness test T8,
+and the QR decode all stay in the build and keep working. Nothing here is deleted. This is
+the one place that marks the dormancy. Do not repeat the marker elsewhere. Update this date
+if the owner picks the feature back up.
+
+**The gating system is retired.** This section used to say the delivery worker "was gated on
+singles Gate B." Gate B passed on 2026-08-22. The gating system retired the day after, and
+nothing here waits behind anything. The worker stays unbuilt because the channel decision
+stays unexecuted, a different reason, argued in `docs/specs/code-cards.md` §6.
+
+**`docs/specs/code-cards.md` is the spec and supersedes this section's architecture.** Read
+it before building. This section is the short operating summary. The spec carries the
+measurements, the channel research, and the open questions.
+
+### Things you will get wrong without being told
+
+- **The QR IS the code, and the primary path makes NO model call and NO network call.**
+  `codes/qr.py` decodes locally. Measured at the rig's real 3840x2160 frame size: **140 of
+  140 physically-possible frames, ZERO mis-reads, 87 ms each.** The decoder is
+  `zxing-cpp==2.3.0` and **the pin is load-bearing** — plain `pip install zxing-cpp` FAILS on
+  this repo's Python 3.9.
+- **THERE IS NO OCR, AND C2's OCR HALF IS RETIRED.** C2 specified a SKU crop off the QR as a
+  fiducial, then Tesseract with an `A-Z0-9` whitelist. Do not build it. Vision OCR was
+  measured returning confidence 1.0 on 24 renders of which 10 were misreads. Tesseract's
+  whitelist does not work with its default LSTM engine. No public list of code-card SKU
+  strings exists to fuzzy-match against. The question it was for is answered by the next
+  rule.
+- **The product is a CAPTURE CLAIM, not a reading.** Code cards arrive in sealed-product
+  batches — a booster box yields 36 identical booster codes. The operator declares the
+  product and set at capture, in D21's exact sense. `codes/products.py` holds the vocabulary,
+  derived from the real catalog rather than invented.
+- **A MIS-READ IS FAR WORSE THAN A REFUSAL.** A refusal costs a re-shoot. A mis-read sells a
+  stranger something that does not work. Someone finds it days later, and it lands in C6 with
+  nobody able to tell whether the code was bad or the read was. Every failure path here
+  returns nothing rather than a guess.
+- **The ledger's key is the CODE, not the position** (C3, and C8's first build had it as the
+  position). Under D24 the card is destroyed, so the position is a filing reference and the
+  code is the identity. This is what makes dedupe and reservation possible.
+- **Codes are fungible pool inventory, not located items** (D24). No box, no section, no
+  position. The code string is the primary key. Do not reuse the singles schema.
+- **Atomic dequeue is required.** A code is marked reserved the instant it is assigned to an
+  order. Never reissue. Double-selling a code is unrecoverable, so `codes/ledger.py:reserve`
+  REFUSES anything that is not `held` rather than quietly doing nothing.
+- **Codes are globally single-use and never expire, and a redeemed card looks identical to an
+  unredeemed one.** The ledger is the only record of a code's state. There is no usable API
+  to check one. The official verify step is genuinely non-consuming, but it sits behind
+  session auth, a `can_redeem` gate and a reCAPTCHA.
+- **The redemption limits are SOFT** (corrects C3). Past the limit, a code grants a little
+  in-game currency instead of the product. The code is not refused.
+- **DESTROYING THE CARD FORECLOSES TCGPLAYER AND EBAY'S DISPUTE DEFENCE.** TCGplayer permits
+  code cards only when *attached to a physical card*. eBay's Money Back Guarantee excludes
+  intangible goods, and its seller protection requires physical delivery evidence. This
+  overturns C5, which existed to buy exactly that protection. See `docs/specs/code-cards.md`
+  §6.1 — it is a real cost of D24, stated so nobody rediscovers it.
+- **Every researched channel came back MARGINAL.** Booster codes are worth $0.01-$0.13, and
+  the published wholesale bid for one is BELOW what bulk costs to get. The money is in the
+  premium tail: a Pokemon Center ETB code lists at ~46x a booster. Tier the pile.
+
+### Hard rules
+
+- Never guess a code. No decode → the paid vision read, then a human. Never a default.
+- Failure must be loud. A QR that does not decode is a stop.
+- Separate non-`BST` codes on sight — they are the scarce, high-value ones, and the catalog
+  numbers now confirm it rather than merely asserting it.
+- No real code-card photo or code string in any tracked file. Enforced by pre-commit hook.
+  The runtime writing codes into gitignored `inventory/` is the sanctioned path. The guards
+  protect the repository, not the store.
+
+Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
+Spec, measurements and channel research: `docs/specs/code-cards.md`.
+
 ## Things you will get wrong without being told
 
 - **The capture server is ALREADY THREADED and NOT YOURS TO RESTART.**
@@ -447,23 +553,23 @@ not rendered — not focusable, not reachable by a screen reader).
   `request_queue_size = 128` (bounds the accept backlog, not the thread count), and
   `CaptureHandler.timeout = 15` (reaps only idle connections). A burst of concurrent clients
   kills it. Measured at 80 Playwright browsers: 969 threads, 338% CPU, answering nothing.
-  Fixed 2026-09-04: `REQUEST_SLOTS = 4` bounds executing requests via a
+  Fixed 2026-09-04: `REQUEST_SLOTS = 4` bounds executing requests with a
   `ThreadPoolExecutor(REQUEST_SLOTS)`. It is safe over HTTP/1.1 only because every response
   sends `Connection: close` (DEBT11 has the mechanism and the measurements — this
-  was sized at 12 originally; the sweep found 4 keeps 82% of peak throughput, and less is
+  was sized at 12 originally. The sweep found 4 keeps 82% of peak throughput, and less is
   strictly better). `make launch-agent` keeps this alive over the owner's real store. Run the
   full suite ONCE at the end. Never `make up ARGS=--restart`, `make down` or `make up` to fix
   a wedge — the refusal without `--confirm` is the answer.
 - **The join key is PER-GAME and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Pokemon composes `zfill(3)(number) + "/" +
-  printedTotal`. One Piece and Riftbound match the printed identifier verbatim; both carry
+  printedTotal`. One Piece and Riftbound match the printed identifier verbatim. Both carry
   denominator-less rows. `zfill` is COMPOSITION only, never matching. A mismatch there once
   silently zero-joined 950 rows. Never join on Product Name as the key. D35 permits it as a
   last resort, folded through `name_index_key`, queued for review rather than listed outright.
-- **A run directory's slot numbers are not the truth; the photograph is** (D36).
+- **A run directory's slot numbers are not the truth. The photograph is** (D36).
   `cli/resolve.py:realign` re-binds every record to its digest's current slot. It refuses on
   ambiguity and on a box whose number was deleted and reused after the run
-  (`store/master.py:refuse_reallocated`, D36 amended).
+  (`cli/resolve.refuse_reallocated`, D36 amended).
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`.
   `TCGplayer Id` is never modified.
 - **Batch API, not sequential calls.** Model: `claude-haiku-4-5-20251001`.
@@ -503,18 +609,20 @@ not rendered — not focusable, not reachable by a screen reader).
   route and the CLI.
 - **A card's number counts the cards in the box, not the slots** (D58). Sell card 17, and the
   next card becomes 17. The STORED index (`/inventory/<box>/<index>`) never moves. A departed
-  card renders `join.departed_label` (`Box 3 · departed`).
+  card renders `pipeline/join.departed_label` (`Box 3 · departed · B3 #96`). D68 added the
+  store key: a bare `Box 3 · departed` once drew two sold copies in one box as one
+  indistinguishable string.
 - **A set hint on some cards narrows nothing. How wide to ask is a per-game rule** (D76).
   Widening may fire only when EVERY card of a game is hinted and every hint resolves.
   Pokemon's whole category is 32,629,598 B against a 33,554,432 B cap — 97.24%, measured
   2026-09-12, six set releases of headroom — so a widening is never silent (a `width` block on
   every fetch). Since D170, a Pokemon run that would widen itself is REFUSED outright
   (`export_needs_hint` in `pipeline/games.py`), unless the operator named `set_ids` or `scope`
-  explicitly. Not enforced at the shutter (D65). Fix an unhinted card via Manage box → Set
+  explicitly. Not enforced at the shutter (D65). Fix an unhinted card in Manage box → Set
   claims.
 - **The catalogue export is a property of the GAME, not the drawer** (D166). A fetch lands in
   `inventory/.exports/<game>/`, deduped store-wide by digest. A covering export fetched inside
-  900s is reused with no socket opened; `refresh: true` forces one. A reuse never touches the
+  900s is reused with no socket opened. `refresh: true` forces one. A reuse never touches the
   mtime — that is when the reading was TAKEN.
 - **The pricing answer is one file for the whole store, keyed by SKU** (D86, amended).
   `pipeline/corpus.py` over `inventory/prices.json`. `sub_threshold` defaults to $0.49 (D9
@@ -539,14 +647,14 @@ not rendered — not focusable, not reachable by a screen reader).
 - **A box is addressed by its name, and names are unique** (D20, amended). `next_box_number`
   allocates the lowest free integer, not a high-water mark. **A box also has `Box.bid`, a
   true index that is a high-water mark and is NEVER reused, drawn on no screen** (D145). The
-  number is a LABEL; the id is an IDENTITY a run binds to. A run records `bid`, never the
+  number is a LABEL. The id is an IDENTITY a run binds to. A run records `bid`, never the
   name. The name is joined at read time from the registry (D56), never written into a run
   directory — a rename would relabel a run's cards retroactively.
 
 ## Hard rules
 
-- **A RULE THAT CAN BE MECHANICALLY ENFORCED MUST BE, AND A NEW RULE IS NOT DONE UNTIL ITS
-  ENFORCEMENT EXISTS OR ITS UNENFORCEABILITY IS ARGUED** (D173). Owner's instruction,
+- **A RULE THAT CAN BE MECHANICALLY ENFORCED MUST BE.** A NEW RULE IS NOT DONE UNTIL ITS
+  ENFORCEMENT EXISTS, OR UNTIL ITS UNENFORCEABILITY IS ARGUED (D173). Owner's instruction,
   2026-09-12: *"every rule for all time... should be mechanically enforced."* A rule that
   cannot be mechanized carries a bold `**NOT MECHANIZED:**` sentence saying what a machine
   would have to SEE. `make docs-audit`'s `rule enforcement` row parses every rule below. It
@@ -575,10 +683,6 @@ not rendered — not focusable, not reachable by a screen reader).
   gate. Mechanized for the arithmetic half: `make docs-audit`'s `repo map` row fails a commit
   adding a file with no map entry. `decision index` fails one citing a non-existent entry.
   Whether the reason is good is a person's judgement.
-- No manual third-party UI step inside the autonomous pipeline.
-  **NOT MECHANIZED:** a machine cannot know a step needs a human's hands in a browser. Every
-  pipeline command is re-runnable from the CLI with no prompt. T1 through T9 exercise them
-  that way, which is evidence, not a gate.
 - **FIX THE CAUSE, NEVER THE SYMPTOM. CHECK WHETHER THE PRIMITIVE ALREADY EXISTS FIRST.**
   Owner's standing instruction, 2026-09-11. `make map ARGS=<path>` and
   `scripts/decision-context.py` find the existing primitive before you design around its
@@ -607,8 +711,8 @@ not rendered — not focusable, not reachable by a screen reader).
   `scripts/githooks/pre-commit`, armed by `make hooks`.
 - **Nine shell mistakes are refused before they run**, by `scripts/guard-shell.py --hook` on
   Bash and on Write/Edit, armed in both rosters (D135). Each clause resolves what a command
-  would DO rather than matching what it says, carries its own escape hatch, and fails open on
-  its own bugs: `PKMNSCAN_CHECKOUT` (a `git checkout`/`restore` over a modified file),
+  would DO rather than matching what it says. Each carries its own escape hatch, and each
+  fails open on its own bugs: `PKMNSCAN_CHECKOUT` (a `git checkout`/`restore` over a modified file),
   `PKMNSCAN_TREE` (a write outside this checkout, or a `cd` into another one), `PKMNSCAN_GH` (`gh api -f` with no method),
   `PKMNSCAN_LINK` (`ln -s` at an existing path), `PKMNSCAN_WAIT` (a polling loop),
   `PKMNSCAN_PUSH` (a push to a differently-named upstream), `PKMNSCAN_STASH` (a bare
@@ -624,6 +728,16 @@ not rendered — not focusable, not reachable by a screen reader).
   So the roster is short and per-incident. It is also reconciled. The self-test asserts every
   command it names still carries a heartbeat constant in the file that runs it. A preview
   (`ARGS=<n>` with no `--confirm`) never waits, and is never this clause's business.
+- **A CITATION NAMES A SYMBOL, NEVER A LINE.** A line number rots on the next edit above it.
+  Measured 2026-09-20: of 313 checkable code anchors, 219 point at the wrong line. Write a
+  decision id, a section, or the `module.symbol` form the `paths` row verifies. That form
+  takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line anchors`
+  refuses a line past the file's end, and any anchor into a split-record stub. `line anchor
+  ratchet` is per file, in D229's shape. A file its pin has never seen is held to zero.
+  `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt` that has
+  stopped being true. The rot rate
+  printed beside them is MEASURED and never gated. A citation pointing at a real line whose
+  content has moved stays invisible, which D149 ruled no check can see.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
   light and dark. `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
   locks every name and hex both ways.
@@ -641,16 +755,19 @@ not rendered — not focusable, not reachable by a screen reader).
   knows main moved: serve.py's adoption points, SessionStart, and `make merge`'s local half.
   It refuses on uncommitted tracked work or a mid-rebase. It touches only the primary
   checkout, never a worktree. `PKMNSCAN_SYNC=off`. `make sync-selftest` proves it.
-  **An orchestrating session carries a standing D42 grant as of 2026-09-13.** The owner named
-  the act once for a whole batch, reaching only that session, only for PRs it planned and
-  reviewed, only via `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+  **A session may merge only when the owner has explicitly called it an Orchestrator**
+  (owner's ruling, 2026-09-20, replacing the standing grant of 2026-09-13). The designation is
+  the grant. It is never inherited, never assumed from the shape of the work, and never
+  carried over from an earlier session. A session the owner has not named that way asks for
+  the word every time. Where it holds, it reaches only PRs that session planned and reviewed.
+  The one command is `make merge ARGS="<n> --confirm"`, with CI green, never `--admin`.
 - **No user-visible string may TYPE a middle dot or bullet (U+00B7, U+2022) as a separator.**
   Owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists." D41
   removed the dot-joined address string and moved the separator into CSS
   (`::before { content: '·' }`) — a screen may SHOW a separator, never TYPE one into a
   string. Mechanized by `make docs-audit`'s `typed interpunct` row over
   `scripts/user-strings.mjs`'s extraction, RATCHETED against `scripts/typed-interpunct.json`'s
-  pinned count (D194's own discipline, mirrored): it fails only when the count RISES; a lower
+  pinned count (D194's own discipline, mirrored). It fails only when the count RISES. A lower
   count is accepted silently and printed. `node scripts/typed-interpunct-pin.mjs --pin`
   re-pins it, run by a person, never quietly. See D218.
 
@@ -670,18 +787,19 @@ Three practices, each earned by a lost round on 2026-09-17. Together they cost m
 that evening than every verification target combined (`docs/specs/verification-cost.md`).
 
 - **Name the rendering component, and the state that selects it.** Not "fix the walk
-  sentence" but "in `#/orders`, with `hidePicks` true, `WalkGroups` renders the walk
-  sentence — change it there." Mechanized: `make orient ARGS=app/src/Orders.tsx --name
-  WalkGroups` prints which component draws it and under which expression. Run it before the
-  brief is written. Where two components can render the same thing, the brief says which and
-  why. The round this cost: a fix briefed against `CopyMapView`, which `hidePicks` suppresses
-  in exactly the state the owner was looking at. Correct, and invisible.
+  sentence" but "in `#/orders`, with `hidePicks` false, `OrderLineRow` draws `CopyMapView`,
+  and `CopyMapView` renders the walk sentence — change it there." Mechanized: `make orient
+  ARGS=app/src/Orders.tsx --name CopyMapView` prints which component draws it and under
+  which expression. Run it before the brief is written. Where two components can render the
+  same thing, the brief says which and why. The round this cost: a fix briefed against
+  `CopyMapView`, which `hidePicks` suppresses in exactly the state the owner was looking at.
+  Correct in general, and invisible there.
 - **Never ask an agent to reconstruct a state it has already left.** A "before" image is
   captured before the edit or not at all. Wanting one afterwards is the orchestrator's job,
   in a separate clean checkout — never the working agent, never in a shared tree. The round
   this cost: an agent told to produce a "before" screenshot went looking for a way to un-build
-  its own change and reached for `git stash`, which is shared with every worktree of this
-  clone. `scripts/guard-shell.py`'s `PKMNSCAN_STASH` clause refuses the command; the brief
+  its own change. It reached for `git stash`, which is shared with every worktree of this
+  clone. `scripts/guard-shell.py`'s `PKMNSCAN_STASH` clause refuses the command. The brief
   should not have pointed an agent at it.
   **NOT MECHANIZED:** a machine cannot read a sentence addressed to a person and tell that
   satisfying it requires undoing work.
@@ -696,7 +814,7 @@ that evening than every verification target combined (`docs/specs/verification-c
 - **Show the screen before saying it looks right.** Render at 1440, 820 and 390, both themes,
   and look at the images.
 - Read `docs/decisions/` before proposing an architecture change
-  (`scripts/decision-context.py` finds the governing entry; see the index below). Every
+  (`scripts/decision-context.py` finds the governing entry, and the index is below). Every
   entry is settled. Reopen one only by citing it and waiting for the owner's word (see the
   outcomes rule above).
 - **Design work is repo work.** A design living only in chat is not done. Land it in
@@ -709,18 +827,26 @@ that evening than every verification target combined (`docs/specs/verification-c
 - `docs/map.py` — the repo as data: built, TBD, and which decisions govern each file. Read it
   before editing under `app/`, `server/`, `pipeline/`, `identify/`, `store/`, `geometry/` or
   `cli/`. Audited by `make docs-audit` — a file added with no entry fails the commit.
-  `make map` is how you look at it (D80). At ~56,000 tokens, reading it whole spends a fifth
-  of a context window. `make docs-audit`'s `map sections` row fails a commit adding a section
-  with no reader.
+  `make map` is how you look at it (D80). The file is large. Reading it whole spends most of a
+  context window. Its token cost is about a quarter of that byte count, at roughly four
+  bytes per token. That ratio is an approximation and never a measured count. `make docs-audit`'s `map sections` row fails a commit
+  adding a section with no reader.
   **The build order is two lists, `SHIPPED` and `OPEN`, not a numbered sequence** (D80).
-  `OPEN` has no `next`. Ranking two open items is yours. `n` is a stable id, never renumbered
-  — 218 references live in this tree. `make docs-audit`'s `build order mirror` row
+  `OPEN` has no `next`. Ranking two open items is yours. `n` is a stable id, never renumbered.
+  This file no longer publishes how many references that id has in the tree. Three scans for
+  "step N" citations gave three different counts, none near each other. A bare "step N"
+  matches ordinary prose too — one spec alone numbers 27 of its own unrelated steps. A
+  trustworthy count needs a citation registry for step ids, the way decisions and debts
+  already have one, not built yet. `make docs-audit`'s `build order mirror` row
   reconciles both files, in both directions.
 - `docs/decisions/` — settled decisions and why, one file per entry, indexed by
-  `scripts/decisions_corpus.py`. Read before redesigning. **Not `@`-loaded** (D60): at
-  ~627KB, loading it all would cost ~163,000 tokens before any work. `scripts/decision-context.py`
-  names the governing decisions before an edit under a mapped directory. The index below is a
-  table of contents, never a substitute for the entry's own argument.
+  `scripts/decisions_corpus.py`. Read before redesigning. **Not `@`-loaded** (D60): the directory is large. Loading it
+  all costs about a quarter
+  of that byte count in tokens, before any work. That ratio is an approximation and never a
+  measured count.
+  `scripts/decision-context.py` names the governing decisions before an edit under a mapped
+  directory. The index below is a table of contents, never a substitute for the entry's own
+  argument.
 
 ```
 D1   Two-phase architecture
@@ -901,7 +1027,7 @@ D175 Ownership is read the way liveness is, and a process a session no longer ow
 D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
 D177 The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
 D178 A document may name what it would create, and the marking expires by itself
-D179 Five shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
+D179 Shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
 D180 A press names the cards it is over, and the drawer is one of the names
 D181 The order is taken once, and a sale may not retake it
 D182 An unclaimed slug is not required in the shared index it will replace itself out of
@@ -967,6 +1093,11 @@ D241 Recorded, not built: ask the catalogue earlier than the archive does
 D242 Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
 D243 Every posted price is recorded, and the row is never touched again
 D244 The posted-price view is wanted, and it is shelved until there is a history to draw
+D245 A citation names a symbol, not a line, and a line-number row sees only the half that shrank
+D246 `commit path writes` reads the code, not `checks.py`'s own sentence about itself
+D247 Fifteen guard self-tests are path-gated, and no target was found dead
+D248 The harness leaves turn end, and code cards fold into one rules file
+D249 Recognition by the complement, never by the expected pattern
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
@@ -992,7 +1123,7 @@ adopting some and deferring others (D99 sits where it does because main took D90
 - `docs/specs/undo.md` — BUILT 2026-09-17, all four sections. Undo as one concept: two
   mechanisms by ruling, and no clock is a limit anywhere. Read it before touching a reversal.
 - `docs/specs/corpus-pruning.md` — RECORDED, NOT BUILT (D177). Pruning may never be
-  automatic; 430 answers examined, 0 safe to auto-prune.
+  automatic. 430 answers examined, 0 safe to auto-prune.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/demo.md` — the public demo, BUILT and LIVE. Why it is not a fork, what is
   real and what is invented, what the published page refuses, and why no secret reaches it.
@@ -1010,8 +1141,11 @@ adopting some and deferring others (D99 sits where it does because main took D90
   dropdown since 2026-09-19, which settled its place at 390. Which order a press records
   against is ANSWERED. D212 rules every copy fungible, so a sale records against an owing
   order, and D220 built it.
-- `docs/specs/stable-card-id.md` — SPECIFIED, NOT BUILT (D172). No store carries `cards.cid`
-  yet. The measurement — 2,535 of 2,535 digests match — is real.
+- `docs/specs/stable-card-id.md` — BUILT (D172). `store/db.py` carries the `cid` column, the
+  unique index, the backfill index, and the migration. The `cards name/audit/photos`
+  subcommands in the Commands block above are this spec's own delivery. Still open: the
+  batch's own `custom_id`, the `identifications` re-key, the order-ledger repair, and the
+  position key itself. The measurement — 2,535 of 2,535 digests match — is real.
 - `docs/specs/capture-app.md` — step 7. 7a and 7b are both built. Gate B ran them 2026-08-22.
 - `docs/specs/motion-trigger.md` — Gate C's auto-capture. Built, tuned, and twice corrected
   (D81, D84), with a ratchet escape and a rescue (D131). One trigger only — D130 deleted the
@@ -1019,7 +1153,8 @@ adopting some and deferring others (D99 sits where it does because main took D90
   `scripts/score-trace.py` is how a trace is scored — read it before changing a threshold here.
 - `docs/DESIGN.md` — the Fulfillment view's hard constraints, asserted by `make design-check`,
   and the `--bn-*` token block, reconciled by `make docs-audit`'s `design tokens` row.
-- `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
+- `code-card-fork/CLAUDE.md` — a relative symlink to this file since 2026-09-20. The
+  "Code cards (dormant feature)" section above is its content now.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.
 
 Deeper schema facts live in the `tcgplayer-csv` skill. It loads on demand.

@@ -34,7 +34,7 @@ Measured screen by screen against the rig, which is one operator with a phone ov
 
 `store/session.py:125` is the single funnel every mutation passes through: exclusive lock, re-read inside it, five JSON files written whole on a clean exit. A counter incremented there covers a capture, a sale, a review answer, a retirement, a divider, an order ingest and a pull without any of them being taught about it, and there is no second door to forget.
 
-**Coalescing is a requirement and not a refinement**, and the number that settles it is already recorded: `docs/GATES.md:884` puts the feeder at a median 623 ms over 84 intervals. Anything that fired per generation would fire twice a second for the length of a box — furniture inside a minute, and worse than silence, because it teaches the operator to ignore the one that matters. A monotonic counter can be compared and coalesced; a random id like `BOOT_ID` cannot.
+**Coalescing is a requirement and not a refinement**, and the number that settles it is already recorded: `docs/gates/gate-runs/GateC-feeder-integration-passed-2026-08-22.md:57` puts the feeder at a median 623 ms over 84 intervals. Anything that fired per generation would fire twice a second for the length of a box — furniture inside a minute, and worse than silence, because it teaches the operator to ignore the one that matters. A monotonic counter can be compared and coalesced; a random id like `BOOT_ID` cannot.
 
 ### Why not a live connection, measured rather than assumed
 
