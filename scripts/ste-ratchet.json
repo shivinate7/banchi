@@ -13,27 +13,32 @@
     "AGENTS.md": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
-      "words": 12305
+      "words": 13582
     },
     "CLAUDE.md": {
       "errors": 0,
       "ratio_per_1k_words": 0.0,
-      "words": 12305
+      "words": 13582
+    },
+    "HANDOFF.md": {
+      "errors": 1,
+      "ratio_per_1k_words": 1.399,
+      "words": 715
     },
     "README.md": {
       "errors": 29,
-      "ratio_per_1k_words": 10.417,
-      "words": 2784
+      "ratio_per_1k_words": 10.361,
+      "words": 2799
     },
     "code-card-fork/AGENTS.md": {
-      "errors": 9,
-      "ratio_per_1k_words": 11.378,
-      "words": 791
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 13582
     },
     "code-card-fork/CLAUDE.md": {
-      "errors": 9,
-      "ratio_per_1k_words": 11.378,
-      "words": 791
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 13582
     },
     "docs/ADVANCES.md": {
       "errors": 20,
@@ -47,8 +52,8 @@
     },
     "docs/DEBTS.md": {
       "errors": 2,
-      "ratio_per_1k_words": 1.972,
-      "words": 1014
+      "ratio_per_1k_words": 1.889,
+      "words": 1059
     },
     "docs/DECISIONS.md": {
       "errors": 7,
@@ -57,8 +62,8 @@
     },
     "docs/DESIGN.md": {
       "errors": 252,
-      "ratio_per_1k_words": 18.1,
-      "words": 13923
+      "ratio_per_1k_words": 17.88,
+      "words": 14094
     },
     "docs/GATES.md": {
       "errors": 0,
@@ -215,6 +220,21 @@
       "ratio_per_1k_words": 0.0,
       "words": 629
     },
+    "docs/debts/032-the-archive-sweep-stays-a-press-and-the-owner-intends.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 10.965,
+      "words": 456
+    },
+    "docs/debts/033-an-answered-queue-entry-can-never-resurface-even-when-wrong.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 468
+    },
+    "docs/debts/034-the-catalogue-cache-never-expires-on-a-membership-claim.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 369
+    },
     "docs/debts/_preamble.md": {
       "errors": 6,
       "ratio_per_1k_words": 13.857,
@@ -224,6 +244,26 @@
       "errors": 0,
       "ratio_per_1k_words": 0.0,
       "words": 1419
+    },
+    "docs/decisions/D-commit-path-writes-reads-the-ast.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 837
+    },
+    "docs/decisions/D-guard-self-test-scope.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1146
+    },
+    "docs/decisions/D-turn-end-drops-the-harness-and-code-cards-fold-in.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 979
+    },
+    "docs/decisions/D-unclaimed-headings-are-found-by-complement.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 877
     },
     "docs/decisions/D001-two-phase-architecture.md": {
       "errors": 1,
@@ -1405,6 +1445,46 @@
       "ratio_per_1k_words": 0.0,
       "words": 1563
     },
+    "docs/decisions/D237-archive-refusal-mechanization.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 1645
+    },
+    "docs/decisions/D238-archive-refusals-to-review-queue.md": {
+      "errors": 7,
+      "ratio_per_1k_words": 6.979,
+      "words": 1003
+    },
+    "docs/decisions/D239-a-archive-store-checks.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 929
+    },
+    "docs/decisions/D240-a-join-time-name-cross-check.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 655
+    },
+    "docs/decisions/D241-archive-live-catalogue-lookup-at-join-time.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 589
+    },
+    "docs/decisions/D242-sku-number-contradictions.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 868
+    },
+    "docs/decisions/D243-a-record-price-postings.md": {
+      "errors": 0,
+      "ratio_per_1k_words": 0.0,
+      "words": 813
+    },
+    "docs/decisions/D244-a-postings-view-shelved.md": {
+      "errors": 5,
+      "ratio_per_1k_words": 8.104,
+      "words": 617
+    },
     "docs/decisions/_deferred-argued-not-gated-nothing-here-is-blocked-and.md": {
       "errors": 5,
       "ratio_per_1k_words": 18.587,
@@ -1645,6 +1725,96 @@
       "ratio_per_1k_words": 15.385,
       "words": 195
     },
+    "docs/reviews/ux-2026-09-20/INDEX.md": {
+      "errors": 4,
+      "ratio_per_1k_words": 8.247,
+      "words": 485
+    },
+    "docs/reviews/ux-2026-09-20/RANKING.md": {
+      "errors": 8,
+      "ratio_per_1k_words": 6.289,
+      "words": 1272
+    },
+    "docs/reviews/ux-2026-09-20/capture.md": {
+      "errors": 14,
+      "ratio_per_1k_words": 19.526,
+      "words": 717
+    },
+    "docs/reviews/ux-2026-09-20/codes.md": {
+      "errors": 22,
+      "ratio_per_1k_words": 23.256,
+      "words": 946
+    },
+    "docs/reviews/ux-2026-09-20/fulfillment.md": {
+      "errors": 32,
+      "ratio_per_1k_words": 17.269,
+      "words": 1853
+    },
+    "docs/reviews/ux-2026-09-20/graveyard.md": {
+      "errors": 41,
+      "ratio_per_1k_words": 24.864,
+      "words": 1649
+    },
+    "docs/reviews/ux-2026-09-20/home.md": {
+      "errors": 21,
+      "ratio_per_1k_words": 21.255,
+      "words": 988
+    },
+    "docs/reviews/ux-2026-09-20/inventory.md": {
+      "errors": 31,
+      "ratio_per_1k_words": 22.334,
+      "words": 1388
+    },
+    "docs/reviews/ux-2026-09-20/kit.md": {
+      "errors": 46,
+      "ratio_per_1k_words": 26.301,
+      "words": 1749
+    },
+    "docs/reviews/ux-2026-09-20/orders.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 24.147,
+      "words": 1201
+    },
+    "docs/reviews/ux-2026-09-20/pricing.md": {
+      "errors": 30,
+      "ratio_per_1k_words": 21.459,
+      "words": 1398
+    },
+    "docs/reviews/ux-2026-09-20/product.md": {
+      "errors": 23,
+      "ratio_per_1k_words": 18.76,
+      "words": 1226
+    },
+    "docs/reviews/ux-2026-09-20/review.md": {
+      "errors": 13,
+      "ratio_per_1k_words": 20.44,
+      "words": 636
+    },
+    "docs/reviews/ux-2026-09-20/runs.md": {
+      "errors": 12,
+      "ratio_per_1k_words": 19.934,
+      "words": 602
+    },
+    "docs/reviews/ux-2026-09-20/sales.md": {
+      "errors": 29,
+      "ratio_per_1k_words": 22.979,
+      "words": 1262
+    },
+    "docs/reviews/ux-2026-09-20/shell.md": {
+      "errors": 27,
+      "ratio_per_1k_words": 18.519,
+      "words": 1458
+    },
+    "docs/reviews/ux-2026-09-20/shipping.md": {
+      "errors": 18,
+      "ratio_per_1k_words": 17.358,
+      "words": 1037
+    },
+    "docs/reviews/ux-2026-09-20/system.md": {
+      "errors": 66,
+      "ratio_per_1k_words": 21.222,
+      "words": 3110
+    },
     "docs/specs/audit-retirement.md": {
       "errors": 111,
       "ratio_per_1k_words": 17.414,
@@ -1847,8 +2017,8 @@
     },
     "docs/specs/verification-cost.md": {
       "errors": 38,
-      "ratio_per_1k_words": 9.418,
-      "words": 4035
+      "ratio_per_1k_words": 8.319,
+      "words": 4568
     },
     "harness/results/README.md": {
       "errors": 3,

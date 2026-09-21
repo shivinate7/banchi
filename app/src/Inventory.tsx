@@ -103,8 +103,12 @@ function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
 }
 
-/** The retire reason as the panel labels it — `given_away` is `Given away` in a sentence. */
-function reasonWord(reason: RetireReason): string {
+/** The retire reason as the panel labels it — `given_away` is `Given away` in a sentence.
+ *  Exported so Graveyard reads the one label table rather than the raw enum (UX review,
+ *  2026-09-20, "Retired · pulled"). Takes `string` rather than `RetireReason` because
+ *  `DepartedCard.retire_reason` is stored untyped (`types.ts:825`); an unrecognized value
+ *  still falls back to itself, same as the panel's own call. */
+export function reasonWord(reason: string): string {
   return REASONS.find((candidate) => candidate.reason === reason)?.label ?? reason
 }
 

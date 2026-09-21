@@ -31,8 +31,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { describeFailure, getOrders, getProductHistory, type Failure } from './server'
 import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange } from './types'
-import { Button, EmptyState, Icon, Notice, PageHeader, Pill } from './kit'
+import { Button, EmptyState, Notice, PageHeader, Pill } from './kit'
 import { money } from './money'
+import { saleDate } from './dates'
 import { sparkSegments } from './PriceHistory'
 import './ProductHistory.css'
 
@@ -187,7 +188,7 @@ function ProductChart({ range, fills, w = 640, h = 160 }: { range: ProductHistor
           className="producthistory-fill-mark"
           d={diamond(x(f.at.getTime()), y(f.unitPrice), 5)}
         >
-          <title>{`${f.at.toLocaleDateString()} — ${f.quantity} sold at ${money(f.unitPrice)}`}</title>
+          <title>{`${saleDate(f.at)} — ${f.quantity} sold at ${money(f.unitPrice)}`}</title>
         </path>
       ))}
     </svg>
@@ -204,7 +205,7 @@ function RangeSection({ range, fills }: { range: ProductHistoryRange; fills: rea
   return (
     <section className="producthistory-range">
       <header className="producthistory-range-head">
-        <div>
+        <div className="producthistory-range-title">
           <h3>{label}</h3>
           <span className="producthistory-machine">{range.range}</span>
         </div>
@@ -229,7 +230,7 @@ function Legend() {
   return (
     <div className="producthistory-legend">
       <span><span className="producthistory-legend-line" /> Market bucket (aggregate — many transactions this store never saw)</span>
-      <span><Icon name="dot" size={10} className="producthistory-legend-diamond" /> Your sale (exact — one order, one price)</span>
+      <span><span className="producthistory-legend-diamond" aria-hidden="true" /> Your sale (exact — one order, one price)</span>
     </div>
   )
 }
@@ -386,7 +387,7 @@ export function ProductHistory() {
                 <tbody>
                   {beforeHistory.map((f, i) => (
                     <tr key={i}>
-                      <td>{f.at.toLocaleDateString()}</td>
+                      <td>{saleDate(f.at)}</td>
                       <td><span className="bn-mono">{f.orderNumber}</span></td>
                       <td className="num">{f.quantity}</td>
                       <td className="num"><span className="bn-money">{money(f.unitPrice)}</span></td>

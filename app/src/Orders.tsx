@@ -907,15 +907,21 @@ function joinPhrases(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 }
 
-/** The lede, drawn once the ledger has answered — THE TOTAL ONLY (S3). The open/done
- *  breakdown and per-reason phrases this used to spell out are the same figures the tab
- *  pills and the filter select already draw, at 820 and 1440 both; keeping both was two
- *  sentences for one fact. */
-function summaryOf(counts: Record<OrderLineReason, number>): ReactNode {
+/** The lede, drawn once the ledger has answered — THE TOTAL, PLUS WHO IT IS SPREAD ACROSS
+ *  (UX review, 2026-09-20). The open/done breakdown and per-reason phrases this used to spell
+ *  out are the same figures the tab pills and the filter select already draw, at 820 and 1440
+ *  both; keeping both was two sentences for one fact — but a bare "551 lines" is a steep drop
+ *  from the loading sentence it replaces, and "line" is order-fulfilment jargon with no
+ *  reader outside this store. Naming the buyer count restores a little of what a first-time
+ *  reader needs, at the cost of D194's word-count ratchet: this raises `#/orders`' pinned
+ *  ceiling (`app/tests/copy-budget.json`) by a few words next time it is re-measured, which
+ *  needs `node scripts/copy-budget.mjs --pin` on the owner's word, same as any other addition. */
+function summaryOf(counts: Record<OrderLineReason, number>, buyerCount: number): ReactNode {
   const lineTotal = ORDER_REASONS.reduce((sum, reason) => sum + counts[reason], 0)
   return (
     <>
-      <strong>{lineTotal}</strong> line{lineTotal === 1 ? '' : 's'}
+      <strong>{lineTotal}</strong> line{lineTotal === 1 ? '' : 's'} across{' '}
+      <strong>{buyerCount}</strong> buyer{buyerCount === 1 ? '' : 's'}
     </>
   )
 }
@@ -2087,6 +2093,14 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const done = orders.filter((one) => !one.open)
   const counts = payload?.resolution.counts ?? null
   const populated = payload !== null && orders.length > 0
+  /* The lede's buyer count (UX review, 2026-09-20): "551 lines" alone is order-fulfilment
+   *  jargon with no context. `groupBuyers` is the one place two spellings of a buyer already
+   *  fold into one walk (D193), so counting its groups rather than a raw Set over `buyer`
+   *  gives the same number the buyer index itself would draw. */
+  const buyerCount = useMemo(() => {
+    const { recent, earlier } = groupBuyers(payload?.orders ?? [], Date.now())
+    return recent.length + earlier.length
+  }, [payload])
 
   /* The well: the textarea, "Read this paste", and — beside the list — "Fetch from TCGplayer".
      Under the empty state the fetch is the EmptyState's own action, so the well there carries
@@ -2163,7 +2177,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const lede =
     stage === 'pull'
       ? populated && counts !== null
-        ? summaryOf(counts)
+        ? summaryOf(counts, buyerCount)
         : 'Which copies each buyer gets, and where in the boxes they are. One press per copy, with twenty seconds to take it back.'
       : "TCGplayer's shipping export, sorted into three lanes."
 
@@ -3638,28 +3652,31 @@ function BuyerRow({
       <span className="bn-sr">{STATUS_PILL[status].label}</span>
       <span className="orders-index-main">
         <span className={`orders-index-number${unnamed ? ' bn-mono' : ''}`}>{heading}</span>
-        <span className="orders-index-meta">
-          {/* THE SECOND >1 SIGNAL LIVES IN THE DETAIL HEADER; THIS ONE IS THE FIRST. Drawn only
-              when there is something to count — a single order's row looks exactly as it always
-              did. */}
-          {group.orders.length > 1 ? (
-            <Pill size="sm" className="orders-index-count">
-              {group.orders.length} orders
-            </Pill>
-          ) : null}
-          {/* THE DATE IS THE PANEL'S OWN FACT NOW (nits review): drawn once, in `OrderPanel`,
-              rather than here and there at once for whichever buyer is selected. */}
-          {group.open.map((order) => {
-            const orderStatus = statusOf(order, answers.get(order.key) ?? null)
-            if (orderStatus === 'ready') return null
-            const pill = STATUS_PILL[orderStatus]
-            return (
-              <Pill key={order.key} size="sm" tone={pill.tone} icon={pill.icon}>
-                {pill.label}
+        {/* THE SECOND >1 SIGNAL LIVES IN THE DETAIL HEADER; THIS ONE IS THE FIRST. Drawn only
+            when there is something to count — a single order's row looks exactly as it always
+            did. The wrapping span itself is now conditional too (UX review, 2026-09-20): an
+            empty `.orders-index-meta` was emitted on every single-order row for no reason. */}
+        {group.orders.length > 1 || group.open.some((order) => statusOf(order, answers.get(order.key) ?? null) !== 'ready') ? (
+          <span className="orders-index-meta">
+            {group.orders.length > 1 ? (
+              <Pill size="sm" className="orders-index-count">
+                {group.orders.length} orders
               </Pill>
-            )
-          })}
-        </span>
+            ) : null}
+            {/* THE DATE IS THE PANEL'S OWN FACT NOW (nits review): drawn once, in `OrderPanel`,
+                rather than here and there at once for whichever buyer is selected. */}
+            {group.open.map((order) => {
+              const orderStatus = statusOf(order, answers.get(order.key) ?? null)
+              if (orderStatus === 'ready') return null
+              const pill = STATUS_PILL[orderStatus]
+              return (
+                <Pill key={order.key} size="sm" tone={pill.tone} icon={pill.icon}>
+                  {pill.label}
+                </Pill>
+              )
+            })}
+          </span>
+        ) : null}
       </span>
       <span className="orders-index-side">
         <span className="orders-index-figure">

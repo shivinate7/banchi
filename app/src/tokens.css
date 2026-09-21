@@ -52,7 +52,9 @@
 
   --bn-ink: #0f1217;             /* primary text, headings, money */
   --bn-ink-2: #3b414b;           /* secondary text, values in a key/value row */
-  --bn-ink-3: #6b7280;           /* metadata, captions, placeholders */
+  --bn-ink-3: #666c76;           /* metadata, captions, placeholders — 4.85:1 on --bn-bg,
+                                    4.55:1 on --bn-surface-2 (was #6b7280, 4.43:1 / 4.16:1,
+                                    failing this token's own documented job; measured 2026-09-20) */
   --bn-ink-4: #7f8791;           /* faint: icons, separators, disabled — 3.6:1 on the page. Data-bearing
                                     text reads ink-3; this is the floor a word may sit at, never a caption */
 
@@ -124,8 +126,28 @@
   --bn-fs-4xl: 36px;
   --bn-fs-5xl: 48px;
 
+  /* -015em and -02em were one intent written as two numbers: 36 raw uses of -0.02em sat
+     beside this token's own -0.015em (system review, 2026-09-20). Moved to -0.02em, the
+     value the larger group already carries, so a future sweep repoints fewer call sites to
+     reach one name than the other way round. */
   --bn-tracking-caps: 0.06em;
-  --bn-tracking-tight: -0.015em;
+  --bn-tracking-tight: -0.02em;
+
+  /* Four line-heights, not the fifteen the shipped CSS was hand-typing beside a token'd
+     font-size (system review, 2026-09-20). Named by role, not by value, so a future re-tune
+     changes what "tight" means rather than a number nobody can place:
+       --bn-lh-tight    1, 1.05, 1.1, 1.15   — a hero figure or a headline set close
+       --bn-lh-snug     1.2, 1.25, 1.3       — UI labels, controls, table rows
+       --bn-lh-base     1.35, 1.4, 1.45      — body default
+       --bn-lh-relaxed  1.5, 1.55, 1.6       — long-form, wrapped sentences
+     One more value shipped, a bare `line-height: 22` with no unit — not traced to a file in
+     this pass (the review that found it could not place it either); confirm it is real
+     before mapping it to anything. Values only, no call sites moved here — that sweep is a
+     separate lane's, once these names exist to sweep onto. */
+  --bn-lh-tight: 1.1;
+  --bn-lh-snug: 1.25;
+  --bn-lh-base: 1.4;
+  --bn-lh-relaxed: 1.55;
 
   /* ---- spacing ----------------------------------------------------------- */
   --bn-1: 4px;
@@ -139,12 +161,28 @@
   --bn-9: 48px;
   --bn-10: 64px;
 
+  /* Micro-spacing, below the 4px floor `--bn-1` sets (system review, 2026-09-20): 2px (68
+     uses) and 6px (77 uses) ship more often than several of the tokens above, re-invented
+     file by file because the scale had nowhere for them to live. Named as fractions of
+     `--bn-1` — a continuation of the same scale's own unit, not a second one — so
+     `--bn-0-5`/`--bn-0-75`/`--bn-1-5` read beside `--bn-1`..`--bn-10` rather than competing
+     with them. 3px (11 uses) is named alongside for the same reason, though less common. */
+  --bn-0-5: 2px;
+  --bn-0-75: 3px;
+  --bn-1-5: 6px;
+
   /* ---- radius ------------------------------------------------------------ */
   --bn-r-xs: 4px;
   --bn-r-sm: 6px;
   --bn-r: 8px;
   --bn-r-lg: 12px;
   --bn-r-xl: 16px;
+  /* One design decision made nine times independently (system review, 2026-09-20): 18px
+     splits the gap between `--bn-r-xl` (16) and `--bn-r-2xl` (22) at every one of its 9
+     call sites. Named rather than folded into either neighbour, since nine independent
+     agreements on the same value is itself the evidence it is a real step, not a rounding
+     error. */
+  --bn-r-2xl-sm: 18px;
   --bn-r-2xl: 22px;
   --bn-r-full: 999px;
 

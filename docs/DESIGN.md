@@ -41,7 +41,12 @@ NEUTRALS                        light        dark
 INK
 --bn-ink                        #0f1217      #eef0f4     body text, headings, money
 --bn-ink-2                      #3b414b      #b9bfc9     secondary text, a value in a key/value row
---bn-ink-3                      #6b7280      #838b98     metadata, captions, placeholders
+--bn-ink-3                      #666c76      #838b98     metadata, captions, placeholders. Light
+                                                         value darkened 2026-09-20: the old
+                                                         #6b7280 measured 4.43:1 on --bn-bg and
+                                                         4.16:1 on --bn-surface-2, failing this
+                                                         row's own job at 4.5:1. #666c76 clears
+                                                         both (4.85:1, 4.55:1).
 --bn-ink-4                      #7f8791      #707886     icons, separators, disabled — 3.6:1 light,
                                                          4.0:1 dark. THE FLOOR A WORD MAY SIT AT,
                                                          never a caption; data-bearing text is ink-3
@@ -83,10 +88,25 @@ TYPE                            Manrope 500-800 · Inter 400-700 · JetBrains Mo
 --bn-font-mono                  JetBrains Mono EVERY NUMBER AND EVERY MACHINE STRING
 --bn-fs-2xs … --bn-fs-5xl       10 11 12 13 14 16 18 22 28 36 48   (base is 14)
 --bn-tracking-caps  0.06em      the one tracking a word may take: uppercase metadata
---bn-tracking-tight -0.015em    display sizes only. A FIGURE IS NEVER TRACKED.
+--bn-tracking-tight -0.02em     display sizes only. A FIGURE IS NEVER TRACKED. Was -0.015em;
+                                moved 2026-09-20 to the value 36 untokened call sites already
+                                carried as a raw literal — one intent, one number now.
+--bn-lh-tight       1.1         a hero figure or a headline set close (covers 1, 1.05, 1.1, 1.15)
+--bn-lh-snug        1.25        UI labels, controls, table rows (covers 1.2, 1.25, 1.3)
+--bn-lh-base        1.4         body default (covers 1.35, 1.4, 1.45)
+--bn-lh-relaxed     1.55        long-form, wrapped sentences (covers 1.5, 1.55, 1.6)
+                                Named 2026-09-20 over 15 shipped literals; no line-height
+                                token existed before. Values only — call sites still read
+                                their own hand-typed number until a sweep moves them.
 
 SPACING                         --bn-1 … --bn-10 = 4 8 12 16 20 24 32 40 48 64
-RADIUS                          --bn-r-xs 4 · -sm 6 · --bn-r 8 · -lg 12 · -xl 16 · -2xl 22 · -full
+--bn-0-5     2px                micro-spacing below --bn-1's 4px floor, named 2026-09-20 (68
+                                uses shipped untokened)
+--bn-0-75    3px                micro-spacing, named 2026-09-20 (11 uses shipped untokened)
+--bn-1-5     6px                micro-spacing, named 2026-09-20 (77 uses shipped untokened)
+RADIUS                          --bn-r-xs 4 · -sm 6 · --bn-r 8 · -lg 12 · -xl 16 · -2xl-sm 18 · -2xl 22 · -full
+                                -2xl-sm named 2026-09-20: 18px split the xl/2xl gap at 9 call
+                                sites independently before this row existed.
 
 MOTION                          --bn-t-fast 120ms · --bn-t 200ms · --bn-t-slow 320ms
 --bn-ease                       cubic-bezier(.2,0,0,1)     the default
