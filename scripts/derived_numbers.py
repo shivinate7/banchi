@@ -241,16 +241,6 @@ REGISTRY: Dict[str, Derivation] = {
             "custom-property declarations in tokens.css's own LEGACY ALIASES block",
             tokens_css_legacy_alias_count,
         ),
-        Derivation(
-            "docs_map_byte_count",
-            "docs/map.py's own size in bytes",
-            docs_map_byte_count,
-        ),
-        Derivation(
-            "docs_decisions_byte_count",
-            "total bytes across every file under docs/decisions/",
-            docs_decisions_byte_count,
-        ),
     )
 }
 

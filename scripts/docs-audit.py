@@ -1691,7 +1691,20 @@ def check_derived_numbers(report: Report, docs: List[Path], root: Path = ROOT) -
 
     findings: List[Finding] = []
     scanned = 0
+    # ONE DEFECT REPORTS ONCE. `CLAUDE.md` is reached by three symlinks — `AGENTS.md`,
+    # `code-card-fork/CLAUDE.md` and `code-card-fork/AGENTS.md` (D135) — so a single drifted
+    # marker was published four times on CI, which reads as four defects and is one. A row
+    # that multiplies its own findings by the repo's link layout is noise about itself.
+    # Resolved paths, so a link and its target collapse to the same entry.
+    seen_real: Set[str] = set()
     for doc in docs:
+        try:
+            real = str(Path(doc).resolve())
+        except OSError:
+            real = str(doc)
+        if real in seen_real:
+            continue
+        seen_real.add(real)
         if not exists(doc):
             continue
         for lineno, line in enumerate(read(doc).splitlines(), start=1):

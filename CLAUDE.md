@@ -819,8 +819,7 @@ that evening than every verification target combined (`docs/specs/verification-c
 - `docs/map.py` — the repo as data: built, TBD, and which decisions govern each file. Read it
   before editing under `app/`, `server/`, `pipeline/`, `identify/`, `store/`, `geometry/` or
   `cli/`. Audited by `make docs-audit` — a file added with no entry fails the commit.
-  `make map` is how you look at it (D80). The file is about
-  730,000<!-- derived:docs_map_byte_count --> bytes. Reading it whole spends most of a
+  `make map` is how you look at it (D80). The file is large. Reading it whole spends most of a
   context window. Its token cost is about a quarter of that byte count, at roughly four
   bytes per token. That ratio is an approximation and never a measured count. `make docs-audit`'s `map sections` row fails a commit
   adding a section with no reader.
@@ -833,8 +832,7 @@ that evening than every verification target combined (`docs/specs/verification-c
   already have one, not built yet. `make docs-audit`'s `build order mirror` row
   reconciles both files, in both directions.
 - `docs/decisions/` — settled decisions and why, one file per entry, indexed by
-  `scripts/decisions_corpus.py`. Read before redesigning. **Not `@`-loaded** (D60): the
-  directory is about 2,200,000<!-- derived:docs_decisions_byte_count --> bytes. Loading it
+  `scripts/decisions_corpus.py`. Read before redesigning. **Not `@`-loaded** (D60): the directory is large. Loading it
   all costs about a quarter
   of that byte count in tokens, before any work. That ratio is an approximation and never a
   measured count.
