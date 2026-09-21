@@ -91,7 +91,7 @@ def test_quantity_and_state() -> None:
 
 def test_name_with_reading() -> None:
     inventory, archive, ledger = base_fixture()
-    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now=0)
+    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now="2026-01-01T00:00:00+00:00")
     series = {s.sku: s for s in report.series}
     ok("PRICED1" in series, "a name with a reading produces a series")
     points = series["PRICED1"].points
@@ -106,7 +106,7 @@ def test_name_with_reading() -> None:
 
 def test_name_with_no_reading() -> None:
     inventory, archive, ledger = base_fixture()
-    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now=0)
+    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now="2026-01-01T00:00:00+00:00")
     skus = {s.sku for s in report.series}
     ok("UNPRICED1" not in skus, "an unpriced name draws no series row")
     ok(report.unmarked_count == 1, "the unpriced name is counted, never a zero",
@@ -125,7 +125,7 @@ def test_range_gap_breaks_the_line() -> None:
         "GAP1:month:2026-08-05": _bucket("GAP1", "month", 1, "2026-08-05", "9.00"),
     })
     ledger = Ledger()
-    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now=0)
+    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now="2026-01-01T00:00:00+00:00")
     points = report.series[0].points
     ok(len(points) == 3, "all three archived points are carried, never dropped",
        str(points))
@@ -159,7 +159,7 @@ def test_priced_none_bucket_carries_no_value() -> None:
         "NONE1:month:2026-08-03": _bucket("NONE1", "month", 1, "2026-08-03", "7.00"),
     })
     ledger = Ledger()
-    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now=0)
+    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now="2026-01-01T00:00:00+00:00")
     points = report.series[0].points
     ok(len(points) == 3, "the priced-None bucket still carries its own row", str(points))
     ok(points[1].value is None, "a priced-None bucket carries no value, never a zero")
@@ -175,7 +175,7 @@ def test_sealed_excluded_counted() -> None:
     inventory, archive, ledger = base_fixture()
     count = holdings.sealed_excluded_count(inventory, ledger)
     ok(count == 1, "the sealed ledger SKU is counted", str(count))
-    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now=0)
+    report = holdings.build_holdings_report(inventory, archive, ledger, "month", now="2026-01-01T00:00:00+00:00")
     ok(report.sealed_excluded_count == 1, "the report carries the same sealed count",
        str(report.sealed_excluded_count))
     skus = {s.sku for s in report.series}
@@ -208,7 +208,7 @@ def mutation_gap_interpolates() -> None:
             "GAP1:month:2026-08-01": _bucket("GAP1", "month", 1, "2026-08-01", "5.00"),
             "GAP1:month:2026-08-05": _bucket("GAP1", "month", 1, "2026-08-05", "9.00"),
         })
-        report = holdings.build_holdings_report(inventory, archive, Ledger(), "month", now=0)
+        report = holdings.build_holdings_report(inventory, archive, Ledger(), "month", now="2026-01-01T00:00:00+00:00")
         defeated = report.series[0].points[1].gap_before is False
         ok(defeated, "MUTATION: forcing `_adjacent` to always answer True defeats the gap "
            "guard, as expected — the real guard above must never do this")
@@ -223,7 +223,7 @@ def mutation_sealed_exclusion_dropped() -> None:
     holdings.sealed_excluded_count = lambda inventory, ledger: 0
     try:
         inventory, archive, ledger = base_fixture()
-        report = holdings.build_holdings_report(inventory, archive, ledger, "month", now=0)
+        report = holdings.build_holdings_report(inventory, archive, ledger, "month", now="2026-01-01T00:00:00+00:00")
         defeated = report.sealed_excluded_count == 0
         ok(defeated, "MUTATION: forcing the sealed count to always answer 0 defeats the "
            "exclusion guard, as expected — the real guard above must never do this")

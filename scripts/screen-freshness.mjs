@@ -219,6 +219,10 @@ const RECORDED = {
     // fallback only for a SKU the archive has never swept. Read-only, like every other
     // entry in this list.
     'getProductHistory',
+    // `#/revenue`'s "on the shelf" (D236 on screen): unsold stock, valued off the
+    // price-history archive, one range at a time. A plain read, same shape as
+    // `getSoldPrices` above and never merged with it.
+    'getHoldingsValue',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',

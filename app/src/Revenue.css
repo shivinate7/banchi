@@ -65,6 +65,7 @@
   stroke-linejoin: round;
   stroke-linecap: round;
 }
+.revenue-spark circle { fill: var(--bn-accent); }
 
 .revenue-spark-axis {
   display: flex;
@@ -218,8 +219,50 @@ th.num .revenue-sort { flex-direction: row-reverse; }
   vertical-align: bottom;
 }
 
+.revenue-holdings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding-top: var(--bn-4);
+  border-top: 1px solid var(--bn-line);
+}
+
+.revenue-holdings-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+
+.revenue-holdings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+}
+
+.revenue-holdings-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+}
+.revenue-holdings-figure .bn-money { font-size: var(--bn-fs-xl); font-family: var(--bn-font-display); color: var(--bn-ink); }
+
+.revenue-holdings-note,
+.revenue-holdings-meta {
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-sm);
+  margin: 0;
+}
+
+.revenue-holdings-spark-empty {
+  height: 72px;
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-surface-2);
+}
+
 @media (max-width: 767px) {
   .revenue-products-head { flex-direction: column; align-items: stretch; }
+  .revenue-holdings-head { flex-direction: column; align-items: stretch; }
   .revenue-table { font-size: var(--bn-fs-sm); }
   /* Measured: the sort icon's `flex-shrink: 0` fix (above) traded 11px of horizontal page
    * scroll at 390px for a legible icon — the icon was never the thing to give up. Narrower

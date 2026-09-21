@@ -382,7 +382,7 @@ both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
 138<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-294<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+295<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
@@ -1098,6 +1098,7 @@ D246 `commit path writes` reads the code, not `checks.py`'s own sentence about i
 D247 Fifteen guard self-tests are path-gated, and no target was found dead
 D248 The harness leaves turn end, and code cards fold into one rules file
 D249 Recognition by the complement, never by the expected pattern
+D250 Unsold stock reaches `#/revenue`, and D236's wire is spent exactly as written
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
