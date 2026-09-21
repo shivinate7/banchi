@@ -24,9 +24,14 @@
   padding: var(--bn-4) 0;
 }
 
+/* BOLD, LIKE EVERY OTHER VERDICT IN THIS KIT (defect fix, UX review 2026-09-20): the display
+ * face's regular cut rendered at browser-default 400 with no `font-weight` declared, thinner
+ * than `.bn-title` (800), `.bn-empty-title` (700), `.bn-section-title` (700) and
+ * `.codes-task-title` (700) — on the largest text on this screen's most important line. */
 .revenue-verdict-said {
   font-size: var(--bn-fs-xl);
   font-family: var(--bn-font-display);
+  font-weight: 700;
   color: var(--bn-ink);
   margin: 0;
 }
@@ -70,9 +75,14 @@
   margin-top: var(--bn-1);
 }
 
+/* ONE GRID, SHARED BY EVERY ROW. Each `.revenue-month-row` used to be its own independent
+ * grid, so its `auto` money column sized to that row's own figure and the column's left edge
+ * drifted row to row — a stacked list of dollar figures that was not a column. `subgrid` below
+ * makes every row read its column widths from here instead of inventing its own, so five
+ * money figures of five different digit-counts land on one shared edge. */
 .revenue-month-rows {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
 }
 
 /* A ROW IS NOW A BUTTON (cross-filtering, D217) rather than a `<div>`, so the
@@ -81,7 +91,8 @@
  * filter and the CURRENT, still-forming bucket (`data-current`). */
 .revenue-month-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   gap: var(--bn-3);
   align-items: baseline;
   width: 100%;
@@ -100,6 +111,7 @@
 .revenue-month-row { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
 
 .revenue-month-name { color: var(--bn-ink-2); display: inline-flex; align-items: center; gap: var(--bn-2); }
+.revenue-month-gross { text-align: right; }
 .revenue-month-orders { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); text-align: right; min-width: 6ch; }
 
 .revenue-products {

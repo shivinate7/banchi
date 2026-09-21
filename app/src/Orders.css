@@ -474,7 +474,9 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--bn-ink);
-  margin-right: 3px;
+  /* Was 3px, one pixel short of every other figure-to-label clearance on this screen
+     (`.orders-line-remaining b`, below) with no comment saying why — UX review, 2026-09-20. */
+  margin-right: var(--bn-1);
 }
 .orders-order-figure i { font-style: normal; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .orders-order-figure i::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
@@ -518,7 +520,7 @@
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--bn-ink);
-  margin-right: 4px;
+  margin-right: var(--bn-1);
 }
 .orders-line-pulled { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; margin-top: 1px; }
 .orders-line-figure-done { justify-content: center; }

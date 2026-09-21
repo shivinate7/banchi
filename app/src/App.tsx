@@ -320,9 +320,42 @@ function useTheme(): [Theme, () => void] {
 
 /* ---- rail state ----------------------------------------------------------------------
    A browser with no opinion gets one from its own width: below 1280 the rail is the honest
-   default, and above it there is room for the words. */
+   default, and above it there is room for the words. THE NUMBER LIVES IN `App.css`, AS
+   `--bn-rail-break-px` — read here and built into a `matchMedia` query at runtime, so the
+   1280 the rail answers to and the 1280 a screen's own stylesheet might reference are one
+   value with one home, not two numbers that could drift apart under a re-tune. (This is a
+   design choice, not something `scripts/js-breakpoints.py`'s D123 row required: that row
+   only pairs a `matchMedia`-shaped string literal against a CSS `@media` block, and neither
+   the old `window.innerWidth < 1280` nor this file's interpolated query ever gave it one to
+   pair — the row reports 0 breakpoints from this file's rail code, before and after.)
+   A lazy initializer alone only ever ran once, at mount, so a window dragged narrower kept
+   whatever density it started in until a reload; `useRailNarrow` (below) is a live
+   `matchMedia` listener instead, the same shape `useMedia`/`TABLET_RAIL` already use. Once a
+   person has toggled the rail by hand, `storedRail()` is no longer null and wins outright: a
+   resize never overrides an explicit choice. */
+function railBreakQuery(): string {
+  const raw = typeof window === 'undefined'
+    ? ''
+    : getComputedStyle(document.documentElement).getPropertyValue('--bn-rail-break-px')
+  const px = Number.parseInt(raw, 10)
+  return `(max-width: ${(Number.isFinite(px) && px > 0 ? px : 1280) - 1}px)`
+}
 function readRail(): boolean {
-  return storedRail() ?? window.innerWidth < 1280
+  if (typeof window === 'undefined') return storedRail() ?? false
+  return storedRail() ?? window.matchMedia(railBreakQuery()).matches
+}
+/** Tracks the rail breakpoint live, across a resize, with no width literal of its own — see
+    `readRail` above. */
+function useRailNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(railBreakQuery()).matches)
+  useEffect(() => {
+    const mql = window.matchMedia(railBreakQuery())
+    const on = () => setNarrow(mql.matches)
+    on()
+    mql.addEventListener('change', on)
+    return () => mql.removeEventListener('change', on)
+  }, [])
+  return narrow
 }
 
 /* ---- error boundary ------------------------------------------------------------------ */
@@ -1350,6 +1383,15 @@ export function App() {
   const arm = useLeader(chrome, path)
   useRouteStep(chrome, path)
   const [rail, setRail] = useState(readRail)
+  // The rail breakpoint is a WIDTH DEFAULT, not a one-time read: a stored preference
+  // (`storedRail()` non-null) always wins and is never overridden here, but a browser with no
+  // opinion follows a live resize rather than freezing at whatever density the tab happened to
+  // mount at.
+  const railNarrowNow = useRailNarrow()
+  useEffect(() => {
+    if (storedRail() !== null) return
+    setRail(railNarrowNow)
+  }, [railNarrowNow])
   const [theme, toggleTheme] = useTheme()
   const [palette, setPalette] = useState(false)
   const [drawer, setDrawer] = useState(false)

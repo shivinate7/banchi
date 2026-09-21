@@ -4,6 +4,7 @@ import { describeFailure, getHoldingsValue, getOrders, getSoldPrices, type Failu
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderLineWire, OrderRow } from './types'
 import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented } from './kit'
 import { money, moneyGrouped } from './money'
+import { saleDate } from './dates'
 import { sparkSegments } from './PriceHistory'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
@@ -1034,7 +1035,7 @@ export function Revenue() {
                     </Pill>
                   ) : null}
                 </span>
-                <span className="bn-money">{moneyGrouped(b.gross)}</span>
+                <span className="bn-money revenue-month-gross">{moneyGrouped(b.gross)}</span>
                 <span className="revenue-month-orders">{`${b.orders.toLocaleString()} ${b.orders === 1 ? 'order' : 'orders'}`}</span>
               </button>
             ))}
@@ -1139,13 +1140,15 @@ export function Revenue() {
                       </td>
                       <td>{row.nameIsSku ? <span className="bn-mono">{row.name}</span> : row.name}</td>
                       <td className="num">{row.copies.toLocaleString()}</td>
-                      {/* PLAIN, NOT GROUPED — a per-product row reads at three or four digits,
-                          the same size `money()` is already right for everywhere else it is used,
-                          and a comma here would be the only one in a column of otherwise-plain
-                          figures. Grouping is for the two headline totals, not every number on
-                          the screen. */}
-                      <td className="num"><span className="bn-money">{money(row.gross)}</span></td>
-                      <td>{row.last.toLocaleDateString()}</td>
+                      {/* GROUPED, LIKE THE COPIES CELL BESIDE IT (defect fix, UX review
+                          2026-09-20). The un-grouped form was argued as "three or four digits,"
+                          but a real product in this store's own data already reads
+                          `$4411.80` — four digits before the decimal, no different from the
+                          five- or six-figure case `moneyGrouped()`'s own comment names as the
+                          comma's reason to exist. Left plain, this cell disagreed with the
+                          Copies column on the same row about whether a big number gets one. */}
+                      <td className="num"><span className="bn-money">{moneyGrouped(row.gross)}</span></td>
+                      <td>{saleDate(row.last)}</td>
                       {prices === null ? null : (
                         <td className="revenue-market">
                           {compare === null ? (
@@ -1177,7 +1180,7 @@ export function Revenue() {
                             <tbody>
                               {lines.map((s, i) => (
                                 <tr key={`${s.order}-${i}`}>
-                                  <td>{s.at.toLocaleDateString()}</td>
+                                  <td>{saleDate(s.at)}</td>
                                   <td><span className="bn-mono">{s.orderNumber}</span></td>
                                   <td className="num">{s.quantity.toLocaleString()}</td>
                                   <td className="num"><span className="bn-money">{money(s.unitPrice)}</span></td>

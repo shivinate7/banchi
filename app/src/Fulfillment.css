@@ -16,6 +16,24 @@
   --ff-col-wide: 1080px;
   --ff-pad: var(--bn-6);
 
+  /* THE FULFILLER'S OWN TYPE REGISTER (system review, 2026-09-20). Seven sizes — 20, 24, 26,
+     32, 34, 38, 56px — shipped here as bare literals, registered nowhere. Kept SEPARATE from
+     `--bn-fs-*` rather than folded into it: the deltas between these seven (+4, +2, +6, +2,
+     +4, +18) do not cluster with the system scale's own steps, and the reason they exist at
+     all is this one screen's own floor — read at arm's length, under pressure, per this
+     file's header comment — not a size a second screen would reach for. Naming them here
+     keeps that intent visible instead of quietly widening the shared vocabulary for a case
+     that is exceptional to one screen. Four OTHER literals in this file exactly duplicate an
+     existing `--bn-fs-*` step (22 = 2xl, 28 = 3xl, 36 = 4xl, 48 = 5xl) and read that token
+     directly rather than joining this register — see the call sites below. */
+  --ff-fs-base: 20px;
+  --ff-fs-md: 24px;
+  --ff-fs-lg: 26px;
+  --ff-fs-xl: 32px;
+  --ff-fs-2xl: 34px;
+  --ff-fs-3xl: 38px;
+  --ff-fs-4xl: 56px;
+
   position: relative;
   min-height: 100vh;
   min-height: 100dvh;
@@ -23,7 +41,7 @@
   background: var(--bn-bg);
   color: var(--bn-ink);
   font-family: var(--bn-font-ui);
-  font-size: 20px;
+  font-size: var(--ff-fs-base);
   line-height: 1.5;
   /* NO transform and NO animation on this element: the sheet and the big photo are fixed
      children of it, and a transformed ancestor would pin them to the page, not the screen. */
@@ -94,7 +112,7 @@
 .fulfillment-say,
 .ff-say {
   font-family: var(--bn-font-ui);
-  font-size: 20px;
+  font-size: var(--ff-fs-base);
   line-height: 1.5;
   color: var(--bn-ink);
   max-width: 36em;
@@ -115,7 +133,7 @@
 .ff-mark { flex: none; filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.28)); }
 .ff-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ff-greeting {
-  font-size: 20px;
+  font-size: var(--ff-fs-base);
   font-weight: 500;
   line-height: 1.3;
   color: var(--bn-ink-2);
@@ -123,14 +141,14 @@
 .fulfillment-title,
 .ff-title {
   font-family: var(--bn-font-display);
-  font-size: 38px;
+  font-size: var(--ff-fs-3xl);
   font-weight: 800;
   letter-spacing: -0.025em;
   line-height: 1.1;
   color: var(--bn-ink);
 }
 @media (max-width: 767px) {
-  .fulfillment-title, .ff-title { font-size: 32px; }
+  .fulfillment-title, .ff-title { font-size: var(--ff-fs-xl); }
 }
 
 .ff-h2 {
@@ -138,7 +156,7 @@
   align-items: center;
   gap: var(--bn-3);
   font-family: var(--bn-font-display);
-  font-size: 24px;
+  font-size: var(--ff-fs-md);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -189,7 +207,7 @@
 }
 .ff-today-num {
   font-family: var(--bn-font-display);
-  font-size: 56px;
+  font-size: var(--ff-fs-4xl);
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -198,7 +216,7 @@
 }
 .ff-today-words {
   font-family: var(--bn-font-display);
-  font-size: 28px;
+  font-size: var(--bn-fs-3xl);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -219,7 +237,7 @@
   background: var(--bn-ink);
   color: var(--bn-bg);
   font-family: var(--bn-font-ui);
-  font-size: 22px;
+  font-size: var(--bn-fs-2xl);
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
@@ -232,8 +250,8 @@
 .ff-start:hover .ff-start-arrow { transform: translateX(3px); }
 @media (max-width: 559px) {
   .ff-today { padding: var(--bn-5); }
-  .ff-today-num { font-size: 48px; }
-  .ff-today-words { font-size: 24px; }
+  .ff-today-num { font-size: var(--bn-fs-5xl); }
+  .ff-today-words { font-size: var(--ff-fs-md); }
   .ff-start { width: 100%; }
 }
 
@@ -249,16 +267,8 @@
   max-width: none;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
-.ff-today-none-icon {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--bn-ok-tint);
-  color: var(--bn-ok);
-}
+/* Was `.ff-today-none-icon`, a local reimplementation of the kit's own shape and colour
+   logic — promoted to `.bn-icon-badge bn-icon-badge--ok` (system review, 2026-09-20). */
 
 /* ---- search: the hero ----------------------------------------------------------------- */
 .ff-search {
@@ -272,7 +282,7 @@
 .ff .search-field { width: 100%; }
 .ff .search-field-label {
   font-family: var(--bn-font-ui);
-  font-size: 22px;
+  font-size: var(--bn-fs-2xl);
   font-weight: 700;
   line-height: 1.35;
   color: var(--bn-ink);
@@ -282,7 +292,7 @@
   position: relative;
   min-height: 64px;
   padding: 0 var(--bn-5) 0 60px;
-  border-radius: 18px;
+  border-radius: var(--bn-r-2xl-sm);
   border: 2px solid var(--bn-line-strong);
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-2);
@@ -314,7 +324,7 @@
 .ff .search-field-input {
   min-height: 60px;
   font-family: var(--bn-font-ui);
-  font-size: 24px;
+  font-size: var(--ff-fs-md);
   font-weight: 500;
   padding: var(--bn-3) 0;
   color: var(--bn-ink);
@@ -324,7 +334,7 @@
 .ff-clear {
   width: 64px;
   height: 64px;
-  border-radius: 18px;
+  border-radius: var(--bn-r-2xl-sm);
   display: grid;
   place-items: center;
   background: var(--bn-surface);
@@ -351,7 +361,7 @@
   color: var(--bn-ink);
   box-shadow: var(--bn-shadow-1);
   font-family: var(--bn-font-ui);
-  font-size: 20px;
+  font-size: var(--ff-fs-base);
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
@@ -369,7 +379,7 @@
   align-items: center;
   gap: var(--bn-4);
   padding: var(--bn-4) var(--bn-5);
-  border-radius: 18px;
+  border-radius: var(--bn-r-2xl-sm);
   background: var(--bn-surface);
   box-shadow: inset 0 0 0 2px var(--bn-warn), var(--bn-shadow-1);
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
@@ -384,22 +394,15 @@
   text-align: center;
   gap: var(--bn-4);
   padding: var(--bn-9) var(--bn-6);
-  border-radius: 22px;
+  border-radius: var(--bn-r-2xl);
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
 }
-.ff-empty-art {
-  width: 72px;
-  height: 72px;
-  border-radius: 22px;
-  display: grid;
-  place-items: center;
-  background: var(--bn-accent-tint);
-  color: var(--bn-accent);
-}
+/* Was `.ff-empty-art`, a local 72px reimplementation of the kit's own shape and colour logic
+   — promoted to `.bn-empty-art bn-empty-art-lg` (system review, 2026-09-20). */
 .ff-empty-title {
   font-family: var(--bn-font-display);
-  font-size: 26px;
+  font-size: var(--ff-fs-lg);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.25;
@@ -413,7 +416,7 @@
   position: relative;
   display: block;
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: var(--bn-r-2xl-sm);
   background: var(--bn-surface-2);
 }
 .ff-skel::after {
@@ -465,7 +468,7 @@
 /* ---- Orders to fill: the walk, order by order ------------------------------------------ */
 .ff-order-list { display: flex; flex-direction: column; gap: var(--bn-4); }
 .ff-order {
-  border-radius: 18px;
+  border-radius: var(--bn-r-2xl-sm);
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
   overflow: clip;
@@ -492,7 +495,7 @@
   color: var(--bn-ink);
   box-shadow: inset 0 0 0 2px var(--bn-line-strong);
   font-family: var(--bn-font-display);
-  font-size: 22px;
+  font-size: var(--bn-fs-2xl);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -513,7 +516,7 @@
 .ff-browse-lede { color: var(--bn-ink-2); margin: calc(-1 * var(--bn-2)) 0 var(--bn-4); }
 .ff-boxes { display: flex; flex-direction: column; gap: var(--bn-3); }
 .ff-box {
-  border-radius: 18px;
+  border-radius: var(--bn-r-2xl-sm);
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
   overflow: clip;
@@ -543,12 +546,12 @@
   background: var(--bn-ink);
   color: var(--bn-bg);
   font-family: var(--bn-font-display);
-  font-size: 22px;
+  font-size: var(--bn-fs-2xl);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 .ff-box-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0; }
-.ff-box-name { font-weight: 700; font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
+.ff-box-name { font-weight: 700; font-size: var(--bn-fs-2xl); line-height: 1.3; overflow-wrap: anywhere; }
 /* D218: the box's own name is its own span; the seam is CSS. */
 .ff-box-namepart::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .ff-box-count { color: var(--bn-ink-2); line-height: 1.3; }
@@ -594,7 +597,7 @@
 .ff-row .ff-row-name {
   grid-area: name;
   font-family: var(--bn-font-display);
-  font-size: 26px;
+  font-size: var(--ff-fs-lg);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -607,7 +610,7 @@
 .fulfillment-place {
   display: block;
   font-family: var(--bn-font-display);
-  font-size: 32px;
+  font-size: var(--ff-fs-xl);
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.02em;
@@ -615,9 +618,9 @@
   color: var(--bn-ink);
   overflow-wrap: break-word;
 }
-.ff-row .ff-row-place { font-size: 32px; font-weight: 600; color: var(--bn-ink-2); }
+.ff-row .ff-row-place { font-size: var(--ff-fs-xl); font-weight: 600; color: var(--bn-ink-2); }
 .ff-row .ff-row-place .ff-place-num { color: var(--bn-ink); font-weight: 800; }
-.fulfillment-place-large { font-size: 36px; font-weight: 800; }
+.fulfillment-place-large { font-size: var(--bn-fs-4xl); font-weight: 800; }
 .ff-place-part { white-space: nowrap; }
 .ff-place-key { font-weight: 600; color: var(--bn-ink-2); }
 .ff-place-num { font-weight: 800; color: var(--bn-ink); }
@@ -652,7 +655,7 @@
 .fulfillment-name,
 .ff-card-name {
   font-family: var(--bn-font-display);
-  font-size: 34px;
+  font-size: var(--ff-fs-2xl);
   font-weight: 800;
   letter-spacing: -0.025em;
   line-height: 1.15;
@@ -721,18 +724,8 @@
   gap: var(--bn-2);
   color: var(--bn-ink-2);
 }
-.ff-photo-missing {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--bn-3);
-  padding: var(--bn-8) var(--bn-5);
-  border-radius: 22px;
-  background: var(--bn-surface);
-  box-shadow: inset 0 0 0 2px var(--bn-line-strong);
-  color: var(--bn-ink-2);
-}
+/* Was `.ff-photo-missing`, a local reimplementation of a bordered icon-and-text well —
+   promoted to the kit's `.bn-empty-well` (system review, 2026-09-20), same declarations. */
 
 .ff-where {
   display: flex;
@@ -784,7 +777,7 @@
 .ff .position-bar-fulfiller .position-bar-marker::after { display: none; }
 .ff .position-bar-fulfiller .position-bar-text {
   font-family: var(--bn-font-ui);
-  font-size: 20px;
+  font-size: var(--ff-fs-base);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--bn-ink-2);
@@ -811,7 +804,7 @@
   background: var(--bn-surface);
   box-shadow: inset 0 0 0 2px var(--bn-line-strong);
   font-family: var(--bn-font-ui);
-  font-size: 24px;
+  font-size: var(--ff-fs-md);
   font-weight: 700;
   line-height: 1.2;
   color: var(--bn-ink);
@@ -837,7 +830,14 @@
   animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards;
 }
 
-/* The quiet first step on a search result (the fill is reserved for the copy past it). */
+/* The one action on this card (system review, 2026-09-20): it used to be the quiet outline
+   variant — a 2px inset border, no fill — despite being the largest element on the panel and
+   the only thing to press. On the light ground that read as merely secondary; on the dark
+   ground the same 2px `--bn-ink` border is near-white on near-black and drew as a bright
+   thin rectangle, closer to an alert outline than a button. A solid fill fixes both, in the
+   same INK-not-accent register `.ff-start` already uses above: the accent fill stays reserved
+   for the one press that writes (the sale, via `--ff-fill`); this step only reveals that
+   press, so it reads as loud without borrowing the write action's own colour. */
 .ff-step {
   display: flex;
   align-items: center;
@@ -846,17 +846,17 @@
   width: 100%;
   min-height: 64px;
   padding: var(--bn-3) var(--bn-5);
-  border-radius: 16px;
-  background: var(--bn-surface);
-  box-shadow: inset 0 0 0 2px var(--bn-ink);
-  color: var(--bn-ink);
+  border-radius: var(--bn-r-xl);
+  background: var(--bn-ink);
+  box-shadow: var(--bn-shadow-2);
+  color: var(--bn-bg);
   font-family: var(--bn-font-ui);
-  font-size: 22px;
+  font-size: var(--bn-fs-2xl);
   font-weight: 700;
   line-height: 1.2;
   transition: background-color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-.ff-step:hover { background: var(--bn-surface-3); transform: translateY(-1px); box-shadow: inset 0 0 0 2px var(--bn-ink), var(--bn-shadow-2); }
+.ff-step:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-3); }
 .ff-step:active { transform: scale(0.985); }
 
 /* The card panel on a wide screen: photograph left, everything he reads in a column beside it.
@@ -909,14 +909,14 @@
 .ff .card-locations-head { display: flex; flex-direction: column; gap: 2px; padding: 0 var(--bn-1); }
 .ff .card-locations-name {
   font-family: var(--bn-font-display);
-  font-size: 34px;
+  font-size: var(--ff-fs-2xl);
   font-weight: 800;
   letter-spacing: -0.025em;
   line-height: 1.15;
   color: var(--bn-ink);
   overflow-wrap: anywhere;
 }
-.ff .card-locations-head > .card-locations-say { font-size: 20px; line-height: 1.5; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.ff .card-locations-head > .card-locations-say { font-size: var(--ff-fs-base); line-height: 1.5; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 /* The owner's listing count is not his fact. */
 .ff .card-locations-head > .card-locations-say:last-child { display: none; }
 
@@ -944,7 +944,7 @@
 }
 .ff .card-locations-place-large {
   font-family: var(--bn-font-display);
-  font-size: 32px;
+  font-size: var(--ff-fs-xl);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -952,7 +952,7 @@
   color: var(--bn-ink);
   margin-top: var(--bn-1);
 }
-.ff .card-locations-copy > .card-locations-say { font-size: 20px; line-height: 1.5; color: var(--bn-ink-2); }
+.ff .card-locations-copy > .card-locations-say { font-size: var(--ff-fs-base); line-height: 1.5; color: var(--bn-ink-2); }
 /* "between X and Y" arrives lowercase; a sentence he reads starts with a capital. */
 .ff .card-locations-copy > .card-locations-say::first-letter { text-transform: uppercase; }
 /* "In the boxes." says nothing to him: it is the sentence right before the action. */
@@ -1015,7 +1015,7 @@
 .ff-found { display: flex; flex-direction: column; gap: var(--bn-4); }
 /* The disclosure is a box row: the count where the box number goes, a sentence, a chevron. */
 .ff-more {
-  border-radius: 18px;
+  border-radius: var(--bn-r-2xl-sm);
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
   overflow: clip;
@@ -1047,12 +1047,12 @@
   color: var(--bn-ink);
   box-shadow: inset 0 0 0 2px var(--bn-line-strong);
   font-family: var(--bn-font-display);
-  font-size: 22px;
+  font-size: var(--bn-fs-2xl);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 .ff-more-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-.ff-more-title { font-weight: 700; font-size: 22px; line-height: 1.3; }
+.ff-more-title { font-weight: 700; font-size: var(--bn-fs-2xl); line-height: 1.3; }
 .ff-more-where { color: var(--bn-ink-2); line-height: 1.3; }
 .ff-more-chev { flex: none; color: var(--bn-ink-2); transition: transform var(--bn-t) var(--bn-ease-spring); }
 .ff-more-head[aria-expanded='true'] .ff-more-chev { transform: rotate(180deg); }
@@ -1115,18 +1115,18 @@
 
 /* ---- phone: the photograph reaches the card's edges, so it clears 320px ------------------- */
 @media (max-width: 479px) {
-  .ff .card-locations-copy { padding: var(--bn-4); border-radius: 18px; }
+  .ff .card-locations-copy { padding: var(--bn-4); border-radius: var(--bn-r-2xl-sm); }
   .ff .card-locations-photo {
     width: calc(100% + 2 * var(--bn-4));
     max-width: none;
     margin: calc(-1 * var(--bn-4)) calc(-1 * var(--bn-4)) 0;
-    border-radius: 18px 18px 0 0;
+    border-radius: var(--bn-r-2xl-sm) var(--bn-r-2xl-sm) 0 0;
     box-shadow: none;
   }
   .ff-where { padding: var(--bn-4) var(--bn-5); }
-  .fulfillment-place-large { font-size: 34px; }
+  .fulfillment-place-large { font-size: var(--ff-fs-2xl); }
   .fulfillment-row, .ff-row { padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); }
-  .ff-row-place { font-size: 32px; }
+  .ff-row-place { font-size: var(--ff-fs-xl); }
   .ff-box-head { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
 }
 
@@ -1194,7 +1194,7 @@
 .ff-receipt-text { grid-area: text; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ff-receipt-said {
   font-family: var(--bn-font-display);
-  font-size: 24px;
+  font-size: var(--ff-fs-md);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -1222,7 +1222,7 @@
   background: var(--bn-ink);
   color: var(--bn-bg);
   font-family: var(--bn-font-ui);
-  font-size: 20px;
+  font-size: var(--ff-fs-base);
   font-weight: 700;
   white-space: nowrap;
   transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t-fast) var(--bn-ease);
@@ -1248,7 +1248,7 @@
   animation: bn-drain var(--ff-window, 20s) linear forwards;
 }
 .ff-receipt-secs {
-  font-size: 20px;
+  font-size: var(--ff-fs-base);
   color: var(--bn-ink-2);
   font-variant-numeric: tabular-nums;
   min-width: 3.4ch;
