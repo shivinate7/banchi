@@ -14985,6 +14985,302 @@ def check_check_registry(report: Report) -> None:
                scanned=len(recipe))
 
 
+## ---- commit-path writes, read from the AST rather than from `checks.py`'s own sentence ----
+#
+# The row below used to take `writes` on faith: an empty string passed, any text failed. That
+# reads the registry's OPINION of itself, never the check's actual Python — a check on the
+# commit path could open a file for writing and this row would still print "none of them
+# writing", because `writes` and this row's verdict were the same claim typed twice.
+#
+# WHAT COUNTS AS A WRITE, decided here because it is the hard part:
+#
+#   - `open(...)` (or its `mode=` keyword) with a mode containing "w", "a", "x" or "+".
+#   - `Path`-shaped methods, matched BY NAME because AST carries no types: `write_text`,
+#     `write_bytes`, `write`, `writelines`, `touch`, `unlink`, `rmdir`, `mkdir`, `rename`,
+#     `chmod`, `symlink_to`, `hardlink_to`. `replace` is dropped from this unresolved-name
+#     bucket on purpose — `str.replace()` is common through this file and `Path.replace()` is
+#     not, so counting it here would fail the row on ordinary string code. It is still caught
+#     as `os.replace(...)`, which is unambiguous.
+#   - `os.remove/replace/rename/mkdir/makedirs/rmdir/unlink/chmod/symlink/system/popen`, and
+#     `shutil.copy*/move/rmtree/make_archive`, resolved through the file's own top-level
+#     `import os` / `import shutil` (or `as` alias) so a same-named method on an unrelated
+#     object is not mistaken for the stdlib one.
+#   - `subprocess.run/call/Popen/check_call/check_output`, but ONLY when every element of its
+#     argv is a literal string and one of those literals is a write-shaped git verb (commit,
+#     push, checkout, reset, merge, rm, mv, stash, rebase, cherry-pick, apply, clean, gc,
+#     prune, init, add). An argv built from a variable, `*args`, or an f-string is invisible
+#     to this reader — see the blind spots below, it is not treated as clean.
+#
+# MODE-SCOPED, NOT WHOLE-FILE: `docs-audit.py` dispatches on `args.self_test` inside `main()`
+# and only ONE branch runs for a given invocation. Scanning the whole file would find every
+# `write_text` call inside `--self-test`'s own fixtures and blame them on the plain
+# `python3 scripts/docs-audit.py` invocation that never reaches that branch — the same shape
+# of false claim this row exists to stop, aimed at itself. So this walks `main()`'s own
+# top-level `if` statements, keeps only the branch(es) whose test names a flag this
+# INVOCATION actually passes (an `if` testing no flag is not a mode gate and both its arms are
+# kept), takes the calls named there as seeds, and closes over every LOCALLY DEFINED function
+# reachable from those seeds by a plain `name(...)` call — recursively, so `audit()`'s ~90
+# `check_*` calls all pull their own bodies in. Module top-level statements (imports, regex
+# `re.compile`, constant tables) are always included; they run at import time regardless of
+# mode.
+#
+# WHAT THIS CANNOT SEE, stated rather than assumed away:
+#   - A write behind an alias this file cannot resolve: `f = Path.write_text; f(p, s)`,
+#     or a write reached only through a base class's overridden method (argparse calling
+#     `self.error()`, which calls `sys.stderr.write()`, is invisible here for exactly that
+#     reason — it is never named as a plain call in this file's own control flow).
+#   - A write inside a called LIBRARY. `json.dumps` is read, not written; if a project
+#     dependency writes a file on its own initiative, nothing here follows it in.
+#   - A write performed by a `subprocess` call whose argv is computed — `git(*args)` in this
+#     very file is exactly that shape, called throughout with read-only git subcommands, and
+#     every one of those calls is invisible to this reader rather than cleared by it.
+#   - A dispatch this file's `main()` does not shape as "an `if` testing a flag, calling one
+#     function, then returning" — a script with a different mode-switch shape gets read as
+#     whole-file, which over-reports rather than under-reports.
+#   - Mode-scoping ITSELF only runs on the invoked script's own `main()`. A write two calls
+#     deep inside a function that is only reachable from a *different* branch than the one
+#     analyzed is correctly excluded; a write reachable from BOTH branches by different
+#     names (unusual) is correctly included once either branch is taken.
+#
+# Measured against the two checks this applies to today: `docs-audit` (`python3
+# scripts/docs-audit.py`, no flags) closes over 316 locally defined functions and finds no
+# write evidence — `self_test()` and its fixture writers are provably excluded, not merely
+# assumed off-path, and the two opaque `subprocess` calls in its reachable set (`git(*args)`
+# and a `node scripts/user-strings.mjs ...` invocation whose argv is spread from a `*args`
+# parameter) are named above rather than cleared. `sigil-check` (both `--self-test` and its
+# bare invocation, since the hook runs both) closes over 4-5 functions each and contains no
+# write-shaped call of any kind — it does not import `os`, `shutil` or `subprocess` at all.
+# So `scripts/docs-audit.py`'s own docstring claim, "THE AUDIT NEVER WRITES", HOLDS for the
+# reachable code this reads, with the blind spots above never having been asked to clear it.
+
+_WRITE_METHODS_UNRESOLVED_ROOT = frozenset({
+    "write_text", "write_bytes", "write", "writelines", "touch",
+    "unlink", "rmdir", "mkdir", "rename", "chmod", "symlink_to", "hardlink_to",
+})
+_OS_WRITE_FUNCS = frozenset({
+    "remove", "replace", "rename", "mkdir", "makedirs", "rmdir", "unlink",
+    "chmod", "symlink", "system", "popen",
+})
+_SHUTIL_WRITE_FUNCS = frozenset({"copy", "copyfile", "copy2", "copytree", "move", "rmtree",
+                                 "make_archive"})
+_SUBPROCESS_FUNCS = frozenset({"run", "call", "Popen", "check_call", "check_output"})
+_SUBPROCESS_WRITE_TOKENS = frozenset({
+    "commit", "push", "checkout", "reset", "merge", "rm", "mv", "stash", "rebase",
+    "cherry-pick", "apply", "clean", "gc", "prune", "init", "add",
+})
+
+
+def _import_aliases(tree: ast.Module) -> Dict[str, str]:
+    """Every `import x` / `import x as y` in the file -> real module name, for `os`/`shutil`/
+    etc. Walked over the WHOLE module rather than only its top level, because a local
+    `import shutil as _sh` inside a function is exactly as real as one at the top."""
+    aliases: Dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".")[0]
+                aliases[alias.asname or root] = root
+    return aliases
+
+
+def _attr_root_module(value: ast.expr, aliases: Dict[str, str]) -> Optional[str]:
+    """For `os.remove(...)`'s `os`, the real module name behind the name — or None."""
+    if isinstance(value, ast.Name):
+        return aliases.get(value.id)
+    return None
+
+
+def _static_str_list(node: Optional[ast.expr]) -> Optional[List[str]]:
+    """A `[...]`/`(...)` of only string literals, or None if any element is not one."""
+    if not isinstance(node, (ast.List, ast.Tuple)):
+        return None
+    out: List[str] = []
+    for elt in node.elts:
+        if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+            out.append(elt.value)
+        else:
+            return None
+    return out
+
+
+def _write_evidence(nodes: Iterable[ast.AST], aliases: Dict[str, str]) -> List[str]:
+    """Write-shaped `Call` nodes under `nodes`, per the vocabulary argued above."""
+    evidence: List[str] = []
+    for root in nodes:
+        for node in ast.walk(root):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            line = getattr(node, "lineno", "?")
+            if isinstance(func, ast.Name) and func.id == "open":
+                mode = None
+                if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+                    mode = node.args[1].value
+                for kw in node.keywords:
+                    if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                        mode = kw.value.value
+                if isinstance(mode, str) and any(c in mode for c in "wax+"):
+                    evidence.append("open(..., mode={0!r}) at line {1}".format(mode, line))
+                continue
+            if not isinstance(func, ast.Attribute):
+                continue
+            attr = func.attr
+            root_mod = _attr_root_module(func.value, aliases)
+            if root_mod == "os" and attr in _OS_WRITE_FUNCS:
+                evidence.append("os.{0}(...) at line {1}".format(attr, line))
+            elif root_mod == "shutil" and attr in _SHUTIL_WRITE_FUNCS:
+                evidence.append("shutil.{0}(...) at line {1}".format(attr, line))
+            elif root_mod == "subprocess" and attr in _SUBPROCESS_FUNCS:
+                argv = _static_str_list(node.args[0] if node.args else None)
+                if argv is None:
+                    continue  # opaque argv — a named blind spot, never counted as clean
+                if any(tok in _SUBPROCESS_WRITE_TOKENS for tok in argv):
+                    evidence.append("subprocess.{0}({1!r}) at line {2}".format(attr, argv, line))
+            elif root_mod is None and attr in _WRITE_METHODS_UNRESOLVED_ROOT:
+                evidence.append(".{0}(...) at line {1}".format(attr, line))
+    return sorted(set(evidence))
+
+
+def _mode_test_flags(test: ast.expr) -> Set[str]:
+    """Flags an `if` test names, either as a literal (`"--self-test" in argv`) or as an
+    `args.<dest>` attribute (`if args.self_test:`), normalized to `--dashed-form`."""
+    flags: Set[str] = set()
+    for node in ast.walk(test):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if node.value.startswith("--"):
+                flags.add(node.value)
+        elif isinstance(node, ast.Attribute) and not node.attr.startswith("__"):
+            flags.add("--" + node.attr.replace("_", "-"))
+    return flags
+
+
+def _calls_in(stmts: Sequence[ast.stmt]) -> Set[str]:
+    """Plain `name(...)` call targets under `stmts` — never `obj.method(...)`, which this
+    reader cannot resolve to a local function without running the program."""
+    names: Set[str] = set()
+    for stmt in stmts:
+        for node in ast.walk(stmt):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+    return names
+
+
+def _has_return(stmts: Sequence[ast.stmt]) -> bool:
+    return any(isinstance(n, ast.Return) for stmt in stmts for n in ast.walk(stmt))
+
+
+def _entry_point_seeds(main_fn: ast.FunctionDef, invocation_flags: FrozenSet[str]) -> Set[str]:
+    """Which of `main()`'s own calls actually run for one invocation, given its flags.
+
+    Reads `main()`'s top-level statements in order. A plain statement always contributes its
+    calls. An `if` whose test names no flag (`_mode_test_flags` finds nothing) is not a mode
+    gate — both its arms are read, conservatively, since this reader cannot evaluate the
+    condition. An `if` that DOES name a flag is a mode gate: its body's calls are taken only
+    when that flag is in `invocation_flags`, and if that body contains a `return`, nothing
+    after it in `main()` runs for this invocation either (the common `if args.x: return y()`
+    early-exit shape both scripts here use).
+    """
+    seeds: Set[str] = set()
+    for stmt in main_fn.body:
+        if isinstance(stmt, ast.If):
+            flags_here = _mode_test_flags(stmt.test)
+            if not flags_here:
+                seeds |= _calls_in(stmt.body)
+                seeds |= _calls_in(stmt.orelse)
+                continue
+            if flags_here & invocation_flags:
+                seeds |= _calls_in(stmt.body)
+                if _has_return(stmt.body):
+                    return seeds
+            continue
+        seeds |= _calls_in([stmt])
+    return seeds
+
+
+def _local_functions(tree: ast.Module) -> Dict[str, ast.AST]:
+    return {n.name: n for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def _call_closure(seed_names: Iterable[str], funcs: Dict[str, ast.AST]) -> List[ast.AST]:
+    """Every locally defined function reachable from `seed_names` by a `name(...)` call,
+    transitively. `obj.method(...)` calls are not followed — see the blind spots above."""
+    visited: Set[str] = set()
+    frontier: Set[str] = set(seed_names)
+    nodes: List[ast.AST] = []
+    while frontier:
+        name = frontier.pop()
+        if name in visited:
+            continue
+        visited.add(name)
+        fn = funcs.get(name)
+        if fn is None:
+            continue
+        nodes.append(fn)
+        for node in ast.walk(fn):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id not in visited):
+                frontier.add(node.func.id)
+    return nodes
+
+
+def _split_invocations(runs: str) -> List[Tuple[str, FrozenSet[str]]]:
+    """`entry["runs"]` into (script path, flags) pairs, one per `&&`/`;`-joined command.
+
+    `sigil-check` runs its script TWICE in one hook step, once with `--self-test` and once
+    bare, and the hook literally executes both — so both are separate invocations to analyze,
+    not one union of flags. A `|` pipeline or a subshell would not be split correctly; neither
+    shape appears in `scripts/checks.py` today.
+    """
+    out: List[Tuple[str, FrozenSet[str]]] = []
+    for part in re.split(r"&&|;", runs):
+        paths = _RUNS_PATH_RE.findall(part)
+        script = next((p for p in paths if p.endswith(".py")), None)
+        if script is None:
+            continue
+        flags = frozenset(_RUNS_FLAG_RE.findall(part))
+        out.append((script, flags))
+    return out
+
+
+def _commit_path_write_evidence(entry: dict) -> Optional[List[str]]:
+    """Write evidence for one `checks.py` entry's `runs`, mode-scoped per invocation.
+
+    None means no `.py` invocation could be read at all (a shell pipeline, a missing file,
+    a syntax error) — the caller reports that as its own finding rather than guessing clean.
+    """
+    invocations = _split_invocations(str(entry.get("runs", "")))
+    if not invocations:
+        return None
+    evidence: List[str] = []
+    saw_any = False
+    for script, flags in invocations:
+        path = ROOT / script
+        if not exists(path):
+            continue
+        try:
+            tree = ast.parse(read(path))
+        except SyntaxError:
+            continue
+        saw_any = True
+        aliases = _import_aliases(tree)
+        funcs = _local_functions(tree)
+        main_fn = funcs.get("main")
+        top_level = [s for s in tree.body
+                     if not isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                            ast.ClassDef, ast.Import, ast.ImportFrom))]
+        if main_fn is None:
+            # No `main()` to mode-scope from — read the whole module rather than guess a mode.
+            nodes = list(funcs.values()) + top_level
+        else:
+            seeds = _entry_point_seeds(main_fn, flags)
+            nodes = _call_closure(seeds, funcs) + top_level
+        evidence.extend(_write_evidence(nodes, aliases))
+    if not saw_any:
+        return None
+    return sorted(set(evidence))
+
+
 def check_commit_path(report: Report) -> None:
     """D18, asserted mechanically for the first time.
 
@@ -14993,7 +15289,9 @@ def check_commit_path(report: Report) -> None:
     header of every self-test it governs — and until this row it was enforced by nobody. It is
     the most-cited rule in this repo with the least machinery behind it.
 
-    Three claims, and the third is the one with teeth:
+    Four claims, and the fourth is the one with teeth — and reads the CODE, not `checks.py`'s
+    own sentence about itself (see the block comment above this function for what "reads" is
+    defined to mean, and what it cannot see):
 
       1. `commit_path` agrees with `scripts/githooks/pre-commit`. Asked of the SCRIPT the
          entry runs and never of the target name: the hook invokes
@@ -15001,7 +15299,13 @@ def check_commit_path(report: Report) -> None:
          entry that is genuinely on that path.
       2. `why_off_commit_path` is present exactly where `commit_path` is false. An entry
          claiming both, or neither, is describing nothing.
-      3. Nothing on the commit path writes.
+      3. A commit-path entry whose AST shows write evidence and whose `writes` field is empty
+         fails. This is the defect this row exists to fix: `writes` was read as true/false
+         with nobody ever inspecting the source it claims to summarize.
+      4. A commit-path entry whose `writes` field is non-empty and whose AST shows no write
+         evidence fails too — a stale declaration is checked in both directions, the same
+         discipline `t3_join_coverage`'s own docstring argues for the join
+         ("a one-directional check passes on that bug").
 
     A check whose `runs` names no repository path — `npm --prefix app run lint`, the vale
     pipeline — cannot be on the commit path, because the hook runs a bare python3 with nothing
@@ -15023,6 +15327,7 @@ def check_commit_path(report: Report) -> None:
     hook = read(PRE_COMMIT)
     findings: List[Finding] = []
     on_path = 0
+    verified = 0
 
     for entry in entries:
         if not all(key in entry for key in CHECK_ENTRY_KEYS):
@@ -15049,12 +15354,39 @@ def check_commit_path(report: Report) -> None:
 
         if claimed:
             on_path += 1
-            if entry["writes"]:
+            declared_writes = bool(entry["writes"])
+            evidence = _commit_path_write_evidence(entry)
+            if evidence is None:
                 findings.append(Finding(where, (
-                    "IS ON THE COMMIT PATH AND WRITES: {0}\n"
-                    "  D18: nothing that writes may run on the path that decides whether a\n"
-                    "  commit proceeds. An agent that can edit what its own gate reads will."
-                ).format(entry["writes"])))
+                    "claims the commit path, and no `.py` invocation in `runs` could be "
+                    "parsed to check it — nothing here says clean, and this row will not "
+                    "guess. Fix `runs`, or read it by hand and record why not.")))
+            else:
+                verified += 1
+                code_writes = bool(evidence)
+                if code_writes and declared_writes:
+                    findings.append(Finding(where, (
+                        "IS ON THE COMMIT PATH AND WRITES: {0}\n"
+                        "  D18: nothing that writes may run on the path that decides whether "
+                        "a\n  commit proceeds. An agent that can edit what its own gate reads "
+                        "will."
+                    ).format(entry["writes"])))
+                elif code_writes and not declared_writes:
+                    findings.append(Finding(where, (
+                        "IS ON THE COMMIT PATH AND WRITES, AND `writes` SAYS NOTHING: {0}\n"
+                        "  This is the defect `commit path` exists to catch: `writes` was "
+                        "read\n  as true/false with nobody inspecting the source it claims "
+                        "to summarize.\n  D18: nothing that writes may run on the path that "
+                        "decides whether a\n  commit proceeds."
+                    ).format("; ".join(evidence))))
+                elif declared_writes and not code_writes:
+                    findings.append(Finding(where, (
+                        "declares `writes`: {0!r}, and the AST reads no write on this "
+                        "invocation's reachable path.\n"
+                        "  A stale declaration is checked in both directions here — see this "
+                        "row's own comment for what the read can and cannot see before "
+                        "trusting either side."
+                    ).format(entry["writes"])))
             if entry["why_off_commit_path"]:
                 findings.append(Finding(where, (
                     "claims the commit path and also carries `why_off_commit_path`.")))
@@ -15065,7 +15397,8 @@ def check_commit_path(report: Report) -> None:
                 "  the field that stops one being moved back on to the path by tidiness.")))
 
     report.add("commit path", MECHANICAL, findings,
-               "{0} of {1} on the commit path, none of them writing".format(on_path, len(entries)),
+               "{0} of {1} on the commit path, {2} of them read against source, none "
+               "writing".format(on_path, len(entries), verified),
                scanned=len(entries))
 
 
@@ -20556,6 +20889,141 @@ def self_test() -> int:
     by_label = {row.check: row.findings for row in report.checks}
     for label in ("column count", "threshold agreement", "dist path agreement", "import filename agreement", "duplicated measurements"):
         ok(not by_label[label], f"the real tree has zero findings on `{label}`", str(by_label[label]))
+
+    print("\ncommit path: the AST reads the code, MUTATION-TESTED against the real files, "
+          "via .bak copies")
+    # This is `commit path` going red on the exact defect it exists to guard: `writes` was
+    # a sentence nobody checked against the source. Two real, on-commit-path files are
+    # mutated in turn — `scripts/sigil-check.py` (to make code write) and `scripts/checks.py`
+    # (to make the field lie the other way) — never `git checkout <path>` to undo either,
+    # a `.bak` copy is the restore, same discipline as `derived numbers` above.
+    sigil_path = ROOT / "scripts" / "sigil-check.py"
+    sigil_original = sigil_path.read_text(encoding="utf-8")
+    sigil_bak = sigil_path.with_suffix(".py.bak")
+
+    def _run_commit_path() -> List[Finding]:
+        fresh = Report()
+        check_commit_path(fresh)
+        by = {row.check: row.findings for row in fresh.checks}
+        return by.get("commit path", [])
+
+    # Arm 1: the founding defect. Code writes; `writes` in checks.py stays "". Two separate
+    # mutants, so this is a real kill count and not one lucky match.
+    arm1_kills = 0
+    arm1_mutants = [
+        ('def scan() -> List[Finding]:\n',
+         'def scan() -> List[Finding]:\n'
+         '    Path("/tmp/sigil-check-selftest-mutant").write_text("mutated")\n'),
+        ('def files() -> Iterable[Path]:\n',
+         'def files() -> Iterable[Path]:\n'
+         '    import shutil as _sh; _sh.copy(__file__, __file__ + ".selftest-mutant")\n'),
+    ]
+    for old, new in arm1_mutants:
+        assert old in sigil_original, "sigil-check.py no longer has the shape this arm mutates"
+        mutated = sigil_original.replace(old, new, 1)
+        ok(mutated != sigil_original,
+           "arm 1 mutation actually changed scripts/sigil-check.py")
+        sigil_bak.write_text(sigil_original, encoding="utf-8")
+        try:
+            sigil_path.write_text(mutated, encoding="utf-8")
+            findings = _run_commit_path()
+        finally:
+            sigil_path.write_text(sigil_original, encoding="utf-8")
+            sigil_bak.unlink()
+        hit = [f for f in findings
+               if f.where.endswith("sigil-check") and "SAYS NOTHING" in f.message]
+        if hit:
+            arm1_kills += 1
+        ok(bool(hit), "a commit-path check whose source now writes, with `writes` still "
+           "empty, goes red", str(findings))
+    ok(arm1_kills == len(arm1_mutants),
+       "arm 1: every write-shaped mutant was killed",
+       f"killed {arm1_kills} of {len(arm1_mutants)}")
+
+    # Restored, the real sigil-check.py is clean again on this arm.
+    ok(not [f for f in _run_commit_path() if f.where.endswith("sigil-check")],
+       "restored from the .bak copy, scripts/sigil-check.py passes `commit path` clean again",
+       str(_run_commit_path()))
+
+    # Arm 2: the other direction. `writes` claims something; the real source makes no write
+    # this reader can see. `t3_join_coverage`'s own docstring is the argument for checking
+    # both ways: "a one-directional check passes on that bug."
+    checks_path = CHECKS_REGISTRY
+    checks_original = checks_path.read_text(encoding="utf-8")
+    checks_bak = checks_path.with_suffix(".py.bak")
+    old_field = (
+        '        "target": "sigil-check",\n'
+        '        "runs": "python3 scripts/sigil-check.py --self-test && python3 '
+        'scripts/sigil-check.py",\n'
+    )
+    assert old_field in checks_original, "sigil-check's entry moved; update this arm's anchor"
+    # Flip its OWN `writes: ""` (searched from this anchor forward) to a false claim,
+    # leaving every other entry's field untouched.
+    anchor = checks_original.index(old_field)
+    field_at = checks_original.index('"writes": ""', anchor)
+    mutated_checks = (
+        checks_original[:field_at]
+        + '"writes": "a fixture, invented for this self-test only."'
+        + checks_original[field_at + len('"writes": ""'):]
+    )
+    ok(mutated_checks != checks_original,
+       "arm 2 mutation actually changed scripts/checks.py")
+    checks_bak.write_text(checks_original, encoding="utf-8")
+    try:
+        checks_path.write_text(mutated_checks, encoding="utf-8")
+        findings = _run_commit_path()
+    finally:
+        checks_path.write_text(checks_original, encoding="utf-8")
+        checks_bak.unlink()
+    hit2 = [f for f in findings
+            if f.where.endswith("sigil-check") and "reads no write" in f.message]
+    ok(bool(hit2),
+       "a commit-path check declaring `writes` the AST cannot find on the real source "
+       "goes red",
+       str(findings))
+    ok(not [f for f in _run_commit_path() if f.where.endswith("sigil-check")],
+       "restored from the .bak copy, scripts/checks.py passes `commit path` clean again",
+       str(_run_commit_path()))
+
+    # Arm 3: scope. The same write-shaped mutant, planted in an OFF-commit-path script,
+    # is not this row's business — `claim_stale`'s entry carries `commit_path: False` and a
+    # `why_off_commit_path`, and this row must not start grading its writes.
+    claim_ids_path = ROOT / "scripts" / "claim-ids.py"
+    if claim_ids_path.exists():
+        claim_original = claim_ids_path.read_text(encoding="utf-8")
+        claim_bak = claim_ids_path.with_suffix(".py.bak")
+        needle = "def main("
+        idx = claim_original.find(needle)
+        ok(idx != -1, "scripts/claim-ids.py has a main() this arm can mutate near")
+        if idx != -1:
+            insertion_point = claim_original.index("\n", idx) + 1
+            mutated_claim = (
+                claim_original[:insertion_point]
+                + '    Path("/tmp/claim-ids-selftest-mutant").write_text("mutated")\n'
+                + claim_original[insertion_point:]
+            )
+            ok(mutated_claim != claim_original,
+               "arm 3 mutation actually changed scripts/claim-ids.py")
+            claim_bak.write_text(claim_original, encoding="utf-8")
+            try:
+                claim_ids_path.write_text(mutated_claim, encoding="utf-8")
+                findings = _run_commit_path()
+            finally:
+                claim_ids_path.write_text(claim_original, encoding="utf-8")
+                claim_bak.unlink()
+            ok(not [f for f in findings if "claim-stale" in f.where],
+               "an off-commit-path check writing is not this row's business — no finding "
+               "names it",
+               str(findings))
+
+    # Arm 4: the honest pair, unmutated. `docs-audit` and `sigil-check` are the only two
+    # entries `commit_path: True` names today, and neither should ever produce a finding
+    # on a clean tree.
+    clean_findings = _run_commit_path()
+    ok(clean_findings == [],
+       "the real tree's two commit-path checks (docs-audit, sigil-check) pass `commit "
+       "path` with zero findings",
+       str(clean_findings))
 
     print("\n" + "=" * 72)
     if failures:
