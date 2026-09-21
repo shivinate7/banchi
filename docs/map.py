@@ -7013,8 +7013,8 @@ COMPONENTS = [
                                                "D51", "D57", "D58", "D61", "D63", "D66", "D69",
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D181", "D192",
-                                               "D193", "D195", "D196", "D203", "D209", "D212",
-                                               "D220", "D221"]},
+                                               "D193", "D194", "D195", "D196", "D203", "D209",
+                                               "D212", "D220", "D221"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "

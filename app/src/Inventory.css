@@ -64,7 +64,10 @@
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
   gap: var(--bn-4);
-  align-items: start;
+  /* CENTER, NOT START (UX review, 2026-09-20): a departed or unlocated copy draws no
+     `PositionBar`, so the text column is two short lines against an 117px-tall photo. Centering
+     keeps the pair balanced whichever way the text column ends up. */
+  align-items: center;
   padding: var(--bn-3);
   border-radius: var(--bn-r-lg);
   background: var(--bn-surface-2);
@@ -114,7 +117,7 @@
 }
 .inventory-retire-reason:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--bn-shadow-2); background: var(--bn-surface-3); }
 .inventory-retire-reason:active:not(:disabled) { transform: translateY(0) scale(0.99); }
-.inventory-retire-reason:disabled { opacity: 0.5; }
+.inventory-retire-reason:disabled { opacity: var(--bn-disabled); }
 .inventory-retire-text { display: flex; flex-direction: column; gap: 2px; }
 .inventory-retire-label { font-size: var(--bn-fs-base); font-weight: 700; }
 .inventory-retire-said { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
