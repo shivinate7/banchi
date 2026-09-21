@@ -1,4 +1,4 @@
-## D245 — Unsold stock reaches `#/revenue`, and D236's wire is spent exactly as written
+## D-a-holdings-value-on-screen — Unsold stock reaches `#/revenue`, and D236's wire is spent exactly as written
 
 **What was reachable and what was not.** D236 built `GET /pipeline/holdings-value`, `pipeline/holdings.py` and its selftest. It named itself explicitly NOT YET REACHABLE FROM A SCREEN. There was no client function. There was no wire type. There was no control anywhere. This entry closes that gap on `#/revenue` alone. `pipeline/holdings.py` and its route are untouched. Every figure on screen is the route's own words.
 
