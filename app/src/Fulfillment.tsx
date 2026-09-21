@@ -895,7 +895,7 @@ export function Fulfillment() {
       <>
         {header}
         <div className="ff-empty">
-          <span className="ff-empty-art">
+          <span className="bn-empty-art bn-empty-art-lg">
             <Icon name="alert" size={30} />
           </span>
           <p className="fulfillment-say ff-empty-title">The cards did not load. Try again.</p>
@@ -952,7 +952,7 @@ export function Fulfillment() {
         <article className="ff-card">
           <div className="ff-photo-wrap">
             {missing ? (
-              <div className="ff-photo-missing">
+              <div className="bn-empty-well">
                 <Icon name="image" size={40} />
                 <p className="fulfillment-say">
                   The photo is missing. The card is still in the place shown here.
@@ -1169,7 +1169,7 @@ export function Fulfillment() {
     } else if (first === undefined) {
       today = (
         <p className="fulfillment-say ff-today-none">
-          <span className="ff-today-none-icon">
+          <span className="bn-icon-badge bn-icon-badge--ok">
             <CheckMark size={22} />
           </span>
           No orders are waiting for a card right now. You can still find any card by name.
@@ -1335,7 +1335,7 @@ export function Fulfillment() {
 
             {cards.length === 0 ? (
               <div className="ff-empty">
-                <span className="ff-empty-art">
+                <span className="bn-empty-art bn-empty-art-lg">
                   <Icon name="box" size={30} />
                 </span>
                 <p className="fulfillment-say ff-empty-title">
