@@ -584,10 +584,8 @@ around **two fetches**:
   `elsewhere` reports every one of them (the rewritten per-SKU `select(sku=...)` pass must
   not stop early or miss a box just because it wasn't the box a shallower fix would have
   checked).
-- **`check_box_names`** (`:7547`) exercises `_box_names()` via
-  `server/pipeline_routes.py:11161`'s call (line number from the earlier grep — re-confirm
-  at implementation time since this file's line numbers shift). Every existing assertion
-  must pass unmodified against the box-registry-scoped rewrite.
+- **`check_box_names`** (`:7547`) exercises `server/pipeline_routes._box_names`'s call.
+  Every existing assertion must pass unmodified against the box-registry-scoped rewrite.
 - The `_on_hand_by_run` case around `:11964` (function name from the grep at the top of this
   file's research — re-confirm at implementation time) must pass unmodified against the
   signature change (`runs` parameter); update the call at `:11964` to pass the run-name list
