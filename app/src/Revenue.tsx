@@ -801,6 +801,75 @@ export function Revenue() {
   const holdingsHistoryLabel =
     holdings?.history_begins == null ? null : new Date(`${holdings.history_begins}T00:00:00`).toLocaleDateString()
 
+  const holdingsSection = (
+    /* WHAT'S STILL ON THE SHELF (D236) — UNSOLD stock, valued off the price-history
+     archive, one range at a time (D62: never merged with another range). A press,
+     never a mount, own loading/failure state, same posture as "Compare to today's
+     market" above and NEVER the same figure — that section is what already sold.
+     COMPUTED ONCE, REFERENCED FROM EVERY EARLY RETURN BELOW (finding 1): the sold-only
+     empty state and the orders-failure banner must not make this section unreachable —
+     the route this section reads has nothing to do with whether anything has sold. */
+    <section className="revenue-holdings">
+      <div className="revenue-holdings-head">
+        <h2 className="bn-label">On the shelf</h2>
+        <Segmented
+          value={holdingsRange}
+          options={HOLDINGS_RANGE_OPTIONS}
+          onChange={setHoldingsRange}
+          label="Time range"
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="package"
+          onClick={() => setHoldingsOpened(true)}
+          disabled={holdingsLoading}
+        >
+          {holdingsLoading ? 'Reading…' : holdingsOpened ? 'Refresh' : 'Value my stock'}
+        </Button>
+      </div>
+
+      {holdingsFailure === null ? null : (
+        <Notice tone="danger" title="Could not read what's on the shelf">
+          {holdingsFailure}
+        </Notice>
+      )}
+
+      {!holdingsOpened || holdingsFailure !== null || holdings === null ? null : (
+        <div className="revenue-holdings-body">
+          {latestHoldingsTotal === null ? (
+            <p className="revenue-holdings-note">Nothing on hand has a price yet.</p>
+          ) : (
+            <>
+              <div className="revenue-holdings-figure">
+                <span className="bn-money">{moneyGrouped(Number(latestHoldingsTotal.value))}</span>
+                <span className="revenue-holdings-note">
+                  {`Priced for ${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} names on hand, ${latestHoldingsTotal.unpriced_names} not yet.`}
+                </span>
+              </div>
+              <HoldingsSpark totals={holdings.totals} />
+            </>
+          )}
+          {/* THE TWO COUNTED EXCLUSIONS (D236) RENDER WHETHER OR NOT `totals` HAS A
+              POINT — an unpriced store is exactly when a reader most needs to be told
+              how much is unpriced. Neither may vanish behind the empty-totals branch
+              above; both stay stated sentences, never a zero and never omitted. */}
+          <p className="revenue-holdings-meta">
+            {holdingsHistoryLabel === null
+              ? 'No history recorded for these names yet.'
+              : `History since ${holdingsHistoryLabel}, ${holdings.width_days === 1 ? 'read daily' : `read every ${holdings.width_days} days`}.`}
+          </p>
+          <p className="revenue-holdings-meta">
+            {`${holdings.unmarked.names} names on hand have never been priced.`}
+          </p>
+          <p className="revenue-holdings-meta">
+            {`${holdings.sealed_excluded.names} sealed items are not counted here. Sales of sealed items are known; what is still on the shelf is not.`}
+          </p>
+        </div>
+      )}
+    </section>
+  )
+
   if (failure !== null) {
     return (
       <main className="revenue bn-page">
@@ -808,6 +877,7 @@ export function Revenue() {
         <Notice tone="danger" title="Could not read your orders">
           {failure.message}
         </Notice>
+        {holdingsSection}
       </main>
     )
   }
@@ -823,6 +893,7 @@ export function Revenue() {
           title="Nothing has sold yet."
           body="Once an order comes in with a price on it, this screen adds it up by month and by name — the search TCGplayer's own Orders page will not do for you."
         />
+        {holdingsSection}
       </main>
     )
   }
@@ -1126,63 +1197,7 @@ export function Revenue() {
         )}
       </section>
 
-      {/* WHAT'S STILL ON THE SHELF (D236) — UNSOLD stock, valued off the price-history
-          archive, one range at a time (D62: never merged with another range). A press,
-          never a mount, own loading/failure state, same posture as "Compare to today's
-          market" above and NEVER the same figure — that section is what already sold. */}
-      <section className="revenue-holdings">
-        <div className="revenue-holdings-head">
-          <h2 className="bn-label">On the shelf</h2>
-          <Segmented
-            size="sm"
-            value={holdingsRange}
-            options={HOLDINGS_RANGE_OPTIONS}
-            onChange={setHoldingsRange}
-            label="Time range"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="package"
-            onClick={() => setHoldingsOpened(true)}
-            disabled={holdingsLoading}
-          >
-            {holdingsLoading ? 'Reading…' : holdingsOpened ? 'Refresh' : 'Value my stock'}
-          </Button>
-        </div>
-
-        {holdingsFailure === null ? null : (
-          <Notice tone="danger" title="Could not read what's on the shelf">
-            {holdingsFailure}
-          </Notice>
-        )}
-
-        {!holdingsOpened || holdingsFailure !== null ? null : holdings === null ? null : holdings.totals.length === 0 ||
-          latestHoldingsTotal === null ? (
-          <EmptyState icon="package" title="Nothing on hand has a price yet." />
-        ) : (
-          <div className="revenue-holdings-body">
-            <div className="revenue-holdings-figure">
-              <span className="bn-money">{moneyGrouped(Number(latestHoldingsTotal.value))}</span>
-              <span className="revenue-holdings-note">
-                {`Priced for ${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} names on hand, ${latestHoldingsTotal.unpriced_names} not yet.`}
-              </span>
-            </div>
-            <HoldingsSpark totals={holdings.totals} />
-            <p className="revenue-holdings-meta">
-              {holdingsHistoryLabel === null
-                ? 'No history recorded for these names yet.'
-                : `History since ${holdingsHistoryLabel}, ${holdings.width_days === 1 ? 'read daily' : `read every ${holdings.width_days} days`}.`}
-            </p>
-            <p className="revenue-holdings-meta">
-              {`${holdings.unmarked.names} names on hand have never been priced.`}
-            </p>
-            <p className="revenue-holdings-meta">
-              {`${holdings.sealed_excluded.names} sealed items are not counted here. Sales of sealed items are known; what is still on the shelf is not.`}
-            </p>
-          </div>
-        )}
-      </section>
+      {holdingsSection}
     </main>
   )
 }

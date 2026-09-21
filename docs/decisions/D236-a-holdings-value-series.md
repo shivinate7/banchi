@@ -100,7 +100,18 @@ GET /pipeline/holdings-value?range=month|quarter|semiannual|annual   (default: m
   "width_days": 1,
   "history_begins": "2026-08-01" | null,   // earliest bucket start any on-hand SKU has in
                                             // this range, or null if nothing archived yet
-  "at": 1758345600,                         // this READ's own moment, not a series date
+  "at": "2026-09-20T05:00:00+00:00",        // this READ's own moment, not a series date.
+                                            // AMENDED 2026-09-20, ON THE OWNER'S WORD: this
+                                            // was written above as a Unix second
+                                            // (`1758345600`), which the route has never
+                                            // produced. `store/master.py:now() -> str`
+                                            // returns an ISO string, unconverted through
+                                            // `HoldingsReport.at`. The screens-lane PR that
+                                            // built this route's client (D-a-
+                                            // holdings-value-on-screen) found the gap; this
+                                            // line and `pipeline/holdings.py`'s two `int`
+                                            // annotations are corrected to match, and the
+                                            // wire itself did not change.
   "on_hand_names": 812,                     // distinct on-hand SKUs this store knows of
   "series": [
     {

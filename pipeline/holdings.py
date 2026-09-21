@@ -288,7 +288,14 @@ class HoldingsReport:
     range: str
     width_days: int
     history_begins: Optional[str]
-    at: int
+    # THIS READ'S OWN MOMENT, AS `store/master.py:now()` ACTUALLY RETURNS IT — an ISO
+    # string, not a Unix second. The annotation used to say `int`; the caller
+    # (`server/pipeline_routes.py:do_pipeline_holdings_value`) has always fed this straight
+    # from `master.now() -> str`, so the field was lying about its own type, and D236's own
+    # wire-shape example inherited the lie (`"at": 1758345600`). Corrected on the owner's
+    # word, 2026-09-20, alongside `build_holdings_report`'s `now` parameter below. The wire
+    # itself is unchanged — this is the type catching up to what it has always sent.
+    at: str
     series: List[SkuSeries]
     totals: List[TotalPoint]
     unmarked_count: int
@@ -301,7 +308,7 @@ def build_holdings_report(
     archive: PriceArchive,
     ledger: Ledger,
     range_: str,
-    now: int,
+    now: str,
 ) -> HoldingsReport:
     """The whole answer for one range: every on-hand SKU's own valued series, the portfolio
     total that follows from them, and the two named, countable gaps — a name the archive has
