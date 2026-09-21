@@ -1,4 +1,4 @@
-## D-a-postings-view-shelved — The posted-price view is wanted, and it is shelved until there is a history to draw
+## D244 — The posted-price view is wanted, and it is shelved until there is a history to draw
 
 **The owner's ruling, 2026-09-20.** Asked whether the recorded posting history should get a
 screen now, they answered: *"I do but record it shelved for now."* This entry is that record.
