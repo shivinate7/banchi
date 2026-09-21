@@ -1098,6 +1098,7 @@ D246 `commit path writes` reads the code, not `checks.py`'s own sentence about i
 D247 Fifteen guard self-tests are path-gated, and no target was found dead
 D248 The harness leaves turn end, and code cards fold into one rules file
 D249 Recognition by the complement, never by the expected pattern
+D250 Unsold stock reaches `#/revenue`, and D236's wire is spent exactly as written
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
