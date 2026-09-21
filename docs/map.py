@@ -382,7 +382,8 @@ COMPONENTS = [
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180",
                                             "D189", "D210",
-                                            "D213", "D219"],
+                                            "D213", "D219", "D239",
+                                            "D242"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -456,12 +457,17 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
-            "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|photos>` — the card's "
-                                     "stable name (D172). `name` previews what the naming "
-                                     "sees and would do, `audit` asks whether every card's "
-                                     "name still resolves to its photograph, and `photos` "
+            "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|contradictions|"
+                                     "photos|variants>` — the card's stable name (D172). `name` "
+                                     "previews what the naming sees and would do, `audit` "
+                                     "asks whether every card's name still resolves to "
+                                     "its photograph, `checks` runs the four stored-data "
+                                     "identification checks (D239), "
+                                     "`contradictions` dispatches to "
+                                     "`cli/cmd_sku_contradictions.py:run` "
+                                     "(D242), and `photos` "
                                      "moves the corpus off the legacy `(box, index)` address "
-                                     "onto the card's own name. TWO OF THE THREE WRITE "
+                                     "onto the card's own name. FOUR OF THE SIX WRITE "
                                      "NOTHING EVER and neither may call `db.connect`: that "
                                      "function is the single entry to the store and always "
                                      "calls `_ensure_schema`, so a preview routed through it "
@@ -471,8 +477,26 @@ COMPONENTS = [
                                      "cannot be re-taken",
                              "governed_by": ["D172", "D183",
                                              "D26", "D88", "D89",
-                                             "D213"],
+                                             "D213", "D239",
+                                             "D242"],
                              "tested_by": ["T7"]},
+            # THE SKU SELF-CONTRADICTION CHECK, KEPT APART FROM `cmd_cards.py:checks` (a
+            # separate, sibling PR) ON THE OWNER'S OWN RULING (D242).
+            "cmd_sku_contradictions.py": {
+                "does": "`pkmnscan cards contradictions` — groups every card by SKU "
+                        "straight out of the store (read-only, `mode=ro&immutable=1`, "
+                        "never `db.connect`) and hands the groups to "
+                        "`pipeline/sku_number_contradictions.py`. The default preview "
+                        "opens no socket: it reports the denominator-mismatch class "
+                        "directly. `--resolve` builds a real `pipeline/pricehistory.py:"
+                        "Market` and asks the live catalogue only about the SKUs the "
+                        "preview already named as needing it — one request per distinct "
+                        "(game, set) pair, cached the same way `cmd_pricearchive.py`'s "
+                        "own sweep caches its own fetches.",
+                "governed_by": ["D146", "D167", "D173", "D234",
+                                "D242"],
+                "tested_by": [],
+            },
             # THE PRESS `pkmnscan archive sweep` RUNS (D219,
             # D224, D223, D222).
             # Argument parsing, the network-free preview, the chunked commit-as-you-go
@@ -499,7 +523,13 @@ COMPONENTS = [
                                             "to a measured pace and stops cleanly if still "
                                             "blocked, persisting the measurement for the next "
                                             "press. `archive show [--sku]` reads the table "
-                                            "and writes nothing.",
+                                            "and writes nothing. A `--write` pass's own final "
+                                            "refusal set, once classified, routes every "
+                                            "identification-shaped refusal to the standing "
+                                            "review queue with its photograph "
+                                            "(`cli/archive_review.py`, D167's own "
+                                            "`Queue.upsert`), and leaves a network-shaped "
+                                            "refusal alone.",
                                     "governed_by": ["D219",
                                                     "D224",
                                                     "D223",
@@ -507,8 +537,22 @@ COMPONENTS = [
                                                     "D62", "D86", "D43", "D88",
                                                     "D231",
                                                     "D230",
-                                                    "D233"],
+                                                    "D233",
+                                                    "D167"],
                                     "tested_by": []},
+            "archive_review.py": {"does": "Routes one `archive sweep` pass's own "
+                                          "identification-shaped refusals (never a "
+                                          "network-shaped one) to the standing review "
+                                          "queue, with each card's own photograph, over "
+                                          "`store/queues.py:Queue.upsert` — never a new "
+                                          "queue or write primitive. Matches PER CARD, "
+                                          "never per SKU: a SKU can cover several physical "
+                                          "copies with different stored numbers, and only "
+                                          "the one `pipeline/pricearchive.py:rows_from_store` "
+                                          "actually tested is queued. A card with no "
+                                          "photograph is never queued.",
+                                   "governed_by": ["D167", "D219", "D233", "D234", "D26", "D58", "D89"],
+                                   "tested_by": []},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
                                       "derives a SECOND run over the drawer they are actually "
@@ -552,7 +596,8 @@ COMPONENTS = [
                                         "which the next emit re-lists at the rule price and "
                                         "undoes the markdown.",
                                "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86",
-                                               "D100", "D103", "D87", "D106", "D107", "D109"],
+                                               "D100", "D103", "D87", "D106", "D107", "D109",
+                                               "D243"],
                                "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
                                     "is unanswered. ONE PRESS WRITES ONE SPREADSHEET (D99) — "
@@ -599,7 +644,7 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99", "D172", "D213"], "tested_by": ["T7"]},
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99", "D172", "D213", "D243"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
@@ -723,6 +768,55 @@ COMPONENTS = [
                                  "condition map from the `pokemon` entry and is the proof the "
                                  "entry is right — the values are byte-identical to the literals "
                                  "it replaced."},
+            # THE FOUR STORED-DATA CHECKS `D239` BUILDS. Pure functions
+            # over plain `CardRecord`s, no store import — `cli/cmd_cards.py`'s `checks`
+            # subcommand is the one caller, reading the real store read-only.
+            "identity_checks.py": {"does": "Four review-signal checks over already-stored "
+                                           "card fields, no catalogue, no network: a name "
+                                           "too long to be a name, a denominator or digit "
+                                           "count that disagrees with its set's own "
+                                           "dominant reading, and a name one edit from a "
+                                           "different name this store holds in the same "
+                                           "set. Never a repair — every flag routes to a "
+                                           "human. Reused by nothing else; the SKU "
+                                           "self-contradiction check is a separate, "
+                                           "sibling build kept apart on the owner's ruling.",
+                                    "governed_by": ["D146", "D173", "D234", "D237",
+                                                    "D239"],
+                                    "note": "PROVED BY `scripts/identity-checks-selftest.py`: "
+                                            "13 arms, including a mutation arm over the "
+                                            "denominator check's dominant-vs-first-seen "
+                                            "choice. Not wired into `make check`, matching "
+                                            "`pricearchive.py`'s own precedent — its one "
+                                            "caller is a CLI subcommand, not tested_by any "
+                                            "harness id."},
+            # THE SKU SELF-CONTRADICTION CHECK, KEPT SEPARATE FROM identity_checks.py (a
+            # separate, sibling PR) ON THE OWNER'S OWN RULING.
+            "sku_number_contradictions.py": {
+                "does": "Two copies of one SKU disagreeing about the card's stored "
+                        "number. `find_disagreements` groups and normalizes, no "
+                        "catalogue needed. `resolve` settles the SKUs sharing a "
+                        "denominator by NAME AGREEMENT against "
+                        "`pipeline/pricehistory.py:Market` — a candidate number's own "
+                        "product must be named what this SKU's copies stored, never "
+                        "merely exist — in three outcomes never collapsed into one: "
+                        "MISREAD (the name settles exactly one candidate, proposed as "
+                        "correct), SHARED_SKU (the name settles more than one — two real, "
+                        "correctly-named products share the SKU), UNRESOLVED (the name "
+                        "settles none). A denominator mismatch never reaches the network "
+                        "at all. Existence-only was this module's first, wrong shape: "
+                        "vacuous in a dense set (Vendetta, 100% of numbers 1-166 real).",
+                "governed_by": ["D146", "D167", "D173", "D234",
+                                "D242"],
+                "note": "PROVED BY `scripts/sku-number-contradictions-selftest.py`: eight "
+                        "arms, including a `RaisingMarket` that fails the test if the "
+                        "denominator-mismatch class ever calls it, and a mutation arm "
+                        "running the ORIGINAL existence-only resolver against a dense-set "
+                        "fixture — it wrongly reports SHARED_SKU where the real, "
+                        "name-agreement function correctly finds the one misread. Not "
+                        "wired into `make check`, matching `pricearchive.py`'s own "
+                        "precedent.",
+            },
             # D10's label formula lives here, and as of 2026-08-29 it assumes NO divider size:
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
@@ -1337,7 +1431,14 @@ COMPONENTS = [
                                         "reused rather than a second knob) and passes it in. A "
                                         "403 is now `Blocked`, a sibling of `Unreachable`, and "
                                         "the route answers it as `history_blocked` rather than "
-                                        "folding it into `history_unreachable`."},
+                                        "folding it into `history_unreachable`. "
+                                        "CATALOG_TTL_SECONDS IS NOW float('inf') (2026-09-20, "
+                                        "DEBT34): categories/groups/products never expire, on "
+                                        "the owner's ruling that a set's membership does not "
+                                        "change from pull to pull. `Market.prices` keeps its "
+                                        "own, still-finite `PRICE_TTL_SECONDS`, unchanged in "
+                                        "value — proved apart by "
+                                        "`pricehistory-cache-selftest.py`."},
         },
     },
     {
@@ -1650,6 +1751,26 @@ COMPONENTS = [
                                                 "D189"],
                                 "note": "PROVED BY `make pricearchive-selftest` — 17 "
                                         "assertions, no network, over a throwaway store."},
+            # THE PRICE-POSTINGS LEDGER (D243). Unlike `pricearchive.py`
+            # and `readings.py`, this one is NEVER an upsert — see the module docstring for
+            # why a posted price has no live source to be re-read from, so a second posting
+            # of a SKU must be a second row, always.
+            "postings.py": {"does": "`Postings`, an accumulator like `Inventory.events` and "
+                                    "not a `Rows` table: `.record()` appends a posted `TCG "
+                                    "Marketplace Price` to an in-memory list, flushed by "
+                                    "`Store.write()` with `db.append_postings` into "
+                                    "`price_postings` — one `INSERT` per row, never an "
+                                    "`UPDATE` or a `DELETE`. No caller yet: `emit` and "
+                                    "`reprice apply` call `.record()` at the moment each "
+                                    "already decides a price reached a file.",
+                             "governed_by": ["D243", "D88", "D212",
+                                             "D219", "D189", "D86"],
+                             "note": "PROVED BY `make price-postings-selftest`, and by "
+                                     "`--mutate-to-upsert` (a real mutation test): rewriting "
+                                     "`append_postings` into an upsert keyed on `sku` turns "
+                                     "the 13/13 pass into 3+ failures. NOT REACHABLE FROM A "
+                                     "SCREEN — the owner's ruling is record first, build the "
+                                     "view later."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
                          "governed_by": ["D13", "D15", "D43", "D86", "D166", "D189"],
@@ -1665,7 +1786,7 @@ COMPONENTS = [
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
                            "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189", "D191", "D219"],
+                                           "D189", "D191", "D219", "D243"],
                            "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
@@ -1682,7 +1803,7 @@ COMPONENTS = [
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
                       "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D166", "D172",
-                                      "D174", "D189", "D192", "D213", "D219"],
+                                      "D174", "D189", "D192", "D213", "D219", "D243"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -2508,6 +2629,97 @@ COMPONENTS = [
                         "never truncates, grouped by reason. 87 assertions.",
                 "governed_by": ["D18", "D21", "D35", "D62", "D219", "D222", "D223", "D224", "D230",
                                 "D231", "D233", "D234"],
+            },
+            "price-postings-selftest.py": {
+                "does": "proves store/postings.py's `price_postings` table against a "
+                        "throwaway store, no network (D243). Posts one "
+                        "price, posts a second price for the SAME SKU, and asserts two rows "
+                        "survive with distinct ids and their own prices — never one row "
+                        "overwritten. Asserts `replaced` is only set when the caller gives "
+                        "one, asserts a session that never calls `.record()` posts nothing, "
+                        "and asserts a fresh connection reads back what an earlier session "
+                        "wrote. `--mutate-to-upsert` is a real mutation test: it copies "
+                        "store/db.py, rewrites `append_postings`'s plain INSERT into an "
+                        "upsert keyed on `sku` by one literal string replacement, adds the "
+                        "UNIQUE(sku) constraint that upsert needs, and re-runs the whole "
+                        "suite against the mutated copy — which MUST go red, or the append-"
+                        "only property is not being tested at all. Not wired into "
+                        "`make check` — `make pricearchive-selftest`'s own precedent, a "
+                        "package with no caller a screen reaches yet.",
+                "governed_by": ["D243", "D88", "D212", "D219", "D189"],
+            },
+            "price-postings-recovery.py": {
+                "does": "read-only measurement against the owner's real "
+                        "inventory/store.sqlite (opened `mode=ro`, never `store.db`, no "
+                        "`pkmnscan` command run): how much price HISTORY survives before "
+                        "`price_postings` existed to record it. Counts `pushed` events and "
+                        "how many name a price (always 0 — the payload has no such field). "
+                        "Walks `inventory/markdowns/*/` and counts a folder as APPLIED only "
+                        "when both `receipt.txt` and `import.csv` are present, then counts "
+                        "the SKU price lines an applied receipt still names. Reports the "
+                        "population (distinct `cards.sku`) beside the recoverable count, and "
+                        "says plainly that a recovered receipt is one later snapshot, never a "
+                        "history, and that every SKU's first posted price is gone either way.",
+                "governed_by": ["D243"],
+            },
+            "sku-number-contradictions-selftest.py": {
+                "does": "proves pipeline/sku_number_contradictions.py against literal "
+                        "NumberRecord fixtures and duck-typed Market fakes, no store, no "
+                        "network (D242). `RaisingMarket` fails the "
+                        "test if a denominator mismatch ever reaches it. `FakeMarket` "
+                        "exercises MISREAD, SHARED_SKU and UNRESOLVED. A mutation arm: a "
+                        "naive first-side-wins resolver picks a wrong, silent winner on "
+                        "the SHARED_SKU fixture; the real function reports both sides "
+                        "and picks none. 15 assertions. Not wired into `make check` — "
+                        "`pricearchive-selftest.py`'s own precedent, one entry above.",
+                "governed_by": ["D146", "D167", "D173", "D234",
+                                "D242"],
+            },
+            "archive-review-selftest.py": {
+                "does": "proves cli/archive_review.py against a throwaway store, no "
+                        "network. Fabricates refusal strings shaped exactly like "
+                        "pipeline/pricehistory.py:NotResolvable/Unreachable's own "
+                        "messages, never calls a market. Proves: an identification "
+                        "refusal reaches the review queue with its photograph; a "
+                        "network-shaped refusal never does; a card sharing the refused "
+                        "SKU but carrying a DIFFERENT stored number is never queued (the "
+                        "Exeggutor shape, D234); a card with no photograph is never "
+                        "queued; a re-run over the same refusal adds nothing new and "
+                        "preserves first_seen; an already-answered position is never "
+                        "re-queued (D167). Mutation-tested: a broken apply that writes "
+                        "the queue mapping directly, skipping Queue.upsert's own "
+                        "cleared-entry guard, is shown to silently reopen an answered "
+                        "entry and lose its first_seen. Not wired into `make check` — "
+                        "`make pricearchive-selftest`'s own precedent.",
+                "governed_by": ["D167", "D219", "D233", "D234", "D238"],
+            },
+            "identity-checks-selftest.py": {
+                "does": "proves pipeline/identity_checks.py against literal CardRecord "
+                        "fixtures, no store, no network (D239). One "
+                        "positive and one negative arm per check, built from the exact "
+                        "subjects the cited analysis measured. A case proving the "
+                        "denominator and digit-count checks flag a genuine rare print "
+                        "honestly, rather than hiding it. A case reproducing the "
+                        "analysis's own Draven, Glorious Executioner finding. A mutation "
+                        "arm: a denominator check comparing against the first-seen value "
+                        "instead of the dominant one is shown to blame the wrong card "
+                        "before the real function is shown to survive the same fixture. "
+                        "13 assertions. Not wired into `make check` — "
+                        "`pricearchive-selftest.py`'s own precedent, one entry above.",
+                "governed_by": ["D146", "D173", "D234", "D237", "D239"],
+            },
+            "pricehistory-cache-selftest.py": {
+                "does": "proves pipeline/pricehistory.py's two cache lifetimes against a "
+                        "fake clock and a counting fetcher, no network. Categories/groups/"
+                        "products (`CATALOG_TTL_SECONDS`, now infinite) are shown served "
+                        "from cache 20 fake years later. `prices` (`PRICE_TTL_SECONDS`, "
+                        "still finite) is shown re-fetched over the same span. A mutation "
+                        "arm calls the cache primitive with `CATALOG_TTL_SECONDS` in "
+                        "`prices`' place — the exact bug the separate constant exists to "
+                        "prevent — and shows it wrongly serves a 20-year-old price where "
+                        "the real `prices()` method does not. 6 assertions. Not wired into "
+                        "`make check`.",
+                "governed_by": ["D216", "D219", "D234"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "

@@ -89,4 +89,7 @@ DEBT28 `pkmnscan rescue` is reachable from no screen, and the screen that needs 
 DEBT29 The drawer's tap sweep is skipped, because it races itself on a slower runner
 DEBT30 The copies panel flash guard is shelved, on the owner's own word
 DEBT31 Twelve decisions are cited by path, one of them dead, and the path guard never reads code
+DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
+DEBT33 An answered queue entry can never resurface, even when it is wrong
+DEBT34 The catalogue cache never expires, on a membership claim this store cannot re-check on its own
 ```

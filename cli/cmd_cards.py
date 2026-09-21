@@ -1,23 +1,33 @@
 """`pkmnscan cards` — the card's stable name: preview it, audit it, move the photographs.
 
-FOUR SUBCOMMANDS AND TWO OF THEM WRITE NOTHING EVER.
+FIVE SUBCOMMANDS AND THREE OF THEM WRITE NOTHING EVER.
 
-  cards name      what the naming would do, or has done — the source census, every card that
-                  would land `nophoto:`, every duplicate photograph, and the receipt
-  cards audit     does every card's name still resolve to its photograph? THREE verdicts,
-                  never two, and the third is `not known`
-  cards photos    move the corpus off the legacy `(box, index)` address onto the card's own
-                  name. Previews by default; `--write` performs it
-  cards variants  backfill `set` and `rarity` from whatever export a card's game already
-                  has on disk (D213).
-                  Previews by default; `--write` performs it. Never guesses: a SKU that
-                  resolves to nothing keeps a null set.
+  cards name            what the naming would do, or has done — the source census, every
+                        card that would land `nophoto:`, every duplicate photograph, and
+                        the receipt
+  cards audit           does every card's name still resolve to its photograph? THREE
+                        verdicts, never two, and the third is `not known`
+  cards checks          the four stored-data identification checks (D239):
+                        a name too long, a denominator or digit count that disagrees with
+                        its set, a name one edit from a sibling in the same set. Review
+                        signals, never repairs, never a catalogue call.
+  cards contradictions  two copies of one SKU disagreeing about the card's number
+                        (D242). Read-only preview, opens no socket
+                        unless `--resolve` is given.
+  cards photos          move the corpus off the legacy `(box, index)` address onto the
+                        card's own name. Previews by default; `--write` performs it
+  cards variants        backfill `set` and `rarity` from whatever export a card's game
+                        already has on disk (D213).
+                        Previews by default; `--write` performs it. Never guesses: a SKU
+                        that resolves to nothing keeps a null set.
 
-`name` AND `audit` OPEN THE STORE READ-ONLY AND MUST NEVER CALL `db.connect`. That function
-is the single entry to the store and it always calls `_ensure_schema`, so a preview routed
-through it would PERFORM the migration it claims to be previewing. It is a hard property
-with a harness arm behind it, and it is why this module talks to `sqlite3` directly instead
-of going through `store.session`.
+`name`, `audit`, `checks` AND `contradictions` OPEN THE STORE READ-ONLY AND MUST NEVER CALL
+`db.connect`. That function is the single entry to the store and it always calls
+`_ensure_schema`, so a preview routed through it would PERFORM the migration it claims to
+be previewing. It is a hard property with a harness arm behind it, and it is why `name` and
+`audit` talk to `sqlite3` directly instead of going through `store.session` —
+`checks` and `contradictions` reuse that same door
+(`cli/cmd_sku_contradictions.py:_read_only`).
 
 `cards photos` IS THE ONE THING HERE THAT TOUCHES 4.45 GB THAT CANNOT BE RE-TAKEN, which is
 why it previews first and why every file it moves is verified against a digest that was
@@ -41,6 +51,8 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from cli import cmd_sku_contradictions
+from pipeline import identity_checks
 from store import Store, db, files, master, photos
 
 # The ladder's own names, in the order `_name_one_card` tries them, so a report can rank a
@@ -365,6 +377,50 @@ def _audit(args, say) -> int:
     return 0
 
 
+# ------------------------------------------------------------------------ cards checks
+
+
+def _checks(args, say) -> int:
+    """The four stored-data checks `D239` builds: read-only, no catalogue,
+    no network, never a repair. Opens the store the same way `audit` does, straight
+    `sqlite3`, never `db.connect` — this reads `name`, `number` and `set_name` only, and a
+    migration is not a preview's business.
+    """
+    directory = files.inventory_dir()
+    conn = _read_only(directory)
+    rows = []
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)")}
+    select_set_name = "set_name" in columns
+    query = "SELECT key, name, number, {} FROM cards".format(
+        "set_name" if select_set_name else "NULL"
+    )
+    for key, name, number, set_name in conn.execute(query):
+        rows.append(identity_checks.CardRecord(key=str(key), name=name, number=number, set_name=set_name))
+    conn.close()
+
+    if not select_set_name:
+        say("VERDICT: not known — this store has no `set_name` column, so class 2, 3 and 4 "
+            "cannot be checked. Run `pkmnscan cards variants --write` first.")
+        return 2
+    if not rows:
+        say("VERDICT: not known — there are no cards in this store")
+        return 2
+
+    results = identity_checks.run_all(rows)
+    total = sum(len(flags) for flags in results.values())
+    say(f"IDENTITY CHECKS  {db.path(directory)}")
+    say(f"  cards {len(rows)}")
+    for name, flags in results.items():
+        say(f"  {name}: {len(flags)}")
+        if flags and getattr(args, "verbose", False):
+            for flag in flags:
+                say(f"    {flag.key}  {flag.detail}")
+    say("")
+    say(f"VERDICT: {total} flag(s). Each is a review signal, never a repair — look at the "
+        "photo before touching the card.")
+    return 0
+
+
 # ----------------------------------------------------------------------- cards photos
 
 
@@ -622,13 +678,20 @@ def _variants(args, say) -> int:
 # --------------------------------------------------------------------------- dispatch
 
 
-_SUBCOMMANDS = {"name": _name, "audit": _audit, "photos": _photos, "variants": _variants}
+_SUBCOMMANDS = {
+    "name": _name,
+    "audit": _audit,
+    "checks": _checks,
+    "contradictions": cmd_sku_contradictions.run,
+    "photos": _photos,
+    "variants": _variants,
+}
 
 
 def run(args, say) -> int:
     action = getattr(args, "cards_action", None)
     handler = _SUBCOMMANDS.get(action)
     if handler is None:
-        say("pkmnscan cards <name|audit|photos|variants>")
+        say("pkmnscan cards <name|audit|checks|contradictions|photos|variants>")
         return 2
     return handler(args, say)

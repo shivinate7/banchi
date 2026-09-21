@@ -125,7 +125,17 @@ PHOTOS_RELOCATED = "photos_relocated"
 # is the only writer, and an upgraded store's archive is correctly empty until the first
 # press: the source's own 357-day window means there was nothing this build could have
 # captured before this table existed either.
-SCHEMA_VERSION = 9
+#
+# TEN, FOR D243. `_add_price_postings` adds `price_postings` — one row per
+# SKU per press that actually wrote a `TCG Marketplace Price` into a file, never cleared and
+# never updated (see `store/postings.py`'s module docstring for why this one can never be an
+# upsert the way `price_history` and `readings` correctly are). Built like `events` rather
+# than through `TABLES`/`TableSpec`: an autoincrement id and a raw `INSERT`, because the
+# `Rows` framework's flush is delete-then-upsert BY KEY, which is exactly the operation this
+# table must never perform. An upgraded store's ledger is correctly empty until the first
+# `emit` or `reprice apply --write` after the upgrade — nothing before this table existed is
+# recoverable, which is the argument for landing it now rather than later.
+SCHEMA_VERSION = 10
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -231,6 +241,16 @@ _INDEXES = (
 _CID_INDEXES = (
     "CREATE UNIQUE INDEX IF NOT EXISTS cards_cid ON cards(cid)",
     "CREATE INDEX IF NOT EXISTS cards_cid_missing ON cards(key) WHERE cid IS NULL",
+)
+
+# D243. Shaped like `events`'s own DDL and not like `TABLES`'s —
+# autoincrement id, one raw `INSERT`, never an `UPDATE` or a `DELETE` anywhere in this
+# module — because `store/postings.py`'s whole argument is that this table must never be
+# reachable through `Rows`'s delete-then-upsert-by-key flush. See that module's docstring.
+_PRICE_POSTINGS_DDL = (
+    "CREATE TABLE IF NOT EXISTS price_postings (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "at INTEGER NOT NULL, sku TEXT NOT NULL, price TEXT NOT NULL, source TEXT NOT NULL, "
+    "run TEXT, replaced TEXT)"
 )
 
 
@@ -342,6 +362,10 @@ def _ensure_schema(
         "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, "
         "at TEXT, event TEXT, position TEXT, payload TEXT NOT NULL)"
     )
+    conn.execute(_PRICE_POSTINGS_DDL)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS price_postings_sku ON price_postings(sku)"
+    )
     conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
     for table, column in _INDEXES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS {table}_{column} ON {table}({column})")
@@ -428,6 +452,8 @@ def _upgrade(
                 _add_set_columns(conn)       # D213
             if stored < 9:
                 _add_price_history(conn)     # D219
+            if stored < 10:
+                _add_price_postings(conn)    # D243
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1165,6 +1191,27 @@ def _add_price_history(conn: sqlite3.Connection) -> None:
     )
 
 
+def _add_price_postings(conn: sqlite3.Connection) -> None:
+    """Schema 10: `price_postings` (D243).
+
+    THE SAME PURELY-ADDITIVE SHAPE `_add_readings` AND `_add_price_history` USED, one table
+    nothing older has, so there is nothing to backfill and nothing to read wrong: an
+    upgraded store's ledger starts empty at the first `emit` or `reprice apply --write` after
+    the upgrade. Built with the raw DDL `_ensure_schema`'s fresh-store branch also uses
+    (`_PRICE_POSTINGS_DDL`), never through `TABLES`/`_ddl` — see `store/postings.py` for why
+    this table is shaped like `events` rather than like `price_history`.
+
+    NOTHING BEFORE THIS TABLE EXISTED IS RECOVERABLE, and that is the honest answer rather
+    than a gap: the number this table records was never observed from a live source that
+    could be asked again, only composed once at the moment a file was written, so there is
+    no upgrade step that could backfill it from anything already on disk.
+    """
+    conn.execute(_PRICE_POSTINGS_DDL)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS price_postings_sku ON price_postings(sku)"
+    )
+
+
 def _add_box_ids(conn: sqlite3.Connection) -> dict:
     """Schema 1 -> 2: give every box in an existing store its true index (D145).
 
@@ -1578,6 +1625,54 @@ def append_events(conn: sqlite3.Connection, events: Iterable[dict]) -> int:
     return count
 
 
+def append_postings(conn: sqlite3.Connection, postings: Iterable[dict]) -> int:
+    """One `INSERT` per posting, never a `REPLACE` and never keyed on anything a caller could
+    collide with by accident — `store/postings.py`'s whole argument. A second posting of a
+    SKU already in this table is a second row, always, which is what makes this table worth
+    building at all.
+    """
+    count = 0
+    for posting in postings:
+        conn.execute(
+            "INSERT INTO price_postings (at, sku, price, source, run, replaced) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                posting.get("at"),
+                posting.get("sku"),
+                posting.get("price"),
+                posting.get("source"),
+                posting.get("run"),
+                posting.get("replaced"),
+            ),
+        )
+        count += 1
+    return count
+
+
+def postings_for_sku(conn: sqlite3.Connection, sku: str) -> List[dict]:
+    """Every posting this ledger holds for one SKU, oldest first — the whole point of
+    keeping more than one row per SKU."""
+    rows = conn.execute(
+        "SELECT id, at, sku, price, source, run, replaced FROM price_postings "
+        "WHERE sku = ? ORDER BY id",
+        (str(sku),),
+    ).fetchall()
+    return [
+        {
+            "id": row[0], "at": row[1], "sku": row[2], "price": row[3],
+            "source": row[4], "run": row[5], "replaced": row[6],
+        }
+        for row in rows
+    ]
+
+
+def postings_count(conn: sqlite3.Connection) -> int:
+    """How many postings this ledger holds in total — what
+    `scripts/price-postings-recovery.py`'s measurement reads to say how few there are next to
+    the store's real history of prices asked."""
+    return int(conn.execute("SELECT COUNT(*) FROM price_postings").fetchone()[0])
+
+
 def history(conn: sqlite3.Connection) -> List[dict]:
     """Every event, in the order it was written. Refuses the whole log over one bad row.
 
@@ -1677,8 +1772,11 @@ def events_at(conn: sqlite3.Connection, key: str) -> List[dict]:
 def dump_tables(conn: sqlite3.Connection) -> Dict[str, List[tuple]]:
     """Every table's rows, ordered. What T7 compares where it used to compare file bytes."""
     out: Dict[str, List[tuple]] = {}
-    for table in list(TABLES) + ["events"]:
-        order = "id" if table == "events" else ("queue, key" if table == "queues" else "key")
+    for table in list(TABLES) + ["events", "price_postings"]:
+        order = (
+            "id" if table in ("events", "price_postings")
+            else ("queue, key" if table == "queues" else "key")
+        )
         out[table] = conn.execute(f"SELECT * FROM {table} ORDER BY {order}").fetchall()
     return out
 
