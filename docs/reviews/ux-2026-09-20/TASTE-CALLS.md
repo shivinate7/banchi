@@ -5,7 +5,12 @@ decided, what they argued, what they rejected, what a reviewer said about it, an
 exact place to change it if the owner later wants it to go the other way.
 
 Nothing here is settled. This is a record of reasoning, not a decision log, and going the
-other way on any of it costs one edit at the line named.
+other way on any of it costs one edit at the place named.
+
+**Each "Reverse at" names a file and a symbol rather than a line number.** A line number in
+a document is wrong the moment anyone edits the file above it, and `main` now carries a
+`line anchor ratchet` that holds a new document to none. A rule name or a function name is
+found by grep and survives the edit.
 
 ## Layout and treatment
 
@@ -20,7 +25,8 @@ bordered cards reads as broken. Merging removes the mismatch rather than paperin
 **Rejected:** stretching either panel to match; leaving it alone.
 **Watch:** a merged surface usually fails where two panels did not — when one side is
 empty, or much taller than the other. That is what its reviewer was asked to test.
-**Reverse at:** `app/src/Pricing.css:307-338`, `app/src/Pricing.tsx:4249,4450,4644`.
+**Reverse at:** the `.pricing-cheap`/`.pricing-verdict` merged-surface block in
+`app/src/Pricing.css`, and the `data-cards` class names in `app/src/Pricing.tsx`.
 
 ### The Fulfiller's action button given a solid fill
 
@@ -39,7 +45,8 @@ writes, per its own comment, so the solid ink register matches `.ff-start` inste
 **Decided:** `.home-standing-row`, `.home-stage`, `.home-deck` ease at 120ms, were 200ms.
 **Argued:** every button and nav link in the product eases at 120ms. Each timing is fine
 alone; the mismatch shows when a tile and a button sit near each other.
-**Reverse at:** `app/src/Home.css:40,55,65,241,341`.
+**Reverse at:** the `--bn-t-fast` transitions on `.home-standing-row`, `.home-stage` and
+`.home-deck` in `app/src/Home.css`.
 
 ## Numbers and formatting
 
@@ -51,7 +58,7 @@ headline in the product treated quietly. Matches `.bn-title`, `.bn-empty-title`,
 `.bn-section-title`, `.codes-task-title`.
 **Against:** the review flagged the light weight as *possibly deliberate* — a verdict is a
 sentence, not a numeral, and treating it quietly may have been the intent.
-**Reverse at:** `app/src/Revenue.css:27-32`.
+**Reverse at:** the verdict rule in `app/src/Revenue.css`.
 
 ### Per-product Gross comma-grouped
 
@@ -68,7 +75,8 @@ Copies column beside it was already inconsistent about whether large numbers get
 row, because `5/2/2026` and `12/13/2026` differ by four characters.
 **Watch:** whether this is now inconsistent with dates rendered on other screens, and
 whether it trades one jitter for another. Its reviewer was asked both.
-**Reverse at:** `app/src/Revenue.tsx:227-234` (`formatLastSold`).
+**Reverse at:** `formatLastSold` in `app/src/Revenue.tsx`, now over `saleDate()` in
+`app/src/dates.ts`.
 
 ## The design system
 
@@ -139,7 +147,7 @@ floating phrase in the reading order.
 **Decided:** an empty-string card name renders "Unidentified".
 **Argued:** the `??` fallback never fired on an empty string, so one row in a permanent
 ledger had no identity at all. A blank is worse than a word that admits the gap.
-**Reverse at:** `app/src/Graveyard.tsx:234`.
+**Reverse at:** the card-name fallback in `app/src/Graveyard.tsx`.
 
 ### Orders lede names the buyer count
 

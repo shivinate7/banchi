@@ -52,6 +52,24 @@ merged. None has a PR.
    literals that duplicate a token's value exactly and will desync the day anyone re-tunes
    one — plus a guard so they cannot return. The tokens it needs now exist.
 
+## Debts this landing took on, for when there is budget
+
+1. **`TASTE-CALLS.md`'s "Reverse at" lines lost their line numbers.** `main` gained a
+   `line anchor ratchet` that holds a new document to zero `file:line` references, landed by
+   another session between this work being written and merged. Rather than pin someone
+   else's brand-new gate, the six anchors were rewritten to name a file and a rule or
+   function instead. Grep finds them and an edit above does not break them, so this is
+   arguably the better form — but it was chosen under time pressure, not on the merits.
+   **Worth settling:** whether a records document is a legitimate line-anchor case that
+   deserves an allow-list rather than a pin, and taking that to the session that built the
+   ratchet.
+2. **The four re-pinned ceilings and the ratchet question behind them** — see entry 9 below
+   and the `#/orders`, `#/revenue`, `#/review` re-pin. The ratchet counts screen-reader-only
+   text against a visible-word budget, which may mean it measures the wrong thing. Nothing
+   here answers that.
+3. **Nothing in this effort has been seen against real data**, and no live resize has been
+   tested. Both are named below, and both remain the largest gaps in the verification.
+
 ## Still the owner's
 
 - **The window drag.** Whether the sidebar actually collapses on a live resize is UNKNOWN.
