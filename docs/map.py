@@ -4032,6 +4032,33 @@ COMPONENTS = [
                 # script's premise stale rather than merely its prose. D18 is why it may sit on
                 # the commit path at all; D16 is the placement of its self-test.
                 "governed_by": ["D16", "D18", "D45", "D58", "D68", "D92"]},
+            "css-var-check.py": {
+                "does": "`make css-var-check` — a `var(--x)` with no fallback, where `--x` "
+                        "is defined nowhere, drops the whole declaration silently. Five of "
+                        "these accumulated across four screens (2026-09-20 UX review, Tier 1 "
+                        "item 1) before anyone saw them, confirmed live by reading "
+                        "`getComputedStyle` in the running app. REFERENCES are read from BOTH "
+                        "`.css` and `.ts`/`.tsx` (a plain or template-literal string is not "
+                        "stripped, only comments are) — it shipped reading `.css` only, and a "
+                        "reviewer's mutation of a real `Gallery.tsx` reference "
+                        "(`var(--bn-ok)` → a typo) exited 0 the same day it landed. A "
+                        "DEFINITION is collected from a `.css` declaration OR from a TS/TSX "
+                        "`style={{...}}` span's own runtime set — `style={{ '--x': ... }}`, a "
+                        "bracket computed key, `.setProperty('--x', ...)` — measured across "
+                        "app/src before those three shapes were chosen, or every property "
+                        "Banchi sets at runtime would be a false positive. The first two are "
+                        "read ONLY inside a `style={{...}}` span, found by brace-counting, so "
+                        "an unrelated object literal whose key happens to be spelled like a "
+                        "token cannot mask a real finding. `var(--x, fallback)` is never a "
+                        "finding: the fallback IS the definition. Comments are stripped "
+                        "before either side is collected; `@media`/`@supports` are scanned "
+                        "like anywhere else. In `make check`, not on the git commit path — "
+                        "unlike sigil-check, it is not (yet) armed in "
+                        "scripts/githooks/pre-commit.",
+                # D18 is why it may sit on the commit path at all (it writes nothing); D173 is
+                # the mechanization rule this check exists to satisfy for a defect class that
+                # was, until now, only found by hand.
+                "governed_by": ["D18", "D173"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -5192,11 +5219,11 @@ COMPONENTS = [
                                     "spoke a different brand depending on the window's width; "
                                     "`every card has an address` left the product with that "
                                     "edit and is no longer copy anywhere.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
-                                            "D28", "D31", "D33", "D39", "D49", "D51", "D53",
-                                            "D57", "D61", "D63", "D66", "D69", "D70", "D94",
-                                            "D95", "D100", "D105", "D109", "D120", "D134",
-                                            "D159", "D207", "D227"]},
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28",
+                                            "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61",
+                                            "D63", "D66", "D69", "D70", "D94", "D95", "D100",
+                                            "D105", "D109", "D120", "D123", "D134", "D159", "D207",
+                                            "D227"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -5241,8 +5268,8 @@ COMPONENTS = [
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51",
-                                            "D94", "D95", "D110", "D117", "D118", "D134", "D152",
-                                            "D204", "D205", "D218"]},
+                                            "D94", "D95", "D110", "D117", "D118", "D123", "D134",
+                                            "D152", "D204", "D205", "D218"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -6986,8 +7013,8 @@ COMPONENTS = [
                                                "D51", "D57", "D58", "D61", "D63", "D66", "D69",
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D181", "D192",
-                                               "D193", "D195", "D196", "D203", "D209", "D212",
-                                               "D220", "D221"]},
+                                               "D193", "D194", "D195", "D196", "D203", "D209",
+                                               "D212", "D220", "D221"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -7301,6 +7328,16 @@ COMPONENTS = [
                                      "different sentences.",
                              # D33 is the money gate, whose receipt this now carries.
                              "governed_by": ["D33"]},
+            "src/dates.ts": {"does": "A SALE DATE, SAID THE SAME WAY EVERYWHERE — `saleDate`. "
+                                     "Extracted 2026-09-20, a UX review follow-up: Revenue.tsx "
+                                     "had padded its own 'Last sold' column against a jittering "
+                                     "un-padded `toLocaleDateString()`, and ProductHistory.tsx "
+                                     "was left calling that identical bare form — the same "
+                                     "defect, uncaught, in a sibling file, which is exactly the "
+                                     "drift money.ts's own header names as the reason a second "
+                                     "copy is never the fix. Both month and day are asked for "
+                                     "`2-digit`, so `Sep 09, 2026` and `Sep 13, 2026` take the "
+                                     "same width."},
             "src/pricingSource.ts": {"does": "WHERE `#/pricing`'s ROWS CAME FROM, AND WHAT MAY "
                                              "BE ASKED ABOUT THEM (D103). One type, two "
                                              "builders, the hash parsing, and the adapter that "

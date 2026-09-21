@@ -17,7 +17,7 @@
 .boxops-identity-num {
   font-size: var(--bn-fs-xs);
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
   color: var(--bn-ink-4);
 }
@@ -127,7 +127,7 @@
   background: var(--bn-surface-2);
   min-width: 0;
 }
-.boxops-census-cell dt { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.boxops-census-cell dt { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .boxops-census-cell dd {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-lg);
@@ -168,7 +168,7 @@
 .boxops-ops > .boxops-op:last-child,
 .boxops-ops > :last-child > .boxops-op:last-of-type { border-bottom: 0; }
 .boxops-op:hover:not(:disabled) { background: var(--bn-hover); }
-.boxops-op:disabled { opacity: 0.5; }
+.boxops-op:disabled { opacity: var(--bn-disabled); }
 .boxops-op-icon {
   display: grid;
   place-items: center;

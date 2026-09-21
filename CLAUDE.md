@@ -150,7 +150,8 @@ make demo-freshness # whether the bundle matches its recording. No gate: CI rebu
 make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
-                    #   screen-freshness-selftest + sigil-check + ignore-check +
+                    #   screen-freshness-selftest + sigil-check +
+                    #   css-var-check + css-var-check-selftest + ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
                     #   mutate-anchors +
                     #   githooks-selftest + merge-selftest + revert-selftest +
@@ -165,6 +166,13 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
+make css-var-check  # a `var(--x)` with no fallback where `--x` is defined nowhere — the
+                    #   whole declaration drops silently, with no warning. A definition is a
+                    #   `.css` declaration or a TS/TSX runtime set (`style={{ '--x': ... }}`,
+                    #   a bracket computed key, `.setProperty('--x', ...)`).
+                    #   `PKMNSCAN_CSS_VARS=off` skips it, printed in the refusal.
+make css-var-check-selftest  # that checker, on fixtures in both directions: a genuinely
+                    #   undefined `var()`, one with a fallback, one defined only from TSX.
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
 make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
                     #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.

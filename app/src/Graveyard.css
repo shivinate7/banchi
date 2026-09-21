@@ -92,7 +92,10 @@
 .graveyard-sub { display: flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
 .graveyard-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
-.graveyard-condition { display: block; font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+/* INK-3, NOT INK-4 (UX review, 2026-09-20): a card's condition is a line a person reads, the
+   same case CardLocations.css:130 already argued — ink-4 measures 3.34:1 here in light theme,
+   under the 4.5:1 body-text floor. */
+.graveyard-condition { display: block; font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 /* D218: `.bn-pill` is already `inline-flex; gap: 5px`, so the gap alone spaces the reason from
    "Retired"; the dot needs only a trailing margin to clear the reason after it. */
 .graveyard-reason::before { content: '·'; margin-right: 5px; }

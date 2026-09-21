@@ -307,7 +307,7 @@
   min-width: 0;
   font-size: var(--bn-fs-xs);
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -853,7 +853,7 @@
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
 }
-.browse-stepper-btn:disabled { opacity: 0.4; box-shadow: none; background: transparent; }
+.browse-stepper-btn:disabled { opacity: var(--bn-disabled); box-shadow: none; background: transparent; }
 .browse-stepper-count {
   min-width: 64px;
   text-align: center;

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check css-var-check css-var-check-selftest suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -138,6 +138,10 @@ help:
 	@echo "  make screen-freshness-selftest  that guard's own cases, both directions. It sat"
 	@echo "                    on no target at all until 2026-09-12 and was red on main."
 	@echo "  make sigil-check   a bare \`#\` on a screen is a COUNT, never a store key (D92)."
+	@echo "  make css-var-check   a \`var(--x)\` with no fallback where \`--x\` is defined"
+	@echo "                    nowhere — the whole declaration drops silently."
+	@echo "  make css-var-check-selftest  that checker, proved on fixtures in both directions,"
+	@echo "                    including a property defined only from TSX."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
@@ -158,7 +162,8 @@ help:
 	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
 	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
 	@echo "                    screen-freshness +"
-	@echo "                    screen-freshness-selftest + sigil-check + ignore-check +"
+	@echo "                    screen-freshness-selftest + sigil-check +"
+	@echo "                    css-var-check + css-var-check-selftest + ignore-check +"
 	@echo "                    lint + vale + typecheck + audit-self-test +"
 	@echo "                    mutate-anchors +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
@@ -500,6 +505,8 @@ check:
 	@$(MAKE) --no-print-directory screen-freshness
 	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory sigil-check
+	@$(MAKE) --no-print-directory css-var-check
+	@$(MAKE) --no-print-directory css-var-check-selftest
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory vale
@@ -583,6 +590,8 @@ ci-check:
 	@$(MAKE) --no-print-directory screen-freshness
 	@$(MAKE) --no-print-directory screen-freshness-selftest
 	@$(MAKE) --no-print-directory sigil-check
+	@$(MAKE) --no-print-directory css-var-check
+	@$(MAKE) --no-print-directory css-var-check-selftest
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
@@ -622,6 +631,26 @@ audit-self-test:
 sigil-check:
 	@python3 scripts/sigil-check.py --self-test
 	@python3 scripts/sigil-check.py
+
+# A `var(--x)` WITH NO FALLBACK, WHERE `--x` IS DEFINED NOWHERE (2026-09-20 review, Tier 1
+# item 1): the whole declaration drops silently, and five of these accumulated across four
+# screens before anyone noticed. Split into a check and its own `-selftest`, split from
+# `sigil-check`'s own precedent of bundling both: this checker's self-test is fixture trees
+# (a whole synthetic stylesheet and TSX file per case), not single-line strings, and the
+# split keeps `make css-var-check`'s own output to the real finding rather than twelve lines
+# of fixture cases first. In `make check`, not the git hook: it writes nothing, needs no
+# venv and no node, same as `sigil-check` — but it is not (yet) armed in
+# scripts/githooks/pre-commit, so it is not claimed here as being on that path.
+css-var-check:
+	@python3 scripts/css-var-check.py
+
+# THE GUARD IS NOT TRUSTED UNTIL IT HAS GONE RED ON THE DEFECT IT GUARDS: a fixture with a
+# genuinely undefined `var()`, one with a fallback, and one defined only from TSX
+# (`style={{ '--x': ... }}`, a bracket computed key, and `.setProperty(`), plus the two real
+# misspellings this check was built to catch. In `check` and `ci-check`, beside
+# `css-var-check` itself.
+css-var-check-selftest:
+	@python3 scripts/css-var-check.py --self-test
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
