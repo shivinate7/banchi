@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -148,6 +148,10 @@ help:
 	@echo "                    nowhere — the whole declaration drops silently."
 	@echo "  make css-var-check-selftest  that checker, proved on fixtures in both directions,"
 	@echo "                    including a property defined only from TSX."
+	@echo "  make token-literal-check  a CSS literal exactly equal to a design token's value,"
+	@echo "                    in its own property family — should have been var(...)."
+	@echo "                    Ratcheted per file; PKMNSCAN_TOKEN_LITERALS=off skips it."
+	@echo "  make token-literal-check-selftest  that checker, on fixtures in both directions."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
@@ -169,7 +173,8 @@ help:
 	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
 	@echo "                    screen-freshness +"
 	@echo "                    screen-freshness-selftest + sigil-check +"
-	@echo "                    css-var-check + css-var-check-selftest + ignore-check +"
+	@echo "                    css-var-check + css-var-check-selftest + token-literal-check +"
+	@echo "                    ignore-check +"
 	@echo "                    lint + vale + typecheck + audit-self-test +"
 	@echo "                    mutate-anchors +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
@@ -182,7 +187,7 @@ help:
 	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
-	@echo "                    guard-scope-selftest"
+	@echo "                    guard-scope-selftest + token-literal-check-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -521,6 +526,7 @@ check:
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory token-literal-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory vale
@@ -550,6 +556,7 @@ check:
 	@$(MAKE) --no-print-directory js-breakpoints-selftest
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
+	@$(MAKE) --no-print-directory token-literal-check-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -600,6 +607,7 @@ ci-check:
 	@$(MAKE) --no-print-directory js-breakpoints-selftest
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
+	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -608,6 +616,7 @@ ci-check:
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory token-literal-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
@@ -675,6 +684,28 @@ css-var-check:
 # `css-var-check` itself.
 css-var-check-selftest:
 	@python3 scripts/css-var-check.py --self-test
+
+# A CSS LITERAL EXACTLY EQUAL TO A DESIGN TOKEN'S VALUE, IN ITS OWN PROPERTY FAMILY
+# (`docs/reviews/ux-2026-09-20/RANKING.md` §4): `font-size: 22px` where `--bn-fs-2xl: 22px`
+# means nothing here stops the two diverging the next time the scale moves. `css-var-check`'s
+# sibling, opposite direction: that one catches a `var()` pointed at nothing, this one catches
+# a value that should have BEEN a `var()`. Reads `tokens.css` itself on every run — no copied
+# list. RATCHETED PER FILE (D-token-literals-are-pinned, D229's shape): main already carries
+# many of these, so the gate is a ceiling on each file's OWN count, not zero. Writes nothing;
+# `token-literal-check-pin.py --pin` is the one thing that may (D18). In `make check`, not the
+# git hook — same reasons as `css-var-check` immediately above.
+token-literal-check:
+	@python3 scripts/token-literal-check.py
+
+# THE GUARD IS NOT TRUSTED UNTIL IT HAS GONE RED ON THE DEFECT IT GUARDS: a literal equal to a
+# token in its own family fails; the same value as var() passes; a var() fallback passes; the
+# same value under a DIFFERENT family's property passes (4px matches --bn-r-xs under
+# border-radius and --bn-1 under padding, never the other's); a raised per-file count fails; a
+# lowered one passes and is only noted; an unseen file with findings fails; a stale allow-list
+# entry fails; a shorthand is counted component by component. Wired last among the guard
+# self-tests, `make check`'s own D161 order, beside `guard-scope-selftest`.
+token-literal-check-selftest:
+	@python3 scripts/token-literal-check.py --self-test
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
