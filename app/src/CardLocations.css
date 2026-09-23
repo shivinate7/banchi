@@ -250,6 +250,24 @@
   /* NOT `justify-self: start`: that sizes the cell to its content and lets a long marker run
      out under the sale control beside it (measured: a 211px state cell in a 110px track). */
   .card-locations-owner .card-locations-state { justify-self: stretch; justify-content: flex-start; }
+
+  /* THE CURRENT ROW'S SECOND PILL LOSES ITS WORD, NOT ITS SPACE. `Viewing` sits beside the row's
+     own state pill only here, sharing the narrow row with `.card-locations-action`'s 137px
+     reservation (D118) — measured, the two pills together wrapped `Identified` onto its own
+     line under 335px. GROWING THE ROW TO FIT THEM WAS TRIED AND MEASURABLY WRONG: a state cell
+     of its own line fixed the wrap and broke `app/tests/inventory.spec.ts`'s
+     `toBeInViewport({ ratio: 1 })` on the current row, because the taller row no longer fit
+     the band. The word rides `.bn-sr`'s own technique — clipped to nothing, never
+     `display: none` — so a screen reader still reads `Viewing`, and the eye icon alone still
+     marks the row on screen; the pill's own height and the row's are exactly what they were. */
+  .card-locations-owner .card-locations-viewing-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 }
 .card-locations-owner .card-locations-row:last-child { border-bottom: 0; }
 .card-locations-owner .card-locations-row:hover { background: var(--bn-hover); }

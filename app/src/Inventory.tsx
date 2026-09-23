@@ -103,6 +103,18 @@ function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
 }
 
+/** D218: a typed middle dot is a defect wherever it is typed, and `Position.label`'s own
+ *  ` · ' is exactly that — server-composed and real, but never fit to retype as a screen's
+ *  visible or spoken text. Every screen that DRAWS a position splits it and lets CSS join
+ *  the parts (`PositionLabel.tsx`); the toast body and the receipt's `aria-label`/dialog
+ *  title below carry `place` as PLAIN TEXT, where there is no CSS to draw a separator with,
+ *  so this reads it as a sentence instead — the same `', '` `Home.tsx`'s box line takes for
+ *  its own `title` attribute. THE SERVER STRING ITSELF IS NEVER EDITED (other screens split
+ *  on it); this is a read, not a rewrite. */
+function sayPlace(label: string): string {
+  return label.replace(/ · /g, ', ')
+}
+
 /** The retire reason as the panel labels it — `given_away` is `Given away` in a sentence.
  *  Exported so Graveyard reads the one label table rather than the raw enum (UX review,
  *  2026-09-20, "Retired · pulled"). Takes `string` rather than `RetireReason` because
@@ -377,7 +389,7 @@ export function Inventory() {
     if (previous !== undefined) dismissToast(previous)
     const id = toast({
       kind: full.canUndo ? 'receipt' : 'status',
-      icon: full.kind === 'sale' ? 'check' : 'minus',
+      icon: full.kind === 'sale' ? 'check' : 'archive',
       title: full.said,
       body: full.note === null ? full.place : `${full.place} — ${full.note}`,
       ttlMs: UNDO_WINDOW_MS,
@@ -396,7 +408,7 @@ export function Inventory() {
         key: copy.key,
         box: copy.place.box,
         index: copy.place.index,
-        place: copy.place.label ?? `pooled · ${copy.key}`,
+        place: sayPlace(copy.place.label ?? `pooled, ${copy.key}`),
       }
       try {
         const reversible = canTakeBack(await markSold(copy.place.box, copy.place.index))
@@ -449,7 +461,7 @@ export function Inventory() {
         key: copy.key,
         box: copy.place.box,
         index: copy.place.index,
-        place: copy.place.label ?? `pooled · ${copy.key}`,
+        place: sayPlace(copy.place.label ?? `pooled, ${copy.key}`),
       }
       try {
         const reversible = canTakeBack(
@@ -939,7 +951,7 @@ function Action({
   }
   if (copy.state === 'retired' || retiredKeys.has(copy.key)) {
     return primary || copy.state !== 'retired' ? (
-      <Pill tone="warn" icon="minus">
+      <Pill tone="warn" icon="archive">
         Retired
       </Pill>
     ) : null
@@ -956,12 +968,18 @@ function Action({
       >
         Mark sold
       </Button>
+      {/* A BARE `—` READ AS UNCLEAR ICON-ONLY (owner's ruling, 2026-09-20: "clearer icon
+          only"). `archive` — a lidded box — reads as "put away" rather than "delete"; the
+          accessible name is explicit here too, rather than leaning on the kit's `.bn-sr`
+          children alone, because a design-check assertion needs to find it by name without
+          depending on that implementation detail. */}
       <Button
         variant="ghost"
         size={primary ? 'md' : 'sm'}
-        icon="minus"
+        icon="archive"
         iconOnly={!primary}
         title={primary ? undefined : 'Retire'}
+        aria-label={primary ? undefined : 'Retire'}
         disabled={busyKey !== null}
         onClick={() => onRetire(copy)}
       >
@@ -991,7 +1009,7 @@ function RetirePanel({
 
 
   return (
-    <Overlay kind="dialog" label={`Retire: ${copy.place.label ?? copy.key}`} onClose={onCancel} className="inventory-confirm">
+    <Overlay kind="dialog" label={`Retire: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">
         <span className="bn-eyebrow">Retire</span>
         <h2 className="inv-dialog-title">Why is this copy leaving?</h2>
@@ -1010,7 +1028,7 @@ function RetirePanel({
                  dialog is about to retire is the copy on screen, whatever has slid through
                  its slot since the search answered. */
               src={photoUrl(copy.place.box, copy.place.index, copy.cid)}
-              alt={`The card stored at ${copy.place.label ?? copy.key}`}
+              alt={`The card stored at ${sayPlace(copy.place.label ?? copy.key)}`}
               onError={() => setBroken(true)}
             />
           )}
