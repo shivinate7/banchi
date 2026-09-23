@@ -42,13 +42,14 @@ merged. None has a PR.
 
 ## Do this next, in this order
 
-1. **Run the cleanup lane on top of the integration branch**, never against `main` — its
-   four items touch files owned by all four lanes. All four are owner-approved:
-   `font-weight: 650` across six files; `.bn-rule` off the faint token (3.34:1, worse than
-   what was just fixed); wire `.review-key` onto the new `.bn-kbd-lg`, which has zero callers
-   until someone does; and `.bn-faint` applied to real data text in `Graveyard.tsx` and
-   `Codes.tsx`.
-2. **Round two**, deferred until the above lands: the literal-vs-token sweep — roughly 40
+1. **The cleanup lane — DONE, 2026-09-23, PR #454.** All four owner-approved items:
+   `font-weight: 650` to `700` in six rules; `.bn-rule` text off the faint token (3.34:1 to
+   4.85:1); `.review-key` consolidated onto the kit's `.bn-kbd-lg`, box model proven
+   identical against `main`; `.bn-faint` moved off three real sentences, with nine em-dash
+   marks left faint on purpose. A reviewer caught one regression on the way — the keyless
+   placeholder lost its hover recolour — fixed before merge. Real-data rendering is still
+   UNKNOWN, as everywhere else in this effort.
+2. **Round two**, now unblocked: the literal-vs-token sweep — roughly 40
    literals that duplicate a token's value exactly and will desync the day anyone re-tunes
    one — plus a guard so they cannot return. The tokens it needs now exist.
 
