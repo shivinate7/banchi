@@ -780,11 +780,10 @@ export function WalkMainPane({
           market={row.card.run === null ? undefined : priced[row.card.run]}
           listings={listings}
           phone={phone}
-          // "Inventory only" — the owner's ruling on D-correct-a-listed-answer. The walk here
-          // is a mode of inventory's own pane (§13), not inventory itself, and the
-          // listing-correction control stays off it. `correctable` defaults true for
-          // `BoxBrowse.tsx`'s own call, unedited; this is the one call site that says no.
-          correctable={false}
+          // "Inventory only" — the owner's ruling on D-correct-a-listed-answer, now
+          // `correctable`'s OWN default: an allow-list of one screen, so this call site needs
+          // no flag at all. The walk here is a mode of inventory's own pane (§13), not
+          // inventory itself, and omitting the prop IS the "no control" answer.
         />
       )}
       {!zoomed || row === null ? null : (

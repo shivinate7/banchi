@@ -372,16 +372,19 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
  *  `correctable` IS THE SCREEN'S OWN WORD, on the owner's ruling (D-correct-a-listed-answer):
  *  "Inventory only" — the listing-correction control shows on `#/inventory` and not on
  *  `#/orders`, and the screen says so rather than this file guessing from the route. DEFAULTS
- *  TRUE so `BoxBrowse.tsx`'s own call site needs no edit (a fenced file, Lanes 3/4's);
- *  `OrdersWalkPane.tsx` passes `false` explicitly at its one call site. `false` renders NOTHING
- *  for the control, not an empty reserved slot — D118 protects a control's OWN state change,
- *  and a screen that never draws the control has no such change to protect against. */
+ *  FALSE — an ALLOW-LIST of one screen, on the owner's OWN wording, so a THIRD screen that
+ *  mounts this pane later inherits nothing silently. `BoxBrowse.tsx` passes `correctable` at
+ *  its one call site (the smallest edit that ruling reaches into a fenced file for);
+ *  `OrdersWalkPane.tsx` needs no flag at all now — omitting one IS "no control", the same
+ *  answer `false` gave before. `false`/omitted renders NOTHING for the control, not an empty
+ *  reserved slot — D118 protects a control's OWN state change, and a screen that never draws
+ *  the control has no such change to protect against. */
 export function CardDetailsSection({
   card,
   market,
   listings,
   phone,
-  correctable = true,
+  correctable = false,
 }: {
   readonly card: InventoryCard
   readonly market: MarketRead | undefined
