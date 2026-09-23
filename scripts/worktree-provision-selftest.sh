@@ -2,11 +2,13 @@
 # `make worktree-provision-selftest` — scripts/worktree-provision.sh's app/node_modules
 # provisioning (D-worktree-node-modules), proved against a throwaway fixture.
 #
-# WHY A FIXTURE RATHER THAN THE REAL TREE. Four cases matter: a fresh worktree cloning from
+# WHY A FIXTURE RATHER THAN THE REAL TREE. Seven cases matter: a fresh worktree cloning from
 # main, a worktree whose lockfile has moved needing a real install, an already-current
-# worktree doing nothing at all, and a lockfile bump AFTER provisioning being caught rather
-# than left to surface later as a confusing Playwright-version mismatch. None of the four
-# may touch this checkout's own app/node_modules or spend a real network install to prove.
+# worktree doing nothing at all, a lockfile bump AFTER provisioning being caught rather than
+# left to surface later as a confusing Playwright-version mismatch, a self-invocation (main
+# == cwd) never deleting the real install, a stale main never being cloned as though it were
+# current, and two racing invocations never both installing at once. None of the seven may
+# touch this checkout's own app/node_modules or spend a real network install to prove.
 #
 # `npm` IS STUBBED. A tiny script on a fixture-only PATH stands in for it: `--prefix X ci`
 # writes a placeholder package into X/node_modules and exits 0, anything else exits 1. That
@@ -50,6 +52,25 @@ chmod +x "$tmp/bin/npm"
 
 lock_digest() { shasum -a 256 "$1" | awk '{print $1}'; }
 
+# The staleness read reuses scripts/serve.py FOR REAL, so any fixture directory that runs
+# worktree-provision.sh needs it and its own dependency chain importable — real files,
+# copied rather than symlinked, because `Path(__file__).resolve()` would follow a symlinked
+# scripts/ straight back to THIS checkout's real REPO_ROOT and read/write the real
+# app/node_modules instead of the fixture's. `store/__init__.py` is replaced with an EMPTY
+# stub: the real one cascades into the whole store/ package for a symbol serve.py never
+# reads (`store.files` is imported as a submodule, which does not require the package's own
+# `__init__` to do anything at all).
+install_serve_deps() {
+  local dest="$1"
+  mkdir -p "$dest/scripts" "$dest/server" "$dest/store"
+  cp "$ROOT/scripts/serve.py" "$dest/scripts/serve.py"
+  cp "$ROOT/scripts/primary_sync.py" "$dest/scripts/primary_sync.py"
+  cp "$ROOT/envfile.py" "$dest/envfile.py"
+  cp "$ROOT/server/ports.py" "$dest/server/ports.py"
+  cp "$ROOT/store/files.py" "$dest/store/files.py"
+  : > "$dest/store/__init__.py"
+}
+
 # A two-tree fixture: MAIN with a real (fake) install and its own package-lock.json, and a
 # worktree carrying only a package-lock.json — the SAME bytes when $1 is "same", different
 # bytes when $1 is "differ".
@@ -64,21 +85,7 @@ fresh_fixture() {
   else
     cp "$tmp/main/app/package-lock.json" "$tmp/wt/app/package-lock.json"
   fi
-  # The staleness read reuses scripts/serve.py FOR REAL, so the fixture needs it and its own
-  # dependency chain importable — real files, copied rather than symlinked, because
-  # `Path(__file__).resolve()` would follow a symlinked scripts/ straight back to THIS
-  # checkout's real REPO_ROOT and read/write the real app/node_modules instead of the
-  # fixture's. `store/__init__.py` is replaced with an EMPTY stub: the real one cascades
-  # into the whole store/ package for a symbol serve.py never reads (`store.files` is
-  # imported as a submodule, which does not require the package's own `__init__` to do
-  # anything at all).
-  mkdir -p "$tmp/wt/scripts" "$tmp/wt/server" "$tmp/wt/store"
-  cp "$ROOT/scripts/serve.py" "$tmp/wt/scripts/serve.py"
-  cp "$ROOT/scripts/primary_sync.py" "$tmp/wt/scripts/primary_sync.py"
-  cp "$ROOT/envfile.py" "$tmp/wt/envfile.py"
-  cp "$ROOT/server/ports.py" "$tmp/wt/server/ports.py"
-  cp "$ROOT/store/files.py" "$tmp/wt/store/files.py"
-  : > "$tmp/wt/store/__init__.py"
+  install_serve_deps "$tmp/wt"
 }
 
 run_provision() {
@@ -184,6 +191,103 @@ if [ -f "$tmp/wt/app/node_modules/.pkmnscan-lock" ] \
   ok "a lockfile bump after provisioning is caught and re-provisioned"
 else
   bad "a lockfile bump after provisioning went undetected"
+fi
+
+# ---------------------------------------------------------- case 5: self-invocation guard
+#
+# The unfixed script compares app/package-lock.json against $main/app/package-lock.json —
+# the SAME FILE, so `cmp -s` trivially matches — then `cp -c -R` a directory onto itself,
+# which APFS refuses, and the `else` arm ran `rm -rf app/node_modules`: the REAL install,
+# not a half-written clone. `install_serve_deps` is copied into $tmp/main too, so an
+# UNGUARDED script still reaches that code path here rather than stopping earlier for an
+# unrelated reason. A MISMATCHED receipt is planted on purpose: with no receipt at all,
+# `npm_install_owed()` trusts an existing node_modules and the vulnerable branch is never
+# reached — which is exactly why the very first draft of this case passed on the unfixed
+# script too, proving nothing. The mismatch is what makes main == cwd read as "owed".
+
+rm -rf "$tmp/main" "$tmp/wt"
+mkdir -p "$tmp/main/app/node_modules/.bin"
+echo '{"name":"a","lockfileVersion":3}' > "$tmp/main/app/package-lock.json"
+echo 'module.exports = 1;' > "$tmp/main/app/node_modules/acorn.js"
+echo 'REAL DATA — must survive a self-invocation' > "$tmp/main/app/node_modules/real-marker.txt"
+printf '%064d\n' 0 > "$tmp/main/app/node_modules/.pkmnscan-lock"
+install_serve_deps "$tmp/main"
+: > "$tmp/npm.log"
+( cd "$tmp/main" && PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/npm.log" bash "$SCRIPT" "$tmp/main" \
+    >"$tmp/out-self.log" 2>&1 )
+if [ -f "$tmp/main/app/node_modules/real-marker.txt" ]; then
+  ok "self-invocation (main == cwd) never deletes the real node_modules"
+else
+  bad "self-invocation (main == cwd) DELETED the real node_modules"
+fi
+if grep -qi "refus" "$tmp/out-self.log"; then
+  ok "self-invocation announces the refusal"
+else
+  bad "self-invocation did not announce a refusal"
+fi
+
+# ------------------------------------------------------- case 6: main's own install stale
+#
+# Lockfiles matching is not enough — main's OWN node_modules must match main's OWN receipt,
+# or a clone would write a receipt in THIS worktree that lies about what got installed.
+
+fresh_fixture same
+printf '%064d\n' 0 > "$tmp/main/app/node_modules/.pkmnscan-lock"     # a receipt for NOTHING main's lockfile is now
+: > "$tmp/npm.log"
+run_provision
+wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+if [ -f "$tmp/wt/app/node_modules/left-pad.js" ] && [ ! -f "$tmp/wt/app/node_modules/acorn.js" ]; then
+  ok "a stale main install is never cloned — the slow path runs instead"
+else
+  bad "a stale main install was cloned anyway (the fast path trusted a stale main)"
+fi
+if [ -f "$tmp/wt/app/node_modules/.pkmnscan-lock" ] \
+   && [ "$(cat "$tmp/wt/app/node_modules/.pkmnscan-lock")" = "$(lock_digest "$tmp/wt/app/package-lock.json")" ]; then
+  ok "this worktree still ends up with a receipt matching its OWN lockfile"
+else
+  bad "this worktree did not end up with a correct receipt"
+fi
+
+# ------------------------------------------------------------ case 7: concurrent installs
+#
+# Two invocations, launched together, over a SLOW stub npm so the race window is wide open.
+# `wait` blocks for both — no polling loop, and none is needed.
+
+fresh_fixture differ
+: > "$tmp/npm.log"
+cat > "$tmp/bin/npm" <<'NPM'
+#!/usr/bin/env bash
+if [ "$1" = "--prefix" ] && [ "$3" = "ci" ]; then
+  target="$2"
+  sleep 1
+  mkdir -p "$target/node_modules"
+  echo stub > "$target/node_modules/left-pad.js"
+  printf 'ran\n' >> "${STUB_LOG:?}"
+  exit 0
+fi
+exit 1
+NPM
+chmod +x "$tmp/bin/npm"
+
+( cd "$tmp/wt" && PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/npm.log" bash "$SCRIPT" "$tmp/main" \
+    >"$tmp/out-race-1.log" 2>&1 ) &
+race1=$!
+( cd "$tmp/wt" && PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/npm.log" bash "$SCRIPT" "$tmp/main" \
+    >"$tmp/out-race-2.log" 2>&1 ) &
+race2=$!
+wait "$race1" 2>/dev/null
+wait "$race2" 2>/dev/null
+wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+ran_count="$(grep -c '^ran$' "$tmp/npm.log" 2>/dev/null || echo 0)"
+if [ "$ran_count" -eq 1 ]; then
+  ok "two concurrent runs launch only one npm ci"
+else
+  bad "two concurrent runs launched $ran_count npm ci processes, expected 1"
+fi
+if grep -qi "already running" "$tmp/out-race-1.log" "$tmp/out-race-2.log" 2>/dev/null; then
+  ok "the losing run reports an install is already running"
+else
+  bad "neither concurrent run reported an already-running install"
 fi
 
 echo

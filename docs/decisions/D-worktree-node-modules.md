@@ -24,10 +24,12 @@ clones it. That is APFS's `clonefile(2)`, copy-on-write. Measured on this Mac: a
 ~200 MB `node_modules` clones in under 0.9s. The disk cost stays near zero until the two
 copies diverge. `node_modules/.bin` holds RELATIVE symlinks, one level up into a sibling
 package's own bin script, confirmed on this tree, 22 of 22, none absolute. A clone at a
-new path still resolves. Nothing in it
-points back at the main tree. The main worktree is found from `git worktree list
---porcelain`'s first entry. That is the same primitive `scripts/worktree-guard.sh` already
-uses to find it, never a typed path.
+new path still resolves. Nothing in it points back at the main tree. The caller passes the
+main tree's path as an argument. Both callers derive it the same way, from
+`git rev-parse --path-format=absolute --git-common-dir`, dirname'd once. This script
+cross-checks that argument against its OWN resolved cwd. It also re-derives the main tree
+from its own git metadata, the identical way, rather than trusting the argument alone. See
+SELF-INVOCATION below for why.
 
 **SLOW PATH, VISIBLE.** The lockfiles may differ. The main tree may hold no install. The
 clone itself may fail — a full disk, or `cp -c` unsupported. Any of the three runs `npm
@@ -35,6 +37,40 @@ clone itself may fail — a full disk, or `cp -c` unsupported. Any of the three 
 on it. One line says so and names the log, `.serve/npm-install.log`. `.serve/` is this
 checkout's own gitignored scratch directory, on D43's precedent — every checkout gets its
 own.
+
+**SELF-INVOCATION IS REFUSED, INSIDE THIS SCRIPT, NOT ONLY IN ITS TWO CALLERS.** A review of
+this entry's first draft reproduced a real defect on an isolated fixture. Both callers
+already refuse to run this script from the main tree. This script itself did not. With main
+equal to cwd, every "copy from main" step is a copy onto ITSELF. `cp -c` refuses a
+self-copy. The code that followed a failed clone assumed that the failure was a disk
+problem. It RECOVERED by `rm -rf app/node_modules` — deleting the real checkout's own
+install, not a half-written clone. The fixture proved it: 8,389 files to zero. The fix
+checks twice, independently, because either input could be wrong alone. The resolved cwd is
+compared against the resolved main argument. It is also compared against what this
+checkout's OWN git metadata says the main tree is. That is the same
+`git rev-parse --git-common-dir` derivation both callers already use. Either match refuses
+the WHOLE script, before any provisioning step runs.
+
+**MAIN'S OWN INSTALL IS CHECKED BEFORE IT IS TRUSTED.** The same review found a second real
+defect. Byte-identical lockfiles say a clone would be aimed at the right target. They say
+nothing about whether main's own `node_modules` was ever installed for that lockfile. The
+first draft cloned a stale or receiptless-but-outdated main. It then wrote THIS worktree's
+own receipt for it. `npm_install_owed()` would then answer "current" over packages that do
+not match the lockfile. That is the exact trap this whole entry exists to close, reproduced
+by the fix meant to close it. `main_install_current()` asks the SAME `npm_install_owed()`,
+pointed at main's own root, before the fast path may run. A stale main sends this worktree
+to the slow path instead. So does a main this check cannot read. Either way this worktree
+gets a real `npm ci`, never a borrowed answer.
+
+**THE BACKGROUND LAUNCH IS LOCKED.** Two invocations of this script can race. Two
+SessionStart hooks can race, or one can overlap a hand-run `make worktree-setup`. Each could
+see no install yet. Each could then background its own `npm ci` into the same
+`app/node_modules`, racing each other's writes. `mkdir` is atomic on this filesystem, so
+`.serve/npm-install.lock` IS the lock. No `flock` binary ships on this Mac, and a directory
+lock needs none. The pid written inside it lets a LATER run tell a live holder from a stale
+one. A holder killed `-9` leaves the directory behind, and the next run reclaims it rather
+than waiting on it forever. A run that loses the race reports the holder's pid and the log.
+It starts nothing of its own.
 
 **THE STALENESS QUESTION IS NOT ASKED TWICE.** `scripts/serve.py` already answers one
 question: does the installed tree match `app/package-lock.json`? That is

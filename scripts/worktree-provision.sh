@@ -27,6 +27,34 @@ main="${1:?usage: worktree-provision.sh [--prefix TEXT] <main-worktree-path>}"
 
 say() { printf '%s%s\n' "$prefix" "$1"; }
 
+# SELF-INVOCATION GUARD. Both callers already refuse to invoke this script from the main
+# tree — scripts/worktree-guard.sh exits before calling it, `make worktree-setup` refuses
+# before calling it — but this script is the shared primitive, and a future caller, or a
+# hand run, could skip that check. Getting it wrong is not merely wrong: with main == cwd,
+# every "copy from main" step below is a copy onto ITSELF. `cp -c` REFUSES a self-copy, and
+# the code that used to follow a failed clone assumed the failure was disk-related and
+# RECOVERED by `rm -rf app/node_modules` — deleting the real checkout's own install, not a
+# half-written clone. Checked twice, independently, because either input could be wrong on
+# its own: the resolved cwd against the resolved $main ARGUMENT (a caller could pass the
+# wrong path), and the resolved cwd against what THIS checkout's OWN git metadata says the
+# main tree is (a caller could pass the right path while this script still runs FROM main).
+# `git rev-parse --git-common-dir` is the exact derivation both callers already use.
+here_real="$(pwd -P 2>/dev/null)"
+main_real="$(cd "$main" 2>/dev/null && pwd -P)"
+common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+own_main_real=""
+if [ -n "$common_dir" ]; then
+  case "$common_dir" in /*) ;; *) common_dir="$(cd "$common_dir" 2>/dev/null && pwd -P)" ;; esac
+  [ -n "$common_dir" ] && own_main_real="$(dirname "$common_dir")"
+fi
+if [ -n "$here_real" ] && { [ "$here_real" = "$main_real" ] || [ "$here_real" = "$own_main_real" ]; }; then
+  say "refusing: this checkout IS the main working tree — there is nothing to provision INTO."
+  say "  \`make worktree-setup\` and the SessionStart hook already refuse before calling this"
+  say "  script; a hand run of it should refuse too, rather than clone or delete the real"
+  say "  app/node_modules onto itself."
+  exit 0
+fi
+
 # The cache first: local, ~90 KB, no network, and the SAFETY one — without it T1 has
 # nothing to replay and refuses rather than spending real money on a submission nobody
 # asked for. Skipped if this worktree already has one: a person or an earlier session may
@@ -103,16 +131,40 @@ except Exception:
 PY
 }
 
+# Is MAIN's OWN install trustworthy? Byte-identical lockfiles only say the CLONE would be
+# aimed at the right target — they say nothing about whether main's own node_modules was
+# ever actually installed for that lockfile. Cloning a stale (or never-installed) main and
+# then writing OUR OWN receipt for it would make `npm_install_owed()` answer "current" over
+# packages that do not match the lockfile — the exact trap this file exists to close,
+# self-inflicted. Reuses the SAME `npm_install_owed()`, pointed at main's own root, so this
+# can never disagree with what main's own `make up` supervisor would say about main. An
+# import failure here answers "stale" — never "current" — because the unsafe direction is
+# trusting an install this could not actually check.
+main_install_current() {
+  python3 - "$1" <<'PY' 2>/dev/null
+import sys
+sys.path.insert(0, "scripts")
+from pathlib import Path
+try:
+    import serve
+    print("current" if not serve.npm_install_owed(root=Path(sys.argv[1])) else "stale")
+except Exception:
+    print("stale")
+PY
+}
+
 if [ "$npm_owed" = "owed" ]; then
   cloned=0
-  # FAST PATH, NO NETWORK: only when the main tree's install exists AND its lockfile is
-  # byte-identical to this one's — never "close enough". `cp -c` is APFS's clonefile(2):
-  # copy-on-write, so the ~200 MB tree costs under a second and almost no disk (measured on
-  # this Mac). node_modules/.bin holds RELATIVE symlinks (`../pkg/bin.js`), confirmed on
-  # this tree, so a clone at a new path still resolves — nothing here points back at main.
+  # FAST PATH, NO NETWORK: only when the main tree's install exists, its lockfile is
+  # byte-identical to this one's — never "close enough" — AND main's own install is itself
+  # trustworthy (see `main_install_current` above). `cp -c` is APFS's clonefile(2): copy-on-
+  # write, so the ~200 MB tree costs under a second and almost no disk (measured on this
+  # Mac). node_modules/.bin holds RELATIVE symlinks (`../pkg/bin.js`), confirmed on this
+  # tree, so a clone at a new path still resolves — nothing here points back at main.
   if [ -f app/package-lock.json ] && [ -d "$main/app/node_modules" ] \
      && [ -f "$main/app/package-lock.json" ] \
-     && cmp -s app/package-lock.json "$main/app/package-lock.json" 2>/dev/null; then
+     && cmp -s app/package-lock.json "$main/app/package-lock.json" 2>/dev/null \
+     && [ "$(main_install_current "$main")" = "current" ]; then
     if mkdir -p app/node_modules 2>/dev/null \
        && cp -c -R "$main/app/node_modules/." app/node_modules/ 2>/dev/null; then
       cloned=1
@@ -127,20 +179,56 @@ if [ "$npm_owed" = "owed" ]; then
     write_npm_receipt
     say "cloned app/node_modules from the main tree (APFS copy-on-write, under a second) — tsc, lint and design-check are ready."
   else
-    # SLOW PATH, VISIBLE: the lockfiles differ, main has no install, or the clone failed.
-    # `npm ci` runs in the BACKGROUND — never blocking session start on a minutes-long
-    # network step, which is exactly what NPM_GUARD was written to keep from happening
-    # silently. It is announced, and it is logged, which is what makes a backgrounded
-    # install different from a hidden one.
+    # SLOW PATH, VISIBLE: the lockfiles differ, main has no install, main's own install is
+    # not trustworthy, or the clone failed. `npm ci` runs in the BACKGROUND — never blocking
+    # session start on a minutes-long network step, which is exactly what NPM_GUARD was
+    # written to keep from happening silently. It is announced, and it is logged, which is
+    # what makes a backgrounded install different from a hidden one.
     mkdir -p .serve 2>/dev/null
     npm_log=".serve/npm-install.log"
-    if command -v npm >/dev/null 2>&1; then
-      ( npm --prefix app ci >"$npm_log" 2>&1; rc=$?; [ "$rc" -eq 0 ] && write_npm_receipt ) </dev/null >/dev/null 2>&1 &
+    npm_lock_dir=".serve/npm-install.lock"
+
+    # A LOCK AROUND THE LAUNCH. Two invocations of this script — two SessionStart hooks
+    # racing, or a hook overlapping a hand-run `make worktree-setup` — could each see "no
+    # install yet" and each background their own `npm ci` into the SAME app/node_modules,
+    # racing each other's writes. `mkdir` is atomic on this filesystem: only one concurrent
+    # caller can create the same directory, so it IS the lock — no `flock` binary ships on
+    # this Mac, and a directory lock needs none. The pid written inside it is only for a
+    # LATER run to tell a live holder from a stale one (a holder killed -9 leaves the
+    # directory behind with nothing to clean it up).
+    npm_lock_holder_alive() {
+      local holder
+      holder="$(cat "$npm_lock_dir/pid" 2>/dev/null)"
+      [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null
+    }
+    launch_npm_ci() {
+      ( npm --prefix app ci >"$npm_log" 2>&1
+        rc=$?
+        [ "$rc" -eq 0 ] && write_npm_receipt
+        rm -rf "$npm_lock_dir"
+      ) </dev/null >/dev/null 2>&1 &
+      echo $! > "$npm_lock_dir/pid" 2>/dev/null
       disown 2>/dev/null || true
-      say "app/ dependencies are missing or stale (no matching install to clone from $main) — running \`npm --prefix app ci\` in the BACKGROUND (~80 MB, network). Log: $npm_log. lint, typecheck and design-check will fail until it finishes; re-run \`make worktree-setup\` or check the log."
+    }
+
+    if [ -d "$npm_lock_dir" ] && npm_lock_holder_alive; then
+      say "an install is already running (pid $(cat "$npm_lock_dir/pid" 2>/dev/null)) — log at $npm_log. Starting nothing."
     else
-      say "app/ dependencies are absent and npm is not on PATH."
-      say "  Fix: install Node, then npm --prefix app install"
+      [ -d "$npm_lock_dir" ] && rm -rf "$npm_lock_dir" 2>/dev/null   # stale: reclaim it
+      if mkdir "$npm_lock_dir" 2>/dev/null; then
+        if command -v npm >/dev/null 2>&1; then
+          launch_npm_ci
+          say "app/ dependencies are missing or stale (no trustworthy install to clone from $main) — running \`npm --prefix app ci\` in the BACKGROUND (~80 MB, network). Log: $npm_log. lint, typecheck and design-check will fail until it finishes; re-run \`make worktree-setup\` or check the log."
+        else
+          rmdir "$npm_lock_dir" 2>/dev/null
+          say "app/ dependencies are absent and npm is not on PATH."
+          say "  Fix: install Node, then npm --prefix app install"
+        fi
+      else
+        # Lost the race to `mkdir` between the staleness check and here — another run's
+        # `mkdir` won it in between. That run is the one installing now; nothing to do.
+        say "an install is already running (pid $(cat "$npm_lock_dir/pid" 2>/dev/null)) — log at $npm_log. Starting nothing."
+      fi
     fi
   fi
 elif [ "$npm_owed" = "unknown" ] && [ ! -d app/node_modules ]; then

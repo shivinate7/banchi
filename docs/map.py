@@ -3611,10 +3611,18 @@ COMPONENTS = [
                         "not a gate, and neither caller is on the commit path. app/node_modules "
                         "WAS report-only and is now PROVISIONED (D-worktree-node-modules): an "
                         "APFS copy-on-write clone from the main tree when the lockfiles are "
-                        "byte-identical, or a backgrounded, logged `npm ci` when they are not. "
+                        "byte-identical AND main's own install is itself current (checked via "
+                        "npm_install_owed(root=main), never trusted on the lockfile match "
+                        "alone), or a backgrounded, logged `npm ci` when any of that fails. "
                         "The staleness read is scripts/serve.py's own `npm_install_owed`, "
                         "imported directly rather than reimplemented, so this step and "
-                        "`make up`'s supervisor can never disagree about what current means.",
+                        "`make up`'s supervisor can never disagree about what current means. "
+                        "REFUSES SELF-INVOCATION (main == cwd) before any provisioning step "
+                        "runs, checked against both the resolved $main argument and this "
+                        "checkout's own git-common-dir — a review fixture found the unguarded "
+                        "form deleting the real node_modules. The background npm ci launch is "
+                        "guarded by an atomic `mkdir` lock under .serve/npm-install.lock, so "
+                        "two racing invocations never both install.",
                 "governed_by": ["D18", "D47", "D-worktree-node-modules"],
             },
             "worktree-provision-selftest.sh": {
