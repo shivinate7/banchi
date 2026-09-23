@@ -302,17 +302,26 @@
   transition: transform var(--bn-t) var(--bn-ease);
 }
 .browse-sectfold[aria-expanded='true'] .browse-sectmark { transform: rotate(90deg); color: var(--bn-accent); }
+/* THE NAME IS CUT, THE COUNT IS NOT (`SectionTitle.tsx`). The title is a row of two parts: the
+   head shrinks and ellipsizes, the count keeps its own width. One ellipsis over the whole title
+   cut the count first, because the count is the END of the sentence. */
 .browse-secttitle {
+  display: flex;
   flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
   font-size: var(--bn-fs-xs);
   font-weight: 700;
   letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
+.browse-secttitle-head {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browse-secttitle-count { flex: none; white-space: pre; }
 .browse-sectcount {
   flex: none;
   min-width: 22px;

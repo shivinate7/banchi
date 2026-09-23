@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
@@ -2674,6 +2674,31 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
   await expect(lens).toHaveAttribute('data-gone', 'true')
   /* Both scales, both unmarked — the box track and the section track it zooms into. */
   await expect(lens.locator('.position-bar-marker[data-gone]')).toHaveCount(2)
+
+  /* THE TAIL IS SHORT AND NEVER CONTRADICTS THE RULER STILL DRAWN UNDER IT (the owner's box
+     WB1 R2 defect: the old two facts read `3 slots · this copy is not in one`, long enough to
+     force the section's own NAME to be the part that ellipsized). One neutral phrase — this
+     `sectionDepthOf` has no sold/retired distinction to read off a bare `Place` — shorter than
+     what it replaces (D194). */
+  const sectionText = lens.locator('.position-bar-text-section')
+  await expect(sectionText.locator('.position-bar-cap-head')).toHaveText('Section 1')
+  await expect(sectionText.locator('.position-bar-cap-tail')).toHaveText('3 slotsleft this section')
+
+  /* AND THE TAIL IS THE PART THAT MAY CLIP, NEVER THE HEAD. `PositionBar.css` had this
+     backwards; swapped, the section's own name is pinned at its full width (`flex: none`) and
+     only the tail can shrink and ellipsize. */
+  const flexStyles = await sectionText.evaluate((el) => {
+    const head = el.querySelector('.position-bar-cap-head') as HTMLElement
+    const tail = el.querySelector('.position-bar-cap-tail') as HTMLElement
+    return {
+      headFlexShrink: getComputedStyle(head).flexShrink,
+      tailFlexShrink: getComputedStyle(tail).flexShrink,
+      tailTextOverflow: getComputedStyle(tail).textOverflow,
+    }
+  })
+  expect(flexStyles.headFlexShrink).toBe('0')
+  expect(flexStyles.tailFlexShrink).toBe('1')
+  expect(flexStyles.tailTextOverflow).toBe('ellipsis')
 })
 
 test('a departed card draws no number, and the cards behind it count past it', async ({
@@ -3900,11 +3925,14 @@ test('the sections of a box are drawn once, by the walk that can open them', asy
   await expect(page.locator('.boxops-sections')).toHaveCount(0)
   await expect(page.locator('.browse-secthead').first()).toBeVisible()
 
-  /* And the walk's headers really are the box's sections — the span and the count that the
-     deleted panel used to repeat. */
+  /* And the walk's headers really are the box's sections — the section's own count, which is
+     what the deleted panel's `85 cards` used to repeat. NOT its span: a header built from
+     `section_start`/`section_end` counts across the whole BOX, a different scale than a row's
+     own `#1`/`#2` — the mixed-units defect the owner found on box WB1 R2, fixed by stating the
+     section's own count instead (`sectionCountOf`, `position.ts`). */
   const first = page.locator('.browse-secthead').first()
   await expect(first).toContainText('Section 1')
-  await expect(first).toContainText('#1')
+  await expect(first).toContainText('cards')
 })
 
 test('the box lives in the walk\'s column, and the run line lives in the header', async ({
@@ -5733,6 +5761,52 @@ test('D132 — the row the walk stands on survives its own sale while sold is hi
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2'])
 })
 
+test('D132 — the Hide sold chip counts what the fold actually hides, not every departed row on the shelf', async ({ page }) => {
+  /* THE OVERCOUNT (owner's screenshot, box WB1 R2): `departedHere` counted every departed row
+     on the shelf, but `visible` keeps the row the walk stands on (D119) whatever its state — so
+     a card that has JUST sold and is still selected stays drawn while the chip claimed it was
+     one of the ones folded away. Two departed rows on the shelf and only one actually hidden is
+     the shape that exposed it: a pre-existing sold record that is always hidden, and a live one
+     this case sells while it is selected, which the fold has to keep. */
+  const live = (index: number, at: number) =>
+    card({ index, at, state: 'identified', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
+  const cards: Cards = {
+    '2/1': live(1, 1),
+    '2/2': card({ index: 2, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 6 }),
+    '2/3': live(3, 2),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  const sale: SaleStub = (box, index, undo) => {
+    cards['2/3'] = card({ index: 3, state: 'sold', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
+    return SALE(box, index, undo)
+  }
+  await open(page, BOXES, store, () => PRICING, sale, { hideSold: true })
+  await expandAll(page)
+
+  const chip = page.locator('.browse-hidesold')
+  /* One departed row (Eiscue) already on the shelf, nothing selected yet: the fold hides it and
+     the chip says so — one, not zero, and not the two it would read if it counted every live row
+     that could someday leave. */
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2'])
+  await expect(chip.locator('.bn-chip-count')).toHaveText('1')
+
+  await page.locator('.browse-row').nth(1).click()
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-row.is-current').getByRole('button', { name: /Undo/ })).toBeVisible()
+
+  /* TWO DEPARTED ROWS ON THE SHELF NOW, AND THE FOLD STILL HIDES ONLY ONE — the row the walk
+     stands on survives its own sale (D119) and stays drawn as `B2 #3`. The old count
+     (`departedHere`) would read 2 here; this is the 6-claimed-5-hidden defect at its smallest
+     reproduction. */
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', 'B2 #3'])
+  await expect(chip.locator('.bn-chip-count')).toHaveText('1')
+
+  /* Step off the sold row and the fold takes it too — both departed rows hidden, both counted. */
+  await page.locator('.browse-row').nth(0).click()
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1'])
+  await expect(chip.locator('.bn-chip-count')).toHaveText('2')
+})
+
 test('D132 — the rail draws names and no numbers, ordered by this browser\'s recency, then cards on hand, then number', async ({ page }) => {
   const boxes = {
     boxes: [
@@ -5806,6 +5880,61 @@ test('D132 — an unnamed box keeps the index in the address and draws no note b
   await expect(page.locator('.card-locations-row.is-current .position-note')).toHaveCount(0)
 })
 
+
+/** WHERE A SECTION TITLE'S COUNT IS DRAWN, against the title's own box — the box that clips it.
+ *  Measured off the TEXT with a Range, not off a count element, so the same probe reads a title
+ *  drawn as one span (the old shape, where the ellipsis cut the count) and as two. `overflow` is
+ *  how far the whole sentence runs past the box: above 0 means the name really was cut, so a
+ *  green count is not a title that simply fit. */
+async function sectionTitleFit(title: Locator, count: string): Promise<{ countInside: boolean; overflow: number; text: string }> {
+  return title.evaluate((el, needle) => {
+    const box = el.getBoundingClientRect()
+    const all = document.createRange()
+    all.selectNodeContents(el)
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    let countInside = false
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const at = (node.textContent ?? '').indexOf(needle)
+      if (at < 0) continue
+      const range = document.createRange()
+      range.setStart(node, at)
+      range.setEnd(node, at + needle.length)
+      const r = range.getBoundingClientRect()
+      countInside = r.width > 0 && r.left >= box.left - 0.5 && r.right <= box.right + 0.5
+    }
+    return { countInside, overflow: all.getBoundingClientRect().width - box.width, text: el.textContent ?? '' }
+  }, count)
+}
+
+test('a long section name is cut before the count is, at 820', async ({ page }) => {
+  /* The same title `#/orders` draws (`SectionTitle.tsx`): the NAME ellipsizes, `3 cards` stays
+     whole. Verified red first: the one-span title cut the count, the end of the sentence. */
+  await page.setViewportSize({ width: 820, height: 1180 })
+  const named = (input: Parameters<typeof card>[0]) => {
+    const one = card(input)
+    return { ...one, place: { ...one.place, section_name: 'Holographic promos from the vintage binder' } }
+  }
+  const cards = {
+    '2/1': named({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+    '2/2': named({ index: 2, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  }
+  const boxes = {
+    boxes: [{
+      ...BOXES.boxes[0],
+      cards: 2, on_hand: 2, fill: 2, next_index: 3, sold: 0, retired: 0,
+      sections_detail: [{ section: 1, start: 1, end: 3, count: 2, name: 'Holographic promos from the vintage binder' }],
+    }],
+  }
+  await open(page, boxes, { cards, search: (query) => searchAnswer(query, cards) })
+  await expandAll(page)
+
+  const title = page.locator('.browse-secttitle').first()
+  await expect(title).toHaveText('Section 1: Holographic promos from the vintage binder, 3 cards')
+  const fit = await sectionTitleFit(title, '3 cards')
+  expect(fit.overflow).toBeGreaterThan(0)
+  expect(fit.countInside).toBe(true)
+})
+
 test('D132 — a named section is said in the walk header, in the bar\'s sentence and on the label', async ({ page }) => {
   const named = (input: Parameters<typeof card>[0]) => {
     const one = card(input)
@@ -5828,8 +5957,11 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await open(page, boxes, { cards, search: (query) => searchAnswer(query, cards) })
   await expandAll(page)
   /* D218: the separator is punctuation in a real sentence, not a typed middle dot
-     (`sectionTitleOf`, BoxBrowse.tsx). */
-  await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1: Rares, #1–#3')
+     (`sectionTitleOf`, BoxBrowse.tsx). The section states its OWN count — 3 cards, not the
+     box-wide `#1–#3` span, which is a different ruler than the row's own `#1`/`#2` (the fix
+     this file's own photo-issues session found: a box-wide range over a within-section
+     number read as out of range). */
+  await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1: Rares, 3 cards')
   await page.locator('.browse-row').nth(0).click()
   await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1Rarescard 1 of 3 slots')
   await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1Rares')

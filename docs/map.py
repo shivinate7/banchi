@@ -6332,6 +6332,16 @@ COMPONENTS = [
                                             "one DOM at one height (D118).",
                                     "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41",
                                                     "D58", "D68", "D118", "D132", "D155", "D218"]},
+            "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST, in two "
+                                             "parts: `#/inventory`'s shelf and `#/orders`' walk both "
+                                             "draw it. The section's name shrinks and ellipsizes; its "
+                                             "card count keeps its own width, so a narrow column cuts "
+                                             "the name and never the count a hand checks the rows "
+                                             "against. The comma rides the count's span, so the text is "
+                                             "`position.ts:sectionTitleText`'s whole sentence. A "
+                                             "component alone in its file so React Refresh can "
+                                             "hot-reload it.",
+                                     "governed_by": ["D58", "D132", "D218"]},
             "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
                                         "`sentenceOf`, `sectionDepthOf`, their types and the shared "
                                         "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "
@@ -6351,7 +6361,7 @@ COMPONENTS = [
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
-                                                "D68", "D118", "D132", "D155", "D218"]},
+                                                "D68", "D118", "D132", "D155", "D194", "D218"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -7286,7 +7296,7 @@ COMPONENTS = [
                                            "brief named first (never re-sort the walk).",
                                    "governed_by": ["D58", "D62", "D79", "D93", "D96", "D97", "D116",
                                                    "D118", "D132", "D164", "D181", "D193", "D209",
-                                                   "D212", "D220"]},
+                                                   "D212", "D218", "D220"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
                                            "name); every other shape this file draws is "
@@ -8436,7 +8446,8 @@ COMPONENTS = [
                                 "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58",
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
-                                "D136", "D142", "D155", "D172", "D181", "D192", "D213", "D218"],
+                                "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D213",
+                                "D218"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
