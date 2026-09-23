@@ -30,7 +30,6 @@ from pipeline.sku_name_contradictions import (
     CardRecord,
     Catalog,
     Dispute,
-    NotKnown,
     find_contradictions,
 )
 from store import db, files, photos
