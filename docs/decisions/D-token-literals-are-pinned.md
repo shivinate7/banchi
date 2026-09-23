@@ -46,6 +46,38 @@ this branch's call to make alone. `Fulfillment.css`'s OTHER properties — paddi
 border-radius, transition — stay in scope through the shared `--bn-*` families. They did
 surface real findings there.
 
+### The spacing family also carries the logical and scroll longhands
+
+A review round after the first commit found a real miss. `app/src/CaptureScreen.css`'s
+`.capture-clear-note { padding-inline: 4px; }` duplicates `--bn-1`. The shipped family listed
+only four PHYSICAL longhands (`padding-top`, `padding-right`, `padding-bottom`,
+`padding-left`) and the bare shorthand. It missed every LOGICAL longhand CSS has.
+`padding-inline`, `padding-inline-start` and `padding-inline-end` are three of six for
+`padding`. `padding-block`, `padding-block-start` and `padding-block-end` are the other
+three. `margin` has the same six of its own. `scroll-margin` and `scroll-padding` were missed
+too. Each has its own four physical and six logical longhands.
+
+All of these hold a length. All of them can duplicate a spacing token. That is the same
+question the shorthand already answers. `SPACING_PROPERTIES` now lists every one. A small
+helper builds the list (`_box_properties`), rather than typing it four times by hand. The same
+mistake cannot repeat for one base while missing another.
+
+`inset-inline` and `inset-block` (the logical form of `inset` itself) are left out. `inset`
+already takes up to four values on the physical axes. Its logical form is rare enough in this
+repo's own CSS that adding it was not measured to be worth the same argument. This is named
+rather than silently skipped.
+
+### `!important` and unit case were both real misses
+
+The same review round found two more gaps. `font-size: 22px !important;` gave zero findings.
+Every non-shorthand family's parser used `re.fullmatch` against the whole value. The trailing
+`!important` made the match fail outright. `_strip_important` now removes it before any value
+is parsed, for every family alike.
+
+`22PX` also gave zero findings. Every unit regex matched only the lowercase spelling. CSS
+itself does not care about unit case. `22PX` and `22px` are the same length to a real engine.
+Every unit match — `px`, `em`, `ms`, `s` — is now case-insensitive.
+
 ### What is left out, and why
 
 Colour tokens are left out. A hex or `rgba(...)` literal is already `raw color`'s row.
@@ -63,7 +95,8 @@ matches `--bn-` names only. The legacy names are not `--bn-` names.
 ### Why a per-file pin, and not landing red, and not the sweep first
 
 Main already carries the literals this check is built to catch. The review measured them. This
-entry's own first run over the real tree found 578, across 32 files. Three options were open.
+entry's own first run over the real tree found 579, across 32 files (after a review round
+added the logical and scroll spacing longhands — see below). Three options were open.
 
 1. **Gate at zero and fail the tree today.** Refused. `make check` would go red on main
    itself, over a defect nobody asked this branch to fix. Every other lane's merge would block

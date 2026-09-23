@@ -136,6 +136,33 @@ class Family(NamedTuple):
     shorthand: bool  # up to 4 space-separated components (padding/margin/gap/inset/radius)
 
 
+def _box_properties(base: str, physical: bool = True) -> Tuple[str, ...]:
+    """`base` ("padding", "margin", "scroll-margin", "scroll-padding") plus every longhand
+    CSS actually has for it: the shorthand itself, the four PHYSICAL sides (only for
+    `padding`/`margin` — `scroll-margin`/`scroll-padding` get them too, see below), and the
+    six LOGICAL longhands every one of the four bases has (`-inline`, `-inline-start`,
+    `-inline-end`, `-block`, `-block-start`, `-block-end`). A reviewer found `padding-inline:
+    4px` in `app/src/CaptureScreen.css` (`--bn-1`) unmatched by the shipped family, because
+    only the four physical longhands were listed — the logical ones are equally real CSS and
+    equally capable of duplicating a spacing token."""
+    out = [base]
+    if physical:
+        out += [f"{base}-top", f"{base}-right", f"{base}-bottom", f"{base}-left"]
+    out += [
+        f"{base}-inline", f"{base}-inline-start", f"{base}-inline-end",
+        f"{base}-block", f"{base}-block-start", f"{base}-block-end",
+    ]
+    return tuple(out)
+
+
+SPACING_PROPERTIES: Tuple[str, ...] = (
+    _box_properties("padding")
+    + _box_properties("margin")
+    + ("gap", "row-gap", "column-gap", "inset")
+    + _box_properties("scroll-margin")
+    + _box_properties("scroll-padding")
+)
+
 PROPERTY_FAMILIES: Tuple[Family, ...] = (
     Family("fs", re.compile(r"^--bn-fs-[a-z0-9]+$"), ("font-size",), "px", False),
     Family("lh", re.compile(r"^--bn-lh-[a-z]+$"), ("line-height",), "", False),
@@ -143,11 +170,7 @@ PROPERTY_FAMILIES: Tuple[Family, ...] = (
     Family(
         "spacing",
         re.compile(r"^--bn-(?:[1-9]|10|0-5|0-75|1-5)$"),
-        (
-            "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
-            "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
-            "gap", "row-gap", "column-gap", "inset",
-        ),
+        SPACING_PROPERTIES,
         "px",
         True,
     ),
@@ -243,33 +266,42 @@ def build_family_tokens(tokens: Dict[str, str]) -> Dict[str, List[TokenDef]]:
 # ------------------------------------------------------------------------- value normalization
 
 
+_NUM = r"[-+]?(?:\d+\.\d+|\.\d+|\d+)"
+
+# UNITS ARE MATCHED CASE-INSENSITIVELY (`re.IGNORECASE` below): CSS itself does not care —
+# `22PX` and `22px` are the same length to a real engine — and a checker that only recognised
+# the lowercase spelling would miss a hand-typed or copy-pasted `22PX` outright.
+
+
 def _parse_length(value: str) -> Optional[float]:
     """A bare `<number>px` literal, nothing else — `1em`, `auto`, `0` alone, a `var()` or a
     `calc()` are all `None` (not a comparable literal in this family's unit)."""
-    m = re.fullmatch(r"([-+]?(?:\d+\.\d+|\.\d+|\d+))px", value.strip())
-    return float(m.group(1)) if m else None
+    m = re.fullmatch(_NUM + r"px", value.strip(), re.IGNORECASE)
+    return float(m.group(0)[:-2]) if m else None
 
 
 def _parse_unitless(value: str) -> Optional[float]:
-    m = re.fullmatch(r"[-+]?(?:\d+\.\d+|\.\d+|\d+)", value.strip())
+    m = re.fullmatch(_NUM, value.strip())
     return float(m.group(0)) if m else None
 
 
 def _parse_em(value: str) -> Optional[float]:
-    m = re.fullmatch(r"([-+]?(?:\d+\.\d+|\.\d+|\d+))em", value.strip())
-    return float(m.group(1)) if m else None
+    m = re.fullmatch(_NUM + r"em", value.strip(), re.IGNORECASE)
+    return float(m.group(0)[:-2]) if m else None
 
 
-_DURATION_TOKEN_RE = re.compile(r"(?<![\w.])([-+]?(?:\d+\.\d+|\.\d+|\d+))(ms|s)\b")
+_DURATION_TOKEN_RE = re.compile(r"(?<![\w.])(" + _NUM + r")(ms|s)\b", re.IGNORECASE)
+_DURATION_FULL_RE = re.compile(r"(" + _NUM + r")(ms|s)", re.IGNORECASE)
 
 
 def _parse_duration_ms(value: str) -> Optional[float]:
     """`480ms` -> 480.0, `0.7s` / `.7s` -> 700.0 — normalized so a stylesheet spelling the same
-    duration either way is still caught (D-token-literals-are-pinned names this explicitly)."""
-    m = re.fullmatch(r"([-+]?(?:\d+\.\d+|\.\d+|\d+))(ms|s)", value.strip())
+    duration either way is still caught (D-token-literals-are-pinned names this explicitly).
+    Units match case-insensitively, same as every other family."""
+    m = re.fullmatch(_DURATION_FULL_RE.pattern, value.strip(), re.IGNORECASE)
     if not m:
         return None
-    num, unit = float(m.group(1)), m.group(2)
+    num, unit = float(m.group(1)), m.group(2).lower()
     return num if unit == "ms" else num * 1000.0
 
 
@@ -329,6 +361,16 @@ def _families_by_property() -> Dict[str, Family]:
 
 _FAMILY_BY_PROPERTY = _families_by_property()
 
+# `!important` is stripped before any value is parsed, for every family — `font-size: 22px
+# !important;` is the same duplicate-token question as `font-size: 22px;`, and every
+# non-shorthand family's parser uses `re.fullmatch`, so the trailing `!important` would
+# otherwise make the whole value unparseable and the finding invisible.
+_IMPORTANT_RE = re.compile(r"!\s*important\s*$", re.IGNORECASE)
+
+
+def _strip_important(value: str) -> str:
+    return _IMPORTANT_RE.sub("", value).strip()
+
 
 def css_findings(
     path: str, cleaned: str, family_tokens: Dict[str, List[TokenDef]]
@@ -339,7 +381,7 @@ def css_findings(
         family = _FAMILY_BY_PROPERTY.get(prop)
         if family is None:
             continue
-        raw_value = decl.group(2).strip()
+        raw_value = _strip_important(decl.group(2).strip())
         masked = _mask_opaque_calls(raw_value)
         line = _line_of(cleaned, decl.start())
         line_text = cleaned.splitlines()[line - 1].strip() if line - 1 < len(cleaned.splitlines()) else ""
@@ -599,11 +641,53 @@ def _scan_css_text(text: str) -> List[Finding]:
     return css_findings("f.css", strip_css_comments(text), _fixture_family_tokens())
 
 
+# THE FAMILY TABLE'S OWN COVERAGE, PINNED: `PROPERTY_FAMILIES` carries 6 families and 62
+# (family, property) pairs as of this writing. A REVIEWER FOUND THAT DELETING A WHOLE FAMILY,
+# OR A SINGLE PROPERTY FROM ONE, STILL LEFT THE SELF-TEST GREEN — the cases below are DERIVED
+# from `PROPERTY_FAMILIES` (so they always test what the table actually says, never a stale
+# copy of it), but derivation alone cannot catch a deletion: fewer entries in the table means
+# fewer generated cases, all of which still pass. So the case COUNT is checked against these
+# two pinned integers, which do NOT move with the table — only a person editing this file
+# moves them, on purpose, when a family or property is deliberately added or removed.
+EXPECTED_FAMILY_COUNT = 6
+EXPECTED_PROPERTY_COUNT = 62
+
+
 def self_test() -> int:
     cases: List[Tuple[str, callable]] = []
 
     def case(name: str, fn) -> None:
         cases.append((name, fn))
+
+    # ---- every property in every family, derived from PROPERTY_FAMILIES itself ----
+    fixture_tokens = _fixture_family_tokens()
+    generated = 0
+    for family in PROPERTY_FAMILIES:
+        reps = fixture_tokens.get(family.key, [])
+        if not reps:
+            case(f"family {family.key!r} has a fixture token to test against", lambda: False)
+            continue
+        rep = reps[0]
+        for prop in family.properties:
+            generated += 1
+            css_text = f".x {{ {prop}: {rep.value}; }}"
+
+            def check(css_text=css_text, expected_token=rep.name) -> bool:
+                found = _scan_css_text(css_text)
+                return len(found) == 1 and found[0].token == expected_token
+
+            case(f"{family.key}/{prop}: literal {rep.value} matches {rep.name}", check)
+
+    case(
+        f"every family in PROPERTY_FAMILIES was exercised ({EXPECTED_FAMILY_COUNT} pinned)",
+        lambda: len(PROPERTY_FAMILIES) == EXPECTED_FAMILY_COUNT,
+    )
+    case(
+        f"every property in every family was exercised ({EXPECTED_PROPERTY_COUNT} pinned) — "
+        f"a family or property removed from PROPERTY_FAMILIES lowers this count and fails "
+        f"here, even though every case still generated still passes",
+        lambda: generated == EXPECTED_PROPERTY_COUNT,
+    )
 
     case(
         "a literal exactly equal to a font-size token is a finding",
@@ -658,6 +742,35 @@ def self_test() -> int:
         "a value in a file this checker excludes (tokens.css itself) never reaches a finding "
         "when scanned through the real scan() entry point",
         lambda: True,  # covered by EXCLUDED_CSS + scan(), not exercised via css_findings here
+    )
+    case(
+        "!important does not hide a finding (non-shorthand family)",
+        lambda: len(_scan_css_text(".x { font-size: 22px !important; }")) == 1,
+    )
+    case(
+        "!important does not hide a finding (shorthand family, one component)",
+        lambda: len(_scan_css_text(".x { padding: 4px !important; }")) == 1,
+    )
+    case(
+        "!important with no space before it is still stripped",
+        lambda: len(_scan_css_text(".x { font-size: 22px!important; }")) == 1,
+    )
+    case(
+        "a unit is matched case-insensitively: 22PX still matches --bn-fs-2xl",
+        lambda: len(_scan_css_text(".x { font-size: 22PX; }")) == 1,
+    )
+    case(
+        "a mixed-case duration unit (480MS) still normalizes and matches",
+        lambda: len(_scan_css_text(".x { transition: opacity 480MS; }")) == 1,
+    )
+    case(
+        "a logical spacing longhand (padding-inline) is matched — the real miss found in "
+        "app/src/CaptureScreen.css's `.capture-clear-note { padding-inline: 4px; }`",
+        lambda: len(_scan_css_text(".x { padding-inline: 4px; }")) == 1,
+    )
+    case(
+        "a scroll-padding logical longhand is matched too",
+        lambda: len(_scan_css_text(".x { scroll-padding-inline-start: 4px; }")) == 1,
     )
 
     # ---- ratchet arithmetic ----
