@@ -258,6 +258,8 @@ const RECORDED = {
     'reconcileBacklog',                      // D203, the one-time
                                               // stand-down over the historical backlog
     'rescueRun',                              // D165/D210, the run rebind
+    'correctAnswer', 'undoCorrectAnswer',     // D-correct-a-listed-answer, past D28's own
+                                               // undo_too_late boundary
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.

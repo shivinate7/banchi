@@ -206,6 +206,42 @@ function oneOpenOrder(): OrdersPayload {
   )
 }
 
+/** `twoCopyPlan()`'s first copy (`3/21`), in the shape `POST /inventory/copies` answers —
+ *  `OrdersWalkPane.tsx`'s `rawCards`, and the ONE thing that makes `currentCard` (and so
+ *  `CardDetailsSection`) render at all: without a real card at this key, `row` stays `null`
+ *  and the Details panel — and the listing-correction control it may or may not carry — is
+ *  never reached, which would make an absence assertion prove nothing. */
+const WALK_CARD = {
+  box: 3,
+  index: 21,
+  label: 'Box 3 · Section 2 · Card 17',
+  section: 2,
+  card: 17,
+  photo: 'photos/3/21.jpg',
+  photo_sha256: null,
+  photo_reclaimed_at: null,
+  set_hint: null,
+  metadata_finish: 'normal',
+  game: 'pokemon',
+  set_name: null,
+  rarity: null,
+  rarity_claim: null,
+  note: null,
+  captured_at: '2026-08-22T12:34:00+00:00',
+  capture_id: 'cap-a',
+  name: 'Volcanion',
+  number: '025',
+  printed_total: null,
+  number_display: '025',
+  confidence: null,
+  sku: SKU,
+  condition: 'Near Mint',
+  state: 'identified',
+  state_at: '2026-08-22T12:34:00+00:00',
+  retire_reason: null,
+  run: null,
+}
+
 /** Land on `#/orders` with a two-copy walk already planned (the sole buyer selects itself on
  *  landing, `docs/specs/order-walk-plan.md` §13) — `open()`'s own `walkPlan`, not a stub called
  *  after, for the reason `orders.spec.ts`'s own `open()` gives at length: the FIRST
@@ -221,7 +257,21 @@ async function open(page: Page): Promise<Wire[]> {
   })
 
   await page.route(/\/inventory\/copies$/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cards: {}, listings: {} }) })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ cards: { '3/21': WALK_CARD }, listings: {} }),
+    })
+  })
+
+  // `WALK_CARD` makes `currentCard` real, which makes `PhotoPanel` ask for its photograph —
+  // never stubbed here before because no card in this file ever rendered whole until now.
+  await page.route(/\/photo\/(by-card\/[0-9a-f]+|\d+\/\d+)/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>',
+    })
   })
 
   await page.route(/\/orders\/walk-plan$/, async (route) => {
@@ -337,4 +387,23 @@ test('undoing the newest pull returns it to Mark sold, and the older copy stays 
      recomputed each time the set of receipts changes, exactly as a stack's own top does when
      the item above it is popped. */
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toBeVisible()
+})
+
+/* -------------------------------------------------------------------------------------- 5 */
+
+test('the walk\'s card pane carries no listing-correction control — Inventory only', async ({ page }) => {
+  /* D-correct-a-listed-answer, the owner's ruling verbatim in intent: "Inventory only." This
+   * pane is `CardHero.tsx`'s shared `CardDetailsSection`, the same component `#/inventory`
+   * draws (§13, "Inventory's card pane, unchanged... reused whole") — `OrdersWalkPane.tsx`
+   * passes `correctable={false}` at its one call site, so the control this file's sibling
+   * (`correct-answer.spec.ts`) proves reachable on `#/inventory` must be absent here, and
+   * absent WITHOUT a reserved gap in its place (D118: nothing rendered, not an empty box). */
+  await open(page)
+
+  const details = page.locator('.browse-details')
+  await expect(details).toBeVisible()
+  // The disclosure is open by default at this viewport (`CardDetailsSection`'s own default,
+  // `!phone`), so the control would already be on screen if it were drawn at all.
+  await expect(page.getByRole('button', { name: 'Wrong card?' })).toHaveCount(0)
+  await expect(page.locator('.card-correction')).toHaveCount(0)
 })

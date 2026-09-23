@@ -3190,10 +3190,11 @@ COMPONENTS = [
                 # lens and its re-addressed history strip (D103, D62), the value band (D159),
                 # the queue refresh (D167), the push/publish pair (D106), the live export
                 # (D104) and the seven order-line closers (D113).
-                "governed_by": ["D13", "D14", "D18", "D58", "D62", "D76", "D79", "D83", "D86",
-                                "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113", "D134",
-                                "D159", "D165", "D167", "D168", "D174", "D189", "D192", "D193",
-                                "D203", "D210", "D225", "D227", "D236"],
+                "governed_by": ["D13", "D14", "D18", "D28", "D58", "D62", "D76", "D79", "D83",
+                                "D86", "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
+                                "D134", "D159", "D165", "D167", "D168", "D174", "D189", "D192",
+                                "D193", "D203", "D210", "D225", "D227", "D236",
+                                "D-correct-a-listed-answer"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -4776,14 +4777,14 @@ COMPONENTS = [
                 "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28",
                                 "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45",
-                                "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62",
-                                "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76", "D77",
-                                "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92",
-                                "D93", "D96", "D100", "D103", "D104", "D108", "D113", "D114",
-                                "D115", "D116", "D132", "D134", "D137", "D138", "D145", "D159",
-                                "D165", "D168", "D172", "D174", "D183", "D189", "D191", "D192",
-                                "D193", "D203", "D212", "D213", "D219",
-                                "D225", "D227"],
+                                "D46", "D49", "D52", "D53", "D54", "D55", "D56", "D58", "D61",
+                                "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
+                                "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
+                                "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D109", "D113",
+                                "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
+                                "D159", "D165", "D168", "D172", "D174", "D183", "D189", "D191",
+                                "D192", "D193", "D203", "D212", "D213", "D219", "D225", "D227",
+                                "D-correct-a-listed-answer"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5604,7 +5605,7 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236"]},
+                                              "D225", "D227", "D236", "D-correct-a-listed-answer"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -5697,7 +5698,7 @@ COMPONENTS = [
                                              "D113", "D114", "D115", "D116", "D132", "D134", "D142",
                                              "D145", "D147", "D156", "D159", "D165", "D166", "D168",
                                              "D172", "D174", "D180", "D183", "D193", "D212", "D213",
-                                             "D225", "D227", "D236"]},
+                                             "D225", "D227", "D236", "D-correct-a-listed-answer"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6063,7 +6064,7 @@ COMPONENTS = [
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218"]},
+                            "D192", "D213", "D218", "D-correct-a-listed-answer"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6123,7 +6124,7 @@ COMPONENTS = [
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
                                 "D87", "D137", "D162", "D167", "D172", "D194",
-                                "D-name-and-number-agree"],
+                                "D-name-and-number-agree", "D-correct-a-listed-answer"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -6497,7 +6498,14 @@ COMPONENTS = [
                                          "caller. `Row` also moved here; `BoxBrowse.tsx` "
                                          "re-exports it so `Inventory.tsx`'s own import keeps "
                                          "working.",
-                                 "governed_by": ["D6", "D26", "D31", "D52", "D89", "D96", "D172"]},
+                                 "governed_by": ["D6", "D26", "D31", "D34", "D46", "D52", "D89",
+                                                 "D96", "D118", "D172", "D-correct-a-listed-answer"]},
+            "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
+                                         "else it draws with is reused rather than restyled: "
+                                         "`kit.css`'s `.bn-panel*` for the panel chrome, "
+                                         "`ReviewQueue.css`'s `.review-catalog*`/`.review-candidate*` "
+                                         "for the picker rows.",
+                                 "governed_by": ["D94", "D117", "D118", "D-correct-a-listed-answer"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
@@ -7369,7 +7377,7 @@ COMPONENTS = [
                                            "brief named first (never re-sort the walk).",
                                    "governed_by": ["D58", "D62", "D79", "D93", "D96", "D97", "D116",
                                                    "D118", "D132", "D164", "D181", "D193", "D209",
-                                                   "D212", "D218", "D220"]},
+                                                   "D212", "D218", "D220", "D-correct-a-listed-answer"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
                                            "name); every other shape this file draws is "
@@ -8309,7 +8317,8 @@ COMPONENTS = [
                                                  "Not a harness test — it starts a browser; "
                                                  "`make design-check` runs it.",
                                          "governed_by": ["D57", "D58", "D113", "D118", "D136",
-                                                         "D164", "D212", "D220"]},
+                                                         "D164", "D212", "D220",
+                                                         "D-correct-a-listed-answer"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -8529,6 +8538,26 @@ COMPONENTS = [
                         "that request. Neither can see the other's half. Like its siblings it "
                         "is NOT a harness test: it starts a browser, so it runs under "
                         "`make design-check` and is deliberately off the commit path.",
+            },
+            "tests/correct-answer.spec.ts": {
+                "does": "`CardHero.tsx:ListingCorrection` is reachable on `#/inventory` for a "
+                        "card the review queue holds no entry for — the same "
+                        "`CLAUDE.md` route-is-not-a-feature check `inventory.spec.ts` runs, "
+                        "narrowed to the one new control. Opens `#/inventory`'s own boot on a "
+                        "single stubbed card (`Thievul`, `8937370`, identified — "
+                        "`inventory.spec.ts`'s own default row), presses `Wrong card?`, asserts "
+                        "the empty-query suggestion fires (D46), picks a row, reads the request "
+                        "body `POST /inventory/2/1/correct` sends, asserts the receipt toast and "
+                        "its Undo, and reads the undo's own request body. EVERY ROUTE IS "
+                        "STUBBED, `inventory.spec.ts`'s own rule: no write ever reaches a real "
+                        "store.",
+                "governed_by": ["D4", "D28", "D46", "D-correct-a-listed-answer"],
+                "note": "NOT a harness test, `inventory.spec.ts`'s own note: it starts a "
+                        "browser, so it runs under `make design-check`. Its own minimal boot "
+                        "rather than importing `inventory.spec.ts`'s `open()` — that file's own "
+                        "`test()` calls would re-register as a module side effect of the "
+                        "import, since Playwright discovers spec files by glob and not by "
+                        "import graph.",
             },
             "tests/card-variants.spec.ts": {
                 "does": "the name -> variant chooser drawn against the owner's own two real "

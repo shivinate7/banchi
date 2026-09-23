@@ -1,0 +1,25 @@
+/* app/src/CardHero.css (D-correct-a-listed-answer) — the listing-correction control's own
+ * spacing. Everything else it draws with — the panel chrome, the catalog rows, the
+ * candidate button — is `kit.css`'s `.bn-panel*` and `ReviewQueue.css`'s `.review-catalog*` /
+ * `.review-candidate*`, both reused rather than restyled. `--bn-*` tokens only (D94).
+ */
+
+/* THE SLOT KEEPS ITS HEIGHT WHEN THE CONTROL BECOMES ITS OWN RESULT (D118) —
+ * `CardLocations.css`'s `.card-locations-action` rule, reused rather than invented.
+ * `Wrong card?` is a 28px `sm` button (40px in the touch-target block, D117); a press
+ * elsewhere on this card (Mark sold) empties this slot, and the reservation is what stops
+ * the Details panel shrinking under it and moving everything the panel sits above. */
+.card-correction {
+  margin-top: var(--bn-4);
+  min-height: var(--bn-control-h-sm);
+}
+
+.card-correction-panel {
+  margin-top: var(--bn-2);
+}
+
+.card-correction-note {
+  margin: 0 0 var(--bn-2);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}
