@@ -367,17 +367,27 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
 
 /** `identity · claims · provenance` — `BoxBrowse.tsx`'s own disclosure, moved whole. Owns its
  *  open/closed state (default open unless `phone`, same as before) rather than reading it off
- *  the caller, so both screens get the identical control with no prop to keep in step. */
+ *  the caller, so both screens get the identical control with no prop to keep in step.
+ *
+ *  `correctable` IS THE SCREEN'S OWN WORD, on the owner's ruling (D-correct-a-listed-answer):
+ *  "Inventory only" — the listing-correction control shows on `#/inventory` and not on
+ *  `#/orders`, and the screen says so rather than this file guessing from the route. DEFAULTS
+ *  TRUE so `BoxBrowse.tsx`'s own call site needs no edit (a fenced file, Lanes 3/4's);
+ *  `OrdersWalkPane.tsx` passes `false` explicitly at its one call site. `false` renders NOTHING
+ *  for the control, not an empty reserved slot — D118 protects a control's OWN state change,
+ *  and a screen that never draws the control has no such change to protect against. */
 export function CardDetailsSection({
   card,
   market,
   listings,
   phone,
+  correctable = true,
 }: {
   readonly card: InventoryCard
   readonly market: MarketRead | undefined
   readonly listings: Readonly<Record<string, Listing>>
   readonly phone: boolean
+  readonly correctable?: boolean
 }) {
   const [openState, setOpenState] = useState<boolean | null>(null)
   const open = openState ?? !phone
@@ -407,7 +417,7 @@ export function CardDetailsSection({
           </div>
         ))}
       </div>
-      <ListingCorrection card={card} />
+      {correctable ? <ListingCorrection card={card} /> : null}
     </details>
   )
 }
@@ -460,7 +470,6 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
   // The two refusals `POST /inventory/<box>/<index>/correct` would give this card anyway —
   // checked here so the control is never offered a press the server would only reject.
   const eligible = sku !== null && card.state === 'identified'
-  if (!eligible) return null
 
   const { box, index } = card
 
@@ -520,49 +529,59 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
       .finally(() => setBusy(false))
   }
 
+  // THE SLOT KEEPS ITS HEIGHT WHEN THE CONTROL BECOMES ITS OWN RESULT (D118),
+  // `.card-locations-action`'s own rule (app/src/CardLocations.css), reused rather than
+  // invented: `.card-correction`'s CSS reserves `Wrong card?`'s own height always, so a press
+  // ELSEWHERE ON THIS CARD (Mark sold — `card.state` turns `sold`/`retired`, `eligible` turns
+  // false) empties this slot without resizing it. The wrapper always renders; what changes is
+  // only what stands inside it.
   return (
     <div className="card-correction">
-      {written !== null ? (
-        // WRITTEN, NOT `card` — the header and the Details panel above still show what this
-        // component was handed until the caller's own next read; this line is the one place
-        // on the pane that already knows what actually happened.
-        <p className="card-correction-note">
-          Now {name ?? 'unnamed'}, SKU {sku}. The rest of this panel updates on the next reload.
-        </p>
-      ) : null}
-      {!open ? (
-        <Button variant="quiet" size="sm" icon="search" onClick={openPanel}>
-          Wrong card?
-        </Button>
-      ) : (
-        <div
-          className="bn-panel card-correction-panel"
-          // `CatalogPanel`'s own copy promises `Esc` goes back — true on `#/review`, where
-          // the container already binds it, and not true here without this. Bound on the
-          // panel rather than the document, so it never reaches past this control.
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') setOpen(false)
-          }}
-        >
-          <div className="bn-panel-head">
-            <span className="bn-section-title">Correct the listing</span>
-            <Button size="sm" variant="ghost" iconOnly icon="x" onClick={() => setOpen(false)}>
-              Close
+      {!eligible ? null : (
+        <>
+          {written !== null ? (
+            // WRITTEN, NOT `card` — the header and the Details panel above still show what
+            // this component was handed until the caller's own next read; this line is the
+            // one place on the pane that already knows what actually happened.
+            <p className="card-correction-note">
+              Now {name ?? 'unnamed'}, SKU {sku}. The rest of this panel updates on the next reload.
+            </p>
+          ) : null}
+          {!open ? (
+            <Button variant="quiet" size="sm" icon="search" onClick={openPanel}>
+              Wrong card?
             </Button>
-          </div>
-          <div className="bn-panel-body">
-            <CatalogPanel
-              lookup={lookup}
-              failed={failed}
-              typed={typed}
-              onTyped={setTyped}
-              onSearch={() => search(typed)}
-              onChoose={choose}
-              overruling
-              busy={busy}
-            />
-          </div>
-        </div>
+          ) : (
+            <div
+              className="bn-panel card-correction-panel"
+              // `CatalogPanel`'s own copy promises `Esc` goes back — true on `#/review`, where
+              // the container already binds it, and not true here without this. Bound on the
+              // panel rather than the document, so it never reaches past this control.
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setOpen(false)
+              }}
+            >
+              <div className="bn-panel-head">
+                <span className="bn-section-title">Correct the listing</span>
+                <Button size="sm" variant="ghost" iconOnly icon="x" onClick={() => setOpen(false)}>
+                  Close
+                </Button>
+              </div>
+              <div className="bn-panel-body">
+                <CatalogPanel
+                  lookup={lookup}
+                  failed={failed}
+                  typed={typed}
+                  onTyped={setTyped}
+                  onSearch={() => search(typed)}
+                  onChoose={choose}
+                  overruling
+                  busy={busy}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

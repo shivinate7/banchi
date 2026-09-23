@@ -7402,6 +7402,7 @@ def _give_back_listing(
     sku: str,
     condition: Optional[str],
     released: Dict[str, int],
+    stamps: Optional[dict] = None,
 ) -> None:
     """Reverse of `Listing.release`: hand `released` back onto `sku`'s own record.
 
@@ -7411,6 +7412,15 @@ def _give_back_listing(
     `set` for `live`. `bump` REFUSES `live` on purpose (D115): a reclaimed live copy is an
     observation made now, not a delta on an old reading, which is the exact posture D34's own
     `release` takes when it is the one reaching `live`.
+
+    `stamps` PUTS `staged_at`/`live_as_of` BACK TOO, AFTER THE COUNTS, so the round trip is
+    exact and not merely equal in number. `release()` restamps both on its way out — `staged_at`
+    when `staged` reaches zero, `live_as_of` whenever it reaches `live` — and `bump`/`set` above
+    restamp them AGAIN on the way back, to now, which is wrong twice over: it is not when the
+    stage was really touched, and a correction-then-undo would otherwise read as fresher than
+    the record ever was — hiding exactly the staleness `staged_stale` and `reprice` exist to
+    catch. Restored VERBATIM, including a `None` either one held before the release, which is
+    what "back to exactly what it was" means for a stamp that was never set.
     """
     if not released:
         return
@@ -7423,6 +7433,9 @@ def _give_back_listing(
             entry.set(master.LIVE, int(entry.live) + count)
         elif stage in (master.PUSHED, master.STAGED):
             entry.bump(stage, count)
+    if stamps is not None:
+        entry.staged_at = stamps.get("staged_at")
+        entry.live_as_of = stamps.get("live_as_of")
 
 
 def do_correct_answer(box: int, index: int, payload: dict) -> dict:
@@ -7547,6 +7560,17 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
 
         old_sku = card.sku
         old_entry = snapshot.inventory.listings.get(old_sku) if old_sku else None
+        # READ BEFORE `release()`, WHICH TOUCHES BOTH OF THESE ITSELF: it stamps `staged_at`
+        # only when `staged` reaches zero and `live_as_of` only when it gives up a `live`
+        # copy — so the record `release` leaves behind is not the record it started from, and
+        # an undo that only reversed the COUNTS would still corrupt the staleness a later
+        # `staged_stale` or `reprice` reads off these two stamps. `_give_back_listing` restores
+        # them from here, verbatim, once the counts are back.
+        stamps_before = (
+            {"staged_at": old_entry.staged_at, "live_as_of": old_entry.live_as_of}
+            if old_entry is not None
+            else None
+        )
         released: Dict[str, int] = old_entry.release(1) if old_entry is not None else {}
 
         card.sku = sku
@@ -7569,6 +7593,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
             restores_to=previous,
             released=released or None,
             old_sku=old_sku,
+            stamps=stamps_before,
         )
 
         # THE SAME QUESTION `do_review_answer` ASKS AFTER ITS OWN WRITE, ON THE NEW SKU: is
@@ -7691,8 +7716,15 @@ def _reverse_correction(box: int, index: int) -> dict:
         withdrawn = {"sku": card.sku, "condition": card.condition}
         released = event.get("released")
         old_sku = pair.get("sku")
+        stamps = event.get("stamps")
         if isinstance(released, dict) and old_sku:
-            _give_back_listing(snapshot.inventory, old_sku, pair.get("condition"), released)
+            _give_back_listing(
+                snapshot.inventory,
+                old_sku,
+                pair.get("condition"),
+                released,
+                stamps=stamps if isinstance(stamps, dict) else None,
+            )
 
         card.sku = pair.get("sku")
         card.condition = pair.get("condition")

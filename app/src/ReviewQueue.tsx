@@ -2022,7 +2022,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
 /** Exported for `CardHero.tsx`'s listing-correction control, which reuses this row rather
  *  than forking one (D-correct-a-listed-answer, on this file's own header: "if reusing the
  *  pane needs a component lifted out... do that — that is added to inventory... not a
- *  fork"). No behaviour here changed to make that reuse possible. */
+ *  fork"). No behavior here changed to make that reuse possible. */
 export function CandidateButton({
   candidate,
   at,

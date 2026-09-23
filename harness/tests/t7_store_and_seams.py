@@ -11656,6 +11656,109 @@ def check_correct_answer(checks: Checks) -> None:
             )
 
 
+def check_correct_answer_live_release(checks: Checks) -> None:
+    """POST /inventory/<box>/<index>/correct — the `live` stage of the release, and the
+    stamps a round trip must not corrupt. D-correct-a-listed-answer, review round 2.
+
+    `Listing.release`'s own rule is least-committed-first: `pushed`, then `staged`, then
+    `live`. Every other case in `check_correct_answer` leaves `pushed` non-zero, so the
+    release never reaches past it — `_give_back_listing`'s `master.LIVE` branch has never
+    run. This fixture starts the old SKU at `pushed=0, staged=0, live=2`, so the ONE copy
+    this correction gives up has nowhere else to come from.
+
+    AND `release()` RESTAMPS `live_as_of` TO NOW WHEN IT TAKES FROM `live` — D34's own rule,
+    "an observation made now, like a sale" — so the stamp the operator's ORIGINAL live
+    reading carried is gone the moment the correction lands. The undo must not read that
+    loss as further permission to restamp AGAIN to whatever "now" happens to be when the
+    undo is pressed: `stamps` on the `sku_corrected` line carries the PRE-CORRECTION value,
+    and `_give_back_listing` puts it back verbatim once the counts are restored.
+    """
+    checks.note("")
+    checks.note("CORRECT A LISTED ANSWER — the live stage, and the stamp round trip")
+
+    old_sku, new_sku = "8926937", "8925897"
+    original_live_as_of = "2020-01-01T00:00:00+00:00"
+
+    with isolated_home() as home:
+        run_dir = home / "runs" / "2026-09-23-box5-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-09-23T00:00:00+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+        capture_server.do_capture(capture_payload(5, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["5/1"].game = "riftbound"
+            snapshot.inventory.cards["5/1"].run = "2026-09-23-box5-01"
+            snapshot.inventory.set_state(
+                "5/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
+            )
+            # `pushed` and `staged` are BOTH zero — the one copy the correction gives up can
+            # only come from `live`, which is the branch under test.
+            snapshot.inventory.listing(old_sku, condition="Near Mint").set(master.LIVE, 2)
+            snapshot.inventory.listings[old_sku].live_as_of = original_live_as_of
+
+        before = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            (before.pushed, before.staged, before.live, before.live_as_of),
+            (0, 0, 2, original_live_as_of),
+            "before the correction: nothing pushed or staged, two copies live, an old reading",
+        )
+
+        body = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(5, 1, {"sku": new_sku}),
+            "the correction succeeds with nothing to release from pushed or staged",
+        )
+        if body is not None:
+            checks.equal(
+                body["released"],
+                {"live": 1},
+                "and `Listing.release` reached `live` — the branch `_give_back_listing` had "
+                "never exercised",
+            )
+
+        after_release = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            (after_release.pushed, after_release.staged, after_release.live),
+            (0, 0, 1),
+            "one live copy is given up, and nothing else moves",
+        )
+        checks.ok(
+            after_release.live_as_of != original_live_as_of,
+            "and `release()` restamped `live_as_of` to now — D34's own rule for a copy taken "
+            "off `live`, unchanged by this correction",
+        )
+
+        undone = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(5, 1, {"undo": True}),
+            "the undo gives the live copy back",
+        )
+        restored = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            (restored.pushed, restored.staged, restored.live),
+            (0, 0, 2),
+            "every count is restored exactly, live included",
+        )
+        checks.equal(
+            restored.live_as_of,
+            original_live_as_of,
+            "and `live_as_of` is the PRE-CORRECTION stamp, not `release()`'s restamp and not "
+            "a fresh `now` from the undo itself — a correct-then-undo round trip must not "
+            "manufacture a reading nobody took, which is exactly what `staged_stale` and "
+            "`reprice` would otherwise read as new evidence",
+        )
+        if undone is not None:
+            checks.ok(True, "and the route itself answered")
+
+
 def check_catalog_set_rarity_match(checks: Checks) -> None:
     """`server/capture_server.py:_catalog_matches` sees `Set Name`/`Rarity`
     (docs/specs/card-variants.md section 3a).
@@ -31402,6 +31505,7 @@ def run() -> Result:
     check_review_stand_down(checks)
     check_review_catalog(checks)
     check_correct_answer(checks)
+    check_correct_answer_live_release(checks)
     check_catalog_set_rarity_match(checks)
     check_run_realignment(checks)
     check_reused_box_refusal(checks)

@@ -6305,13 +6305,13 @@ COMPONENTS = [
                                          "re-exports it so `Inventory.tsx`'s own import keeps "
                                          "working.",
                                  "governed_by": ["D6", "D26", "D31", "D34", "D46", "D52", "D89",
-                                                 "D96", "D172", "D-correct-a-listed-answer"]},
+                                                 "D96", "D118", "D172", "D-correct-a-listed-answer"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "
                                          "`kit.css`'s `.bn-panel*` for the panel chrome, "
                                          "`ReviewQueue.css`'s `.review-catalog*`/`.review-candidate*` "
                                          "for the picker rows.",
-                                 "governed_by": ["D94", "D-correct-a-listed-answer"]},
+                                 "governed_by": ["D94", "D117", "D118", "D-correct-a-listed-answer"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
@@ -7179,7 +7179,7 @@ COMPONENTS = [
                                            "brief named first (never re-sort the walk).",
                                    "governed_by": ["D58", "D62", "D79", "D93", "D96", "D97", "D116",
                                                    "D118", "D132", "D164", "D181", "D193", "D209",
-                                                   "D212", "D220"]},
+                                                   "D212", "D220", "D-correct-a-listed-answer"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
                                            "name); every other shape this file draws is "
@@ -8119,7 +8119,8 @@ COMPONENTS = [
                                                  "Not a harness test — it starts a browser; "
                                                  "`make design-check` runs it.",
                                          "governed_by": ["D57", "D58", "D113", "D118", "D136",
-                                                         "D164", "D212", "D220"]},
+                                                         "D164", "D212", "D220",
+                                                         "D-correct-a-listed-answer"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

@@ -780,6 +780,11 @@ export function WalkMainPane({
           market={row.card.run === null ? undefined : priced[row.card.run]}
           listings={listings}
           phone={phone}
+          // "Inventory only" — the owner's ruling on D-correct-a-listed-answer. The walk here
+          // is a mode of inventory's own pane (§13), not inventory itself, and the
+          // listing-correction control stays off it. `correctable` defaults true for
+          // `BoxBrowse.tsx`'s own call, unedited; this is the one call site that says no.
+          correctable={false}
         />
       )}
       {!zoomed || row === null ? null : (
