@@ -6214,6 +6214,16 @@ COMPONENTS = [
                                             "one DOM at one height (D118).",
                                     "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41",
                                                     "D58", "D68", "D118", "D132", "D155", "D218"]},
+            "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST, in two "
+                                             "parts: `#/inventory`'s shelf and `#/orders`' walk both "
+                                             "draw it. The section's name shrinks and ellipsizes; its "
+                                             "card count keeps its own width, so a narrow column cuts "
+                                             "the name and never the count a hand checks the rows "
+                                             "against. The comma rides the count's span, so the text is "
+                                             "`position.ts:sectionTitleText`'s whole sentence. A "
+                                             "component alone in its file so React Refresh can "
+                                             "hot-reload it.",
+                                     "governed_by": ["D58", "D132", "D218"]},
             "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
                                         "`sentenceOf`, `sectionDepthOf`, their types and the shared "
                                         "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "

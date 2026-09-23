@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
@@ -5878,6 +5878,61 @@ test('D132 — an unnamed box keeps the index in the address and draws no note b
   await page.locator('.browse-row').nth(0).click()
   await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX 2SECTION 1')
   await expect(page.locator('.card-locations-row.is-current .position-note')).toHaveCount(0)
+})
+
+
+/** WHERE A SECTION TITLE'S COUNT IS DRAWN, against the title's own box — the box that clips it.
+ *  Measured off the TEXT with a Range, not off a count element, so the same probe reads a title
+ *  drawn as one span (the old shape, where the ellipsis cut the count) and as two. `overflow` is
+ *  how far the whole sentence runs past the box: above 0 means the name really was cut, so a
+ *  green count is not a title that simply fit. */
+async function sectionTitleFit(title: Locator, count: string): Promise<{ countInside: boolean; overflow: number; text: string }> {
+  return title.evaluate((el, needle) => {
+    const box = el.getBoundingClientRect()
+    const all = document.createRange()
+    all.selectNodeContents(el)
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    let countInside = false
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const at = (node.textContent ?? '').indexOf(needle)
+      if (at < 0) continue
+      const range = document.createRange()
+      range.setStart(node, at)
+      range.setEnd(node, at + needle.length)
+      const r = range.getBoundingClientRect()
+      countInside = r.width > 0 && r.left >= box.left - 0.5 && r.right <= box.right + 0.5
+    }
+    return { countInside, overflow: all.getBoundingClientRect().width - box.width, text: el.textContent ?? '' }
+  }, count)
+}
+
+test('a long section name is cut before the count is, at 820', async ({ page }) => {
+  /* The same title `#/orders` draws (`SectionTitle.tsx`): the NAME ellipsizes, `3 cards` stays
+     whole. Verified red first: the one-span title cut the count, the end of the sentence. */
+  await page.setViewportSize({ width: 820, height: 1180 })
+  const named = (input: Parameters<typeof card>[0]) => {
+    const one = card(input)
+    return { ...one, place: { ...one.place, section_name: 'Holographic promos from the vintage binder' } }
+  }
+  const cards = {
+    '2/1': named({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+    '2/2': named({ index: 2, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  }
+  const boxes = {
+    boxes: [{
+      ...BOXES.boxes[0],
+      cards: 2, on_hand: 2, fill: 2, next_index: 3, sold: 0, retired: 0,
+      sections_detail: [{ section: 1, start: 1, end: 3, count: 2, name: 'Holographic promos from the vintage binder' }],
+    }],
+  }
+  await open(page, boxes, { cards, search: (query) => searchAnswer(query, cards) })
+  await expandAll(page)
+
+  const title = page.locator('.browse-secttitle').first()
+  await expect(title).toHaveText('Section 1: Holographic promos from the vintage binder, 3 cards')
+  const fit = await sectionTitleFit(title, '3 cards')
+  expect(fit.overflow).toBeGreaterThan(0)
+  expect(fit.countInside).toBe(true)
 })
 
 test('D132 — a named section is said in the walk header, in the bar\'s sentence and on the label', async ({ page }) => {

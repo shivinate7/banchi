@@ -235,6 +235,22 @@ export function sectionCountOf(place: Place): SectionCount | null {
   return span === null ? null : { of: span.of, growing: span.growing }
 }
 
+/** A section title in its two parts: `head` names the section (and, on `#/orders`, the box), and
+ *  `count` is `sectionCountOf`'s answer in words, or null where it has none. Two parts because
+ *  a narrow column may cut the name but never the count (`SectionTitle.tsx` draws them). */
+export type SectionTitleParts = { readonly head: string; readonly count: string | null }
+
+/** `19 cards`, `1 card`. The words every section title states its count in. */
+export function sectionCountWords(count: SectionCount | null): string | null {
+  return count === null ? null : `${count.of} card${count.of === 1 ? '' : 's'}`
+}
+
+/** The whole title as one sentence: what a screen reader hears, what a fold groups by, and
+ *  exactly the text `SectionTitle` draws. */
+export function sectionTitleText(parts: SectionTitleParts): string {
+  return parts.count === null ? parts.head : `${parts.head}, ${parts.count}`
+}
+
 /**
  * A section is `growing` when the box is open AND its declared end reaches or passes what the
  * box currently holds — the last section, the one the next capture lands in. A growing section

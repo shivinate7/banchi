@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
-import { sectionCountOf } from './position'
+import { sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { SectionTitle } from './SectionTitle'
 import type {
   BoxRecord,
   InventoryCard,
@@ -260,11 +261,11 @@ function passesFacetFilter(card: InventoryCard, filter: InventoryFacetFilter): b
 /* Which stretch of one shelf's walk a row belongs to, worded as its header will say it.
  * Composed from the server's own decorations — no position arithmetic here beyond
  * `sectionCountOf`'s own (`position.ts`), which this shares with `sectionDepthOf`. */
-function sectionTitleOf(row: Row): string {
+function sectionTitleOf(row: Row): SectionTitleParts {
   if (isPooled(row.card)) {
-    return `Pooled: ${row.card.place?.game_display ?? row.card.game ?? 'cards'}`
+    return { head: `Pooled: ${row.card.place?.game_display ?? row.card.game ?? 'cards'}`, count: null }
   }
-  if (row.card.section === undefined) return 'No position label'
+  if (row.card.section === undefined) return { head: 'No position label', count: null }
 
   /* THE SECTION'S NAME RIDES ITS NUMBER (D132): `Section 6: Rares`. Off the place block, where
      the server joined it at read time, so a rename reaches every header at once. D218: the
@@ -281,12 +282,10 @@ function sectionTitleOf(row: Row): string {
      answers in the section's own scale, honestly on a growing section too — no "so far" (owner's
      ruling, 2026-09-19, see `sectionDepthOf`'s comment) — so the fold below has one number
      rather than a range with nothing to check it against. */
-  const count = row.card.place ? sectionCountOf(row.card.place) : null
-  if (count === null) return named
-  return `${named}, ${count.of} card${count.of === 1 ? '' : 's'}`
+  return { head: named, count: sectionCountWords(row.card.place ? sectionCountOf(row.card.place) : null) }
 }
 
-type Section = { key: string; title: string; first: Row; rows: Row[] }
+type Section = { key: string; title: string; parts: SectionTitleParts; first: Row; rows: Row[] }
 
 function sectionKeyOf(row: Row, title: string): string {
   const box = row.card.box
@@ -306,9 +305,10 @@ function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = nul
   const out: Section[] = []
   for (const row of rows) {
     const open = out[out.length - 1]
-    const title = sectionTitleOf(row)
+    const parts = sectionTitleOf(row)
+    const title = sectionTitleText(parts)
     if (open !== undefined && open.title === title) open.rows.push(row)
-    else out.push({ key: sectionKeyOf(row, title), title, first: row, rows: [row] })
+    else out.push({ key: sectionKeyOf(row, title), title, parts, first: row, rows: [row] })
   }
   /* DEPARTED ROWS SINK UNDER THE LIVE ONES, WITHIN THEIR OWN SECTION (D132). A stable partition
      so the walk's order survives in each half, and per section rather than over the whole list,
@@ -2103,7 +2103,7 @@ export function BoxBrowse({
                         onClick={() => toggleSection(section)}
                       >
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
-                        <span className="browse-secttitle">{section.title}</span>
+                        <SectionTitle parts={section.parts} />
                         <span
                           className="browse-sectcount"
                           title={ticked === 0 ? census : `${ticked} of ${section.rows.length} records ticked; ${census}`}

@@ -31,7 +31,8 @@ import { CardDetailsSection, CardHeroHead, marketTable, PhotoPanel, type MarketR
 import { CardLocations } from './CardLocations'
 import { Overlay } from './InventoryOverlay'
 import { Button, Icon, Pill } from './kit'
-import { sectionCountOf } from './position'
+import { sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { SectionTitle } from './SectionTitle'
 import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -140,17 +141,15 @@ function rowsOf(plan: WalkPlan | null): WalkRow[] {
  *  reading `#37` is two rulers on one screen, the defect `sectionCountOf` already fixed on
  *  `#/inventory`. `place` is the section's first row's copy — a `here` copy, so it stands in
  *  this stop's box and section and carries the `box_closed` the stop itself does not. */
-function stopTitle(stop: WalkPlanStop, place: Place): string {
-  if (stop.pooled) return `Pooled: ${stop.game_display ?? 'cards'}`
+function stopTitle(stop: WalkPlanStop, place: Place): SectionTitleParts {
+  if (stop.pooled) return { head: `Pooled: ${stop.game_display ?? 'cards'}`, count: null }
   const box = stop.box_name ?? (stop.box === null ? 'Box' : `Box ${stop.box}`)
-  if (stop.section === null) return box
+  if (stop.section === null) return { head: box, count: null }
   const named = stop.section_name ? `Section ${stop.section}: ${stop.section_name}` : `Section ${stop.section}`
-  const count = sectionCountOf(place)
-  if (count === null) return `${box}, ${named}`
-  return `${box}, ${named}, ${count.of} card${count.of === 1 ? '' : 's'}`
+  return { head: `${box}, ${named}`, count: sectionCountWords(sectionCountOf(place)) }
 }
 
-export type WalkSection = { readonly key: string; readonly title: string; readonly rows: readonly WalkRow[] }
+export type WalkSection = { readonly key: string; readonly title: string; readonly parts: SectionTitleParts; readonly rows: readonly WalkRow[] }
 
 /** Run-length over the flat rows, the same trick `BoxBrowse.tsx:sectionsOf` uses, keyed by the
  *  stop rather than by a title string so a re-plan cannot merge two stops that only happen to
@@ -166,7 +165,8 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
       continue
     }
     const stop = stopByKey.get(row.stopKey)
-    out.push({ key: row.stopKey, title: stop === undefined ? row.stopKey : stopTitle(stop, row.copy.place), rows: [row] })
+    const parts: SectionTitleParts = stop === undefined ? { head: row.stopKey, count: null } : stopTitle(stop, row.copy.place)
+    out.push({ key: row.stopKey, title: sectionTitleText(parts), parts, rows: [row] })
   }
   return out
 }
@@ -541,7 +541,7 @@ export function WalkList({
             <div className="browse-secthead">
               <span className="browse-sectfold" aria-hidden="true">
                 <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} size={14} className="browse-sectmark" />
-                <span className="browse-secttitle">{section.title}</span>
+                <SectionTitle parts={section.parts} />
                 <span className="browse-sectcount">{shown.length}</span>
               </span>
             </div>
