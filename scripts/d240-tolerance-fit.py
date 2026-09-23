@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Fits D240's proposed name-agreement tolerance against the owner's own hand answers
-rather than borrowing D239's 0.82 unmeasured for this shape. The decision entry that will
-carry the result is NOT YET WRITTEN — this file was rescued from a lane that stopped before
-it reached the owner's store, and no measurement has been taken with it.
+rather than borrowing D239's 0.82 unmeasured for this shape. The result is recorded in the
+decision entry `D-a-name-tolerance-fit`, measured 2026-09-23 on the owner's store.
+
+THE LABELS ARE SELECTED BY THE GATE THEY FIT. A `name_disputed` entry exists only because
+`pipeline/join.py:name_disputes` fired, which is ratio below `NAME_DISPUTE_SIMILARITY` and no
+containment. So no label can sit at or above that constant, and the sweep is silent there.
+The store-wide listing below is what speaks for that band, read by name.
 
 NO NETWORK CALL, EVER. NO STORE ON DISK IS NEEDED TO RUN THIS FILE. With no `--store`, it
 proves the sweep logic itself against a small fixture built in this file (the same
@@ -41,7 +45,7 @@ WHAT IT MEASURES, WITH A REAL STORE. Three things, and none of them touches a ne
    already narrows those a different way — see the module's own comment) and reported
    separately, never silently dropped.
 
-THE SWEEP is run over the labelled set from (2) at every 0.01 step the caller asks for
+THE SWEEP is run over the labelled set from (3) at every 0.01 step the caller asks for
 (default 0.70-0.95, the range named in the brief this script answers), with and without a
 substring-containment escape, and reports at each point: how many known misreads it would
 still catch, how many known-correct answers it would needlessly re-flag, and the two counts
@@ -63,7 +67,15 @@ from typing import Dict, List, Optional, Tuple
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from pipeline.join import _name_compare_key  # noqa: E402
+from pipeline import tcgcsv  # noqa: E402
+from pipeline.join import (  # noqa: E402
+    NAME_DISPUTE_SIMILARITY,
+    Catalog,
+    IdentifiedCard,
+    Position,
+    _name_compare_key,
+    name_disputes,
+)
 from pipeline.sku_number_contradictions import (  # noqa: E402
     NumberRecord,
     find_disagreements,
@@ -167,7 +179,7 @@ class LabeledCase:
     agrees: bool  # True: human confirmed the number's own candidate was correct
 
 
-def load_labels(conn: sqlite3.Connection) -> Tuple[List[LabeledCase], int]:
+def load_labels(conn: sqlite3.Connection, closed: Dict[str, str]) -> Tuple[List[LabeledCase], int]:
     """Every hand-cleared `name_disputed` entry with exactly one candidate. Returns the
     labelled cases and the count of multi-candidate entries excluded (reported, never
     silently dropped).
@@ -178,6 +190,8 @@ def load_labels(conn: sqlite3.Connection) -> Tuple[List[LabeledCase], int]:
     cases: List[LabeledCase] = []
     excluded_multi = 0
     for key, payload in rows:
+        if closed.get(key) != "answered":
+            continue  # a stand-down closed it: no answer, so no label
         record = json.loads(payload)
         candidates = record.get("candidates", [])
         if len(candidates) != 1:
@@ -203,6 +217,105 @@ def load_labels(conn: sqlite3.Connection) -> Tuple[List[LabeledCase], int]:
             )
         )
     return cases, excluded_multi
+
+
+def clearing_events(conn: sqlite3.Connection) -> Dict[str, str]:
+    """Which event last closed each position's question: `answered` or `stood_down`.
+
+    `cleared_by_human` HAS TWO MEANINGS (`store/queues.py`'s docstring). A stand-down (D37)
+    writes nothing to the card, so its final SKU still equals the number's candidate and
+    would read as agreement. Only an `answered` close is a label. An `unanswered` event
+    withdraws the answer before it.
+    """
+    last: Dict[str, str] = {}
+    for event, position in conn.execute(
+        "SELECT event, position FROM events "
+        "WHERE event IN ('answered', 'stood_down', 'unanswered') ORDER BY id"
+    ):
+        if event == "unanswered":
+            last.pop(position, None)
+        else:
+            last[position] = event
+    return last
+
+
+def _best_against(read_name: str, names: List[str]) -> Tuple[float, bool]:
+    """The highest ratio and any containment over every row. `name_disputes` trusts a
+    number when ANY of its rows agrees, so the gate reads the best row, never the first.
+    """
+    best, contains = 0.0, False
+    for name in names:
+        ratio, inside = ratio_and_containment(read_name, name)
+        best, contains = max(best, ratio), contains or inside
+    return best, contains
+
+
+def load_other_reason_labels(
+    conn: sqlite3.Connection, closed: Dict[str, str]
+) -> Tuple[List[LabeledCase], List[LabeledCase]]:
+    """Answered entries of every OTHER reason whose read name disputes every candidate.
+
+    The join runs `name_disputes` only when `not resolution.needs_review`, so a card queued
+    for another reason never had the name check. Two groups, never merged:
+
+    - the answer is a SKU outside the candidates: the number's rows were wrong, and the
+      name was right. A case the rung must flag (`agrees=False`).
+    - the answer is one of the number's own rows, under a different name. The owner
+      accepted it, but a peer session reports all of these as misreads. Only the
+      photograph can settle it, so these are UNKNOWN and enter no sweep count.
+    """
+    rejected: List[LabeledCase] = []
+    accepted: List[LabeledCase] = []
+    for key, payload in conn.execute(
+        "SELECT key, payload FROM queues "
+        "WHERE reason != 'name_disputed' AND cleared_by_human=1"
+    ):
+        if closed.get(key) != "answered":
+            continue
+        record = json.loads(payload)
+        read_name = record.get("read", {}).get("name")
+        candidates = record.get("candidates", [])
+        rows = [{tcgcsv.NAME_COLUMN: c.get("name") or ""} for c in candidates]
+        if not read_name or not rows or not name_disputes(read_name, rows):
+            continue
+        final = conn.execute("SELECT sku FROM cards WHERE key=?", (key,)).fetchone()
+        if final is None or not final[0]:
+            continue
+        ratio, contains = _best_against(read_name, [c.get("name") or "" for c in candidates])
+        inside = str(final[0]) in {str(c.get("sku")) for c in candidates}
+        case = LabeledCase(key, read_name, "; ".join(sorted({c.get("name") or "" for c in candidates})),
+                           ratio, contains, agrees=inside)
+        (accepted if inside else rejected).append(case)
+    return rejected, accepted
+
+
+def store_wide(conn: sqlite3.Connection, exports: Path) -> List[Tuple[str, str, float, bool]]:
+    """Every numbered, named card, taken through the join's own `Catalog.candidates` against
+    the newest cached export of its game, read-only. Returns (key, state, best ratio,
+    containment) for each card whose rows came from the NUMBER, never from a name rung.
+    """
+    catalogs = {}
+    for game_dir in sorted(p for p in exports.iterdir() if p.is_dir()):
+        files = sorted(game_dir.glob("*.csv"))
+        if files:
+            catalogs[game_dir.name] = Catalog.from_export(tcgcsv.read_export(files[-1]), game_dir.name)
+    out = []
+    for key, name, number, game, hint, state, payload in conn.execute(
+        "SELECT key, name, number, game, set_hint, state, payload FROM cards"
+    ):
+        if not name or not number or game not in catalogs:
+            continue
+        box, index = (int(part) for part in str(key).split("/"))
+        card = IdentifiedCard(
+            position=Position(box, index), name=name, number=number,
+            printed_total=json.loads(payload).get("printed_total"), game=game, set_hint=hint,
+        )
+        found = catalogs[game].candidates(card)
+        if not found.rows or found.lookup.startswith("name"):
+            continue
+        ratio, contains = _best_against(name, [r.get(tcgcsv.NAME_COLUMN) or "" for r in found.rows])
+        out.append((key, state, ratio, contains))
+    return out
 
 
 # --------------------------------------------------------------------- the sweep
@@ -341,7 +454,8 @@ def run_report(store_path: Path, low: float, high: float, step: float) -> int:
           "at least one member card independently hand-cleared in the review queue")
     print()
 
-    cases, excluded_multi = load_labels(conn)
+    closed = clearing_events(conn)
+    cases, excluded_multi = load_labels(conn, closed)
     misreads = [c for c in cases if not c.agrees]
     correct = [c for c in cases if c.agrees]
     print("LABELLED SET (hand-answered `name_disputed` queue entries, single candidate):")
@@ -372,6 +486,34 @@ def run_report(store_path: Path, low: float, high: float, step: float) -> int:
                 f"{row.correct_released:>17}"
             )
         print()
+
+    rejected, accepted = load_other_reason_labels(conn, closed)
+    print("OTHER-REASON ANSWERS WHOSE READ NAME DISPUTES EVERY CANDIDATE (never name-checked):")
+    print(f"  {len(rejected)} answered OUTSIDE the candidates (name right, number wrong)")
+    for c in rejected:
+        print(f"    {c.key:8} ratio={c.ratio:.3f}  {c.read_name!r} vs {c.cand_name!r}")
+    print(f"  {len(accepted)} answered WITH a number row under another name — UNKNOWN, "
+          "no sweep count")
+    for c in accepted:
+        print(f"    {c.key:8} ratio={c.ratio:.3f}  {c.read_name!r} vs {c.cand_name!r}")
+    print()
+
+    exports = store_path.parent / ".exports"
+    if exports.is_dir():
+        wide = store_wide(conn, exports)
+        print(f"STORE-WIDE: {len(wide)} numbered cards matched by NUMBER in the cached exports")
+        print(f"  {'tol':>5}  {'flagged, all':>13}  {'flagged, on hand':>17}  "
+              f"{'vs today (0.80)':>16}")
+        today = sum(1 for _, _, r, k in wide if not would_trust(r, k, NAME_DISPUTE_SIMILARITY, True))
+        n = round((high - low) / step) + 1
+        for i in range(n):
+            t = round(low + i * step, 10)
+            flagged = [(s, r) for _, s, r, k in wide if not would_trust(r, k, t, True)]
+            on_hand = sum(1 for s, _ in flagged if s == "identified")
+            print(f"  {t:>5.2f}  {len(flagged):>13}  {on_hand:>17}  {len(flagged) - today:>+16}")
+        print()
+    else:
+        print(f"STORE-WIDE: no exports at {exports}, volume NOT measured")
 
     return 0
 

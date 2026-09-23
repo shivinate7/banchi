@@ -2752,7 +2752,8 @@ COMPONENTS = [
                         "mutation arm: an always-trust stub must misclassify exactly the "
                         "fixture's known misreads. Not wired into `make check` — "
                         "`holdings-selftest.py`'s own precedent.",
-                "governed_by": ["D35", "D55", "D239", "D240", "D242", "D18"],
+                "governed_by": ["D18", "D35", "D37", "D55", "D239", "D240", "D242",
+                                "D-a-name-tolerance-fit"],
             },
             "holdings-selftest.py": {
                 "does": "proves pipeline/holdings.py against fixtures built in the file "
