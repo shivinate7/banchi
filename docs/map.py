@@ -458,16 +458,20 @@ COMPONENTS = [
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
             "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|contradictions|"
-                                     "photos|variants>` — the card's stable name (D172). `name` "
+                                     "sku-names|photos|variants>` — the card's stable name "
+                                     "(D172). `name` "
                                      "previews what the naming sees and would do, `audit` "
                                      "asks whether every card's name still resolves to "
                                      "its photograph, `checks` runs the four stored-data "
                                      "identification checks (D239), "
                                      "`contradictions` dispatches to "
                                      "`cli/cmd_sku_contradictions.py:run` "
-                                     "(D242), and `photos` "
+                                     "(D242), `sku-names` dispatches to "
+                                     "`cli/cmd_sku_name_contradictions.py:run` — the mirror "
+                                     "check, a fixed SKU whose stored name disagrees with "
+                                     "the SKU's own product name — and `photos` "
                                      "moves the corpus off the legacy `(box, index)` address "
-                                     "onto the card's own name. FOUR OF THE SIX WRITE "
+                                     "onto the card's own name. FIVE OF THE SEVEN WRITE "
                                      "NOTHING EVER and neither may call `db.connect`: that "
                                      "function is the single entry to the store and always "
                                      "calls `_ensure_schema`, so a preview routed through it "
@@ -478,7 +482,7 @@ COMPONENTS = [
                              "governed_by": ["D172", "D183",
                                              "D26", "D88", "D89",
                                              "D213", "D239",
-                                             "D242"],
+                                             "D240", "D242"],
                              "tested_by": ["T7"]},
             # THE SKU SELF-CONTRADICTION CHECK, KEPT APART FROM `cmd_cards.py:checks` (a
             # separate, sibling PR) ON THE OWNER'S OWN RULING (D242).
@@ -495,6 +499,23 @@ COMPONENTS = [
                         "own sweep caches its own fetches.",
                 "governed_by": ["D146", "D167", "D173", "D234",
                                 "D242"],
+                "tested_by": [],
+            },
+            # THE MIRROR CHECK: FIXED SKU, DISAGREEING NAME, WHERE D242'S OWN CLASS NEEDS
+            # THE NUMBERS TO DISAGREE AND CANNOT SEE THIS ONE. A sixth stored-data check,
+            # kept apart from the four `D239` approved ones and from D242, on the same
+            # precedent D242 itself set.
+            "cmd_sku_name_contradictions.py": {
+                "does": "`pkmnscan cards sku-names` — groups nothing; reads every card "
+                        "with a SKU straight out of the store (read-only, "
+                        "`mode=ro&immutable=1`, reusing "
+                        "`cli/cmd_sku_contradictions.py:_read_only`, never `db.connect`) "
+                        "and hands them, with the newest cached export per game "
+                        "(`inventory/.exports/<game>/*.csv`, never fetched here), to "
+                        "`pipeline/sku_name_contradictions.py`. Opens no socket, ever — "
+                        "there is no `--resolve` flag, unlike its sibling. Three verdicts, "
+                        "`cards audit`'s own shape: pass, fail, not known.",
+                "governed_by": ["D146", "D239", "D240", "D242"],
                 "tested_by": [],
             },
             # THE PRESS `pkmnscan archive sweep` RUNS (D219,
@@ -822,6 +843,39 @@ COMPONENTS = [
                         "name-agreement function correctly finds the one misread. Not "
                         "wired into `make check`, matching `pricearchive.py`'s own "
                         "precedent.",
+            },
+            # THE MIRROR: FIXED SKU, DISAGREEING NAME. Kept apart from
+            # `sku_number_contradictions.py` on the same precedent that module was kept
+            # apart from `identity_checks.py` — a sixth stored-data check, its own module,
+            # its own decision entry, its own CLI subcommand.
+            "sku_name_contradictions.py": {
+                "does": "One SKU, two stored names. Reuses "
+                        "`pipeline.join.name_disputes` — never a second similarity rule — "
+                        "to ask whether a card's own stored `name` agrees with the "
+                        "`Product Name` of the SKU it is CURRENTLY under, in the newest "
+                        "cached export per game. `Catalog` here is a small, local index, "
+                        "deliberately NOT `pipeline.join.Catalog`: that class narrows to "
+                        "Near-Mint conditions for the listing path's own reason (D137), "
+                        "which would make a real, non-Near-Mint SKU silently vanish from "
+                        "this diagnostic. A disputed card's likely-right alternative rows "
+                        "— every export row whose name folds exactly to the card's own — "
+                        "are ranked, never picked, by `rank_candidates` using only the "
+                        "capture claims the card already carries (`set_hint`, "
+                        "`rarity_claim`, `metadata_finish`), never a second name "
+                        "comparison. Measured read-only on the owner's store: 62 "
+                        "identified cards and 6 sold cards disagree. THREE VERDICTS, "
+                        "`cards audit`'s own shape, with one amendment over it: a "
+                        "`not_known` card never suppresses a real `dispute` found on a "
+                        "different card, because unlike `audit`'s single whole-store "
+                        "fact, this check's subject is independent per card.",
+                "governed_by": ["D137", "D146", "D172", "D239", "D240", "D242"],
+                "note": "PROVED BY `scripts/sku-name-contradictions-selftest.py`: "
+                        "thirteen arms, including a mutation arm — an exact-equality "
+                        "resolver (this module's tempting first shape) wrongly flags a "
+                        "legitimate short-title variant (`Repair Specialist` beside "
+                        "`Zaun, Repair Specialist`) that the real, `name_disputes`-backed "
+                        "check correctly lets through. Not wired into `make check`, "
+                        "matching `sku_number_contradictions.py`'s own precedent.",
             },
             # D10's label formula lives here, and as of 2026-08-29 it assumes NO divider size:
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
@@ -2687,6 +2741,23 @@ COMPONENTS = [
                         "`pricearchive-selftest.py`'s own precedent, one entry above.",
                 "governed_by": ["D146", "D167", "D173", "D234",
                                 "D242"],
+            },
+            "sku-name-contradictions-selftest.py": {
+                "does": "proves pipeline/sku_name_contradictions.py against literal "
+                        "tcgcsv.Row fixtures, no store, no network. Agrees (no finding), "
+                        "disputes with the real alternative proposed, a sold card's own "
+                        "section, no-SKU skipped rather than counted, three `not_known` "
+                        "reasons (blank name, no export for the game, SKU absent from "
+                        "the export), the one-bad-card-never-hides-another-finding "
+                        "amendment over `cards audit`'s own verdict precedent, the "
+                        "Near-Mint-blind catalog lookup, and `rank_candidates`'s "
+                        "set_hint tie-break. A mutation arm: an exact-equality resolver "
+                        "wrongly flags a legitimate short-title variant the real, "
+                        "`name_disputes`-backed check correctly lets through. 26 "
+                        "assertions. Not wired into `make check` — "
+                        "`sku-number-contradictions-selftest.py`'s own precedent, one "
+                        "entry above.",
+                "governed_by": ["D146", "D239", "D240", "D242", "D-sku-name-contradictions"],
             },
             "archive-review-selftest.py": {
                 "does": "proves cli/archive_review.py against a throwaway store, no "

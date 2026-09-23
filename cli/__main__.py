@@ -267,7 +267,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="the card's stable name: preview it, audit it, move the photographs.",
     )
     cards_sub = cards.add_subparsers(
-        dest="cards_action", metavar="<name|audit|checks|contradictions|photos|variants>"
+        dest="cards_action",
+        metavar="<name|audit|checks|contradictions|sku-names|photos|variants>",
     )
     cards_sub.add_parser(
         "name",
@@ -312,6 +313,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="ask the live catalogue to settle the SKUs that share a denominator. Costs "
         "one request per distinct (game, set) among them. Without this, no socket opens.",
+    )
+    cards_sku_names = cards_sub.add_parser(
+        "sku-names",
+        help="one SKU, two stored names — a card's own name disagrees with its SKU's "
+        "product name (D242's sibling). Read-only, no network, ever. Reads the newest "
+        "cached export per game.",
+    )
+    cards_sku_names.add_argument(
+        "--verbose",
+        action="store_true",
+        help="list every ranked alternative and every not-known card, rather than "
+        "counting them.",
     )
     cards_photos = cards_sub.add_parser(
         "photos",
