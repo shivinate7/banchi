@@ -51,6 +51,13 @@ checkout's OWN git metadata says the main tree is. That is the same
 `git rev-parse --git-common-dir` derivation both callers already use. Either match refuses
 the WHOLE script, before any provisioning step runs.
 
+**A SECOND REVIEW FOUND THE GUARD MISSED A SUBDIRECTORY OF MAIN.** Cwd may be `<main>/app`,
+not `<main>` itself. A raw `pwd -P` never equals main's own root there. So the first draft
+let a run from inside main's own `app/` slip past the guard. The fix resolves cwd to its
+git toplevel FIRST, with `git rev-parse --show-toplevel`. It resolves that to a real path
+with `pwd -P`, before either comparison runs. A cwd outside any git tree falls back to the
+raw path, the same check the guard always had.
+
 **MAIN'S OWN INSTALL IS CHECKED BEFORE IT IS TRUSTED.** The same review found a second real
 defect. Byte-identical lockfiles say a clone would be aimed at the right target. They say
 nothing about whether main's own `node_modules` was ever installed for that lockfile. The
@@ -67,10 +74,21 @@ SessionStart hooks can race, or one can overlap a hand-run `make worktree-setup`
 see no install yet. Each could then background its own `npm ci` into the same
 `app/node_modules`, racing each other's writes. `mkdir` is atomic on this filesystem, so
 `.serve/npm-install.lock` IS the lock. No `flock` binary ships on this Mac, and a directory
-lock needs none. The pid written inside it lets a LATER run tell a live holder from a stale
-one. A holder killed `-9` leaves the directory behind, and the next run reclaims it rather
-than waiting on it forever. A run that loses the race reports the holder's pid and the log.
-It starts nothing of its own.
+lock needs none. A holder killed `-9` leaves the directory behind, and the next run
+reclaims it rather than waiting on it forever. A run that loses the race reports the log
+and starts nothing of its own.
+
+**LIVENESS IS `scripts/serve.py:live_pid`, NEVER A BARE `kill -0`.** A third review found
+the first draft's liveness check bare: a pid, and nothing else. The OS recycles pids. A
+bare `kill -0` on a stale one would misread some OTHER process's pid as this worktree's own
+`npm ci`, still running. That is the exact defect `live_pid` already exists to close for
+the capture-server supervisor, in a module this script already imports. It checks the pid.
+It also checks that the live process's own argv still names THIS launch. The recorded argv
+carries the ABSOLUTE `app` path, never the relative one `npm --prefix app ci` types. A
+relative path leaves the needle as the bare word `ci` — a weak match, any process could
+carry it. `write_pidfile`, `read_pidfile`, `clear_pidfile` and the `Child` record are all
+reused as they stand. Nothing here writes a second, narrower version of `live_pid`'s own
+check.
 
 **THE STALENESS QUESTION IS NOT ASKED TWICE.** `scripts/serve.py` already answers one
 question: does the installed tree match `app/package-lock.json`? That is

@@ -2,13 +2,14 @@
 # `make worktree-provision-selftest` — scripts/worktree-provision.sh's app/node_modules
 # provisioning (D-worktree-node-modules), proved against a throwaway fixture.
 #
-# WHY A FIXTURE RATHER THAN THE REAL TREE. Seven cases matter: a fresh worktree cloning from
+# WHY A FIXTURE RATHER THAN THE REAL TREE. Eight cases matter: a fresh worktree cloning from
 # main, a worktree whose lockfile has moved needing a real install, an already-current
 # worktree doing nothing at all, a lockfile bump AFTER provisioning being caught rather than
 # left to surface later as a confusing Playwright-version mismatch, a self-invocation (main
-# == cwd) never deleting the real install, a stale main never being cloned as though it were
-# current, and two racing invocations never both installing at once. None of the seven may
-# touch this checkout's own app/node_modules or spend a real network install to prove.
+# == cwd) never deleting the real install, that same refusal from a SUBDIRECTORY of main, a
+# stale main never being cloned as though it were current, and two racing invocations never
+# both installing at once. None of the eight may touch this checkout's own app/node_modules
+# or spend a real network install to prove.
 #
 # `npm` IS STUBBED. A tiny script on a fixture-only PATH stands in for it: `--prefix X ci`
 # writes a placeholder package into X/node_modules and exits 0, anything else exits 1. That
@@ -17,7 +18,8 @@
 # was already current" gets CAUGHT rather than merely assumed.
 #
 # WHY IT IS NOT IN THE GIT HOOK. D18: it writes — two throwaway trees. Nothing that writes
-# may run on the path that decides whether a commit proceeds. It IS in `make check`.
+# may run on the path that decides whether a commit proceeds. NOT in `make check` either, on
+# `catalog-index-selftest`'s precedent — see the Makefile recipe for why.
 
 set -uo pipefail          # NOT -e: every case must run and be scored
 
@@ -204,9 +206,21 @@ fi
 # `npm_install_owed()` trusts an existing node_modules and the vulnerable branch is never
 # reached — which is exactly why the very first draft of this case passed on the unfixed
 # script too, proving nothing. The mismatch is what makes main == cwd read as "owed".
+#
+# THE REFUSAL ASSERTION NAMES THE GUARD'S OWN DISTINCTIVE TEXT, not a generic "refus"
+# substring — the second review found the generic form would still pass with the guard
+# entirely disabled, because the harness/.cache and harness/images steps ABOVE it print
+# their own unrelated "T1 will refuse until a run is banked there" NOTE. "IS the main
+# working tree" appears nowhere else in this script's output.
+#
+# `$tmp/main` IS A REAL GIT REPOSITORY (`git init`), which case 5 itself does not need — a
+# raw cwd already equals a raw main argument here — but case 5b right below does: it is what
+# lets `git rev-parse --show-toplevel` resolve a SUBDIRECTORY of main back up to main's own
+# root.
 
 rm -rf "$tmp/main" "$tmp/wt"
 mkdir -p "$tmp/main/app/node_modules/.bin"
+git init -q "$tmp/main"
 echo '{"name":"a","lockfileVersion":3}' > "$tmp/main/app/package-lock.json"
 echo 'module.exports = 1;' > "$tmp/main/app/node_modules/acorn.js"
 echo 'REAL DATA — must survive a self-invocation' > "$tmp/main/app/node_modules/real-marker.txt"
@@ -220,10 +234,30 @@ if [ -f "$tmp/main/app/node_modules/real-marker.txt" ]; then
 else
   bad "self-invocation (main == cwd) DELETED the real node_modules"
 fi
-if grep -qi "refus" "$tmp/out-self.log"; then
+if grep -q "IS the main working tree" "$tmp/out-self.log"; then
   ok "self-invocation announces the refusal"
 else
-  bad "self-invocation did not announce a refusal"
+  bad "self-invocation did not announce the refusal"
+fi
+
+# ------------------------------------------------- case 5b: self-invocation, subdirectory
+#
+# Running from `<main>/app` is still running FROM main — the second review's item 2. The
+# unfixed-for-item-2 guard compared a RAW cwd against main, which `<main>/app` never
+# equals; the fix resolves cwd to its git toplevel first.
+
+: > "$tmp/npm.log"
+( cd "$tmp/main/app" && PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/npm.log" bash "$SCRIPT" "$tmp/main" \
+    >"$tmp/out-self-subdir.log" 2>&1 )
+if [ -f "$tmp/main/app/node_modules/real-marker.txt" ]; then
+  ok "self-invocation from a SUBDIRECTORY of main never deletes the real node_modules"
+else
+  bad "self-invocation from a subdirectory of main DELETED the real node_modules"
+fi
+if grep -q "IS the main working tree" "$tmp/out-self-subdir.log"; then
+  ok "self-invocation from a subdirectory announces the refusal"
+else
+  bad "self-invocation from a subdirectory did not announce the refusal"
 fi
 
 # ------------------------------------------------------- case 6: main's own install stale
@@ -288,6 +322,37 @@ if grep -qi "already running" "$tmp/out-race-1.log" "$tmp/out-race-2.log" 2>/dev
   ok "the losing run reports an install is already running"
 else
   bad "neither concurrent run reported an already-running install"
+fi
+
+# ------------------------------------------------- case 9: a recycled pid is never trusted
+#
+# item 1 of the third review: a bare `kill -0` cannot tell a live process from a RECYCLED
+# pid — the OS reassigning a dead holder's number to something that is not an npm install at
+# all. Plants a lock naming a REAL, currently-running process (a `sleep`, started here) whose
+# actual argv does not match — exactly what `live_pid`'s argv check exists to catch, and
+# what a bare `kill -0` cannot: that check alone would read this pid as this worktree's own
+# install still running and refuse to reclaim it, forever.
+
+fresh_fixture differ
+: > "$tmp/npm.log"
+sleep 30 &
+unrelated_pid=$!
+mkdir -p "$tmp/wt/.serve/npm-install.lock"
+python3 - "$tmp/wt" "$unrelated_pid" "$tmp/wt/app" <<'PY' 2>/dev/null
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1] + "/scripts")
+import serve
+child = serve.Child("npm-install", "npm-install.pid", "npm-install.log")
+serve.write_pidfile(child, int(sys.argv[2]), ["npm", "--prefix", sys.argv[3], "ci"], root=Path(sys.argv[1]))
+PY
+run_provision
+wait_for "$tmp/wt/app/node_modules/.pkmnscan-lock" || true
+kill "$unrelated_pid" 2>/dev/null
+if [ -f "$tmp/wt/app/node_modules/left-pad.js" ]; then
+  ok "a lock naming a live but UNRELATED process (recycled pid) is reclaimed, not trusted"
+else
+  bad "a lock naming a live but unrelated process blocked the install forever"
 fi
 
 echo

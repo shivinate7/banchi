@@ -3617,12 +3617,16 @@ COMPONENTS = [
                         "The staleness read is scripts/serve.py's own `npm_install_owed`, "
                         "imported directly rather than reimplemented, so this step and "
                         "`make up`'s supervisor can never disagree about what current means. "
-                        "REFUSES SELF-INVOCATION (main == cwd) before any provisioning step "
-                        "runs, checked against both the resolved $main argument and this "
-                        "checkout's own git-common-dir — a review fixture found the unguarded "
-                        "form deleting the real node_modules. The background npm ci launch is "
-                        "guarded by an atomic `mkdir` lock under .serve/npm-install.lock, so "
-                        "two racing invocations never both install.",
+                        "REFUSES SELF-INVOCATION before any provisioning step runs, checked "
+                        "against both the resolved $main argument and this checkout's own "
+                        "git-common-dir — a review fixture found the unguarded form deleting "
+                        "the real node_modules. cwd is resolved to its git toplevel first "
+                        "(`git rev-parse --show-toplevel`), so a subdirectory of main is "
+                        "caught too, not only main's own root. The background npm ci launch "
+                        "is guarded by an atomic `mkdir` lock under .serve/npm-install.lock, "
+                        "so two racing invocations never both install; liveness is "
+                        "scripts/serve.py's own `live_pid` (pid AND argv, reused rather than "
+                        "a bare kill -0, which a recycled pid would fool).",
                 "governed_by": ["D18", "D47", "D-worktree-node-modules"],
             },
             "worktree-provision-selftest.sh": {

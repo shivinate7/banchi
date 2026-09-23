@@ -39,7 +39,20 @@ say() { printf '%s%s\n' "$prefix" "$1"; }
 # wrong path), and the resolved cwd against what THIS checkout's OWN git metadata says the
 # main tree is (a caller could pass the right path while this script still runs FROM main).
 # `git rev-parse --git-common-dir` is the exact derivation both callers already use.
-here_real="$(pwd -P 2>/dev/null)"
+#
+# THE CWD IS RESOLVED TO ITS GIT TOPLEVEL, NEVER COMPARED RAW. Running from a subdirectory
+# of main — `<main>/app`, say — is still running FROM main, and a raw `pwd -P` would miss
+# it: `<main>/app` is never equal to `<main>`. `git rev-parse --show-toplevel` answers "the
+# root of whichever tree cwd is in", resolved a second time with `pwd -P` because
+# `--show-toplevel` does not itself resolve symlinks on every git version. A cwd outside any
+# git tree (show-toplevel fails) falls back to the raw, unresolved cwd — the same check this
+# guard always had, never a new gap.
+here_toplevel="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -n "$here_toplevel" ]; then
+  here_real="$(cd "$here_toplevel" 2>/dev/null && pwd -P)"
+else
+  here_real="$(pwd -P 2>/dev/null)"
+fi
 main_real="$(cd "$main" 2>/dev/null && pwd -P)"
 common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
 own_main_real=""
@@ -193,28 +206,72 @@ if [ "$npm_owed" = "owed" ]; then
     # install yet" and each background their own `npm ci` into the SAME app/node_modules,
     # racing each other's writes. `mkdir` is atomic on this filesystem: only one concurrent
     # caller can create the same directory, so it IS the lock — no `flock` binary ships on
-    # this Mac, and a directory lock needs none. The pid written inside it is only for a
-    # LATER run to tell a live holder from a stale one (a holder killed -9 leaves the
-    # directory behind with nothing to clean it up).
+    # this Mac, and a directory lock needs none.
+    #
+    # LIVENESS IS `scripts/serve.py:live_pid`, NOT A BARE `kill -0`. A pid alone can lie: the
+    # OS recycles pids, and a bare `kill -0` on a stale one would misread SOME OTHER
+    # PROCESS's pid as this worktree's own npm ci still running — the exact defect
+    # `live_pid` was written to close for the capture-server supervisor, and this script
+    # already imports the module that carries it. It checks the pid AND that the live
+    # process's own argv still names this launch (`_needle`), never a second, narrower
+    # version of that same check.
+    npm_child_write() {
+      # The recorded argv carries the ABSOLUTE app path, never the relative one `npm
+      # --prefix app ci` is typed with — `_needle` searches for the last argument starting
+      # with `/`, exactly `live_pid`'s own house rule, and a relative "app" would leave it
+      # falling back to the bare word "ci", which is a weak needle any process could contain.
+      python3 - "$1" "$(pwd -P)/app" <<'PY' 2>/dev/null
+import sys
+sys.path.insert(0, "scripts")
+try:
+    import serve
+    child = serve.Child("npm-install", "npm-install.pid", "npm-install.log")
+    serve.write_pidfile(child, int(sys.argv[1]), ["npm", "--prefix", sys.argv[2], "ci"])
+except Exception:
+    pass
+PY
+    }
+    npm_child_clear() {
+      python3 - <<'PY' 2>/dev/null
+import sys
+sys.path.insert(0, "scripts")
+try:
+    import serve
+    serve.clear_pidfile(serve.Child("npm-install", "npm-install.pid", "npm-install.log"))
+except Exception:
+    pass
+PY
+    }
     npm_lock_holder_alive() {
-      local holder
-      holder="$(cat "$npm_lock_dir/pid" 2>/dev/null)"
-      [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null
+      # An exception (broken venv, unreadable serve.py) answers "alive": the unsafe
+      # direction for a mutual-exclusion lock is assuming free when it cannot tell, which
+      # would let a second `npm ci` start into the same tree the first is still writing.
+      python3 - <<'PY' 2>/dev/null
+import sys
+sys.path.insert(0, "scripts")
+try:
+    import serve
+    child = serve.Child("npm-install", "npm-install.pid", "npm-install.log")
+    print("alive" if serve.live_pid(child) is not None else "dead")
+except Exception:
+    print("alive")
+PY
     }
     launch_npm_ci() {
       ( npm --prefix app ci >"$npm_log" 2>&1
         rc=$?
         [ "$rc" -eq 0 ] && write_npm_receipt
+        npm_child_clear
         rm -rf "$npm_lock_dir"
       ) </dev/null >/dev/null 2>&1 &
-      echo $! > "$npm_lock_dir/pid" 2>/dev/null
+      npm_child_write "$!"
       disown 2>/dev/null || true
     }
 
-    if [ -d "$npm_lock_dir" ] && npm_lock_holder_alive; then
-      say "an install is already running (pid $(cat "$npm_lock_dir/pid" 2>/dev/null)) — log at $npm_log. Starting nothing."
+    if [ -d "$npm_lock_dir" ] && [ "$(npm_lock_holder_alive)" = "alive" ]; then
+      say "an install is already running — log at $npm_log. Starting nothing."
     else
-      [ -d "$npm_lock_dir" ] && rm -rf "$npm_lock_dir" 2>/dev/null   # stale: reclaim it
+      [ -d "$npm_lock_dir" ] && { rm -rf "$npm_lock_dir" 2>/dev/null; npm_child_clear; }   # stale: reclaim it
       if mkdir "$npm_lock_dir" 2>/dev/null; then
         if command -v npm >/dev/null 2>&1; then
           launch_npm_ci
@@ -227,7 +284,7 @@ if [ "$npm_owed" = "owed" ]; then
       else
         # Lost the race to `mkdir` between the staleness check and here — another run's
         # `mkdir` won it in between. That run is the one installing now; nothing to do.
-        say "an install is already running (pid $(cat "$npm_lock_dir/pid" 2>/dev/null)) — log at $npm_log. Starting nothing."
+        say "an install is already running — log at $npm_log. Starting nothing."
       fi
     fi
   fi
