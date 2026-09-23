@@ -1,0 +1,19 @@
+/* app/src/CardHero.css (D-correct-a-listed-answer) — the listing-correction control's own
+ * spacing. Everything else it draws with — the panel chrome, the catalog rows, the
+ * candidate button — is `kit.css`'s `.bn-panel*` and `ReviewQueue.css`'s `.review-catalog*` /
+ * `.review-candidate*`, both reused rather than restyled. `--bn-*` tokens only (D94).
+ */
+
+.card-correction {
+  margin-top: var(--bn-4);
+}
+
+.card-correction-panel {
+  margin-top: var(--bn-2);
+}
+
+.card-correction-note {
+  margin: 0 0 var(--bn-2);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}

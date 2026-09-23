@@ -1120,6 +1120,49 @@ export type AnswerResult = {
   restores_to: AnswerOrigin | null
 }
 
+/** `POST /inventory/<box>/<index>/correct`, both directions (D-correct-a-listed-answer).
+ *
+ *  THE GAP `AnswerResult`'s OWN UNDO LEAVES: `undo_too_late` refuses the moment the wrong SKU
+ *  has gone out — pushed, staged or live — which for a real mistake is usually already true.
+ *  This route rewrites an identified card's SKU to a different catalog row REGARDLESS of the
+ *  queue, and it never trusts the wire for the row: the server re-reads it from the card's
+ *  own export, exactly as a D46 `fromCatalog` answer does.
+ *
+ *  `released` IS WHAT THE OLD SKU GAVE UP, through `Listing.release` (D34) — the count the
+ *  next live reconcile reads as over-listed. Read it for the receipt's own words, never to
+ *  decide anything: nothing on this screen edits a listing count directly. */
+export type CorrectResult = {
+  /** `"<box>/<index>"`, the store's own key. */
+  position: string
+  box: number
+  index: number
+
+  /** True when this call took a correction back rather than recording one — `AnswerResult`'s
+   *  own field, under the same name. */
+  undone: boolean
+
+  /** The SKU the card carries after this call — the new one on a correction, the old one on
+   *  its reversal. */
+  sku: string
+  condition: string
+
+  /** The SKU this call replaced. Absent on a reversal, which restores it rather than naming
+   *  it again. */
+  previous_sku?: string | null
+
+  /** What `Listing.release` gave up on the SKU this call replaced, by stage — `{pushed: 1}`
+   *  for the ordinary case. Absent on a reversal, and empty when the old SKU carried no
+   *  listing record at all (never pushed, so nothing to give up). */
+  released?: Record<string, number>
+
+  /** What an undo of THIS call would put back, or null when it would be refused —
+   *  `AnswerOrigin`'s own shape, with the name the correction also restores. */
+  restores_to: (AnswerOrigin & { name: string | null }) | null
+
+  /** The card as `GET /inventory` would draw it, after this write. */
+  card: InventoryCard
+}
+
 /** One member of a group answer, as `POST /review/group-answer` reports it back.
  *
  *  THE CLEARED FLAGS ARE TYPED BOOLEANS HERE AND DELIBERATELY ABSENT FROM `AnswerResult`,

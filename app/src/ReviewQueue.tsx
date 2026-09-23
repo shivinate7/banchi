@@ -2019,7 +2019,11 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
   return <div className="review-claims">{chips}</div>
 }
 
-function CandidateButton({
+/** Exported for `CardHero.tsx`'s listing-correction control, which reuses this row rather
+ *  than forking one (D-correct-a-listed-answer, on this file's own header: "if reusing the
+ *  pane needs a component lifted out... do that — that is added to inventory... not a
+ *  fork"). No behaviour here changed to make that reuse possible. */
+export function CandidateButton({
   candidate,
   at,
   shared,
@@ -2161,7 +2165,7 @@ function ClosePanel({ onChoice, onClose, disabled }: { onChoice: (choice: CloseC
 
 // --------------------------------------------------------------------------- the catalog
 
-type CatalogPanelProps = {
+export type CatalogPanelProps = {
   lookup: CatalogLookup | null
   failed: string | null
   typed: string
@@ -2173,8 +2177,14 @@ type CatalogPanelProps = {
 }
 
 /* D46 — rows out of the export, drawn through the same row and answered on the same digits.
- * The search heads the list; the mode line says whose rows these are. */
-function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoose, overruling, busy }: CatalogPanelProps): ReactNode {
+ * The search heads the list; the mode line says whose rows these are.
+ *
+ * EXPORTED FOR `CardHero.tsx`'s LISTING-CORRECTION CONTROL, this file's own header rule:
+ * "added to inventory and both screens get it, not a fork." `overruling` reads oddly for
+ * that caller — there is no candidate list to have looked away from — so it always passes
+ * `true`, which draws the plain "Rows from the export, matched by name" copy. That caller
+ * binds `Escape` on its own panel, so "Esc goes back" is true there too. */
+export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoose, overruling, busy }: CatalogPanelProps): ReactNode {
   const rows = lookup?.rows ?? []
   return (
     <div className="review-catalog">
