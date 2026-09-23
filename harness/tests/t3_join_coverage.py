@@ -2050,6 +2050,149 @@ def run() -> Result:
             "and both are claimed by the name, so the screen can say so on each",
         )
 
+    # --- D-name-and-number-agree, 2026-09-23: THE GATE REACHES A CARD ALREADY QUEUED -----
+    #
+    # Until this date the whole block above only fired `not resolution.needs_review and
+    # resolution.row is not None` — a card the ladder had already resolved OUTSIDE review.
+    # A card ALREADY headed to review for a reason of its OWN — `ambiguous_no_signal`,
+    # `rarity_claim_mismatch`, `set_ambiguous`, … — never got the name cross-check at all,
+    # and its queue entry offered only the wrong card's rows. Measured on the owner's
+    # store: `4/176` read "Daisy!" over a number that resolved to `Lilting Lullaby`'s two
+    # rows, queued `ambiguous_no_signal`, and the entry offered only those two — never
+    # Daisy's. `6/563` read "Frigid Jewel" at `024/219`, capture claimed a foil finish and
+    # a Common/Uncommon rarity, queued `rarity_claim_mismatch` — a reason that never
+    # carries a row at all — and offered only `Rengar, Unseen`, a Rare. Both were answered
+    # onto the wrong-name SKU because that was the only row on screen.
+    #
+    # Dunsparce `120/159` stands in for both shapes: stocked in two conditions, so a card
+    # with no capture claim over it reviews `ambiguous_no_signal`; the SAME number reviews
+    # `rarity_claim_mismatch` under a rarity claim neither of its rows carries (both are
+    # Common). Neither reason carries a row for the disputed name to be compared or ranked
+    # against, which is exactly the gap `resolution.row is not None` used to require.
+
+    # Daisy's shape: queued for a reason of its own, the name resolves to exactly ONE
+    # OTHER card with exactly one stocked condition, so the ladder settles it by
+    # `CATALOG_FORCED` — no capture claim needed. D162 still decides alone. `Alcremie ex
+    # 075/159` stands in: one row, Near Mint Holofoil, a real (non-blank) number — a
+    # BLANK-Number product is deliberately unreachable here, since `Catalog.rows_for_name`
+    # excludes it (`_blank_number_by_name` is a separate index, D35's own fallback rung,
+    # never this one).
+    ALCREMIE_EX_SKU = "8608039"  # Alcremie ex 075/159, Near Mint Holofoil, single row
+    daisy = join.join_batch(
+        [_card(96, "Alcremie ex", "120")],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        list(daisy.matches),
+        [ALCREMIE_EX_SKU],
+        "THE CARD IS LISTED, off the row the NAME settled. Before the gate widened this "
+        "stayed queued under `ambiguous_no_signal` with Dunsparce's two conditions on "
+        "offer — the wrong card, with nothing pointing at the right one",
+    )
+    c.equal(daisy.queued, [], "and nothing is left in a queue for it")
+    c.equal(
+        daisy.name_corrections,
+        {},
+        "and no name correction either — the read and the row it settled on ARE "
+        "byte-identical (\"Alcremie ex\" is both), so there is nothing to correct",
+    )
+
+    # Frigid's shape: queued `rarity_claim_mismatch` — NO ROW AT ALL, so `resolution.row`
+    # cannot be the disputed row and `found.rows` (Dunsparce, the WRONG card) is not what
+    # ranks the name's own candidates either. The claim runs a SECOND time, inside
+    # `name_alternatives`, over `Billy & O'Nare`'s own two rows — released there by
+    # `name_corroborated=True` exactly as D146 argues — and a `reverse_holo` metadata
+    # claim settles which of its two conditions is meant, putting the claimed finish
+    # first the same way a Riftbound card's `metadata_finish=['foil']` puts its foil row
+    # first on the owner's store.
+    frigid_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=97),
+        name=AMPERSAND_NAME,
+        number="120",
+        printed_total="159",
+        metadata_finish=("reverse_holo",),
+        rarity_claim=("Rare",),
+        photo=f"captures/box{BOX}/0097.jpg",
+        confidence="high",
+    )
+    frigid = join.join_batch([frigid_card], catalog, router=join.default_router())
+    c.equal(
+        list(frigid.matches),
+        [AMPERSAND_REVERSE_SKU],
+        "THE CLAIMED FINISH WINS, off the NAME's own rows. `rarity_claim_mismatch` never "
+        "carries a row to rank from and `found.rows` is the wrong card (Dunsparce, "
+        "Common) — the claim released and settled over `Billy & O'Nare`'s own rows "
+        "instead, and put the Reverse Holofoil the metadata claimed in front",
+    )
+    c.equal(frigid.queued, [], "and nothing is queued for it")
+
+    # A DISPUTED NAME THAT DOES NOT SETTLE STILL KEEPS ITS PRIMARY REASON, and its
+    # candidates are the name's rows first, then the NUMBER'S OWN — `found.rows`, plural,
+    # because `rarity_claim_mismatch` left `resolution.row` at `None` and there is no
+    # single row to fall back to. `Articuno` answers TWO cards (32/159 and the secret rare
+    # 161/159), so the name never settles it, whatever the claim says.
+    unsettled_review_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=98),
+        name="Articuno",
+        number="120",
+        printed_total="159",
+        rarity_claim=("Rare",),
+        photo=f"captures/box{BOX}/0098.jpg",
+        confidence="high",
+    )
+    unsettled_review = join.join_batch(
+        [unsettled_review_card], catalog, router=join.default_router()
+    )
+    still_queued = unsettled_review.queued[0] if unsettled_review.queued else None
+    if c.ok(still_queued is not None, "an unsettled dispute over a reason of its own still queues"):
+        c.equal(list(unsettled_review.matches), [], "and lists nothing")
+        c.equal(
+            still_queued.resolution_reason,
+            variant.RARITY_CLAIM_MISMATCH,
+            "THE PRIMARY REASON SURVIVES — it is not overwritten to `name_disputed`, "
+            "because the card is still queued for what it was queued for",
+        )
+        candidate_names = [row[tcgcsv.NAME_COLUMN] for row in still_queued.candidates]
+        c.equal(
+            set(candidate_names[:-2]),
+            {"Articuno - 032/159", "Articuno - 161/159"},
+            "the name's rows (both prints) lead the list",
+        )
+        c.equal(
+            candidate_names[-2:],
+            ["Dunsparce", "Dunsparce"],
+            "and BOTH of the number's own rows close it — `found.rows`, not one row, "
+            "because `rarity_claim_mismatch` never gave this card a single row to fall "
+            "back to",
+        )
+
+    # --- D-name-and-number-agree, THE NEAR-MISS HALF: a read that agreed WITHOUT being ---
+    # byte-identical offers the catalogue's own spelling as a correction; an exact read
+    # offers none, because there is nothing to correct.
+    near_miss = join.join_batch(
+        [_card(99, "Dunsprce", "120", metadata="normal")],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        near_miss.name_corrections,
+        {(BOX, 99): "Dunsparce"},
+        "a read one letter short of the row it resolved to offers the catalogue's own "
+        "spelling as a stored-name correction — the model's own reading is untouched, "
+        "this is a candidate for `Card.name` alone",
+    )
+    exact_read = join.join_batch(
+        [_card(100, "Dunsparce", "120", metadata="normal")],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        exact_read.name_corrections,
+        {},
+        "and NOTHING when the read was already byte-identical to the row",
+    )
+
     name_only = join.join_batch([_card(91, BLANK_NUMBER_NAME, "999")], catalog)
     c.equal(
         len(name_only.unmatched_cards),

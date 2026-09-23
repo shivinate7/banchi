@@ -836,6 +836,22 @@ def name_disputes(read_name, rows: Sequence[tcgcsv.Row]) -> bool:
     return True
 
 
+def name_reads_exactly(read_name, row: tcgcsv.Row) -> bool:
+    """Is the model's read name BYTE-IDENTICAL to this row's, through the fold?
+
+    THE NARROWER HALF OF `name_corroborates`, split out for D-name-and-number-agree.
+    `name_corroborates` is True on an exact fold match AND on a containment-with-coverage
+    near miss (`Corfish` for `Corphish`); this answers only the first half, which is what
+    tells `join_batch` whether a resolved card's stored name has anything to correct. A
+    blank read matches nothing, for the reason every fold in this module gives a blank one:
+    the absence of a reading is not a reading that agrees.
+    """
+    read = _name_compare_key(read_name)
+    if not read:
+        return False
+    return read == _name_compare_key(row.get(tcgcsv.NAME_COLUMN), catalog_side=True)
+
+
 # How many rows the NAME may contribute to a disputed card's candidate list.
 #
 # NINE IS THE SCREEN'S LIMIT, NOT A JUDGEMENT ABOUT NAMES. `app/src/ReviewQueue.tsx` keys
@@ -863,18 +879,34 @@ class NameSide(NamedTuple):
     It is reachable on the committed fixture: `Alcremie ex` is one row, `Near Mint
     Holofoil`, and a `normal` claim resolves `metadata_not_stocked` with no row at all.
     `settled` is that answer stated rather than guessed at.
+
+    `resolution` IS THE LADDER'S OWN ANSWER OVER THESE ROWS, carried rather than
+    discarded, and `None` unless `settled` is True. D-name-and-number-agree needs it: a
+    card already queued for a reason of its own — `rarity_claim_mismatch`,
+    `ambiguous_no_signal`, `set_ambiguous`, … — has no stage or reason of its own to keep
+    once the NAME settles it, because the one it carried was a review reason and the card
+    is no longer going to review. `resolution.stage` and `.reason` describe how THIS row's
+    finish was actually decided (metadata, catalog-forced, or detection, over the claims
+    the card already carried) rather than borrowing the review reason it is replacing.
     """
 
     rows: Tuple[tcgcsv.Row, ...]
     settled: bool
+    resolution: Optional[variant.Resolution] = None
 
 
 def name_alternatives(
     named: Sequence[tcgcsv.Row],
     card: "IdentifiedCard",
-    disputed_row: tcgcsv.Row,
+    disputed_row: Optional[tcgcsv.Row],
 ) -> NameSide:
     """The rows the READ NAME finds, for a card whose NUMBER found something else.
+
+    `disputed_row` IS NONE FOR A CARD THE LADDER NEVER RESOLVED AT ALL, since
+    D-name-and-number-agree — `rarity_claim_mismatch` and `ambiguous_no_signal` both carry
+    no row (`variant.Resolution(stage=REVIEW, reason=...)`, `row` defaulted), and
+    `set_ambiguous` is built the same way one level up. The SKU filter below is a no-op in
+    that case, not a defect: there is no number's row to exclude the name's rows from.
 
     THE PIPELINE HAD ALREADY REASONED THE NUMBER'S ROW WAS WRONG AND THEN OFFERED IT ALONE.
     That is the defect this answers, and it is a defect of PRESENTATION rather than of
@@ -920,10 +952,13 @@ def name_alternatives(
     the caller does with the answer turns on `settled`, and that flag is exactly the
     difference between a narrowed row and a fallen-back one. See `NameSide`.
     """
+    excluded_sku = (
+        str(disputed_row[tcgcsv.SKU_COLUMN]) if disputed_row is not None else None
+    )
     rows = [
         row
         for row in named
-        if str(row[tcgcsv.SKU_COLUMN]) != str(disputed_row[tcgcsv.SKU_COLUMN])
+        if excluded_sku is None or str(row[tcgcsv.SKU_COLUMN]) != excluded_sku
     ]
     if not rows:
         return NameSide((), False)
@@ -937,7 +972,7 @@ def name_alternatives(
         name_corroborated=True,
     )
     if not narrowed.needs_review and narrowed.row is not None:
-        return NameSide((narrowed.row,), True)
+        return NameSide((narrowed.row,), True, narrowed)
     return NameSide(tuple(rows[:NAME_ALTERNATIVE_LIMIT]), False)
 
 
@@ -2117,6 +2152,18 @@ class JoinReport:
     below_threshold: SubThresholdBucket = field(default_factory=SubThresholdBucket)
     cards_in: int = 0
     collisions: int = 0
+    # D-name-and-number-agree — `(box, index) -> catalog product name`, for a card whose
+    # read name AGREED with the row it resolved to WITHOUT being byte-identical to it (the
+    # near-miss half of `name_corroborates`, never the exact half — that has nothing to
+    # correct — and never a disputed card, whether it settled onto the name's own row or
+    # stayed in review: both are excluded structurally, see `join_batch`). Empty on every
+    # other card. `cli/cmd_emit.py` is the one reader, through `cli/resolve.py:Resolved
+    # .name_corrections` — the moment it commits a SKU to a position is the moment
+    # `SkuMatch.name` (the row this dict was built from) is in hand to write over
+    # `Card.name`, exactly as `set_name` and `rarity` already do at that same write
+    # (D213). The model's own reading is untouched here and stays in the run's
+    # `identifications.json` as evidence.
+    name_corrections: Dict[Tuple[int, int], str] = field(default_factory=dict)
 
     def queue(self, name: str) -> List[QueuedCard]:
         """One standing queue's cards, in the order they should be worked.
@@ -2448,13 +2495,21 @@ def join_batch(
         # at the photograph has already answered the question this would ask, and re-raising
         # it is the sixteen-cards failure D3 rung 0 exists to prevent. `store/queues.py`
         # would not even re-queue the card: it would be listed nowhere and asked nowhere.
+        # THE GATE WIDENED 2026-09-23 (D-name-and-number-agree). Until then this fired only
+        # `not resolution.needs_review and resolution.row is not None` — a card the ladder
+        # had already resolved OUTSIDE review. A card ALREADY queued for a reason of its
+        # own — `rarity_claim_mismatch`, `ambiguous_no_signal`, `set_ambiguous`, … — never
+        # reached here, and its payload offered only the number's (wrong) rows. Three of
+        # thirteen hand-cleared entries measured with this shape were answered onto the
+        # NUMBER's SKU although the read NAME disputed it, because that was the only row on
+        # screen: `Frigid Jewel` read at `024/219`, queued `rarity_claim_mismatch` (no row
+        # at all — that reason never carries one), offered only `Rengar, Unseen`. The owner's
+        # ruling: match off name and number; where they still disagree after a fuzzy
+        # recorrection, it goes to review WITH suggested options from both signals,
+        # `resolution.row is not None` DROPPED for the identical reason — a card queued
+        # for a reason of its own may carry no row to be `is not None` about.
         name_matched_skus: Tuple[str, ...] = ()
-        if (
-            disputed
-            and resolution.stage != variant.HUMAN_ANSWERED
-            and not resolution.needs_review
-            and resolution.row is not None
-        ):
+        if disputed and resolution.stage != variant.HUMAN_ANSWERED:
             # BOTH ROWS, THE NAME'S FIRST — and it offered only the number's until 2026-09-12.
             #
             # D35's block above narrows to the resolved row because there is only one reading
@@ -2506,9 +2561,24 @@ def join_batch(
             settled = side.settled and distinct_cards(named) == 1
             if settled:
                 chosen = alternatives[0]
+                if resolution.needs_review:
+                    # THE CARD WAS ALREADY HEADED TO REVIEW FOR A REASON OF ITS OWN, and
+                    # that reason has no stage to inherit — a review Resolution carries no
+                    # finish decision, only a refusal. `side.resolution` is the ladder's
+                    # own answer over the NAME's rows (`name_alternatives`, same claims),
+                    # and it is what decided `chosen`, so its stage and reason describe
+                    # this SKU honestly, where the reason it is replacing no longer does.
+                    settled_by = side.resolution
+                    assert settled_by is not None  # `side.settled` guarantees this
+                    stage, reason = settled_by.stage, settled_by.reason
+                else:
+                    # UNCHANGED FROM 2026-09-12: the NUMBER already resolved a row outside
+                    # review, and the name settles the dispute onto a DIFFERENT row without
+                    # unsettling how that finish was decided.
+                    stage, reason = resolution.stage, resolution.reason
                 resolution = variant.Resolution(
-                    stage=resolution.stage,
-                    reason=resolution.reason,
+                    stage=stage,
+                    reason=reason,
                     row=chosen,
                     condition=str(chosen[tcgcsv.CONDITION_COLUMN]),
                     market_price=tcgcsv.parse_price(chosen[tcgcsv.MARKET_PRICE_COLUMN]),
@@ -2516,13 +2586,34 @@ def join_batch(
                 found = replace(found, rows=(chosen,))
                 name_matched_skus = (str(chosen[tcgcsv.SKU_COLUMN]),)
             else:
-                found = replace(found, rows=alternatives + (resolution.row,))
+                # THE NUMBER'S OWN ROWS, WHATEVER THEY ARE. A card the ladder had already
+                # resolved outside review carries exactly `resolution.row`, one row,
+                # unchanged from 2026-09-12. A card already queued for another reason may
+                # carry none at all — `rarity_claim_mismatch` and `ambiguous_no_signal`
+                # never set one, and `set_ambiguous` is built the same way — so the
+                # fallback is every row the NUMBER found, `found.rows` exactly as
+                # `catalog.candidates` returned it, before this block ever touches it.
+                numbers_rows = (
+                    (resolution.row,)
+                    if resolution.row is not None
+                    else tuple(found.rows)
+                )
+                found = replace(found, rows=alternatives + numbers_rows)
                 name_matched_skus = tuple(
                     str(row[tcgcsv.SKU_COLUMN]) for row in alternatives
                 )
                 resolution = variant.Resolution(
                     stage=variant.REVIEW,
-                    reason=routing.NAME_DISPUTED,
+                    # THE PRIMARY REASON SURVIVES UNCHANGED where the card already had
+                    # one — owner's ruling: the card is still queued for what it was
+                    # queued for, and only which rows it is queued WITH has grown. A card
+                    # the ladder had resolved outside review still gets the dispute's own
+                    # reason, exactly as before 2026-09-20.
+                    reason=(
+                        resolution.reason
+                        if resolution.needs_review
+                        else routing.NAME_DISPUTED
+                    ),
                     # STILL THE NUMBER'S ROW ON THE QUEUED BRANCH, AND DELIBERATELY SO.
                     # `resolution.row` is what routing prices the entry on; the name's rows
                     # are an OFFER to a human, and promoting one of them here without the
@@ -2532,6 +2623,28 @@ def join_batch(
                     condition=resolution.condition,
                     market_price=resolution.market_price,
                 )
+
+        # D-name-and-number-agree, THE NEAR-MISS HALF. A card that resolved OUTSIDE review
+        # (whether the ladder settled it directly or the dispute above settled it here)
+        # whose read name agreed with the row it landed on WITHOUT being byte-identical to
+        # it — `Corfish` for `Corphish`, the model's own spelling a character or two out —
+        # gets the catalogue's own spelling recorded as a candidate for the STORED name,
+        # in `report.name_corrections`. The model's raw reading is untouched: it stays
+        # exactly where `record_identification` already put it, in the run's own record.
+        # A DISPUTED CARD NEVER REACHES THIS AS A NEAR MISS. One that settled above did so
+        # onto the name's OWN row (`catalog.rows_for_name` is an exact fold lookup), so its
+        # read is byte-identical to what it resolved to and there is nothing to correct;
+        # one that did not settle is still `needs_review` and is excluded by that alone.
+        if (
+            resolution.row is not None
+            and not resolution.needs_review
+            and resolution.stage != variant.HUMAN_ANSWERED
+            and not name_reads_exactly(card.name, resolution.row)
+            and _name_compare_key(card.name)
+        ):
+            report.name_corrections[(card.position.box, card.position.index)] = str(
+                resolution.row[tcgcsv.NAME_COLUMN]
+            )
 
         if router is not None:
             destination = router(card, found, resolution)
