@@ -2051,7 +2051,7 @@ function CandidateButton({
       {keyed ? (
         <Kbd className="review-key bn-kbd-lg">{at + 1}</Kbd>
       ) : (
-        <span className="review-key-blank bn-kbd-lg" aria-hidden="true" title="No key. Click this row.">
+        <span className="review-key review-key-blank bn-kbd-lg" aria-hidden="true" title="No key. Click this row.">
           –
         </span>
       )}

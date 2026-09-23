@@ -952,7 +952,7 @@
 
 /* ---- touch ----------------------------------------------------------------------- */
 @media (hover: none) and (pointer: coarse) {
-  .review-key, .review-key-blank, .review .bn-kbd { display: none; }
+  .review-key, .review .bn-kbd { display: none; }
   .review-candidate { grid-template-columns: minmax(0, 1fr) auto auto; }
   .review-close-choice { grid-template-columns: minmax(0, 1fr) auto; min-height: 44px; }
   /* A thumb presses these: 40px chips, 44px actions. The 767px block below is layout only. */
