@@ -37,8 +37,10 @@ recovered or confirmed empty before stopping. Nothing is lost.
 4. **Allowlist `game coverage`'s One Piece SR/TR pair** with the reason.
 5. **Document `reap`, `janitor-install` and `merge`** in CLAUDE.md's Commands block, and fix
    `make help`'s false claim that `catalog-index-selftest` is in `check`.
-6. **Delete `make orient-selftest`** — it fails on the live tree, asserting against
-   `WalkGroups`, deleted weeks ago, and nothing noticed because it sits outside `make check`.
+6. **DONE, claude/ruled-cleanup.** The orient self-test target failed on the live tree,
+   asserting against `WalkGroups`, deleted weeks ago, and nothing noticed because it sat
+   outside `make check`. Deleted: the recipe, its `.PHONY` entry, `scripts/orient.py`'s
+   `selftest()` function and its `--selftest` flag.
 
 ## Follow-up owed on work that landed
 

@@ -1,0 +1,15 @@
+# `game key rarity` pairs `game coverage` (scripts/docs-audit.py) may not ask about.
+# One `pair  # reason` per line.
+#
+# SELF-CLEANING, same shape as scripts/docs-audit-allow.txt: `game coverage allowlist`
+# FAILS when a pair here would no longer be asked about anyway — because the entry
+# stopped being an unproven finish_by_rarity cell (an export now stocks it, or the
+# matrix no longer claims it). Delete the line the moment that happens.
+one_piece SR  # SR exists in the game. The three One Piece exports on hand (three sets,
+# marked partial by the owner) stock it foil-only. finish_by_rarity deliberately allows
+# the plain version too, per pipeline/games.py's own superset comment (D23, the rarity
+# claim does three jobs) — narrowing to what three sets happen to show would make a real
+# plain-NM SR stack unclaimable behind an unselectable chip.
+one_piece TR  # Same reason as SR above: TR exists in the game, is foil-only across the
+# one product this file has, and finish_by_rarity allows the plain version on purpose
+# (D23's superset rule, pipeline/games.py).

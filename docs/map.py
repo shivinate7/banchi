@@ -3544,6 +3544,17 @@ COMPONENTS = [
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D90", "D96", "D218"],
             },
+            "docs-audit-allow-game-coverage.txt": {
+                "does": "`game key rarity` pairs the `game coverage` row may not ask "
+                        "about, one `pair  # reason` line each. Same self-cleaning shape "
+                        "as `docs-audit-allow.txt`: `game coverage allowlist` fails when "
+                        "an entry would no longer be asked about anyway. Its two live "
+                        "entries are One Piece's `SR` and `TR`: both exist in the game, "
+                        "the three exports on hand stock them foil-only, and "
+                        "pipeline/games.py's finish_by_rarity deliberately allows the "
+                        "plain version too, per D23's superset rule.",
+                "governed_by": ["D16", "D23"],
+            },
             "docs-audit-line-allow.txt": {
                 "does": "`path:N`/`path:N-M` line anchors the `line anchors` row's Clause A "
                         "would otherwise flag as past their target's end, one "
