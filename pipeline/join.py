@@ -930,12 +930,23 @@ def name_alternatives(
     offered to a person, and it is folded by `name_index_key` exactly as D35 requires.
 
     NARROWED BY THE SAME LADDER THAT NARROWED THE NUMBER'S ROWS, so the two sides of the
-    disagreement are shown at the same grain. `name_corroborated=True` is correct by
-    construction rather than by assumption: these rows were found BY the name, so the name
-    agrees with them, and D146's release is exactly what should happen to a rarity claim that
-    contradicts a row the name itself picked out. Where the ladder cannot settle the finish,
+    disagreement are shown at the same grain. Where the ladder cannot settle the finish,
     every row is offered and the operator settles it — which is the ordinary multi-row entry
     this screen has always drawn.
+
+    `name_corroborated=False`, NOT TRUE — CORRECTED 2026-09-23 (a review finding on
+    D-name-and-number-agree). This call passed `True` from 2026-09-12 until then, on the
+    argument that "these rows were found BY the name, so the name agrees with them." That
+    argument is circular: `rows_for_name` finding a row BECAUSE its name matches is not a
+    SECOND signal independent of the name — D146's release needs two, and this call had
+    only one, wearing two names. Measured cost on the owner's store: a card read
+    `Pyke, Returned`, claimed `rarity_claim=['Showcase']`, whose NUMBER found `Pyke,
+    Returned` (Rare, the base print) — the claim contradicts that row outright and should
+    queue. With `True` hardcoded, the waiver fired anyway and released the card onto the
+    WRONG print. A rarity or finish claim that contradicts EVERY row the name itself
+    found must still queue, exactly as it would over the number's own rows — the name
+    finding a row is not a reason to trust an unrelated claim about which ROW that name's
+    card is stocked in.
 
     ONE LINE HERE IS AN INVARIANT RESTATEMENT RATHER THAN A GUARD, AND IT IS KEPT ON
     PURPOSE. The SKU filter cannot fire: a row is in both sets only if one of the rows the
@@ -969,7 +980,7 @@ def name_alternatives(
         detected_finish=card.detected_finish,
         rarity_claim=card.rarity_claim,
         game=card.game,
-        name_corroborated=True,
+        name_corroborated=False,
     )
     if not narrowed.needs_review and narrowed.row is not None:
         return NameSide((narrowed.row,), True, narrowed)
@@ -1425,6 +1436,16 @@ class Catalog:
         # also what makes a name collision between a card and a code card impossible here,
         # which matters because `from_export` deliberately KEEPS code-card rows in the
         # `pokemon` catalog (see its docstring).
+        #
+        # KEYED BY THE CATALOG-SIDE COMPARE FOLD, NOT THE PLAIN INDEX — CORRECTED
+        # 2026-09-23 (a review finding on D-name-and-number-agree). `name_index_key` alone
+        # never strips a trailing qualifier, so `Pyke, Returned (Alternate Art)` indexed
+        # under its own full string and `rows_for_name("Pyke, Returned")` never found it —
+        # `distinct_cards` then saw one product where the export actually stocks two, and
+        # D162's "exactly one card" release fired on the WRONG one. `_name_compare_key(...,
+        # catalog_side=True)` is the SAME fold `name_disputes`/`name_corroborates` already
+        # compare against; using it here too means one card's every printing shares one
+        # bucket, whatever qualifier the export appends to tell them apart on screen.
         self._by_name: Dict[str, List[tcgcsv.Row]] = {}
         self._order: Dict[str, int] = {}
         self._sets_by_key: Dict[str, List[str]] = {}
@@ -1446,11 +1467,11 @@ class Catalog:
                 key = number_index_key(number)
                 self._by_number.setdefault(key, []).append(row)
                 self._cell_by_key.setdefault(key, number)
-                # Folded by `name_index_key`, and `rows_for_name` folds what it is handed
-                # with the same function — the invariant this class already keeps for
-                # numbers, kept for the other column too.
+                # Folded by `_name_compare_key(catalog_side=True)`, and `rows_for_name`
+                # folds what it is handed with the same function — the invariant this
+                # class already keeps for numbers, kept for the other column too.
                 self._by_name.setdefault(
-                    name_index_key(row[tcgcsv.NAME_COLUMN]), []
+                    _name_compare_key(row[tcgcsv.NAME_COLUMN], catalog_side=True), []
                 ).append(row)
             else:
                 name = row[tcgcsv.NAME_COLUMN].strip()
@@ -1638,8 +1659,13 @@ class Catalog:
         Answers rows the caller must not list on that basis alone — see
         `_walk` for the rung and `join_batch` for the routing
         that keeps a card found this way in front of a human.
+
+        `_name_compare_key(name)`, CATALOG-SIDE OFF — the query is the MODEL's read, never
+        a catalog row, so nothing here strips a trailing qualifier; it is folded through
+        the same NFKD/accent pass `_by_name` was built with (`catalog_side=True`), so the
+        two sides of the lookup use one fold rather than two that happen to agree today.
         """
-        return list(self._by_name.get(name_index_key(name), ()))
+        return list(self._by_name.get(_name_compare_key(name), ()))
 
     def candidates(self, card: IdentifiedCard) -> Candidates:
         """Rows this card could be, and how they were found.
@@ -2558,7 +2584,29 @@ def join_batch(
             # export stocks in ONE finish returns one row whether the ladder settled it or
             # REFUSED it, and releasing the second is listing a card on a finish the ladder
             # rejected. `Alcremie ex` is that card on the committed fixture.
-            settled = side.settled and distinct_cards(named) == 1
+            #
+            # "EXACTLY ONE CARD" COUNTS PRODUCTS THE RARITY CLAIM AGREES WITH, WHEN THERE
+            # IS ONE — CORRECTED 2026-09-23, a review finding. `named` alone answers a
+            # PRODUCT count that a qualifier variant (`rows_for_name` now reaching it,
+            # D-name-and-number-agree) can raise past one even where the claim already
+            # picks a single product out of it: `Pyke, Returned` (base, Rare) and
+            # `Pyke, Returned (Alternate Art)` (Showcase) are two products under one
+            # folded name, and a `rarity_claim=['Showcase']` names exactly one of them.
+            # THAT IS A SECOND AGREEING SIGNAL, D146's own shape — the name narrows the
+            # search to one card's every printing, the claim narrows within that to one
+            # printing — so it may release, the same way two signals release a rarity
+            # contradiction elsewhere in this ladder. ONLY THE RARITY CLAIM COUNTS FOR
+            # THIS, never the finish claim: two prints of one name generally differ in
+            # RARITY, and nothing here argues a finish claim ever tells two PRODUCTS
+            # apart, only two conditions of the SAME one. Where there is no rarity claim
+            # at all, this is `distinct_cards(named)` exactly as before — unchanged for
+            # every card this rung already released correctly.
+            products = distinct_cards(
+                variant.rarity_filter(named, card.rarity_claim)
+                if card.rarity_claim
+                else named
+            )
+            settled = side.settled and products == 1
             if settled:
                 chosen = alternatives[0]
                 if resolution.needs_review:

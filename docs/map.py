@@ -837,7 +837,7 @@ COMPONENTS = [
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
                                         "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
                                         "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D213", "D-name-and-number-agree"], "tested_by": ["T3"]},
+                                        "D137", "D146", "D162", "D213", "D-name-and-number-agree"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
