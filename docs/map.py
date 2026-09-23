@@ -644,7 +644,9 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99", "D172", "D213", "D243"], "tested_by": ["T7"]},
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58",
+                                            "D59", "D86", "D99", "D172", "D213", "D243",
+                                            "D-name-and-number-agree"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
@@ -706,7 +708,11 @@ COMPONENTS = [
                                    "dict instead of one `Rows.where(sku=sku)` per listing — "
                                    "measured at 0.9s over 492 listings before the rewrite "
                                    "(D156).",
-                           "governed_by": ["D147", "D145", "D4", "D8", "D10", "D11", "D12", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D137", "D150", "D156", "D166", "D180", "D183", "D188"], "tested_by": ["T7"]},
+                           "governed_by": ["D4", "D8", "D10", "D11", "D12", "D20", "D21", "D22",
+                                           "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49",
+                                           "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D137",
+                                           "D145", "D147", "D150", "D156", "D166", "D180", "D183",
+                                           "D188", "D-name-and-number-agree"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -827,8 +833,11 @@ COMPONENTS = [
                                 "condition at all, which was invisible while the operator downloaded "
                                 "Near-Mint-only exports by hand and cost D3 rung 2 outright once the "
                                 "fetch started sending every play grade",
-                        "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87", "D137",
-                                        "D146", "D213"], "tested_by": ["T3"]},
+                        "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16",
+                                        "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
+                                        "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
+                                        "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
+                                        "D137", "D146", "D162", "D213", "D-name-and-number-agree"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -1602,7 +1611,11 @@ COMPONENTS = [
                                   "still hands out the lowest free integer (D20) — the number is a "
                                   "label on a drawer and the id is an identity, which is `Place."
                                   "slot` and `Place.index` one register up (D58)",
-                          "governed_by": ["D145", "D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D24", "D26", "D30", "D34", "D36", "D55", "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88", "D89", "D100", "D115", "D132", "D146", "D167", "D172", "D183", "D192", "D213"], "tested_by": ["T7"]},
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23",
+                                          "D24", "D26", "D30", "D34", "D36", "D55", "D56", "D58",
+                                          "D59", "D63", "D67", "D83", "D87", "D88", "D89", "D100",
+                                          "D115", "D132", "D145", "D146", "D167", "D172", "D183",
+                                          "D192", "D213", "D-name-and-number-agree"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -5966,7 +5979,10 @@ COMPONENTS = [
                         "up, because its choices ride digits that mean candidates everywhere "
                         "else on this screen; the mid-box delete is deliberately not on it. "
                         "The re-check sheet owns it the same way, and for the same reason.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77", "D87", "D137", "D162", "D167", "D172", "D194"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
+                                "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
+                                "D87", "D137", "D162", "D167", "D172", "D194",
+                                "D-name-and-number-agree"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of

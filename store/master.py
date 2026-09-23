@@ -1838,6 +1838,7 @@ class Inventory:
         condition: Optional[str] = None,
         set_name: Optional[str] = None,
         rarity: Optional[str] = None,
+        name: Optional[str] = None,
         run: Optional[str] = None,
     ) -> bool:
         """Move one card to a new state. Returns False if this position has no record.
@@ -1852,6 +1853,14 @@ class Inventory:
         catalogue row is in hand — `cli/cmd_emit.py`'s `SkuMatch` carries both beside the
         SKU it resolved. A caller with no catalogue row (a bare state transition) passes
         neither and leaves them as they were.
+
+        `name` FOLLOWS THE SAME RULE, AND IS NARROWER STILL (D-name-and-number-agree). It
+        is not the model's identification — `record_identification` owns that write and
+        this never touches it — it is the catalogue's own spelling of a card whose read
+        name agreed with its row without being identical to it (`Corfish` for `Corphish`).
+        `cli/cmd_emit.py` passes it only for that one case, out of
+        `pipeline/join.py:JoinReport.name_corrections`; every other commit passes `None`
+        and this leaves `card.name` exactly as `record_identification` last wrote it.
         """
         check_state(state)
         card = self.cards.get(key)
@@ -1867,6 +1876,8 @@ class Inventory:
             card.set_name = set_name
         if rarity is not None:
             card.rarity = rarity
+        if name is not None:
+            card.name = name
         if run is not None:
             card.run = run
         self._log(state, key, sku=card.sku, run=card.run)

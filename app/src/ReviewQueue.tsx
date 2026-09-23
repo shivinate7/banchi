@@ -395,15 +395,21 @@ const TAG_TITLES: Readonly<Record<Evidence, string>> = {
 
 /* WHICH SIGNAL ARGUED FOR THIS ROW, drawn only where the list holds more than one answer.
  *
- * `found_by` is on the wire for `name_disputed` alone (`cli/resolve.py:_candidate_rows`), so
- * this returns the provenance tag for exactly the entry whose rows come from two different
- * readings of one photograph and nothing else. Reading the FIELD rather than the reason code
- * is deliberate: the reason is the server's word for the question, and the provenance is a
- * property of the row — a later rung that offers two readings gets the tags for free, and a
- * queue entry written before the field existed draws none rather than drawing a wrong one.
+ * `found_by` is on the wire wherever `cli/resolve.py:_candidate_rows` was handed a
+ * non-empty `name_matched`, which was `name_disputed` alone until D-name-and-number-agree
+ * (2026-09-23): a card already queued for a reason of its own — `ambiguous_no_signal`,
+ * `rarity_claim_mismatch`, `set_ambiguous` — can now carry both readings too, under its
+ * OWN reason. Reading the FIELD rather than the reason code is deliberate and is what
+ * makes that extension free: the reason is the server's word for the question, and the
+ * provenance is a property of the row — a later rung that offers two readings gets the
+ * tags for free, and a queue entry written before the field existed draws none rather
+ * than drawing a wrong one.
  *
- * The two families cannot collide: `FINISH_REASONS` and `name_disputed` are disjoint, so a
- * row never carries a finish tag and a provenance tag at once. */
+ * THE TWO FAMILIES NEVER COLLIDE ON ONE ROW, but not because their reason codes are
+ * disjoint any more — `rarity_claim_mismatch` is in `FINISH_REASONS` and can now carry
+ * `found_by` too. The early return below is what keeps them apart: a row stamped
+ * `found_by` never falls through to the sorted/photo finish check, whatever its entry's
+ * reason is. */
 function tagsFor(entry: QueueEntryWire, claims: Claims, candidate: CandidateRow): Evidence[] {
   if (candidate.found_by !== undefined) return [candidate.found_by]
   if (!FINISH_REASONS.has(entry.reason)) return []

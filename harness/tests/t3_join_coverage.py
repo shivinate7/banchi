@@ -168,6 +168,38 @@ def _multi_set_catalog(export, second_set=SECOND_SET):
     return join.Catalog(tcgcsv.Export(header=export.header, rows=tuple(rows)))
 
 
+# D-name-and-number-agree's qualifier fix (the review's second CRITICAL finding). The
+# committed fixture carries no parenthetical-qualifier name — no `(Alternate Art)`, no
+# `(Overnumbered)` — to test the real shape against, so this clones ONE synthetic
+# printing under a different number and a different rarity, the same approach and the
+# same reason as `_multi_set_catalog` above.
+QUALIFIER_BASE_SKU = "8607894"  # Banette 060/159, Near Mint, Uncommon
+QUALIFIER_ALT_NAME = "Banette (Alternate Art)"
+QUALIFIER_ALT_NUMBER = "060a/159"
+QUALIFIER_ALT_SKU = "9100201"
+
+
+def _qualifier_catalog(export):
+    """SYNTHETIC: the SV09 export plus one alt-art clone of Banette, folding to the
+    SAME name as the base print once the trailing qualifier is stripped — the shape
+    `Pyke, Returned` / `Pyke, Returned (Alternate Art)` measured on the owner's store."""
+    rows = list(export.rows)
+    base = next(row for row in export.rows if row[tcgcsv.SKU_COLUMN] == QUALIFIER_BASE_SKU)
+    rows.append(
+        dict(
+            base,
+            **{
+                tcgcsv.SKU_COLUMN: QUALIFIER_ALT_SKU,
+                tcgcsv.NAME_COLUMN: QUALIFIER_ALT_NAME,
+                tcgcsv.NUMBER_COLUMN: QUALIFIER_ALT_NUMBER,
+                tcgcsv.RARITY_COLUMN: "Showcase",
+                tcgcsv.MARKET_PRICE_COLUMN: "3.00",
+            },
+        )
+    )
+    return join.Catalog(tcgcsv.Export(header=export.header, rows=tuple(rows)))
+
+
 def _clean_batch():
     """13 cards covering all four required cases."""
     cards = []
@@ -2049,6 +2081,252 @@ def run() -> Result:
             2,
             "and both are claimed by the name, so the screen can say so on each",
         )
+
+    # --- D-name-and-number-agree, 2026-09-23: THE GATE REACHES A CARD ALREADY QUEUED -----
+    #
+    # Until this date the whole block above only fired `not resolution.needs_review and
+    # resolution.row is not None` — a card the ladder had already resolved OUTSIDE review.
+    # A card ALREADY headed to review for a reason of its OWN — `ambiguous_no_signal`,
+    # `rarity_claim_mismatch`, `set_ambiguous`, … — never got the name cross-check at all,
+    # and its queue entry offered only the wrong card's rows. Measured on the owner's
+    # store: `4/176` read "Daisy!" over a number that resolved to `Lilting Lullaby`'s two
+    # rows, queued `ambiguous_no_signal`, and the entry offered only those two — never
+    # Daisy's. `6/563` read "Frigid Jewel" at `024/219`, capture claimed a foil finish and
+    # a Common/Uncommon rarity, queued `rarity_claim_mismatch` — a reason that never
+    # carries a row at all — and offered only `Rengar, Unseen`, a Rare. Both were answered
+    # onto the wrong-name SKU because that was the only row on screen.
+    #
+    # Dunsparce `120/159` stands in for both shapes: stocked in two conditions, so a card
+    # with no capture claim over it reviews `ambiguous_no_signal`; the SAME number reviews
+    # `rarity_claim_mismatch` under a rarity claim neither of its rows carries (both are
+    # Common). Neither reason carries a row for the disputed name to be compared or ranked
+    # against, which is exactly the gap `resolution.row is not None` used to require.
+
+    # Daisy's shape: queued for a reason of its own, the name resolves to exactly ONE
+    # OTHER card with exactly one stocked condition, so the ladder settles it by
+    # `CATALOG_FORCED` — no capture claim needed. D162 still decides alone. `Alcremie ex
+    # 075/159` stands in: one row, Near Mint Holofoil, a real (non-blank) number — a
+    # BLANK-Number product is deliberately unreachable here, since `Catalog.rows_for_name`
+    # excludes it (`_blank_number_by_name` is a separate index, D35's own fallback rung,
+    # never this one).
+    ALCREMIE_EX_SKU = "8608039"  # Alcremie ex 075/159, Near Mint Holofoil, single row
+    daisy = join.join_batch(
+        [_card(96, "Alcremie ex", "120")],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        list(daisy.matches),
+        [ALCREMIE_EX_SKU],
+        "THE CARD IS LISTED, off the row the NAME settled. Before the gate widened this "
+        "stayed queued under `ambiguous_no_signal` with Dunsparce's two conditions on "
+        "offer — the wrong card, with nothing pointing at the right one",
+    )
+    c.equal(daisy.queued, [], "and nothing is left in a queue for it")
+    c.equal(
+        daisy.name_corrections,
+        {},
+        "and no name correction either — the read and the row it settled on ARE "
+        "byte-identical (\"Alcremie ex\" is both), so there is nothing to correct",
+    )
+
+    # A RARITY CLAIM THAT CONTRADICTS THE NAME'S OWN ROWS MUST STILL QUEUE — the review's
+    # first CRITICAL finding, 2026-09-23. `name_alternatives` passed `name_corroborated=
+    # True` HARD-CODED from 2026-09-12 until this fix: the argument was that a row
+    # `rows_for_name` found BY the name already "agrees" with it, so a contradicting
+    # rarity claim could be waived exactly as D146 waives one the NUMBER's own row
+    # corroborates. That argument is circular — finding a row by name is not a SECOND
+    # signal independent of the name, and D146 needs two. Measured cost: this exact
+    # shape (`Billy & O'Nare`'s rows are Common, the claim says `Rare`) auto-released
+    # onto `Billy & O'Nare` before the fix. Real case: `4/442` read "Pyke, Returned",
+    # `rarity_claim=['Showcase']`, auto-released onto the BASE print (Rare) — the owner
+    # confirmed the true card is the Alternate Art print, `074/219`'s own sibling shape
+    # one register over. `name_corroborated=False` now, and this asserts REVIEW.
+    contradicted_name_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=97),
+        name=AMPERSAND_NAME,
+        number="120",
+        printed_total="159",
+        metadata_finish=("reverse_holo",),
+        rarity_claim=("Rare",),
+        photo=f"captures/box{BOX}/0097.jpg",
+        confidence="high",
+    )
+    contradicted_name = join.join_batch(
+        [contradicted_name_card], catalog, router=join.default_router()
+    )
+    c.equal(
+        list(contradicted_name.matches),
+        [],
+        "NOTHING LISTS. `Rare` matches neither of `Billy & O'Nare`'s Common rows, and a "
+        "claim contradicting every row the name found is not waived just because the "
+        "name is what found them",
+    )
+    contradicted_queued = (
+        contradicted_name.queued[0] if contradicted_name.queued else None
+    )
+    if c.ok(contradicted_queued is not None, "and it queues instead"):
+        c.equal(
+            contradicted_queued.resolution_reason,
+            variant.RARITY_CLAIM_MISMATCH,
+            "under the reason the claim actually failed on",
+        )
+
+    # Frigid's REAL shape: the claim MATCHES the name's own row, and a finish claim then
+    # picks which of its conditions is meant — `rarity_claim_mismatch` on the NUMBER
+    # (Dunsparce, Common, claimed Uncommon), no row at all, released over `Banette`'s own
+    # rows (Uncommon, matching the claim) with the finish claim settling Reverse
+    # Holofoil first, the same way the real `6/563` settled Near Mint Foil under
+    # `metadata_finish: ['foil']` and a Common/Uncommon claim.
+    BANETTE_REVERSE_SKU = "8607899"  # Banette 060/159, Near Mint Reverse Holofoil
+    frigid_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=101),
+        name="Banette",
+        number="120",
+        printed_total="159",
+        metadata_finish=("reverse_holo",),
+        rarity_claim=("Uncommon",),
+        photo=f"captures/box{BOX}/0101.jpg",
+        confidence="high",
+    )
+    frigid = join.join_batch([frigid_card], catalog, router=join.default_router())
+    c.equal(
+        list(frigid.matches),
+        [BANETTE_REVERSE_SKU],
+        "THE CLAIM MATCHES THE NAME'S ROW, so the claimed finish wins over it. "
+        "`rarity_claim_mismatch` never carries a row to rank from and `found.rows` is "
+        "the wrong card (Dunsparce, Common) — the claim agrees with `Banette` (Uncommon) "
+        "and settles over its own rows, putting Reverse Holofoil in front",
+    )
+    c.equal(frigid.queued, [], "and nothing is queued for it")
+
+    # The review's second CRITICAL finding: a QUALIFIED name was unreachable.
+    # `Catalog.__init__` indexed `_by_name` on the raw fold, which never strips a
+    # trailing `(Alternate Art)`, so `rows_for_name` never found the alt-art print and
+    # D162's "exactly one card" test saw one product where the export stocks two — the
+    # real `4/442` shape exactly. `_qualifier_catalog` clones `Banette (Alternate Art)`
+    # at `060a/159`, `Showcase`, to prove it against.
+    qualifier_catalog = _qualifier_catalog(export)
+    c.equal(
+        {row[tcgcsv.SKU_COLUMN] for row in qualifier_catalog.rows_for_name("Banette")},
+        {QUALIFIER_BASE_SKU, "8607899", QUALIFIER_ALT_SKU},
+        "THE QUALIFIER VARIANT IS AMONG THE NAME'S ROWS NOW — indexed and looked up "
+        "through the same catalog-side fold, so `(Alternate Art)` no longer hides a "
+        "printing from this rung",
+    )
+    c.equal(
+        {
+            row[tcgcsv.SKU_COLUMN]
+            for row in qualifier_catalog.candidates(_card(0, "Dunsparce", "120")).rows
+        },
+        {SEVEN_COPY_SKU, SEVEN_COPY_REVERSE_SKU},
+        "AND THE NUMBER'S OWN LOOKUP IS UNTOUCHED — the qualifier fold is a NAME-side "
+        "change only, the number key finds exactly the rows it always found",
+    )
+    alt_art_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=102),
+        name="Banette",
+        number="120",
+        printed_total="159",
+        rarity_claim=("Showcase",),
+        photo=f"captures/box{BOX}/0102.jpg",
+        confidence="high",
+    )
+    alt_art = join.join_batch(
+        [alt_art_card], qualifier_catalog, router=join.default_router()
+    )
+    c.equal(
+        list(alt_art.matches),
+        [QUALIFIER_ALT_SKU],
+        "THE CLAIM PICKS THE ALT-ART PRINT, and the card lists on it — TWO agreeing "
+        "signals, D146's own shape: the name narrows every printing to one CARD, "
+        "`Showcase` narrows within that to the one PRINTING it names. Before both "
+        "fixes this queued, or worse, released onto the base (Rare) print",
+    )
+    c.equal(alt_art.queued, [], "and nothing is queued for it")
+    two_products_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=103),
+        name="Banette",
+        number="120",
+        printed_total="159",
+        photo=f"captures/box{BOX}/0103.jpg",
+        confidence="high",
+    )
+    two_products = join.join_batch(
+        [two_products_card], qualifier_catalog, router=join.default_router()
+    )
+    two_products_queued = two_products.queued[0] if two_products.queued else None
+    if c.ok(
+        two_products_queued is not None,
+        "NO CLAIM AT ALL still queues rather than guessing between the two prints",
+    ):
+        c.equal(list(two_products.matches), [], "and lists nothing")
+
+    # A DISPUTED NAME THAT DOES NOT SETTLE STILL KEEPS ITS PRIMARY REASON, and its
+    # candidates are the name's rows first, then the NUMBER'S OWN — `found.rows`, plural,
+    # because `rarity_claim_mismatch` left `resolution.row` at `None` and there is no
+    # single row to fall back to. `Articuno` answers TWO cards (32/159 and the secret rare
+    # 161/159), so the name never settles it, whatever the claim says.
+    unsettled_review_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=98),
+        name="Articuno",
+        number="120",
+        printed_total="159",
+        rarity_claim=("Rare",),
+        photo=f"captures/box{BOX}/0098.jpg",
+        confidence="high",
+    )
+    unsettled_review = join.join_batch(
+        [unsettled_review_card], catalog, router=join.default_router()
+    )
+    still_queued = unsettled_review.queued[0] if unsettled_review.queued else None
+    if c.ok(still_queued is not None, "an unsettled dispute over a reason of its own still queues"):
+        c.equal(list(unsettled_review.matches), [], "and lists nothing")
+        c.equal(
+            still_queued.resolution_reason,
+            variant.RARITY_CLAIM_MISMATCH,
+            "THE PRIMARY REASON SURVIVES — it is not overwritten to `name_disputed`, "
+            "because the card is still queued for what it was queued for",
+        )
+        candidate_names = [row[tcgcsv.NAME_COLUMN] for row in still_queued.candidates]
+        c.equal(
+            set(candidate_names[:-2]),
+            {"Articuno - 032/159", "Articuno - 161/159"},
+            "the name's rows (both prints) lead the list",
+        )
+        c.equal(
+            candidate_names[-2:],
+            ["Dunsparce", "Dunsparce"],
+            "and BOTH of the number's own rows close it — `found.rows`, not one row, "
+            "because `rarity_claim_mismatch` never gave this card a single row to fall "
+            "back to",
+        )
+
+    # --- D-name-and-number-agree, THE NEAR-MISS HALF: a read that agreed WITHOUT being ---
+    # byte-identical offers the catalogue's own spelling as a correction; an exact read
+    # offers none, because there is nothing to correct.
+    near_miss = join.join_batch(
+        [_card(99, "Dunsprce", "120", metadata="normal")],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        near_miss.name_corrections,
+        {(BOX, 99): "Dunsparce"},
+        "a read one letter short of the row it resolved to offers the catalogue's own "
+        "spelling as a stored-name correction — the model's own reading is untouched, "
+        "this is a candidate for `Card.name` alone",
+    )
+    exact_read = join.join_batch(
+        [_card(100, "Dunsparce", "120", metadata="normal")],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        exact_read.name_corrections,
+        {},
+        "and NOTHING when the read was already byte-identical to the row",
+    )
 
     name_only = join.join_batch([_card(91, BLANK_NUMBER_NAME, "999")], catalog)
     c.equal(
