@@ -295,6 +295,33 @@ CHECKS = (
         "governed_by": ("D18", "D173"),
     },
     {
+        "target": "token-literal-check",
+        "runs": "python3 scripts/token-literal-check.py",
+        "asserts": "A CSS literal exactly equal to a design token's value, in its own "
+                   "property family (`docs/reviews/ux-2026-09-20/RANKING.md` §4): "
+                   "`font-size: 22px` where `--bn-fs-2xl: 22px`, `padding: 8px` where "
+                   "`--bn-2: 8px`, `transition: ... 480ms` where `--bn-t-draw: 480ms`. "
+                   "css-var-check's sibling, the other direction — that one catches a "
+                   "`var()` pointed at nothing, this one catches a value that should have "
+                   "BEEN a `var()`. Reads tokens.css itself on every run, no copied list. "
+                   "Matched by PROPERTY FAMILY, never value alone: `4px` is `--bn-1` under "
+                   "padding/margin/gap/inset and `--bn-r-xs` under border-radius, never the "
+                   "other's finding. Durations normalize (`0.7s` = `700ms`) before "
+                   "comparing. `var(--x, fallback)` and `calc(...)` are never read as a "
+                   "literal. RATCHETED PER FILE in scripts/token-literal-check.json "
+                   "(D-token-literals-are-pinned, D229's shape) — main already carries many "
+                   "of these, so the gate is a ceiling on each file's own count, never zero. "
+                   "scripts/token-literal-allow.json excuses a named one-off, refused if it "
+                   "matches no real finding.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "not armed in scripts/githooks/pre-commit — css-var-check's "
+                               "reason exactly. `make check` is where it runs.",
+        "gates": True,
+        "governed_by": ("D18", "D173", "D229"),
+    },
+    {
         "target": "ignore-check",
         "runs": "sh scripts/ignore-check.sh",
         "asserts": "Every path a worktree provisions is gitignored — as a file, as a directory "
@@ -929,6 +956,29 @@ CHECKS = (
                                "which this one is the sibling of.",
         "gates": True,
         "governed_by": ("D18", "D247"),
+    },
+    {
+        "target": "token-literal-check-selftest",
+        "runs": "python3 scripts/token-literal-check.py --self-test",
+        "asserts": "the guard sees its own subject before it is trusted: a literal exactly "
+                   "equal to a token in its own family fails; the same value as var() "
+                   "passes; the same value inside a var() FALLBACK passes; the same value "
+                   "under a DIFFERENT family's property passes (4px matches --bn-r-xs under "
+                   "border-radius and --bn-1 under padding, never crossed); a shorthand is "
+                   "counted component by component (padding: 4px 8px is two findings); "
+                   "0.7s/0.48s/.48s all normalize to the same duration as 480ms and are "
+                   "caught; a value inside calc() is never read; a raised per-file count "
+                   "fails, an unchanged one passes silently, a lowered one passes and is "
+                   "noted, an unseen file with findings fails, a zero-count file never "
+                   "fails; an allow-list entry that matches a real finding removes it, and "
+                   "one matching nothing is reported stale.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "token-literal-check's reason exactly — not armed in "
+                               "scripts/githooks/pre-commit, `make check` only.",
+        "gates": True,
+        "governed_by": ("D18", "D173", "D229"),
     },
 )
 

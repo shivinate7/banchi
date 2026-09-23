@@ -4151,6 +4151,44 @@ COMPONENTS = [
                 # the mechanization rule this check exists to satisfy for a defect class that
                 # was, until now, only found by hand.
                 "governed_by": ["D18", "D173"]},
+            "token-literal-check.py": {
+                "does": "`make token-literal-check` — a CSS literal exactly equal to a design "
+                        "token's value, in its own property family (2026-09-20 UX review, "
+                        "RANKING.md section 4): `font-size: 22px` where `--bn-fs-2xl: 22px`, "
+                        "`padding: 8px` where `--bn-2: 8px`. css-var-check's sibling, the "
+                        "opposite direction — that one catches a `var()` pointed at nothing, "
+                        "this one catches a value that should have BEEN a `var()`. Reads "
+                        "`tokens.css` itself on every run, no copied list. MATCHED BY "
+                        "PROPERTY FAMILY, never value alone: six families derived from token "
+                        "names in `tokens.css` (fs, lh, tracking, spacing, radius, duration), "
+                        "each with its own fixed property list, so `4px` means `--bn-r-xs` "
+                        "under `border-radius` and `--bn-1` under `padding` and never the "
+                        "other's finding. Durations normalize (`0.7s` = `700ms`) before "
+                        "comparing. A value inside `var(--x, fallback)` or `calc(...)` is "
+                        "never read as a literal. TSX inline styles are measured and printed, "
+                        "never gated. RATCHETED PER FILE in "
+                        "`scripts/token-literal-check.json` — main already carries many of "
+                        "these, so the gate is a ceiling on each file's own count, never "
+                        "zero; `scripts/token-literal-check-pin.py --pin` is the one thing "
+                        "that may write it (D18). `scripts/token-literal-allow.json` excuses "
+                        "a named one-off, refused if it matches no real finding. In "
+                        "`make check`, not on the git commit path — css-var-check's own "
+                        "reason.",
+                # D18 is why the pin may exist at all (it writes nothing itself); D173 is the
+                # mechanization rule; D229 is the per-file ratchet shape this check's own pin
+                # follows.
+                "governed_by": ["D18", "D102", "D173", "D229", "D-token-literals-are-pinned"]},
+            "token-literal-check-pin.py": {
+                "does": "`python3 scripts/token-literal-check-pin.py --pin` — the ONE thing "
+                        "allowed to write `scripts/token-literal-check.json`, "
+                        "token-literal-check.py's own per-file ratchet ceiling (D18, D229's "
+                        "shape). Re-measures the real tree through the checker's own `scan()` "
+                        "and `apply_allow_list()`, refuses to pin over a stale allow-list "
+                        "entry, and writes `{\"files\": {\"<path>\": <count>}}` — only files "
+                        "with a finding after the allow-list is applied get a key. Run by a "
+                        "person choosing to accept today's count as the new ceiling, never by "
+                        "the check itself.",
+                "governed_by": ["D18", "D229", "D-token-literals-are-pinned"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -4169,7 +4207,7 @@ COMPONENTS = [
                                 "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
                                 "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141",
                                 "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D178",
-                                "D189", "D215", "D247"],
+                                "D189", "D215", "D229", "D247", "D-token-literals-are-pinned"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

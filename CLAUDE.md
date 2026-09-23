@@ -203,7 +203,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check +
-                    #   css-var-check + css-var-check-selftest + ignore-check +
+                    #   css-var-check + css-var-check-selftest + token-literal-check +
+                    #   ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
                     #   mutate-anchors +
                     #   githooks-selftest + merge-selftest + revert-selftest +
@@ -214,7 +215,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
-                    #   subagent-override-selftest + guard-scope-selftest,
+                    #   subagent-override-selftest + guard-scope-selftest +
+                    #   token-literal-check-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -225,6 +227,21 @@ make css-var-check  # a `var(--x)` with no fallback where `--x` is defined nowhe
                     #   `PKMNSCAN_CSS_VARS=off` skips it, printed in the refusal.
 make css-var-check-selftest  # that checker, on fixtures in both directions: a genuinely
                     #   undefined `var()`, one with a fallback, one defined only from TSX.
+make token-literal-check  # a CSS literal exactly equal to a design token's value, in its
+                    #   own property family (D-token-literals-are-pinned) — `font-size: 22px`
+                    #   where `--bn-fs-2xl: 22px` means the two can silently diverge. Reads
+                    #   tokens.css itself every run, matched by property family (spacing,
+                    #   radius, font-size, line-height, letter-spacing, duration), not value
+                    #   alone. RATCHETED PER FILE in scripts/token-literal-check.json —
+                    #   main already carries many, so the gate is a ceiling, never zero.
+                    #   `scripts/token-literal-allow.json` excuses a named one-off; a stale
+                    #   entry fails. `PKMNSCAN_TOKEN_LITERALS=off` skips it, printed in the
+                    #   refusal.
+make token-literal-check-selftest  # that checker, on fixtures in both directions: a literal
+                    #   equal to a token fails, the same value as var() or a var() fallback
+                    #   passes, the same value under a different family's property passes, a
+                    #   raised/lowered/unseen per-file count and a stale allow-list entry are
+                    #   each proved.
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
 make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
                     #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.
