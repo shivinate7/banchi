@@ -1961,7 +1961,10 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   const receiptUndo = receiptToast(page).getByRole('button', { name: 'Undo' })
   await expect(receiptUndo).toBeVisible()
   await expect(receiptToast(page)).toContainText('Marked sold')
-  await expect(receiptToast(page)).toContainText(CARD_1)
+  /* D218: the toast speaks the place as a sentence, never the server's typed `' · '` — see
+     `Inventory.tsx:sayPlace`. `CARD_1` is `Position.label`'s own string; the toast's is that
+     string read aloud. */
+  await expect(receiptToast(page)).toContainText(CARD_1.replace(/ · /g, ', '))
 
   await rowUndo.click()
   const sales = wire.filter((call) => call.path.endsWith('/sold'))
@@ -1971,6 +1974,44 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   await expect(row.getByRole('button', { name: 'Mark sold' })).toBeVisible()
   await expect(page.locator('.inventory-receipt')).toHaveCount(0)
   await expect(receiptToast(page).getByRole('button', { name: 'Undo' })).toHaveCount(0)
+})
+
+/* D218: A TYPED DOT IS A DEFECT WHEREVER IT IS TYPED. `Position.label` reaches this screen as
+ * `Box 2 · Section 1 · Card 1` — real, server-composed, and never edited here — but the toast
+ * body has no CSS to draw a separator with, so retyping the server's `' · '` into that plain
+ * text would be exactly the defect D218 names. `Inventory.tsx:sayPlace` reads it as a sentence
+ * instead. This is the ONE surface in this file a middle dot could still reach verbatim: every
+ * other place this screen draws a position goes through `PositionLabel`, which never emits the
+ * character as text at all (`.position-plain-parts`'s separator is CSS `content`). */
+test('the sale toast speaks the place, and never types the server\'s middle dot', async ({
+  page,
+}) => {
+  const { store, sell } = sellableStore()
+  await open(page, BOXES, store)
+
+  await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/1')
+
+  const body = await receiptToast(page).innerText()
+  expect(body).not.toContain('·')
+  expect(body).not.toContain('•')
+  expect(body).toContain(CARD_1.replace(/ · /g, ', '))
+})
+
+/* OWNER'S RULING, 2026-09-20: "Clearer icon only." A bare `—` read as unclear icon-only — the
+ * hover `title` said `Retire`, but nothing stood in for it until the pointer arrived, and a
+ * screen reader was never told which control this was without reading the icon's own SVG path.
+ * The accessible name has to be real, not only a tooltip: `title` is the LAST source accname
+ * computation falls back to, behind the element's own text content, so a name that depends on
+ * `title` alone is one CSS rule (or one icon swap) from silence. */
+test('the Retire control carries a real accessible name, not only a hover title', async ({
+  page,
+}) => {
+  await open(page)
+
+  const retire = copyRow(page, CARD_1).getByRole('button', { name: 'Retire' })
+  await expect(retire).toBeVisible()
+  await expect(retire).toHaveAttribute('aria-label', 'Retire')
 })
 
 /* `docs/specs/undo.md` §3: `U` IS THE ONE KEY FOR THE NEWEST REVERSIBLE WRITE, wherever one

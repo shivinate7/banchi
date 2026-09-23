@@ -6142,8 +6142,7 @@ COMPONENTS = [
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
-                                "D172", "D181", "D192",
-                                "D213"],
+                                "D172", "D181", "D192", "D213", "D218"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -6448,7 +6447,11 @@ COMPONENTS = [
                                               "counts line: `emit` has written no listing record, so "
                                               "every one of those numbers would be a structural zero "
                                               "under a headroom promise nothing can keep.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D28", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92", "D115", "D118", "D132", "D119", "D172", "D181"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24",
+                                                      "D26", "D28", "D30", "D31", "D38", "D41",
+                                                      "D45", "D58", "D67", "D68", "D71",
+                                                      "D92", "D115", "D118", "D119", "D132", "D172",
+                                                      "D181", "D218"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "

@@ -541,7 +541,18 @@ function OwnerRows({
               <span className="card-locations-state">
                 {current ? (
                   <Pill icon="eye" outline className="card-locations-viewing">
-                    Viewing
+                    {/* NARROW, THE WORD IS SPOKEN AND NOT DRAWN — the kit's own `.bn-sr`
+                        technique, `Button`'s `iconOnly` reuses the same way:
+                        the current row is the only one that carries this second pill beside
+                        its own state, and sharing the narrow row with `.card-locations-action`'s
+                        137px reservation (D118) left `Identified` too little room — measured,
+                        it wrapped onto its own line under 335px. Growing the row instead
+                        (a line of its own for `state`) fixed the wrap and broke a stricter
+                        floor: `toBeInViewport({ ratio: 1 })` on the pipeline-console case,
+                        because the taller row no longer fit. The eye icon alone still says
+                        "you are looking at this one"; the word rides `.bn-sr` so a screen
+                        reader still gets it, and the row's height never moves. */}
+                    <span className="card-locations-viewing-text">Viewing</span>
                   </Pill>
                 ) : null}
                 {claim === null ? null : (
