@@ -94,7 +94,7 @@
   color: var(--bn-ink-3);
 }
 .markdown-caveat .bn-icon { flex: none; margin-top: 2px; color: var(--bn-ink-4); }
-.markdown-caveat strong { color: var(--bn-ink); font-weight: 650; }
+.markdown-caveat strong { color: var(--bn-ink); font-weight: 700; }
 
 /* One step of the three. The rule above each is the seam the eye needs on a column this
    long; the first carries the head straight after the caveat and needs none. */

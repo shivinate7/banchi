@@ -538,18 +538,12 @@
 .review-candidate-price.is-unpriced { font-family: var(--bn-font-ui); font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink-3); letter-spacing: 0; }
 .review-candidate-skeleton { height: 62px; border-radius: var(--bn-r-lg); }
 
-/* The kit's keycap (`<Kbd>`), scaled up for a row a finger or a digit lands on: only the
-   size is this sheet's; the border, the face and the ink are the kit's. */
+/* The kit's own `.bn-kbd-lg` (system review, 2026-09-20) now carries the size; this class
+   is the hover and touch hook only. */
 .review-key {
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  padding: 0;
-  font-size: var(--bn-fs-sm);
-  flex: none;
   transition: color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
 }
-/* The tenth row and beyond have no digit: a dashed blank drawn to the same size. */
+/* The tenth row and beyond have no digit: a dashed blank, sized by `.bn-kbd-lg` too. */
 .review-key-blank {
   display: inline-flex;
   align-items: center;
@@ -612,7 +606,7 @@
 .review-close-choice:hover:not(:disabled) { background: var(--bn-hover); }
 .review-close-choice:hover:not(:disabled) .review-key { color: var(--bn-accent); border-color: var(--bn-accent); }
 .review-close-choice:disabled { opacity: 0.5; }
-.review-close-choice .review-key { width: 22px; min-width: 22px; height: 22px; font-size: var(--bn-fs-xs); }
+.review-close-choice .bn-kbd-lg { width: 22px; min-width: 22px; height: 22px; font-size: var(--bn-fs-xs); }
 .review-close-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .review-close-label { font-size: var(--bn-fs-md); font-weight: 600; }
 .review-close-why { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
@@ -1116,7 +1110,7 @@
   color: var(--bn-ink-3);
 }
 .review-recheck-safe .bn-icon { flex: none; margin-top: 2px; color: var(--bn-ink-4); }
-.review-recheck-safe strong { color: var(--bn-ink-2); font-weight: 650; }
+.review-recheck-safe strong { color: var(--bn-ink-2); font-weight: 700; }
 
 .review-recheck-status {
   display: flex;

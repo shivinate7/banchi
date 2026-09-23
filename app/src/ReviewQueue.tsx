@@ -2049,9 +2049,9 @@ function CandidateButton({
       data-from={fromCatalog ? 'catalog' : undefined}
     >
       {keyed ? (
-        <Kbd className="review-key">{at + 1}</Kbd>
+        <Kbd className="review-key bn-kbd-lg">{at + 1}</Kbd>
       ) : (
-        <span className="review-key review-key-blank" aria-hidden="true" title="No key. Click this row.">
+        <span className="review-key review-key-blank bn-kbd-lg" aria-hidden="true" title="No key. Click this row.">
           –
         </span>
       )}
@@ -2132,7 +2132,7 @@ function ClosePanel({ onChoice, onClose, disabled }: { onChoice: (choice: CloseC
       {CLOSE_CHOICES.map((option, at) =>
         option.choice.kind !== kind ? null : (
           <button key={option.machine} className="review-close-choice" type="button" onClick={() => onChoice(option.choice)} disabled={disabled}>
-            <Kbd className="review-key">{at + 1}</Kbd>
+            <Kbd className="review-key bn-kbd-lg">{at + 1}</Kbd>
             <span className="review-close-text">
               <span className="review-close-label">{option.label}</span>
               <span className="review-close-why">{option.note}</span>

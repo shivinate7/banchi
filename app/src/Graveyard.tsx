@@ -239,7 +239,7 @@ export function Graveyard() {
                         </td>
                         <td data-th="Card">
                           <span className="graveyard-card-cell">
-                            <span className="graveyard-name">{row.name && row.name.trim() !== '' ? row.name : <span className="bn-faint">Unidentified</span>}</span>
+                            <span className="graveyard-name">{row.name && row.name.trim() !== '' ? row.name : <span className="bn-muted">Unidentified</span>}</span>
                             <span className="graveyard-sub">
                               {row.number ?? <span className="bn-faint">—</span>}
                               {gameLabel(row.game) !== null ? <Pill size="sm">{gameLabel(row.game)}</Pill> : null}

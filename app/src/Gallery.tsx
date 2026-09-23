@@ -677,7 +677,7 @@ export function Gallery() {
                   </Button>
                 </div>
               </Spec>
-              <Spec label="row keycap · 28px" note={<>The review queue's row keycap — <Code>.review-key</Code>, a candidate for promotion.</>}>
+              <Spec label="row keycap · 28px" note={<>The review queue's row keycap is the kit's <Code>.bn-kbd-lg</Code>.</>}>
                 <div className="kit-row">
                   <kbd className="kit-keycap">1</kbd>
                   <kbd className="kit-keycap">2</kbd>
