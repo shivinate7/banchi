@@ -3714,17 +3714,49 @@ COMPONENTS = [
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
                 "governed_by": ["D16", "D18", "D43", "D47", "D42", "D53", "D139",
-                                "D176"],
+                                "D176", "D-worktree-node-modules"],
             },
             "worktree-provision.sh": {
-                "does": "the cache-copy, image-mirror-symlink and node_modules report "
+                "does": "the cache-copy, image-mirror-symlink and node_modules provisioning "
                         "shared by worktree-guard.sh (above) and `make worktree-setup` — "
                         "extracted so a fix like D47's lands once rather than twice. Takes "
                         "the main tree's path and an optional --prefix so each caller keeps "
                         "its own voice; every failure here is reported, never fatal, matching "
                         "D18 for the same reason worktree-guard.sh does — this is provisioning, "
-                        "not a gate, and neither caller is on the commit path.",
-                "governed_by": ["D18", "D47"],
+                        "not a gate, and neither caller is on the commit path. app/node_modules "
+                        "WAS report-only and is now PROVISIONED (D-worktree-node-modules): an "
+                        "APFS copy-on-write clone from the main tree when the lockfiles are "
+                        "byte-identical AND main's own install is itself current (checked via "
+                        "npm_install_owed(root=main), never trusted on the lockfile match "
+                        "alone), or a backgrounded, logged `npm ci` when any of that fails. "
+                        "The staleness read is scripts/serve.py's own `npm_install_owed`, "
+                        "imported directly rather than reimplemented, so this step and "
+                        "`make up`'s supervisor can never disagree about what current means. "
+                        "REFUSES SELF-INVOCATION before any provisioning step runs, checked "
+                        "against both the resolved $main argument and this checkout's own "
+                        "git-common-dir — a review fixture found the unguarded form deleting "
+                        "the real node_modules. cwd is resolved to its git toplevel first "
+                        "(`git rev-parse --show-toplevel`), so a subdirectory of main is "
+                        "caught too, not only main's own root. The background npm ci launch "
+                        "is guarded by an atomic `mkdir` lock under .serve/npm-install.lock, "
+                        "so two racing invocations never both install; liveness is "
+                        "scripts/serve.py's own `live_pid` (pid AND argv, reused rather than "
+                        "a bare kill -0, which a recycled pid would fool).",
+                "governed_by": ["D18", "D47", "D-worktree-node-modules"],
+            },
+            "worktree-provision-selftest.sh": {
+                "does": "`make worktree-provision-selftest` — worktree-provision.sh's "
+                        "app/node_modules clone/install/staleness logic, proved against a "
+                        "throwaway two-tree fixture with a stubbed `npm` rather than a real "
+                        "network install. The fixture copies scripts/serve.py and its "
+                        "dependency chain (envfile.py, scripts/primary_sync.py, "
+                        "server/ports.py, store/files.py, an empty store/__init__.py stub) "
+                        "rather than symlinking them, because `Path(__file__).resolve()` "
+                        "would follow a symlinked scripts/ back to this checkout's own "
+                        "REPO_ROOT. NOT in `make check`, on catalog-index-selftest's "
+                        "precedent — it proves a mechanism this checkout's own session start "
+                        "and `make worktree-setup` already exercise on every worktree.",
+                "governed_by": ["D18", "D-worktree-node-modules"],
             },
             "stop-gate.sh": {
                 "does": "the Stop hook. RUNS NOTHING as of 2026-09-20 — the owner's ruling "
