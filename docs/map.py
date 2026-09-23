@@ -2735,6 +2735,26 @@ COMPONENTS = [
                         "file's own sibling above sets.",
                 "governed_by": ["D227", "D62", "D18", "D22"],
             },
+            "d240-tolerance-fit.py": {
+                "does": "RESCUED, INCOMPLETE — the sweep exists, the measurement it takes "
+                        "has never been run. Fits `D240`'s proposed name-agreement "
+                        "tolerance against the owner's OWN hand answers, rather than "
+                        "carrying `D239`'s 0.82 across to a listing-path rung where nobody "
+                        "fitted it. Ground truth is the review queue: a hand-cleared "
+                        "`name_disputed` entry offering exactly one candidate is a case "
+                        "where a person was shown a number-matched catalogue row whose name "
+                        "disagreed with the model's reading, and then said which was right. "
+                        "The card's final stored `sku` says which way they ruled. Entries "
+                        "offering several candidates are excluded and reported, never "
+                        "dropped. With no `--store` it proves the sweep logic against an "
+                        "in-file fixture and REFUSES to measure nothing; with `--store` it "
+                        "opens read-only and immutable. No network call on any path. One "
+                        "mutation arm: an always-trust stub must misclassify exactly the "
+                        "fixture's known misreads. Not wired into `make check` — "
+                        "`holdings-selftest.py`'s own precedent.",
+                "governed_by": ["D18", "D35", "D37", "D55", "D239", "D240", "D242",
+                                "D-a-name-tolerance-fit"],
+            },
             "holdings-selftest.py": {
                 "does": "proves pipeline/holdings.py against fixtures built in the file "
                         "(`D236`) — no store on disk, no network. "
