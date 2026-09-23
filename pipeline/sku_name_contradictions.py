@@ -34,9 +34,14 @@ so `not_known` here is a per-card count, reported honestly, and the OVERALL verd
 store's answer trustworthy." See `Report.verdict`.
 
 RANKING THE ALTERNATIVES IS A TIE-BREAK, NOT A SECOND FOLD. For a disputed card, the export
-rows whose `Product Name` folds (`pipeline.join.name_index_key`) EXACTLY to the card's own
-stored name are the likely right SKU — no fuzzy match here, the fold is the same equality
-`Catalog.rows_for_name` already uses. Where more than one such row exists, `rank_candidates`
+rows whose `Product Name` folds (`pipeline.join._name_compare_key`, `catalog_side=True`)
+to the card's own stored name are the likely right SKU. THIS IS THE SAME FOLD `name_disputes`
+ITSELF READS THE CATALOGUE SIDE THROUGH — reused verbatim, not re-derived — so it strips a
+trailing catalogue qualifier such as `(Alternate Art)` before comparing. `4/442`, stored as
+"Pyke, Returned", is the reason: the export carries `145/219` "Pyke, Returned" and `145a/219`
+"Pyke, Returned (Alternate Art)" as two distinct rows, and the owner confirmed the Alternate
+Art printing is the true card. An exact, unfolded match would offer only the first and never
+even list the row that was right. Where more than one such row exists, `rank_candidates`
 breaks the tie using only the capture-time claims the card already carries —
 `set_hint` (`pipeline.setnames.resolve`), `rarity_claim`, `metadata_finish`
 (`pipeline.variant`'s own condition map) — never a new comparison invented for this module.
@@ -66,7 +71,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from pipeline import tcgcsv
-from pipeline.join import name_disputes, name_index_key
+from pipeline.join import _name_compare_key, name_disputes
 
 
 @dataclass(frozen=True)
@@ -102,8 +107,11 @@ class Dispute:
     """One card whose stored name `name_disputes` its own SKU's product name. `sku_row` is
     the export's own row for the SKU the card is CURRENTLY under — its Name/Number/Condition
     are what the SKU presently claims. `alternatives` are the export rows whose Product Name
-    folds exactly to the card's own stored name — the likely right SKU(s), RANKED, NEVER
-    PICKED. Empty when nothing in the export is named what this card is.
+    folds, through `pipeline.join._name_compare_key`, to the card's own stored name — the
+    likely right SKU(s), RANKED, NEVER PICKED. A trailing catalogue qualifier such as
+    `(Alternate Art)` is stripped by that same fold, so a qualified printing is offered
+    beside its plain one rather than hidden behind an exact-string match. Empty when nothing
+    in the export is named what this card is.
     """
 
     card: CardRecord
@@ -160,7 +168,11 @@ class Catalog:
             sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
             if sku:
                 self._by_sku.setdefault(sku, row)
-            name_key = name_index_key(row.get(tcgcsv.NAME_COLUMN))
+            # `catalog_side=True` — the exact fold `name_disputes` itself reads the export
+            # side through, which strips a trailing catalogue qualifier such as `(Alternate
+            # Art)`. Indexing through the unfolded name would hide a qualified printing
+            # behind its plain sibling instead of offering both as candidates.
+            name_key = _name_compare_key(row.get(tcgcsv.NAME_COLUMN), catalog_side=True)
             if name_key:
                 self._by_name.setdefault(name_key, []).append(row)
 
@@ -172,7 +184,10 @@ class Catalog:
         return self._by_sku.get(sku)
 
     def rows_for_name(self, name: str) -> Tuple[tcgcsv.Row, ...]:
-        return tuple(self._by_name.get(name_index_key(name), ()))
+        # NOT `catalog_side=True` here — `name` is the CARD's own read name, the same side
+        # `name_disputes` reads unqualified. The asymmetry is `_name_compare_key`'s own, not
+        # invented here: a model's reading is never expected to carry a catalogue qualifier.
+        return tuple(self._by_name.get(_name_compare_key(name), ()))
 
 
 def rank_candidates(rows: Sequence[tcgcsv.Row], card: CardRecord) -> Tuple[tcgcsv.Row, ...]:
@@ -196,7 +211,7 @@ def rank_candidates(rows: Sequence[tcgcsv.Row], card: CardRecord) -> Tuple[tcgcs
 
     wanted_conditions: Optional[set] = None
     if card.metadata_finish:
-        from pipeline import variant
+        from pipeline import games, variant
 
         try:
             _, condition_by_finish = variant.vocabulary(card.game)
@@ -205,7 +220,18 @@ def rank_candidates(rows: Sequence[tcgcsv.Row], card: CardRecord) -> Tuple[tcgcs
                 for finish in card.metadata_finish
                 if finish in condition_by_finish
             }
-        except (KeyError, variant.UnknownFinish):
+        except (
+            KeyError,
+            variant.UnknownFinish,
+            # `variant.vocabulary` -> `games.require`, and THESE are the two exceptions
+            # that function really raises (see its own docstring) — a game with no catalog
+            # at all, or an entry still waiting for its export. Either means the tie-break
+            # cannot be scored, never that the whole report should stop: this rank is a
+            # courtesy over an already-found dispute, and one card's unscorable claim must
+            # not take the rest of the run down with it.
+            games.NotCatalogued,
+            games.EmptyVocabulary,
+        ):
             wanted_conditions = None
 
     def score(row: tcgcsv.Row) -> int:

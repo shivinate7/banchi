@@ -2744,7 +2744,7 @@ COMPONENTS = [
                         "assertions. Not wired into `make check` — "
                         "`sku-number-contradictions-selftest.py`'s own precedent, one "
                         "entry above.",
-                "governed_by": ["D146", "D239", "D240", "D242"],
+                "governed_by": ["D146", "D239", "D240", "D242", "D-sku-name-contradictions"],
             },
             "archive-review-selftest.py": {
                 "does": "proves cli/archive_review.py against a throwaway store, no "

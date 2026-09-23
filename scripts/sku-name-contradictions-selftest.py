@@ -83,7 +83,14 @@ def test_disputes_and_proposes_alternative():
     ]))
     c = card("a", sku="SKU1", name="Twilight Reveler")
     report = find_contradictions([c], {"riftbound": cat})
-    ok(len(report.identified) == 1, "one identified dispute", str(report.identified))
+    found_one = len(report.identified) == 1
+    ok(found_one, "one identified dispute", str(report.identified))
+    if not found_one:
+        # A LENGTH CHECK, NEVER A BARE INDEX. `report.identified[0]` right here, unguarded,
+        # is the shape `test_mutation_false_negative_fails_cleanly` below exists to argue
+        # against: a real regression must read as this `ok()` line above going red, never
+        # as an uncaught `IndexError` that kills the run before its summary prints.
+        return
     dispute = report.identified[0]
     ok(dispute.sku_row[tcgcsv.NAME_COLUMN] == "Grumpy Rockbear",
        "the SKU's own current product name is reported")
@@ -92,6 +99,29 @@ def test_disputes_and_proposes_alternative():
        "the export row actually named what the card reads is proposed",
        str(dispute.alternatives))
     ok(report.verdict == "fail", "verdict is fail", report.verdict)
+
+
+def test_alternate_art_qualifier_is_offered_as_a_candidate():
+    print("a catalogue qualifier like `(Alternate Art)` does not hide a real alternative — "
+          "D-sku-name-contradictions review finding 1, the owner-confirmed `4/442` case")
+    # The export carries the SAME card twice: the plain printing and the Alternate Art one,
+    # exactly the `4/442` "Pyke, Returned" / "Pyke, Returned (Alternate Art)" shape the
+    # owner confirmed on the real store — SKU 9191942 (145a/219) is the true card.
+    cat = Catalog.from_export(export([
+        row("SKU_WRONG", "Someone Else", "39/166"),
+        row("SKU_PLAIN", "Pyke, Returned", "145/219"),
+        row("9191942", "Pyke, Returned (Alternate Art)", "145a/219"),
+    ]))
+    c = card("a", sku="SKU_WRONG", name="Pyke, Returned")
+    report = find_contradictions([c], {"riftbound": cat})
+    found_one = len(report.identified) == 1
+    ok(found_one, "one identified dispute", str(report.identified))
+    if not found_one:
+        return
+    alt_skus = {row_[tcgcsv.SKU_COLUMN] for row_ in report.identified[0].alternatives}
+    ok(alt_skus == {"SKU_PLAIN", "9191942"},
+       "both the plain and the Alternate Art rows are offered as candidates",
+       str(alt_skus))
 
 
 def test_sold_card_own_section():
@@ -224,9 +254,67 @@ def test_mutation_exact_equality_overflags_a_legitimate_near_miss():
        f"real_disputes={bool(report.disputes)} mutant_flags={mutant_flags_it}")
 
 
+def test_rank_candidates_survives_an_uncatalogued_game():
+    print("rank_candidates does not crash the whole report over one card's unscorable "
+          "claim — D-sku-name-contradictions review finding 2")
+    rows = [
+        row("SKU5", "Twilight Reveler", "10/300", set_name="Origins"),
+        row("SKU6", "Twilight Reveler", "10/166", set_name="Vendetta"),
+    ]
+    # `misc` is `catalogued: False` (pipeline/games.py) — `variant.vocabulary("misc")`
+    # raises `games.NotCatalogued`, for real, not simulated. A card of this game can
+    # legitimately carry a `metadata_finish` claim; before this fix, ranking it would have
+    # raised straight out of `find_contradictions` and stopped the whole report over one
+    # card's own game.
+    c = card("a", sku="SKU1", name="Twilight Reveler", game="misc", metadata_finish=("normal",))
+    ranked = rank_candidates(rows, c)
+    ranked_skus = {r[tcgcsv.SKU_COLUMN] for r in ranked}
+    ok(ranked_skus == {"SKU5", "SKU6"},
+       "no crash — both rows still come back, unscored rather than lost", str(ranked))
+
+
+def test_mutation_false_negative_fails_cleanly():
+    print("mutation — name_disputes forced to always return False must be caught by a "
+          "clean `ok()` failure, never by an unguarded index crashing the run — "
+          "D-sku-name-contradictions review finding 3")
+    import pipeline.sku_name_contradictions as skn_module
+
+    original = skn_module.name_disputes
+    skn_module.name_disputes = lambda *args, **kwargs: False
+    try:
+        cat = Catalog.from_export(export([row("SKU1", "Grumpy Rockbear", "39/166")]))
+        c = card("a", sku="SKU1", name="Twilight Reveler")
+        report = skn_module.find_contradictions([c], {"riftbound": cat})
+    finally:
+        skn_module.name_disputes = original
+
+    # THE UNGUARDED SHAPE THIS FILE USED TO WRITE: index `identified[0]` right after an
+    # `ok()` length check, with nothing stopping execution when that check failed. A
+    # regressed `name_disputes` empties `identified`, and this is the line that would have
+    # crashed the whole script before its summary line ever printed.
+    crashed_on_bare_index = False
+    try:
+        _ = report.identified[0]
+    except IndexError:
+        crashed_on_bare_index = True
+
+    # THE GUARDED SHAPE THIS FILE NOW WRITES (see `test_disputes_and_proposes_alternative`
+    # and `test_alternate_art_qualifier_is_offered_as_a_candidate`): check the length FIRST
+    # and return early when it fails. The same regression is then a clean, recorded `ok()`
+    # failure and nothing else in the suite is taken down with it.
+    length_check_would_catch_it = len(report.identified) != 1
+
+    ok(crashed_on_bare_index and length_check_would_catch_it,
+       "an unguarded index crashes on this regression; the length-check-first pattern "
+       "this file uses everywhere else catches it cleanly instead",
+       f"crashed_on_bare_index={crashed_on_bare_index} "
+       f"length_check_would_catch_it={length_check_would_catch_it}")
+
+
 TESTS = [
     test_agrees_no_finding,
     test_disputes_and_proposes_alternative,
+    test_alternate_art_qualifier_is_offered_as_a_candidate,
     test_sold_card_own_section,
     test_no_sku_not_a_subject,
     test_blank_name_not_known,
@@ -238,6 +326,8 @@ TESTS = [
     test_rank_candidates_uses_set_hint,
     test_rank_candidates_no_claims_is_stable,
     test_mutation_exact_equality_overflags_a_legitimate_near_miss,
+    test_rank_candidates_survives_an_uncatalogued_game,
+    test_mutation_false_negative_fails_cleanly,
 ]
 
 
