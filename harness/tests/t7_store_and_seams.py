@@ -27454,14 +27454,6 @@ def check_price_history(checks: Checks) -> None:
     # TWO products, and the query's NAME MATCHES NEITHER — so the name rung (which would
     # otherwise resolve a single-product index by name alone, hiding whether the number
     # repair ever ran) answers empty, and only the repaired NUMBER can find the row.
-    #
-    # THE QUERY NAME IS BLANK, NOT `"No Such Name"` — CHANGED BY D240/D-pricehistory-name-agrees.
-    # A single number hit is no longer accepted unconditionally (see the disputed-name block
-    # right below this one): a HOSTILE name like `"No Such Name"` now disputes the resolved
-    # product and correctly falls through to a refusal, which is the whole point of that
-    # fix. A blank name proves the same thing this block always proved — the repair alone,
-    # with no help from the name rung — because `pipeline/join.py:name_disputes`'s own rule
-    # is that a blank read disputes nothing (`""` corroborates and disputes nobody).
     spiritforged = pricehistory.ProductIndex.build([
         {"productId": 701, "name": "Blast Cadet",
          "extendedData": [{"name": "Number", "value": "013/221"}]},
@@ -27469,14 +27461,14 @@ def check_price_history(checks: Checks) -> None:
          "extendedData": [{"name": "Number", "value": "099/221"}]},
     ])
     checks.equal(
-        spiritforged.find("SFD • 013/221", ""),
+        spiritforged.find("SFD • 013/221", "No Such Name"),
         701,
         "a dot-glued set code (`SFD • 013/221`) is repaired and resolves off the NUMBER "
-        "alone, with a blank name that disputes nothing — the real refused shape from the "
-        "2026-09-20 archive sweep, and proof the name rung is not what answered it",
+        "alone, with a name that matches nothing in the index — the real refused shape from "
+        "the 2026-09-20 archive sweep, and proof the name rung is not what answered it",
     )
     checks.equal(
-        spiritforged.find("SPD 999/221", ""),
+        spiritforged.find("SPD 999/221", "No Such Name"),
         None,
         "a space-glued set code against a group that does not carry 999/221 still refuses — "
         "the repair tries the stripped key, it does not manufacture a row",
@@ -27487,7 +27479,7 @@ def check_price_history(checks: Checks) -> None:
              "extendedData": [{"name": "Number", "value": "208/221"}]},
             {"productId": 704, "name": "Another Card",
              "extendedData": [{"name": "Number", "value": "017/221"}]},
-        ]).find("SPD 208/221", ""),
+        ]).find("SPD 208/221", "No Such Name"),
         702,
         "and the SAME space-glued shape resolves off the number once the group actually "
         "carries 208/221 — the other real refused shape from that sweep, a plain space with "
@@ -27503,75 +27495,78 @@ def check_price_history(checks: Checks) -> None:
         "unglued number behaves exactly as before",
     )
 
-    # -------------------------------------------------- D240: a resolved number is no longer
-    # trusted alone. Measured by the D240 session beside `pipeline/join.py:_walk`'s own seam:
-    # a number that resolved to exactly ONE product was accepted here with no look at the
-    # name at all, so a misread number landing on the wrong single product read that
-    # product's whole history under the right card's SKU. The owner's ruling (2026-09-23)
-    # closes it the way D162 already closes the same shape of disagreement in the real
-    # listing join — match off name AND number, let a fuzzy name count, and put an
-    # unrepairable disagreement in front of a human rather than guessing
-    # (D-pricehistory-name-agrees).
-    espeon_umbreon = pricehistory.ProductIndex.build([
-        {"productId": 801, "name": "Espeon", "extendedData": [{"name": "Number", "value": "099/165"}]},
-        {"productId": 802, "name": "Umbreon", "extendedData": [{"name": "Number", "value": "100/165"}]},
-    ])
-    checks.equal(
-        espeon_umbreon.find("099/165", "Espeon"),
-        801,
-        "an agreeing name changes nothing — the number hit is accepted exactly as it always "
-        "was (D-pricehistory-name-agrees's un-changed case)",
+    # ------------------------------------------ D-pricehistory-resolves-by-sku: a caller
+    # that already has a productId in hand — the archive's own already-verified answer for
+    # this SKU, `store/pricearchive.py:Bucket.product_id` — skips resolving the row at all.
+    # The owner's ruling (2026-09-23) closed a session's earlier attempt to weigh a card's
+    # own READ name against the number it found: the reviewer's re-measurement found 15 of
+    # 20 new refusals had a correct old answer and 1 of 29 flips was wrong, because a
+    # Riftbound "Champion, Title" card's read NAME is the unreliable field, not the number.
+    # The fix is to never ask the card at all — resolve by the SKU, never by a read field —
+    # and `pipeline/pricearchive.py:resolve_by_sku`/`merged_export_rows_by_sku` carry that;
+    # this proves the primitive they are built on, in `Market` itself, with no store and no
+    # `pipeline/pricearchive.py` import at all.
+    #
+    # PROVEN WITH NO NETWORK AND NO CACHE, THE ROW ITSELF UNRESOLVABLE ON PURPOSE. A `Product
+    # Line` no registry names would raise `NotResolvable` the moment `category_id` ran, and
+    # `ranges=()` means `self.history` is never reached either — so a reading that succeeds
+    # here, over this row, is proof the whole resolution walk was skipped, not proof it
+    # happened to succeed.
+    unresolvable_row = {
+        tcgcsv.PRODUCT_LINE_COLUMN: "Not A Real Product Line",
+        tcgcsv.SET_COLUMN: "Not A Real Set",
+        tcgcsv.NUMBER_COLUMN: "999/999",
+        tcgcsv.NAME_COLUMN: "Not A Real Name",
+        tcgcsv.SKU_COLUMN: "9999999",
+        tcgcsv.CONDITION_COLUMN: "Near Mint",
+    }
+
+    def _no_network(url):
+        raise AssertionError(f"MUTATION: the network was reached at {url!r}")
+
+    skip_market = pricehistory.Market(fetcher=_no_network)
+    verified_reading = skip_market.reading_for_row(
+        unresolvable_row, ranges=(), product_id=555
     )
     checks.equal(
-        espeon_umbreon.find("099/165", "Umbreon"),
-        802,
-        "A SINGLE NUMBER HIT WHOSE NAME OUTRIGHT DISPUTES IT IS NOT TRUSTED. `099/165` "
-        "resolves to Espeon (801) alone, but the read name is `Umbreon` — no relation at "
-        "all to `Espeon` under `join.name_disputes`'s tolerance, so 801 is dropped and the "
-        "name rung gets its turn; `Umbreon` resolves to exactly one product, 802, which is "
-        "D162's own rule reused rather than reinvented: the name decides where it resolves "
-        "to exactly one card",
+        verified_reading.product_id, 555,
+        "reading_for_row(product_id=555) trusts the given id as-is, over a row that would "
+        "otherwise refuse — the archive-verified tier, D-pricehistory-resolves-by-sku",
     )
     checks.equal(
-        espeon_umbreon.find("099/165", "Nobody Here"),
-        None,
-        "and where the disputing name resolves NOTHING either, this refuses rather than "
-        "falling back to the disputed number — the seam D240 measured, closed",
+        verified_reading.series, {},
+        "and asks for nothing over an empty ranges tuple — nothing here proves the walk "
+        "ran and merely returned this id anyway",
+    )
+    batch_readings, batch_refusals = skip_market.readings_for_rows(
+        [unresolvable_row], ranges=(), product_ids={"9999999": 777}
+    )
+    checks.equal(
+        batch_readings["9999999"].product_id, 777,
+        "readings_for_rows(product_ids=...) honours a verified id the same way, per SKU",
     )
     checks.ok(
-        "801" in espeon_umbreon.refusal("099/165", "Nobody Here", "Base Set")
-        and "Espeon" in espeon_umbreon.refusal("099/165", "Nobody Here", "Base Set"),
-        "and the refusal names the NUMBER's own candidate — BOTH candidate sets is the "
-        "owner's ruling; the name side is empty here, so only the number side has anything "
-        "to show, and it does",
-        espeon_umbreon.refusal("099/165", "Nobody Here", "Base Set"),
+        not batch_refusals,
+        "and never refuses a row it was never asked to resolve",
+        batch_refusals,
     )
-    # A near-miss the model's own spelling produces — `join.py`'s own measured case
-    # (`Corfish` for `Corphish`) — now COUNTS rather than costing a review. Same fold
-    # (`_name_compare_key`), same settled tolerance (`NAME_DISPUTE_SIMILARITY`, 0.80 with
-    # containment), reused from `pipeline/join.py` rather than a second copy of either.
-    near_miss = pricehistory.ProductIndex.build([
-        {"productId": 1, "name": "Corphish", "extendedData": [{"name": "Number", "value": "1/1"}]},
-    ])
-    checks.equal(
-        near_miss.find("1/1", "Corfish"),
-        1,
-        "a near-miss spelling within `NAME_DISPUTE_SIMILARITY`'s tolerance is accepted, not "
-        "refused — 'we'd allow those to count', the owner's own words",
+    # MUTATION GUARD: the identical row, with NO verified id offered, refuses exactly as it
+    # always has — proves the skip above is conditional on being HANDED an id, never a
+    # general relaxation of `product_id_for_row`'s own refusal. A DIFFERENT market, whose
+    # fetcher answers an ordinary empty catalogue rather than asserting on any call —
+    # `product_id_for_row` DOES have to reach it here, legitimately, to fail on "no such
+    # category" rather than on this test's own network trap.
+    refusing_market = pricehistory.Market(fetcher=lambda url: {"results": []})
+    raised = checks.raises(
+        pricehistory.NotResolvable,
+        lambda: refusing_market.reading_for_row(unresolvable_row, ranges=()),
+        "MUTATION GUARD: the same row with no product_id given still refuses — "
+        "product_id_for_row runs exactly as before when nothing was verified",
     )
-    # 2+ number hits narrow by the SAME fold and tolerance as the single-hit check, so the
-    # two can never disagree. A near-miss now narrows where an exact `by_name` membership
-    # test used to fail it.
-    two_hits_near_miss = pricehistory.ProductIndex.build([
-        {"productId": 1, "name": "Corphish", "extendedData": [{"name": "Number", "value": "1/1"}]},
-        {"productId": 2, "name": "Crawdaunt", "extendedData": [{"name": "Number", "value": "1/1"}]},
-    ])
-    checks.equal(
-        two_hits_near_miss.find("1/1", "Corfish"),
-        1,
-        "a colliding number narrows by the same fuzzy name check a single hit uses — a "
-        "near-miss spelling now narrows two candidates to one exactly as an exact spelling "
-        "always did",
+    checks.ok(
+        raised is not None and "Not A Real Product Line" in str(raised),
+        "and the refusal names the row's own unresolvable Product Line, the ordinary "
+        "resolution failure, proving product_id_for_row is what ran",
     )
 
     # ---------------------------------------------------------------- the parse, on real bytes

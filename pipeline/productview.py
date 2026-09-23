@@ -49,14 +49,26 @@ class ProductNotFound(RuntimeError):
 
 
 def row_for_sku(snapshot: Snapshot, sku: str) -> dict:
-    """The export-shaped row `pipeline/pricearchive.py:rows_from_store` would build for this
-    one SKU, without walking the whole `cards` table for a single lookup. Raises
-    `ProductNotFound` when no card has ever carried it."""
+    """The row `pipeline/pricehistory.py:Market.reading_for_row` is resolved against for
+    this one SKU. Raises `ProductNotFound` when no card has ever carried it.
+
+    RESOLVED BY THE SKU, NEVER BY THE CARD'S OWN READ FIELDS FIRST
+    (D-pricehistory-resolves-by-sku). This function is reached ONLY from the live-fallback
+    branch of `GET /pipeline/products/<sku>/history` — `archive_payload` already answers
+    from the archive when it has anything for this SKU at all, so a SKU reaching here has
+    never been swept and carries no `Bucket.product_id` to trust (tier (a) cannot apply).
+    What CAN apply is tier (b): the SKU's own row in the store's cached Filtered Export,
+    preferred over `rows_from_store`'s card-derived row (`pipeline/pricearchive.py:
+    rows_from_store`, without walking the whole `cards` table for a single lookup) — the
+    export's `Product Name`/`Number` describe this SKU's product by definition, and a card's
+    own stored fields are what this SKU's PRODUCT decision no longer trusts alone.
+    """
     rows = archive_walk.rows_from_store(snapshot)
     row = rows.get(str(sku).strip())
     if row is None:
         raise ProductNotFound(sku)
-    return row
+    exported = archive_walk.merged_export_rows_by_sku().get(str(sku).strip())
+    return exported if exported is not None else row
 
 
 def _bucket_payload(bucket: Bucket) -> dict:

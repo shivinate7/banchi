@@ -66,6 +66,28 @@ def ok(condition: bool, label: str, detail: str = "") -> None:
                 print(f"         {line}")
 
 
+class _FakeArchiveForSku:
+    """A `store/pricearchive.py:PriceArchive`-shaped stand-in over a plain
+    `sku -> productId` dict, for `resolve_by_sku`'s own tier (a) — the one method it calls,
+    `for_sku`, answering a single synthetic `Bucket` with everything else zeroed, since
+    `resolve_by_sku` reads only `.product_id` off whatever `for_sku` returns."""
+
+    def __init__(self, verified: Dict[str, int]):
+        self._verified = verified
+
+    def for_sku(self, sku: str):
+        product_id = self._verified.get(sku)
+        if not product_id:
+            return []
+        return [
+            Bucket(
+                sku=sku, product_id=int(product_id), range="month", width_days=1,
+                start="2026-01-01", market=None, quantity=0, transactions=0,
+                low=None, high=None, at=0,
+            )
+        ]
+
+
 class FakeMarket:
     """Answers `readings_for_rows` out of a fixed script, no network, no `Market` at all.
 
@@ -78,7 +100,7 @@ class FakeMarket:
         self.script = script
         self.refuse = refuse or {}
 
-    def readings_for_rows(self, rows, ranges=()):
+    def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
         readings = {}
         refusals = dict(self.refuse)
         for row in rows:
@@ -111,7 +133,7 @@ class RecordingMarket:
         self.raise_on = raise_on or set()
         self.asked = set()
 
-    def readings_for_rows(self, rows, ranges=()):
+    def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
         readings = {}
         refusals = {}
         for row in rows:
@@ -414,7 +436,7 @@ def main() -> int:
             def groups(self, category_id: int) -> Dict[str, dict]:
                 return self._groups
 
-            def readings_for_rows(self, rows, ranges=()):  # unused by this arm
+            def readings_for_rows(self, rows, ranges=(), *, product_ids=None):  # unused by this arm
                 return {}, {}
 
         with Store().write() as snapshot:
@@ -486,7 +508,7 @@ def main() -> int:
             def groups(self, category_id: int) -> Dict[str, dict]:
                 return self._groups.get(category_id, {})
 
-            def readings_for_rows(self, rows, ranges=()):  # unused by this arm
+            def readings_for_rows(self, rows, ranges=(), *, product_ids=None):  # unused by this arm
                 return {}, {}
 
         class _FakeLedger:
@@ -628,11 +650,18 @@ def main() -> int:
                     for set_name, products in products_by_set.items()
                 }
 
-            def readings_for_rows(self, rows, ranges=()):
+            def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
                 readings = {}
                 refusals = {}
+                known = product_ids or {}
                 for row in rows:
                     sku = row.get(tcgcsv_module.SKU_COLUMN, "")
+                    verified = known.get(sku)
+                    if verified:
+                        readings[sku] = HistoryReading(
+                            sku=sku, product_id=int(verified), series={}
+                        )
+                        continue
                     set_name = row.get(tcgcsv_module.SET_COLUMN, "")
                     index = self._index_by_set.get(set_name)
                     if index is None:
@@ -767,6 +796,181 @@ def main() -> int:
            "MUTATION: with the fallback removed, both real shapes go back to refusing — "
            "proves the fix above, rather than the fixture, is what resolves them",
            mutated_refusals)
+
+        # ---------------------- resolve by the SKU, never by the card's own read fields
+        # (D-pricehistory-resolves-by-sku, owner's ruling 2026-09-23, replacing a session's
+        # earlier attempt to weigh a card's read name against the number it found). The
+        # reviewer's re-measurement found 15 of 20 new refusals from that attempt had a
+        # CORRECT old answer, and 1 of 29 flips was WRONG — a Riftbound "Champion, Title"
+        # card's READ name is the unreliable field, so the fix is to never ask the card at
+        # all: resolve by the SKU, either the archive's own already-verified productId or
+        # the SKU's own row in the store's cached Filtered Export.
+        print("\n-- pipeline/pricearchive.py: resolve_by_sku (D-pricehistory-resolves-by-sku) --")
+
+        card_row_misread = _row("SKU-M", "Totally Wrong Name", "misread-number", "Origins")
+        export_row_correct = _row("SKU-M", "Twisted Fate, Gambler", "200/298", "Origins")
+
+        # (a) an archive-verified productId wins outright — the row is never even looked at.
+        resolved_rows_a, verified_a, tiers_a = archive_walk.resolve_by_sku(
+            {"SKU-M": card_row_misread},
+            archive=_FakeArchiveForSku({"SKU-M": 601}),
+        )
+        ok(verified_a.get("SKU-M") == 601 and tiers_a["SKU-M"] == archive_walk.TIER_ARCHIVE,
+           "tier (a): an archive-verified productId answers before anything else is asked",
+           (resolved_rows_a, verified_a, tiers_a))
+
+        # (b) no archive answer, but the SKU has its own row in the cached export — THAT
+        # row is what gets resolved with, never the card's misread one.
+        resolved_rows_b, verified_b, tiers_b = archive_walk.resolve_by_sku(
+            {"SKU-M": card_row_misread},
+            archive=_FakeArchiveForSku({}),
+            export_rows={"SKU-M": export_row_correct},
+        )
+        ok(not verified_b and tiers_b["SKU-M"] == archive_walk.TIER_EXPORT
+           and resolved_rows_b["SKU-M"] is export_row_correct,
+           "tier (b): the SKU's own export row is substituted for the card's misread one",
+           (resolved_rows_b, tiers_b))
+
+        # (c) neither answers — today's behaviour, the card's own row, unchanged.
+        resolved_rows_c, verified_c, tiers_c = archive_walk.resolve_by_sku(
+            {"SKU-M": card_row_misread}, archive=_FakeArchiveForSku({}), export_rows={},
+        )
+        ok(not verified_c and tiers_c["SKU-M"] == archive_walk.TIER_CARD
+           and resolved_rows_c["SKU-M"] is card_row_misread,
+           "tier (c): neither the archive nor the export answers — falls back to the "
+           "card's own row exactly as sweep() always resolved it",
+           (resolved_rows_c, tiers_c))
+
+        # MUTATION GUARD: with NO archive and NO export_rows at all (the function's two
+        # defaults), every SKU is tier (c) and the row handed back IS the input row,
+        # object-identical — `resolve_by_sku`'s own claim to be `sweep`'s unchanged
+        # pre-2026-09-23 shape when given nothing new to work with.
+        default_rows, default_verified, default_tiers = archive_walk.resolve_by_sku(
+            {"SKU-M": card_row_misread},
+        )
+        ok(not default_verified and default_tiers["SKU-M"] == archive_walk.TIER_CARD
+           and default_rows["SKU-M"] is card_row_misread,
+           "MUTATION GUARD: no archive, no export_rows — every SKU still falls to tier (c)",
+           default_tiers)
+
+        # ---- end to end through sweep(): the misread card row would resolve WRONG on its
+        # own (ResolvingMarket's real ProductIndex.find, fed the misread name/number), but
+        # an export row for the same SKU resolves it CORRECTLY once sweep() prefers it.
+        origins_products_for_sku_test = {"Origins": origins_products}
+        sku_test_market = ResolvingMarket(origins_products_for_sku_test)
+        _b5, _s5, refusals5, _resolved5 = archive_walk.sweep(
+            {"SKU-M": card_row_misread}, sku_test_market, ranges=("month",), now=1,
+        )
+        ok("SKU-M" in refusals5,
+           "BASELINE: the misread card row alone cannot resolve — proves the fixture is a "
+           "genuine misread and not a shape ProductIndex.find would have fixed anyway",
+           refusals5)
+        _b6, _s6, refusals6, _resolved6 = archive_walk.sweep(
+            {"SKU-M": card_row_misread}, sku_test_market, ranges=("month",), now=1,
+            export_rows={"SKU-M": export_row_correct},
+        )
+        ok(not refusals6,
+           "a SKU with a misread stored name still resolves to its own product once "
+           "sweep() is given the store's cached export — tier (b), through the real "
+           "ProductIndex.find over the export's own trustworthy row",
+           refusals6)
+
+        # ---- end to end through sweep(): an archive-verified productId wins outright, even
+        # over a market that would REFUSE the row it is never asked to resolve.
+        class _RefusingMarket:
+            """`readings_for_rows` refuses every row it is asked to resolve directly, and
+            answers a `product_ids`-verified SKU without looking at its row at all — proof
+            that tier (a) is reached without `product_id_for_row`-shaped resolution ever
+            running, not merely proof it happens to answer the same id."""
+
+            def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
+                known = product_ids or {}
+                readings, refusals = {}, {}
+                for row in rows:
+                    sku = row.get(tcgcsv_module.SKU_COLUMN, "")
+                    verified = known.get(sku)
+                    if verified:
+                        readings[sku] = HistoryReading(
+                            sku=sku, product_id=int(verified), series={}
+                        )
+                    else:
+                        refusals[sku] = "MUTATION TRAP: resolved a row tier (a) should skip"
+                return readings, refusals
+
+        _b7, _s7, refusals7, _resolved7 = archive_walk.sweep(
+            {"SKU-M": card_row_misread}, _RefusingMarket(), ranges=("month",), now=1,
+            archive=_FakeArchiveForSku({"SKU-M": 601}),
+        )
+        ok(not refusals7,
+           "an archive-verified productId (tier (a)) resolves through sweep() even against "
+           "a market that refuses every row it is actually asked to resolve",
+           refusals7)
+
+        # MUTATION GUARD: the SAME market, the SAME SKU, with NO archive offered — the trap
+        # fires, proving the guard above is real and not a market that always answers.
+        _b8, _s8, refusals8, _resolved8 = archive_walk.sweep(
+            {"SKU-M": card_row_misread}, _RefusingMarket(), ranges=("month",), now=1,
+        )
+        ok("SKU-M" in refusals8 and "MUTATION TRAP" in refusals8["SKU-M"],
+           "MUTATION GUARD: with no archive at all, the same market refuses the same "
+           "SKU — proves tier (a)'s skip is conditional on a real verified id, not a "
+           "market that always answers",
+           refusals8)
+
+        # ---------------------------------------- merged_export_rows_by_sku, on real bytes
+        print("\n-- pipeline/pricearchive.py: merged_export_rows_by_sku, real files on disk --")
+        export_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-exports-"))
+        previous_home = os.environ.get(files.HOME_ENV)
+        os.environ[files.HOME_ENV] = str(export_home)
+        try:
+            exports_dir = export_home / "inventory" / ".exports" / "riftbound"
+            exports_dir.mkdir(parents=True)
+            csv_text = (
+                "TCGplayer Id,Product Line,Set Name,Product Name,Number,Rarity,Condition,"
+                "TCG Market Price,TCG Direct Low,TCG Low Price With Shipping,TCG Low Price,"
+                "Total Quantity,Add to Quantity,TCG Marketplace Price,Photo URL\n"
+                '"7654321","Riftbound League of Legends Trading Card Game","Origins",'
+                '"Twisted Fate, Gambler","200/298","Rare","Near Mint","5.00","","","",'
+                '"1","0","",""\n'
+            )
+            (exports_dir / "export-tcgplayer-20260101-000000-aaaaaaaa.csv").write_text(
+                csv_text, "utf-8"
+            )
+            merged = archive_walk.merged_export_rows_by_sku()
+            ok(
+                merged.get("7654321", {}).get(tcgcsv_module.NAME_COLUMN)
+                == "Twisted Fate, Gambler",
+                "a real cached export file, merged by SKU, answers the SKU's own "
+                "Product Name — read off disk, no network",
+                merged.get("7654321"),
+            )
+            ok(
+                "0000000" not in merged,
+                "a SKU never written to any cached export is simply absent, never "
+                "guessed at",
+            )
+        finally:
+            if previous_home is None:
+                os.environ.pop(files.HOME_ENV, None)
+            else:
+                os.environ[files.HOME_ENV] = previous_home
+            shutil.rmtree(export_home, ignore_errors=True)
+
+        # MUTATION GUARD: no `.exports` directory at all on disk answers an empty map,
+        # never an exception — the function's own stated fail-open shape.
+        no_exports_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-noexports-"))
+        previous_home = os.environ.get(files.HOME_ENV)
+        os.environ[files.HOME_ENV] = str(no_exports_home)
+        try:
+            ok(archive_walk.merged_export_rows_by_sku() == {},
+               "MUTATION GUARD: no inventory/.exports/ directory at all answers an empty "
+               "map rather than raising")
+        finally:
+            if previous_home is None:
+                os.environ.pop(files.HOME_ENV, None)
+            else:
+                os.environ[files.HOME_ENV] = previous_home
+            shutil.rmtree(no_exports_home, ignore_errors=True)
 
         # ------------------------------------------ every refusal reaches the output
         print("\n-- pipeline/pricearchive.py: format_refusals never truncates --")

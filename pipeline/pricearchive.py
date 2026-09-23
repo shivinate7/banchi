@@ -65,7 +65,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
 from pipeline import games, join, tcgcsv
-from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, Source, _key
+from store import files
+from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive, Source, _key
 from store.session import Store
 
 # How many subject SKUs one `sweep()` call and one Store commit cover — chosen so an
@@ -119,7 +120,11 @@ CANCELED_STATUS = "canceled"
 
 class _MarketLike(Protocol):
     def readings_for_rows(
-        self, rows: Iterable[dict], ranges: Tuple[str, ...] = ()
+        self,
+        rows: Iterable[dict],
+        ranges: Tuple[str, ...] = (),
+        *,
+        product_ids: Optional[Dict[str, int]] = None,
     ) -> Tuple[Dict[str, object], Dict[str, str]]:
         ...
 
@@ -169,6 +174,133 @@ def _export_row(
         tcgcsv.SKU_COLUMN: sku,
         tcgcsv.CONDITION_COLUMN: condition or "",
     }
+
+
+# ------------------------------------------------------- resolving by the SKU (owner's
+# ruling, 2026-09-23, replacing the branch this module briefly carried)
+#
+# A SESSION BRIEFLY MATCHED A CARD'S OWN READ NAME AGAINST THE NUMBER IT FOUND
+# (D240's measured seam, `pipeline/pricehistory.py:ProductIndex.find`). The owner's review
+# reversed it: on the reviewer's own re-measurement, 15 of 20 new refusals had a CORRECT old
+# answer, and 1 of 29 flips was WRONG — Riftbound's "Champion, Title" cards make the READ
+# name the unreliable field, not the number, so weighing a read against a number is exactly
+# backwards for this shape of card. The reviewer also corrected the failure mechanism this
+# module's own decision entry overstated: `store/pricearchive.py`'s key is
+# `(sku, range, start)`, so a wrong productId gives an EMPTY series for the SKU — the
+# endpoint's answer for a DIFFERENT product almost never carries this SKU's own id among its
+# results — never another product's numbers filed under this one's SKU.
+#
+# THE FIX IS TO NEVER ASK THE CARD AT ALL. A SKU's own product is a fact about the SKU, not
+# about a photograph — `pipeline/join.py:_walk` already owns fixing an actual
+# misidentification (Lane 1), and the review screen's "Wrong card?" press already owns
+# correcting a wrong stored name after the fact. This module's job is narrower: given a SKU
+# already in the store, find ITS product without re-deriving an identification for it.
+#
+# THREE TIERS, IN THE OWNER'S OWN ORDER, EACH STRICTLY MORE TRUSTED THAN CHECKING A CARD'S
+# READ FIELDS AT ALL:
+#
+#   (a) `store/pricearchive.py:Bucket.product_id`, an archive a previous sweep already
+#       verified for this exact SKU — no lookup at all, the fastest and most trusted tier.
+#   (b) the SKU's OWN row in the store's cached Filtered Export
+#       (`inventory/.exports/<game>/*.csv`) — its `Product Name` and `Number` describe that
+#       SKU's product BY DEFINITION, because TCGplayer itself filed the SKU under that row.
+#       Never a card's stored fields, which is what makes this tier trustworthy where a
+#       card's own read name is not.
+#   (c) TODAY'S BEHAVIOUR — the card's own last-known `(name, number)`, resolved through
+#       `pipeline/pricehistory.py:Market.product_id_for_row` exactly as it always was. Only
+#       reached for a SKU neither (a) nor (b) can answer.
+
+
+def merged_export_rows_by_sku() -> Dict[str, tcgcsv.Row]:
+    """Every row of every cached Filtered Export under `inventory/.exports/`, across every
+    game, merged into one `sku -> row` map — first-file-wins on a SKU seen twice, the same
+    choice `cli/cmd_cards.py:_variants`'s own `export_for` already makes and for the same
+    reason: a Set Name or a Product Name for one SKU does not change file to file, so the
+    freshest file to name it first is as good as any.
+
+    EVERY GAME AT ONCE, NEVER ONE GAME AT A TIME. A SKU is TCGplayer's own primary key and
+    belongs to exactly one product, so it is unambiguous to look for it across every cached
+    export rather than first resolving which game's subdirectory to open — which would need
+    a `Product Line -> game key` reverse lookup `pipeline/games.py` does not publish. Reusing
+    that ambiguity-free fact is simpler than building the reverse lookup only to throw it
+    away after one dictionary access.
+
+    READS ONLY WHAT `make catalog-refresh`/A LIVE EXPORT FETCH ALREADY LEFT ON DISK. No
+    network call, and nothing here writes — the directory this reads is D166's own per-game
+    export cache, already fetched by an operator's own press on `#/runs`.
+    """
+    merged: Dict[str, tcgcsv.Row] = {}
+    root = files.inventory_dir() / files.EXPORTS_DIRNAME
+    if not root.is_dir():
+        return merged
+    for game_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+        for path in sorted(game_dir.glob("*.csv")):
+            try:
+                export = tcgcsv.read_export(path)
+            except (OSError, tcgcsv.MalformedCsv):
+                continue
+            for row in export.rows:
+                sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+                if sku and sku not in merged:
+                    merged[sku] = row
+    return merged
+
+
+# The reason each SKU in a `resolve_by_sku` result landed where it did — printed by
+# `cli/cmd_pricearchive.py` so "how many SKUs fall to this" is answered on every real press,
+# not only in a read-only measurement script.
+TIER_ARCHIVE = "archive"
+TIER_EXPORT = "export"
+TIER_CARD = "card"
+
+
+def resolve_by_sku(
+    rows: Dict[str, dict],
+    archive: Optional[PriceArchive] = None,
+    export_rows: Optional[Dict[str, tcgcsv.Row]] = None,
+) -> Tuple[Dict[str, dict], Dict[str, int], Dict[str, str]]:
+    """For every SKU in `rows`, decide how its product will be resolved, in the owner's
+    order. Answers `(rows_to_resolve_with, verified_product_ids, tier_by_sku)`:
+
+    - `rows_to_resolve_with` is `rows` itself for a SKU tier (a) or (c) answers, and the
+      EXPORT'S OWN ROW for a SKU tier (b) answers — the row `Market.product_id_for_row`
+      (or nothing at all, for tier (a)) is ultimately handed.
+    - `verified_product_ids` is `sku -> productId` for every SKU tier (a) answers, meant for
+      `pipeline/pricehistory.py:Market.readings_for_rows`'s own `product_ids=` parameter,
+      which skips resolving those SKUs at all.
+    - `tier_by_sku` names which tier answered each SKU (`TIER_ARCHIVE`/`TIER_EXPORT`/
+      `TIER_CARD`), the count a caller reports as "how many SKUs fall to this".
+
+    `archive`/`export_rows` DEFAULT TO NONE RATHER THAN BEING FETCHED HERE, so a caller
+    that already has a `Snapshot.archive` or an already-built `merged_export_rows_by_sku()`
+    passes it straight through — this function reads them, it does not open either one.
+    A caller with neither (`archive=None, export_rows=None`) gets tier (c) for every SKU,
+    which is `sweep`'s own pre-2026-09-23 behaviour, byte for byte.
+    """
+    resolved_rows: Dict[str, dict] = {}
+    verified: Dict[str, int] = {}
+    tiers: Dict[str, str] = {}
+    export_rows = export_rows if export_rows is not None else {}
+    for sku, row in rows.items():
+        archived_id = 0
+        if archive is not None:
+            for bucket in archive.for_sku(sku):
+                if bucket.product_id:
+                    archived_id = int(bucket.product_id)
+                    break
+        if archived_id:
+            resolved_rows[sku] = row
+            verified[sku] = archived_id
+            tiers[sku] = TIER_ARCHIVE
+            continue
+        exported = export_rows.get(sku)
+        if exported is not None:
+            resolved_rows[sku] = exported
+            tiers[sku] = TIER_EXPORT
+            continue
+        resolved_rows[sku] = row
+        tiers[sku] = TIER_CARD
+    return resolved_rows, verified, tiers
 
 
 class UnresolvedLedgerName(ValueError):
@@ -523,6 +655,8 @@ def sweep(
     *,
     now: Optional[int] = None,
     fallback_rows: Optional[Dict[str, dict]] = None,
+    archive: Optional[PriceArchive] = None,
+    export_rows: Optional[Dict[str, tcgcsv.Row]] = None,
 ) -> Tuple[Dict[str, Bucket], List[Source], Dict[str, str], List[str]]:
     """Ask `market` for every SKU in `rows`, over every range in `ranges`, and answer
     `(buckets_by_key, sources_by_range, refusals_by_sku, resolved_via_fallback)`.
@@ -549,11 +683,20 @@ def sweep(
     attempt's, since it is the one that actually decided the SKU's fate.
     `resolved_via_fallback` names every SKU the retry rescued, sorted, so a caller can
     report which source answered rather than silently swapping one in.
+
+    `archive`/`export_rows`, WHEN GIVEN, RUN `resolve_by_sku` BEFORE ANY ROW REACHES `market`
+    (D-pricehistory-resolves-by-sku). Neither defaults to being fetched here — a caller
+    passes its own `Snapshot.archive` and its own `merged_export_rows_by_sku()` once, rather
+    than this function opening either per call. Omitting both is every SKU resolved tier
+    (c), `rows` unchanged — this function's own shape before 2026-09-23, byte for byte.
     """
     now = int(now if now is not None else time.time())
     ranges = tuple(ranges) if ranges else tuple(RANGE_WIDTH_DAYS)
 
-    readings, refusals = market.readings_for_rows(rows.values(), ranges=ranges)
+    resolved_rows, verified_ids, _tiers = resolve_by_sku(rows, archive, export_rows)
+    readings, refusals = market.readings_for_rows(
+        resolved_rows.values(), ranges=ranges, product_ids=verified_ids
+    )
 
     resolved_via_fallback: List[str] = []
     if fallback_rows:
@@ -561,8 +704,11 @@ def sweep(
             sku: fallback_rows[sku] for sku in refusals if sku in fallback_rows
         }
         if retry_rows:
+            retry_resolved, retry_verified, _retry_tiers = resolve_by_sku(
+                retry_rows, archive, export_rows
+            )
             retry_readings, retry_refusals = market.readings_for_rows(
-                retry_rows.values(), ranges=ranges
+                retry_resolved.values(), ranges=ranges, product_ids=retry_verified
             )
             for sku in retry_rows:
                 if sku in retry_readings:
