@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -98,6 +98,10 @@ help:
 	@echo "                    re-shoot excused by a RECORDED digest, and a -9 mid-transaction."
 	@echo "                    Counts syscalls, because an outcome assertion cannot see work"
 	@echo "                    that no longer happens. In \`check\`, never in the hook."
+	@echo "  make pricearchive-selftest  D-pricehistory-resolves-by-sku's three tiers,"
+	@echo "                    merged_export_rows_by_sku and row_for_sku, proved against a"
+	@echo "                    throwaway store and real cached-export files under mktemp."
+	@echo "                    PATH GATED (D247's sixteenth). In \`check\`, never in the hook."
 	@echo "  make cid-audit    does every card's name still resolve to its photograph? Reads"
 	@echo "                    the whole corpus, so it is NOT in \`check\` — \`make lan-check\`'s"
 	@echo "                    reason. Three verdicts, and the third is \`not known\`."
@@ -129,7 +133,7 @@ help:
 	@echo "  make serve-scope   what serve-selftest reads, and whether this branch touches it."
 	@echo "                    ARGS=list | ARGS=\"classify --base <rev>\". Fails open."
 	@echo "  make serve-scope-selftest  that gate, including a CARRY drift it must catch."
-	@echo "  make guard-scope   the SECOND path gate: what each of 15 guard self-tests reads,"
+	@echo "  make guard-scope   the SECOND path gate: what each of 16 guard self-tests reads,"
 	@echo "                    derived from its own source. ARGS=list [--target <name>] |"
 	@echo "                    ARGS=\"classify --target <name> --base <rev>\". Fails open."
 	@echo "                    PKMNSCAN_GUARD_SCOPE=off runs every gated self-test regardless."
@@ -180,7 +184,7 @@ help:
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + debts-selftest +"
 	@echo "                    gates-selftest + submission-selftest +"
-	@echo "                    cid-selftest + readings-selftest +"
+	@echo "                    cid-selftest + pricearchive-selftest + readings-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -542,6 +546,7 @@ check:
 	@$(MAKE) --no-print-directory gates-selftest
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory cid-selftest
+	@$(MAKE) --no-print-directory pricearchive-selftest
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -592,6 +597,7 @@ ci-check:
 	@$(MAKE) --no-print-directory gates-selftest
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory cid-selftest
+	@$(MAKE) --no-print-directory pricearchive-selftest
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
@@ -1106,6 +1112,18 @@ cid-selftest:
 		$(PYTHON) scripts/cid-selftest.py; \
 	else \
 		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
+
+# THE SIXTEENTH GATED TARGET (D247, owner's word 2026-09-23 on the SKU-first price-history
+# rebuild: "once it's done, it only needs to be tested when touched"). Answers from the
+# tree alone, same standing as `cid-selftest` right above it: a throwaway store and real
+# cached-export files under `mktemp`, never the operator's own store or their real
+# `inventory/.exports/`. In `check`, never in the git hook, D18 — it writes a temp store.
+pricearchive-selftest:
+	@if python3 scripts/guard-scope.py classify --target pricearchive-selftest --base origin/main; then \
+		$(PYTHON) scripts/pricearchive-selftest.py; \
+	else \
+		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
 cid-audit:

@@ -209,6 +209,22 @@ def _sweep(args, say) -> int:
     if current is None:
         return 1
 
+    # RESOLVED BY THE SKU, NEVER BY THE CARD'S OWN READ FIELDS FIRST
+    # (D-pricehistory-resolves-by-sku, owner's ruling 2026-09-23). Read once, here, so
+    # every chunk's own `sweep()` call sees the same archive and the same export cache
+    # rather than each chunk re-deriving `export_rows` off disk.
+    export_index = archive_walk.merged_export_rows_by_sku()
+    _resolved, _verified, tiers = archive_walk.resolve_by_sku(rows, current, export_index)
+    tier_counts: Dict[str, int] = {}
+    for tier in tiers.values():
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+    say(
+        f"resolved by: {tier_counts.get(archive_walk.TIER_ARCHIVE, 0)} already-verified "
+        f"(archive), {tier_counts.get(archive_walk.TIER_EXPORT, 0)} from the store's own "
+        f"cached export, {tier_counts.get(archive_walk.TIER_CARD, 0)} falling back to the "
+        "card's own stored fields"
+    )
+
     index = archive_walk.freshness_index(current.entries.values())
     now = int(time.time())
     ttl = archive_walk.RESUME_TTL_SECONDS
@@ -241,6 +257,7 @@ def _sweep(args, say) -> int:
     for i, chunk in enumerate(chunks, start=1):
         buckets, sources, refusals, resolved_via_ledger = archive_walk.sweep(
             chunk, market, ranges=ranges, fallback_rows=fallback_rows,
+            archive=current, export_rows=export_index,
         )
         all_resolved_via_ledger.extend(resolved_via_ledger)
         # ONE SIGNAL, USED TWICE — whether to rewrite a 403's message and whether to treat

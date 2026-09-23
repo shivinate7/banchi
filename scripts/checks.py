@@ -620,6 +620,34 @@ CHECKS = (
         "governed_by": ("D18", "D26", "D83", "D88", "D89", "D172"),
     },
     {
+        "target": "pricearchive-selftest",
+        "runs": "python3 scripts/pricearchive-selftest.py",
+        "asserts": "D-pricehistory-resolves-by-sku's whole rebuild: resolve_by_sku's three "
+                   "tiers (an archive-verified productId, the SKU's own row in a cached "
+                   "Filtered Export, the card's own stored fields as the last resort), "
+                   "merged_export_rows_by_sku against real cached-export files on disk and "
+                   "against no `.exports` directory at all, pipeline/productview.py:"
+                   "row_for_sku preferring the export row over a misread stored name, and "
+                   "two end-to-end sweep() proofs — a misread card row still resolving "
+                   "through its own export row, and an archive-verified id resolving "
+                   "through a market that refuses every row it is actually asked to "
+                   "resolve — each with its own mutation guard. Also D219's key argument "
+                   "(range, not width_days), D223's ranking, D224's chunked resume and "
+                   "D233's ledger-row retry, all proved offline against `FakeMarket`/"
+                   "`RecordingMarket`, no network.",
+        "needs": ("python3",),
+        "writes": "one sqlite store, one cached-export CSV tree and one price-history "
+                  "archive per case, all under `mktemp -d`. `PKMNSCAN_HOME` is repointed "
+                  "for every case, so the operator's own store and their real "
+                  "`inventory/.exports/` are never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store and temp export files. Same "
+                               "standing as cid-selftest right above it.",
+        "gates": True,
+        "governed_by": ("D18", "D166", "D219", "D222", "D223", "D224", "D233", "D234",
+                        "D240", "D-pricehistory-resolves-by-sku"),
+    },
+    {
         "target": "readings-selftest",
         "runs": "python3 scripts/readings-selftest.py",
         "asserts": "the cached market-reading table (store/readings.py) and the two-source "

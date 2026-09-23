@@ -178,7 +178,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from pipeline import games, join, pricing, tcgcsv
 
@@ -715,6 +715,17 @@ class ProductIndex:
     AND IT IS NOT THE JOIN THAT LISTS ANYTHING, which is what makes the rung affordable here
     at all. A wrong answer costs a wrong sales chart on a screen nobody has built yet. A
     wrong answer in `pipeline/join.py` costs a card listed as a different card.
+
+    THIS CLASS TAKES ONLY A NUMBER AND A NAME, NEVER A SKU (D-pricehistory-resolves-by-sku).
+    A session briefly widened `find` to weigh a CARD's own read name against the number it
+    found (D240's measured seam), and the owner's review reversed it: `pipeline/pricearchive.py`
+    and `pipeline/productview.py:row_for_sku` now decide WHICH `(number, name)` pair this
+    class is ever asked about, before it is asked — the archive's own already-verified
+    productId for that SKU where one exists, else the SKU's OWN row in the store's cached
+    Filtered Export (its `Product Name` and `Number`, which describe that SKU's product by
+    definition and were never read off a photograph), else this class exactly as it always
+    was. `find` itself is unchanged from the shape D240 found "zero ambiguous" over: it is
+    handed a trustworthy pair now, so it needs no dispute check of its own.
     """
 
     by_number: Dict[str, Tuple[int, ...]]
@@ -1133,6 +1144,16 @@ class Market:
         consulted by the caller when it wants to know whether the game is catalogued at all;
         an uncatalogued `misc` card has no `Product Line` to look up and refuses here on the
         first hop, saying so.
+
+        THIS IS NOT THE ONLY WAY A PRODUCT IS RESOLVED (D-pricehistory-resolves-by-sku). A
+        caller that already knows the productId — the archive's own already-verified answer
+        for this SKU, `store/pricearchive.py:Bucket.product_id` — never calls this at all;
+        `reading_for_row`/`readings_for_rows` below take that id directly and skip this
+        whole walk. This function is what runs when neither the archive nor the caller has
+        an answer in hand, over whatever `(number, name)` the row carries. The caller
+        decides which row that is (`pipeline/pricearchive.py:merged_export_rows_by_sku`
+        prefers the SKU's own export row over a card's stored fields); this function has no
+        opinion about where the row came from.
         """
         category_id = self.category_id(row.get(tcgcsv.PRODUCT_LINE_COLUMN, ""))
         group_id = self.group_id(category_id, row.get(tcgcsv.SET_COLUMN, ""))
@@ -1160,13 +1181,23 @@ class Market:
         return parse_history(payload, int(product_id), range_)
 
     def reading_for_row(
-        self, row: tcgcsv.Row, ranges: Sequence[str] = DEFAULT_RANGES
+        self,
+        row: tcgcsv.Row,
+        ranges: Sequence[str] = DEFAULT_RANGES,
+        *,
+        product_id: Optional[int] = None,
     ) -> Reading:
         """An export row -> everything this module can say about that SKU.
 
         The row's OWN `TCGplayer Id` is what is picked out of each response. That is the
         exact hop the header calls out: we ask about a product and take our own SKU out of
         the answer by its number, so no variant or condition string is ever matched.
+
+        `product_id`, WHEN GIVEN, SKIPS `product_id_for_row` ENTIRELY
+        (D-pricehistory-resolves-by-sku). A caller that already knows the answer — the
+        archive's own already-verified productId for this SKU — passes it straight through;
+        `row` is then read only for its SKU, never its name or number. Trusted as given: this
+        function does not re-verify a productId it was handed.
         """
         sku = str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
         if not sku:
@@ -1174,16 +1205,20 @@ class Market:
                 f"the row carries no {tcgcsv.SKU_COLUMN!r}, so there is nothing to pick out "
                 "of a product's answer."
             )
-        product_id = self.product_id_for_row(row)
+        resolved_id = int(product_id) if product_id else self.product_id_for_row(row)
         series: Dict[str, Series] = {}
         for range_ in ranges:
-            found = self.history(product_id, range_).get(sku)
+            found = self.history(resolved_id, range_).get(sku)
             if found is not None:
                 series[range_] = found
-        return Reading(sku=sku, product_id=product_id, series=series)
+        return Reading(sku=sku, product_id=resolved_id, series=series)
 
     def readings_for_rows(
-        self, rows: Iterable[tcgcsv.Row], ranges: Sequence[str] = DEFAULT_RANGES
+        self,
+        rows: Iterable[tcgcsv.Row],
+        ranges: Sequence[str] = DEFAULT_RANGES,
+        *,
+        product_ids: Optional[Mapping[str, int]] = None,
     ) -> Tuple[Dict[str, Reading], Dict[str, str]]:
         """Many rows at once. Answers `(readings_by_sku, refusals_by_sku)`.
 
@@ -1195,13 +1230,24 @@ class Market:
         One product's response carries every condition of that card, so rows are grouped by
         productId before anything is fetched and a card held in four conditions costs one
         request per range rather than four.
+
+        `product_ids`, SKU -> A KNOWN PRODUCTID, SKIPS `product_id_for_row` FOR THOSE SKUS
+        (D-pricehistory-resolves-by-sku). The caller's own already-verified answers —
+        typically `store/pricearchive.py:Bucket.product_id` from a prior sweep — win over a
+        fresh catalogue walk for any SKU named here; every other row still resolves through
+        `product_id_for_row` exactly as before.
         """
         readings: Dict[str, Reading] = {}
         refusals: Dict[str, str] = {}
         by_product: Dict[int, List[str]] = {}
+        known = product_ids or {}
         for row in rows:
             sku = str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
             if not sku:
+                continue
+            verified = known.get(sku)
+            if verified:
+                by_product.setdefault(int(verified), []).append(sku)
                 continue
             try:
                 by_product.setdefault(self.product_id_for_row(row), []).append(sku)

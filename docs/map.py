@@ -551,15 +551,9 @@ COMPONENTS = [
                                             "(`cli/archive_review.py`, D167's own "
                                             "`Queue.upsert`), and leaves a network-shaped "
                                             "refusal alone.",
-                                    "governed_by": ["D219",
-                                                    "D224",
-                                                    "D223",
-                                                    "D222",
-                                                    "D62", "D86", "D43", "D88",
-                                                    "D231",
-                                                    "D230",
-                                                    "D233",
-                                                    "D167"],
+                                    "governed_by": ["D43", "D62", "D86", "D88", "D167", "D219",
+                                                    "D222", "D223", "D224", "D230", "D231", "D233",
+                                                    "D-pricehistory-resolves-by-sku"],
                                     "tested_by": []},
             "archive_review.py": {"does": "Routes one `archive sweep` pass's own "
                                           "identification-shaped refusals (never a "
@@ -1221,17 +1215,22 @@ COMPONENTS = [
                                         "`measured_pace`/`load_pace`/`save_pace` turn a "
                                         "measured requests-before-block count into the next "
                                         "press's pace, persisted on disk.",
-                                "governed_by": ["D9", "D21", "D22", "D26", "D62", "D134", "D214",
-                                                "D216", "D219", "D222", "D223", "D224", "D230",
-                                                "D231", "D233", "D234"],
-                                "note": "PROVED BY `make pricearchive-selftest`, not in "
-                                        "`make check` — no network call. A FakeMarket and a "
-                                        "RecordingMarket stand in for the network; 48 "
-                                        "assertions, including the D62 collision arm run "
-                                        "both ways, an interrupted one-shot sweep proven to "
-                                        "lose everything BEFORE the chunked fix is proven to "
-                                        "keep what it already committed, and a resumed pass "
-                                        "proven to never re-ask for an already-fresh SKU."},
+                                "governed_by": ["D9", "D21", "D22", "D26", "D62", "D134", "D166",
+                                                "D214", "D216", "D219", "D222", "D223", "D224",
+                                                "D230", "D231", "D233", "D234", "D240",
+                                                "D-pricehistory-resolves-by-sku"],
+                                "note": "PROVED BY `make pricearchive-selftest`, PATH GATED "
+                                        "and IN `make check` as of D247's sixteenth entry "
+                                        "(owner's word, 2026-09-23) — no network call. A "
+                                        "FakeMarket and a RecordingMarket stand in for the "
+                                        "network; 105 assertions, including the D62 "
+                                        "collision arm run both ways, an interrupted "
+                                        "one-shot sweep proven to lose everything BEFORE the "
+                                        "chunked fix is proven to keep what it already "
+                                        "committed, a resumed pass proven to never re-ask "
+                                        "for an already-fresh SKU, and D-pricehistory-"
+                                        "resolves-by-sku's three tiers, each with its own "
+                                        "mutation guard."},
             # THE PER-PRODUCT VIEW'S OWN READ (D227). Archive-first,
             # live-fallback only when `store/pricearchive.py` has never seen the SKU at all.
             # Never writes — a sweep is still a press, never this route.
@@ -1245,8 +1244,8 @@ COMPONENTS = [
                                        "live read. `history_begins` computes the date the "
                                        "chart states its own history starts from, off the "
                                        "buckets actually read, never the 357-day constant.",
-                                "governed_by": ["D62", "D219",
-                                                "D227"],
+                                "governed_by": ["D62", "D219", "D227",
+                                                "D-pricehistory-resolves-by-sku"],
                                 "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
                                         "and by `app/tests/product-history.spec.ts`. No "
                                         "network call in the archive-hit path."},
@@ -1454,8 +1453,8 @@ COMPONENTS = [
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
-                                                "D55", "D62", "D64", "D171", "D216",
-                                                "D234"],
+                                                "D55", "D62", "D64", "D171", "D216", "D234",
+                                                "D240", "D-pricehistory-resolves-by-sku"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -1816,8 +1815,10 @@ COMPONENTS = [
                                         "untouched, forever.",
                                 "governed_by": ["D219", "D62", "D88",
                                                 "D189"],
-                                "note": "PROVED BY `make pricearchive-selftest` — 17 "
-                                        "assertions, no network, over a throwaway store."},
+                                "note": "PROVED BY `make pricearchive-selftest`, PATH GATED "
+                                        "and IN `make check` as of D247's sixteenth entry "
+                                        "(owner's word, 2026-09-23) — no network, over a "
+                                        "throwaway store."},
             # THE PRICE-POSTINGS LEDGER (D243). Unlike `pricearchive.py`
             # and `readings.py`, this one is NEVER an upsert — see the module docstring for
             # why a posted price has no live source to be re-read from, so a second posting
@@ -2675,8 +2676,12 @@ COMPONENTS = [
                         "pacing (D222): `classify_refusals` rewrites a 403 "
                         "only with evidence of an earlier success this pass, and "
                         "`measured_pace`/`load_pace`/`save_pace` are exercised directly. "
-                        "Not wired into `make check` — "
-                        "`make catalog-index-selftest`'s own precedent. Also proves the "
+                        "PATH GATED, IN `make check` and `make ci-check` as of D247's "
+                        "sixteenth entry (owner's word, 2026-09-23) — "
+                        "the exemption this note used to state (\"no caller yet reachable "
+                        "from a screen\") went stale under `pkmnscan archive sweep --write` "
+                        "running `pipeline/pricearchive.py` against the owner's real store. "
+                        "Also proves the "
                         "sealed-ledger widening and the resume window, mutation-tested: "
                         "cards still wins a SKU both sources answer for, an unparseable "
                         "ledger name is a named refusal, the naive first-colon group split "
@@ -2693,9 +2698,14 @@ COMPONENTS = [
                         "a number carrying a typed separator), against a resolver built on "
                         "the real ProductIndex/number_index_key/name_index_key, "
                         "mutation-tested by removing the fallback. Proves format_refusals "
-                        "never truncates, grouped by reason. 87 assertions.",
+                        "never truncates, grouped by reason. Proves "
+                        "D-pricehistory-resolves-by-sku's three tiers, "
+                        "`merged_export_rows_by_sku` against real cached-export files, and "
+                        "`pipeline/productview.py:row_for_sku` preferring the export row "
+                        "over a misread stored name, each with its own mutation guard. "
+                        "105 assertions.",
                 "governed_by": ["D18", "D21", "D35", "D62", "D219", "D222", "D223", "D224", "D230",
-                                "D231", "D233", "D234"],
+                                "D231", "D233", "D234", "D247", "D-pricehistory-resolves-by-sku"],
             },
             "price-postings-selftest.py": {
                 "does": "proves store/postings.py's `price_postings` table against a "
@@ -4343,8 +4353,10 @@ COMPONENTS = [
                                 "D53", "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80",
                                 "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
                                 "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141",
-                                "D149", "D158", "D160", "D171", "D172", "D173", "D176", "D178",
-                                "D189", "D215", "D229", "D247", "D-token-literals-are-pinned"],
+                                "D149", "D158", "D160", "D166", "D171", "D172", "D173", "D176",
+                                "D178", "D189", "D215", "D219", "D222", "D223", "D224", "D229",
+                                "D233", "D234", "D240", "D247", "D-pricehistory-resolves-by-sku",
+                                "D-token-literals-are-pinned"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "

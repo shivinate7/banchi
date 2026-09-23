@@ -27879,6 +27879,80 @@ def check_price_history(checks: Checks) -> None:
         "unglued number behaves exactly as before",
     )
 
+    # ------------------------------------------ D-pricehistory-resolves-by-sku: a caller
+    # that already has a productId in hand — the archive's own already-verified answer for
+    # this SKU, `store/pricearchive.py:Bucket.product_id` — skips resolving the row at all.
+    # The owner's ruling (2026-09-23) closed a session's earlier attempt to weigh a card's
+    # own READ name against the number it found: the reviewer's re-measurement found 15 of
+    # 20 new refusals had a correct old answer and 1 of 29 flips was wrong, because a
+    # Riftbound "Champion, Title" card's read NAME is the unreliable field, not the number.
+    # The fix is to never ask the card at all — resolve by the SKU, never by a read field —
+    # and `pipeline/pricearchive.py:resolve_by_sku`/`merged_export_rows_by_sku` carry that;
+    # this proves the primitive they are built on, in `Market` itself, with no store and no
+    # `pipeline/pricearchive.py` import at all.
+    #
+    # PROVEN WITH NO NETWORK AND NO CACHE, THE ROW ITSELF UNRESOLVABLE ON PURPOSE. A `Product
+    # Line` no registry names would raise `NotResolvable` the moment `category_id` ran, and
+    # `ranges=()` means `self.history` is never reached either — so a reading that succeeds
+    # here, over this row, is proof the whole resolution walk was skipped, not proof it
+    # happened to succeed.
+    unresolvable_row = {
+        tcgcsv.PRODUCT_LINE_COLUMN: "Not A Real Product Line",
+        tcgcsv.SET_COLUMN: "Not A Real Set",
+        tcgcsv.NUMBER_COLUMN: "999/999",
+        tcgcsv.NAME_COLUMN: "Not A Real Name",
+        tcgcsv.SKU_COLUMN: "9999999",
+        tcgcsv.CONDITION_COLUMN: "Near Mint",
+    }
+
+    def _no_network(url):
+        raise AssertionError(f"MUTATION: the network was reached at {url!r}")
+
+    skip_market = pricehistory.Market(fetcher=_no_network)
+    verified_reading = skip_market.reading_for_row(
+        unresolvable_row, ranges=(), product_id=555
+    )
+    checks.equal(
+        verified_reading.product_id, 555,
+        "reading_for_row(product_id=555) trusts the given id as-is, over a row that would "
+        "otherwise refuse — the archive-verified tier, D-pricehistory-resolves-by-sku",
+    )
+    checks.equal(
+        verified_reading.series, {},
+        "and asks for nothing over an empty ranges tuple — nothing here proves the walk "
+        "ran and merely returned this id anyway",
+    )
+    batch_readings, batch_refusals = skip_market.readings_for_rows(
+        [unresolvable_row], ranges=(), product_ids={"9999999": 777}
+    )
+    checks.equal(
+        batch_readings["9999999"].product_id, 777,
+        "readings_for_rows(product_ids=...) honours a verified id the same way, per SKU",
+    )
+    checks.ok(
+        not batch_refusals,
+        "and never refuses a row it was never asked to resolve",
+        batch_refusals,
+    )
+    # MUTATION GUARD: the identical row, with NO verified id offered, refuses exactly as it
+    # always has — proves the skip above is conditional on being HANDED an id, never a
+    # general relaxation of `product_id_for_row`'s own refusal. A DIFFERENT market, whose
+    # fetcher answers an ordinary empty catalogue rather than asserting on any call —
+    # `product_id_for_row` DOES have to reach it here, legitimately, to fail on "no such
+    # category" rather than on this test's own network trap.
+    refusing_market = pricehistory.Market(fetcher=lambda url: {"results": []})
+    raised = checks.raises(
+        pricehistory.NotResolvable,
+        lambda: refusing_market.reading_for_row(unresolvable_row, ranges=()),
+        "MUTATION GUARD: the same row with no product_id given still refuses — "
+        "product_id_for_row runs exactly as before when nothing was verified",
+    )
+    checks.ok(
+        raised is not None and "Not A Real Product Line" in str(raised),
+        "and the refusal names the row's own unresolvable Product Line, the ordinary "
+        "resolution failure, proving product_id_for_row is what ran",
+    )
+
     # ---------------------------------------------------------------- the parse, on real bytes
     #
     # THE ORDER ASSERTION IS THE POINT OF COMMITTING THIS FILE. Both halves, so a change
