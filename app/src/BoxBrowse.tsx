@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
+import { sectionCountOf } from './position'
 import type {
   BoxRecord,
   InventoryCard,
@@ -257,23 +258,32 @@ function passesFacetFilter(card: InventoryCard, filter: InventoryFacetFilter): b
 }
 
 /* Which stretch of one shelf's walk a row belongs to, worded as its header will say it.
- * Composed from the server's own decorations — no position arithmetic here. */
+ * Composed from the server's own decorations — no position arithmetic here beyond
+ * `sectionCountOf`'s own (`position.ts`), which this shares with `sectionDepthOf`. */
 function sectionTitleOf(row: Row): string {
   if (isPooled(row.card)) {
     return `Pooled: ${row.card.place?.game_display ?? row.card.game ?? 'cards'}`
   }
   if (row.card.section === undefined) return 'No position label'
 
-  const start = row.card.place?.section_start
-  const end = row.card.place?.section_end
-  /* THE SECTION'S NAME RIDES ITS NUMBER (D132): `Section 6: Rares, #101–#153`. Off the place
-     block, where the server joined it at read time, so a rename reaches every header at once.
-     D218: the separator is punctuation in a real sentence, never a typed middle dot. */
+  /* THE SECTION'S NAME RIDES ITS NUMBER (D132): `Section 6: Rares`. Off the place block, where
+     the server joined it at read time, so a rename reaches every header at once. D218: the
+     separator is punctuation in a real sentence, never a typed middle dot. */
   const named = row.card.place?.section_name
     ? `Section ${row.card.section}: ${row.card.place.section_name}`
     : `Section ${row.card.section}`
-  if (typeof start !== 'number') return named
-  return typeof end === 'number' ? `${named}, #${start}–#${end}` : `${named}, #${start} onward`
+
+  /* THE HEADER STATES THE SECTION'S OWN COUNT, NEVER THE BOX-WIDE SPAN. `section_start`/
+     `section_end` count across the whole BOX (D58's units, but the box's own numbering) —
+     drawing them here as `#54–#93` put a box-wide range over a row reading `#37`, the number
+     WITHIN THE SECTION (`row.card.card`, `pipeline/join.py:Position.card`). Two rulers on one
+     screen, one scale up from the bug D092 already named for the position bar. `sectionCountOf`
+     answers in the section's own scale, honestly on a growing section too — no "so far" (owner's
+     ruling, 2026-09-19, see `sectionDepthOf`'s comment) — so the fold below has one number
+     rather than a range with nothing to check it against. */
+  const count = row.card.place ? sectionCountOf(row.card.place) : null
+  if (count === null) return named
+  return `${named}, ${count.of} card${count.of === 1 ? '' : 's'}`
 }
 
 type Section = { key: string; title: string; first: Row; rows: Row[] }
@@ -939,9 +949,8 @@ export function BoxBrowse({
   /* THE WALK, WITH SOLD FOLDED AWAY (D132). The row the walk stands on is kept whatever its
      state: `selectedRow` is found in this list, a sale must leave its receipt on screen (D119),
      and a walk-to from the copies list may land on a sold copy (D45). It goes the moment the
-     walk steps off it. */
-  const departedHere = useMemo(() => onShelf.filter((row) => hasDeparted(row.card)).length, [onShelf])
-  /* AND UNDER A SEARCH, A ROW THAT LEFT SINCE THIS ORDER WAS TAKEN IS KEPT TOO
+     walk steps off it.
+     AND UNDER A SEARCH, A ROW THAT LEFT SINCE THIS ORDER WAS TAKEN IS KEPT TOO
      (`frozenRank.ts`). Freezing the arithmetic and letting the fold delete the row puts the
      jump straight back through the other door: the row goes and everything under it comes up by
      its height, which is the movement the freeze exists to stop. It goes on the re-rank, with
@@ -962,6 +971,16 @@ export function BoxBrowse({
         (filtered && ranksAsShown(row.key, true, frozen)),
     )
   }, [onShelf, hideSold, selected, filtered, frozen])
+
+  /* THE PILL COUNTS WHAT THE FOLD ACTUALLY HIDES, NEVER EVERY DEPARTED ROW ON THE SHELF.
+     `visible`'s own exceptions above keep some departed rows drawn — the row the walk stands
+     on (D119), and under a search a row `ranksAsShown` in the frozen rank (D118/D181) — so a
+     count of every departed row overstates what pressing the chip removed. A LIVE ROW IS NEVER
+     REMOVED BY THIS FILTER, so the shrink from `onShelf` to `visible` is exactly the departed
+     rows the fold took out, in both states of the toggle: zero while it is off, since nothing
+     is filtered yet. Measured on the owner's screenshot: `departedHere` (the old count) read 6,
+     one just-sold row stayed drawn under the selection exception, and only 5 left the shelf. */
+  const hiddenBySold = useMemo(() => onShelf.length - visible.length, [onShelf, visible])
 
   const sections = useMemo(() => sectionsOf(visible, !hideSold, selected), [visible, hideSold, selected])
 
@@ -1957,7 +1976,7 @@ export function BoxBrowse({
             {onShelf.length === 0 || onHideSold === undefined ? null : (
               <Chip
                 pressed={hideSold}
-                count={departedHere}
+                count={hiddenBySold}
                 className="browse-hidesold"
                 title={hideSold ? 'Sold and retired cards are folded away' : 'Sold and retired cards sink under the live ones'}
                 onClick={onHideSold}
