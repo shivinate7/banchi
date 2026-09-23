@@ -86,7 +86,7 @@
 
 .livecheck-age strong {
   color: var(--bn-live);
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: var(--bn-tracking-caps);
   font-size: var(--bn-fs-sm);
   text-transform: uppercase;

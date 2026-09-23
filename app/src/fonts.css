@@ -22,10 +22,9 @@
  * EACH FILE IS A VARIABLE FONT AND EVERY WEIGHT HERE IS STILL A SINGLE VALUE. Google serves
  * ONE woff2 per family per subset and points four `@font-face` blocks at it, each pinning one
  * weight — 7 files answering 28 declarations for Inter. Collapsing those four into one
- * `font-weight: 400 700` range would be smaller CSS and a DIFFERENT PRODUCT: four rules in
- * `app/src` ask for `font-weight: 650` (`LiveReconcile.css`, `Markdown.css`, `RunPanel.css`,
- * `Orders.css`), which resolves against these discrete faces to 700 and would resolve against
- * a range to an actual 650. The blocks are duplicated on purpose.
+ * `font-weight: 400 700` range would be smaller CSS and a DIFFERENT PRODUCT: a call site
+ * asking for `font-weight: 650` resolves against these discrete faces to 700, and would
+ * resolve against a range to an actual 650. The blocks are duplicated on purpose.
  *
  * TWO SUBSETS OF THE SEVEN, MEASURED RATHER THAN GUESSED. Google offers cyrillic, cyrillic-ext,
  * greek, greek-ext, vietnamese, latin-ext and latin. Every non-ASCII codepoint that `app/src`

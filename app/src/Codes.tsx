@@ -984,7 +984,7 @@ export function Codes() {
                         <span className="codes-dup-where">
                           {positions.map((p, i) =>
                             p.box === null || p.index === null ? (
-                              <span key={i} className="bn-faint">
+                              <span key={i} className="bn-muted">
                                 No position
                               </span>
                             ) : (
@@ -1802,7 +1802,7 @@ export function Codes() {
                   {lotBuilt.files?.['manifest.txt'] ? (
                     <ManifestPath path={lotBuilt.files['manifest.txt']} />
                   ) : (
-                    <p className="bn-faint">No manifest path came back.</p>
+                    <p className="bn-muted">No manifest path came back.</p>
                   )}
                 </div>
               )}

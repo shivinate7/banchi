@@ -490,7 +490,7 @@
 /* The step's cost pill can carry two short facts (D218); the pill is already flex with its own
    gap, so only the leading space needs adding here. */
 .runs-cost-pill > *:not(:last-child)::after { content: '·'; margin-left: var(--bn-2); color: var(--bn-ink-4); }
-.run-receipt-what { font-weight: 650; color: var(--bn-ink); }
+.run-receipt-what { font-weight: 700; color: var(--bn-ink); }
 .run-receipt-rows {
   font-family: var(--bn-font-display);
   font-weight: 700;

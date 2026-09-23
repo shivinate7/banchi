@@ -989,7 +989,7 @@ img.bn-crop[data-cropped='true'] {
 }
 
 /* ---- divider with a word ---------------------------------------------------------------------- */
-.bn-rule { display: flex; align-items: center; gap: var(--bn-3); color: var(--bn-ink-4); font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
+.bn-rule { display: flex; align-items: center; gap: var(--bn-3); color: var(--bn-ink-3); font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
 .bn-rule::before, .bn-rule::after { content: ''; flex: 1; height: 1px; background: var(--bn-line); }
 
 /* ---- utility animations --------------------------------------------------------------------- */

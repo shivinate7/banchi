@@ -87,7 +87,7 @@
   line-height: 1.5;
   color: var(--bn-ink-3);
 }
-.clearprices-scope-says strong { color: var(--bn-ink); font-weight: 650; }
+.clearprices-scope-says strong { color: var(--bn-ink); font-weight: 700; }
 
 /* THE AGE WINDOWS, EACH CARRYING ITS OWN COUNT. Not `Segmented`: that primitive draws one line
    of label per option, and five options each needing a word AND a figure is a two-line cell — a
