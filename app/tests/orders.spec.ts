@@ -3211,6 +3211,33 @@ test('Mark sold records the copy against the owing order, and the order panel up
   await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('1')
 })
 
+/* ------------------------------------------------------------ a stop's title, one ruler */
+
+test('a stop\'s title states the section\'s own count, never the box-wide span', async ({ page }) => {
+  /* The rows under a stop read `#${place.card}`, the number WITHIN the section. The title used
+     to draw the stop's `span`, `#12–#30`, counted across the whole BOX: two rulers on one
+     screen, the defect `#/inventory`'s own section header had. This stop's section runs from
+     box card 12 to 30 of a box of 133, closed, so it holds 19 cards, and its one row reads #7.
+     Verified red first: on the old `stopTitle`, the title ends in the box-wide
+     `#12–#30`. */
+  await open(page)
+  await stubWalkPlan(
+    page,
+    walkPlanOf([
+      walkPlanStop({
+        section_name: 'Rares',
+        span: { start: 12, end: 30 },
+        takes: [walkPlanTake({ copies: [walkPlanCopy({ card: 7, place: { section_name: 'Rares', section_start: 12, section_end: 30 } })] })],
+      }),
+    ]),
+  )
+  await startWalk(page)
+
+  const title = page.locator('.browse-list .browse-secttitle').first()
+  await expect(title).toHaveText('RB Epics, Section 2: Rares, 19 cards')
+  await expect(page.locator('.browse-list .browse-row-slot').first()).toHaveText('#7')
+})
+
 /* ------------------------------------------------------------------- the trap: no re-sort */
 
 test('a sale does not re-sort the walk list, and this section leads', async ({ page }) => {

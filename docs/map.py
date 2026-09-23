@@ -7168,7 +7168,7 @@ COMPONENTS = [
                                            "brief named first (never re-sort the walk).",
                                    "governed_by": ["D58", "D62", "D79", "D93", "D96", "D97", "D116",
                                                    "D118", "D132", "D164", "D181", "D193", "D209",
-                                                   "D212", "D220"]},
+                                                   "D212", "D218", "D220"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
                                            "name); every other shape this file draws is "

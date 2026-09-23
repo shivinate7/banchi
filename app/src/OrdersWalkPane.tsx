@@ -31,6 +31,7 @@ import { CardDetailsSection, CardHeroHead, marketTable, PhotoPanel, type MarketR
 import { CardLocations } from './CardLocations'
 import { Overlay } from './InventoryOverlay'
 import { Button, Icon, Pill } from './kit'
+import { sectionCountOf } from './position'
 import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -128,18 +129,25 @@ function rowsOf(plan: WalkPlan | null): WalkRow[] {
 }
 
 /** `BoxBrowse.tsx`'s own `sectionTitleOf`, restated for a stop rather than a `Row` — a pooled
- *  stop reads `Pooled · <game>`, same as `#/inventory`'s pooled shelf; a physical one leads
+ *  stop reads `Pooled: <game>`, same as `#/inventory`'s pooled shelf; a physical one leads
  *  with the box (the walk crosses boxes, which a single box's own section list never has to
- *  say) and then the section, exactly as `#/inventory` composes it. */
-function stopTitle(stop: WalkPlanStop): string {
-  if (stop.pooled) return `Pooled · ${stop.game_display ?? 'cards'}`
+ *  say) and then the section, exactly as `#/inventory` composes it. D218: the separators are
+ *  punctuation in a real sentence, never a typed middle dot.
+ *
+ *  THE TITLE STATES THE SECTION'S OWN COUNT, NEVER THE STOP'S BOX-WIDE `span`. The rows under
+ *  it read `#${place.card}`, the number WITHIN THE SECTION (`pipeline/join.py:Position.card`);
+ *  `span` is `section_start`/`section_end`, counted across the whole box. `#54–#93` over a row
+ *  reading `#37` is two rulers on one screen, the defect `sectionCountOf` already fixed on
+ *  `#/inventory`. `place` is the section's first row's copy — a `here` copy, so it stands in
+ *  this stop's box and section and carries the `box_closed` the stop itself does not. */
+function stopTitle(stop: WalkPlanStop, place: Place): string {
+  if (stop.pooled) return `Pooled: ${stop.game_display ?? 'cards'}`
   const box = stop.box_name ?? (stop.box === null ? 'Box' : `Box ${stop.box}`)
   if (stop.section === null) return box
-  const named = stop.section_name ? `Section ${stop.section} · ${stop.section_name}` : `Section ${stop.section}`
-  const span = stop.span
-  const withSpan =
-    span === null ? named : span.end === null ? `${named} · #${span.start} onward` : `${named} · #${span.start}–#${span.end}`
-  return `${box} · ${withSpan}`
+  const named = stop.section_name ? `Section ${stop.section}: ${stop.section_name}` : `Section ${stop.section}`
+  const count = sectionCountOf(place)
+  if (count === null) return `${box}, ${named}`
+  return `${box}, ${named}, ${count.of} card${count.of === 1 ? '' : 's'}`
 }
 
 export type WalkSection = { readonly key: string; readonly title: string; readonly rows: readonly WalkRow[] }
@@ -158,7 +166,7 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
       continue
     }
     const stop = stopByKey.get(row.stopKey)
-    out.push({ key: row.stopKey, title: stop === undefined ? row.stopKey : stopTitle(stop), rows: [row] })
+    out.push({ key: row.stopKey, title: stop === undefined ? row.stopKey : stopTitle(stop, row.copy.place), rows: [row] })
   }
   return out
 }
