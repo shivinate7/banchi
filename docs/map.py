@@ -1391,8 +1391,8 @@ COMPONENTS = [
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
-                                                "D55", "D62", "D64", "D171", "D216",
-                                                "D234"],
+                                                "D55", "D62", "D64", "D162", "D171", "D216", "D234",
+                                                "D238", "D240", "D-pricehistory-name-agrees"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "

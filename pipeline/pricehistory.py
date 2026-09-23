@@ -715,15 +715,32 @@ class ProductIndex:
     AND IT IS NOT THE JOIN THAT LISTS ANYTHING, which is what makes the rung affordable here
     at all. A wrong answer costs a wrong sales chart on a screen nobody has built yet. A
     wrong answer in `pipeline/join.py` costs a card listed as a different card.
+
+    A NUMBER THAT RESOLVES IS NO LONGER TRUSTED ON ITS OWN (D240, D-pricehistory-name-agrees).
+    D240 measured the seam this class used to leave open: a number that resolves to exactly
+    one product was accepted with no look at the name at all, so a misread number landing on
+    the WRONG single product read that product's whole history under the right card's SKU.
+    The owner's ruling closes it the same way D162 already closes the real listing join for
+    the same shape of disagreement — match off name AND number, let a fuzzy name count, and
+    put an unrepairable disagreement in front of a human rather than guessing. `find` below
+    runs every number-found candidate, one or many, through `pipeline/join.py:name_disputes`
+    — never a second copy of that comparison — before trusting it, with that module's own
+    settled tolerance (`NAME_DISPUTE_SIMILARITY`, 0.80 with containment).
     """
 
     by_number: Dict[str, Tuple[int, ...]]
     by_name: Dict[str, Tuple[int, ...]]
+    # productId -> the mirror's own `name` field, RAW (never folded) — kept so a dispute
+    # check and a refusal message can both show the catalog's own spelling. Built once here
+    # rather than looked up per call, because `find` is asked once per export row and the
+    # dispute check now runs on every number hit rather than only on 2-or-more.
+    names: Dict[int, str]
 
     @classmethod
     def build(cls, products: Iterable[Dict]) -> "ProductIndex":
         numbers: Dict[str, List[int]] = {}
         names: Dict[str, List[int]] = {}
+        names_by_id: Dict[int, str] = {}
         for product in products:
             try:
                 product_id = int(product["productId"])
@@ -735,19 +752,50 @@ class ProductIndex:
             name = product.get("name")
             if name:
                 names.setdefault(join.name_index_key(name), []).append(product_id)
+                names_by_id[product_id] = str(name)
         return cls(
             by_number={k: tuple(v) for k, v in numbers.items()},
             by_name={k: tuple(v) for k, v in names.items()},
+            names=names_by_id,
         )
+
+    def _number_hits(self, number) -> Tuple[int, ...]:
+        """Every product the NUMBER alone finds, after D234's one repair. Pulled out of
+        `find` so a refusal message can show the same candidates `find` itself looked at,
+        with no second copy of the lookup."""
+        key = join.number_index_key(number)
+        hits = self.by_number.get(key, ()) if key else ()
+        if not hits:
+            repaired = join.strip_set_code(number)
+            if repaired and repaired != str(number or "").strip():
+                repaired_key = join.number_index_key(repaired)
+                hits = self.by_number.get(repaired_key, ()) if repaired_key else hits
+        return hits
+
+    def _name_hits(self, name) -> Tuple[int, ...]:
+        """Every product the NAME alone finds — the name rung's own index, exposed so a
+        refusal message can show it without re-deriving `name_index_key`'s fold."""
+        return self.by_name.get(join.name_index_key(name), ())
+
+    def _agrees(self, name, product_id: int) -> bool:
+        """Does `name` NOT dispute this one product's own catalog name?
+
+        `pipeline/join.py:name_disputes`'s own fold (`_name_compare_key(...,
+        catalog_side=True)`) and tolerance (`NAME_DISPUTE_SIMILARITY`, 0.80 with containment)
+        — reused rather than copied, so this can never quietly disagree with what the real
+        listing join accepts. The one product is wrapped as a single-row `tcgcsv.Row`-shaped
+        dict under `tcgcsv.NAME_COLUMN`, which is the only adapter `name_disputes` needs: it
+        never asks for a productId or a number.
+        """
+        catalog_name = self.names.get(product_id, "")
+        return not join.name_disputes(name, ({tcgcsv.NAME_COLUMN: catalog_name},))
 
     def find(self, number, name) -> Optional[int]:
         """The productId for this (number, name), or None. Never a guess.
 
         Ambiguity answers None rather than picking the first, which is the same refusal
         `geometry.detect_card` makes and for the same reason: a "not found" a caller can act
-        on beats a plausible wrong answer it cannot see. Measured at zero ambiguous across
-        all four committed exports, which is a fact about those exports and not a promise
-        about the next one.
+        on beats a plausible wrong answer it cannot see.
 
         A NUMBER-KEY MISS GETS ONE REPAIR BEFORE THE NAME RUNG, THE SAME ORDER
         `pipeline/join.py:_walk` ALREADY USES FOR THE REAL LISTING JOIN
@@ -758,22 +806,76 @@ class ProductIndex:
         rung on a miss, never trying the stripped form the way `_walk`'s own `repair` step
         does before giving up on a number. Asked only on a miss, exactly like `_walk`'s own
         repair — a number that already matched is never rewritten.
+
+        EVERY NUMBER HIT IS NOW CHECKED AGAINST THE NAME BEFORE IT IS TRUSTED (D240,
+        D-pricehistory-name-agrees), one candidate or several:
+
+          - Two or more number hits narrow to whichever ones the name does not DISPUTE —
+            the fuzzy, tolerant check (containment or `NAME_DISPUTE_SIMILARITY`), not the
+            old exact `by_name` membership test, so a near-miss spelling now narrows exactly
+            where it would have failed to before. Narrowing to exactly one is the answer;
+            narrowing to zero or staying at several is still ambiguous by the number alone,
+            unchanged from before.
+          - EXACTLY ONE number hit is no longer accepted unconditionally. A name that
+            disputes it outright drops it — the number is not trusted alone — and the name
+            rung gets its own turn below, D162's own rule: where the name settles on exactly
+            one product, that product is the answer; where it does not, this returns None
+            and the caller's refusal (`Market.product_id_for_row`) is what names both
+            candidate sets to a human, on `ProductIndex.refusal`.
+          - A name that merely AGREES, or lands within tolerance, changes nothing: the
+            number hit is accepted exactly as it always was.
         """
-        key = join.number_index_key(number)
-        hits = self.by_number.get(key, ()) if key else ()
-        if not hits:
-            repaired = join.strip_set_code(number)
-            if repaired and repaired != str(number or "").strip():
-                repaired_key = join.number_index_key(repaired)
-                hits = self.by_number.get(repaired_key, ()) if repaired_key else hits
+        hits = self._number_hits(number)
         if len(hits) > 1:
-            narrowed = tuple(
-                pid for pid in hits if pid in self.by_name.get(join.name_index_key(name), ())
-            )
+            narrowed = tuple(pid for pid in hits if self._agrees(name, pid))
             hits = narrowed if len(narrowed) == 1 else hits
+        elif len(hits) == 1 and not self._agrees(name, hits[0]):
+            hits = ()
         if not hits:
-            hits = self.by_name.get(join.name_index_key(name), ())
+            hits = self._name_hits(name)
         return hits[0] if len(hits) == 1 else None
+
+    def refusal(self, number, name, set_name: str = "") -> str:
+        """The message `Market.product_id_for_row` raises `NotResolvable` with when `find`
+        answers None. BOTH CANDIDATE SETS, the owner's ruling on this seam (2026-09-23):
+        *"if both don't match even after that, yes it can come for review, but in the
+        review it ought to have presuggested options with the context it already has ie a
+        name match and/or a number match option."* This module has no review screen of its
+        own (see the header) — `str(exc)` is the whole surface (D238's already-built path,
+        `cli/archive_review.py`) — so both sets are named in the one string that reaches it,
+        rather than a bare "no match" a human has to re-derive from scratch.
+
+        Reuses `_number_hits`/`_name_hits`, the exact lookups `find` itself just ran, so this
+        can never show a candidate `find` did not actually consider.
+        """
+        number_hits = self._number_hits(number)
+        name_hits = self._name_hits(name)
+        where = f" in {set_name!r}" if set_name else ""
+        parts = [f"no single tcgcsv product matches {name!r} {number!r}{where}."]
+        if number_hits:
+            parts.append(
+                "number match option(s): "
+                + ", ".join(
+                    f"{pid} ({self.names.get(pid, '')!r})" for pid in number_hits
+                )
+                + "."
+            )
+        if name_hits:
+            parts.append(
+                "name match option(s): "
+                + ", ".join(
+                    f"{pid} ({self.names.get(pid, '')!r})" for pid in name_hits
+                )
+                + "."
+            )
+        if not number_hits and not name_hits:
+            parts.append("the mirror carries neither — check the group is the right one.")
+        else:
+            parts.append(
+                "either the mirror does not carry this card or the name and number "
+                "disagree — this refuses rather than picking one."
+            )
+        return " ".join(parts)
 
 
 @dataclass(frozen=True)
@@ -1133,21 +1235,19 @@ class Market:
         consulted by the caller when it wants to know whether the game is catalogued at all;
         an uncatalogued `misc` card has no `Product Line` to look up and refuses here on the
         first hop, saying so.
+
+        THE LAST HOP'S REFUSAL IS `ProductIndex.refusal`, NOT A MESSAGE WRITTEN HERE (D240,
+        D-pricehistory-name-agrees) — the same lookups `find` just ran, read back rather
+        than re-derived, so the message can never name a candidate `find` did not consider.
         """
         category_id = self.category_id(row.get(tcgcsv.PRODUCT_LINE_COLUMN, ""))
         group_id = self.group_id(category_id, row.get(tcgcsv.SET_COLUMN, ""))
-        product_id = self.products(category_id, group_id).find(
-            row.get(tcgcsv.NUMBER_COLUMN, ""), row.get(tcgcsv.NAME_COLUMN, "")
-        )
+        index = self.products(category_id, group_id)
+        number = row.get(tcgcsv.NUMBER_COLUMN, "")
+        name = row.get(tcgcsv.NAME_COLUMN, "")
+        product_id = index.find(number, name)
         if product_id is None:
-            raise NotResolvable(
-                "no single tcgcsv product matches "
-                f"{row.get(tcgcsv.NAME_COLUMN, '')!r} "
-                f"{row.get(tcgcsv.NUMBER_COLUMN, '')!r} in "
-                f"{row.get(tcgcsv.SET_COLUMN, '')!r}. Either the mirror does not carry it or "
-                "two products share the number and the name could not tell them apart — this "
-                "refuses rather than picking one."
-            )
+            raise NotResolvable(index.refusal(number, name, row.get(tcgcsv.SET_COLUMN, "")))
         return product_id
 
     # -------------------------------------------------------------------- the history
