@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -65,7 +65,6 @@ help:
 	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
 	@echo "  make orient       which component renders the thing, and what selects it."
 	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
-	@echo "  make orient-selftest  that renderer, including the Orders.tsx case it exists for."
 	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
@@ -85,7 +84,8 @@ help:
 	@echo "                    (D15). Writes; never gates. ARGS=--dry-run to preview the diff."
 	@echo "  make catalog-index  build vendor/pokemon-tcg-data/catalog.sqlite from the snapshot."
 	@echo "  make catalog-index-selftest  that builder and pipeline/catalog.py, proved on a"
-	@echo "                    throwaway fixture. In \`check\`, never in the hook."
+	@echo "                    throwaway fixture. Fast. NOT wired into \`make check\`'s list as"
+	@echo "                    shipped, deliberately — never in the hook either."
 	@echo "  make catalog-mirror  fill the pokemontcg.io image mirror. ARGS=--dry-run samples up"
 	@echo "                    to 200 images over HTTP HEAD and reports the byte total; writes"
 	@echo "                    nothing. Bare form fills it for real — not run by any target here."
@@ -477,9 +477,6 @@ map-fix-selftest:
 # a location.
 orient:
 	@python3 scripts/orient.py $(ARGS)
-
-orient-selftest:
-	@python3 scripts/orient.py --selftest
 
 # Deliberately NOT a prerequisite of `check`, and never wired to a hook: every tree after
 # the audit landed is clean because the hook blocked anything else, so a zero here cannot

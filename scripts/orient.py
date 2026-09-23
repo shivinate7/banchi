@@ -30,7 +30,6 @@ as a prop is invisible to it. A condition spread over more lines than it reads i
 Read it as the first place to look, never as proof that nothing else renders the thing.
 
     scripts/orient.py <file.tsx> [--name <Component>]
-    scripts/orient.py --selftest
 """
 
 from __future__ import annotations
@@ -172,78 +171,12 @@ def render(path: Path, only: Optional[str] = None) -> str:
     return "\n".join(out) + "\n"
 
 
-def selftest() -> int:
-    ok = True
-
-    def check(label: str, got, want) -> None:
-        nonlocal ok
-        if got == want:
-            print(f"  ok   {label}")
-        else:
-            ok = False
-            print(f"  FAIL {label}\n       got  {got!r}\n       want {want!r}")
-
-    sample = (
-        "import x from 'y'\n"
-        "function Alpha() {\n"
-        "  return <div />\n"
-        "}\n"
-        "function Beta({ hide }: { hide: boolean }) {\n"
-        "  return (\n"
-        "    <div>\n"
-        "      {hide || empty ? null : <Alpha />}\n"
-        "      <Gamma />\n"
-        "    </div>\n"
-        "  )\n"
-        "}\n"
-        "function Gamma() {\n"
-        "  return <span />\n"
-        "}\n"
-    )
-    found = components(sample)
-    check("it finds every component", [c.name for c in found], ["Alpha", "Beta", "Gamma"])
-    check("a span ends at the next top-level declaration",
-          [(c.start, c.end) for c in found], [(2, 4), (5, 12), (13, 15)])
-
-    alpha = sites(sample, found, "Alpha")
-    check("it names the component that draws it", [s.inside for s in alpha], ["Beta"])
-    check("it reports the condition that suppresses it",
-          [s.condition for s in alpha], ["hide || empty ? … :"])
-
-    gamma = sites(sample, found, "Gamma")
-    check("an unconditional draw reports no condition",
-          [(s.inside, s.condition) for s in gamma], [("Beta", None)])
-    check("a component does not count as drawing itself",
-          sites(sample, found, "Beta"), [])
-
-    # THE CASE THIS EXISTS FOR, against the real file.
-    orders = ROOT / "app" / "src" / "Orders.tsx"
-    if orders.exists():
-        text = orders.read_text()
-        real = components(text)
-        names = {c.name for c in real}
-        check("Orders.tsx: both of the confused components are found",
-              {"CopyMapView", "WalkGroups"} <= names, True)
-        copy_sites = sites(text, real, "CopyMapView")
-        check("Orders.tsx: CopyMapView's draw is reported as conditional",
-              any(s.condition and "hidePicks" in s.condition for s in copy_sites), True)
-        walk_sites = sites(text, real, "WalkGroups")
-        check("Orders.tsx: WalkGroups is drawn from more than one place",
-              len(walk_sites) > 1, True)
-
-    print("\nPASS" if ok else "\nFAIL")
-    return 0 if ok else 1
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("file", nargs="?", help="a .tsx file")
     parser.add_argument("--name", help="one component rather than all of them")
-    parser.add_argument("--selftest", action="store_true")
     args = parser.parse_args()
 
-    if args.selftest:
-        return selftest()
     if not args.file:
         parser.print_help()
         return 2

@@ -113,6 +113,32 @@ make up             # THE server, detached — ONE PROCESS (D138). Serves app/di
                     #   WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D53).
                     #   `PKMNSCAN_SERVE_MAIN=off` overrides, printed in every refusal.
                     #   Silent on any branch in a LINKED WORKTREE (D43).
+make reap           # stop what THIS session started, and nothing else. Previews with no
+                    #   argument or --confirm. ARGS="--confirm" stops every process this
+                    #   checkout started. ARGS="port:5484 --confirm", "match:vite --confirm"
+                    #   or "pid:12345 --confirm" target one process, only if it is ours.
+                    #   RESOLVES the real targets with pgrep and lsof, read-only, and judges
+                    #   each pid by whether it lives under this checkout (D127) — never a
+                    #   text match on the command, which is how `pkill -f` once killed the
+                    #   owner's live main-tree server from a worktree. --hook is the armed
+                    #   PreToolUse guard on Bash that refuses a kill outside this checkout.
+                    #   `make reap-selftest` proves it by violating it, in `check`, never
+                    #   in the hook (D18).
+make janitor-install # copy janitor.py, session-teardown.sh and reap.py to the user's home
+                    #   Claude bin directory, outside this repo, so every clone's hooks can
+                    #   reach them, not only this one. Writes those three files there and
+                    #   prints the SessionEnd, WorktreeRemove and
+                    #   PreToolUse hook lines to add to ~/.claude/settings.json by hand — it
+                    #   does not write that file itself. `make status` compares the
+                    #   installed copies against this repo's and says when either is stale.
+make merge          # merge a PR and move main onto it (D42). ARGS=<n> previews. ARGS="<n>
+                    #   --confirm" merges, ALWAYS a real GitHub merge, never --admin. Fetches
+                    #   origin/main first, then claim-stale (D140) so the id allocation reads
+                    #   current state. `make merge` carries a needed rebase and force-push on
+                    #   a branch nobody else holds (owner ruling, 2026-09-18). A session may
+                    #   run this only when the owner has named it an Orchestrator, per turn,
+                    #   never inherited or assumed. `make merge-selftest` proves the wrapper
+                    #   in a throwaway repo and worktree, in `check`, never in the git hook.
 make janitor        # what a finished session left behind. PREVIEWS both tiers, presses
                     #   nothing. ARGS=--confirm reaps tier 2: worktrees, loose processes and
                     #   branches. Runs from no hook and no schedule.
@@ -488,6 +514,12 @@ stays unexecuted, a different reason, argued in `docs/specs/code-cards.md` §6.
 **`docs/specs/code-cards.md` is the spec and supersedes this section's architecture.** Read
 it before building. This section is the short operating summary. The spec carries the
 measurements, the channel research, and the open questions.
+
+**`scripts/docs-audit.py`'s `views exposure` advisory is turned OFF as of 2026-09-23**
+(`VIEWS_EXPOSURE_ENABLED = False`), because no session is drawing pooled captures onto a
+screen while this feature is dormant. Turn it back on when code-card work resumes — flip
+the constant to `True`. **`scripts/guard-opsec.sh` stays ARMED, untouched**: it refuses a
+real code-card photo into a commit and protects real money, and dormancy never reaches it.
 
 ### Things you will get wrong without being told
 
@@ -1128,8 +1160,8 @@ adopting some and deferring others (D99 sits where it does because main took D90
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/demo.md` — the public demo, BUILT and LIVE. Why it is not a fork, what is
   real and what is invented, what the published page refuses, and why no secret reaches it.
-- `docs/specs/one-process.md` — D138's plan. SPECIFIED, NOT BUILT as its own target — folded
-  into `make up`.
+- `docs/specs/one-process.md` — D138's plan, BUILT 2026-09-11, all three PRs. No target named
+  after the file exists — the built behavior is `make up` itself, never a separate target.
 - `docs/specs/store-scaling.md` — BUILT 2026-09-13, all eight items, three phases.
 - `docs/specs/order-walk-plan.md` — the ticked-order walk as the fewest drawers to open.
   The SOLVER is BUILT (`pipeline/walkplan.py`, T11). The route is BUILT (`POST

@@ -81,6 +81,13 @@ ROOT = Path(__file__).resolve().parent.parent
 MECHANICAL = "mechanical"
 ADVISORY = "advisory"
 
+# `views exposure` (below) is OFF as of 2026-09-23. Code cards are DORMANT (CLAUDE.md,
+# "Code cards (dormant feature)") — the owner has not run the feature, so no session is
+# drawing pooled captures onto a screen this row would flag. `scripts/guard-opsec.sh` stays
+# ARMED regardless; it is the mechanism that protects real money, not this advisory. Flip
+# this back to True when code-card work resumes, per CLAUDE.md's own note.
+VIEWS_EXPOSURE_ENABLED = False
+
 # sysexits.h EX_USAGE. Deliberately not 2 — see the exit table in the module docstring.
 EXIT_USAGE = 64
 
@@ -113,6 +120,7 @@ SKIP_DIRS = {
 }
 
 ALLOWLIST = ROOT / "scripts" / "docs-audit-allow.txt"
+GAME_COVERAGE_ALLOWLIST = ROOT / "scripts" / "docs-audit-allow-game-coverage.txt"
 
 # Source group -> the docs that describe it. Layer 2 only; see D16 for why this is a
 # question and not a failure.
@@ -212,6 +220,11 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
         "always",
         "its subject is the unclaimed slugs this branch carries, and main carries none "
         "BY THE INVARIANT the row asserts — so on main it examines nothing, every time",
+    ),
+    "views exposure": (
+        "always",
+        "turned OFF 2026-09-23 while code cards are dormant (CLAUDE.md) — "
+        "VIEWS_EXPOSURE_ENABLED is False, so this row examines nothing on purpose",
     ),
     "sole reader": (
         "always",
@@ -1027,6 +1040,23 @@ def load_allowlist() -> Dict[str, str]:
             continue
         path, _, reason = stripped.partition("#")
         entries[path.strip()] = reason.strip()
+    return entries
+
+
+def load_game_coverage_allowlist() -> Dict[str, str]:
+    """`game key / rarity` pairs `game coverage` may not ask about, one `pair  # reason`
+    per line, same self-cleaning shape as `docs-audit-allow.txt`: an entry the row would
+    no longer ask about anyway is stale and fails. See `check_game_coverage_allowlist`.
+    """
+    if not exists(GAME_COVERAGE_ALLOWLIST):
+        return {}
+    entries: Dict[str, str] = {}
+    for line in read(GAME_COVERAGE_ALLOWLIST).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        pair, _, reason = stripped.partition("#")
+        entries[pair.strip()] = reason.strip()
     return entries
 
 
@@ -8163,6 +8193,9 @@ def check_game_coverage(report: Report) -> None:
         report.add("game coverage", ADVISORY, findings)
         return
 
+    coverage_allow = load_game_coverage_allowlist()
+    consumed: Set[str] = set()
+
     entries = list(data["GAMES"])
     where_module = rel(GAMES_MODULE)
     sources = export_facts()
@@ -8209,6 +8242,10 @@ def check_game_coverage(report: Report) -> None:
                 if condition is None:
                     continue
                 if (line, rarity, condition) not in triples:
+                    pair = f"{key} {rarity}"
+                    if pair in coverage_allow:
+                        consumed.add(pair)
+                        continue
                     findings.append(
                         Finding(
                             where,
@@ -8239,6 +8276,24 @@ def check_game_coverage(report: Report) -> None:
         findings,
         f"{committed} committed exports, {len(sources) - committed} opt-in",
         scanned=len(sources),
+    )
+
+    stale = [
+        Finding(
+            rel(GAME_COVERAGE_ALLOWLIST),
+            f"`{pair}` is allowed but `game coverage` would not ask about it anyway "
+            f"(the pair is no longer an unproven finish_by_rarity cell) — delete the "
+            f"line.\nIt was allowed because: {reason or '(no reason recorded)'}",
+        )
+        for pair, reason in sorted(coverage_allow.items())
+        if pair not in consumed
+    ]
+    report.add(
+        "game coverage allowlist",
+        MECHANICAL,
+        stale,
+        f"{len(coverage_allow)} entries, none stale",
+        scanned=len(allowed),
     )
 
 
@@ -13573,15 +13628,25 @@ def check_views_opsec(report: Report) -> None:
         f"service; {len(rendered_routes)} routes rendered, {len(off_render)} declared off",
         scanned=len(entries),
     )
-    report.add(
-        "views exposure",
-        ADVISORY,
-        exposure,
-        ("no pooled game in the registry — a stored photo is not a bearer instrument today"
-         if not pooled
-         else "no manifest view can draw a stored photo"),
-        scanned=len(entries),
-    )
+    if VIEWS_EXPOSURE_ENABLED:
+        report.add(
+            "views exposure",
+            ADVISORY,
+            exposure,
+            ("no pooled game in the registry — a stored photo is not a bearer instrument today"
+             if not pooled
+             else "no manifest view can draw a stored photo"),
+            scanned=len(entries),
+        )
+    else:
+        report.add(
+            "views exposure",
+            ADVISORY,
+            [],
+            "OFF — code cards are dormant (CLAUDE.md); re-enable VIEWS_EXPOSURE_ENABLED "
+            "when code-card work resumes",
+            scanned=0,
+        )
 
 
 # --------------------------------------------------------------- doc hygiene

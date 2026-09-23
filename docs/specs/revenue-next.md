@@ -1,9 +1,11 @@
 # Sales: what is wrong with it, and what comes next
 
-**Recorded 2026-09-19. Not built.** D217 shipped the interactive Sales screen. D216 repaired the
-price history reader the same day. This file records what five independent reviews found
-afterwards. It also records the work the owner deferred. Nothing here is built. Nothing here is
-approved, except where it says so.
+**Recorded 2026-09-19. Not built, except finding 1 below.** D217 shipped the interactive Sales
+screen. D216 repaired the price history reader the same day. This file records what five
+independent reviews found afterwards. It also records the work the owner deferred. Finding 1's
+general-branch defect is fixed in `app/src/Revenue.tsx:compareLine` — see its own heading
+below for what landed and what did not. Every other finding here is still open. Nothing here
+is approved, except where it says so.
 
 Read D214 for why the screen exists. Read D217 for what made it interactive. Read D62 for the
 price history rules that every future chart inherits. Read D216 for why that reader needed a
@@ -15,15 +17,13 @@ Ranked by how wrong a decision each one could cause. None is a data error. All a
 
 ### The comparison sentence marks the wrong period
 
-`compareLine` builds one `lead` string. It shares that string across every branch. When the
-current window is unfinished, `lead` becomes `So far, the period before this one made`. The words
-`So far` then modify a closed window's total. That is false. The closed window is over. The
-qualifier belongs on the current total instead.
+**FIXED, general branch.** `compareLine`'s populated-previous-period branch no longer shares
+one `lead` string across every case. It now reads `Over the same stretch, the period before
+this one made`, which does not put `So far` on the closed prior window's total.
 
-The owner found this first in the empty branch. There it reads
-`So far, nothing is recorded for the period before this one`. The defect is not confined to that
-branch. The same string fires on the ordinary comparison. That is the default six month view. It
-fires every day of every unfinished month.
+**NOT FIXED, empty branch.** The owner found the defect first here, and the string is
+unchanged: `So far, nothing is recorded for the period before this one` still puts `So far` on
+the prior, closed period when `likeForLike` is true.
 
 No test opens the screen at its own default period against a populated prior window. The most
 common sentence on the most common view has no coverage.

@@ -1,10 +1,12 @@
 # Item 2 — the per-box read
 
-**Status of this file: SPECIFIED. Nothing below is built.** It is the playbook for
+**Status of this file: BUILT, 2026-09-13, as D192.** It was the playbook for
 `docs/specs/store-scaling.md` §3 item 2 ("The per-box read, and the screens move to it. 2–3
-days"), written for a session with no other context on this branch. Every file:line below was
-read on this worktree on 2026-09-12; re-check line numbers before trusting them if the branch
-has moved since.
+days"), written for a session with no other context on this branch. D192 shipped
+`GET /inventory/<box>` (`server/capture_server.py:do_inventory_box`) and the `rows.py`
+degrade fix this file specifies below. Every file:line below was read on this worktree on
+2026-09-12. Re-check line numbers before trusting them. Read D192 for what actually landed
+and where it corrected this playbook.
 
 ## Goal and done-when
 
