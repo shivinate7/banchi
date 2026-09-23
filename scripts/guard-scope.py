@@ -87,6 +87,7 @@ ROSTER = (
     {"target": "submission-selftest", "test": "scripts/submission-selftest.py"},
     {"target": "screen-freshness-selftest", "test": "scripts/screen-freshness.mjs"},
     {"target": "cid-selftest", "test": "scripts/cid-selftest.py"},
+    {"target": "pricearchive-selftest", "test": "scripts/pricearchive-selftest.py"},
 )
 
 TARGETS = {entry["target"] for entry in ROSTER}

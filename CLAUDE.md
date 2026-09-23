@@ -69,7 +69,10 @@ make serve-scope    # what `make serve-selftest` reads, and whether this branch 
                     #   checkout with a STUB app/, so no screen change can reach it.
                     #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
 make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
-                    #   measurement). What each of fifteen guard self-tests reads.
+                    #   measurement). What each of sixteen guard self-tests reads. A
+                    #   sixteenth, `pricearchive-selftest`, joined 2026-09-23 on the
+                    #   owner's word: "once it's done, it only needs to be tested when
+                    #   touched."
                     #   ARGS=list [--target <name>], or
                     #   ARGS="classify --target <name> --base <rev>".
                     #   D247 is the argument. A guard
@@ -78,7 +81,7 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   fixture changing. THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S
                     #   OWN SOURCE, never typed beside it — `scripts/guard-scope.py:
                     #   derive_subjects` reads local-package imports and `Path`-style chains
-                    #   straight out of the test file. Only WHICH fifteen targets are gated
+                    #   straight out of the test file. Only WHICH sixteen targets are gated
                     #   is a hand-typed roster, on `serve-scope.py`'s own precedent. Fails
                     #   open exactly like `serve-scope`: no merge-base, an unreadable diff,
                     #   an EMPTY diff, an unscoped target, and any exception all run the
@@ -183,7 +186,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + debts-selftest +
                     #   gates-selftest + submission-selftest +
-                    #   cid-selftest + readings-selftest + janitor-selftest +
+                    #   cid-selftest + pricearchive-selftest + readings-selftest +
+                    #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +

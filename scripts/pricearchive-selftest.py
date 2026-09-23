@@ -17,8 +17,15 @@ own key with `width_days` in place of `range` and shows THAT key collapses the t
 row — the guard is trusted only once it has been seen to fail on the defect it guards
 (`CLAUDE.md`'s own rule).
 
-Written, not wired into `make check` — `make catalog-index-selftest`'s own precedent, a fast
-self-contained proof of a package with no caller yet reachable from a screen.
+PATH GATED, THE SIXTEENTH (D247, owner's word 2026-09-23): `make pricearchive-selftest`,
+wired into `make check` and `make ci-check` through `scripts/guard-scope.py`, exactly like
+`cid-selftest` right beside it in both recipes. This file is no longer the exception it was
+when written — `pkmnscan archive sweep --write` runs `pipeline/pricearchive.py` against the
+owner's real store, D223, and the sentence that used to sit here ("no caller yet reachable
+from a screen") had gone stale under it. The owner's own words for the fix: "once it's
+done, it only needs to be tested when touched" — never on every commit, only when this
+file's own derived subjects change (`scripts/guard-scope.py:derive_subjects`, read from this
+file's own imports, never hand-typed beside it).
 """
 
 from __future__ import annotations
@@ -39,6 +46,7 @@ from pipeline import games as games_module  # noqa: E402
 from pipeline import join as join_module  # noqa: E402
 from pipeline import pricearchive as archive_walk  # noqa: E402
 from pipeline import pricehistory  # noqa: E402
+from pipeline import productview  # noqa: E402
 from pipeline import tcgcsv as tcgcsv_module  # noqa: E402
 from pipeline.pricehistory import Bucket as HistoryBucket  # noqa: E402
 from pipeline.pricehistory import Reading as HistoryReading  # noqa: E402
@@ -971,6 +979,65 @@ def main() -> int:
             else:
                 os.environ[files.HOME_ENV] = previous_home
             shutil.rmtree(no_exports_home, ignore_errors=True)
+
+        # --------- pipeline/productview.py: row_for_sku prefers the SKU's own export row
+        # (D-pricehistory-resolves-by-sku) — the live-fallback path's own tier (b), a real
+        # store and a real cached export together, the same shape `GET /pipeline/products/
+        # <sku>/history` reaches when the archive has never swept a SKU.
+        print("\n-- pipeline/productview.py: row_for_sku prefers the export row --")
+        rowsku_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-rowsku-"))
+        previous_home = os.environ.get(files.HOME_ENV)
+        os.environ[files.HOME_ENV] = str(rowsku_home)
+        try:
+            with Store().write() as snapshot:
+                snapshot.inventory.cards["1:1"] = Card(
+                    box=1, index=1, sku="7654321", name="Totally Wrong Stored Name",
+                    number="misread", set_name="Origins", game="riftbound",
+                    condition="Near Mint",
+                )
+            ok(
+                productview.row_for_sku(Store().read(), "7654321").get(
+                    tcgcsv_module.NAME_COLUMN
+                ) == "Totally Wrong Stored Name",
+                "BASELINE: with no cached export at all, row_for_sku falls back to the "
+                "card's own stored name — tier (c), proving the fixture's name really is "
+                "what tier (b) below has to override",
+            )
+            exports_dir = rowsku_home / "inventory" / ".exports" / "riftbound"
+            exports_dir.mkdir(parents=True)
+            (exports_dir / "export-tcgplayer-20260101-000000-bbbbbbbb.csv").write_text(
+                "TCGplayer Id,Product Line,Set Name,Product Name,Number,Rarity,Condition,"
+                "TCG Market Price,TCG Direct Low,TCG Low Price With Shipping,TCG Low Price,"
+                "Total Quantity,Add to Quantity,TCG Marketplace Price,Photo URL\n"
+                '"7654321","Riftbound League of Legends Trading Card Game","Origins",'
+                '"Twisted Fate, Gambler","200/298","Rare","Near Mint","5.00","","","",'
+                '"1","0","",""\n',
+                "utf-8",
+            )
+            resolved = productview.row_for_sku(Store().read(), "7654321")
+            ok(
+                resolved.get(tcgcsv_module.NAME_COLUMN) == "Twisted Fate, Gambler",
+                "with a cached export now present, row_for_sku prefers ITS name over the "
+                "card's own misread one — tier (b), the live-fallback path's own reach",
+                resolved,
+            )
+            raised = None
+            try:
+                productview.row_for_sku(Store().read(), "0000000")
+            except productview.ProductNotFound as exc:
+                raised = exc
+            ok(
+                raised is not None,
+                "MUTATION GUARD: a SKU no card has ever carried still raises "
+                "ProductNotFound, even with a cached export directory present — the export "
+                "preference never manufactures a subject `rows_from_store` never named",
+            )
+        finally:
+            if previous_home is None:
+                os.environ.pop(files.HOME_ENV, None)
+            else:
+                os.environ[files.HOME_ENV] = previous_home
+            shutil.rmtree(rowsku_home, ignore_errors=True)
 
         # ------------------------------------------ every refusal reaches the output
         print("\n-- pipeline/pricearchive.py: format_refusals never truncates --")
