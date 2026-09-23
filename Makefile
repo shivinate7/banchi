@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest
+.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient orient-selftest serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -55,6 +55,7 @@ help:
 	@echo "  make venv         .venv + requirements.txt   (before the first harness run, and"
 	@echo "                    again whenever requirements.txt changes — safe to re-run)"
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
+	@echo "  make worktree-provision-selftest  that node_modules clone/install logic, on a fixture"
 	@echo "  make launch-config   .claude/launch.json for THIS checkout's dev port (D43)"
 	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
 	@echo "  make harness      T1-T8 verification tests. Run at turn end by the Stop hook."
@@ -299,6 +300,16 @@ worktree-setup:
 	$(MAKE) --no-print-directory venv; \
 	bash scripts/worktree-provision.sh "$$main"
 	@echo "worktree ready. \`make harness\` should now be green without spending anything."
+
+# scripts/worktree-provision.sh's app/node_modules clone/install/staleness logic
+# (D-worktree-node-modules), proved against a throwaway two-tree fixture with a stubbed
+# `npm` — never a real network install. ITS SELF-TEST IS NOT IN `make check`, on
+# `catalog-index-selftest`'s precedent: it proves a mechanism this checkout's own session
+# start and `make worktree-setup` already exercise on every worktree, one step further from
+# the product. Run it when `scripts/worktree-provision.sh` or `scripts/serve.py`'s
+# `npm_install_owed`/`NPM_RECEIPT` change.
+worktree-provision-selftest:
+	@bash scripts/worktree-provision-selftest.sh
 
 # core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh
 # clone carries scripts/githooks/pre-commit as a tracked file with NOTHING POINTING AT IT, and
