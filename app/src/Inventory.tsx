@@ -28,6 +28,7 @@ import { BoxRuns } from './BoxRuns'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
+import { sayPlace } from './position'
 import { useSearch } from './useSearch'
 import { isEditableTarget } from './keys'
 import { Button, Icon, Notice, Pill } from './kit'
@@ -101,18 +102,6 @@ function layoutsOf(records: readonly BoxRecord[]): ReadonlyMap<number, readonly 
 
 function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
-}
-
-/** D218: a typed middle dot is a defect wherever it is typed, and `Position.label`'s own
- *  ` · ' is exactly that — server-composed and real, but never fit to retype as a screen's
- *  visible or spoken text. Every screen that DRAWS a position splits it and lets CSS join
- *  the parts (`PositionLabel.tsx`); the toast body and the receipt's `aria-label`/dialog
- *  title below carry `place` as PLAIN TEXT, where there is no CSS to draw a separator with,
- *  so this reads it as a sentence instead — the same `', '` `Home.tsx`'s box line takes for
- *  its own `title` attribute. THE SERVER STRING ITSELF IS NEVER EDITED (other screens split
- *  on it); this is a read, not a rewrite. */
-function sayPlace(label: string): string {
-  return label.replace(/ · /g, ', ')
 }
 
 /** The retire reason as the panel labels it — `given_away` is `Given away` in a sentence.

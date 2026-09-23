@@ -31,7 +31,7 @@ import { CardDetailsSection, CardHeroHead, marketTable, PhotoPanel, type MarketR
 import { CardLocations } from './CardLocations'
 import { Overlay } from './InventoryOverlay'
 import { Button, Icon, Pill } from './kit'
-import { sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'
 import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
@@ -408,7 +408,17 @@ export function useOrderWalk({
     setBusyCopy(copy.key)
     void (async () => {
       const refresh = staleAfter(target.box, copy.key)
-      const outcome = await onPull({ order, sku: take.sku, name: take.name ?? take.sku, target, place: copy.place.label, refresh })
+      const outcome = await onPull({
+        order,
+        sku: take.sku,
+        name: take.name ?? take.sku,
+        target,
+        /* D218: `place` reaches a toast body as plain text (`onWalkPull`'s own receipt),
+           never a component that splits it — sent through `sayPlace` here rather than left
+           for the caller, since this is the one place the pre-write label crosses into text. */
+        place: copy.place.label === null ? null : sayPlace(copy.place.label),
+        refresh,
+      })
       if (!live.current) return
       if (outcome.ok) {
         absorb(outcome.refreshed)
@@ -796,7 +806,10 @@ export function WalkMainPane({
       )}
       {!zoomed || row === null ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
-          <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt={`The card at ${currentRow.copy.place.label ?? row.key}`} />
+          <img
+            src={photoUrl(row.card.box, row.card.index, row.card.cid)}
+            alt={`The card at ${currentRow.copy.place.label === null ? row.key : sayPlace(currentRow.copy.place.label)}`}
+          />
         </Overlay>
       )}
     </>

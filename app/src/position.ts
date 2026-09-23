@@ -139,6 +139,22 @@ export function sentenceOf(place: Place, persona: Persona = 'owner'): string {
   return detail === null ? main : `${main} · ${detail}`
 }
 
+/** D218: a typed middle dot is a defect wherever it is typed, and `Position.label`'s own
+ *  ` · ' is exactly that — server-composed and real, but never fit to retype as a screen's
+ *  visible or spoken text. Every screen that DRAWS a position splits it and lets CSS join the
+ *  parts (`PositionLabel.tsx`); a toast body, a sentence built around the label (`Walk to
+ *  ${label}`, `The card at ${label}`), and any other plain-text or accessible-name use carry
+ *  the label as a SENTENCE FRAGMENT, where there is no CSS to draw a separator with — this
+ *  reads it as a sentence instead, the same `', '` `Home.tsx`'s box line takes for its own
+ *  `title` attribute. THE SERVER STRING ITSELF IS NEVER EDITED (other screens split on it);
+ *  this is a read, not a rewrite. `PositionLabel.tsx`'s own internal `aria-label` is the one
+ *  caller D41 lets keep the raw dot, because it carries `Position.label` whole as its OWN
+ *  accessible name rather than splicing it into a bigger sentence — that caller does not
+ *  reach this function. */
+export function sayPlace(label: string): string {
+  return label.replace(/ · /g, ', ')
+}
+
 /** The second scale: how far into its own SECTION a card sits. Null when there is no honest
  *  answer — a pooled card, a degraded block, a box the server cannot size. */
 export type SectionDepth = {

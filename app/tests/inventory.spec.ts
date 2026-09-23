@@ -2213,6 +2213,11 @@ const ELSEWHERE: Cards = { ...CARDS, ...SPARES }
 
 /** Where the third copy sits — named once, because three assertions and a button label read it. */
 const FAR = 'Box 7 · Section 1 · Card 40'
+/* D218: `Walk to ${FAR}` is an aria-label — a sentence built AROUND the server's label — so it
+   reads through `sayPlace` (`CardLocations.tsx`'s `OwnerRows`) the same way the sale toast
+   does. `.position-parts`'s OWN aria-label stays raw (D41's one exception, verbatim), which is
+   why FAR itself is untouched and only the button's name below uses the spoken form. */
+const FAR_SPOKEN = 'Box 7, Section 1, Card 40'
 
 const TWO_BOXES = {
   boxes: [
@@ -2249,9 +2254,9 @@ test('a copy in another box is reached by pressing its position, and the walk go
      does appear unambiguous about where it goes. */
   const rows = page.locator('.card-locations-owner .card-locations-row')
   await expect(rows).toHaveCount(3)
-  await expect(page.getByRole('button', { name: 'Walk to Box 2 · Section 1 · Card 1' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Walk to Box 2, Section 1, Card 1' })).toHaveCount(0)
 
-  await page.getByRole('button', { name: `Walk to ${FAR}` }).click()
+  await page.getByRole('button', { name: `Walk to ${FAR_SPOKEN}` }).click()
 
   /* THE BOX, THE CARD AND THE PHOTOGRAPH ALL FOLLOW, which is the whole of the feature: every
      one of them is drawn for whatever the walk points at, so moving the mark is the only thing
@@ -2272,8 +2277,23 @@ test('a copy in another box is reached by pressing its position, and the walk go
 
   /* And the offer is now the other way round: the copy just left has one, the copy landed on
      does not. */
-  await expect(page.getByRole('button', { name: 'Walk to Box 2 · Section 1 · Card 1' })).toBeVisible()
-  await expect(page.getByRole('button', { name: `Walk to ${FAR}` })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Walk to Box 2, Section 1, Card 1' })).toBeVisible()
+  await expect(page.getByRole('button', { name: `Walk to ${FAR_SPOKEN}` })).toHaveCount(0)
+})
+
+/* D218: `CardLocations.tsx:OwnerRows`'s "Walk to" button composes a sentence AROUND the
+ * server's `Position.label` — this is `sayPlace`'s own site, moved into `position.ts` so
+ * `Inventory.tsx`'s toast and this button read the same function. No U+00B7 (the middle dot)
+ * or U+2022 (bullet) may survive into the accessible name. */
+test('the walk-to button speaks the place, and never types the server\'s middle dot', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+
+  const goTo = page.getByRole('button', { name: `Walk to ${FAR_SPOKEN}` })
+  const name = await goTo.getAttribute('aria-label')
+  expect(name).not.toMatch(/[·•]/)
+  expect(name).toBe(`Walk to ${FAR_SPOKEN}`)
 })
 
 test('a walk-to scrolls the walk and never the page — the top bars stay put', async ({
@@ -2306,7 +2326,7 @@ test('a walk-to scrolls the walk and never the page — the top bars stay put', 
   expect(await navTop()).toBe(0)
 
   await page
-    .getByRole('button', { name: `Walk to ${FAR}` })
+    .getByRole('button', { name: `Walk to ${FAR_SPOKEN}` })
     .evaluate((button: HTMLElement) => button.click())
 
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
@@ -2358,7 +2378,7 @@ test('a filtered walk gives up the filter rather than swallowing the jump', asyn
   await expect(page.getByRole('button', { name: /^Box 2/ })).toBeEnabled()
   await expect(page.getByRole('button', { name: /^Box 7/ })).toBeDisabled()
 
-  await page.getByRole('button', { name: `Walk to ${FAR}` }).click()
+  await page.getByRole('button', { name: `Walk to ${FAR_SPOKEN}` }).click()
 
   /* THE CARD ASKED FOR IS THE CARD REACHED — asserted before anything about the query, because
      this is the claim that matters and the wrong-card landing is what fails it: unguarded, the

@@ -1039,8 +1039,11 @@ test('the receipt names where the card just was, never the departed label the sa
      about: it is still composed at the moment of the press, it still has to name the place the
      operator just walked to, and the way back still has to be on it. */
   const receipt = page.locator('.bn-toast-receipt')
-  await expect(receipt).toContainText('Box 3 · Section 2 · Card 17')
+  /* D218: the toast body is plain text, so `place` reads through `sayPlace` (`Orders.tsx`'s
+     `onPull`) before it lands here — the server's own `' · '` never reaches this sentence. */
+  await expect(receipt).toContainText('Box 3, Section 2, Card 17')
   await expect(receipt).not.toContainText('departed')
+  expect(await receipt.innerText()).not.toMatch(/[·•]/)
 
   /* THE WAY BACK IS ON THE RECEIPT AND NOT IN THE ROW, and that is forced rather than chosen: a
      successful pull marks the copy sold, the resolver stops offering it, and an Undo drawn

@@ -6499,7 +6499,8 @@ COMPONENTS = [
                                          "re-exports it so `Inventory.tsx`'s own import keeps "
                                          "working.",
                                  "governed_by": ["D6", "D26", "D31", "D34", "D46", "D52", "D89",
-                                                 "D96", "D118", "D172", "D-correct-a-listed-answer"]},
+                                                 "D96", "D118", "D172", "D218",
+                                                 "D-correct-a-listed-answer"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "
                                          "`kit.css`'s `.bn-panel*` for the panel chrome, "
@@ -7305,7 +7306,7 @@ COMPONENTS = [
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D181", "D192",
                                                "D193", "D194", "D195", "D196", "D203", "D209",
-                                               "D212", "D220", "D221"]},
+                                               "D212", "D218", "D220", "D221"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "

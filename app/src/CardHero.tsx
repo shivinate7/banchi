@@ -34,6 +34,7 @@ import { collectorNumber } from './cardNumber'
 import { readingAgo, stateLabel, stateTone } from './cardState'
 import { Button, Icon, Pill } from './kit'
 import { toast } from './kit/toast'
+import { sayPlace } from './position'
 // D46's own picker, reused rather than forked — this file's own header rule: "added to
 // inventory and both screens get it, not a fork" (D-correct-a-listed-answer).
 import { CatalogPanel } from './ReviewQueue'
@@ -303,7 +304,12 @@ export type PhotoPanelProps = {
  *  by the caller's own choice: `#/orders` passes `null`, since re-shooting a card mid-walk is
  *  an Inventory-only correction. */
 export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot }: PhotoPanelProps) {
-  const where = label ?? `store key ${row.key}`
+  /* D218: `label` is the server's `Position.label`, and this panel only ever speaks it —
+     the paragraph below and the photo's own `alt` are plain text and an accessible name,
+     where there is no CSS to draw the ` · ' with, so `sayPlace` reads it as a sentence
+     instead. Shared by `#/inventory` (`BoxBrowse.tsx`) and `#/orders`
+     (`OrdersWalkPane.tsx`), so fixing it here fixes both callers at once. */
+  const where = label === null ? `store key ${row.key}` : sayPlace(label)
 
   if (row.card.photo === null) {
     return (

@@ -5,7 +5,7 @@ import { isDeparted, photoUrl, placeSentence } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
-import type { Persona } from './position'
+import { sayPlace, type Persona } from './position'
 import { PositionLabel } from './PositionLabel'
 import { collectorNumber } from './cardNumber'
 import { Button, Chip, Icon, Pill } from './kit'
@@ -516,7 +516,7 @@ function OwnerRows({
                         <button
                           className="card-locations-goto"
                           type="button"
-                          aria-label={`Walk to ${label}`}
+                          aria-label={`Walk to ${sayPlace(label)}`}
                           onClick={goesTo}
                         >
                           <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} />
@@ -681,6 +681,11 @@ function FulfillerCard({
           const sold = isSold(copy, soldKeys)
           const noPhoto = !copy.has_photo || missing.includes(copy.key)
           const where = copy.place.label
+          /* D218: the alt text is a sentence built AROUND the label ("The card in X"), where
+             `where` below is drawn whole as its own line — `PositionLabel.tsx`'s own header
+             names this exact firewall and it stays untouched (the Fulfiller's screen has hard
+             floors, docs/DESIGN.md). Only the composed sentence gets the safe form. */
+          const whereSpoken = where === null ? null : sayPlace(where)
           const between = placeSentence(copy.place)
 
           return (
@@ -703,7 +708,7 @@ function FulfillerCard({
                           photoUrl(copy.place.box, copy.place.index, copy.cid)
                         : photoSrc(copy)
                     }
-                    alt={where === null ? 'The card' : `The card in ${where}`}
+                    alt={whereSpoken === null ? 'The card' : `The card in ${whereSpoken}`}
                     onError={() =>
                       setMissing((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
                     }
