@@ -31,6 +31,19 @@
 
 .search-field-icon { flex: none; color: var(--bn-ink-4); pointer-events: none; }
 .search-field-box:focus-within .search-field-icon { color: var(--bn-accent); }
+/* `busy`: the search mark's own 16px square turns, so the field keeps its size (D118). A
+   turning ring carries meaning (the answer is on its way), so it keeps turning under reduced
+   motion, the same as the kit's busy button. */
+.search-field-spin {
+  flex: none;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--bn-r-full);
+  border: 2px solid var(--bn-ink-3);
+  border-right-color: transparent;
+  animation: bn-spin var(--bn-t-spin) linear infinite;
+}
 
 .search-field-input {
   flex: 1 1 auto;
@@ -98,10 +111,28 @@
   padding: 0 var(--bn-2) 0 var(--bn-3);
   min-height: var(--bn-control-h-lg);
 }
+/* `controlHeight="bar"` (`SearchField.tsx`): ONE HEIGHT for every control a filter bar draws
+   (the owner's gripe: "the filters aren't even the same widths"). `kit/filters.tsx:FilterBar`
+   is the only caller that passes it — every OTHER `SearchField` on the product keeps its own
+   `--bn-control-h-lg` above, untouched. Below 767px, or on a coarse pointer, `--bn-control-h`
+   itself rises to 42px (`tokens.css`), so the 40px thumb floor still holds at any width
+   narrower than that, `FilterBar`'s own 639px phone stack included. */
+/* `height`, not `min-height`: the bar's other controls (`kit/data.css:.bn-pick`,
+   `.bn-sort-dir`) are a fixed height, and the field's own content (padding plus a line of
+   text) is taller than `--bn-control-h` on its own — `min-height` would let it grow past its
+   neighbours by a few pixels, the exact 1-pixel-off drift a filter bar cannot afford. `align-
+   items: center` on the box centers the input inside the shorter box, same as it already
+   centers the icon and the key. */
+.search-field-owner.search-field-bar .search-field-box { height: var(--bn-control-h); min-height: 0; }
 .search-field-owner .search-field-input {
   font-size: var(--bn-fs-base);
   padding: var(--bn-2) 0;
 }
+/* Inside a FilterBar's wide row, EVERY control reads at the bar's own 13px (`--bn-fs-md`): the
+   pick triggers, the sort control and the hide toggle already do (`kit/data.css`,
+   `kit/filters.css`). Only the search field's `.search-field-bar` class narrows this — a
+   standalone `SearchField` elsewhere keeps `--bn-fs-base` (14px), untouched. */
+.search-field-bar .search-field-input { font-size: var(--bn-fs-md); }
 .search-field-owner .search-field-key {
   flex: none;
   display: inline-flex;

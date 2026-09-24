@@ -14,6 +14,7 @@ import {
 import { MARKS } from './kit/markPalettes'
 import { ICON_MEANINGS, ICON_NAMES } from './kit/Icon'
 import { DataSpecimens } from './kit/data.specimens'
+import { FilterSpecimens } from './kit/filters.specimens'
 import './Gallery.css'
 
 /* THE KIT — every primitive Banchi is built from, on one page, so the tokens are looked at
@@ -1354,6 +1355,10 @@ export function Gallery() {
 
           <Section id="kit-data-kit" data-kit-section="data-kit" className="kit-section" title="Money, filters & links" lede="Money, counts, dates, filters, sort, and the links that open a product or an order.">
             <DataSpecimens />
+          </Section>
+
+          <Section id="kit-filtering" data-kit-section="filtering" className="kit-section" title="Filter bar" lede="One filter bar, one hide toggle, one sortable table header, and the match highlight — composed from the pieces above.">
+            <FilterSpecimens />
           </Section>
 
           {/* ------------------------------------------------------------ screen pieces */}

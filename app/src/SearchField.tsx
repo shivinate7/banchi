@@ -51,6 +51,20 @@ export type SearchFieldProps = {
 
   /** What an empty press says. Defaults to the placeholder's own words. */
   emptyHint?: string
+
+  /** `'lg'` (the default, `--bn-control-h-lg`) everywhere this field stands alone. `'bar'` is
+   *  for a caller that sits this field beside OTHER controls sharing `--bn-control-h` — today
+   *  only `kit/filters.tsx:FilterBar` (the owner's gripe 3, "the filters aren't even the same
+   *  widths") — and takes that shorter height there ONLY: every other `SearchField` on the
+   *  product is untouched. Below 767px, or on a coarse pointer, `--bn-control-h` itself is
+   *  raised to 42px (`tokens.css`), so the 40px thumb floor still holds at any width narrower
+   *  than that, `FilterBar`'s own 639px phone stack included. */
+  controlHeight?: 'lg' | 'bar'
+
+  /** True while what is on screen is not yet the answer to what is in the box (`useSearch`'s
+   *  `loading`). The search mark turns into a spinner, in the same place, so the field keeps
+   *  its size (D118). */
+  busy?: boolean
 }
 
 export function SearchField({
@@ -64,6 +78,8 @@ export function SearchField({
   onSubmit,
   submitLabel,
   emptyHint,
+  controlHeight = 'lg',
+  busy = false,
 }: SearchFieldProps) {
   const id = useId()
   const hintId = useId()
@@ -174,15 +190,19 @@ export function SearchField({
   }
 
   return (
-    <div className={`search-field search-field-${persona}`}>
+    <div className={`search-field search-field-${persona}${controlHeight === 'bar' ? ' search-field-bar' : ''}`}>
       {/* A real <label> in both skins, hidden visually on the owner's rather than replaced by an
           aria-label. */}
       <label className="search-field-label" htmlFor={id}>
         {label ?? LABEL[persona]}
       </label>
 
-      <div className="search-field-box">
-        {persona === 'owner' ? <Icon name="search" size={16} className="search-field-icon" /> : null}
+      <div className="search-field-box" aria-busy={busy ? true : undefined} data-busy={busy ? 'true' : undefined}>
+        {persona !== 'owner' ? null : busy ? (
+          <span className="search-field-spin" aria-hidden="true" />
+        ) : (
+          <Icon name="search" size={16} className="search-field-icon" />
+        )}
         <input
           className="search-field-input"
           id={id}

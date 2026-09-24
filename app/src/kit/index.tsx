@@ -683,3 +683,13 @@ export type {
 export { registerSheet, openSheet, closeSheet, useOpenSheet, sheetHref, hasSheet } from './sheets'
 export type { SheetProps, SheetKind, OpenSheet, SheetHostProps } from './sheets'
 export { matchQuery } from './match'
+
+/* ---- the filter bar, and the URL view state it is built to sit in (kit-filtering) -----------
+   Screens import these from here too, never from `./filters` or `./viewState` directly. */
+export { FilterBar, HideToggle, SortHeader } from './filters'
+export type { FilterBarProps, FilterBarSearch, FilterBarSort, FilterBarHide, FilterBarCount } from './filters'
+export { countFacets, filterRows, withCounts } from './facets'
+export type { FacetValueOf } from './facets'
+export { Highlight, matchSpans } from './highlight'
+export type { HighlightKind } from './highlight'
+export { useViewQuery, patchViewQuery, useViewParam, useViewFlag, useFacetParams, useSortParam } from './viewState'
