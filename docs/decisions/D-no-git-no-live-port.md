@@ -16,10 +16,20 @@
 - **The GitHub Pages demo** (`make demo-static`, `VITE_DEMO=1`) sends every request through `app/src/server.ts:request`'s `DEMO` branch to `demoServer.ts`. It never fetches the baked port. `scripts/demo-record.py` starts its own server on a free port through `PKMNSCAN_PORT`. The demo does not read this derivation.
 - **A copied tree's store** is its own: `home()` answers the copy's `REPO_ROOT`, so its store is `<copy>/inventory/store.sqlite`. It is not the owner's store. But a `cp -r` of the MAIN checkout also copies the gitignored `inventory/`. The copy then holds a copy of the owner's real data. Writes land in the copy and never reach the owner's store.
 
-**What this does not cover.**
+**The override is `PKMNSCAN_PORT`.** The lane plan named a capture-port override under a different name. No variable of that name exists. `server/ports.py:capture_port` reads `PKMNSCAN_PORT`, and `app/devPort.ts` reads no override at all. On the client, `VITE_CAPTURE_SERVER` is the override.
 
-- **A copy that brings its `.git` directory.** A `cp -r` of the main checkout WITH `.git`, or a second clone, is a primary checkout of its own and still derives 8000. No local fact tells it apart from the owner's tree. Its server gets `EADDRINUSE` while the owner's server runs, but its app still bakes 8000. The incident case, no `.git`, is closed. This case is open.
-- **`app/src/server.ts:FALLBACK_BASE`** is `http://localhost:8000`. A bundle built WITHOUT `vite.config.ts`'s define uses it. Every Vite build has the define, so no build reaches it today.
-- **`scripts/screenshot.sh`** falls back to 5173 when Python cannot import `server/ports.py` and `.git` is not a file. That is a second failure on top of this one.
+**The two fallbacks that did not use the derivation.**
 
-**The reader.** `make port-agreement` copies both files into three throwaway trees: `.git` a directory, `.git` a file, and no `.git`. It asks each copy for its own default ports through the module-location read a real build makes. The no-`.git` arm goes red on the old rule, on either side alone. `harness/tests/t7_store_and_seams.py` asserts that a root with no `.git` does not derive 5173.
+- **`app/src/server.ts:FALLBACK_BASE`** was `http://localhost:8000`. A bundle built WITHOUT `vite.config.ts`'s port define used it. The browser cannot hash a path, so a build cannot derive the port here. It is now `about:invalid`, which opens no socket. `request` refuses with `no_server_address` and a sentence on screen before any fetch.
+- **`scripts/screenshot.sh`** fell back to 5173 when Python could not import `server/ports.py` and `.git` was not a FILE. A tree with no `.git` took that fallback. The test is now `[ ! -d .git ]`, so only the primary checkout falls back to 5173.
+
+**An accepted risk, recorded by the orchestrator on 2026-09-23: a copy that brings its `.git` directory.** A `cp -r` of the main checkout WITH `.git`, or a second clone, is a primary checkout of its own and still derives 8000. No local fact tells it apart from the owner's tree. No further guard is built. A second clone is a deliberate act. Its server gets `EADDRINUSE` while the owner's server runs. Its app still bakes 8000. The incident case, no `.git`, is closed.
+
+**The reader.** `make port-agreement` holds four arms.
+
+- It copies both derivation files into three throwaway trees: `.git` a directory, `.git` a file, and no `.git`. It asks each copy for its own default ports, the same way a real build reads them. The no-`.git` arm goes red on the old rule, on either side alone.
+- It bundles `app/src/server.ts` with no port define and a stubbed `fetch`. The bundle must refuse with `no_server_address` and address no base port. The old constant goes red.
+- It runs a copy of `scripts/screenshot.sh` in each kind of tree with no `server/ports.py`. Only the primary tree may fall back. The old `[ -f .git ]` test goes red on the no-`.git` tree.
+- No arm loads a page or opens a socket.
+
+`harness/tests/t7_store_and_seams.py` asserts that a root with no `.git` does not derive 5173.

@@ -2480,10 +2480,11 @@ COMPONENTS = [
                         "the previous bundle byte-identical, the build in flight that answers "
                         "200 throughout, and a PATH with no node on it — the API up, `GET /` "
                         "503, the log naming `make launch-agent`. THE PORT IS PINNED with "
-                        "`PKMNSCAN_PORT` and that is not a shortcut: a copied tree is not a "
-                        "LINKED worktree, so the derivation calls it the main checkout and it "
-                        "claims :8000 — measured, against the owner's live server, the first "
-                        "time this ran. In `check`, never in the git hook (D18). "
+                        "`PKMNSCAN_PORT` and that is not a shortcut: the first time this ran, a "
+                        "copied tree claimed :8000 — measured, against the owner's live server. "
+                        "A copy with no `.git` now takes a slot (D-no-git-no-live-port), and a "
+                        "free socket still cannot collide the way a slot can. "
+                        "In `check`, never in the git hook (D18). "
                         "IT ALSO REPRODUCES BOTH OF D158\'s INCIDENTS in a third "
                         "tree that is a REAL git checkout with a real `main`: a tree moving "
                         "under a live supervisor, and a cold start through `serve.py run` — "
@@ -2491,7 +2492,7 @@ COMPONENTS = [
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
                         "reload is scheduled and the guard is never reached.",
-                "governed_by": ["D18", "D43", "D53", "D138", "D158", "D176"],
+                "governed_by": ["D18", "D43", "D53", "D138", "D158", "D176", "D-no-git-no-live-port"],
                 "tested_by": [],
             },
             "primary_sync.py": {
@@ -4616,7 +4617,8 @@ COMPONENTS = [
                         "derivation — and substitutes a worktree's own port before rendering, "
                         "saying so as it goes. Before that, `make screenshot` in a worktree "
                         "photographed the MAIN tree's app over the owner's real store, and the "
-                        "renders looked perfectly correct. A linked worktree that cannot "
+                        "renders looked perfectly correct. Any tree whose `.git` is not a "
+                        "DIRECTORY (a linked worktree, or a copy with no `.git`) that cannot "
                         "derive its port renders NOTHING rather than falling back to a port "
                         "that would be another tree's.",
                 # D5 is why the loop exists: the agent cannot see its own output, and the
@@ -4626,7 +4628,7 @@ COMPONENTS = [
                 # the store, and this script had been the one caller that did not follow it.
                 # D18 is the rule that keeps it off `make check`: it writes, and nothing
                 # that writes may run on the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18", "D43", "D129"],
+                "governed_by": ["D5", "D13", "D18", "D43", "D129", "D-no-git-no-live-port"],
             },
             "screenshot.mjs": {
                 "does": "the browser half of `make screenshot`: one render, and the proof "
@@ -5666,7 +5668,8 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236", "D252"]},
+                                              "D225", "D227", "D236", "D252",
+                                              "D-no-git-no-live-port"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "

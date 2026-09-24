@@ -39,6 +39,11 @@ WHAT IT COMPARES, and it is deliberately two different things:
      A copy, not a path fed to a function, because the incident was the module reading where
      it LIVES. Only a copy reaches that read.
 
+  4. THE TWO FALLBACKS that do not use the derivation. `app/src/server.ts` bundled with NO
+     port define, with `fetch` stubbed, must refuse by name and address no base port. A copy
+     of `scripts/screenshot.sh` that cannot derive its port may fall back to 5173 only in a
+     primary checkout. Neither arm loads a page or opens a socket.
+
 Stdlib only, and it never writes outside the temporary directory it creates and destroys.
 """
 
@@ -149,6 +154,69 @@ def expected(kind: str, slot: int) -> tuple:
     return ports.DEV_LOW + slot, ports.CAPTURE_LOW + slot
 
 
+def client_fallback_answers(tmp: Path) -> dict:
+    """Bundle the real `app/src/server.ts` WITHOUT `vite.config.ts`'s port define, and ask it.
+
+    This is the bundle `FALLBACK_BASE` exists for. `fetch` is a stub that records the URL and
+    rejects, so this opens no socket, on the old code or the new. The answer is every URL the
+    client tried, the code a read refused with, and one photo URL.
+    """
+    bundle = tmp / "server-no-define.mjs"
+    esbuild = ROOT / "app" / "node_modules" / ".bin" / "esbuild"
+    built = subprocess.run(
+        [str(esbuild), str(ROOT / "app" / "src" / "server.ts"), "--bundle", "--format=esm",
+         "--platform=neutral", "--define:__BN_DEMO__=false", "--define:import.meta.env={}",
+         "--external:./demoServer", f"--outfile={bundle}", "--log-level=error"],
+        cwd=str(ROOT), capture_output=True, text=True, check=False,
+    )
+    if built.returncode != 0:
+        raise SystemExit(
+            "esbuild could not bundle app/src/server.ts — the client fallback is unproven,\n"
+            "which is not the same as safe:\n" + (built.stderr.strip() or "(no stderr)")
+        )
+    script = (
+        "const calls = [];\n"
+        "globalThis.fetch = (url) => { calls.push(String(url));"
+        " return Promise.reject(new Error('stub')); };\n"
+        "const m = await import(%s);\n"
+        "let code = null;\n"
+        "try { await m.getStatus(); } catch (err) { code = err && err.code; }\n"
+        "console.log(JSON.stringify({ calls, code, photo: m.photoUrl(1, 1) }));\n"
+        % json.dumps(bundle.as_uri())
+    )
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        cwd=str(tmp), capture_output=True, text=True, check=False,
+    )
+    if done.returncode != 0:
+        raise SystemExit(
+            "node could not run the bundled client — the fallback is unproven:\n"
+            + (done.stderr.strip() or "(no stderr)")
+        )
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def screenshot_refuses(tmp: Path, kind: str) -> bool:
+    """Run a copy of `scripts/screenshot.sh` in a tree that CANNOT derive its port.
+
+    The tree has no `server/ports.py`, so the derivation fails and the fallback decides. It
+    has no `app/node_modules`, so a run that does not refuse stops at that check, before any
+    render. No page loads either way. True when the script refused for the port.
+    """
+    tree = tmp / f"shot-{kind}"
+    (tree / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "screenshot.sh", tree / "scripts" / "screenshot.sh")
+    if kind == "primary":
+        (tree / ".git").mkdir()
+    elif kind == "linked":
+        (tree / ".git").write_text("gitdir: /nowhere/.git/worktrees/copy\n", encoding="utf-8")
+    done = subprocess.run(
+        ["bash", str(tree / "scripts" / "screenshot.sh")],
+        cwd=str(tree), capture_output=True, text=True, check=False, timeout=60,
+    )
+    return done.returncode != 0 and "dev port could not be derived" in done.stderr
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="pkmnscan-ports.") as tmp:
         roots = []
@@ -196,6 +264,37 @@ def main() -> int:
                         f"(D-no-git-no-live-port, a copied tree never gets the live port)"
                     )
 
+        # The client bundle with no port define: it must refuse, and never call a base port.
+        client = client_fallback_answers(Path(tmp))
+        live = (f":{ports.CAPTURE_BASE_PORT}", f":{ports.DEV_BASE_PORT}")
+        for url in client["calls"] + [client["photo"]]:
+            if any(port in url for port in live):
+                failures.append(
+                    f"a client bundle with no port define addresses {url}, the PRIMARY "
+                    f"checkout's live port (D-no-git-no-live-port, a copied tree never gets "
+                    f"the live port)"
+                )
+        if client["calls"]:
+            failures.append(
+                f"a client bundle with no port define fetched {client['calls']} — it must "
+                f"refuse before any request"
+            )
+        if client["code"] != "no_server_address":
+            failures.append(
+                f"a client bundle with no port define refused with {client['code']!r}, "
+                f"want 'no_server_address'"
+            )
+
+        # The screenshot runner's fallback: only a primary checkout may fall back to 5173.
+        for kind in TREE_KINDS:
+            refused = screenshot_refuses(Path(tmp), kind)
+            if refused != (kind != "primary"):
+                failures.append(
+                    f"{kind} tree: scripts/screenshot.sh "
+                    f"{'refused' if refused else 'fell back to the base dev port'} when it "
+                    f"could not derive its port; only the primary checkout may fall back"
+                )
+
         if failures:
             print("port agreement: FAILED")
             for line in failures:
@@ -205,7 +304,8 @@ def main() -> int:
         print(
             f"port agreement: {len(as_strings)} paths, slots identical; "
             f"this checkout dev {ports.dev_port()} / capture {ports.capture_port()} on both "
-            f"sides; {len(trees)} copied trees ({', '.join(TREE_KINDS)}) answer their own kind"
+            f"sides; {len(trees)} copied trees ({', '.join(TREE_KINDS)}) answer their own kind; "
+            f"a client with no port define refuses; screenshot.sh falls back only when primary"
         )
         return 0
 
