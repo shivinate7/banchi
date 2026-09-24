@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -254,6 +254,8 @@ help:
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
 	@echo "  make demo-photos  curate real card photographs into the tracked set. Needs a"
 	@echo "                    store: SOURCE=<checkout>. Refuses any photo carrying a QR."
+	@echo "  make demo-histories  record the demo's price histories into new fixtures. The"
+	@echo "                    owner's Mac only, with PKMNSCAN_TCG_USER_AGENT set. Never CI."
 	@echo "  make demo-seed    the store alone, built on the curated photographs."
 	@echo "  make demo-record  the bundle alone — sweep every GET the client can build."
 	@echo "  make demo-static  the two above, then a static build to dist-demo/."
@@ -1713,6 +1715,16 @@ demo-photos:
 		exit 1; }
 	@$(PYTHON) scripts/demo-photos.py --source "$(SOURCE)" \
 	  --count $(DEMO_PHOTO_COUNT) --joinable $(DEMO_PHOTO_JOINABLE)
+
+# Record the demo's price histories into NEW committed fixtures, on the owner's Mac only.
+#
+# The history host refuses the honest User-Agent (D216), and the owner allows the browser
+# signature from the owner's own machine, never from CI. So this runs by hand, when the owner
+# chooses, with PKMNSCAN_TCG_USER_AGENT set, and writes a new dated directory under
+# fixtures/demo-price-history/. It refuses to overwrite one. The seed and the recorder read the
+# newest. NO WORKFLOW CALLS THIS TARGET.
+demo-histories:
+	@$(PYTHON) scripts/demo-histories.py $(ARGS)
 
 demo-seed:
 	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force

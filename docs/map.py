@@ -4588,6 +4588,17 @@ COMPONENTS = [
                 # number this copies across so the caption matches the picture.
                 "governed_by": ["D24", "D25", "D67", "D70"],
             },
+            "demo-histories.py": {
+                "does": "`make demo-histories`: records every demo card's price history, all "
+                        "four ranges, from infinite-api into a NEW dated directory under "
+                        "`fixtures/demo-price-history/`, on the owner's Mac only, with the "
+                        "browser User-Agent the owner allows there (D216) and never from CI. "
+                        "Refuses without that variable, refuses an existing directory (a "
+                        "fixture is never modified), and refuses any answer carrying a key "
+                        "outside its allow list of public market figures. The seed and the "
+                        "recorder read the newest directory.",
+                "governed_by": ["D62", "D216", "D219"],
+            },
             "demo-seed.py": {
                 "does": "writes a demo store — real catalogue rows out of fixtures/, invented "
                         "positions, drawn card photographs, a corpus with three deliberate "
@@ -8644,10 +8655,12 @@ COMPONENTS = [
                         "and Cards to pull draw photographs that answer 200; Mark sold then Undo restores the box "
                         "count; a Game pick draws counts; a typed search, the order walk, a "
                         "review answer and its undo, the graveyard, product history, the value "
-                        "band and 'Value my stock' all draw without the demo refusal. Proved to "
-                        "fail: 13 of 17 cases go red on the previous `demoServer.ts` with no "
-                        "photographs. SKIPS BY NAME with no `dist-demo/` — `make demo-static` "
-                        "builds it, and `make design-check` does not.",
+                        "band and 'Value my stock' all draw without the demo refusal. Every "
+                        "screen is reached from the root by the sidebar or a control, except "
+                        "the `#/product` deep link (D227). Proved to fail: 13 of 17 cases went "
+                        "red on the previous `demoServer.ts` with no photographs. SKIPS BY NAME "
+                        "with no `dist-demo/`; `DEMO_REQUIRED=1` makes that a failure, and "
+                        "`.github/workflows/demo.yml` runs it that way before it publishes.",
                 "governed_by": ["D52", "D126", "D183", "D213", "D227"],
             },
             "tests/product-history.spec.ts": {
