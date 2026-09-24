@@ -135,12 +135,12 @@ function SendStanding({
       return (
         <Notice tone="warn" compact className="send-standing send-unknown" title={`TCGplayer has not confirmed ${copies}.`}>
           {send.unknown?.staged
-            ? 'The upload may still wait in TCGplayer’s Staged list. Do not publish it there, and do not send these again.'
-            : 'They may be live. Do not send them again.'}{' '}
+            ? 'The upload may still wait in TCGplayer’s Staged list. Do not publish it there.'
+            : 'They may be live.'}{' '}
           {send.held
-            ? `These cards stay out of every send until Banchi checks, after ${clockTime(send.check_after)}.`
+            ? `Until Banchi checks, after ${clockTime(send.check_after)}, they stay out of every send.`
             : `Banchi checks after ${clockTime(send.check_after)}.`}{' '}
-          Any that are not there can come back to the list then.
+          Any not found can come back then.
         </Notice>
       )
     case 'written':
