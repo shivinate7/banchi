@@ -39,7 +39,7 @@ addresses it. It adds the freedom the owner asked for.
 
 The shape of the key is not decided. The builder brings options to the owner with measurements:
 
-- **The form.** A sortable fraction between two neighbours, integers with gaps, or an order
+- **The form.** A sortable fraction between two neighbors, integers with gaps, or an order
   within the section object. Each costs something different on a long box.
 - **The dividers.** A divider list of indices cannot describe a section that lands between two
   others. Dividers may need to key by order key, or the section object may hold its own cards.

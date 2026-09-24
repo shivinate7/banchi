@@ -213,7 +213,7 @@ another write, the way back is a new move. This adds a move to the fast path in
 
 ## 6. A drop that crosses something in flight
 
-| Case | v1 behaviour |
+| Case | v1 behavior |
 |---|---|
 | A card in the section has a live paid reading | Refuse before the drag starts, and again at the write. It names the reading. |
 | The section's cards belong to a run that is matched and not yet sent | Allow. The join follows the card (slug `a-moved-card-keeps-its-price`). |

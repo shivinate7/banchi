@@ -30,7 +30,7 @@ The review recommended a visible cue or a shorter foot. The owner chose to remov
 ### What goes with the foot
 
 D204's `--bn-drawer-foot-h` token describes the foot's fixed height. It has no subject once the
-foot goes, so it goes too, in the same change. The spec that D204 added reads a row's centre
+foot goes, so it goes too, in the same change. The spec that D204 added reads a row's center
 with `elementFromPoint`. It stays, and it now also asserts that the drawer draws no fixed foot.
 
 ### What is built

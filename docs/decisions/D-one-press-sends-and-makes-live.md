@@ -74,7 +74,7 @@ the transport until a mechanism is chosen and proved red on a double send.
   same place. The Mark-down sheet's shell command becomes the "Check what is live" press.
 - **D156 (every unsent copy is one worklist).** A run's status names its real next step, for
   example "Ready to send", never "Needs pricing" once pricing is answered.
-- **D64, D65, D76, D166, D170 (the export fetch and its scope).** The rules stay. The fetch now
+- **The export fetch and its scope (D64, D65, D76, D166, D170).** The rules stay. The fetch now
   starts when a reading finishes. A refusal becomes the run's next step.
 - **D174 (a press claims the cards it is about to buy).** Unchanged.
 

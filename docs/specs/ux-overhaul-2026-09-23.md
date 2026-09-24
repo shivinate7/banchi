@@ -66,7 +66,7 @@ those entries.
 
 ### 4.1 Scope
 
-- The two S1 findings fold into the plan. No separate hotfix lane.
+- The two S1 findings fold into the plan. No separate lane for urgent fixes.
 - The build covers every finding, the small ones included.
 - Cut every line the density lens proposed, about 4,200 words. D137 (the catalog is Near Mint
   by rule) is the one exception: "Near Mint" stays on every row.
