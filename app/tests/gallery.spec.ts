@@ -1,6 +1,7 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { sealEveryTest } from './shell'
+import { settleMotion } from './motionSettled'
 
 /* THE ROW SHAPES `#/gallery` DRAWS THAT NOTHING ELSE IN THIS APP EVER DRAWS.
  *
@@ -560,6 +561,107 @@ test('layers stack: the top one takes focus and Escape, and each gives focus bac
   await page.keyboard.press('Escape')
   await expect(first).toHaveCount(0)
   await expect(opener).toBeFocused()
+})
+
+/* A rectangle in VIEWPORT coordinates — `getBoundingClientRect()`'s own frame, which is what
+ * `elementFromPoint` reads too, so a point computed from one is valid for the other. */
+type Box = { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+
+async function boxOf(target: Locator): Promise<Box> {
+  return target.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return { x: r.x, y: r.y, width: r.width, height: r.height }
+  })
+}
+
+/** A point inside `lower` and outside `upper` — whichever margin `lower` extends past `upper`
+ *  on (top, bottom, left or right), the midpoint of that strip. `null` when `upper` fully
+ *  covers `lower`, which would make a point that is "inside lower, outside upper" undefined. */
+function pointOutside(lower: Box, upper: Box): { readonly x: number; readonly y: number } | null {
+  if (lower.y < upper.y) {
+    return { x: lower.x + lower.width / 2, y: (lower.y + Math.min(lower.y + lower.height, upper.y)) / 2 }
+  }
+  if (lower.y + lower.height > upper.y + upper.height) {
+    return { x: lower.x + lower.width / 2, y: (Math.max(lower.y, upper.y + upper.height) + lower.y + lower.height) / 2 }
+  }
+  if (lower.x < upper.x) {
+    return { x: (lower.x + Math.min(lower.x + lower.width, upper.x)) / 2, y: lower.y + lower.height / 2 }
+  }
+  if (lower.x + lower.width > upper.x + upper.width) {
+    return { x: (Math.max(lower.x, upper.x + upper.width) + lower.x + lower.width) / 2, y: lower.y + lower.height / 2 }
+  }
+  return null
+}
+
+/* A SECOND SCRIMMED LAYER'S OWN SCRIM HAS TO DIM THE FIRST LAYER'S PANEL — a review finding,
+ * 2026-09-23. `useOverlayLayer` gives the panel a z-index from its own position in the stack
+ * (`kit/overlay.tsx`), but until this fix every scrim shared ONE static number (60, kit.css)
+ * regardless of which layer it belonged to — so a second scrim (60) sat BELOW the first layer's
+ * own panel (61) instead of above it, and the layer underneath was never actually dimmed. Two
+ * shapes: a `ConfirmSheet` opened from inside an open `Sheet`, and the kit's own `Modal`-over-
+ * `Modal` fixture (`layered`/`second`). Both read the SAME two things: the upper scrim's own
+ * z-index against both panels' (`assertUpperScrimDims`), and a real point — computed, not
+ * guessed — where only the scrim, not the upper panel itself, could be covering the lower one. */
+async function assertUpperScrimDims(page: Page, lower: Locator, upper: Locator): Promise<void> {
+  // The upper panel's own entrance transform (`bn-dialog-in`/`bn-sheet-up`, kit.css) is still
+  // animating for `toBeVisible()`'s whole first frame — a `getBoundingClientRect()` read mid
+  // scale is a real but TRANSIENT box, not the settled one this geometry is about (the same
+  // shape of reading `fulfillment.spec.ts`'s own `settleMotion` calls exist for).
+  await settleMotion(page)
+  const scrims = page.locator('.bn-scrim')
+  await expect(scrims).toHaveCount(2)
+  const [lowerZ, upperZ, scrimZs] = await Promise.all([
+    lower.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+    upper.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+    scrims.evaluateAll((els) => els.map((el) => Number(window.getComputedStyle(el).zIndex))),
+  ])
+  const upperScrimZ = Math.max(...scrimZs)
+  expect(upperScrimZ, `scrims: ${scrimZs.join(', ')}, lower panel: ${lowerZ}`).toBeGreaterThan(lowerZ)
+  expect(upperScrimZ, `scrims: ${scrimZs.join(', ')}, upper panel: ${upperZ}`).toBeLessThan(upperZ)
+
+  const [lowerBox, upperBox] = await Promise.all([boxOf(lower), boxOf(upper)])
+  const point = pointOutside(lowerBox, upperBox)
+  expect(point, 'no margin between the two panels to probe an uncovered point in').not.toBeNull()
+  const covering = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.className ?? null, point!)
+  expect(covering, `element at (${point!.x}, ${point!.y}): "${covering}"`).toContain('bn-scrim')
+}
+
+test('a confirm opened from inside an open sheet dims the sheet with its own scrim, not the sheet\'s', async ({
+  page,
+}) => {
+  const openSheet = page.locator('[data-kit-open="sheet"]')
+  await openSheet.scrollIntoViewIfNeeded()
+  await openSheet.click()
+  const sheet = page.locator('[data-bn-overlay="sheet"]')
+  await expect(sheet).toBeVisible()
+
+  await sheet.locator('[data-kit-open="confirm-in-sheet"]').click()
+  const confirm = page.locator('[role="alertdialog"]')
+  await expect(confirm).toBeVisible()
+
+  await assertUpperScrimDims(page, sheet, confirm)
+
+  await confirm.getByRole('button', { name: 'Cancel' }).click()
+  await expect(confirm).toHaveCount(0)
+  await expect(sheet).toBeVisible()
+})
+
+test('a second modal over the first dims it with its own scrim, not the first modal\'s', async ({ page }) => {
+  const opener = page.locator('[data-kit-open="layered"]')
+  await opener.scrollIntoViewIfNeeded()
+  await opener.click()
+  const first = page.locator('[data-bn-overlay="modal"]').filter({ hasText: 'The first layer' })
+  await expect(first).toBeVisible()
+
+  await first.locator('[data-kit-open="second"]').click()
+  const second = page.locator('[data-bn-overlay="modal"]').filter({ hasText: 'The second layer' })
+  await expect(second).toBeVisible()
+
+  await assertUpperScrimDims(page, first, second)
+
+  await page.keyboard.press('Escape')
+  await expect(second).toHaveCount(0)
+  await expect(first).toBeVisible()
 })
 
 test('a popover closes on Escape, and on Tab past its last item, and gives focus back to its trigger', async ({ page }) => {

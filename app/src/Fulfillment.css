@@ -1277,6 +1277,11 @@
 .ff-zoom {
   position: fixed;
   inset: 0;
+  /* A FALLBACK ONLY, for the instant before `useOverlayLayer` (`kit/overlay.tsx`) attaches and
+   * overrides it inline. The zoom is now on the kit's own layer stack, the same one the "?"
+   * sheet's `Modal` joins, so which of the two paints on top is decided by open order, not by
+   * this number — see that hook's own comment for why a static value here once meant the
+   * photo always won regardless of which was opened last. */
   z-index: 70;
   width: 100%;
   display: flex;
@@ -1310,20 +1315,31 @@
 :root[data-theme='dark'] .ff-zoom { background: var(--bn-bg); color: var(--bn-ink); }
 :root[data-theme='dark'] .ff-zoom-hint { color: var(--bn-ink); }
 
-/* ---- the keyboard reference (UX-101) — plain, no route out, over the kit's own
-   scrim/dialog primitives. This screen's own sheet, never the shell's `.app-keys` (App.css),
+/* ---- the keyboard reference (UX-101) — plain, no route out, on the kit's own `Modal`
+   (`kit/overlay.tsx`). This screen's own sheet, never the shell's `.app-keys` (App.css),
    which cannot open here at all (D5, no shell). --------------------------------------------- */
-.ff-keys { width: min(420px, calc(100vw - 32px)); padding: var(--bn-6); }
+/* `--ff-fs-base` IS RE-DECLARED HERE, not just read: `Modal` portals to `document.body`
+   (`kit/overlay.tsx`), so `.ff-keys` is no longer a DOM descendant of `.fulfillment`, which
+   is the only place this custom property is set (above). A custom property inherits down the
+   DOM tree, never across a portal, so every `var(--ff-fs-base)` under here was resolving to
+   nothing and falling through to `body`'s own 14px (`--bn-fs-base`) — under this screen's own
+   20px floor. Re-declaring the one token this sheet reads on its own new root fixes it at the
+   cause, the same one the kit's own chrome is raised for just below. */
+.ff-keys { --ff-fs-base: 20px; width: min(420px, calc(100vw - 32px)); }
 /* Below 768px `.bn-dialog` (kit.css) already drops its own centering for a full-bleed
    bottom sheet (`left/right: 0`) — this screen's own fixed `width` above fought that and
    left it pinned at the left edge with empty space beside it. Clearing it here lets the
-   kit's own treatment stand, the gutter is its own `padding` unchanged. */
+   kit's own treatment stand. */
 @media (max-width: 767px) {
   .ff-keys { width: auto; }
 }
-.ff-keys-head { display: flex; align-items: center; gap: var(--bn-4); margin-bottom: var(--bn-4); }
-.ff-keys-title { flex: 1 1 auto; }
-.ff-keys-close { flex: none; }
+/* THE FLOOR TABLE REACHES THE KIT'S OWN CHROME TOO, once it is drawn here. The kit's shared
+   `.bn-overlay-title` is 16px (`--bn-fs-h3`, kit.css) and its `.bn-overlay-close` is 34-42px
+   (`--bn-control-h`) — both sized for the owner's dense screens, both under this screen's own
+   20px text / 44px target floors. Raised here, the same way `.ff-keys-key` below already
+   raises the kit's `.bn-kbd`. */
+.ff-keys .bn-overlay-title { font-size: var(--ff-fs-base); }
+.ff-keys .bn-overlay-close { min-width: 44px; min-height: 44px; }
 .ff-keys-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-4); }
 /* ONE COLUMN FOR THE KEYS. A `grid` PER `<li>` cannot do this — grid tracks size per
    CONTAINER, so "Esc" (3 characters) and "?" (1) sized two DIFFERENT first columns and put

@@ -30,7 +30,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { sayPlace } from './position'
-import { Icon, Logo } from './kit'
+import { Icon, Logo, Modal, useOverlayLayer } from './kit'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
 import './Fulfillment.css'
@@ -529,6 +529,10 @@ export function Fulfillment() {
   const [now, setNow] = useState(() => Date.now())
   /** The photo he tapped, so focus comes back to it when the big photo closes. */
   const photoBtn = useRef<HTMLButtonElement>(null)
+  /** The zoomed photo itself — on the kit's own layer stack (`kit/overlay.tsx`), so it and the
+   *  "?" sheet's `Modal` share one Escape and one z-order even though neither is portalled from
+   *  the other's own call. */
+  const zoomOverlay = useRef<HTMLButtonElement>(null)
 
   const reread = useCallback(() => setReads((n) => n + 1), [])
 
@@ -630,33 +634,33 @@ export function Fulfillment() {
        zoom is open — and focus would land on whatever is in that slot now. This is the node
        he tapped. */
     const opener = photoBtn.current
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setZoom(false)
-    }
-    document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('keydown', onKey)
       /* The page is hidden under the big photo, which drops focus; hand it back to the photo
          he tapped. Null once the card has left the screen, and then there is nothing to do. */
       opener?.focus({ preventScroll: true })
     }
   }, [zoom])
 
+  /* ON THE KIT'S OWN LAYER STACK (`kit/overlay.tsx`), the same one the "?" sheet's `Modal`
+   * joins — so whichever of the two opened last is the one Escape closes and the one painted
+   * on top, and Escape pressed again then reaches the other. `trap: false`: the zoomed photo's
+   * only control is itself (closing it, on click or Escape), so nothing needs to cycle by Tab. */
+  useOverlayLayer(zoomOverlay, { active: zoom, onEscape: () => setZoom(false), trap: false })
+
   /* THE ONE BINDING THIS SCREEN ANSWERS TO ON ITS OWN, no shell to carry it (D5). `?` opens
    * the small reference below; `isEditableTarget` yields to typing, `App.tsx`'s own rule for
-   * the same key. Escape closes whichever of the two overlays this screen has open, the
-   * sheet taking priority since it sits on top. */
+   * the same key. Escape closing the sheet itself is the kit Modal's own job now (its capture
+   * listener stops the key reaching here at all while the sheet is the top layer), which is
+   * also why this no longer needs `showKeys` in its own deps. */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === '?' && !event.repeat && !isEditableTarget(event.target)) {
         setShowKeys((held) => !held)
-        return
       }
-      if (event.key === 'Escape' && showKeys) setShowKeys(false)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [showKeys])
+  }, [])
 
   const soldSet = useMemo(() => new Set(soldHere), [soldHere])
 
@@ -1601,6 +1605,7 @@ export function Fulfillment() {
   const bigPhoto =
     zoom && chosen !== null && photoMissing !== chosen.key ? (
       <button
+        ref={zoomOverlay}
         className="ff-zoom"
         type="button"
         aria-label="Close the big photo"
@@ -1619,46 +1624,26 @@ export function Fulfillment() {
     ) : null
 
   /* The one thing this screen answers to on its own — UX-101, "the key works for the
-     Fulfiller, or it leaves the list". The kit's own scrim/dialog primitives (`bn-scrim`,
-     `bn-dialog` — `App.tsx`'s own `.app-keys` is the same pair, scaled up for its own
-     many-screen table); no route out, closed by Esc, the scrim, or its own button. THE KEY
-     CAP IS NOT `.bn-kbd` — that chip is 10px, sized for the owner's dense reference sheet,
-     and this screen's own floor table reaches it too (`.ff-keys-key`, Fulfillment.css). */
-  const keysSheet = !showKeys ? null : (
-    <>
-      <div className="bn-scrim" onClick={() => setShowKeys(false)} />
-      <div
-        className="bn-dialog ff-keys"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ff-keys-title"
-      >
-        <header className="ff-keys-head">
-          <h2 className="fulfillment-title ff-keys-title" id="ff-keys-title">
-            Keyboard shortcuts
-          </h2>
-          <button
-            className="ff-quiet ff-keys-close"
-            type="button"
-            aria-label="Close"
-            autoFocus
-            onClick={() => setShowKeys(false)}
-          >
-            <Icon name="x" size={24} />
-          </button>
-        </header>
-        <ul className="ff-keys-list">
-          <li>
-            <kbd className="ff-keys-key">Esc</kbd>
-            <span className="fulfillment-say">Close the enlarged photograph</span>
-          </li>
-          <li>
-            <kbd className="ff-keys-key">?</kbd>
-            <span className="fulfillment-say">Open or close this list</span>
-          </li>
-        </ul>
-      </div>
-    </>
+     Fulfiller, or it leaves the list". Built on the kit's own `Modal` (`kit/overlay.tsx`) —
+     `App.tsx`'s own `.app-keys` is a hand-rolled twin of the same pair, scaled up for its own
+     many-screen table, kept outside the kit because it is the shell's. This screen has none
+     (D5), so this is its own sheet, over the kit's focus trap, layer stack, and return-focus;
+     no route out, closed by Esc, the scrim, or its own Close. THE KEY CAP IS NOT `.bn-kbd` —
+     that chip is 10px, sized for the owner's dense reference sheet, and this screen's own
+     floor table reaches it too (`.ff-keys-key`, Fulfillment.css). */
+  const keysSheet = (
+    <Modal open={showKeys} onClose={() => setShowKeys(false)} title="Keyboard shortcuts" className="ff-keys">
+      <ul className="ff-keys-list">
+        <li>
+          <kbd className="ff-keys-key">Esc</kbd>
+          <span className="fulfillment-say">Close the enlarged photograph</span>
+        </li>
+        <li>
+          <kbd className="ff-keys-key">?</kbd>
+          <span className="fulfillment-say">Open or close this list</span>
+        </li>
+      </ul>
+    </Modal>
   )
 
   return (

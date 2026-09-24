@@ -1,6 +1,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 
 /* docs/DESIGN.md's Fulfillment constraints table, every row of it, as assertions.
  *
@@ -1001,11 +1002,26 @@ type Run = { text: string; where: string; size: number; color: string; ground: s
  * same call the nav rule in Fulfillment.css relies on, and the destructive-route test below
  * is where it is made honest.
  *
+ * `checkVisibility()` alone still says yes to the kit's own `.bn-sr` (`kit.css`): visible per
+ * `display`/`visibility`, clipped to a 1x1 box on purpose (the accessible name an icon-only
+ * `Button` gives a screen reader — the "?" sheet's own Close button, since it moved onto the
+ * kit's `Modal`, is the first place this file draws one). `checkVisibility()` has no option
+ * for `clip`, so the box itself is read: on-screen text is never 1px in both directions.
+ *
  * The ground is resolved by walking up to the first opaque background, which is what the eye
  * does: `.pull-confirm-label` is white on nothing, sitting on a button filled with --accent.
  */
 async function runsIn(view: Locator): Promise<Run[]> {
   return view.evaluate((root) => {
+    /* `checkVisibility()` alone, not the box: see the comment above this function. KNOWN GAP,
+     * not this screen's shape: a 0x0 wrapper with `overflow: visible` holding text that
+     * paints outside its own box is read as unpainted here too — the box checked is the
+     * TEXT'S OWN PARENT, never where its content actually renders. */
+    const painted = (element: Element): boolean => {
+      if (!element.checkVisibility()) return false
+      const box = element.getBoundingClientRect()
+      return box.width > 1 && box.height > 1
+    }
     /* THE GROUND, COMPOSITED RATHER THAN THE FIRST COLOUR FOUND.
      *
      * A translucent layer is a real ground — what the eye reads is it painted over whatever is
@@ -1063,7 +1079,7 @@ async function runsIn(view: Locator): Promise<Run[]> {
     while (node !== null) {
       const text = (node.textContent ?? '').trim()
       const parent = node.parentElement
-      if (text !== '' && parent !== null && parent.checkVisibility()) {
+      if (text !== '' && parent !== null && painted(parent)) {
         const style = window.getComputedStyle(parent)
         out.push({
           text,
@@ -1207,15 +1223,22 @@ async function paintedPhoto(
  * a 12px line on any of those was invisible.
  */
 
+/* Page-wide, like `targets` and `noWayOut` below — not `view(page)`. The kit's `Modal`
+ * (`kit/overlay.tsx`) portals to `document.body`, a sibling of `main.fulfillment`, so a
+ * `view(page)`-scoped walk would silently stop seeing the "?" sheet's own text the moment it
+ * moved onto the kit. This route draws nothing else outside `main.fulfillment` (no shell,
+ * D5), so scanning the body reads exactly the view plus whatever overlay sits on top of it. */
+const PAGE_ROOT = 'body'
+
 async function noSmallText(page: Page, where: string): Promise<void> {
-  const runs = await runsIn(view(page))
+  const runs = await runsIn(page.locator(PAGE_ROOT))
   expect(runs.length, `${where}: nothing rendered, so nothing was measured`).toBeGreaterThan(0)
   const small = runs.filter((run) => run.size < BODY_FLOOR)
   expect(small, `${where}: below the ${BODY_FLOOR}px floor`).toEqual([])
 }
 
 async function noThinContrast(page: Page, where: string): Promise<void> {
-  const runs = await runsIn(view(page))
+  const runs = await runsIn(page.locator(PAGE_ROOT))
   expect(runs.length, `${where}: nothing rendered`).toBeGreaterThan(0)
   for (const run of runs) {
     const ink = parseRgb(run.color)
@@ -1293,6 +1316,13 @@ const BANNED_RE = new RegExp(`\\b(${BANNED.join('|')})(s|d|es|ed|ing)?\\b`, 'i')
 
 async function copyIn(view: Locator): Promise<{ text: string; where: string }[]> {
   return view.evaluate((root) => {
+    /* Same reason as `runsIn`'s own `painted`: `checkVisibility()` alone says yes to the
+     * kit's `.bn-sr` (an icon-only button's accessible name, clipped to 1x1 on purpose). */
+    const painted = (element: Element): boolean => {
+      if (!element.checkVisibility()) return false
+      const box = element.getBoundingClientRect()
+      return box.width > 1 && box.height > 1
+    }
     const describe = (element: Element): string => {
       const classes = element.getAttribute('class')
       return `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}`
@@ -1304,7 +1334,7 @@ async function copyIn(view: Locator): Promise<{ text: string; where: string }[]>
     while (node !== null) {
       const text = (node.textContent ?? '').trim()
       const parent = node.parentElement
-      if (text !== '' && parent !== null && parent.checkVisibility()) {
+      if (text !== '' && parent !== null && painted(parent)) {
         out.push({ text, where: describe(parent) })
       }
       node = walker.nextNode()
@@ -1323,7 +1353,8 @@ async function copyIn(view: Locator): Promise<{ text: string; where: string }[]>
 }
 
 async function noJargon(page: Page, where: string): Promise<void> {
-  const copy = await copyIn(view(page))
+  // Page-wide too — see PAGE_ROOT's own comment above `noSmallText`.
+  const copy = await copyIn(page.locator(PAGE_ROOT))
   expect(copy.length, `${where}: no copy to read`).toBeGreaterThan(0)
   for (const line of copy) {
     const found = BANNED_RE.exec(line.text)
@@ -1997,25 +2028,84 @@ test('the search placeholder ends in an honest ellipsis at 390px, never a raw mi
  * proved end to end: it opens, it names what this screen actually takes, and it closes. */
 test('"?" opens this screen\'s own keyboard reference, and closes it again', async ({ page }) => {
   await openList(page)
-  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+  // Unscoped, not `view(page)`: the kit's `Modal` (`kit/overlay.tsx`) portals to
+  // `document.body`, a sibling of `main.fulfillment` and not a descendant of it.
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
 
   await page.keyboard.press('?')
-  const sheet = view(page).locator('.ff-keys')
+  const sheet = page.locator('.ff-keys')
   await expect(sheet).toBeVisible()
   await expect(sheet).toContainText('Esc')
   await expect(sheet).toContainText('Close the enlarged photograph')
+  // THE MODAL'S OWN ENTRANCE ANIMATION (`bn-dialog-in`/`bn-sheet-up`, kit.css) SCALES AND
+  // TRANSLATES IT IN over `--bn-t-slow` — a transform, so `getBoundingClientRect()` reads the
+  // TRANSIENT painted size mid-animation, not the settled one. `toBeVisible()` above passes
+  // from the animation's first frame, well before that. Measured: the Close button's own
+  // 44px floor read 43.79px under load, mid-scale. `settleMotion` (`motionSettled.ts`) is the
+  // fix `orders.spec.ts`'s D118 guard already uses for the same shape of reading.
+  await settleMotion(page)
   // THE FLOOR TABLE REACHES THE SHEET TOO — its key caps and text are on screen exactly
   // like any other card, and `battery` holds them to the same nine rows while it is open.
   await battery(page, 'keyboard shortcuts sheet')
 
   await page.keyboard.press('Escape')
-  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
 
   // And the close button works the same way.
   await page.keyboard.press('?')
-  await expect(view(page).locator('.ff-keys')).toBeVisible()
-  await view(page).getByRole('button', { name: 'Close' }).click()
-  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+  await expect(page.locator('.ff-keys')).toBeVisible()
+  await page.getByRole('button', { name: 'Close' }).click()
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
+})
+
+/* THE ZOOM AND THE "?" SHEET ARE BOTH REACHABLE AT ONCE — zoom a photo, then press "?" — and
+ * before this test neither knew about the other. The zoom answered its own Escape with a
+ * plain `document` listener; the kit `Modal`'s own listener is on `window`, in the CAPTURE
+ * phase, and stops the event once it decides it is the top layer — which it always was,
+ * being the only thing on the kit's stack. So Escape closed the sheet BEHIND the photo and
+ * the photo, visually on top the whole time, never moved: a real regression, since the
+ * screen never told him which of the two his key press had just answered.
+ *
+ * Both now join the kit's one stack (`kit/overlay.tsx`) through `useOverlayLayer`, so the
+ * sheet — opened SECOND — is the one Escape closes first, and paints above the zoom for the
+ * same reason: a stack position, not a class-wide constant, decides both. */
+test('a zoomed photo and the "?" sheet share one Escape and one order, and each gives focus back', async ({
+  page,
+}) => {
+  await openList(page)
+  await openCard(page, 'Charizard ex')
+  const photoBtn = view(page).getByRole('button', { name: 'Show the photo bigger' })
+  await photoBtn.click()
+  const zoomEl = page.locator('.ff-zoom')
+  await expect(zoomEl).toBeVisible()
+  await expect(zoomEl).toBeFocused()
+
+  await page.keyboard.press('?')
+  const sheet = page.locator('.ff-keys')
+  await expect(sheet).toBeVisible()
+  // BOTH REACHABLE: opening the sheet did not close the photo behind it.
+  await expect(zoomEl).toBeVisible()
+
+  // THE SHEET OPENED LAST, SO IT PAINTS ON TOP — read off the two layers' own z-index
+  // rather than a point on screen, which is what `useOverlayLayer` actually sets.
+  const [zoomZ, sheetZ] = await Promise.all([
+    zoomEl.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+    sheet.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+  ])
+  expect(sheetZ, `zoom z-index ${zoomZ}, sheet z-index ${sheetZ}`).toBeGreaterThan(zoomZ)
+
+  // FIRST ESCAPE closes the sheet — the shared stack's own top — and gives focus back to
+  // the photo, which is what had focus the moment "?" opened it.
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await expect(zoomEl).toBeVisible()
+  await expect(zoomEl).toBeFocused()
+
+  // SECOND ESCAPE closes the zoom, now the stack's own top on its own, and gives focus back
+  // to the card's own photo button.
+  await page.keyboard.press('Escape')
+  await expect(zoomEl).toHaveCount(0)
+  await expect(photoBtn).toBeFocused()
 })
 
 /* ONE COLUMN FOR THE KEYS, MEASURED — a `display: grid` on each `<li>` looked right and was
@@ -2026,8 +2116,13 @@ test('"?" opens this screen\'s own keyboard reference, and closes it again', asy
  * (390) — the two layouts this sheet actually draws. */
 async function keysSentenceXs(page: Page): Promise<number[]> {
   await page.keyboard.press('?')
-  const rows = view(page).locator('.ff-keys-list li .fulfillment-say')
+  // Unscoped: the kit's `Modal` portals `.ff-keys` to `document.body`, not into `main.fulfillment`.
+  const rows = page.locator('.ff-keys-list li .fulfillment-say')
   await expect(rows).toHaveCount(2)
+  // The Modal's own entrance animation transforms the whole panel; an x read mid-scale is a
+  // transient one, not the settled layout this test is about (see the comment beside the
+  // other `settleMotion` call above).
+  await settleMotion(page)
   return rows.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().x))
 }
 

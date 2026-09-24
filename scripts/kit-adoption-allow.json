@@ -41,7 +41,6 @@
     },
     "app/src/Gallery.tsx": {
       "R2-search": "kit-frame",
-      "R2-select": "kit-frame",
       "R2-money": "kit-frame"
     },
     "app/src/Graveyard.tsx": {
