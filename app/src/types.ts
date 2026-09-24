@@ -479,8 +479,57 @@ export type InventoryCard = {
   number: string | null
   printed_total: string | null
   confidence: string | null
+
+  /** THE EVIDENCE GROUP'S OWN COPY OF WHAT THE CAMERA READ
+   *  (`docs/specs/identity-follows-sku.md` §3.1/§3.4/§4.1, lane 1). `record_identification`
+   *  writes these three — never `name`/`number`/`printed_total` directly on a card `bind_sku`
+   *  has bound — so a reading and a catalogue-derived identity can coexist and disagree
+   *  without either overwriting the other. `read_number`/`read_printed_total` keep the
+   *  model's raw shape, set code and all (D67, D55): unlike `number`/`printed_total`, no
+   *  fold ever runs on these two. Null on every card identified before these fields existed.
+   *  Never searchable (§5.2, ruling 4) and never rendered outside Details' own "Read as"
+   *  line below (§5.4), which draws only when `read_disputes` is true.
+   *
+   *  OPTIONAL, on `types.ts`'s own standing rule for a server decoration: a server that
+   *  predates this change sends no such key at all, and every fixture built before this
+   *  change stays a valid `InventoryCard` rather than needing three new nulls typed in. */
+  read_name?: string | null
+  read_number?: string | null
+  read_printed_total?: string | null
+
   sku: string | null
   condition: string | null
+
+  /** THE BINDING GROUP (§3.1, lane 1): which SKU this card is, who chose it, and when —
+   *  written only by `Inventory.bind_sku`/`unbind_sku`, never by `set_state`.
+   *
+   *  `identity_source` is `"sku"` when `name`/`number`/`printed_total`/`rarity`/`set_name`
+   *  equal the SKU table's own row for `sku`, and `"read"` when the card has no SKU yet, is a
+   *  HELD card (a SKU whose own reading disputes it, or a migration leftover, §7), or the SKU
+   *  is absent from the table — in which case those same fields equal the evidence fields
+   *  instead. There is no third value. `POST /inventory/<box>/<index>/confirm`
+   *  (`server.ts:confirmIdentity`) is the press that turns a held card's `"read"` into
+   *  `"sku"` with no new SKU; `CardHero.tsx:ListingCorrection` is where it lives, beside the
+   *  D252 correction and inside the same reserved slot (D118).
+   *
+   *  `bound_by` is one of `join`, `answer`, `group_answer`, `correction`, `confirm`,
+   *  `migration` — the act that last wrote the binding. `bound_at` is when.
+   *
+   *  Null on every card written before this change (a pre-migration record on a server that
+   *  has not yet run `cards identity --write`, §7). Optional for the same reason the
+   *  evidence group above is: an older server sends no such key. */
+  identity_source?: string | null
+  bound_by?: string | null
+  bound_at?: string | null
+
+  /** `pipeline/join.name_disputes(read_name, [identity name])` (§3.1), computed by the
+   *  server at every write that changes either side and stored rather than joined live —
+   *  `#/inventory` is a polled route. Gates the "Read as" line in Details (§5.4): a card
+   *  whose read agrees draws nothing new. Optional and read as false where absent — a card
+   *  from a server that predates this field, or a fixture that predates it, is a card with
+   *  no recorded dispute rather than a third state. */
+  read_disputes?: boolean
+
   state: string
   state_at: string | null
 
@@ -1160,6 +1209,45 @@ export type CorrectResult = {
   restores_to: (AnswerOrigin & { name: string | null }) | null
 
   /** The card as `GET /inventory` would draw it, after this write. */
+  card: InventoryCard
+}
+
+/** `POST /inventory/<box>/<index>/confirm`, both directions
+ *  (`docs/specs/identity-follows-sku.md` §8.1).
+ *
+ *  THE RIGHT SKU, THE WRONG NAME. `CorrectResult` above answers "this listing is the wrong
+ *  card"; this route answers the sibling case — a HELD card (`identity_source: 'read'`)
+ *  whose SKU is already correct, so nothing needs to move. It NEVER TAKES A `sku` IN THE
+ *  BODY: the listing already on the card is what gets confirmed, never a new one. The
+ *  server's three refusals mirror `do_confirm_identity`'s own checks — `card_not_found`
+ *  (404); `card_departed`, `not_identified`, `already_confirmed`, `sku_unknown` (409); on
+ *  undo, `not_confirmed` (409) — so `CardHero.tsx`'s own control offers this press only
+ *  where the server would not refuse it: an on-hand, SKU-carrying, held card.
+ *
+ *  UNLIKE `CorrectResult`, there is no `restores_to` to read before offering Undo:
+ *  `do_confirm_identity` always captures the full identity snapshot before it writes, so a
+ *  fresh confirm's own reversal is never refused for want of one — only for having moved on
+ *  since (a second confirm, a correction, a fresh answer). */
+export type ConfirmResult = {
+  /** `"<box>/<index>"`, the store's own key. */
+  position: string
+  box: number
+  index: number
+
+  /** True on the write direction — the SKU already on the card is now confirmed. */
+  confirmed: boolean
+
+  /** True when this call took a confirm back rather than recording one —
+   *  `AnswerResult`/`CorrectResult`'s own field, under the same name. */
+  undone: boolean
+
+  /** The SKU the card carries — unchanged by this route in either direction, since a
+   *  confirm never moves the SKU (§8.1). Read for the receipt's own words. */
+  sku: string
+  condition: string
+
+  /** The card as `GET /inventory` would draw it, after this write — `identity_source` is
+   *  `'sku'` after a confirm and `'read'` after its undo. */
   card: InventoryCard
 }
 

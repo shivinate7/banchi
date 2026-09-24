@@ -5994,14 +5994,14 @@ COMPONENTS = [
                              "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
                                              "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28",
                                              "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39",
-                                             "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56",
-                                             "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67",
-                                             "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89",
-                                             "D91", "D92", "D93", "D97", "D100", "D103", "D104",
-                                             "D113", "D114", "D115", "D116", "D132", "D134", "D142",
-                                             "D145", "D147", "D156", "D159", "D165", "D166", "D168",
-                                             "D172", "D174", "D180", "D183", "D193", "D212", "D213",
-                                             "D225", "D227", "D236", "D252"]},
+                                             "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D55",
+                                             "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65",
+                                             "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87",
+                                             "D89", "D91", "D92", "D93", "D97", "D100", "D103",
+                                             "D104", "D113", "D114", "D115", "D116", "D118", "D132",
+                                             "D134", "D142", "D145", "D147", "D156", "D159", "D165",
+                                             "D166", "D168", "D172", "D174", "D180", "D183", "D193",
+                                             "D212", "D213", "D225", "D227", "D236", "D252"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6801,9 +6801,9 @@ COMPONENTS = [
                                          "caller. `Row` also moved here; `BoxBrowse.tsx` "
                                          "re-exports it so `Inventory.tsx`'s own import keeps "
                                          "working.",
-                                 "governed_by": ["D6", "D26", "D31", "D34", "D46", "D52", "D89",
-                                                 "D96", "D118", "D172", "D218",
-                                                 "D252"]},
+                                 "governed_by": ["D6", "D26", "D28", "D31", "D34", "D46", "D52",
+                                                 "D67", "D89", "D96", "D118", "D172", "D195",
+                                                 "D218", "D252"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "
                                          "`kit.css`'s `.bn-panel*` for the panel chrome, "
@@ -8862,6 +8862,31 @@ COMPONENTS = [
                         "`test()` calls would re-register as a module side effect of the "
                         "import, since Playwright discovers spec files by glob and not by "
                         "import graph.",
+            },
+            "tests/confirm-identity.spec.ts": {
+                "does": "the confirm press `identity-follows-sku.md` §8.1 adds beside "
+                        "`ListingCorrection`'s existing correction — `correct-answer.spec.ts`'s "
+                        "own sibling and its own minimal boot, on a HELD card fixture "
+                        "(`identity_source: 'read'`, `read_disputes: true`, a `Rell, Noxus` "
+                        "read under a `Rell, Magnetic` SKU, echoing §5.5's own worked example). "
+                        "First case: both presses render, `The listing is right` posts "
+                        "`POST /inventory/2/1/confirm` with an EMPTY body (never a `sku`), "
+                        "asserts the receipt toast and its Undo, and reads the undo's own "
+                        "`{\"undo\": true}` body. Second case: the D118 sweep this control's "
+                        "own review round required — `inventory.spec.ts`'s own "
+                        "`outsideThePanel`/`whatMoved` shape, duplicated rather than imported "
+                        "for the same reason `correct-answer.spec.ts` gives — asserts the press "
+                        "moves nothing outside `.browse-card` and changes neither the "
+                        "document's scroll height nor its scroll position. EVERY ROUTE IS "
+                        "STUBBED, the same rule: no write ever reaches a real store.",
+                "governed_by": ["D28", "D118", "D252"],
+                "note": "NOT a harness test: it starts a browser, so it runs under "
+                        "`make design-check`. The sweep is what caught the review-round "
+                        "defect `ListingCorrection`'s own `Written.via`/`confirmable` fields "
+                        "exist to fix — a first pass let the confirm button leave the "
+                        "`.bn-actions-stack` once already confirmed and drew the correction's "
+                        "own note for a confirm too, both of which shrank or grew "
+                        "`.card-correction` on the press and moved the whole page under it.",
             },
             "tests/card-variants.spec.ts": {
                 "does": "the name -> variant chooser drawn against the owner's own two real "

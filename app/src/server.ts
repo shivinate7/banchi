@@ -1,5 +1,6 @@
 import type {
   AnswerResult,
+  ConfirmResult,
   CorrectResult,
   CodeExportResult,
   CodeLedger,
@@ -1261,6 +1262,46 @@ async function correctCall(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })) as CorrectResult
+}
+
+/**
+ * Confirm a held card's own listing as the right card — `POST /inventory/<box>/<index>/confirm`
+ * (`docs/specs/identity-follows-sku.md` §8.1).
+ *
+ * THE SIBLING CASE `correctAnswer` DOES NOT REACH: a card whose SKU is already right but whose
+ * drawn name is the camera's, not the listing's (`identity_source: 'read'`) — the owner's own
+ * examples are a misread "Rell" and "Jax". This route takes NO `sku`: the listing already on
+ * the card is what gets confirmed, never a new one, which is the one thing that tells this
+ * press apart from `correctAnswer` at the call site as much as on screen.
+ *
+ * REFUSES `card_not_found`, `card_departed`, `not_identified`, `already_confirmed` or
+ * `sku_unknown` — `CardHero.tsx`'s own control is offered only where none of the four
+ * conflicts would fire, the same discipline `ListingCorrection`'s `eligible` already keeps for
+ * `correctAnswer`.
+ */
+export function confirmIdentity(box: number, index: number): Promise<ConfirmResult> {
+  return confirmCall(box, index, {})
+}
+
+/**
+ * Take one confirm back — `{"undo": true}` on the same route, D28's shape once more. Refuses
+ * `not_confirmed` once the card has moved on: a second confirm, a correction, or a fresh
+ * answer, since this one.
+ */
+export function undoConfirmIdentity(box: number, index: number): Promise<ConfirmResult> {
+  return confirmCall(box, index, { undo: true })
+}
+
+async function confirmCall(
+  box: number,
+  index: number,
+  body: Record<string, unknown>,
+): Promise<ConfirmResult> {
+  return (await request(`/inventory/${box}/${index}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as ConfirmResult
 }
 
 /**
