@@ -783,7 +783,7 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="kit-motion" data-kit-section="motion" className="kit-section" title="Motion" lede="Three durations, three curves. Press a tile to play it. Reduced motion stops all of it but a busy ring.">
+          <Section id="kit-motion" data-kit-section="motion" className="kit-section" title="Motion" lede="Three durations, three curves. Press a tile to play it.">
             <div className="kit-motions">
               {['--bn-t-fast', '--bn-t', '--bn-t-slow'].map((d) =>
                 ['--bn-ease', '--bn-ease-out', '--bn-ease-spring'].map((e) => <MotionDemo key={d + e} duration={d} ease={e} />),
@@ -1327,7 +1327,7 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="kit-data-kit" data-kit-section="data-kit" className="kit-section" title="Money, filters & links" lede="The primitives every list is built from: money, counts, dates, filters, sort, and the links that open a product or an order.">
+          <Section id="kit-data-kit" data-kit-section="data-kit" className="kit-section" title="Money, filters & links" lede="Money, counts, dates, filters, sort, and the links that open a product or an order.">
             <DataSpecimens />
           </Section>
 
