@@ -6178,7 +6178,7 @@ COMPONENTS = [
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
-                                "D93", "D125", "D172", "D192", "D193", "D218"],
+                                "D83", "D93", "D125", "D172", "D192", "D193", "D212", "D218"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -6186,7 +6186,7 @@ COMPONENTS = [
                         "none is restated as a comment — they are asserted next door instead. "
                         "The temporary rule that hid the shell nav is gone: src/App.tsx stopped "
                         "rendering it on this route, which is the fix that rule named.",
-                "governed_by": ["D5", "D10", "D218"],
+                "governed_by": ["D5", "D10", "D93", "D97", "D212", "D218"],
             },
 
             # ---- step 6's component and the sheet that renders it ----
@@ -8409,8 +8409,8 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D115", "D125",
-                                "D136", "D193", "D218"],
+                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
+                                "D125", "D136", "D193", "D212", "D218"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

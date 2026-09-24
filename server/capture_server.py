@@ -10283,6 +10283,18 @@ def _walk_plan_take(
         "wanted": take.wanted,
         "for": _walk_plan_refs(ledger, take.orders),
         "copies": rows,
+        # THE SAME THREE FIELDS `do_search`'s `_group_row` COMPOSES, OVER THE SAME `listing`
+        # ALREADY READ ABOVE FOR `condition` — added so a caller synthesising a `SearchGroup`
+        # from a take (`Fulfillment.tsx`'s Owed section) can draw the honest live-count
+        # sentence `CardLocations`'s Fulfiller skin always shows, rather than a fabricated
+        # zero. Never a second Listing read: one `inventory.listings.get` call answers both
+        # this and `condition`'s fallback above.
+        "listed": {
+            stage: (int(getattr(listing, stage)) if listing is not None else 0)
+            for stage in master.LISTING_STAGES
+        },
+        "sold_here": int(getattr(listing, "sold_here", 0) or 0) if listing is not None else 0,
+        "live_as_of": getattr(listing, "live_as_of", None) if listing is not None else None,
     }
 
 

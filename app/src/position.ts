@@ -108,8 +108,26 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
  */
 export type SentenceParts = { main: string; detail: string | null }
 
+/** How many cards this card's own SECTION holds — never the box's total (owner's ruling,
+ *  2026-09-23, amending how D58's number is DRAWN: "a card's place number counts WITHIN ITS
+ *  SECTION, not within the whole box... restarting at every divider"). THE SERVER ALREADY
+ *  SENDS THE NUMERATOR SECTION-RELATIVE: `place.card` is `pipeline/join.py:Position.card`,
+ *  `slot - section_start + 1`, so the same number `Box 3 · Section 2 · Card 1` already puts
+ *  in the label. What is missing is the DENOMINATOR — the server sends the section's bounds
+ *  (`section_start`/`section_end`), not its size — so this is the one client-side derivation
+ *  the ruling asks for, never a server change. `section_end` is null only for an open box's
+ *  final section, which runs to the box's own end (`box_total`), the same fallback
+ *  `pipeline/join.py:Position.card`'s own docstring and `_of_uncached` already use server-side
+ *  for that same section's `section_end`. */
+function sectionCardTotal(place: Place): number | null {
+  const { section_start, section_end, box_total } = place
+  const end = section_end ?? (Number.isFinite(box_total) && box_total > 0 ? box_total : null)
+  if (end === null) return null
+  return Math.max(0, end - section_start + 1)
+}
+
 export function sentencePartsOf(place: Place, persona: Persona = 'owner'): SentenceParts {
-  const { slot, box_total, box_closed, fraction } = place
+  const { slot, card, box_total, box_closed, fraction } = place
   if (isDeparted(place)) {
     return { main: persona === 'fulfiller' ? 'No longer in the box' : 'no longer in the box', detail: null }
   }
@@ -127,7 +145,15 @@ export function sentencePartsOf(place: Place, persona: Persona = 'owner'): Sente
       ? { main: `Card ${slot}`, detail: 'where it sits in the box is not known yet' }
       : { main: `#${slot}`, detail: 'where this sits in the box is not known yet' }
   }
-  if (persona === 'fulfiller') return { main: `Card ${slot} of ${box_total}`, detail: null }
+  if (persona === 'fulfiller') {
+    // SECTION-RELATIVE, not box-wide (see `sectionCardTotal` above) — `card`/the section
+    // total fall back to the box-wide reading only if the server ever omits either, which it
+    // does not on this path (slot is not null here, and `card`/`section_start` are computed
+    // together with it).
+    const total = sectionCardTotal(place)
+    if (card !== null && total !== null) return { main: `Card ${card} of ${total}`, detail: null }
+    return { main: `Card ${slot} of ${box_total}`, detail: null }
+  }
   if (box_closed) return { main: `#${slot} of ${box_total}`, detail: `${Math.round(fraction * 100)}% in` }
   return { main: `#${slot} of ${box_total}`, detail: null }
 }

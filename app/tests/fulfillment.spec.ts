@@ -414,21 +414,29 @@ type Mood = {
    *  one sentence this view gained: his count is the estimate, so it moves the moment a copy
    *  is pulled, and the sentence is what says why. */
   soldHere?: number
-  /** THE LEDGER, WHICH THIS VIEW NOW READS BESIDE THE CARDS. `GET /orders` resolves every open
-   *  order to the copies that fill it, and the view draws those as "Orders to fill" above the
-   *  boxes. It defaults to a ledger with nothing open — the world every case below was written
-   *  in, where the boxes ARE the walk — so a case that wants an order says so. Stubbed rather
-   *  than left to fall through: an unrouted `/orders` reaches the real capture server, and this
-   *  file would then be measuring the owner's real open orders. */
+  /** THE LEDGER, WHICH THIS VIEW NOW READS BESIDE THE CARDS. `GET /orders` names what is open;
+   *  `resolution` on this fixture is field-for-field what `do_orders` answers, but as of
+   *  2026-09-16 it is never what draws a card here (`OrdersPayload.resolution.orders[].lines[]
+   *  .picks` is always `[]` on the wire, and `Fulfillment.tsx` never reads it) — `plan`, below,
+   *  is the real source, over `POST /orders/walk-plan`. It defaults to a ledger with nothing
+   *  open — the world every case below was written in, where the boxes ARE the walk — so a
+   *  case that wants an order says so. Stubbed rather than left to fall through: an unrouted
+   *  `/orders` reaches the real capture server, and this file would then be measuring the
+   *  owner's real open orders. */
   orders?: unknown
+  /** THE REAL PICKS, `plan` being `WalkPlan`-shaped over `POST /orders/walk-plan` (D212/D93,
+   *  the owner's own ruling — see `Fulfillment.tsx`'s file header). Every open order named in
+   *  `orders` above should have a matching take here, or the screen draws an order with
+   *  nothing under it, which is the S1 defect this file exists to catch (UX-001). Defaults to
+   *  an empty plan, matching `orders` defaulting to none open. */
+  plan?: unknown
 }
 
 /** THE ONE OPEN ORDER, waiting for the copy the fixture holds at 3/7.
  *
- *  Field for field the shape `do_orders` answers with — `pickSellable` refuses a copy that is
- *  missing any of `label`, `located`, `state` or `capture_id`, so a partial fixture here does
- *  not fail partially: it draws an order with no cards under it, which reads exactly like the
- *  feature being broken. The one line resolves to one pick, which is the ordinary case. */
+ *  Field for field the shape `do_orders` answers with. `resolution` here is realistic but
+ *  UNREAD by the screen (see `Mood.orders`'s own comment); `ONE_OPEN_ORDER_PLAN`, below, is
+ *  what the screen actually draws from. */
 const ORDER_NUMBER = 'A2FFC195-0000F4-006AC'
 const ORDER_SKU = '9191486'
 const ORDER_KEY = `TCGplayer:${ORDER_NUMBER}`
@@ -595,6 +603,111 @@ const NO_ORDERS = {
   },
 }
 
+/** `POST /orders/walk-plan`'s own empty answer — no keys asked, nothing to plan. The screen
+ *  never sends this request with no order open (`Fulfillment.tsx`'s own effect skips the
+ *  call), so this is only ever the stub's DEFAULT for a case that sets `orders` without `plan`
+ *  and has no order that owes anything, and for `NO_ORDERS`. */
+const EMPTY_PLAN = {
+  cost: 'sections',
+  stops: [],
+  shortfall: [],
+  counts: { stops: 0, boxes: 0, copies: 0, sections_considered: 0, sections_candidate: 0, exact: true, solve_ms: 0 },
+}
+
+/** The real pick `ONE_OPEN_ORDER` resolves to, field for field the place `ORDER_PICK.place`
+ *  above already carries — same card, same address, because the two fixtures describe the
+ *  same physical copy through the two different wires (`GET /orders`, `POST
+ *  /orders/walk-plan`) the real routes actually split it across. */
+const ORDER_COPY_PLACE = {
+  label: 'Box 3 · Section 1 · Card 7',
+  located: true,
+  box: 3,
+  index: 7,
+  slot: 7,
+  section: 1,
+  card: 7,
+  box_name: null,
+  section_start: 1,
+  section_end: 25,
+  box_total: 25,
+  box_closed: true,
+  fraction: 0.28,
+  neighbors: null,
+  section_gaps: 0,
+}
+
+/** One `WalkPlanCopy` — `_walk_plan_copy`'s own shape, field for field: `_copy_row` plus
+ *  `here`. NO PRESELECTION READS THIS SHAPE AS SPECIAL: `here` says whether the solver would
+ *  reach it from the stop it is filed under, never whether it is offered — the screen offers
+ *  every copy in the list the same way (D212, D93). */
+const ORDER_WALK_COPY = {
+  key: '3/7',
+  state: 'identified',
+  has_photo: true,
+  capture_id: 'cap-charizard',
+  cid: null,
+  place: ORDER_COPY_PLACE,
+  here: true,
+}
+
+/** One `WalkPlanTake` — the SKU `ONE_OPEN_ORDER` owes, one copy wide, one order owing it. */
+const ORDER_TAKE = {
+  sku: ORDER_SKU,
+  name: 'Charizard ex',
+  number_display: '006',
+  set: null,
+  rarity: null,
+  condition: 'Near Mint',
+  wanted: 1,
+  for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+  copies: [ORDER_WALK_COPY],
+  listed: { pushed: 0, staged: 0, live: 0 },
+  sold_here: 0,
+  live_as_of: null,
+}
+
+/** `ONE_OPEN_ORDER`'s own plan — one stop, one take, one copy, fully fillable. */
+const ONE_OPEN_ORDER_PLAN = {
+  cost: 'sections',
+  stops: [
+    {
+      key: 'box/3/section/1',
+      box: 3,
+      box_name: null,
+      section: 1,
+      section_name: null,
+      pooled: false,
+      game: null,
+      game_display: null,
+      order: 1,
+      span: { start: 1, end: 25 },
+      box_total: 25,
+      takes: [ORDER_TAKE],
+    },
+  ],
+  shortfall: [],
+  counts: { stops: 1, boxes: 1, copies: 1, sections_considered: 1, sections_candidate: 1, exact: true, solve_ms: 1 },
+}
+
+/** `ORDER_WITH_ELSEWHERE`'s own plan — the same fillable take, plus a SKU the store holds
+ *  none of at all: `on_hand: 0`, so it is `shortfall` and never a stop (`pipeline/walkplan.py:
+ *  plan`'s own doc comment — demand is capped at availability before the solve). This is the
+ *  shape UX-001's own direction asks for: "if the screen cannot place a copy, it says how
+ *  many" — never a card drawn with nothing under it. */
+const ORDER_WITH_ELSEWHERE_PLAN = {
+  ...ONE_OPEN_ORDER_PLAN,
+  shortfall: [
+    {
+      sku: ELSEWHERE_SKU,
+      name: 'Charizard ex',
+      wanted: 8,
+      on_hand: 0,
+      short: 8,
+      for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+    },
+  ],
+}
+
 async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<Store> {
   const states: Store = {}
   for (const [key, card] of Object.entries(CARDS)) {
@@ -660,6 +773,17 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(mood.orders ?? NO_ORDERS),
+    })
+  })
+
+  /* The second tier `GET /orders` names in its own comment (S1, UX-001): the screen's real
+     picks. `POST` because a key is `source:number` and a number may legally carry a colon —
+     the same reason the real route takes a body rather than a query string. */
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mood.plan ?? EMPTY_PLAN),
     })
   })
 
@@ -1481,64 +1605,88 @@ test('the cards for sale are listed in box-walk order, and nothing else is liste
   await expect(view(page)).toContainText('1 card for sale is not shown here')
 })
 
-/* THE ORDERS, WHICH ARE THE SCREEN'S FIRST ANSWER NOW. `GET /orders` resolves every open order
- * to the copies that fill it, and those copies are drawn above the boxes with the order number
- * on them — so the walk starts from what a buyer is waiting for rather than from the store.
+/* THE ORDERS, WHICH ARE THE SCREEN'S FIRST ANSWER NOW. `POST /orders/walk-plan` resolves every
+ * open order's own demand to every on-hand copy of each SKU, and those copies are drawn above
+ * the boxes as "Cards to pick" -- one entry per SKU, "Pick N", and every copy the store holds,
+ * NONE PRESELECTED (the owner's own ruling, 2026-09-23: "I shouldn't just see 2 cards that are
+ * preselected. I should be told I need to pick 2, and here's where all the copies are." D212,
+ * D93). This is the S1 defect's own test (UX-001): the screen used to build this list from
+ * `GET /orders`'s `picks`, which have answered `[]` since 2026-09-16 -- so it showed a green
+ * "No orders are waiting" while 71 open orders on the owner's real store owed 216 copies. This
+ * case asserts the list ACTUALLY DRAWS what the orders owe, and it holds the whole floor table
+ * to it, for the reason the file's header gives: the copy on a screen nobody renders is the
+ * copy nobody proofreads.
  *
  * The rest of this file runs against a ledger with nothing open, which is the same screen with
- * that section absent; this case is the one that renders it, and it holds the whole table to it
- * for the reason the file's header gives: the copy on a screen nobody renders is the copy
- * nobody proofreads.
+ * that section absent; this case is the one that renders it.
  */
-test('a card an order is waiting for is drawn under that order, and the floors hold there', async ({
+test('a card an open order owes is drawn as "Pick N" with every copy the store holds, none preselected', async ({
   page,
 }) => {
-  await openList(page, [], { orders: ONE_OPEN_ORDER })
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
 
-  // The figure he reads first, and it counts cards rather than orders.
-  await expect(view(page)).toContainText('1 card to pull')
+  // The figure he reads first, and it counts copies rather than orders.
+  await expect(view(page)).toContainText('1 copy to pick')
 
-  /* The copy is on screen WITHOUT opening a box: an order's cards are the list, and the boxes
+  /* The card is on screen WITHOUT opening a box: an order's demand is the list, and the boxes
      below it are the other way in. */
-  const order = view(page).locator('.ff-order', { hasText: ORDER_BUYER })
-  // D218: the seam is CSS now (`.ff-place-elem::before`), never part of `textContent`.
-  await expect(order.locator('.fulfillment-place')).toHaveText(['Box 3Section 1Card 7'])
-  // D193: the buyer's name leads, and the raw order id never stands alone -- it is present,
-  // but only ever paired with the name that made this one findable.
-  await expect(order.locator('.ff-order-title')).toContainText(ORDER_BUYER)
-  await expect(order.locator('.ff-order-id')).toContainText(ORDER_NUMBER)
-  await battery(page, 'orders to fill')
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  await expect(card.locator('.ff-owed-pick')).toContainText('Pick 1')
+  /* NONE PRESELECTED: this is `CardLocations`' own copies list, the same one a search result
+     draws, with a two-step Pull/Mark-sold control on the copy itself -- not a single card that
+     opens on its own screen. D218: the seam is CSS now (`.ff-place-elem::before` /
+     `.card-locations-place-large`'s own render), never part of `textContent`. */
+  // `CardLocations`' own place text is the server's raw label, dots and all — unlike
+  // `PlaceText`'s CSS seam, this component has never stripped it.
+  await expect(card.locator('.card-locations-place-large')).toHaveText('Box 3 · Section 1 · Card 7')
+  await expect(card.getByRole('button', { name: 'Pull' })).toBeVisible()
+  await battery(page, 'cards to pick')
 
-  // And the card he opens from it says which order is waiting, so he can match the slip.
-  await order.getByRole('button', { name: 'Charizard ex' }).click()
-  await expect(view(page)).toContainText(`For ${ORDER_BUYER}`)
-  await expect(view(page).locator('.ff-card-order-id')).toContainText(ORDER_NUMBER)
-  await expect(view(page).locator('.fulfillment-photo')).toBeVisible()
-  await battery(page, 'card for an order')
+  // And pulling it sells THROUGH the order, so the owner's ledger counts it.
+  await card.getByRole('button', { name: 'Pull' }).click()
+  await card.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(view(page)).toContainText('Marked sold.')
+  // D193: the buyer's name leads, and the raw order id never stands alone.
+  await expect(view(page)).toContainText(`Order ${ORDER_NUMBER}`)
+  await battery(page, 'sold through an order')
 })
 
-test('an order with no buyer name reads "No name", never the raw id alone', async ({ page }) => {
+/* A card the same order also claims, reached by browsing a box instead of through "Cards to
+ * pick" -- the walk-in case (`claim`, `Fulfillment.tsx`): a copy an order is waiting for is
+ * sold through the order however he reaches it. This is also where "No name" is asserted now:
+ * the buyer's name is not drawn on the owed card itself (D212 -- the card is fungible, not
+ * "for" one buyer to look at), but the card he opens from a box still says which order is
+ * waiting, so he can match the packing slip. */
+test('a card an order is waiting for still says which order, opened from a box', async ({
+  page,
+}) => {
   const noBuyerOrder = {
     ...ONE_OPEN_ORDER,
     orders: [{ ...ONE_OPEN_ORDER.orders[0], buyer: null }],
   }
-  await openList(page, [], { orders: noBuyerOrder })
-  const order = view(page).locator('.ff-order')
-  await expect(order.locator('.ff-order-title')).toContainText('No name')
-  await expect(order.locator('.ff-order-id')).toContainText(ORDER_NUMBER)
-  await battery(page, 'orders to fill, no buyer name')
+  const noBuyerPlan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [
+      { ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [{ ...ORDER_TAKE, for: [{ ...ORDER_TAKE.for[0]!, buyer: null }] }] },
+    ],
+  }
+  await openList(page, [], { orders: noBuyerOrder, plan: noBuyerPlan })
+  await openCard(page, 'Charizard ex')
+  await expect(view(page)).toContainText('For No name')
+  await expect(view(page).locator('.ff-card-order-id')).toContainText(ORDER_NUMBER)
+  await expect(view(page).locator('.fulfillment-photo')).toBeVisible()
+  await battery(page, 'card for an order, no buyer name')
 })
 
-/* fulfiller.md finding 5: "8 things on this order are not in the boxes" named a real gap
- * and answered nothing. The sentence now ends in a concrete instruction rather than a
- * question, and it stays a sentence -- `noWayOut` inside `battery` still asserts nothing
- * here routes him off this screen. */
-test('a line the boxes cannot fill gets an instruction, not a dead end', async ({ page }) => {
-  await openList(page, [], { orders: ORDER_WITH_ELSEWHERE })
-  await expect(view(page)).toContainText(
-    '8 things on this order are not in the boxes yet — tell the owner before you seal this one',
-  )
-  await battery(page, 'order with an unfilled line')
+/* fulfiller.md finding 5, restated for D212: "8 things on this order are not in the boxes"
+ * named a real gap and answered nothing. UX-001's own direction: "if the screen cannot place a
+ * copy, it says how many" -- a SKU the store holds none of at all is `plan.shortfall`, drawn as
+ * a warm note beside the figure rather than a dead end, and `noWayOut` inside `battery` still
+ * asserts nothing here routes him off this screen. */
+test('a SKU the boxes cannot fill at all gets a count, not a dead end', async ({ page }) => {
+  await openList(page, [], { orders: ORDER_WITH_ELSEWHERE, plan: ORDER_WITH_ELSEWHERE_PLAN })
+  await expect(view(page)).toContainText('8 more copies are not in the boxes')
+  await battery(page, 'order with a shortfall SKU')
 })
 
 /* fulfiller.md finding 2: "Charizard" names a game (Pokemon) that may hold none of this
@@ -1552,20 +1700,6 @@ test('the search hint names a real card from this store, not a fixed example', a
     'placeholder',
     'For example, Iono',
   )
-})
-
-/* fulfiller.md finding 4 / the plan's item 3: two counters read "Card N of M" for two
- * unrelated numbers on one screen. The walk counter -- his progress across every OPEN
- * ORDER'S cards, not a day's work -- now says "Pull", leaving "Card N of M" to the one
- * counter left that means a card: his position inside the box (`PositionBar`, untouched
- * here). NOT "Pull N of M today": the walk is every open order's cards, which is not
- * bounded to a day, and "today" claimed a scope the number does not carry. */
-test('the walk counter reads "Pull N of M", not "Card N of M" and not "today"', async ({
-  page,
-}) => {
-  await openList(page, [], { orders: ONE_OPEN_ORDER })
-  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
-  await expect(view(page).locator('.ff-card-step')).toHaveText('Pull 1 of 1')
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
@@ -1689,8 +1823,11 @@ test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figur
  * the phone already uses. */
 test('the position label does not wrap to three lines at 768px', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 })
-  await openList(page, [], { orders: ONE_OPEN_ORDER })
-  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
+  // Browsed from a box, not from an order: `.fulfillment-place-large` is the single-card
+  // panel's own class, unchanged by the Owed rebuild, and drawn on every card that flow opens
+  // regardless of whether an order is waiting for it.
+  await openList(page)
+  await openCard(page, 'Charizard ex')
   const place = view(page).locator('.fulfillment-place-large')
   await expect(place).toBeVisible()
   const lines = await place.evaluate((node) => {
@@ -1713,29 +1850,28 @@ test('the longest label the store can emit does not wrap to three lines at 820px
   page,
 }) => {
   const MAX_LABEL = 'Box 9999 · Section 99 · Card 50000'
-  const maxLabelOrder = {
-    ...ONE_OPEN_ORDER,
-    resolution: {
-      ...ONE_OPEN_ORDER.resolution,
-      orders: [
-        {
-          ...ONE_OPEN_ORDER.resolution.orders[0]!,
-          lines: [
-            {
-              ...ONE_OPEN_ORDER.resolution.orders[0]!.lines[0]!,
-              picks: [{ ...ORDER_PICK, place: { ...ORDER_PICK.place, label: MAX_LABEL } }],
-            },
-          ],
-        },
-      ],
-    },
+  // Drawn on an owed card's own copy now (`CardLocations`' `.card-locations-place-large`),
+  // since that is the live path a long label reaches this screen through — the Owed section
+  // draws every on-hand copy of a SKU, ranked, and the label is whatever the store composed
+  // for that copy's position.
+  const maxLabelPlan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [
+      {
+        ...ONE_OPEN_ORDER_PLAN.stops[0]!,
+        takes: [
+          {
+            ...ORDER_TAKE,
+            copies: [{ ...ORDER_WALK_COPY, place: { ...ORDER_WALK_COPY.place, label: MAX_LABEL } }],
+          },
+        ],
+      },
+    ],
   }
   await page.setViewportSize({ width: 820, height: 1024 })
-  await openList(page, [], { orders: maxLabelOrder })
-  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
-  const place = view(page).locator('.fulfillment-place-large')
-  // D218: the seam is CSS now (`.ff-place-elem::before`), never part of `textContent`.
-  await expect(place).toHaveText(MAX_LABEL.replace(/\s*·\s*/g, ''))
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: maxLabelPlan })
+  const place = view(page).locator('.card-locations-place-large')
+  await expect(place).toHaveText(MAX_LABEL)
   const lines = await place.evaluate((node) => {
     const style = window.getComputedStyle(node)
     const lineHeight = parseFloat(style.lineHeight)

@@ -223,6 +223,17 @@
   color: var(--bn-ink);
 }
 .ff-today-say { color: var(--bn-ink-2); }
+/* A copy an open order wants that the store cannot find at all (UX-001's direction: "if the
+   screen cannot place a copy, it says how many"). The icon carries the warm tint; the text
+   stays at the body's own ink so it clears the 7:1 floor — `--bn-warn` is a 5.0:1 token,
+   `.ff-notice-icon`'s own reason for the same split. */
+.ff-today-warn {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  margin-top: var(--bn-2);
+}
+.ff-today-warn-icon { color: var(--bn-warn); flex: none; }
 
 .ff-start {
   flex: none;
@@ -454,63 +465,34 @@
    so it is set in the machine face — the one place a machine string reaches this screen. */
 .ff-done-order,
 .ff-receipt-order,
-.ff-card-order-id,
-.ff-order-id {
+.ff-card-order-id {
   font-family: var(--bn-font-mono);
   font-weight: 600;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 .ff-done-order,
-.ff-card-order-id,
-.ff-order-id { color: var(--bn-ink-2); }
+.ff-card-order-id { color: var(--bn-ink-2); }
 
-/* ---- Orders to fill: the walk, order by order ------------------------------------------ */
-.ff-order-list { display: flex; flex-direction: column; gap: var(--bn-4); }
-.ff-order {
-  border-radius: var(--bn-r-2xl-sm);
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-1);
-  overflow: clip;
+/* ---- Cards to pick: one owed SKU, "Pick N", every copy the store holds (D212/D93/D97,
+   the owner's own ruling — see Fulfillment.tsx's file header) ---------------------------- */
+.ff-owed-list { display: flex; flex-direction: column; gap: var(--bn-5); }
+.ff-owed-card {
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
-  transition: box-shadow var(--bn-t) var(--bn-ease);
 }
-.ff-order:hover { box-shadow: var(--bn-shadow-2); }
-.ff-order-head {
+.ff-owed-pick {
   display: flex;
-  align-items: center;
-  gap: var(--bn-4);
-  min-height: 76px;
-  padding: var(--bn-3) var(--bn-5) var(--bn-3) var(--bn-4);
-  border-bottom: 1px solid var(--bn-line);
+  align-items: baseline;
+  gap: var(--bn-2);
+  margin: 0 0 var(--bn-2);
 }
-.ff-order-rank {
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: var(--bn-surface-2);
-  color: var(--bn-ink);
-  box-shadow: inset 0 0 0 2px var(--bn-line-strong);
+.ff-owed-pick-num {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-2xl);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
 }
-.ff-order-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ff-order-title { color: var(--bn-ink-2); line-height: 1.3; overflow-wrap: anywhere; }
-.ff-order-title b { color: var(--bn-ink); }
-.ff-order-count { color: var(--bn-ink-2); line-height: 1.35; }
-/* D218: the shortfall clause is its own element now, the seam CSS rather than typed. */
-.ff-order-elsewhere::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
-.ff-order-cards { padding: var(--bn-3); }
+.ff-owed-pick-for { color: var(--bn-ink-2); }
 .ff-orders-more { margin-top: var(--bn-4); }
-@media (max-width: 479px) {
-  .ff-order-head { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
-  .ff-order-cards { padding: var(--bn-2); }
-}
 
 /* ---- Browse by box ---------------------------------------------------------------------- */
 .ff-browse-lede { color: var(--bn-ink-2); margin: calc(-1 * var(--bn-2)) 0 var(--bn-4); }
@@ -1328,3 +1310,13 @@
    `--bn-ink` is the light color, so the page's own ground and ink take over. */
 :root[data-theme='dark'] .ff-zoom { background: var(--bn-bg); color: var(--bn-ink); }
 :root[data-theme='dark'] .ff-zoom-hint { color: var(--bn-ink); }
+
+/* ---- the keyboard reference (UX-101) — plain, no route out, over the kit's own
+   scrim/dialog primitives. This screen's own sheet, never the shell's `.app-keys` (App.css),
+   which cannot open here at all (D5, no shell). --------------------------------------------- */
+.ff-keys { width: min(420px, calc(100vw - 32px)); padding: var(--bn-6); }
+.ff-keys-head { display: flex; align-items: center; gap: var(--bn-4); margin-bottom: var(--bn-4); }
+.ff-keys-title { flex: 1 1 auto; }
+.ff-keys-close { flex: none; }
+.ff-keys-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-4); }
+.ff-keys-list li { display: flex; align-items: center; gap: var(--bn-4); }
