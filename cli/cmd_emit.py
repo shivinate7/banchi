@@ -71,7 +71,7 @@ from __future__ import annotations
 from collections import OrderedDict
 
 from cli import resolve, runs
-from pipeline import corpus, decisions, join, merge, pricing, routing, tcgcsv
+from pipeline import corpus, decisions, join, merge, pricing, routing, sendguard, tcgcsv
 from pathlib import Path
 
 from store import master, files, photos
@@ -129,6 +129,98 @@ def _say_quantities(quantities, matches, say) -> None:
     if missing:
         say(f"{'':<16} {len(missing)} SKU(s) named that this send does not hold: "
             f"{', '.join(missing[:8])}{' ...' if len(missing) > 8 else ''}")
+
+
+class GuardRefused(Exception):
+    """The live export named for the double-send guard could not be read. Nothing is written."""
+
+
+def _live_guard(args):
+    """The live export this send was guarded by, read once: `(name, SKU -> live copies)`, or
+    None when the press named no guard (`--live-guard`).
+
+    A FILE THAT CANNOT BE READ IS A REFUSAL, NEVER NO GUARD. A guard that failed open on a bad
+    file is the dry-run block-list this repo has already paid for once.
+    """
+    path = getattr(args, "live_guard", None)
+    if not path:
+        return None
+    target = Path(path)
+    try:
+        export = tcgcsv.read_export(target)
+        live = sendguard.live_by_sku(export.rows)
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        raise GuardRefused(f"the live export {target.name} could not be read: {exc}") from None
+    return target.name, live
+
+
+def _apply_guard(guard, matches_by_sku, inventory):
+    """Bound every matched SKU by the guard's room. Returns what `_say_guard` reads, or None.
+
+    `matches_by_sku` is SKU -> every match that sends it (one on the single-run path, one per
+    leg on the merged path). The room is computed ONCE over the union of their positions, and
+    every leg is bounded by it, so the merged plan's `min` over legs is the union's room and
+    never one leg's share of it.
+
+    IT WRITES `asked`, THE SEND QUANTITY `--quantity` ALREADY SETS, AND ONLY EVER LOWERS IT.
+    That is the existing primitive for "fewer copies of this card this press"
+    (`pipeline/join.py:SkuMatch.add_to_quantity`), so `live_keys` and `pushed` below read the
+    trimmed figure with no second code path.
+    """
+    if guard is None:
+        return None
+    name, live = guard
+    rooms = {}
+    held = {}
+    for sku, matches in matches_by_sku.items():
+        keys = sorted(
+            {
+                master.position_key(position.box, position.index)
+                for match in matches
+                for position in match.positions
+            }
+        )
+        held[sku] = sendguard.on_hand(inventory.copies_on_hand(sku), inventory.cards, keys)
+        rooms[sku] = sendguard.room(live.get(sku, 0), held[sku])
+        for match in matches:
+            if match.asked is None or match.asked > rooms[sku]:
+                match.asked = rooms[sku]
+    return {"name": name, "live": live, "held": held, "rooms": rooms}
+
+
+def _say_guard(applied, would_by_sku, names, say) -> None:
+    """Name what the guard trimmed, then print its one JSON line for the route to read.
+
+    `would_by_sku` is what each SKU would have added WITHOUT the guard: the send's own room,
+    bounded by any quantity the operator typed. NAMED PER SKU (D59): a trimmed copy is the one
+    line the operator is waiting for, and a trim nobody named is a silent drop.
+    """
+    if applied is None:
+        return
+    import json
+
+    trimmed = sendguard.trims(
+        applied["live"], would_by_sku, applied["rooms"], applied["held"], names
+    )
+    say("")
+    say(f"{'live guard':<16} {len(would_by_sku)} SKU(s) checked against {applied['name']}")
+    for trim in trimmed[:8]:
+        say(
+            f"{'':<16} {trim.sku} {trim.name} — TCGplayer holds {trim.live} of "
+            f"{trim.on_hand} on hand; {trim.would} would have gone, {trim.goes} goes"
+        )
+    if len(trimmed) > 8:
+        say(f"{'':<16} ...and {len(trimmed) - 8} more")
+    if not trimmed:
+        say(f"{'':<16} nothing trimmed")
+    say(json.dumps(sendguard.report(applied["name"], len(would_by_sku), trimmed), sort_keys=True))
+
+
+def _would(match, typed) -> int:
+    """What one match adds with the operator's own figure applied and no guard."""
+    room = match.room
+    asked = typed.get(match.sku)
+    return room if asked is None else max(0, min(asked, room))
 
 
 def _warn_stale(run_dir, say) -> None:
@@ -503,6 +595,25 @@ def run(args, say) -> int:
 
     store = Store()
     snapshot = store.read()
+
+    # THE DOUBLE-SEND GUARD, BEFORE ANY GATE BELOW AND BEFORE ANY FILE. It lowers `asked` on
+    # the matches the file is built from, so every write below reads the trimmed figure.
+    try:
+        guarded = _apply_guard(
+            _live_guard(args),
+            {sku: [match] for sku, match in resolved.matches.items()},
+            snapshot.inventory,
+        )
+    except GuardRefused as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
+    typed = _quantities_for(args)
+    _say_guard(
+        guarded,
+        {sku: _would(match, typed) for sku, match in resolved.matches.items()},
+        {sku: match.name for sku, match in resolved.matches.items()},
+        say,
+    )
 
     # --------------------------------------------------- reported before any output exists
     missing = sorted(
@@ -986,6 +1097,20 @@ def run_merged(args, say) -> int:
                 say("REFUSING to write. Nothing was written.")
                 return 1
 
+    # THE DOUBLE-SEND GUARD, OVER THE UNION OF EVERY LEG (`_apply_guard` says why the union).
+    # Applied to the legs BEFORE `merge.plan`, which takes the tightest `asked` any leg names.
+    legs_by_sku: "OrderedDict[str, list]" = OrderedDict()
+    for resolved in resolved_by_run.values():
+        for sku, match in resolved.matches.items():
+            legs_by_sku.setdefault(sku, []).append(match)
+    try:
+        guarded = _apply_guard(
+            _live_guard(args), legs_by_sku, Store().read().inventory
+        )
+    except GuardRefused as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
+
     choice = book.scoped_to(matched)
     say(f"send             {len(dirs)} run(s): {', '.join(d.name for d in dirs)}")
     say(f"prices           {files.prices_path()}")
@@ -997,6 +1122,17 @@ def run_merged(args, say) -> int:
         say(str(refusal))
         say("REFUSING to write. Nothing was written.")
         return 1
+
+    # NAMED BEFORE THE EMPTY CHECK BELOW, so a send the guard trimmed to nothing still says
+    # which cards TCGplayer already holds. `room` ignores `asked`, so this is the unguarded
+    # figure over the merged union.
+    typed = _quantities_for(args)
+    _say_guard(
+        guarded,
+        {row.sku: _would(row.match, typed) for row in merged_plan.skus},
+        {row.sku: row.match.name for row in merged_plan.skus},
+        say,
+    )
 
     rows = merged_plan.rows(listed_only=args.listed_only)
     if not rows:

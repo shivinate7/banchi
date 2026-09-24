@@ -380,10 +380,9 @@ COMPONENTS = [
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
-                                            "D87", "D100", "D145", "D172", "D180",
-                                            "D189", "D210",
-                                            "D213", "D219", "D239",
-                                            "D242"],
+                                            "D87", "D100", "D145", "D172", "D180", "D189", "D210",
+                                            "D213", "D219", "D239", "D242",
+                                            "D-one-press-sends-and-makes-live"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -1396,6 +1395,18 @@ COMPONENTS = [
                              "governed_by": ["D10", "D21", "D22", "D33", "D36", "D39", "D43",
                                              "D48", "D56", "D58", "D65", "D76", "D145", "D165",
                                              "D172", "D174", "D180"],
+                             "tested_by": ["T7"]},
+            "sendguard.py": {"does": "THE DOUBLE-SEND GUARD. After a send, live at TCGplayer "
+                                     "plus Add to Quantity may never pass the copies on hand, "
+                                     "per SKU. It reads the fresh live export and the shelf, "
+                                     "never the store's listing bookkeeping, so a wrong "
+                                     "`pushed` cannot open it. On hand is the store's unsold "
+                                     "copies of the SKU union this send's matched positions. "
+                                     "It only ever takes copies OUT of a file. Pure: "
+                                     "`cli/cmd_emit.py --live-guard` supplies the inputs and "
+                                     "prints one JSON line of trims.",
+                             "governed_by": ["D7", "D59", "D87", "D100",
+                                             "D-one-press-sends-and-makes-live"],
                              "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and any cap the send asked for spent ONCE "
@@ -4887,7 +4898,7 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D168", "D172", "D174", "D183", "D189", "D191",
                                 "D192", "D193", "D203", "D212", "D213", "D219", "D225", "D227",
-                                "D252", "D-no-git-no-live-port"],
+                                "D252", "D-no-git-no-live-port", "D-one-press-sends-and-makes-live"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4912,12 +4923,30 @@ COMPONENTS = [
                                       "what their server reads and what urlencode alone "
                                       "cannot express. `_check` runs their own validators — "
                                       "price 0.01-200000, integer quantity — plus D100's "
-                                      "invariant that AddToQuantity is 0 on every row, before "
-                                      "a transaction is opened, so a bad file is a refusal "
-                                      "with nothing sent. THE PUSH IS MEASURED; movetolive is "
-                                      "read and has never been called from here.",
+                                      "invariant that AddToQuantity is 0 on every row of a "
+                                      "price file, before a transaction is opened, so a bad "
+                                      "file is a refusal with nothing sent. A LISTING file "
+                                      "(`listing=True`, the send press only) may add 0 or more "
+                                      "copies and never fewer; whether that door should exist "
+                                      "is the owner's open question. THE PUSH IS MEASURED; "
+                                      "movetolive is read and has never been called from here.",
                                "governed_by": ["D13", "D16", "D64", "D87", "D100", "D103",
-                                               "D104", "D106"],
+                                               "D104", "D106", "D-one-press-sends-and-makes-live"],
+                               "tested_by": ["T7"]},
+            "send_routes.py": {"does": "THE ONE PRESS that sends listings to TCGplayer and makes "
+                                       "them live, and the checks around it. In order: fetch "
+                                       "the live export (a failure refuses the whole press), "
+                                       "`reconcile --live --write`, `emit --live-guard`, push, "
+                                       "publish. A failed push or publish rolls the upload back "
+                                       "and puts the copies back on the list. Receipts live "
+                                       "under `inventory/sends/<stamp>/`. Also the live check "
+                                       "after the lag (runs only when a request asks; no timer "
+                                       "here), take-back for a downloaded file, and the "
+                                       "mark-down's one press. Never called against the real "
+                                       "portal: T7 proves every path on a loopback one.",
+                               "governed_by": ["D33", "D54", "D86", "D87", "D99", "D100",
+                                               "D104", "D105", "D106",
+                                               "D-one-press-sends-and-makes-live"],
                                "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "

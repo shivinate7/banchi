@@ -251,13 +251,21 @@ def rows_from_csv(text: str) -> List[dict]:
     return rows
 
 
-def _check(rows: Sequence[dict]) -> None:
+def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
     """Refuse a file their validator would refuse, before a transaction exists.
 
     THE CHECKS ARE THEIRS, NOT THIS REPO'S OPINION. `MyPrice` between 0.01 and 200000 and
     `AddToQuantity` an integer are `PricingStagedPrice`'s own validation extenders. Running
     them here turns "chunk 3 of 5 failed and now there is a half-written staged upload" into
     a refusal with nothing sent.
+
+    `listing` IS THE ONE DOOR FOR A FILE THAT ADDS COPIES (`D-one-press-sends-and-makes-live`),
+    and it is a keyword so no existing caller can reach it by position. A price file keeps
+    D100's zero rule exactly as it was. A listing row must add a whole number of copies, 0 or
+    more, and never fewer: the listing file is written by `emit` behind the double-send guard
+    (`pipeline/sendguard.py`), and a negative figure is a file this repo did not write. WHETHER
+    THIS DOOR SHOULD EXIST IS STILL THE OWNER'S OPEN QUESTION (the decision entry's "D100's
+    check on the transport"), and nothing sends through it before the owner's first test.
     """
     if not rows:
         raise FetchRefusal("tcg_import_empty", "That file has no rows, so there is nothing to push.")
@@ -290,6 +298,14 @@ def _check(rows: Sequence[dict]) -> None:
                 "tcg_import_bad_quantity",
                 f"SKU {sku} carries an Add to Quantity that is not an integer. Nothing was sent.",
             ) from None
+        if listing:
+            if quantity < 0:
+                raise FetchRefusal(
+                    "tcg_import_moves_quantity",
+                    f"SKU {sku} carries Add to Quantity {quantity}. A listing file only ever "
+                    f"adds copies, so nothing was sent.",
+                )
+            continue
         if quantity != 0:
             # NOT TCGPLAYER'S RULE — THIS REPO'S. D100 is built on every row of every file
             # this path writes carrying 0, which is what makes an accidental re-upload a
@@ -302,14 +318,17 @@ def _check(rows: Sequence[dict]) -> None:
             )
 
 
-def push_to_staged(rows: Sequence[dict], filename: str = "import.csv") -> StagedUpload:
+def push_to_staged(
+    rows: Sequence[dict], filename: str = "import.csv", *, listing: bool = False
+) -> StagedUpload:
     """Initialize, upload every chunk, finalize. Rolls back if any chunk or the finalize fails.
 
     NOTHING A BUYER CAN SEE CHANGES HERE. Staged is the operator's own working copy; measured
     2026-09-06, a 100-row push moved 0 of 759 live prices and 0 live quantities. Publishing is
-    `move_to_live`, and it is a second, separate press on purpose.
+    `move_to_live`, a second call. Since `D-one-press-sends-and-makes-live` one PRESS makes
+    both calls, and they stay two calls so a failed publish can still roll this upload back.
     """
-    _check(rows)
+    _check(rows, listing=listing)
 
     opened = _post(INITIALIZE, {"filename": filename, "type": TYPE_PRICING})
     upload_id = opened.get("StagedPricingUploadId")

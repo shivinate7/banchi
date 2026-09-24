@@ -192,6 +192,7 @@ import sqlite3
 # THIS COMMENT SAID "THE ONLY TEST" UNTIL THE MERGE THAT BROUGHT THEM TOGETHER, and both sides
 # were right when they were written: main added the import for the first, this branch for the
 # second, and the count is the one thing neither could see.
+import re
 import subprocess
 import sys
 import tempfile
@@ -206,7 +207,7 @@ from decimal import Decimal
 from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -228,6 +229,7 @@ from pipeline import (  # noqa: E402
     readings,
     reprice,
     selection,
+    sendguard,
     shipping,
     tcgcsv,
     variant,
@@ -237,6 +239,7 @@ from server import (  # noqa: E402
     order_transport,
     pipeline_routes,
     ports,
+    send_routes,
     shipping_routes,
     tcg_export,
     tcg_import,
@@ -17297,6 +17300,492 @@ def check_markdown_push(checks: Checks) -> None:
     )
 
 
+def _live_export_bytes(quantities: Dict[str, int]) -> bytes:
+    """A live export (My Pricing shape) holding the seam rows at these `Total Quantity`s."""
+    source = tcgcsv.read_export(FIXTURE_EXPORT)
+    by_sku = source.by_sku()
+    rows = [
+        dict(by_sku[sku], **{tcgcsv.LIVE_QUANTITY_COLUMN: str(quantity)})
+        for sku, quantity in quantities.items()
+    ]
+    path = Path(tempfile.mkdtemp()) / "live.csv"
+    tcgcsv.write_csv(path, source.header, rows)
+    return path.read_bytes()
+
+
+@contextmanager
+def send_portal():
+    """A loopback TCGplayer: the live export GET and the five pricing POSTs, and a record of
+    every call. NOTHING HERE CAN REACH THE REAL PORTAL: `tcg_import._url` and
+    `tcg_export.live_endpoint` both follow `PKMNSCAN_TCG_EXPORT_URL`, which is set to this
+    socket, and `envfile` is made hermetic so a real `.env` cannot supply a real cookie.
+
+    `state["fail"]` names endpoints (the last path segment) that answer 500. `state["live"]`
+    is the export body; `state["signed_out"]` makes the GET redirect to the login page.
+    """
+    state = {
+        "live": _live_export_bytes({DUNSPARCE_SKU: 0}),
+        "signed_out": False,
+        "fail": set(),
+        "calls": [],
+        "rows": [],
+        "moved": [],
+        "rolled": [],
+        "uploads": 0,
+    }
+
+    class Portal(http.server.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):  # noqa: A003
+            pass
+
+        def _answer(self, status, body, kind="application/json"):
+            self.send_response(status)
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):  # noqa: N802
+            state["calls"].append(("GET", urllib.parse.urlparse(self.path).path))
+            if state["signed_out"]:
+                self.send_response(302)
+                self.send_header("Location", "https://store.tcgplayer.com/oauth/login")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self._answer(200, state["live"], "text/csv")
+
+        def do_POST(self):  # noqa: N802
+            path = urllib.parse.urlparse(self.path).path
+            name = path.rsplit("/", 1)[-1]
+            length = int(self.headers.get("Content-Length") or 0)
+            form = urllib.parse.parse_qs(
+                self.rfile.read(length).decode("utf-8"), keep_blank_values=True
+            )
+            state["calls"].append(("POST", name))
+            if name in state["fail"]:
+                self._answer(500, b"{}")
+                return
+            answer: dict = {}
+            if name == "initializeexportcsv":
+                state["uploads"] += 1
+                answer = {"StagedPricingUploadId": f"u-{state['uploads']}"}
+            elif name == "uploadexportcsv":
+                rows: Dict[int, dict] = {}
+                for key, values in form.items():
+                    found = re.match(r"^data\[(\d+)\]\[(\w+)\]$", key)
+                    if found:
+                        rows.setdefault(int(found.group(1)), {})[found.group(2)] = values[0]
+                state["rows"] += [rows[index] for index in sorted(rows)]
+                answer = {"SuccessfulProductCount": len(rows), "Messages": []}
+            elif name == "movetolive":
+                state["moved"].append(form.get("stagedPricingUploadId", [""])[0])
+                answer = {"Success": True}
+            elif name == "rollbackexportcsv":
+                state["rolled"].append(form.get("stagedPricingUploadId", [""])[0])
+            self._answer(200, json.dumps(answer).encode("utf-8"))
+
+    keys = (
+        "PKMNSCAN_TCG_EXPORT_URL",
+        "TCGPLAYER_STORE_COOKIE",
+        "PKMNSCAN_TCG_USER_AGENT",
+        envfile.FROM_FILE_ENV,
+    )
+    previous = {name: os.environ.get(name) for name in keys}
+    portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
+    thread = threading.Thread(target=portal.serve_forever, daemon=True)
+    thread.start()
+    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+        f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
+    )
+    os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=t7-send-not-a-real-session"
+    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-send-no-such.env"
+    envfile._from_file.clear()
+    os.environ.pop(envfile.FROM_FILE_ENV, None)
+    envfile._loaded = False
+    try:
+        yield state
+    finally:
+        portal.shutdown()
+        portal.server_close()
+        envfile.ENV_FILE, from_file, envfile._loaded = env_before
+        envfile._from_file.clear()
+        envfile._from_file.update(from_file)
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def _route_refusal(fn) -> Optional[str]:
+    """The `PipelineRefusal` code `fn` raised, or None if it answered."""
+    try:
+        fn()
+    except pipeline_routes.PipelineRefusal as caught:
+        return caught.code
+    return None
+
+
+def check_send_guard(checks: Checks) -> None:
+    """The double-send guard, at the command: TCGplayer never ends up holding more than is here.
+
+    THE OWNER'S RULING (`D-one-press-sends-and-makes-live`): a send "never doubles a quantity".
+    THE DEFECT IS SHOWN FIRST, THEN THE GUARD. A store whose bookkeeping says nothing is out,
+    while TCGplayer's own export says all three copies are live — the D100 §2 shape, a file
+    uploaded by hand. `emit` alone writes all three again. `emit --live-guard` over the same
+    store writes none, and names the card.
+    """
+    checks.note("")
+    checks.note("SEND GUARD — a file never leaves TCGplayer holding more than is on hand")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def written(run_dir):
+        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
+        return {row[tcgcsv.SKU_COLUMN]: row[tcgcsv.QUANTITY_COLUMN] for row in rows}
+
+    live = Path(tempfile.mkdtemp()) / "live.csv"
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+        checks.equal(
+            written(run_dir).get(ARTICUNO_SKU),
+            "3",
+            "THE DEFECT: with no guard, a store that has lost track of three live copies "
+            "writes all three again — a doubled quantity the moment the file is uploaded",
+        )
+
+    for held_live, goes in ((3, None), (2, "1")):
+        live.write_bytes(_live_export_bytes({ARTICUNO_SKU: held_live, DUNSPARCE_SKU: 0}))
+        with isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            said = command(checks, "emit", str(run_dir.directory), "--live-guard", str(live))
+            checks.equal(
+                written(run_dir).get(ARTICUNO_SKU),
+                goes,
+                f"WITH THE GUARD, TCGplayer holding {held_live} of 3 leaves room for "
+                f"{goes or 'none'}: live plus added never passes what is on hand",
+            )
+            checks.equal(
+                written(run_dir).get(DUNSPARCE_SKU),
+                "1",
+                "and a card TCGplayer does not hold goes out untouched",
+            )
+            report = send_routes._guard_line(said) or {}
+            trimmed = {row["sku"]: row for row in report.get("trimmed", [])}
+            checks.ok(
+                ARTICUNO_SKU in trimmed
+                and trimmed[ARTICUNO_SKU]["would"] == 3
+                and trimmed[ARTICUNO_SKU]["live"] == held_live,
+                f"the trim is NAMED in the command's JSON line, with the figures: {report}",
+            )
+            listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+            checks.equal(
+                0 if listing is None else listing.pushed,
+                int(goes or 0),
+                "and `pushed` follows the trimmed file, never the untrimmed one",
+            )
+
+    # A GUARD FILE THAT CANNOT BE READ REFUSES THE WRITE. It never fails open to no guard.
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        from cli import __main__ as entry
+
+        with quiet() as said:
+            code = entry.main(
+                ["emit", str(run_dir.directory), "--live-guard", "/no/such/live.csv"]
+            )
+        checks.ok(
+            code == 1 and not run_dir.path(runs.IMPORT_MERGED).exists(),
+            f"an unreadable guard file writes nothing. exit {code}: {said.getvalue()[-200:]!r}",
+        )
+
+    # THE PURE RULE, ONCE, WITHOUT A STORE: a departed copy is not on hand, and a matched
+    # position the store has never seen is.
+    sold = master.Card(box=1, index=1)
+    sold.sku, sold.state = "9", master.SOLD
+    kept = master.Card(box=1, index=2)
+    kept.sku = "9"
+    cards_by_key = {"1/1": sold, "1/2": kept}
+    checks.equal(
+        sendguard.on_hand([kept], cards_by_key, ["1/1", "1/2", "1/3"]),
+        2,
+        "on hand is the store's unsold copies union this send's matched positions, less "
+        "every copy that has left",
+    )
+    checks.equal(sendguard.room(live=5, held=3), 0, "room is never negative")
+
+
+def check_send_press(checks: Checks) -> None:
+    """The one press, every path, against the loopback portal (`send_portal`).
+
+    NOTHING HERE REACHES TCGPLAYER. What is asserted is what the portal RECEIVED and what the
+    store and the receipt say afterwards: the live read first, a refusal that sends nothing,
+    the double-send trim end to end, a failed push and a failed publish that both put the
+    copies back, the download door, take-back, the live check after the lag, and the
+    mark-down's one press.
+    """
+    checks.note("")
+    checks.note("SEND PRESS — read what is live, send, make live, check")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    # ------------------------------------------------ the happy path, and the check after it
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name]})),
+            "confirm_required",
+            "an unconfirmed send refuses",
+        )
+        checks.equal(portal["calls"], [], "and it refuses before TCGplayer is asked anything")
+
+        answer = send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        sent = answer["send"]
+        names = [call for call in portal["calls"]]
+        checks.equal(
+            names[0],
+            ("GET", "/admin/pricing/DownloadMyExportCSV"),
+            "THE LIVE READ COMES FIRST, before any write reaches TCGplayer",
+        )
+        checks.equal(
+            [name for kind, name in names if kind == "POST"],
+            ["initializeexportcsv", "uploadexportcsv", "finalizeexportcsv", "movetolive"],
+            "ONE PRESS pushes and publishes: the four calls, in order, and no rollback",
+        )
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "3", DUNSPARCE_SKU: "1"},
+            "the portal received every unsent copy, as the listing file's own quantities",
+        )
+        checks.equal(portal["moved"], ["u-1"], "and the publish named the upload it pushed")
+        checks.equal(sent["state"], "waiting", "the receipt waits for the check after the lag")
+        checks.ok(bool(sent["check_after"]), "and says when that check is due")
+        checks.ok(
+            ARTICUNO_SKU in cmd_reprice.published_recently(),
+            "THE LAG GUARD SEES A LISTING PUBLISH, not only a mark-down's",
+        )
+
+        # NOT DUE YET: the check runs only when a receipt's lag has passed.
+        early = send_routes.do_live_check({})
+        checks.equal(early["ran"], False, "a check inside the lag does not run")
+
+        # THE LAG PASSES (the receipt's clock moved back), and TCGplayer shows one short.
+        directory = send_routes.sends_dir() / sent["stamp"]
+        record = send_routes._read(directory)
+        record["check_after"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        checks.ok(send_routes.do_sends()["due"], "once the lag has passed, the check is due")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        checked = send_routes.do_live_check({})
+        summary = checked["checked"][0]
+        checks.equal(
+            (summary["state"], summary["check"]["found"], summary["check"]["expected"]),
+            ("short", 3, 4),
+            "the check finds three of four live and names the short one",
+        )
+        checks.equal(
+            [row["sku"] for row in summary["check"]["missing"]],
+            [DUNSPARCE_SKU],
+            "by SKU, so the screen can name the card",
+        )
+        checks.equal(
+            send_routes.do_live_check({})["ran"], False, "and a checked send is not checked again"
+        )
+
+        # A SECOND SEND OF THE SAME COPIES ADDS NOTHING: they are pushed, and TCGplayer holds
+        # three. The send refuses rather than uploading an empty file.
+        portal["calls"].clear()
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "nothing_to_send",
+            "a second press over copies already sent refuses and sends nothing",
+        )
+        checks.equal(
+            [name for kind, name in portal["calls"] if kind == "POST"],
+            [],
+            "and TCGplayer receives no write",
+        )
+
+    # ----------------------------------------- the double-send trim, end to end through the press
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        # TCGplayer holds two Articuno the store never recorded (a hand upload).
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0})
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "1", DUNSPARCE_SKU: "1"},
+            "THE PRESS NEVER DOUBLES: two live of three on hand sends one Articuno, not three",
+        )
+
+    # --------------------------------------------------------- the live read cannot run
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["signed_out"] = True
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "live_check_failed",
+            "SIGNED OUT, THE SEND REFUSES by name, and the screen offers Try again",
+        )
+        checks.equal(
+            [name for kind, name in portal["calls"] if kind == "POST"],
+            [],
+            "and nothing was pushed or published",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 0, "and no copy was marked sent")
+        checks.ok(
+            not send_routes.sends_dir().exists() or not any(send_routes.sends_dir().iterdir()),
+            "and no receipt was written",
+        )
+
+    # ------------------------------------------------ a failed push, then a failed publish
+    for failing, rolled in (("initializeexportcsv", []), ("movetolive", ["u-1"])):
+        with send_portal() as portal, isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+            portal["fail"] = {failing}
+            code = _route_refusal(
+                lambda run_dir=run_dir: send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+            )
+            checks.equal(code, "tcg_write_refused", f"a failing {failing} refuses the press")
+            checks.equal(
+                (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+                (0, 0),
+                f"and after a failing {failing} THE COPIES ARE BACK ON THE LIST: a copy is "
+                f"never marked sent when it was not",
+            )
+            checks.equal(portal["rolled"], rolled, f"and the upload is rolled back ({failing})")
+            receipt = send_routes.do_sends()["sends"][0]
+            checks.equal(receipt["state"], "failed", "and the receipt says the press failed")
+
+    # --------------------------------------------------- the download door, and take-back
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        answer = send_routes.do_send({"runs": [run_dir.name], "download": True})
+        checks.equal(
+            [name for kind, name in portal["calls"] if kind == "POST"],
+            [],
+            "THE DOWNLOAD DOOR sends nothing to TCGplayer — but it still read what is live",
+        )
+        checks.equal(answer["send"]["state"], "written", "its copies are written, not confirmed")
+        status = send_routes.do_sends()
+        checks.equal(status["unconfirmed"]["copies"], 4, "and Pricing can name all four copies")
+        checks.equal(pushed(ARTICUNO_SKU), 3, "the file's copies are held out of the next file")
+        taken = send_routes.do_take_back(answer["send"]["stamp"], {"confirm": True})
+        checks.equal(taken["send"]["state"], "taken_back", "Take them back puts them back")
+        checks.equal(pushed(ARTICUNO_SKU), 0, "and the next send offers them again")
+        checks.equal(
+            _route_refusal(
+                lambda: send_routes.do_take_back(answer["send"]["stamp"], {"confirm": True})
+            ),
+            "not_takeable",
+            "and a second take-back refuses: there is nothing left to take",
+        )
+
+    # ------------------------------------------------ the same bytes are never pushed twice
+    with isolated_home():
+        directory = send_routes.sends_dir() / "20260923-120000"
+        send_routes._write(
+            directory,
+            {"kind": "send", "digest": "abc", "pushed": {"upload_id": "u"}, "taken_back_at": None},
+        )
+        checks.equal(
+            send_routes._already_pushed("abc"),
+            "20260923-120000",
+            "a file whose bytes already went to TCGplayer is found by its digest",
+        )
+
+    # ------------------------------------------------------------ the mark-down's one press
+    for failing in (None, "movetolive"):
+        with send_portal() as portal, isolated_home() as home:
+            directory = home / "inventory" / "markdowns" / "20260923-130000"
+            directory.mkdir(parents=True)
+            source = tcgcsv.read_export(FIXTURE_EXPORT)
+            row = dict(
+                source.by_sku()[ARTICUNO_SKU],
+                **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: "19.99"},
+            )
+            tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+            if failing:
+                portal["fail"] = {failing}
+                checks.equal(
+                    _route_refusal(
+                        lambda directory=directory: send_routes.do_markdown_send(directory.name, {"confirm": True})
+                    ),
+                    "tcg_write_refused",
+                    "a mark-down whose publish fails refuses",
+                )
+                checks.equal(portal["rolled"], ["u-1"], "and its upload is rolled back")
+                checks.ok(
+                    pipeline_routes._read_push(directory) is None,
+                    "and no receipt is left offering to publish rows TCGplayer was told to forget",
+                )
+                continue
+            send_routes.do_markdown_send(directory.name, {"confirm": True})
+            checks.equal(
+                [call for call in portal["calls"]][0][0],
+                "GET",
+                "THE MARK-DOWN'S PRESS READS WHAT IS LIVE FIRST, like the listing send",
+            )
+            checks.equal(
+                [name for kind, name in portal["calls"] if kind == "POST"],
+                ["initializeexportcsv", "uploadexportcsv", "finalizeexportcsv", "movetolive"],
+                "ONE PRESS pushes and publishes a mark-down",
+            )
+            checks.equal(
+                [row["AddToQuantity"] for row in portal["rows"]],
+                ["0"],
+                "and the price file still moves no copy (D100's rule, untouched)",
+            )
+            checks.ok(
+                bool((pipeline_routes._read_push(directory) or {}).get("published_at")),
+                "and its receipt says it went live",
+            )
+
+    # ------------------------------------------------ the transport's listing door
+    good = {
+        "Id": 0, "ProductConditionId": "123", "CategoryName": "Pokemon", "SetName": "S",
+        "ProductName": "P", "ConditionName": "Near Mint", "AddToQuantity": "3",
+        "MyPrice": "1.00", "ProOnlineStoreReserveQuantity": "", "ProOnlineStorePrice": "",
+        "Number": "1/1",
+    }
+    tcg_import._check([good], listing=True)
+    checks.ok(True, "a listing row may add copies")
+    checks.equal(
+        _refusal_code_transport([dict(good, AddToQuantity="-1")], listing=True),
+        "tcg_import_moves_quantity",
+        "but never a negative quantity",
+    )
+    checks.equal(
+        _refusal_code_transport([good], listing=False),
+        "tcg_import_moves_quantity",
+        "and a price file still refuses any quantity at all (D100)",
+    )
+
+
+def _refusal_code_transport(rows, *, listing: bool) -> Optional[str]:
+    try:
+        tcg_import._check(rows, listing=listing)
+    except tcg_import.FetchRefusal as refusal:
+        return refusal.code
+    return None
+
+
 def check_publish_lag(checks: Checks) -> None:
     """`reconcile --live` will not settle a SKU this pipeline just published (D106).
 
@@ -31881,6 +32370,8 @@ def run() -> Result:
     check_markdown_floor(checks)
     check_markdown_lens(checks)
     check_markdown_push(checks)
+    check_send_guard(checks)
+    check_send_press(checks)
     check_publish_lag(checks)
     check_withholding(checks)
     check_pricing_route(checks)

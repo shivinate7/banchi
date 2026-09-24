@@ -85,6 +85,16 @@
                                            price-only import CSV. Every row it writes carries
                                            `Add to Quantity` 0, so it cannot move a quantity
     GET    /pipeline/markdowns/<stamp>/file    the worklist to edit, and the import to upload
+    POST   /pipeline/markdowns/<stamp>/send    reads what is live, then that push and that
+                                               publish, in one press
+    POST   /pipeline/send                  THE ONE PRESS for listings: reads what is live,
+                                           writes the file behind the double-send guard, sends
+                                           it and makes it live. `download` stops at the file
+    GET    /pipeline/sends                 every send's receipt, what is written and not
+                                           confirmed, and whether the live check is due
+    POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
+    POST   /pipeline/live-check            reads what is live and confirms the sends that are
+                                           due. Runs only when a request asks
 
 The first five are build-order step 5 in `docs/GATES.md`. The sixth is the capture app's
 undo, and it lives here rather than in the app because deleting a record, a sidecar, a
@@ -318,6 +328,10 @@ from store import orders as order_store  # noqa: E402
 # under both, and the sys.path line above is what makes it work under the first.
 from server import codes_routes  # noqa: E402
 from server import pipeline_routes  # noqa: E402
+# The one press that sends to TCGplayer and makes copies live, and the live check after it
+# (`D-one-press-sends-and-makes-live`). Its own module for `tcg_import.py`'s reason: it can
+# change what buyers see, so its promises are written once, beside it.
+from server import send_routes  # noqa: E402
 # The shipping seam, below the line for the same reason and by the same rule (D61). It opens
 # no socket and holds no key, but it does hold a buyer's ADDRESS in memory for half an hour,
 # which is its own boundary worth keeping in one file rather than inlined here.
@@ -672,6 +686,11 @@ _MARKDOWN_PUBLISH_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/pub
 # The undo for a push, and only before it is published. Narrower than the portal's own
 # control on purpose: `clearstagedinventory` empties the whole staged channel and takes no id.
 _MARKDOWN_ROLLBACK_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/rollback$")
+# ONE PRESS, `D-one-press-sends-and-makes-live`: the live read, the push and the publish of one
+# mark-down. The two routes above stay, and this one calls them in order.
+_MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$")
+# A written file's copies back on the list (the owner's Q8 ruling). A send stamp, the same shape.
+_SEND_TAKE_BACK_RE = re.compile(r"^/pipeline/sends/([0-9]{8}-[0-9]{6})/take-back$")
 # The lens (D103): every live listing this survey saw, and the two readings over one of them.
 # Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
 # — the document holding the export row is what says what the card is, so the address names a
@@ -13215,6 +13234,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # Every markdown this store has written (D100). Reads the directory and holds
                 # nothing, the way `/pipeline/runs` does.
                 return self._json(HTTPStatus.OK, pipeline_routes.do_markdowns())
+            if path == "/pipeline/sends":
+                # Every send's receipt, what is written and not confirmed, and whether the
+                # live check is due. Reads a directory; opens no socket.
+                return self._json(HTTPStatus.OK, send_routes.do_sends())
             match = _MARKDOWN_TABLE_RE.match(path)
             if match:
                 # THE LENS'S INPUT (D103): every live listing the survey saw, refused ones
@@ -13596,6 +13619,28 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # 0, so no file on this path can add, remove or delete a copy.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_markdown_list(self._body())
+                )
+            if path == "/pipeline/send":
+                # THE ONE PRESS (`D-one-press-sends-and-makes-live`): reads what is live,
+                # writes the listing file behind the double-send guard, pushes it and makes it
+                # live. Refuses without `confirm`, and refuses whole when the live read fails.
+                # `download: true` stops after the file.
+                return self._json(HTTPStatus.OK, send_routes.do_send(self._body()))
+            if path == "/pipeline/live-check":
+                # THE CHECK AFTER THE LAG. Runs only when a request asks: the screen's timer or
+                # its next visit. No timer runs here (the owner's Q3 ruling).
+                return self._json(HTTPStatus.OK, send_routes.do_live_check(self._body()))
+            match = _SEND_TAKE_BACK_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, send_routes.do_take_back(match.group(1), self._body())
+                )
+            match = _MARKDOWN_SEND_RE.match(path)
+            if match:
+                # **CHANGES WHAT BUYERS PAY, IN ONE PRESS.** Reads what is live first, then the
+                # push and the publish below, in order. A failed publish rolls the push back.
+                return self._json(
+                    HTTPStatus.OK, send_routes.do_markdown_send(match.group(1), self._body())
                 )
             match = _MARKDOWN_PUSH_RE.match(path)
             if match:

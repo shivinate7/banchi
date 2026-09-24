@@ -68,6 +68,13 @@ def _markdowns_dir() -> Path:
     return files.inventory_dir() / DIRNAME
 
 
+#: Where the one-press listing send keeps its receipts (`server/send_routes.py`), named here
+#: because `published_recently` below reads them. A publish from that press is as unknown to
+#: Export From Live as a markdown's, so the lag guard has to see both.
+SENDS = "sends"
+SEND_RECEIPT = "send.json"
+
+
 #: How long after a publish TCGplayer's own live export cannot be trusted about the SKUs that
 #: were published.
 #:
@@ -110,11 +117,16 @@ def published_recently(now: Optional[datetime] = None, window_s: int = PUBLISH_L
     """
     moment = now or datetime.now(timezone.utc)
     recent: Dict[str, str] = {}
-    root = _markdowns_dir()
-    if not root.is_dir():
-        return recent
-    for directory in root.iterdir():
-        record = files.read_json(directory / "push.json", {}) or {}
+    # TWO KINDS OF RECEIPT, ONE RULE. A markdown's `push.json` beside its `import.csv`, and
+    # the listing send's `send.json` beside the file it pushed (`files[0]`). Before the send
+    # press existed a listing publish happened by hand in the portal, which no receipt could
+    # see — the flow review's second hazard.
+    receipts = []
+    for root, name in ((_markdowns_dir(), "push.json"), (files.inventory_dir() / SENDS, SEND_RECEIPT)):
+        if root.is_dir():
+            receipts += [(directory, directory / name) for directory in root.iterdir()]
+    for directory, receipt in receipts:
+        record = files.read_json(receipt, {}) or {}
         stamp = record.get("published_at")
         if not stamp:
             continue
@@ -128,7 +140,10 @@ def published_recently(now: Optional[datetime] = None, window_s: int = PUBLISH_L
             when = when.replace(tzinfo=timezone.utc)
         if (moment - when).total_seconds() > window_s:
             continue
-        for sku in _skus_in(directory / IMPORT):
+        # A SEND NAMES ITS OWN FILE (a game's import can be `import-<game>.csv`); a markdown's
+        # is always `import.csv`.
+        named = [str(name) for name in (record.get("files") or [IMPORT])]
+        for sku in (sku for name in named for sku in _skus_in(directory / name)):
             # NEWEST PUBLISH WINS, so a SKU published twice reports the stamp that matters.
             if sku not in recent or stamp > recent[sku]:
                 recent[sku] = str(stamp)

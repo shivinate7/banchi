@@ -438,6 +438,16 @@ def build_parser() -> argparse.ArgumentParser:
         "on hand that are not already listed; 0 sends none of it. Repeat per card. A card "
         "not named sends every copy that can go",
     )
+    # THE DOUBLE-SEND GUARD (`D-one-press-sends-and-makes-live`). A live export fetched
+    # moments before this press: every row is trimmed so that TCGplayer's live quantity plus
+    # the copies added never exceeds the copies on hand, and every trim is named. It only
+    # ever takes copies OUT of the file. `pipeline/sendguard.py` has the arithmetic.
+    emit.add_argument(
+        "--live-guard",
+        metavar="LIVE_EXPORT",
+        help="a live export (My Pricing, all printings) read just before this send: no row "
+        "may leave TCGplayer holding more copies than are on hand. Trims are named",
+    )
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile
