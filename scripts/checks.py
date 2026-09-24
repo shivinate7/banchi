@@ -322,6 +322,27 @@ CHECKS = (
         "governed_by": ("D18", "D173", "D229"),
     },
     {
+        "target": "kit-adoption",
+        "runs": "node scripts/kit-adoption.mjs",
+        "asserts": "Every screen inherits the page scaffold (D-page-scaffold). R1: every "
+                   "`ROUTES` view in app/src/App.tsx renders `<Page>` from the kit, directly "
+                   "or through a screen component it renders. R2: outside app/src/kit/, no "
+                   "`role=\"dialog\"`, no `<input type=\"search\">` outside SearchField.tsx, "
+                   "no raw `<select>`, no kit-reserved class name, no hand-rolled date format "
+                   "outside dates.ts, no `$${x.toFixed()}` outside money.ts. Read from the "
+                   "TypeScript AST. scripts/kit-adoption-allow.json is a SHRINKING offender "
+                   "list, file -> rule -> lane: an unlisted violation fails, and so does a "
+                   "stale entry. Never a pinned count.",
+        "needs": ("node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It needs app/node_modules for typescript, which a fresh "
+                               "clone does not have until `npm ci`. `make check` is where "
+                               "it runs.",
+        "gates": True,
+        "governed_by": ("D18", "D173"),
+    },
+    {
         "target": "ignore-check",
         "runs": "sh scripts/ignore-check.sh",
         "asserts": "Every path a worktree provisions is gitignored — as a file, as a directory "
@@ -1155,6 +1176,24 @@ CHECKS = (
                                "scripts/githooks/pre-commit, `make check` only.",
         "gates": True,
         "governed_by": ("D18", "D173", "D229"),
+    },
+    {
+        "target": "kit-adoption-selftest",
+        "runs": "node scripts/kit-adoption.mjs --self-test",
+        "asserts": "the guard sees its own subject before it is trusted: a route view "
+                   "without `<Page>` fails, a component called Page that is not the kit's "
+                   "fails, `<Page>` reached through a local or an imported screen component "
+                   "passes, `role=\"dialog\"` in a screen fails and inside app/src/kit/ "
+                   "passes, a stale allow entry fails, an unlisted violation fails, each R2 "
+                   "rule fails and its home file passes, an unknown rule or an empty lane is "
+                   "refused, and an unreadable or empty ROUTES table is a loud failure. The "
+                   "fixtures are in-memory maps, never files.",
+        "needs": ("node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "kit-adoption's reason exactly: it needs app/node_modules.",
+        "gates": True,
+        "governed_by": ("D18", "D173"),
     },
 )
 

@@ -1,0 +1,22 @@
+## D-page-scaffold — Every screen inherits the page scaffold, and a shrinking list holds the exceptions
+
+**The rule.** The owner, 2026-09-23: "say a new page in the sidebar gets built tomorrow, it should be able to autocall/inherit the properties of the other pages". D-one-page-width put those properties in one component, `Page` in `app/src/kit/Page.tsx`. A screen inherits them only if it renders `Page`. D173 says a rule that a machine can enforce must be enforced by a machine. This entry is the mechanism.
+
+**A new screen is one `ROUTES` entry plus a view that returns `<Page>`.**
+
+**Two checks, one static and one in a browser.**
+
+- `make kit-adoption` (`scripts/kit-adoption.mjs`) reads the TypeScript AST, like `scripts/user-strings.mjs`. R1: every `ROUTES` view renders `<Page>` from `./kit` or `./kit/Page`. The reader follows a JSX tag into a local component, or into a component from another screen file, up to four levels. So `Shipping`, which renders `OrdersHub` from `Orders.tsx`, passes when `OrdersHub` renders `<Page>`. R2: outside `app/src/kit/`, no screen hand-rolls a primitive that the kit owns. The rule refuses a dialog role, a search input, a raw `<select>` and a kit-reserved class name. It also refuses a hand-rolled date format and a `$${x.toFixed()}` template.
+- `app/tests/scaffold.spec.ts` reads `ROUTES` through the same reader (`kit-adoption.mjs --routes`). It measures each route at 1440, 820, 720 and 390. It asserts one `[data-bn-page]` and one visible h1 with the route's `title ?? label`. It asserts a max-width of `--bn-page-w`, an h1 gap of `--bn-page-top`, and no sideways scroll. It also asserts `document.title`, the palette's "Go to" group and a keyboard-sheet entry for each route. `make design-check` runs it.
+
+**Three home files, and one specimen sheet.** A rule that points at a primitive cannot forbid that primitive. `app/src/SearchField.tsx` draws the one search input, `app/src/dates.ts` the one date format and `app/src/money.ts` the one money format. Each is exempt from its own rule only. `app/src/Gallery.tsx` is the kit's specimen sheet. It draws each kit class raw so a person can see it, so it is exempt from the class rule only. R1 and the other R2 rules still apply to it.
+
+**The exceptions are a shrinking offender list, never a pinned count.** This is the owner's ruling on Q3, 2026-09-23. `scripts/kit-adoption-allow.json` holds two blocks. `static` is file -> rule -> lane, read by the static check. `runtime` is route -> assertion -> lane, read by the spec. The lane is the lane that owes the fix. Both readers fail on a violation that the list does not name. Both also fail on an entry that no longer matches a violation, which is a stale entry. So the list can only get shorter, and a lane that moves a screen onto `Page` deletes that screen's entries in the same commit. An entry covers every occurrence of its rule in its file. It is a debt per file, not a count.
+
+**What the shell owes is on the same list.** The palette, the keyboard sheet and the document title are the shell lane's work. Their failing routes are entries with lane `shell`. Nothing is skipped. The list gets shorter when the shell lands.
+
+**The Fulfiller's tab is not held to the title rule.** D5 gives the Fulfiller a screen with no shell and no brand. The tab names the task. So `title` does not apply to a `persona: 'fulfiller'` route, and the spec refuses an allow entry for it.
+
+**What neither check can see.** A class name, role or type that reaches JSX through a variable. A view that picks its component at run time (`const V = a ? A : B`). A view that renders `<Page>` on one branch and something else on another. R1 asks only whether the view reaches `<Page>`. The spec measures only the state that its fixtures build.
+
+**Where they run.** Both write nothing (D18). The self-test builds its fixtures as in-memory maps and never touches the disk. `kit-adoption` and `kit-adoption-selftest` are in `make check` and `make ci-check`, not the git hook, because they need `app/node_modules`. Neither is on the `guard-scope.py` roster. D247 says that a new guard self-test is not scoped until someone adds it by hand. It also says that which targets to gate is a product judgement. This self-test takes under a second, so there is no reason to gate it.

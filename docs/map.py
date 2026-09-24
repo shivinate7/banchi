@@ -4380,6 +4380,24 @@ COMPONENTS = [
                         "person choosing to accept today's count as the new ceiling, never by "
                         "the check itself.",
                 "governed_by": ["D18", "D229", "D256"]},
+            "kit-adoption.mjs": {
+                "does": "`make kit-adoption` — does every screen inherit the page scaffold "
+                        "(D-page-scaffold)? Reads the TypeScript AST, like user-strings.mjs. "
+                        "R1: every `ROUTES` view in App.tsx renders `<Page>` from the kit, "
+                        "directly or through a screen component it renders, up to four levels "
+                        "(Shipping reaches OrdersHub in Orders.tsx). R2: outside app/src/kit/, "
+                        "no `role=\"dialog\"`/`\"alertdialog\"`, no `<input type=\"search\">` "
+                        "outside SearchField.tsx, no raw `<select>`, no kit-reserved class name "
+                        "(Gallery.tsx, the specimen sheet, is exempt from that one rule), no "
+                        "`toLocaleDateString`/`toLocaleTimeString`/`Intl.DateTimeFormat` outside "
+                        "dates.ts, no `$${x.toFixed()}` outside money.ts. "
+                        "`scripts/kit-adoption-allow.json` is a SHRINKING offender list, file -> "
+                        "rule -> lane: it fails on an unlisted violation AND on a stale entry, "
+                        "never a pinned count. `--self-test` proves each rule on in-memory "
+                        "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
+                        "app/tests/scaffold.spec.ts, so the spec and the check read one table "
+                        "with one reader.",
+                "governed_by": ["D18", "D173", "D-page-scaffold"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -4401,8 +4419,7 @@ COMPONENTS = [
                                 "D171", "D172", "D173", "D176", "D178", "D189", "D212", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D254",
-                                "D256"],
+                                "D247", "D250", "D254", "D256", "D-page-scaffold"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -8058,6 +8075,21 @@ COMPONENTS = [
                         "reverted to `start`, turned the capture block's own two fix buttons "
                         "red — \"Open the camera\" 147.3px against \"Pick a box\" 107.0px — and "
                         "restoring both files turned it green again.",
+            },
+            "tests/scaffold.spec.ts": {
+                "does": "every screen inherits the page scaffold, in a browser "
+                        "(D-page-scaffold). Reads ROUTES through `scripts/kit-adoption.mjs "
+                        "--routes`, the static check's own reader, and cross-checks it against "
+                        "`routesFromNav`. Per route, at 1440, 820, 720 and 390: one "
+                        "`[data-bn-page]`, one visible h1 equal to `title ?? label`, max-width "
+                        "`--bn-page-w`, h1 gap `--bn-page-top`, no sideways scroll, and "
+                        "`document.title` \"<title> — Banchi\" (owner routes only, D5). Once, at "
+                        "1440: the palette's Go to group and the keyboard sheet name every "
+                        "route. Exceptions are `scripts/kit-adoption-allow.json`'s `runtime` "
+                        "block, route -> assertion -> lane: an unlisted failure is red and an "
+                        "entry that now passes at every width is red (stale). Writes nothing. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D5", "D173", "D-page-scaffold"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
