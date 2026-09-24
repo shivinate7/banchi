@@ -3878,3 +3878,221 @@ test('the clear is refused while the screen has an unsaved answer', async ({ pag
   await expect(page.locator('.clearprices-foot .bn-btn-danger-solid')).toBeDisabled()
   await expect(page.locator('.clearprices')).toContainText('Save first')
 })
+
+/* ============================================================================================
+   UX-002 (S1) + UX-073: THE "LISTS AT" FIELD, AT DESK WIDTH.
+ *
+ * THE DEFECT, MEASURED: `.pricing-row` and `.pricing-caption` are one flat grid
+ * (`.pricing-facts { display: contents }` in `Pricing.css`), and `--pricing-cols` reserves a
+ * FIXED track count for the SNAPS ref columns Compare draws (one off, up to four on). With
+ * Compare off — the screen's own default — only the Market column renders, so grid
+ * auto-placement filled the price and actions tracks with the SPARE 68px tracks meant for a
+ * Low/+Ship column nobody drew, and the real 132px track sat empty at the end. Verified
+ * directly against `origin/main`'s CSS on this checkout's own dev server before this file
+ * changed: `.pricing-input` measured 8.53px wide and 13.11 read as "$1" — the finding's own
+ * repro, to the pixel. `Pricing.css` now anchors `.pricing-price` and `.pricing-actions` (and
+ * the caption's matching cells) to the grid's LAST TWO LINES, so the child count stops
+ * mattering.
+ *
+ * "LEGIBLE" IS MEASURED, NOT SCREENSHOTTED: `scrollWidth > clientWidth` is a real input
+ * element clipping its own value — the same fact a person reads as "$1" instead of "$13.11".
+ * `toHaveValue` alone would not have caught the original defect: the DOM value was always the
+ * full string, typed or committed: only the box around it was too narrow to show it.
+ *
+ * THE GRID VARIANTS: data-trends and data-direct only vary `--pricing-cols`' track COUNT at
+ * the table tier (>= roughly 940px of the row's own container, which this checkout's shell
+ * measures at a 1440px viewport with the sidebar open — see the container-width figures this
+ * case's own comments below were measured against). Below that the compact and card tiers
+ * (`Pricing.css`'s own "TIERS" block) replace the grid with a fixed, explicit layout that does
+ * not read `--pricing-cols` at all, which is why the finding itself reports 820 and 390 as
+ * already correct. `data-copies='none'` is the fourth variant named in the lane's own brief;
+ * it belongs to `pricing-markdown.spec.ts` and not here — that file's own header states "its
+ * own file, and pricing.spec.ts is not touched" as the property that keeps the run-source path
+ * byte-identical, and `data-copies` never varies within a run-sourced screen. The markdown-lens
+ * width case lives beside it.
+ * ============================================================================================ */
+
+const LONG_PRICE = '1234.56'
+
+/** No horizontal clipping: the content a real typed value needs (`scrollWidth`) fits inside
+ *  what the box actually shows (`clientWidth`). This is what "$1" for "13.11" measures as —
+ *  `toHaveValue` reads the same full string either way, so it cannot see this on its own. */
+async function legible(input: Locator): Promise<void> {
+  const clipped = await input.evaluate((el: HTMLInputElement) => el.scrollWidth > el.clientWidth + 1)
+  expect(clipped).toBe(false)
+}
+
+/** Types a long price into the first row's field and reads it back in full at three moments:
+ *  the row's OWN typed answer on arrival (before any edit), mid-edit while still focused
+ *  (during), and once more after the blur commits it — a field that only grows on focus would
+ *  pass the middle check and fail the first or the last. */
+async function typeAndCheck(page: Page): Promise<void> {
+  const input = field(page).first()
+  await expect(input).toBeVisible()
+  await legible(input) // before: whatever answer the row already carries
+  await input.fill(LONG_PRICE)
+  await expect(input).toHaveValue(LONG_PRICE)
+  await legible(input) // during: focused, freshly typed, not yet committed
+  await input.blur()
+  await expect(input).toHaveValue(LONG_PRICE)
+  await legible(input) // after: committed
+}
+
+/* ONE `open()` PER TEST, NOT TWO. A second `open()` against the same `#/pricing?run=…` hash
+   is a same-document navigation — the SPA never remounts, `picked`/`stamp` do not change, and
+   the effect that re-fetches never re-fires, so the second fixture is dead on arrival and the
+   first render is asserted twice under a different name. Caught by this file's own DEBUG
+   check before it shipped: a single `open()` with the direct-carrying fixture drew
+   `data-direct='some'` correctly; the double-open version of the same case drew 'none' every
+   time. Two variants, two tests. */
+test('the "Lists at" field reads a long price in full at 1440, data-direct=none', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  /* No row in this fixture carries a Direct figure — the default shape `sku()` already
+     builds. An existing typed answer seeds the "before" state. */
+  await open(page, {
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+  })
+  await expect(page.locator('.pricing-caption')).toBeVisible() // table tier, or this case proves nothing
+  await expect(page.locator(".pricing-section[data-direct='none']")).toHaveCount(1)
+  await expect(page.locator(".pricing-body[data-trends='off']")).toHaveCount(1)
+  await typeAndCheck(page)
+
+  await loadTrends(page).click()
+  await expect(page.locator(".pricing-body[data-trends='on']")).toHaveCount(1)
+  await typeAndCheck(page)
+})
+
+test('the "Lists at" field reads a long price in full at 1440, data-direct=some', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  /* One row carries a Direct figure, which only widens `--pricing-cols` by one more spare
+     track at this width (the `@container pricing (min-width: 1040px)` rule) — the anchor
+     still has to hold. */
+  await open(page, {
+    skus: [
+      sku({
+        snap: { market: '22.03', direct_low: '21.50', low: '21.98', low_with_shipping: '22.98', now: null },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+  })
+  await expect(page.locator('.pricing-caption')).toBeVisible()
+  await expect(page.locator(".pricing-section[data-direct='some']")).toHaveCount(1)
+  await expect(page.locator(".pricing-body[data-trends='off']")).toHaveCount(1)
+  await typeAndCheck(page)
+
+  await loadTrends(page).click()
+  await expect(page.locator(".pricing-body[data-trends='on']")).toHaveCount(1)
+  await typeAndCheck(page)
+})
+
+/* THE VIEWPORT IS SET BEFORE `open()`, NOT AFTER, and each width is its OWN test rather than
+   one test resizing a single page five times in a row. The sidebar's rail state is read once
+   at mount and then only from a live `matchMedia` listener (`App.tsx`) — resizing a page that
+   already loaded wide can leave it open a beat longer than a fresh load at the same width
+   would, which measured as a FALSE PASS at 820 during this case's own development: the stale
+   open sidebar left the row more room than the width will actually give a person who arrives
+   there. A fresh `open()` per width is what this file's own `open()` already assumes — see
+   its own comment on why two navigations to the same hash do not even re-fetch. */
+for (const width of [1024, 820, 720, 390, 360]) {
+  test(`the "Lists at" field reads a long price in full at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await open(page, {
+      decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+    })
+    await typeAndCheck(page)
+  })
+}
+
+/* ---- UX-073: the focus ring is measured, not screenshotted -------------------------------------- */
+
+/** `getComputedStyle` on a border returns an `rgb()` string; `--bn-accent` is a hex token. A
+ *  probe element's own computed `color` is the browser's own conversion of the SAME token, in
+ *  the SAME theme, so this compares like with like rather than a hand-copied rgb() literal that
+ *  would silently stop meaning anything the day the token's value moves. */
+async function accentRGB(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement('div')
+    probe.style.color = 'var(--bn-accent)'
+    document.body.appendChild(probe)
+    const rgb = getComputedStyle(probe).color
+    probe.remove()
+    return rgb
+  })
+}
+
+test('the focus ring on a TYPED price field is --bn-accent, not the halo alone (UX-073)', async ({
+  page,
+}) => {
+  /* A TYPED ANSWER, NOT A SUGGESTION — the finding's own case, and the one the two-class
+     `.pricing-price[data-answer='typed'] .pricing-field` rule outranked. `[data-answer='suggested']`
+     had its own focus-within override already and was never broken. */
+  await open(page, {
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '4.50' } },
+  })
+  const typedRow = page.locator(".pricing-price[data-answer='typed']").first()
+  await expect(typedRow, 'the fixture answered this row, or the case proves nothing').toHaveCount(1)
+
+  const input = field(page).first()
+  await input.click()
+  /* `.pricing-field`'s `border-color` EASES over `--bn-t-fast` (120ms). Read right after the
+     click, the computed style is mid-transition — measured once as `rgb(122, 131, 153)`,
+     neither the grey start nor the accent end. `settleMotion` (`motionSettled.ts`) is the
+     same wait this file already uses before reading a position out of a moving page. */
+  await settleMotion(page)
+
+  const accent = await accentRGB(page)
+  const border = await page
+    .locator(".pricing-price[data-answer='typed'] .pricing-field")
+    .first()
+    .evaluate((el) => getComputedStyle(el).borderColor)
+  expect(border, `the typed field's focused border is ${border}, not the accent ${accent}`).toBe(accent)
+})
+
+/* ---- Compare ON: the anchor holds at three reference columns and at four ------------------------- */
+
+/** `.pricing-caption` and `.pricing-row` both read `--pricing-cols` off the same `.pricing-section`
+ *  (`Pricing.css`'s own "the caption and the grid" rule), so their resolved `grid-template-columns`
+ *  agree by construction — this asserts that fact rather than assuming it, the way
+ *  `pricing-markdown.spec.ts`'s own `--pricing-cols` check already does for its screen. */
+async function tracksAgree(page: Page): Promise<void> {
+  const [row, caption] = await Promise.all([
+    page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+    page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+  ])
+  expect(row, `row tracks "${row}" disagree with caption tracks "${caption}"`).toBe(caption)
+}
+
+test('Compare on with no Direct column: three reference columns, the anchor still holds', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, {
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+  })
+  await page.getByRole('button', { name: 'Compare' }).first().click()
+  await expect(page.locator('.pricing-ref-low')).toHaveCount(1) // Compare is really on
+  await expect(page.locator(".pricing-section[data-direct='none']")).toHaveCount(1)
+  await tracksAgree(page)
+  await typeAndCheck(page)
+})
+
+test('Compare on with a Direct column: four reference columns, the anchor still holds', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, {
+    skus: [
+      sku({
+        snap: { market: '22.03', direct_low: '21.50', low: '21.98', low_with_shipping: '22.98', now: null },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+  })
+  await page.getByRole('button', { name: 'Compare' }).first().click()
+  await expect(page.locator('.pricing-ref-direct_low')).toHaveCount(1) // Compare is really on, direct really drawn
+  await expect(page.locator(".pricing-section[data-direct='some']")).toHaveCount(1)
+  await tracksAgree(page)
+  await typeAndCheck(page)
+})
