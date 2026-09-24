@@ -1,0 +1,80 @@
+/* The send card (`SendCard.tsx`): one press from priced to live. It sits inside Pricing's send
+   bar, which owns the stickiness and the page edge; this sheet owns only the card's own rows. */
+
+.send-card {
+  display: grid;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+
+/* The press and its two quiet doors on one line where they fit, wrapping as a unit. The primary
+   press comes first so a phone's first line is always the send. */
+.send-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+}
+
+.send-press {
+  flex: 0 1 auto;
+}
+
+/* The download door, opened: the split option and the write press, then the files it wrote. */
+.send-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2) var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+}
+
+.send-files {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--bn-1);
+}
+
+/* A card list under a notice: the name reads first, the figure beside it in the reading face. */
+.send-names {
+  display: grid;
+  gap: var(--bn-0-5);
+  margin: var(--bn-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.send-names li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  min-width: 0;
+}
+
+.send-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.send-figure {
+  flex: none;
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.send-more {
+  color: var(--bn-ink-3);
+}
+
+/* ON A PHONE ONLY THE PRESS STAYS ON THE FIRST LINE (UX-007). The two quiet doors take the
+   whole width beneath it, so the send is never pushed off the line by its siblings. */
+@media (max-width: 767px) {
+  .send-press {
+    flex: 1 1 100%;
+  }
+}

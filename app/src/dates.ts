@@ -23,6 +23,14 @@ const DAY = 24 * HOUR
 const WEEK = 7 * DAY
 
 const ABSOLUTE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const CLOCK = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
+
+/** `4:12 PM`, or `—` where there is no date. THE one time-of-day format, for a moment inside
+ *  today that a person will watch for (a send that went live, the check that follows it). */
+export function clockTime(at: Date | string | number | null | undefined): string {
+  const when = toDate(at)
+  return when === null ? '—' : CLOCK.format(when)
+}
 
 /** A stamp in any shape the wire sends it, as a `Date`, or null where it will not read. */
 export function toDate(at: Date | string | number | null | undefined): Date | null {

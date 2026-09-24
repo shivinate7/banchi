@@ -19,9 +19,9 @@ import {
   getPriceHistory,
   getPriceTrends,
   markdownFileUrl,
+  sendMarkdown,
   markdownHistory,
   markdownTrends,
-  emitMerged,
   getPricingCorpus,
   getPricingWorklist,
   putPricingCorpus,
@@ -29,7 +29,6 @@ import {
   getRun,
   getRuns,
   photoUrl,
-  runStep,
   type Failure,
 } from './server'
 import type {
@@ -46,7 +45,6 @@ import type {
   Unreachable,
   PricingSku,
   RunDetail,
-  RunFile,
   RunSummary,
   TrendRange,
   WithheldRecord,
@@ -56,10 +54,8 @@ import { isEditableTarget } from './keys'
 import { FLAT_KEY, owed, subThresholdSkus, type OwedReason } from './readiness'
 import { PriceHistoryPanel, RANGE_LABEL, type HistoryRead } from './PriceHistory'
 import { TrendCell, type TrendRead } from './PriceTrend'
-import { RunFiles } from './RunFiles'
 import { Markdown } from './Markdown'
 import { ClearPrices } from './ClearPrices'
-import { LogWell } from './RunsLog'
 import { runBoxLabel } from './runScope'
 import { storeKeyText } from './storeKey'
 import {
@@ -73,11 +69,12 @@ import {
 } from './pricingSource'
 import { forSale, soldSince } from './cardState'
 import { useCardCropWhenSeen } from './cardCrop'
-import { Button, Chip, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
+import { Button, cropStyle, EmptyState, FailureNotice, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import { ValueBands, type ValueEnd } from './ValueBands'
 import { rememberPricingCompare, storedPricingCompare } from './deviceMemory'
 import './Pricing.css'
+import { SendCard } from './SendCard'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D49, D86).
  *
@@ -836,93 +833,16 @@ export function Pricing() {
      live" — and waiting for a second press to start the download is the whole distance
      between a door and a signpost. */
   const [mdFetch, setMdFetch] = useState(false)
-  const [push, setPush] = useState<'idle' | 'checking' | 'writing'>('idle')
+  const [push, setPush] = useState<'idle' | 'sending' | 'writing'>('idle')
   const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
   const [wroteUpload, setWroteUpload] = useState(false)
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
   /** The pricing corpus — one document for the store, and the authority (D86). */
   const [book, setBook] = useState<PricingCorpus | null>(null)
-  const [sendingAll, setSendingAll] = useState(false)
-  const [listedOnly, setListedOnly] = useState(false)
-  /* ONE PRESS WRITES ONE SPREADSHEET (D99), AND THE SPLIT IS AN OPTION BEHIND IT (the owner,
-     2026-09-03). Off is the product's answer: across runs, across games and across the two
-     sides of the cut-off, emit writes `import.csv`. On, it writes the pair back —
-     `import-listed.csv` and `import-subthreshold.csv` — for the send that genuinely wants
-     them staged separately. It is never on by default and never remembered. */
-  const [splitFiles, setSplitFiles] = useState(false)
-  /* THIS SEND'S CAP, AND EMPTY IS THE ORDINARY ANSWER (D7, rewritten 2026-09-07). The standing bound
-     of four is retired — every copy this run holds that TCGplayer does not already have goes
-     out — so a figure here is the operator asking to send fewer, for this press only. Held as
-     the string it was typed as: the field's alphabet is digits, and a number would make an
-     empty field indistinguishable from a zero. */
-  const [sendCap, setSendCap] = useState('')
-  /* ONE CONTROL, BOTH SHIP BARS. `server/pipeline_routes.py`'s per-run step already refuses
-     this asymmetry in as many words — *"a screen that could ask for a split on a send of
-     three and not on a send of one would be answering a question about how many runs are
-     open"* — and a cap is that same kind of answer, so it is declared here and rendered in
-     both rather than written twice and drifting.
-
-     NOT `bn-check`, WHICH IT WORE FOR ONE BUILD AND WHICH ATE THE FIGURE. That class styles
-     ANY input under it as the box of a checkbox — `appearance: none`, 16px square,
-     `display: grid` — so a text field inside one renders as a small empty square with the
-     typed number clipped out of it. It typechecked, the wire assertion passed, and the
-     control was blank on screen; only looking at it said so. It borrows the check's type and
-     rhythm in CSS instead.
-
-     Blank means no cap, which is what the placeholder says, so the empty state reads as a
-     choice rather than a gap. It sits with the emit options because it is the same kind of
-     answer — a thing THIS press does differently — and not on the deck, which holds STANDING
-     policy.
-
-     IT IS A CEILING ON COPIES LIVE, NOT A SEND QUANTITY, and the label said the opposite for
-     a day (D7, amended 2026-09-08). `add_to_quantity` is `live_cap - copies_out`, so a SKU
-     with seven already out and a figure of four adds NOTHING — correct for a ceiling and
-     absurd under "at most 4 of each card", which is what this read. Measured on a ten-copy
-     SKU with seven out: every figure from 1 to 7 wrote no row. The wording is the fix; the
-     arithmetic is D59's and is right. */
-  const capField = (
-    <label className="pricing-ship-cap">
-      {/* THE SENTENCE SHORTENS ON A PHONE (D117), it does not go. This bar is sticky and owns
-          the foot of a 390px screen, and this control is a real answer THIS press gives — a
-          control that vanishes reads as one you imagined. What it can afford to lose there is
-          the second half of its own sentence: `hold to 4 live` says the same thing to somebody
-          already looking at a send.
-
-          THE WORDS CHANGED UNDER D117 AND ITS MECHANISM DID NOT (D7, amended 2026-09-08).
-          This read `at most N of each card`, which describes a send quantity; the figure is a
-          CEILING on copies live, so a SKU with seven already out and a figure of four adds
-          nothing. What shortens is still the second half. */}
-      hold to
-      <input
-        className="bn-input pricing-ship-cap-input"
-        type="text"
-        inputMode="numeric"
-        placeholder="no cap"
-        aria-label="Copies to keep live at TCGplayer"
-        value={sendCap}
-        onChange={(event) => {
-          const text = event.currentTarget.value
-          if (/^\d{0,3}$/.test(text)) setSendCap(text)
-        }}
-      />
-      <span className="pricing-hide-sm">live per card</span>
-      <span className="pricing-only-sm">live</span>
-    </label>
-  )
-  /* THE FIGURE THIS PRESS ASKS FOR, or null for none. Parsed in one place because two callers
-     read it and `Number.parseInt('')` is `NaN`, which is neither a cap nor obviously not one.
-
-     A `useCallback` BECAUSE ONE OF THOSE CALLERS IS AN EFFECT. The per-run send runs inside
-     the emit effect, whose dependency list already carries `splitFiles` for the same reason —
-     a send option the effect reads has to be in it, or the press fires with the value from
-     whichever render installed the handler. A bare function would be a new identity every
-     render and `react-hooks/exhaustive-deps` says so. */
-  const capAsked = useCallback((): number | null => {
-    const asked = Number.parseInt(sendCap, 10)
-    return Number.isFinite(asked) && asked > 0 ? asked : null
-  }, [sendCap])
-
+  /* THE SEND OPTIONS LEFT THE SEND PRESS (the owner's Send-menu ruling, `D-one-press-sends-and-makes-live`):
+     nothing sits beside Send. The split lives under "Download the file instead" inside `SendCard`,
+     and where the per-send cap lives now is not ruled. */
   /* A NUMBER ON EACH CARD'S ROW, THIS PRESS ONLY (D7, amended 2026-09-11 on the operator's
      ruling). The owner's report: *"I can no longer select quantities to sell at all"*. The
      ceiling above holds every card to N live; it cannot say "two of THIS card". This is that
@@ -1046,15 +966,10 @@ export function Pricing() {
   const customSeed = useRef<string | null>(null)
   const customPct = useRef<HTMLInputElement | null>(null)
   const [runsOpen, setRunsOpen] = useState(false)
-  const [filesOpen, setFilesOpen] = useState(false)
-  const [consoleOpen, setConsoleOpen] = useState(false)
 
   /* Shipping this run (D54): the emit press and its import CSVs live here. */
   const [detail, setDetail] = useState<RunDetail | null>(null)
-  const [ship, setShip] = useState<'idle' | 'waiting' | 'sending'>('idle')
-  const [receipt, setReceipt] = useState<{ ok: boolean; console: string; files: readonly RunFile[] } | null>(null)
   const [shipTrouble, setShipTrouble] = useState<Failure | null>(null)
-  const [armed, setArmed] = useState(false)
   /* The landing deck flashes when the ship bar's verdict is pressed — the press is at the
      bottom of a long list and the account of it is at the top. */
   const deckRef = useRef<HTMLDivElement | null>(null)
@@ -1157,8 +1072,6 @@ export function Pricing() {
       failedBook.current = null
       setFailure(null)
       setUndo([])
-      setReceipt(null)
-      setArmed(false)
       setShipTrouble(null)
       if (answer !== null && answer.runs.length === 1) {
         try {
@@ -1259,7 +1172,7 @@ export function Pricing() {
 
   const queued = runs.find((row) => row.run === run)?.counts?.queued_main ?? 0
   const emitted =
-    receipt?.ok === true || Boolean(detail?.manifest?.emitted) || detail?.phase === 'reconcile' || detail?.phase === 'done'
+    Boolean(detail?.manifest?.emitted) || detail?.phase === 'reconcile' || detail?.phase === 'done'
 
   /** Set the STORE-WIDE cut-off. BOTH KEYS, ALWAYS: `threshold` is the line the partition is
    *  drawn at and `sub_threshold` is what the half below it lists at, and the owner's ruling is
@@ -1288,53 +1201,14 @@ export function Pricing() {
     [run],
   )
 
-  /* THE PRESS SEQUENCES RATHER THAN GATING ON `dirty`: `waiting` until the save loop is quiet. */
-  useEffect(() => {
-    if (ship !== 'waiting' || run === null) return
-    if (book !== null && failedBook.current === book) {
-      setShip('idle')
-      setShipTrouble({
-        code: 'answers_not_saved',
-        message: 'Your answers could not be saved, so nothing was written. Fix the error above and the next keystroke will retry the save.',
-      })
-      return
-    }
-    if (dirty || saving || inFlight.current) return
-    setShip('sending')
-    void (async () => {
-      try {
-        const asked = quantitiesAsked()
-        const result = await runStep(run, 'emit', { splitThreshold: splitFiles, cap: capAsked(), quantities: asked })
-        setReceipt({ ok: result.ok, console: result.console, files: result.files })
-        setDetail((current) => (current === null ? current : { ...current, ...result.summary, files: result.files }))
-        setShipTrouble(null)
-        setArmed(false)
-        /* SPENT BY THE WRITE, as on the merged bar: the figures were this press's. */
-        if (result.ok) clearAsked()
-        const imports = (result.files ?? []).filter((file) => file.is_import)
-        const byHand = Object.keys(asked).length
-        if (result.ok) {
-          toast({
-            kind: 'ok',
-            title: `${imports.length} import file${imports.length === 1 ? '' : 's'} written`,
-            body: `${byHand === 0 ? '' : `${byHand} card${byHand === 1 ? '' : 's'} at the quantity you typed. `}Import them to Staged in TCGplayer, then reconcile on Runs.`,
-            action: { label: 'Files', onPress: () => setFilesOpen(true) },
-          })
-        } else {
-          toast({
-            kind: 'refusal',
-            title: 'Emit refused',
-            body: result.console.trim().split('\n').slice(-1)[0] ?? '',
-            action: { label: 'Details', onPress: () => setFilesOpen(true) },
-          })
-        }
-      } catch (err) {
-        setShipTrouble(describeFailure(err))
-      } finally {
-        setShip('idle')
-      }
-    })()
-  }, [ship, dirty, doc, book, run, saving, splitFiles, capAsked, quantitiesAsked, clearAsked])
+  /* WHAT THE SEND CARD NEEDS FROM THE SAVE LOOP. A press waits until the screen is settled,
+     and refuses rather than sending old prices when the last save failed. After a send the
+     typed quantities are spent and the list reads again, so the rows that went leave it. */
+  const saveFailed = useCallback(() => book !== null && failedBook.current === book, [book])
+  const afterSend = useCallback(() => {
+    clearAsked()
+    void load(picked, stamp)
+  }, [clearAsked, load, picked, stamp])
 
   /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack. */
   const write = useCallback(
@@ -1443,24 +1317,30 @@ export function Pricing() {
       return
     }
     if (dirty || saving || inFlight.current) return
-    const write = push === 'writing'
+    const sending = push === 'sending'
     void (async () => {
       try {
+        /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the file is written, then the
+           server reads what is live, sends the file and makes it live. "Download the file
+           instead" stops after the write. There is no press that puts the old prices back. */
         const result = await applyMarkdown(stamp, {
           edits: pushable,
           revision: revision.current,
-          write,
+          write: true,
         })
         setApplied(result)
         setWroteUpload(result.wrote)
         if (result.revision) revision.current = result.revision
         setShipTrouble(null)
-        if (write && result.wrote) {
+        if (sending && result.wrote) {
+          await sendMarkdown(stamp)
           toast({
             kind: 'ok',
-            title: 'The upload file is written',
-            body: 'Upload import.csv through TCGplayer’s My Pricing. Every row carries Add to Quantity 0.',
+            title: `${pushable.length} ${pushable.length === 1 ? 'price is' : 'prices are'} live`,
+            body: 'Banchi checks TCGplayer again after the wait.',
           })
+        } else if (result.wrote) {
+          toast({ kind: 'ok', title: 'The file is written', body: 'Download it below.' })
         }
       } catch (err) {
         setShipTrouble(describeFailure(err))
@@ -1598,15 +1478,6 @@ export function Pricing() {
     latestRows.current = rows
   }, [rows])
 
-  /* THE WAY BACK FOR THE WHOLE SEND, beside the other send options: one press puts every card
-     back to all its copies. A per-row figure is cleared on its own row with Escape or by
-     emptying the field; this is for the operator who typed twelve and changed their mind. */
-  const byHandChip =
-    progress.byHand === 0 ? null : (
-      <Chip icon="x" className="pricing-ship-byhand" onClick={clearAsked} title="Clear all typed quantities">
-        {progress.byHand} by hand
-      </Chip>
-    )
 
   const move = useCallback(
     (sku: string, by: number) => {
@@ -2482,14 +2353,6 @@ export function Pricing() {
     }
   }, [runsOpen])
 
-  useEffect(() => {
-    if (!filesOpen) return
-    const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setFilesOpen(false)
-    }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [filesOpen])
 
   /* Escape closes the pinned drawer (history or photograph) the way it closes every other
      surface here. The price field keeps its own Escape (revert and blur), and a hold panel,
@@ -2497,26 +2360,26 @@ export function Pricing() {
   useEffect(() => {
     if (pinned === null && photoFor === null) return
     const key = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || holdFor !== null || filesOpen || runsOpen || mdOpen || isPriceField(event.target)) return
+      if (event.key !== 'Escape' || holdFor !== null || runsOpen || mdOpen || isPriceField(event.target)) return
       closeDrawer()
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [pinned, photoFor, holdFor, filesOpen, runsOpen, mdOpen, isPriceField, closeDrawer])
+  }, [pinned, photoFor, holdFor, runsOpen, mdOpen, isPriceField, closeDrawer])
 
   /* R reloads, as it does on Review — outside a field, outside a panel, and never on a phone. */
   useEffect(() => {
     if (phone) return
     const key = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== 'r' || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return
-      if (holdFor !== null || filesOpen || runsOpen || mdOpen || loading) return
+      if (holdFor !== null || runsOpen || mdOpen || loading) return
       if (isEditableTarget(event.target)) return
       event.preventDefault()
       void load(picked, stamp)
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [phone, holdFor, filesOpen, runsOpen, mdOpen, loading, load, picked, stamp])
+  }, [phone, holdFor, runsOpen, mdOpen, loading, load, picked, stamp])
 
   const activePreset = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis) ?? null
   /* NO INVENTED FIGURES. The floor is the store's own and a screen that cannot read it says
@@ -3807,234 +3670,20 @@ export function Pricing() {
         )
       ) : null}
 
-      {/* THE SHIP BAR (D54): sticky, in flow, one primary. A merged send over several runs
-          re-derives the cap once across them (D86). */}
-      {loaded.length < 2 ? null : (
-        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship these runs">
-          <div className="pricing-ship-status">
-            <span className="bn-pill bn-pill-accent bn-dotline">
-              <Icon name="layers" size={12} />
-              <span>{loaded.length} runs</span>
-              <span>
-                {boxesLoaded.length} {boxesLoaded.length === 1 ? 'box' : 'boxes'}
-              </span>
-              <span>one file</span>
-            </span>
-            {/* WHAT THE MERGE IS FOR, AND IT STOPPED BEING THE CAP (D7, rewritten). This line
-                read "the cap is spent once across the send" unconditionally, which after the
-                standing bound went is a promise about a figure the ordinary press does not
-                carry. The dedupe is the half that was always true — a card in three boxes is
-                one row either way — and the cap sentence returns the moment one is asked for,
-                because THAT is when spending it once across the send is the load-bearing
-                property (D86: three separate emits over three real runs wrote two SKUs past
-                the cap of four; one merged emit wrote none). */}
-            {/* AND HIDDEN ON A PHONE (D117), whichever of the two it is. This bar is sticky and owns the
-                foot of the screen; the pill beside it already says how many runs and boxes go in
-                one file, and both of these sentences are the reasoning rather than the fact.
-                Measured at 390 the bar stood 430px against an 844px viewport and covered `Pick a
-                run` outright — a control the operator could see and could not press. */}
-            <span className="pricing-ready pricing-ship-says pricing-hide-sm">
-              {sendCap.trim() === ''
-                ? 'A card in three boxes gets one row — every copy TCGplayer does not hold goes out.'
-                : 'The cap is spent once across the send.'}            </span>
-          </div>
-          <div className="pricing-ship-act">
-            <label className="bn-check pricing-ship-only">
-              <input type="checkbox" checked={listedOnly} onChange={(event) => setListedOnly(event.currentTarget.checked)} />
-              <span className="pricing-hide-sm">just the cards above the cut-off</span>
-              <span className="pricing-only-sm">above the cut-off only</span>
-            </label>
-            {/* THE SPLIT IS MEANINGLESS OVER A FILTERED SEND — "listed only" has already left the
-                lower half out, so there is no second file to write. Disabled rather than hidden:
-                a control that vanishes reads as one you imagined. */}
-            <label className="bn-check pricing-ship-only" data-off={listedOnly ? 'true' : undefined}>
-              <input
-                type="checkbox"
-                checked={splitFiles && !listedOnly}
-                disabled={listedOnly}
-                onChange={(event) => setSplitFiles(event.currentTarget.checked)}
-              />
-              <span className="pricing-hide-sm">split it in two, either side of the cut-off</span>
-              <span className="pricing-only-sm">split in two</span>
-            </label>
-            {capField}
-            {byHandChip}
-            {receipt === null ? null : (
-              <Button variant="ghost" icon={receipt.ok ? 'download' : 'alert'} onClick={() => setFilesOpen(true)}>
-                {receipt.ok ? `${receipt.files.filter((f) => f.is_import).length} files` : 'Refused'}
-              </Button>
-            )}
-            <Button
-              variant="primary"
-              size="lg"
-              icon="send"
-              className="pricing-emit"
-              busy={sendingAll}
-              disabled={sendingAll}
-              onClick={() => {
-                setSendingAll(true)
-                setShipTrouble(null)
-                void (async () => {
-                  try {
-                    const asked = quantitiesAsked()
-                    const result = await emitMerged(loaded, {
-                      listedOnly,
-                      splitThreshold: splitFiles && !listedOnly,
-                      cap: capAsked(),
-                      quantities: asked,
-                    })
-                    setReceipt({ ok: result.ok, console: result.console, files: result.files })
-                    /* SPENT BY THE WRITE. The figures were for this press; a re-press with them
-                       still standing would send the same copies again on top of what went. */
-                    if (result.ok) clearAsked()
-                    const imports = (result.files ?? []).filter((file) => file.is_import)
-                    toast(
-                      result.ok
-                        ? {
-                            kind: 'ok',
-                            title: `${imports.length} import file${imports.length === 1 ? '' : 's'} written`,
-                            body: 'Import to Staged in TCGplayer, then reconcile on Runs.',
-                            action: { label: 'Files', onPress: () => setFilesOpen(true) },
-                          }
-                        : {
-                            kind: 'refusal',
-                            title: 'Emit refused',
-                            body: result.console.trim().split('\n').slice(-1)[0] ?? '',
-                            action: { label: 'Details', onPress: () => setFilesOpen(true) },
-                          },
-                    )
-                  } catch (err) {
-                    setShipTrouble(describeFailure(err))
-                  } finally {
-                    setSendingAll(false)
-                  }
-                })()
-              }}
-            >
-              {sendingAll ? 'Writing…' : splitFiles && !listedOnly ? 'Write two import files' : 'Write one import file'}
-            </Button>
-          </div>
-          {shipTrouble === null ? null : (
-            <Notice tone="danger" title={shipTrouble.message} code={shipTrouble.code} className="pricing-ship-trouble" />
-          )}
-          {!filesOpen || receipt === null ? null : (
-            <ReceiptDialog
-              receipt={receipt}
-              run={loaded[loaded.length - 1] as string}
-              consoleOpen={consoleOpen}
-              onToggleConsole={() => setConsoleOpen((on) => !on)}
-              onClose={() => setFilesOpen(false)}
-            />
-          )}
-        </aside>
-      )}
-
-      {run === null ? null : (
-        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship this run" data-ready={owes.length === 0 ? 'true' : 'false'}>
-          {/* THE VERDICT IS STATED ONCE, ON THE DECK ABOVE (Ruling A, D208):
-              this bar used to restate readiness as a second pill and sentence, walking back to
-              the same account the deck already gives at the top of the screen. That restatement
-              — and the button that carried it — is gone; the bar is the press and its two
-              controls. */}
-          <div className="pricing-keys" aria-hidden="true">
-            <span>
-              <Kbd>↵</Kbd> next
-            </span>
-            <span>
-              <Kbd>M</Kbd>
-              <Kbd>L</Kbd>
-              <Kbd>S</Kbd>
-              <Kbd>D</Kbd> snap
-            </span>
-            <span>
-              <Kbd>H</Kbd> hold
-            </span>
-            <span>
-              <Kbd>T</Kbd> history
-            </span>
-            <span>
-              <Kbd>P</Kbd> photo
-            </span>
-            <span>
-              <Kbd>U</Kbd> undo
-            </span>
-          </div>
-
-          <div className="pricing-ship-act">
-            <label className="bn-check pricing-ship-only">
-              <input type="checkbox" checked={splitFiles} onChange={(event) => setSplitFiles(event.currentTarget.checked)} />
-              <span className="pricing-hide-sm">split it in two, either side of the cut-off</span>
-              <span className="pricing-only-sm">split in two</span>
-            </label>
-            {capField}
-            {byHandChip}
-            {receipt === null ? null : (
-              <Button variant="ghost" icon={receipt.ok ? 'download' : 'alert'} onClick={() => setFilesOpen(true)}>
-                {receipt.ok ? `${receipt.files.filter((f) => f.is_import).length} files` : 'Refused'}
-              </Button>
-            )}
-            {ship === 'waiting' ? (
-              <>
-                <span className="pricing-ship-key">Saving your answers…</span>
-                <Button variant="quiet" onClick={() => setShip('idle')}>
-                  Cancel
-                </Button>
-              </>
-            ) : emitted && !armed ? (
-              <>
-                <span className="pricing-ship-key">
-                  <Icon name="check" size={13} /> Already written
-                </span>
-                <Button icon="refresh" onClick={() => setArmed(true)}>
-                  Write them again
-                </Button>
-              </>
-            ) : emitted && armed ? (
-              <>
-                <span className="pricing-ship-key">Sends only what's unsent.</span>
-                <Button variant="quiet" onClick={() => setArmed(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  icon="send"
-                  className="pricing-emit"
-                  busy={ship === 'sending'}
-                  disabled={ship === 'sending'}
-                  onClick={() => setShip('waiting')}
-                >
-                  {ship === 'sending' ? 'Writing…' : 'Write again'}
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="primary"
-                size="lg"
-                icon="send"
-                className="pricing-emit"
-                busy={ship === 'sending'}
-                disabled={ship === 'sending'}
-                onClick={() => setShip('waiting')}
-              >
-                {ship === 'sending' ? 'Writing…' : splitFiles ? 'Write the two import files' : 'Write the import file'}
-              </Button>
-            )}
-          </div>
-
-          {shipTrouble === null ? null : (
-            <Notice tone="danger" title={shipTrouble.message} code={shipTrouble.code} className="pricing-ship-trouble" />
-          )}
-
-          {!filesOpen || receipt === null ? null : (
-            <ReceiptDialog
-              receipt={receipt}
-              run={run}
-              consoleOpen={consoleOpen}
-              onToggleConsole={() => setConsoleOpen((on) => !on)}
-              onClose={() => setFilesOpen(false)}
-            />
-          )}
+      {/* THE SEND BAR (`D-one-press-sends-and-makes-live`): sticky, in flow, one press. One
+          bar for one run or many: the server writes ONE file over every run in the send (D86),
+          behind the double-send guard, sends it and makes it live. Its options left the press
+          (the Send-menu ruling), so the bar is the card and nothing beside it. */}
+      {loaded.length === 0 ? null : (
+        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Send to TCGplayer" data-ready={owes.length === 0 ? 'true' : 'false'}>
+          <SendCard
+            runs={loaded}
+            copies={progress.outCopies}
+            settled={!dirty && !saving}
+            saveFailed={saveFailed}
+            quantities={quantitiesAsked}
+            onSent={afterSend}
+          />
         </aside>
       )}
 
@@ -4049,43 +3698,32 @@ export function Pricing() {
           `work.runs`, which is null on a lens, so `loaded.length < 2` and `run === null` are
           both true. The run path is untouched by construction rather than by care. */}
       {source.kind !== 'markdown' || stamp === null ? null : (
-        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Push these prices">
-          <div className="pricing-ship-status">
-            <span className="bn-pill bn-pill-accent">
-              <Icon name="trendDown" size={12} />
-              {pushable.length} {pushable.length === 1 ? 'price' : 'prices'} to push
-            </span>
-            <span className="pricing-ready pricing-ship-says">
-              Every row carries <code className="bn-code">Add to Quantity</code> 0 — this changes
-              prices and cannot move a single copy, so uploading it twice changes nothing.
-            </span>
-          </div>
+        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Send these prices">
           <div className="pricing-ship-act">
-            {/* TWO PRESSES, MATCHING THE COMMAND AND `Markdown.tsx`'s OWN THREE-STEP REGISTER:
-                the check answers first, and the write does not exist until it has. An absence
-                rather than a disabled button, which is the rule that sheet already keeps. */}
+            {/* ONE PRESS SENDS AND MAKES LIVE (`D-one-press-sends-and-makes-live`, Q7). The
+                download is the second door, and nothing else sits beside the press. */}
             <Button
-              icon="eye"
+              variant="primary"
               size="lg"
-              busy={push === 'checking'}
+              icon="send"
+              className="pricing-emit"
+              busy={push === 'sending'}
               disabled={push !== 'idle' || pushable.length === 0}
-              onClick={() => setPush('checking')}
+              onClick={() => setPush('sending')}
             >
-              {push === 'checking' ? 'Checking…' : 'Check these prices'}
+              {push === 'sending'
+                ? 'Checking TCGplayer, then sending…'
+                : `Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
             </Button>
-            {applied === null || !applied.ok ? null : (
-              <Button
-                variant="primary"
-                size="lg"
-                icon="trendDown"
-                className="pricing-emit"
-                busy={push === 'writing'}
-                disabled={push !== 'idle'}
-                onClick={() => setPush('writing')}
-              >
-                {push === 'writing' ? 'Writing…' : 'Write the upload file'}
-              </Button>
-            )}
+            <Button
+              variant="quiet"
+              icon="download"
+              busy={push === 'writing'}
+              disabled={push !== 'idle' || pushable.length === 0}
+              onClick={() => setPush('writing')}
+            >
+              {push === 'writing' ? 'Writing…' : 'Download the file instead'}
+            </Button>
             {!wroteUpload ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
                 <Icon name="download" size={16} />
@@ -4094,17 +3732,12 @@ export function Pricing() {
             )}
           </div>
 
-          {applied === null ? null : (
-            <LogWell
-              text={applied.console}
-              label={wroteUpload ? 'What the write printed' : 'What the check printed'}
-              className="pricing-ship-console"
-              maxHeight={220}
-            />
+          {applied === null || applied.ok ? null : (
+            <Notice tone="warn" title="These prices could not be written, so nothing was sent." detail={applied.console.trim().split('\n').slice(-1)[0]} className="pricing-ship-trouble" />
           )}
 
           {shipTrouble === null ? null : (
-            <Notice tone="danger" title={shipTrouble.message} code={shipTrouble.code} className="pricing-ship-trouble" />
+            <FailureNotice failure={shipTrouble} title="Nothing was sent. The prices at TCGplayer did not change." />
           )}
         </aside>
       )}
@@ -4851,78 +4484,6 @@ function flash(input: HTMLInputElement): void {
   void host.offsetWidth
   host.classList.add('is-flash')
   window.setTimeout(() => host.classList.remove('is-flash'), 700)
-}
-
-/** The receipt: the files to import, what emit printed, and the errand that follows. */
-function ReceiptDialog({
-  receipt,
-  run,
-  consoleOpen,
-  onToggleConsole,
-  onClose,
-}: {
-  receipt: { ok: boolean; console: string; files: readonly RunFile[] }
-  run: string
-  consoleOpen: boolean
-  onToggleConsole: () => void
-  onClose: () => void
-}) {
-  return createPortal(
-    <>
-      <div className="bn-scrim" onClick={onClose} />
-      <div className="bn-dialog pricing-ship-receipt" role="dialog" aria-label={receipt.ok ? 'The files to import' : 'What emit printed'}>
-        <header className="pricing-receipt-head">
-          <span className={`pricing-receipt-mark ${receipt.ok ? 'is-ok' : 'is-bad'}`}>
-            <Icon name={receipt.ok ? 'check' : 'alert'} size={18} />
-          </span>
-          <div className="pricing-receipt-title">
-            <h2>{receipt.ok ? 'Import files written' : 'Emit refused'}</h2>
-            <p className={`pricing-receipt-sub${receipt.ok ? '' : ' pricing-ready-warn'}`}>
-              {receipt.ok ? 'Written just now.' : 'The console below says why.'}
-            </p>
-          </div>
-          <Button variant="ghost" size="sm" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
-        </header>
-        <div className="pricing-receipt-body">
-          {!receipt.ok ? null : (
-            <>
-              <RunFiles run={run} files={receipt.files} only="import" />
-              <ol className="pricing-errand">
-                <li>
-                  <span className="pricing-errand-n">1</span>
-                  <span>Download the files above.</span>
-                </li>
-                <li>
-                  <span className="pricing-errand-n">2</span>
-                  <span>
-                    In TCGplayer, <strong>Import to Staged</strong>, then <strong>Export From Staged</strong>.
-                  </span>
-                </li>
-                <li>
-                  <span className="pricing-errand-n">3</span>
-                  <span>
-                    Come back with that export and <a href="#/runs">reconcile on Runs</a>.
-                  </span>
-                </li>
-              </ol>
-            </>
-          )}
-          <button type="button" className="pricing-console-toggle" aria-expanded={consoleOpen || !receipt.ok} onClick={onToggleConsole}>
-            <Icon name={consoleOpen || !receipt.ok ? 'chevronDown' : 'chevronRight'} size={14} />
-            What emit printed
-          </button>
-          {consoleOpen || !receipt.ok ? (
-            <pre className="pricing-ship-console" aria-label="What emit printed">
-              {receipt.console}
-            </pre>
-          ) : null}
-        </div>
-      </div>
-    </>,
-    document.body,
-  )
 }
 
 /** The hold popover, anchored to its row. Letters, not digits — the digits are price entry. */

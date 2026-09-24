@@ -44,6 +44,10 @@ import type {
   ExportScope,
   MarkdownAnswer,
   MarkdownPublish,
+  LiveCheckAnswer,
+  SendAnswer,
+  SendsStatus,
+  SendSummary,
   MarkdownPush,
   LiveExportFetched,
   MarkdownTable,
@@ -2354,6 +2358,74 @@ export async function publishMarkdown(stamp: string): Promise<MarkdownPublish> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ confirm: true }),
   })) as MarkdownPublish
+}
+
+/**
+ * ONE PRESS for a mark-down: read what is live, then push and publish this markdown's file
+ * (`D-one-press-sends-and-makes-live`). **This changes what buyers pay.** A failed publish
+ * rolls the push back server-side, so no half-sent state is left for a screen to explain.
+ */
+export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
+  return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as MarkdownPublish
+}
+
+/**
+ * THE ONE PRESS for listings (`D-one-press-sends-and-makes-live`): the server reads what is
+ * live first and refuses whole if it cannot, writes the file behind the double-send guard,
+ * sends it and makes it live. **This changes what buyers see.**
+ *
+ * `download: true` is "Download the file instead": the same live read and the same guard, then
+ * it stops at the file. `confirm` is sent only on the real press, never defaulted.
+ */
+export async function sendCopies(
+  runs: readonly string[],
+  options: { download?: boolean; splitThreshold?: boolean; quantities?: Record<string, number> } = {},
+): Promise<SendAnswer> {
+  return (await request('/pipeline/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      runs,
+      ...(options.download ? { download: true } : { confirm: true }),
+      ...(options.download && options.splitThreshold ? { split_threshold: true } : {}),
+      ...quantitiesClaim(options.quantities),
+    }),
+  })) as SendAnswer
+}
+
+/** Every send's receipt, what is written and not confirmed, and whether the live check is due. */
+export async function sendsStatus(): Promise<SendsStatus> {
+  return (await request('/pipeline/sends')) as SendsStatus
+}
+
+/** A written file's copies back on the list (the owner's ruling on unconfirmed copies). */
+export async function takeBackSend(stamp: string): Promise<{ send: SendSummary; moved: number }> {
+  return (await request(`/pipeline/sends/${encodeURIComponent(stamp)}/take-back`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { send: SendSummary; moved: number }
+}
+
+/**
+ * Read what is live and confirm every send that is due. The server runs it only when asked:
+ * `force` is the manual "Check what is live" press, which runs with nothing due.
+ */
+export async function liveCheck(force = false): Promise<LiveCheckAnswer> {
+  return (await request('/pipeline/live-check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(force ? { force: true } : {}),
+  })) as LiveCheckAnswer
+}
+
+/** The bytes of one file a send wrote, for "Download the file instead". */
+export function sendFileUrl(stamp: string, file: string): string {
+  return `${base}/pipeline/sends/${encodeURIComponent(stamp)}/file?name=${encodeURIComponent(file)}`
 }
 
 /**

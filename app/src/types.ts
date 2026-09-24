@@ -3987,3 +3987,63 @@ export type ValueTable = {
    *  `do_pipeline_value_page`'s `totals` block carries. */
   totals: { cards: number; valued: number; value: string; under_cutoff: number; at_or_over: number }
 }
+
+/* ============================================================ the one press (send to live)
+ *
+ * `server/send_routes.py`, `D-one-press-sends-and-makes-live`. One press reads what is live,
+ * writes the listing file behind the double-send guard, sends it and makes it live. */
+
+/** Where one send stands. `server/send_routes.py:state_of` is the one rule. */
+export type SendState = 'written' | 'waiting' | 'checked' | 'short' | 'failed' | 'taken_back'
+
+/** One card the double-send guard held back: TCGplayer already held `live` of `on_hand`. */
+export type SendTrim = {
+  sku: string
+  name: string
+  live: number
+  on_hand: number
+  would: number
+  goes: number
+}
+
+export type SendSummary = {
+  stamp: string
+  kind: 'send' | 'download'
+  state: SendState
+  at: string
+  copies: number
+  rows: number
+  published_at: string | null
+  check_after: string | null
+  checked_at: string | null
+  check: {
+    export: string
+    found: number
+    expected: number
+    missing: { sku: string; name: string; sent: number; found: number }[]
+  } | null
+  trimmed: SendTrim[]
+  trimmed_copies: number
+  accepted: number | null
+  failure: { code: string; message: string } | null
+  files: string[]
+  taken_back_at: string | null
+}
+
+/** `GET /pipeline/sends`. `due` is the one bit the timer and the visit check both read. */
+export type SendsStatus = {
+  sends: SendSummary[]
+  unconfirmed: { copies: number; stamps: string[] }
+  due: boolean
+  check_at: string | null
+  now: string
+}
+
+export type SendAnswer = { send: SendSummary; console: string }
+
+export type LiveCheckAnswer = {
+  ran: boolean
+  check_at?: string | null
+  export?: string
+  checked: SendSummary[]
+}

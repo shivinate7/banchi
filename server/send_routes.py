@@ -544,6 +544,20 @@ def do_sends() -> dict:
     }
 
 
+def do_send_file(stamp: str, name: str) -> bytes:
+    """`GET /pipeline/sends/<stamp>/file?name=<f>` — one file a send wrote, and only those.
+
+    SHAPE, THEN MEMBERSHIP (`do_markdown_file`'s rule): the name must be one the receipt lists,
+    so a request can never name a path.
+    """
+    directory = _open_send(stamp)
+    if name not in (_read(directory).get("files") or []):
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND, "no_such_file", f"Send {stamp} wrote no file called {name!r}."
+        )
+    return (directory / name).read_bytes()
+
+
 def do_take_back(stamp: str, payload: dict) -> dict:
     """`POST /pipeline/sends/<stamp>/take-back` — a written file's copies back on the list.
 

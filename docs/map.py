@@ -5805,7 +5805,8 @@ COMPONENTS = [
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
                                               "D225", "D227", "D236", "D252",
-                                              "D-no-git-no-live-port"]},
+                                              "D-no-git-no-live-port",
+                                              "D-one-press-sends-and-makes-live"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -5898,7 +5899,8 @@ COMPONENTS = [
                                              "D113", "D114", "D115", "D116", "D132", "D134", "D142",
                                              "D145", "D147", "D156", "D159", "D165", "D166", "D168",
                                              "D172", "D174", "D180", "D183", "D193", "D212", "D213",
-                                             "D225", "D227", "D236", "D252"]},
+                                             "D225", "D227", "D236", "D252",
+                                             "D-one-press-sends-and-makes-live"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6939,6 +6941,33 @@ COMPONENTS = [
                                         "be grepped, and a summary is the second vocabulary that "
                                         "rule exists to refuse.",
                                 "governed_by": ["D33", "D39", "D94"]},
+            "src/SendCard.tsx": {"does": "THE SEND CARD on Pricing's send bar: one press from "
+                                         "priced to live (D-one-press-sends-and-makes-live). The "
+                                         "press waits for the screen's own save, then one request "
+                                         "reads what is live, writes the file behind the "
+                                         "double-send guard, sends it and makes it live. It draws "
+                                         "what the guard held back by card, a refusal with Try "
+                                         "again when the live read cannot run, the download door "
+                                         "with the split behind it, copies written and not "
+                                         "confirmed with Take them back, and the check after the "
+                                         "lag. No pipeline word reaches the screen (D196).",
+                                 "governed_by": ["D86", "D99", "D105", "D106", "D118", "D196",
+                                                 "D-notice-detail",
+                                                 "D-one-press-sends-and-makes-live"]},
+            "src/SendCard.css": {"does": "the send card's own rows: the press and its two quiet "
+                                         "doors on one line that wraps as a unit, the download "
+                                         "door, and the card lists under a notice. On a phone "
+                                         "the press takes the whole first line (UX-007).",
+                                 "governed_by": ["D117", "D118", "D-one-press-sends-and-makes-live"]},
+            "src/liveCheck.ts": {"does": "WHEN THE LIVE CHECK AFTER A SEND RUNS (the owner's Q3 "
+                                         "ruling). A visit to Pricing or Home reads the send "
+                                         "status and runs a due check at once; otherwise one "
+                                         "module-level timer waits for the moment the next check "
+                                         "is due, measured on the server's clock, and outlives "
+                                         "the screen that started it. No server job runs "
+                                         "unattended. A failed automatic check waits for the "
+                                         "next visit rather than retrying.",
+                                 "governed_by": ["D106", "D-one-press-sends-and-makes-live"]},
             "src/RunsDrop.tsx": {"does": "the file controls, as controls that look like the "
                                          "product: a native file input cannot be styled to sit "
                                          "beside a kit button, so the input is visually hidden "
@@ -7121,7 +7150,8 @@ COMPONENTS = [
                                                 "D78", "D79", "D85", "D86", "D89", "D98", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
                                                 "D115", "D117", "D118", "D125", "D156", "D159",
-                                                "D168", "D172", "D208", "D210", "D218"]},
+                                                "D168", "D172", "D208", "D210", "D218",
+                                                "D-one-press-sends-and-makes-live"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
                                             "header (D168). The operator's "
                                             "own ask - \"after several emits a lot of pricing "

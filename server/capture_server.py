@@ -93,6 +93,7 @@
     GET    /pipeline/sends                 every send's receipt, what is written and not
                                            confirmed, and whether the live check is due
     POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
+    GET    /pipeline/sends/<stamp>/file    the file one send wrote, for the download door
     POST   /pipeline/live-check            reads what is live and confirms the sends that are
                                            due. Runs only when a request asks
 
@@ -691,6 +692,7 @@ _MARKDOWN_ROLLBACK_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/ro
 _MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$")
 # A written file's copies back on the list (the owner's Q8 ruling). A send stamp, the same shape.
 _SEND_TAKE_BACK_RE = re.compile(r"^/pipeline/sends/([0-9]{8}-[0-9]{6})/take-back$")
+_SEND_FILE_RE = re.compile(r"^/pipeline/sends/([0-9]{8}-[0-9]{6})/file$")
 # The lens (D103): every live listing this survey saw, and the two readings over one of them.
 # Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
 # — the document holding the export row is what says what the card is, so the address names a
@@ -13263,6 +13265,17 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_markdown_trends(match.group(1), asked),
+                )
+            match = _SEND_FILE_RE.match(path)
+            if match:
+                # "Download the file instead": the file one send wrote, forced as a download.
+                wanted = parse_qs(parsed.query, keep_blank_values=True).get("name") or [""]
+                blob = send_routes.do_send_file(match.group(1), wanted[0])
+                return self._send(
+                    HTTPStatus.OK,
+                    blob,
+                    "text/csv",
+                    (("Content-Disposition", f'attachment; filename="{wanted[0]}"'),),
                 )
             match = _MARKDOWN_FILE_RE.match(path)
             if match:
