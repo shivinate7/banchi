@@ -143,6 +143,16 @@ help:
 	@echo "                    it; SkuUnknown/GameMismatch both write nothing;"
 	@echo "                    record_identification writes only read_* on a bound card. No"
 	@echo "                    store, no disk write at all. In \`check\`, never in the hook."
+	@echo "  make identity-binding-selftest  the migration's classifier and the merged"
+	@echo "                    D242/D255 report (identity-follows-sku.md §5.5/§7, lane 2):"
+	@echo "                    every class T1-T6/sku_unknown in order, the human-bound"
+	@echo "                    exclusion, both report halves. No store. In \`check\`, never"
+	@echo "                    in the hook."
+	@echo "  make identity-replay ARGS=\"--store <copy.sqlite>\"  the replay, before any"
+	@echo "                    write (identity-follows-sku.md §7.4): the same classifier,"
+	@echo "                    against a COPY of a real store, asserting the six checks"
+	@echo "                    §7.4 names. Never \`check\`-gated — it needs a store copy the"
+	@echo "                    owner supplies, not a fixture."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -225,6 +235,7 @@ help:
 	@echo "                    product-history-selftest +"
 	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
 	@echo "                    skus-selftest + identity-store-selftest +"
+	@echo "                    identity-binding-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -596,6 +607,7 @@ check:
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory skus-selftest
 	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-binding-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -655,6 +667,7 @@ ci-check:
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory skus-selftest
 	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-binding-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -1277,7 +1290,29 @@ skus-selftest:
 identity-store-selftest:
 	@$(PYTHON) scripts/identity-store-selftest.py
 
-.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest
+# THE MIGRATION'S CLASSIFIER AND THE MERGED D242/D255 REPORT, PROVED AGAINST LITERAL
+# FIXTURES (identity-follows-sku.md §5.5, §7, lane 2). Every class T1-T6 and `sku_unknown`,
+# in §7.2's own order; the human-bound exclusion §5.5 requires (`answer`/`group_answer`/
+# `correction`/`confirm` never re-flagged); both report halves (§4.3's three audit failures,
+# and §5.5's name half/number half). `./pkmnscan cards identity` and `scripts/
+# identity-replay.py` both import this module rather than re-deriving the classifier, so
+# this is the one place its logic is proved.
+#
+# IN `check`, NEVER IN THE GIT HOOK. Writes nothing to disk at all — no store, no `mktemp`
+# (D18 does not even apply) — so it is in `ci-check` too.
+identity-binding-selftest:
+	@$(PYTHON) scripts/identity-binding-selftest.py
+
+# THE REPLAY, BEFORE ANY WRITE (identity-follows-sku.md §7.4, lane 2). Takes a COPY of a
+# real store (`sqlite3 <store> ".backup <copy>"`, never the live file) and asserts the six
+# checks §7.4 names, importing `pipeline/identity_binding.py`'s own classifier rather than
+# re-deriving it. Never `check`-gated: it needs a store copy the owner supplies, and a
+# fixture cannot stand in for "did the owner's own store move in six minutes". Read-only —
+# never opens `Store().write()`, never touches the copy it is given.
+identity-replay:
+	@$(PYTHON) scripts/identity-replay.py $(ARGS)
+
+.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest identity-binding-selftest identity-replay
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null

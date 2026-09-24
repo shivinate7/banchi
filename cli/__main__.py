@@ -269,7 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cards_sub = cards.add_subparsers(
         dest="cards_action",
-        metavar="<name|audit|checks|contradictions|sku-names|photos|variants>",
+        metavar="<name|audit|checks|identity|contradictions|sku-names|photos|variants>",
     )
     cards_sub.add_parser(
         "name",
@@ -297,12 +297,25 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="list every flagged card as well as counting them.",
     )
+    cards_identity = cards_sub.add_parser(
+        "identity",
+        help="docs/specs/identity-follows-sku.md §5.5/§7 (lane 2): the migration's own "
+        "classifier and the merged `contradictions`/`sku-names` report — every card's "
+        "class (T1-T6, sku_unknown), the store's own audit, and the name/number "
+        "contradiction halves. Previews by default; `--write` performs the one-time "
+        "migration — held cards never change identity.",
+    )
+    cards_identity.add_argument(
+        "--write",
+        action="store_true",
+        help="bind every deriving class (T1, T2, T3, T4u) to its SKU's own identity, hold "
+        "the rest (T4s, T5), and open a review entry for every held card that is "
+        "identified. Re-runnable: a card already correctly bound is skipped.",
+    )
     cards_contradictions = cards_sub.add_parser(
         "contradictions",
-        help="two copies of one SKU disagreeing about the card's number "
-        "(D242). Preview is read-only and opens no socket. "
-        "`--resolve` asks the live catalogue to tell a misread from a shared SKU, only "
-        "for the SKUs that need it.",
+        help="RETIRED (§5.5) — subsumed by `cards identity`. Prints one line naming it "
+        "and exits.",
     )
     cards_contradictions.add_argument(
         "--verbose",
@@ -317,9 +330,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cards_sku_names = cards_sub.add_parser(
         "sku-names",
-        help="one SKU, two stored names — a card's own name disagrees with its SKU's "
-        "product name (D242's sibling). Read-only, no network, ever. Reads the newest "
-        "cached export per game.",
+        help="RETIRED (§5.5) — subsumed by `cards identity`. Prints one line naming it "
+        "and exits.",
     )
     cards_sku_names.add_argument(
         "--verbose",

@@ -469,21 +469,24 @@ COMPONENTS = [
                                     "carries, is deliberately not built unasked.",
                             "governed_by": ["D88", "D189"],
                             "tested_by": []},
-            "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|contradictions|"
-                                     "sku-names|photos|variants>` — the card's stable name "
-                                     "(D172). `name` "
+            "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|identity|"
+                                     "contradictions|sku-names|photos|variants>` — the "
+                                     "card's stable name (D172) and, since lane 2 of "
+                                     "identity-follows-sku.md, its identity. `name` "
                                      "previews what the naming sees and would do, `audit` "
                                      "asks whether every card's name still resolves to "
                                      "its photograph, `checks` runs the four stored-data "
-                                     "identification checks (D239), "
-                                     "`contradictions` dispatches to "
-                                     "`cli/cmd_sku_contradictions.py:run` "
-                                     "(D242), `sku-names` dispatches to "
-                                     "`cli/cmd_sku_name_contradictions.py:run` — the mirror "
-                                     "check, a fixed SKU whose stored name disagrees with "
-                                     "the SKU's own product name — and `photos` "
+                                     "identification checks (D239), `identity` is the "
+                                     "migration's own classifier AND the merged D242/D255 "
+                                     "report (identity-follows-sku.md §5.5, §7) — every "
+                                     "card's class (T1-T6, sku_unknown), the store's own "
+                                     "audit, and the name/number contradiction halves; "
+                                     "previews by default, `--write` performs the one-time "
+                                     "migration. `contradictions` and `sku-names` are "
+                                     "RETIRED into `identity` (each prints one line naming "
+                                     "it) — and `photos` "
                                      "moves the corpus off the legacy `(box, index)` address "
-                                     "onto the card's own name. FIVE OF THE SEVEN WRITE "
+                                     "onto the card's own name. SIX OF THE EIGHT WRITE "
                                      "NOTHING EVER and neither may call `db.connect`: that "
                                      "function is the single entry to the store and always "
                                      "calls `_ensure_schema`, so a preview routed through it "
@@ -493,41 +496,35 @@ COMPONENTS = [
                                      "cannot be re-taken",
                              "governed_by": ["D172", "D183",
                                              "D26", "D88", "D89",
-                                             "D213", "D239",
-                                             "D240", "D242"],
+                                             "D162", "D213", "D239",
+                                             "D240", "D242", "D253", "D255"],
                              "tested_by": ["T7"]},
-            # THE SKU SELF-CONTRADICTION CHECK, KEPT APART FROM `cmd_cards.py:checks` (a
-            # separate, sibling PR) ON THE OWNER'S OWN RULING (D242).
+            # RETIRED INTO `cmd_cards.py:identity` (identity-follows-sku.md §5.5, lane 2,
+            # owner's ruling 6: "Merge them"). `run` is now a one-line pointer. `_read_only`
+            # and `_by_sku` stay: `_by_sku`'s own grouping is what proved D242's shape in
+            # the first place, kept in case a later session wants it again.
             "cmd_sku_contradictions.py": {
-                "does": "`pkmnscan cards contradictions` — groups every card by SKU "
-                        "straight out of the store (read-only, `mode=ro&immutable=1`, "
-                        "never `db.connect`) and hands the groups to "
-                        "`pipeline/sku_number_contradictions.py`. The default preview "
-                        "opens no socket: it reports the denominator-mismatch class "
-                        "directly. `--resolve` builds a real `pipeline/pricehistory.py:"
-                        "Market` and asks the live catalogue only about the SKUs the "
-                        "preview already named as needing it — one request per distinct "
-                        "(game, set) pair, cached the same way `cmd_pricearchive.py`'s "
-                        "own sweep caches its own fetches.",
+                "does": "`pkmnscan cards contradictions` — RETIRED. `run` prints a pointer "
+                        "to `pkmnscan cards identity` and exits 0. `_read_only` (read-only, "
+                        "`mode=ro&immutable=1`, never `db.connect`) and `_by_sku` (every "
+                        "card grouped by SKU) stay as helpers; `pipeline/"
+                        "sku_number_contradictions.py`'s own resolver is still proved "
+                        "directly by `scripts/sku-number-contradictions-selftest.py`, even "
+                        "though nothing on the ordinary command path calls it any more.",
                 "governed_by": ["D146", "D167", "D173", "D234",
-                                "D242"],
+                                "D242", "D255"],
                 "tested_by": [],
             },
-            # THE MIRROR CHECK: FIXED SKU, DISAGREEING NAME, WHERE D242'S OWN CLASS NEEDS
-            # THE NUMBERS TO DISAGREE AND CANNOT SEE THIS ONE. A sixth stored-data check,
-            # kept apart from the four `D239` approved ones and from D242, on the same
-            # precedent D242 itself set.
+            # RETIRED INTO `cmd_cards.py:identity` (identity-follows-sku.md §5.5, lane 2,
+            # the same ruling as its sibling above).
             "cmd_sku_name_contradictions.py": {
-                "does": "`pkmnscan cards sku-names` — groups nothing; reads every card "
-                        "with a SKU straight out of the store (read-only, "
-                        "`mode=ro&immutable=1`, reusing "
-                        "`cli/cmd_sku_contradictions.py:_read_only`, never `db.connect`) "
-                        "and hands them, with the newest cached export per game "
-                        "(`inventory/.exports/<game>/*.csv`, never fetched here), to "
-                        "`pipeline/sku_name_contradictions.py`. Opens no socket, ever — "
-                        "there is no `--resolve` flag, unlike its sibling. Three verdicts, "
-                        "`cards audit`'s own shape: pass, fail, not known.",
-                "governed_by": ["D146", "D239", "D240", "D242"],
+                "does": "`pkmnscan cards sku-names` — RETIRED. `run` prints a pointer to "
+                        "`pkmnscan cards identity` and exits 0. `pipeline/"
+                        "sku_name_contradictions.py`'s own resolver "
+                        "(`find_contradictions`) is still proved directly by `scripts/"
+                        "sku-name-contradictions-selftest.py`, even though nothing on the "
+                        "ordinary command path calls it any more.",
+                "governed_by": ["D146", "D239", "D240", "D242", "D255"],
                 "tested_by": [],
             },
             # THE PRESS `pkmnscan archive sweep` RUNS (D219,
@@ -895,6 +892,41 @@ COMPONENTS = [
                         "`Zaun, Repair Specialist`) that the real, `name_disputes`-backed "
                         "check correctly lets through. Not wired into `make check`, "
                         "matching `sku_number_contradictions.py`'s own precedent.",
+            },
+            # THE MIGRATION'S CLASSIFIER AND THE MERGED D242/D255 REPORT
+            # (identity-follows-sku.md §5.5, §7, lane 2). Reads plain `Card`/`SkuRow`
+            # objects, no store import — `cli/cmd_cards.py:identity` is the one caller,
+            # reading the real store read-only (or, for `--write`, through `Store()`), and
+            # `scripts/identity-replay.py` is the other, over a read-only COPY.
+            "identity_binding.py": {
+                "does": "§7.2's ladder — T3 (a human act chose this SKU), T5 (the read "
+                        "disputes the row, or is blank, no human act), T4s (number "
+                        "disagrees, name names more than one product), T4u (the same, but "
+                        "exactly one — D162), T1 (name equal after the fold), T2 (a near "
+                        "miss, not disputed), T6 (no SKU), `sku_unknown`. Reuses "
+                        "`pipeline.join.name_disputes`/`number_index_key` and "
+                        "`store.numbers.catalog_number_fields`/`strip_name_suffix` rather "
+                        "than a second rule for either test. `newest_human_sku` scopes an "
+                        "`answered`/`sku_corrected` event by the card's own `captured_at` "
+                        "(the '6/53' finding, §3.1) — a reused position's earlier answer is "
+                        "never credited to the card now at it. `backfill_read` re-keys the "
+                        "`identifications` table by `photo_sha256` rather than trusting its "
+                        "own position key, for the same reason. `audit()` is §4.3's three "
+                        "failures PLUS §5.5's name half/number half — D242/D255's "
+                        "replacement, excluding any card `bound_by` a human act "
+                        "(`HUMAN_BOUND_BY`), because a human who chose that SKU has already "
+                        "answered the report's question. `held_review_candidates`/"
+                        "`held_review_entry` build the `+listing_disputed` queue entry a "
+                        "held, identified card gets on `--write` — the SKU's own row plus "
+                        "D253's two candidate sets, `found_by` tagged `listing`/`name`/"
+                        "`number`, read off the SKU table's own `raw` rather than a "
+                        "re-fetched export.",
+                "governed_by": ["D55", "D63", "D67", "D81", "D146", "D162", "D172", "D242",
+                                "D253", "D255"],
+                "note": "PROVED BY `make identity-binding-selftest`: every class in §7.2's "
+                        "own order, the human-bound exclusion, both report halves, over "
+                        "plain fixtures, no store. `scripts/identity-replay.py` imports "
+                        "this module rather than re-deriving the classifier.",
             },
             # D10's label formula lives here, and as of 2026-08-29 it assumes NO divider size:
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
@@ -2812,6 +2844,35 @@ COMPONENTS = [
                 "governed_by": ["D36", "D63", "D67", "D88", "D172", "D183", "D213",
                                 "D252"],
             },
+            "identity-binding-selftest.py": {
+                "does": "proves pipeline/identity_binding.py, the migration's classifier "
+                        "and the merged D242/D255 report (identity-follows-sku.md §5.5, "
+                        "§7, lane 2), over plain Card/SkuRow objects — no store. Every "
+                        "class in §7.2's own order (T1, T2, T3, T4s, T4u, T5 twice — "
+                        "disputed and blank, T6, sku_unknown), including an arm proving T3 "
+                        "is tested before T5; number_agrees's 'equal or blank' fold for "
+                        "both number strategies; the D162 uniqueness count; "
+                        "newest_human_sku's captured_at scoping (the '6/53' finding); "
+                        "backfill_read's digest match and fallback; audit()'s three §4.3 "
+                        "failures, each proved to fire and to stay silent; the §5.5 "
+                        "human-bound exclusion over every member of HUMAN_BOUND_BY; "
+                        "held_review_candidates' found_by tagging.",
+                "governed_by": ["D55", "D63", "D67", "D162", "D172", "D242", "D253", "D255"],
+            },
+            "identity-replay.py": {
+                "does": "the migration's replay, before any write (identity-follows-sku.md "
+                        "§7.4, lane 2): reads a COPY of the store, read-only "
+                        "(mode=ro&immutable=1, never db.connect), simulates the whole "
+                        "press in memory through pipeline/identity_binding.py's own "
+                        "plan_migration, and asserts the six things §7.4 names — every "
+                        "held card's drawn identity unchanged, no field outside the "
+                        "identity/binding group moves, every bound card's identity equals "
+                        "its SKU table row, every T3 card's SKU equals the newest human "
+                        "act on it, every identity move is in T3 or T4u, every SKU on a "
+                        "card or in listings is in the table. Never writes; the copy is "
+                        "the owner's, made with `sqlite3 ... .backup`.",
+                "governed_by": ["D63", "D162", "D172", "D242", "D253", "D255"],
+            },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
                         "throwaway store, no network (D219). A "
@@ -4549,12 +4610,13 @@ COMPONENTS = [
                                 "D74", "D76",
                                 "D80", "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122",
                                 "D123", "D127", "D129", "D133", "D135", "D138", "D139", "D140",
-                                "D141", "D146", "D149", "D158", "D159", "D160", "D166", "D167",
+                                "D141", "D146", "D149", "D158", "D159", "D160", "D162", "D166",
+                                "D167",
                                 "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
                                 "D213", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D252", "D254",
+                                "D247", "D250", "D252", "D253", "D254", "D255",
                                 "D256"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "

@@ -312,6 +312,13 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   number_unread_name_matched: 'Is this the row it matched?',
   name_disputed: 'Is this the right card at all?',
   no_market_data: 'Is this the card?',
+  /* `pipeline/routing.py:LISTING_DISPUTED` (identity-follows-sku.md §7.3, lane 2): a held
+   * card from `cards identity --write` — the read disputes the SKU it is bound to, and
+   * nobody has looked. Not in `reasons.ts` yet (that file and docs/DESIGN.md are outside
+   * lane 2's fence), so the sub-label under this headline is the raw machine string until a
+   * later lane wires it — the same honest fallback `reasons.ts` already documents for any
+   * reason it has not labelled. */
+  listing_disputed: 'Is the listing the right card?',
 }
 
 const RETIRED_HEADLINE = 'This question was retired.'

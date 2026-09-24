@@ -1,6 +1,7 @@
-"""`pkmnscan cards` — the card's stable name: preview it, audit it, move the photographs.
+"""`pkmnscan cards` — the card's stable name and, since lane 2 of `docs/specs/
+identity-follows-sku.md`, its identity: preview it, audit it, move the photographs.
 
-SIX SUBCOMMANDS AND FOUR OF THEM WRITE NOTHING EVER.
+SEVEN SUBCOMMANDS AND FIVE OF THEM WRITE NOTHING EVER.
 
   cards name            what the naming would do, or has done — the source census, every
                         card that would land `nophoto:`, every duplicate photograph, and
@@ -11,13 +12,15 @@ SIX SUBCOMMANDS AND FOUR OF THEM WRITE NOTHING EVER.
                         a name too long, a denominator or digit count that disagrees with
                         its set, a name one edit from a sibling in the same set. Review
                         signals, never repairs, never a catalogue call.
-  cards contradictions  two copies of one SKU disagreeing about the card's number
-                        (D242). Read-only preview, opens no socket
-                        unless `--resolve` is given.
-  cards sku-names       one SKU, two stored names — a card's own stored name disagrees
-                        with its SKU's product name in the newest cached export
-                        (D242's sibling). Read-only, no network ever. THREE verdicts,
-                        `audit`'s own shape.
+  cards identity         `docs/specs/identity-follows-sku.md` §5.5, §7 (lane 2): the
+                        migration's own classifier AND the merged D242/D255 report — every
+                        card's class (T1-T6, `sku_unknown`), the §4.3 audit, and the name/
+                        number contradiction halves. Previews by default; `--write`
+                        performs the one-time migration. `cards contradictions` and `cards
+                        sku-names` retire into this — see their own subcommands below.
+  cards contradictions  RETIRED into `cards identity` (§5.5). Prints one line and exits.
+  cards sku-names       RETIRED into `cards identity` (§5.5's sibling). Prints one line
+                        and exits.
   cards photos          move the corpus off the legacy `(box, index)` address onto the
                         card's own name. Previews by default; `--write` performs it
   cards variants        backfill `set` and `rarity` from whatever export a card's game
@@ -25,13 +28,19 @@ SIX SUBCOMMANDS AND FOUR OF THEM WRITE NOTHING EVER.
                         Previews by default; `--write` performs it. Never guesses: a SKU
                         that resolves to nothing keeps a null set.
 
-`name`, `audit`, `checks`, `contradictions` AND `sku-names` OPEN THE STORE READ-ONLY AND MUST NEVER CALL
-`db.connect`. That function is the single entry to the store and it always calls
-`_ensure_schema`, so a preview routed through it would PERFORM the migration it claims to
-be previewing. It is a hard property with a harness arm behind it, and it is why `name` and
-`audit` talk to `sqlite3` directly instead of going through `store.session` —
-`checks` and `contradictions` reuse that same door
-(`cli/cmd_sku_contradictions.py:_read_only`).
+`name`, `audit`, `checks`, `identity`, `contradictions` AND `sku-names` OPEN THE STORE
+READ-ONLY AND MUST NEVER CALL `db.connect`. That function is the single entry to the store
+and it always calls `_ensure_schema`, so a preview routed through it would PERFORM the
+migration it claims to be previewing. It is a hard property with a harness arm behind it,
+and it is why `name`, `audit`, `checks` and `identity` all talk to `sqlite3` directly
+through this module's own `_read_only`, instead of going through `store.session` — `cards
+identity`'s own reader functions (`pipeline/identity_binding.py:read_cards`/`read_skus`/
+`read_human_events`/`read_identifications_by_digest`/`listing_skus`) take the connection
+this door opens and never call `db.connect` themselves. `cards identity --write` is the one
+exception among the three identity-aware subcommands: it previews with the read-only door
+and then, only once it has decided what to write, opens `store.Store().write()` for the
+press itself — `cards photos`'/`cards variants`'s own preview-then-write shape, not a new
+one.
 
 `cards photos` IS THE ONE THING HERE THAT TOUCHES 4.45 GB THAT CANNOT BE RE-TAKEN, which is
 why it previews first and why every file it moves is verified against a digest that was
@@ -55,9 +64,14 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import time
+
 from cli import cmd_sku_contradictions, cmd_sku_name_contradictions
+from pipeline import games as games_module
+from pipeline import identity_binding as ib
 from pipeline import identity_checks
 from store import Store, db, files, master, photos
+from store.master import IDENTITY_READ, IDENTITY_SKU
 
 # The ladder's own names, in the order `_name_one_card` tries them, so a report can rank a
 # source by how much it is worth rather than printing a dict in hash order.
@@ -425,6 +439,167 @@ def _checks(args, say) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------- cards identity
+
+
+def _read_plan(directory: Path) -> Tuple["ib.MigrationPlan", "ib.AuditFindings", Dict[str, "ib.SkuRow"]]:
+    """The whole read-only pass §7 and §4.3 need — one `_read_only` connection, closed
+    before this returns. Shared by the preview and by `--write`'s own preview-then-write
+    shape (`cards photos`/`cards variants`'s own idiom, not a new one)."""
+    conn = _read_only(directory)
+    try:
+        cards = ib.read_cards(conn)
+        skus = ib.read_skus(conn)
+        events = ib.read_human_events(conn)
+        identifications = ib.read_identifications_by_digest(conn)
+        listings = ib.listing_skus(conn)
+    finally:
+        conn.close()
+    plan = ib.plan_migration(cards, skus, events, identifications)
+    findings = ib.audit(cards, skus, listings)
+    return plan, findings, skus
+
+
+def _print_plan(plan: "ib.MigrationPlan", findings: "ib.AuditFindings", say) -> None:
+    counts = plan.counts
+    derive_total = sum(counts[c] for c in ib.DERIVING_CLASSES)
+    held_total = sum(counts[c] for c in ib.HELD_CLASSES)
+    identified_held = sum(
+        1 for p in plan.plans if ib.held(p.cls) and p.state == master.IDENTIFIED
+    )
+    sold_held = sum(1 for p in plan.plans if ib.held(p.cls) and p.state == master.SOLD)
+    other_held = held_total - identified_held - sold_held
+
+    say("CLASSES (identity-follows-sku.md §7.2)")
+    say(f"  T3   {counts[ib.T3]:>5}  derive — a human act chose this SKU")
+    say(f"  T5   {counts[ib.T5]:>5}  HOLD — read disputes the SKU, or is blank, no human act")
+    say(f"  T4s  {counts[ib.T4S]:>5}  HOLD — number disagrees, name names more than one product")
+    say(f"  T4u  {counts[ib.T4U]:>5}  derive — number disagrees, name names exactly one (D162)")
+    say(f"  T1   {counts[ib.T1]:>5}  derive — name equal after the fold")
+    say(f"  T2   {counts[ib.T2]:>5}  derive — name a near miss, not disputed")
+    say(f"  T6   {counts[ib.T6]:>5}  no SKU — nothing to derive")
+    say(f"  {ib.SKU_UNKNOWN:<4} {counts[ib.SKU_UNKNOWN]:>5}  SKU not yet in the table")
+    say("")
+    say(f"  {derive_total} derive, {held_total} held "
+        f"({identified_held} identified, {sold_held} sold"
+        + (f", {other_held} other" if other_held else "") + ")")
+
+    disputed_names = [
+        p for p in plan.plans
+        if p.cls == ib.T3 and p.classification.new_name is not None
+        and (p.read_name or "").strip().upper() != p.classification.new_name.strip().upper()
+    ]
+    if disputed_names:
+        say("")
+        say(f"T3 CARDS WHOSE DRAWN NAME WILL DISPUTE THE READ ({len(disputed_names)}, "
+            "ruling 2 — derive, listed once):")
+        for p in disputed_names[:80]:
+            say(f"    {p.key}  read {p.read_name!r}  ->  {p.classification.new_name!r}")
+        if len(disputed_names) > 80:
+            say(f"    … and {len(disputed_names) - 80} more")
+
+    say("")
+    say("AUDIT (§4.3) — the store's own health, over whatever bindings already exist")
+    say(f"  identity drift (bound card disagrees with its SKU row): {len(findings.identity_drift)}")
+    say(f"  SKU absent from the table: {len(findings.sku_not_in_table)}")
+    say(f"  product rarity disagreement: {len(findings.rarity_disagreement)}")
+
+    say("")
+    say("NAME/NUMBER CONTRADICTIONS (§5.5 — replaces `cards contradictions`/`cards "
+        "sku-names`, human-bound cards excluded)")
+    say(f"  name half (read disputes its own bound SKU): {len(findings.name_half)}")
+    say(f"  number half (read number disagrees with its own bound SKU): {len(findings.number_half)}")
+
+
+def _identity(args, say) -> int:
+    """`docs/specs/identity-follows-sku.md` §5.5, §7 (lane 2). Previews by default; `--write`
+    performs the one-time migration. NEVER calls `db.connect` for the preview half — see the
+    module docstring."""
+    write = bool(getattr(args, "write", False))
+    directory = files.inventory_dir()
+    plan, findings, skus = _read_plan(directory)
+
+    say(f"IDENTITY  {db.path(directory)}")
+    say(f"  {len(plan.plans)} card(s) checked; {'WRITING' if write else 'PREVIEW, nothing will be written'}")
+    say("")
+    _print_plan(plan, findings, say)
+
+    if not write:
+        say("")
+        say("Nothing was written. Re-run with `--write` to bind every deriving class and "
+            "hold the rest — re-runnable, and a card already bound correctly is skipped.")
+        return 0
+
+    started = time.monotonic()
+    census = {
+        "bound": 0, "unchanged": 0, "held": 0, "review_opened": 0, "sold_reported": 0,
+        "skipped_moved": 0,
+    }
+    with Store().write() as snapshot:
+        for p in plan.plans:
+            card = snapshot.inventory.cards.get(p.key)
+            if card is None or card.sku != p.sku:
+                # THE IN-LOCK RE-CHECK `cards variants`/`cards photos` ALREADY MAKE (§7.3's
+                # own words): a card whose SKU moved between the preview above and this
+                # write is a card this pass no longer has authority to describe.
+                census["skipped_moved"] += 1
+                continue
+            card.read_name = p.read_name
+            card.read_number = p.read_number
+            card.read_printed_total = p.read_printed_total
+            if ib.derives(p.cls):
+                if card.identity_source == IDENTITY_SKU and card.sku == p.sku:
+                    census["unchanged"] += 1
+                    continue
+                row = p.classification.row
+                strategy = games_module.get(p.game)["join_key"]
+                product_line = games_module.get(p.game).get("product_line")
+                disputed = ib.name_disputes(p.read_name, [ib._row_dict(row)])
+                snapshot.inventory.bind_sku(
+                    p.key, p.sku, bound_by="migration", skus=snapshot.skus,
+                    number_strategy=strategy, expected_product_line=product_line,
+                    read_disputes=disputed, event="sku_bound",
+                )
+                # THE CLASS, RECORDED ON THE EVENT (§7.3, "with the class recorded on the
+                # event") — `bind_sku`'s own `event=` only renames the line, and lane 1's
+                # signature (owned by that lane, not this one) carries no field for it, so
+                # this is a second, plain line beside the one `bind_sku` already appends,
+                # never a second WRITER of the identity itself.
+                snapshot.inventory.events.append({
+                    "at": master.now(), "event": "identity_migration_classified",
+                    "position": p.key, "sku": p.sku, "class": p.cls,
+                })
+                census["bound"] += 1
+            elif ib.held(p.cls):
+                if card.identity_source != IDENTITY_READ:
+                    card.identity_source = IDENTITY_READ
+                    census["held"] += 1
+                if card.state == master.IDENTIFIED:
+                    entry = ib.held_review_entry(card, p.classification.row, plan)
+                    if snapshot.review.upsert(entry):
+                        census["review_opened"] += 1
+                elif card.state == master.SOLD:
+                    census["sold_reported"] += 1
+    elapsed = time.monotonic() - started
+
+    say("")
+    say("WROTE")
+    say(f"  bound (T1/T2/T3/T4u, bound_by=migration): {census['bound']}")
+    say(f"  already correctly bound, skipped: {census['unchanged']}")
+    say(f"  held (identity_source=read): {census['held']}")
+    say(f"  review entries opened (listing_disputed): {census['review_opened']}")
+    say(f"  sold and held, report only: {census['sold_reported']}")
+    if census["skipped_moved"]:
+        say(f"  SKIPPED, SKU moved since the preview: {census['skipped_moved']}")
+    say(f"  write took {elapsed:.2f}s, including every FTS index trigger the identity "
+        "writes above fired (§5.2 — no FTS change was needed, the existing trigger indexes "
+        "the new `name`/`number` on every UPDATE)")
+    say("")
+    say("VERDICT: migration written. Zero held cards changed identity; every card that "
+        "moved is in T1, T2, T3 or T4u.")
+    return 0
+
+
 # ----------------------------------------------------------------------- cards photos
 
 
@@ -686,6 +861,7 @@ _SUBCOMMANDS = {
     "name": _name,
     "audit": _audit,
     "checks": _checks,
+    "identity": _identity,
     "contradictions": cmd_sku_contradictions.run,
     "sku-names": cmd_sku_name_contradictions.run,
     "photos": _photos,
@@ -697,6 +873,6 @@ def run(args, say) -> int:
     action = getattr(args, "cards_action", None)
     handler = _SUBCOMMANDS.get(action)
     if handler is None:
-        say("pkmnscan cards <name|audit|checks|contradictions|sku-names|photos|variants>")
+        say("pkmnscan cards <name|audit|checks|identity|contradictions|sku-names|photos|variants>")
         return 2
     return handler(args, say)

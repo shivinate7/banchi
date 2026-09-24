@@ -230,6 +230,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   product-history-selftest +
                     #   sku-number-contradictions-selftest + readings-selftest +
                     #   skus-selftest + identity-store-selftest +
+                    #   identity-binding-selftest +
                     #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
@@ -312,14 +313,19 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   refuse on mismatch, hard link, re-hash destination, THEN
                                    #   unlink source. The bytes exist under a name at every
                                    #   instant.
-./pkmnscan cards    sku-names [--verbose]
-                                   # one SKU, two stored names (D242's sibling).
-                                   #   A card's stored name disagrees with its SKU's
-                                   #   product name in the newest cached export.
-                                   #   Free, read-only, no network ever.
-                                   #   Three verdicts: pass, fail, not known.
-                                   #   Ranks the likely SKU by the card's own claims.
-                                   #   Never picks one.
+./pkmnscan cards    identity [--write]
+                                   # THE MIGRATION'S OWN CLASSIFIER, AND THE MERGED
+                                   #   `contradictions`/`sku-names` REPORT (identity-follows-
+                                   #   sku.md §5.5, §7). Every card's class (T1-T6,
+                                   #   sku_unknown), the store's own audit, and the name/
+                                   #   number contradiction halves. Previews by default;
+                                   #   `--write` performs the one-time migration — held
+                                   #   cards (T4s, T5) never change identity, only
+                                   #   `identity_source`, and a held, identified card gets a
+                                   #   `listing_disputed` review entry.
+./pkmnscan cards    contradictions / sku-names
+                                   # RETIRED into `cards identity` (owner's ruling, "Merge
+                                   #   them"). Each prints one line naming it and exits.
 ./pkmnscan cards    variants [--write]
                                    # backfill `set`/`rarity` from whatever export a card's own
                                    #   game already has on disk. Governed by

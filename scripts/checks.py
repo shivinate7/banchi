@@ -885,6 +885,36 @@ CHECKS = (
         "governed_by": ("D36", "D63", "D67", "D88", "D172", "D183", "D213", "D252"),
     },
     {
+        "target": "identity-binding-selftest",
+        "runs": "python3 scripts/identity-binding-selftest.py",
+        "asserts": "pipeline/identity_binding.py, the migration's classifier and the merged "
+                   "D242/D255 report (docs/specs/identity-follows-sku.md §5.5, §7, lane 2), "
+                   "over plain Card/SkuRow objects, no store. number_agrees's 'equal or "
+                   "blank' fold for both number strategies; name_fold_matches's exact-fold "
+                   "test; distinct_products_by_line/matching_products' D162 uniqueness "
+                   "count, including two SKUs of one product collapsing to one; "
+                   "newest_human_sku scoped by captured_at (the '6/53' finding — an act "
+                   "before this card's own capture is never credited to it) and taking the "
+                   "newest of two; backfill_read matching and falling back; classify_card "
+                   "over EVERY class in §7.2's own order (T1, T2, T3, T4s, T4u, T5 — both "
+                   "the disputed and the blank arm, T6, sku_unknown), including one arm "
+                   "proving T3 is tested before T5 (a human-chosen SKU derives even when "
+                   "the read disputes it); audit()'s three §4.3 failures, each proved to "
+                   "fire AND to stay silent on a clean fixture; the §5.5 human-bound "
+                   "exclusion over every member of HUMAN_BOUND_BY; held_review_candidates' "
+                   "found_by tagging (listing/name/number) and held_review_entry's reason; "
+                   "plan_migration/class_counts end to end.",
+        "needs": ("python3",),
+        "writes": "nothing — plain Card/SkuRow objects in memory only, never a store on "
+                  "disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. `identity-store-"
+                               "selftest`'s own precedent: PATH GATED into `make check` "
+                               "alone, never the hook.",
+        "gates": True,
+        "governed_by": ("D63", "D162", "D172", "D242", "D253", "D255"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "

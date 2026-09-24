@@ -84,6 +84,25 @@ NUMBER_UNREAD_NAME_MATCHED = "number_unread_name_matched"
 # only other thing read off that photograph, so it is the only thing that can contradict it.
 NAME_DISPUTED = "name_disputed"
 
+# `docs/specs/identity-follows-sku.md` §7.3, lane 2: the migration's own review reason, for
+# a HELD card (`identity_source = read`, a SKU the read disputes on name or on number, §3.1)
+# that is IDENTIFIED rather than sold. `./pkmnscan cards identity --write` opens the entry
+# directly, through `store/queues.py:Queue.upsert` — never through `route()` above, which is
+# the join's own reasoning and has nothing to say about a card the migration is looking at
+# long after the join ran. Label on screen, `app/src/ReviewQueue.tsx`'s own `QUESTIONS` map
+# (§7.3's exact words): "Is the listing the right card?"
+#
+# DELIBERATELY NOT IN `ROUTING_REASONS` BELOW. That tuple is `route()`'s own emitted
+# vocabulary, reconciled against `app/src/reasons.ts` and `docs/DESIGN.md` by `make
+# docs-audit`'s `reason codes`/`reason emissions` rows — neither file is lane 2's to touch
+# (see the lane's own fence). A reason outside the roster still renders: `#/review`'s
+# `reasonLabel` falls back to the raw string exactly as it does for any code `reasons.ts`
+# has not labelled yet (`app/src/reasons.ts`'s own docstring: "an unknown code renders as
+# itself... so a reason added to the pipeline shows up here as a plain string rather than a
+# blank line"). Wiring this into the roster, `reasons.ts` and `docs/DESIGN.md` is real work
+# a later lane owns.
+LISTING_DISPUTED = "listing_disputed"
+
 # ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
 # `pipeline/variant.py:LADDER_REASONS`; together the two tuples are the whole vocabulary, and
 # the split is the same one docs/DESIGN.md credits each reason by.
