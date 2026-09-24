@@ -34,6 +34,10 @@ export const STATUS_TONES: Readonly<Record<StatusKind, StatusTone>> = {
   neutral: 'default',
 }
 
+/** What a box with no stored name is called. Never its number (the owner's ruling,
+ *  2026-09-23). */
+export const UNNAMED_BOX = 'Unnamed box'
+
 /** When this browser last reached for each box, by box number (`deviceMemory.ts`). */
 export type BoxRecency = ReadonlyMap<number, string>
 

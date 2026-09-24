@@ -247,6 +247,13 @@ test('a separator is drawn, never typed, and a screen reader hears a comma', asy
   expect(drawn).toContain('·')
 })
 
+test('a box is drawn by its name and never by its number', async ({ page }) => {
+  await open(page, 1440, 'light')
+  const boxes = page.locator('[data-specimen="Box"] .bn-boxlabel')
+  await expect(boxes).toHaveText(['RB Epics', 'Mixed Singles', 'Unnamed box'])
+  await expect(page.locator('[data-specimen="Box"]')).not.toContainText(/Box \d/)
+})
+
 test('two printings of one card read differently', async ({ page }) => {
   await open(page, 1440, 'light')
   const lines = page.locator('[data-specimen="Card"] .bn-cardline')

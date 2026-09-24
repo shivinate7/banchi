@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 
 import { Icon, type IconName } from './Icon'
 import { cropStyle, type Crop } from './index'
-import { STATUS_TONES, type StatusKind } from './dataRules'
+import { STATUS_TONES, UNNAMED_BOX, type StatusKind } from './dataRules'
 import { hasSheet, openSheet, sheetHref } from './sheets'
 import { moneyGrouped, moneySigned } from '../money'
 import { PositionLabel } from '../PositionLabel'
@@ -14,7 +14,7 @@ import './data.css'
 /* The pure half — the status tones and the box order — lives in `dataRules.ts`, so a spec and a
  * non-React caller can import it without a stylesheet. It is re-exported here: this file is
  * still the one place a screen imports a data primitive from. */
-export { STATUS_TONES, boxesMostRecentFirst } from './dataRules'
+export { STATUS_TONES, UNNAMED_BOX, boxesMostRecentFirst } from './dataRules'
 export type { BoxRecency, StatusKind, StatusTone } from './dataRules'
 
 /* THE KIT'S DATA PRIMITIVES: how a figure, a card, a box, a place, a status and a filter are
@@ -32,8 +32,8 @@ export type { BoxRecency, StatusKind, StatusTone } from './dataRules'
  *  - MONO IS FOR MACHINE STRINGS ONLY: SKUs, run ids, card numbers, key caps, and money. A
  *    count, a date, a box number and a name are Inter.
  *  - A SEPARATOR IS DRAWN BY CSS, NEVER TYPED (D218). `Sep` is the one separator.
- *  - A BOX IS ITS NAME, THEN ITS NUMBER (D132), and a list of boxes is MOST RECENT FIRST (the
- *    owner's ruling, 2026-09-23). `BoxLabel` and `boxesMostRecentFirst`.
+ *  - A BOX IS ITS NAME AND NEVER ITS NUMBER, and a list of boxes is MOST RECENT FIRST (the
+ *    owner's rulings, 2026-09-23). `BoxLabel` and `boxesMostRecentFirst`.
  *  - A CARD'S LINE NAMES ITS FINISH, so two printings of one card never look the same.
  *  - A PRODUCT OPENS BY SKU, NEVER BY ONE COPY (D212: every copy is fungible).
  *  - A FILTER COMBINES WITH EVERY OTHER, IN ANY ORDER, and a pick list NEVER opens the native OS
@@ -425,29 +425,28 @@ export function CardThumb({
  * BoxLabel and the box order.
  * ============================================================================================ */
 
-/** A box as every screen names it: its NAME first, then `Box 3` (D132). A box with no name is
- *  `Box 3` alone. The number is Inter, not mono: it is a label, not a machine string. */
+/** A box as every screen names it: its NAME, and nothing else.
+ *
+ *  THE BOX NUMBER IS NEVER SHOWN (the owner's ruling, 2026-09-23: "those box numbers are
+ *  arbitrary index values that you get to keep on the back end, having a count of boxes is
+ *  great, having each box labeled with a number is not ok"). Every box carries a stored name:
+ *  a new one defaults to `Box <count+1>`, and the server backfills the old ones. So this
+ *  composes nothing. A box whose name is still missing reads `Unnamed box`.
+ *
+ *  `box` is kept for the caller's own key and rides a data attribute; it is never drawn. */
 export function BoxLabel({
   box,
   name,
   className,
 }: {
-  readonly box: number
+  readonly box?: number
   readonly name?: string | null
   readonly className?: string
 }) {
   const named = typeof name === 'string' && name.trim() !== ''
   return (
-    <span className={['bn-boxlabel', className].filter(Boolean).join(' ')}>
-      {named ? (
-        <>
-          <span className="bn-boxlabel-name">{name}</span>
-          <Sep />
-          <span className="bn-boxlabel-number">{`Box ${box}`}</span>
-        </>
-      ) : (
-        <span className="bn-boxlabel-name">{`Box ${box}`}</span>
-      )}
+    <span className={['bn-boxlabel', className].filter(Boolean).join(' ')} data-box={box}>
+      <span className={named ? 'bn-boxlabel-name' : 'bn-boxlabel-name is-unnamed'}>{named ? name : UNNAMED_BOX}</span>
     </span>
   )
 }

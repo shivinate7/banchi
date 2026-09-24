@@ -130,10 +130,10 @@
   line-height: var(--bn-lh-snug);
 }
 
-/* ---- BoxLabel: the name, then Box N ------------------------------------------------------------ */
+/* ---- BoxLabel: the name, and never the number ------------------------------------------------- */
 .bn-boxlabel { display: inline-flex; align-items: baseline; min-width: 0; max-width: 100%; }
 .bn-boxlabel-name { font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bn-boxlabel-number { flex: none; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bn-boxlabel-name.is-unnamed { font-weight: 400; font-style: italic; color: var(--bn-ink-3); }
 
 /* ---- Location ------------------------------------------------------------------------------------ */
 .bn-location { display: inline-flex; min-width: 0; }

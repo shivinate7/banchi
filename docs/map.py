@@ -5464,7 +5464,7 @@ COMPONENTS = [
                                          "OrderLink (open by SKU or order key, a sheet when one is "
                                          "registered, the page otherwise), CardLine (the finish is "
                                          "always said), CardThumb (one no-photo state), BoxLabel "
-                                         "(name, then Box N), Location (over PositionLabel), Sep "
+                                         "(the name only, never the number), Location (over PositionLabel), Sep "
                                          "(the one CSS separator), and the pick list Select, "
                                          "FilterChips and SortControl draw: Capture's option rows, "
                                          "in the kit's own panel, never the native OS menu, every "
