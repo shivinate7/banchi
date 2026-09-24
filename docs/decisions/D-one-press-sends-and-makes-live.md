@@ -19,7 +19,7 @@ The record of the review is `docs/reviews/ux-2026-09-23/`. The plan is
 | Q5 | Does the cost check run when the Identify sheet opens? | Yes. Open, then spend: two presses. |
 | Q6 | What does the Runs screen become? | Decide after the moves land. The route and its name stay. |
 | Q7 | Where does a manual "Check what is live" press live? | On Pricing's send card and on the Live tab, which replaces the Mark-down sheet. |
-| Q8 | What happens to copies in a file that was written and never sent? | Pricing names them, with "Take them back". |
+| Q8 | What happens to copies in a file that was written and never sent? | Pricing names them, with "Take them back". Amended 2026-09-24: "Take them back" is offered only after a live check has run past the wait for that receipt. |
 
 ### The premise that no longer holds
 
@@ -47,7 +47,8 @@ accepted that cost. These protections stay, and they are D106's own promises:
 
 - The move is scoped to one upload. `SCOPE_THIS_UPLOAD` is a constant, never a parameter.
 - The upload id comes off disk, never off the request.
-- A failed push rolls back at TCGplayer. Its copies go back to the list.
+- A failed push rolls back at TCGplayer. Its copies go back to the list ONLY when TCGplayer
+  answered the rollback, or when no upload was opened (the 2026-09-24 review).
 - The one press is the only route that publishes. No session, test or dry run calls it. The
   repo's rule that a block-list fails open applies here: a dry run uses an allow-list.
 
@@ -106,7 +107,8 @@ and change for listing files? Or does something else hold D100's outcome for a l
   example "Ready to write", never "Needs pricing" once pricing is answered.
 - **The export fetch and its scope (D64, D65, D76, D166, D170).** The rules stay. The fetch now
   starts when a reading finishes. A refusal becomes the run's next step.
-- **D174 (a press claims the cards it is about to buy).** Unchanged.
+- **D174 (a press claims the cards it is about to buy).** Unchanged for a read. A send now
+  claims its SKUs in the same shape (`store/sendclaims.py`, below).
 
 ### What is still open
 
@@ -126,16 +128,18 @@ first real send needs the owner's word.
 - The double-send guard is `pipeline/sendguard.py`. After a send, the live count at TCGplayer
   plus the copies added may never be more than the copies on hand. It reads the fresh live
   export and the shelf. It does not read the store's listing records. `emit --live-guard`
-  lowers each card's send quantity to the room that is left, and it names each trim.
+  lowers each card's send quantity to the room that is left, and it names each trim. An export
+  with no `TCGplayer Id` or `Total Quantity` column is refused, never read as zero.
 - The one press is `POST /pipeline/send` in `server/send_routes.py`. In order, it fetches the
   live export, runs `reconcile --live --write`, runs `emit --live-guard`, pushes the file and
-  publishes the file. If the live read fails, the press refuses and nothing is written. If the
-  push or the publish fails, the upload is rolled back and the copies go back on the list. The
-  press refuses a second push of the same file bytes. With `download: true` it stops after the
-  file.
+  publishes the file. If the live read fails, the press refuses and nothing is written. With
+  `download: true` it stops after the file.
 - The check after the lag is `POST /pipeline/live-check`. It runs only when a request asks.
   `app/src/liveCheck.ts` asks on a visit to Pricing or Home. Otherwise one timer in the page
-  asks when the wait ends.
+  asks when the wait ends. The first check is due two minutes past the lag, never at it.
+- Matching runs by itself (Q4): `POST /pipeline/runs/<name>/match`, called by `#/runs` for
+  every run it sees waiting for a match. A refusal is recorded beside the run and is its next
+  step, and it is not asked again until its own "Try again" press. T7 `check_run_match`.
 - `cli/cmd_reprice.py:published_recently` now reads the send receipts too. Before, a listing
   that went live had no lag guard.
 - A mark-down has one press too: `POST /pipeline/markdowns/<stamp>/send`. It keeps D100's
@@ -144,3 +148,39 @@ first real send needs the owner's word.
   the open question above, and it stays open.
 
 The pricing lane follows, with the rest of the screen and the Live tab.
+
+### Round 2: what the adversarial review found, and the fixes (2026-09-24)
+
+The review of round 1 failed. Each finding is fixed at its cause, and each has a T7 case in
+`check_send_hazards` that went red on the round-1 build before the fix.
+
+- **Two presses at once.** The server ran four request slots, and nothing stopped two sends.
+  Now the server takes one press at a time and refuses a second by name. The rule that holds
+  across processes and restarts is a store claim in D174's shape: `emit` checks every live
+  claim, and writes its own, in the same store write that counts the copies sent
+  (`store/sendclaims.py`, schema 11). A plan whose basis moved while it was deciding is
+  refused. Each press writes its file into its own directory, and a stamp can no longer clash
+  inside one second.
+- **A dropped connection.** The receipt is written before the first byte leaves, and it says
+  `sending` while the press runs. The send card reads it after a dropped connection and offers
+  no second press.
+- **An unclear answer.** A publish that TCGplayer answered 500, a publish that never answered,
+  and a rollback that TCGplayer refused are UNKNOWN. The copies stay counted, the claim holds
+  their SKUs out of every send, and the card names the upload that may wait in TCGplayer's
+  Staged list. Only a live check past the wait resolves it.
+- **Take them back (the owner's ruling, 2026-09-24).** Offered only after a live check has run
+  past the wait for that receipt, and it returns only the copies the check did not find.
+  Before that, the card says when it will be safe.
+- **Timeouts.** On this Python, `socket.timeout` is not a `TimeoutError`, so a slow answer
+  escaped every caller. Every socket failure on the transport is now `tcg_unreachable`.
+- **Counts.** TCGplayer's accepted count is reconciled against the rows sent. The card never
+  says more went live than TCGplayer took, and the check names the rows it turned away.
+- **Two receipts, one rise.** The check hands one live rise to receipts oldest first, so one
+  rise never confirms two sends.
+- **The same bytes.** The refusal of a second push of the same file bytes holds only inside
+  the upload window, where the live read cannot see the first push yet.
+
+WHAT IS NOT KNOWN, AND WHERE THE CODE DOES NOT GUESS. TCGplayer's upload answer carries a
+count of rows it took, not which rows. So a turned-away row is named by the check after the
+wait, not at the send. Whether the portal's `Messages` name the rows is not measured.
+
