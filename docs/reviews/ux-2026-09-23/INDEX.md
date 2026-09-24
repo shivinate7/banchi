@@ -53,8 +53,9 @@ contradict a settled decision on purpose. The owner weighs that.
 3. **The live look was GET only.** The visual lens loaded five screens of the owner's live app,
    10 loads in all. The held-orders reviewer's scratch copy also read the live store once by
    accident. `RULINGS.md` records that incident.
-4. **A second consolidation** was running when this record was copied. `CONSOLIDATED.md` holds
-   the version that was current then. The lane plan in the spec says which.
+4. **A second consolidation** was running when this record was copied. `CONSOLIDATED.md` here is
+   the FIRST consolidation: 164 findings, UX-001 to UX-164. The second adds findings from UX-165
+   on, and it was not done when this copy was made.
 
 ## What was changed from the reviewers' own files
 

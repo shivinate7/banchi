@@ -110,7 +110,9 @@ those entries.
 | Box lists | Most recent first everywhere: the Inventory rail, the Capture picker, Home and Cards to pull. | D132, D142. Slug `a-press-reorders-and-nothing-else-moves`. |
 | Sales | Rows lead with the card name. The table shows the top rows and "Show all". "On the shelf" moves above the table or to its own tab. | D214 (a gross-revenue retrospective), D250 (unsold stock on Sales). The sales lane writes it. |
 | Sales | Printings of one name must be told apart. The code groups rows by name and keeps only the last SKU. The planner picked one row per printing. | D214, D217 (Sales becomes a tool). The sales lane. |
-| Sales | "Literally just an excel sheet". It needs a visual redesign. A direction goes to the owner before the layout is built. | None. Held for the owner. |
+| Sales | "Literally just an excel sheet". The owner picked direction B: a summary band with month bars and the shelf value, the top three cards as photo tiles, a mix tile for foil and rarity, places 4 to 10 as bar rows, then the table. | None. The sales lane. |
+| Sales | "On the shelf" loads on arrival, after one timing on the real store. A tile without its own photo uses another copy's photo, found by SKU, or a plain tile. | D250. The sales lane. |
+| Sales | A line sold at $0.00 is not left out. The owner: "TCGplayer has all the data of what items sold at what prices tho". The fix finds the real price in TCGplayer's own data. First measure how many live lines are at $0.00. | D214. Not yet in a lane. |
 | Shipping | The lane order stays. Every lane collapses on a phone. Per-card repetition is still cut. | D61 (the shipping lane is three lanes). The shipping lane writes it. |
 | Product views | One product view. A sheet opens from every product name. `#/product?sku=` stays the deep link. The Pricing drawer folds in. First fix the trap that sends a person back to an empty `#/product`. | D227 (a route, not a lens), D62 (price history beside the hold). The product lane writes it. |
 | Cards to pull | "Pick 2 of X", and where every copy is. Never 2 copies the app chose. | D212 (no order claims a copy). Slug `pull-list-is-a-pick-count`. |
@@ -254,7 +256,8 @@ Wave 0 merges in this order: kit-data, then kit-frame, then guards. Every screen
 
 1. The Pricing re-interview.
 2. The Runs screen's shape, after the moves land.
-3. The visual direction for Sales. It goes to the owner before its layout is built.
+3. Where a $0.00 sale finds its real price: the order detail, the shipping export or another
+   export. Measure first.
 4. Which mechanism replaces D100's zero-quantity check for a listing file. A file sent twice
    must not double a quantity.
 5. Whether the one-press send also reaches the Mark-down sheet.
@@ -284,6 +287,6 @@ The owner learned of these on 2026-09-23.
 ## 8. The second consolidation
 
 A second consolidation was rewriting the consolidated findings when this lane ran. It adds
-findings from UX-165 on, and a lane addendum. Section 5's counts are the first plan's. The
-record in `docs/reviews/ux-2026-09-23/` holds whichever consolidation was current when this lane
-copied it, and its `INDEX.md` says which.
+findings from UX-165 on, and a lane addendum. It was not done when this lane finished. So
+section 5's counts are the first plan's, and `docs/reviews/ux-2026-09-23/CONSOLIDATED.md` is the
+first consolidation. The second consolidation and its lane addendum still need a record here.

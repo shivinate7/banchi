@@ -103,3 +103,9 @@
 - The held-Orders reviewer's scratch copy of main (no .git) built an app whose API fell back to localhost:8000, and it read the owner's live store once (page-load reads, no press). The captures were deleted. DEFECT to fix: the port derivation must never fall back to the main checkout's live port from a copied tree. Needs a lane (server/ports.py, app/devPort.ts).
 - HOR-04 (S1): "Stand down N orders" in a buyer's Manage sheet closes every open order before today, including live Ready to Ship, and shows no cutoff (breaks D203). Owner warned.
 - HOR-07: Undo on a pull fails with sold_origin_unknown on a seeded store. The owner was asked to test once on the real store.
+
+## Sales (sales-directions.md)
+- Direction B: a summary band with month bars and the shelf value, the top three cards as photo tiles, a foil/rarity mix tile, places 4-10 as bar rows, then the table.
+- $0.00 lines: owner's words, "TCGplayer has all the data of what items sold at what prices tho". So the fix is NOT to exclude them: find the real sale price from TCGplayer's own data (order detail, the shipping export, or another export) and fill it in. First measure whether live lines have an empty unit_price at all (the demo has 6). Only where no TCGplayer source has a price, say so on the line.
+- "On the shelf" loads on arrival (after one timing on the real store).
+- Thumbnails: yes, a server lookup by SKU for another copy's photo, with a plain tile fallback.
