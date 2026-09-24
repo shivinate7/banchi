@@ -8771,23 +8771,24 @@ def check_box_names(checks: Checks) -> None:
             "written, which is the shape a screen that PUTs its whole form back produces",
         )
 
-        # --- clearing puts it back to unnamed --------------------------------------------
+        # --- clearing stores the default name ---------------------------------------------
+        # A box is shown by its name only (D-a-box-is-shown-by-its-name), so a clear cannot
+        # leave it with none: it stores the default `Box <count+1>`, the orchestrator's call
+        # on the locating review, 2026-09-24.
         cleared = capture_server.do_put_box(1, {"name": None})
         checks.equal(
             cleared["name"],
-            None,
+            "Box 3",
             "`{name: null}` clears the name — the shape a cleared text field sends, and a "
-            "legitimate edit rather than a refusal",
+            "legitimate edit rather than a refusal. Two boxes stand, so it stores `Box 3`",
         )
         cleared_event = [e for e in Store().history() if e["event"] == "box_renamed"][-1]
         checks.equal(
-            [cleared_event["name_from"], "name_to" in cleared_event],
-            ["ME01 commons, tray 2", False],
-            "and the clear is logged like any other rename, with `name_to` ABSENT rather "
-            "than null — `_log` drops None by construction, the same convention that keeps "
-            "a box-level event from carrying a null `position`. Asserted rather than worked "
-            "around: after this write there is no other evidence the box was ever called "
-            "anything, so what the line does and does not carry is the whole record",
+            [cleared_event["name_from"], cleared_event.get("name_to")],
+            ["ME01 commons, tray 2", "Box 3"],
+            "and the clear is logged like any other rename, with both names on the line: "
+            "after this write there is no other evidence the box was ever called anything, "
+            "so what the line carries is the whole record",
         )
         freed = capture_server.do_create_box({"name": "ME01 commons, tray 2"})[1]
         checks.equal(
@@ -9508,15 +9509,45 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
     with isolated_home():
         # --- the default name at creation --------------------------------------------------
         capture_server.do_create_box({"box": 4})
-        capture_server.do_create_box({"name": "Box 2"})
+        inventory = Store().read().inventory
+        checks.equal(
+            inventory.box(4).name,
+            "Box 1",
+            "A BOX CREATED WITH NO NAME GETS THE STORED NAME `Box <count+1>`: the first box is "
+            "`Box 1` whatever its number (4)",
+        )
+        capture_server.do_create_box({"name": "Box 3"})
         capture_server.do_create_box({"box": 9})
         inventory = Store().read().inventory
         checks.equal(
             [(entry.box, entry.name) for entry in sorted(inventory.boxes.values(), key=lambda e: e.box)],
-            [(1, "Box 2"), (4, "Box 1"), (9, "Box 3")],
-            "A BOX CREATED WITH NO NAME GETS THE STORED NAME `Box <count+1>`: the first box is "
-            "`Box 1` whatever its number (4). When `Box <count+1>` is taken (the second box was "
-            "named `Box 2` by hand), the next free name is used, so names stay unique (D20)",
+            [(1, "Box 3"), (4, "Box 1"), (9, "Box 4")],
+            "WHEN `Box <count+1>` IS TAKEN, THE NEXT FREE NAME IS USED. Two boxes stand, so the "
+            "third is `Box 3`, but the owner named box 1 `Box 3` by hand: box 9 gets `Box 4`, "
+            "and names stay unique (D20)",
+        )
+
+        # THE DEFAULT GOES THROUGH THE SAME UNIQUE-NAME CHECK AS A TYPED NAME. The default is
+        # chosen free, and the check is what proves it: a default that clashes is refused,
+        # never stored beside the box that already answers to it.
+        real_default = master.Inventory.default_box_name
+        master.Inventory.default_box_name = lambda self, count=None, number=None: "Box 1"
+        try:
+            with Store().write() as snapshot:
+                clash = checks.raises(
+                    master.BoxNameTaken,
+                    lambda: snapshot.inventory.ensure_box(20),
+                    "a default name that another box already has is REFUSED at creation: the "
+                    "default path takes the same unique-name check a typed name takes",
+                )
+                if clash is None:
+                    snapshot.inventory.boxes.pop("20", None)
+        finally:
+            master.Inventory.default_box_name = real_default
+        checks.equal(
+            Store().read().inventory.box(20),
+            None,
+            "and the refused box is not registered",
         )
         for _ in range(3):
             capture_server.do_capture(capture_payload(4))
@@ -9527,15 +9558,45 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
             "and a rename reaches every label at once: the name is joined at read time",
         )
 
+        # --- clearing a name stores the default -------------------------------------------
+        # The orchestrator's call on the locating review: a cleared name is the default name
+        # `Box <count+1>`, the next free one, never a bare number drawn at render time.
+        capture_server.do_put_box(4, {"name": ""})
+        checks.equal(
+            Store().read().inventory.box(4).name,
+            "Box 5",
+            "CLEARING A BOX'S NAME STORES THE DEFAULT NAME. Three boxes stand, so the default "
+            "is `Box 4`, which box 9 has: the next free one, `Box 5`, is stored",
+        )
+        cleared = [e for e in Store().history() if e.get("event") == "box_renamed"
+                   and e.get("box") == 4 and e.get("name_from") == "Rares"]
+        checks.equal(
+            [e.get("name_to") for e in cleared],
+            ["Box 5"],
+            "and the clear lands as one `box_renamed` line naming the stored default",
+        )
+        before_events = len(Store().history())
+        capture_server.do_put_box(9, {"name": None})
+        checks.ok(
+            Store().read().inventory.box(9).name == "Box 4"
+            and len(Store().history()) == before_events,
+            "a box that already carries `Box <count+1>` keeps it when cleared, and nothing is "
+            "logged: its own name is not taken from it",
+            Store().read().inventory.box(9).name,
+        )
+
         # --- the backfill ------------------------------------------------------------------
         # A store from before the ruling: registered boxes with no name.
+        # `set_name` no longer stores None (a cleared name is the default), so a legacy box is
+        # made by writing the row's name away directly, the shape a store from before the
+        # ruling holds.
         with Store().write() as snapshot:
-            snapshot.inventory.set_name(4, None)
-            snapshot.inventory.set_name(9, None)
+            snapshot.inventory.box(4).name = None
+            snapshot.inventory.box(9).name = None
         capture_server.do_capture(capture_payload(5))
         with Store().write() as snapshot:
-            # Box 5 came from a capture, which now names it; clear it to stand for a legacy box.
-            snapshot.inventory.set_name(5, None)
+            # Box 5 came from a capture, which now names it; unname it to stand for a legacy box.
+            snapshot.inventory.box(5).name = None
         before = Store().read().inventory
         plan = before.box_name_plan()
         checks.equal(
@@ -9564,7 +9625,7 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
         after = Store().read().inventory
         checks.equal(
             [after.box(n).name for n in (1, 4, 5, 9)],
-            ["Box 2", "Box 4", "Box 5", "Box 9"],
+            ["Box 3", "Box 4", "Box 5", "Box 9"],
             "`--write` names every unnamed box and leaves a named one alone",
         )
         renamed = [e for e in Store().history() if e.get("event") == "box_renamed"
@@ -9588,12 +9649,29 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
         capture_server.do_create_box({"box": 1, "name": "Box 2"})
         capture_server.do_create_box({"box": 2})
         with Store().write() as snapshot:
-            snapshot.inventory.set_name(2, None)
+            snapshot.inventory.box(2).name = None
         checks.equal(
             Store().read().inventory.box_name_plan(),
             [(2, "Box 3")],
             "WHEN `Box <number>` IS ANOTHER BOX'S NAME, the backfill plans the next free one: "
             "names stay unique (D20), and no box is renamed to make room",
+        )
+
+    with isolated_home():
+        # A clash must not push a box off a name that was free for it. Box 1 was named `Box 4`
+        # by hand; boxes 4 and 5 have no name. Box 5's own `Box 5` is free, so it keeps it,
+        # and only box 4, the one that clashes, moves to the next free name.
+        capture_server.do_create_box({"box": 1, "name": "Box 4"})
+        capture_server.do_create_box({"box": 4})
+        capture_server.do_create_box({"box": 5})
+        with Store().write() as snapshot:
+            snapshot.inventory.box(4).name = None
+            snapshot.inventory.box(5).name = None
+        checks.equal(
+            Store().read().inventory.box_name_plan(),
+            [(4, "Box 6"), (5, "Box 5")],
+            "EVERY UNNAMED BOX GETS ITS OWN `Box <number>` FIRST, WHERE IT IS FREE, and only then "
+            "are the clashes resolved: a clash never shifts a later box off its own free name",
         )
 
 

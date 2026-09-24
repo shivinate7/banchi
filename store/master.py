@@ -2176,14 +2176,16 @@ class Inventory:
         number = _as_position_int(number, "box")
         entry = self.boxes.get(str(number))
         if entry is None:
-            if name is not None:
-                self._check_name_free(name, number)
-            else:
+            if name is None:
                 # A BOX WITH NO NAME GETS A STORED ONE (D-a-box-is-shown-by-its-name). The
                 # owner's ruling, 2026-09-23: "If I choose to not name a box, it can default
                 # to count+1 Box as a default name". Stored at creation, not drawn at render,
                 # so it is a name like any other: it never renumbers when a box is deleted.
                 name = self.default_box_name()
+            # THE DEFAULT TAKES THE SAME CHECK A TYPED NAME TAKES. `default_box_name` picks a
+            # free name, and this is what proves it did: a default that clashes is refused
+            # here, never stored beside the box that already answers to it (D20).
+            self._check_name_free(name, number)
             entry = Box(box=number, bid=self._issue_box_id(), name=name, created_at=now())
             self.boxes[str(number)] = entry
             # `bid` ON THE EVENT, NOT ONLY ON THE ROW. The row is deleted when the drawer is;
@@ -2210,15 +2212,17 @@ class Inventory:
             for entry in self.boxes.values()
         )
 
-    def default_box_name(self, count: Optional[int] = None) -> str:
+    def default_box_name(self, count: Optional[int] = None, number: Optional[int] = None) -> str:
         """`Box <count+1>`, or the next free `Box <n>` above it (D-a-box-is-shown-by-its-name).
 
-        `count` is how many boxes the registry holds before the new one, so the first box is
-        `Box 1`. Names are unique (D20, `_check_name_free`), so when `Box <count+1>` is taken
-        (a box was deleted, or the owner named one that way) the next free number is used.
+        `count` defaults to how many boxes the registry holds now: before a new box is added,
+        so the first box is `Box 1`. Names are unique (D20, `_check_name_free`), so when
+        `Box <count+1>` is taken (a box was deleted, or the owner named one that way) the next
+        free number is used. `number` is a box whose own name does not count as taken: the box
+        being cleared (`set_name`), which may keep the default name it already carries.
         """
         n = (len(self.boxes) if count is None else int(count)) + 1
-        while self._name_taken(f"Box {n}"):
+        while self._name_taken(f"Box {n}", number):
             n += 1
         return f"Box {n}"
 
@@ -2235,8 +2239,12 @@ class Inventory:
         a legacy shape. Its cards still read `Box <number>` through `join.box_title`'s
         fallback, which is the same string this plan would store for it.
 
-        WHEN `Box <number>` IS ALREADY ANOTHER BOX'S NAME, the next free `Box <n>` above it is
-        planned (D20, names are unique). Earlier entries of the plan count as taken.
+        TWO PASSES, SO A CLASH MOVES ONLY THE BOX THAT CLASHES. The first pass gives every
+        unnamed box its own `Box <number>` wherever that name is free. The second pass takes
+        the boxes left over, the ones whose `Box <number>` is already another box's name, and
+        gives each the next free `Box <n>` above its number (D20, names are unique). One pass
+        in number order was wrong: box 1 named `Box 4` by hand pushed box 4 to `Box 5`, and
+        that pushed box 5 to `Box 6`, although `Box 5` was free for box 5.
         """
         numbers: Set[int] = set()
         for key in self.boxes:
@@ -2249,18 +2257,30 @@ class Inventory:
             for entry in self.boxes.values()
             if entry.name is not None and entry.name.strip() != ""
         }
-        plan: List[Tuple[int, str]] = []
+        unnamed: List[int] = []
         for number in sorted(numbers):
             entry = self.boxes.get(str(number))
             if entry is not None and entry.name is not None and entry.name.strip() != "":
+                continue
+            unnamed.append(number)
+        planned: Dict[int, str] = {}
+        # Pass 1: each unnamed box's own `Box <number>`, where no box has it.
+        for number in unnamed:
+            own = f"Box {number}"
+            if own.casefold() not in taken:
+                taken.add(own.casefold())
+                planned[number] = own
+        # Pass 2: only the clashes, each to the next free name above its number.
+        for number in unnamed:
+            if number in planned:
                 continue
             n = number
             while f"Box {n}".casefold() in taken:
                 n += 1
             wanted = f"Box {n}"
             taken.add(wanted.casefold())
-            plan.append((number, wanted))
-        return plan
+            planned[number] = wanted
+        return [(number, planned[number]) for number in unnamed]
 
     def backfill_box_names(self) -> List[Tuple[int, str]]:
         """Apply `box_name_plan` to this inventory, and return the plan it applied.
@@ -2307,9 +2327,17 @@ class Inventory:
         `docs/DESIGN.md` would ban anyway.
         """
         entry = self.ensure_box(number)
-        wanted = None if name is None or name.strip() == "" else name
-        if wanted is not None:
-            self._check_name_free(wanted, entry.box)
+        # A CLEARED NAME IS THE DEFAULT NAME, NEVER NONE (the orchestrator's call on the
+        # locating review, 2026-09-24, under D-a-box-is-shown-by-its-name). A box is shown by
+        # its name only, so a box with no name would have nothing to be shown by. Clearing
+        # stores `Box <count+1>`, the next free one, the name a box made with no name gets.
+        # The box's own name does not count as taken, so a box that already carries that
+        # default keeps it and nothing is logged.
+        if name is None or name.strip() == "":
+            wanted = self.default_box_name(number=entry.box)
+        else:
+            wanted = name
+        self._check_name_free(wanted, entry.box)
         before = entry.name
         if before == wanted:
             # A no-op writes no event, `do_put_card`'s rule: a log line for a request that
