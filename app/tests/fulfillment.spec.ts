@@ -1001,11 +1001,23 @@ type Run = { text: string; where: string; size: number; color: string; ground: s
  * same call the nav rule in Fulfillment.css relies on, and the destructive-route test below
  * is where it is made honest.
  *
+ * `checkVisibility()` alone still says yes to the kit's own `.bn-sr` (`kit.css`): visible per
+ * `display`/`visibility`, clipped to a 1x1 box on purpose (the accessible name an icon-only
+ * `Button` gives a screen reader — the "?" sheet's own Close button, since it moved onto the
+ * kit's `Modal`, is the first place this file draws one). `checkVisibility()` has no option
+ * for `clip`, so the box itself is read: on-screen text is never 1px in both directions.
+ *
  * The ground is resolved by walking up to the first opaque background, which is what the eye
  * does: `.pull-confirm-label` is white on nothing, sitting on a button filled with --accent.
  */
 async function runsIn(view: Locator): Promise<Run[]> {
   return view.evaluate((root) => {
+    /* `checkVisibility()` alone, not the box: see the comment above this function. */
+    const painted = (element: Element): boolean => {
+      if (!element.checkVisibility()) return false
+      const box = element.getBoundingClientRect()
+      return box.width > 1 && box.height > 1
+    }
     /* THE GROUND, COMPOSITED RATHER THAN THE FIRST COLOUR FOUND.
      *
      * A translucent layer is a real ground — what the eye reads is it painted over whatever is
@@ -1063,7 +1075,7 @@ async function runsIn(view: Locator): Promise<Run[]> {
     while (node !== null) {
       const text = (node.textContent ?? '').trim()
       const parent = node.parentElement
-      if (text !== '' && parent !== null && parent.checkVisibility()) {
+      if (text !== '' && parent !== null && painted(parent)) {
         const style = window.getComputedStyle(parent)
         out.push({
           text,
@@ -1207,15 +1219,22 @@ async function paintedPhoto(
  * a 12px line on any of those was invisible.
  */
 
+/* Page-wide, like `targets` and `noWayOut` below — not `view(page)`. The kit's `Modal`
+ * (`kit/overlay.tsx`) portals to `document.body`, a sibling of `main.fulfillment`, so a
+ * `view(page)`-scoped walk would silently stop seeing the "?" sheet's own text the moment it
+ * moved onto the kit. This route draws nothing else outside `main.fulfillment` (no shell,
+ * D5), so scanning the body reads exactly the view plus whatever overlay sits on top of it. */
+const PAGE_ROOT = 'body'
+
 async function noSmallText(page: Page, where: string): Promise<void> {
-  const runs = await runsIn(view(page))
+  const runs = await runsIn(page.locator(PAGE_ROOT))
   expect(runs.length, `${where}: nothing rendered, so nothing was measured`).toBeGreaterThan(0)
   const small = runs.filter((run) => run.size < BODY_FLOOR)
   expect(small, `${where}: below the ${BODY_FLOOR}px floor`).toEqual([])
 }
 
 async function noThinContrast(page: Page, where: string): Promise<void> {
-  const runs = await runsIn(view(page))
+  const runs = await runsIn(page.locator(PAGE_ROOT))
   expect(runs.length, `${where}: nothing rendered`).toBeGreaterThan(0)
   for (const run of runs) {
     const ink = parseRgb(run.color)
@@ -1293,6 +1312,13 @@ const BANNED_RE = new RegExp(`\\b(${BANNED.join('|')})(s|d|es|ed|ing)?\\b`, 'i')
 
 async function copyIn(view: Locator): Promise<{ text: string; where: string }[]> {
   return view.evaluate((root) => {
+    /* Same reason as `runsIn`'s own `painted`: `checkVisibility()` alone says yes to the
+     * kit's `.bn-sr` (an icon-only button's accessible name, clipped to 1x1 on purpose). */
+    const painted = (element: Element): boolean => {
+      if (!element.checkVisibility()) return false
+      const box = element.getBoundingClientRect()
+      return box.width > 1 && box.height > 1
+    }
     const describe = (element: Element): string => {
       const classes = element.getAttribute('class')
       return `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}`
@@ -1304,7 +1330,7 @@ async function copyIn(view: Locator): Promise<{ text: string; where: string }[]>
     while (node !== null) {
       const text = (node.textContent ?? '').trim()
       const parent = node.parentElement
-      if (text !== '' && parent !== null && parent.checkVisibility()) {
+      if (text !== '' && parent !== null && painted(parent)) {
         out.push({ text, where: describe(parent) })
       }
       node = walker.nextNode()
@@ -1323,7 +1349,8 @@ async function copyIn(view: Locator): Promise<{ text: string; where: string }[]>
 }
 
 async function noJargon(page: Page, where: string): Promise<void> {
-  const copy = await copyIn(view(page))
+  // Page-wide too — see PAGE_ROOT's own comment above `noSmallText`.
+  const copy = await copyIn(page.locator(PAGE_ROOT))
   expect(copy.length, `${where}: no copy to read`).toBeGreaterThan(0)
   for (const line of copy) {
     const found = BANNED_RE.exec(line.text)
@@ -1997,10 +2024,12 @@ test('the search placeholder ends in an honest ellipsis at 390px, never a raw mi
  * proved end to end: it opens, it names what this screen actually takes, and it closes. */
 test('"?" opens this screen\'s own keyboard reference, and closes it again', async ({ page }) => {
   await openList(page)
-  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+  // Unscoped, not `view(page)`: the kit's `Modal` (`kit/overlay.tsx`) portals to
+  // `document.body`, a sibling of `main.fulfillment` and not a descendant of it.
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
 
   await page.keyboard.press('?')
-  const sheet = view(page).locator('.ff-keys')
+  const sheet = page.locator('.ff-keys')
   await expect(sheet).toBeVisible()
   await expect(sheet).toContainText('Esc')
   await expect(sheet).toContainText('Close the enlarged photograph')
@@ -2009,13 +2038,13 @@ test('"?" opens this screen\'s own keyboard reference, and closes it again', asy
   await battery(page, 'keyboard shortcuts sheet')
 
   await page.keyboard.press('Escape')
-  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
 
   // And the close button works the same way.
   await page.keyboard.press('?')
-  await expect(view(page).locator('.ff-keys')).toBeVisible()
-  await view(page).getByRole('button', { name: 'Close' }).click()
-  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+  await expect(page.locator('.ff-keys')).toBeVisible()
+  await page.getByRole('button', { name: 'Close' }).click()
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
 })
 
 /* ONE COLUMN FOR THE KEYS, MEASURED — a `display: grid` on each `<li>` looked right and was
@@ -2026,7 +2055,8 @@ test('"?" opens this screen\'s own keyboard reference, and closes it again', asy
  * (390) — the two layouts this sheet actually draws. */
 async function keysSentenceXs(page: Page): Promise<number[]> {
   await page.keyboard.press('?')
-  const rows = view(page).locator('.ff-keys-list li .fulfillment-say')
+  // Unscoped: the kit's `Modal` portals `.ff-keys` to `document.body`, not into `main.fulfillment`.
+  const rows = page.locator('.ff-keys-list li .fulfillment-say')
   await expect(rows).toHaveCount(2)
   return rows.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().x))
 }
