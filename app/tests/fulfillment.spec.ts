@@ -739,6 +739,40 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     })
   })
 
+  /* `POST /orders/pull` — a card an owed take names is sold THROUGH the order (`claim`,
+     `Fulfillment.tsx`), never through `/inventory/<box>/<index>/sold` above. One target at a
+     time is all this screen ever sends (D93: one press per copy), so the stub answers for
+     the first and only one, field for field what a real pull returns on success. */
+  await page.route(/\/orders\/pull$/, async (route) => {
+    const request = route.request()
+    const sent = request.postDataJSON() as {
+      undo?: unknown
+      targets?: { box: number; index: number; capture_id: string }[]
+    } | null
+    const undo = sent?.undo === true
+    const target = sent?.targets?.[0]
+    const key = target === undefined ? '' : `${target.box}/${target.index}`
+    wire.push({ method: request.method(), url: request.url(), undo })
+    if (key !== '') states[key] = undo ? 'identified' : 'sold'
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        undone: undo,
+        order_key: ORDER_KEY,
+        sku: ORDER_SKU,
+        newly: undo ? 0 : 1,
+        recorded: undo ? 0 : 1,
+        outstanding: undo ? 1 : 0,
+        places: target === undefined ? [] : [ORDER_COPY_PLACE],
+        sales:
+          target === undefined
+            ? []
+            : [{ position: key, undone: undo, restores_to: undo ? null : 'identified', order_released: null }],
+      }),
+    })
+  })
+
   /* Before `/inventory`, because a regex that reaches this URL first would swallow it. The
    * search route is the only one in this server with a query string, which is what makes it
    * safe to match on `?` at all. */

@@ -419,18 +419,6 @@ function count(n: number, one: string, many: string): string {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
-/** A place label, said rather than shown — every conversion of a raw place label into an
- *  accessible-name string (`aria-label`, `alt`) in this file goes through this one function,
- *  so a later merge that lands `sayPlace()` in `app/src/position.ts` swaps one body here
- *  rather than every call site (coordinator note, the branch merging before this one). A
- *  passthrough today — `PlaceText`'s own CSS seam is what reads the same string visually, and
- *  this is its spoken twin, identity until that function exists to replace it. NOT applied to
- *  `ff-step`'s own aria-label (`actionFor`, below): a sibling branch is changing that one
- *  line's shape, so it is left as it was. */
-function sayPlace(label: string): string {
-  return label
-}
-
 /** `Box 3`, `Section 1`, `Card 17`, the figures ranked above the words. The text content of each
  *  part is the server's string character for character; only the weight changes. Each part is
  *  its own span (D218) so a narrow screen can stack them on purpose, breaking before `Card N`
