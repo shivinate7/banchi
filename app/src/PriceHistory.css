@@ -33,8 +33,9 @@
   white-space: nowrap;
 }
 
-.pricehistory-loading { display: flex; flex-direction: column; gap: var(--bn-3); }
-.pricehistory-loading .bn-skeleton { display: block; width: 100%; border-radius: var(--bn-r-sm); }
+/* The kit's own `Loading` draws the skeleton now (`bn-loading`, kit.css); this class is only
+   a spacing hook so it sits in the drawer's own padding rhythm. */
+.pricehistory-loading { margin: 0; }
 
 .pricehistory-state { display: flex; flex-direction: column; gap: var(--bn-3); align-items: flex-start; }
 
