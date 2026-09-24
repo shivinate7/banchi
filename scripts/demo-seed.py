@@ -525,6 +525,18 @@ def build_store(force: bool) -> dict:
                     counts["identified"] = counts.get("identified", 0) - 1
                     break
 
+        # THE ONE CARD WITH A REAL PRICE HISTORY STAYS ON HAND, for the reason the moved card
+        # above is guaranteed: a state no demo store holds is a screen no viewer sees. The
+        # archive below holds one real reading (`write_archive`), and "Value my stock" values
+        # only what is on hand, so a sold copy would leave that press empty.
+        for card, _ in placed:
+            if card.sku in ARCHIVED_SKUS and card.state in ("sold", "retired"):
+                counts[card.state] = counts.get(card.state, 0) - 1
+                card.state = "identified"
+                card.retire_reason = None
+                inventory.cards[card.key] = card
+                counts["identified"] = counts.get("identified", 0) + 1
+
         # ------------------------------------------------------------------- listings
         # One row per SKU, holding QUANTITIES rather than addresses (D7 amended). `live` is a
         # READING of what TCGplayer holds and carries the moment it was taken (D87).
@@ -766,6 +778,88 @@ def write_corpus(placed: List[Tuple[Card, "Row"]]) -> int:
     return len(skus)
 
 
+# --------------------------------------------------------------------- the price archive
+
+# A REAL READING, COMMITTED AS GROUND TRUTH: one month of what Vilemaw (Unleashed, Near Mint
+# Foil) sold for on TCGplayer, captured 2026-08-30 and kept under `fixtures/` for the harness.
+# Every other price history in this product is read from a host that refuses an honest
+# User-Agent (D216), so a published page built in CI can fetch none of them. This is the one
+# the demo can carry without a network call and without inventing a price.
+PRICE_HISTORY_FIXTURE = FIXTURES / "tcgplayer_price_history_vilemaw_month.json"
+PRODUCTS_FIXTURE = FIXTURES / "tcgcsv_riftbound_unleashed_products.json"
+ARCHIVED_SKUS = frozenset(
+    str(result.get("skuId"))
+    for result in json.loads(PRICE_HISTORY_FIXTURE.read_text()).get("result") or []
+)
+
+
+class FixtureMarket:
+    """`pipeline/pricearchive.py:_MarketLike`, answered from the committed reading only.
+
+    THE REAL SWEEP DOES THE WORK. `write_archive` hands this to `pricearchive.sweep`, so the
+    buckets the archive holds are built by the same code `pkmnscan archive sweep --write`
+    runs — this class replaces only the network. A SKU the fixture does not carry is a
+    refusal, named, never an invented series.
+    """
+
+    RANGE = "month"
+
+    def __init__(self) -> None:
+        from pipeline import pricehistory
+
+        self.pricehistory = pricehistory
+        self.payload = json.loads(PRICE_HISTORY_FIXTURE.read_text())
+        products = json.loads(PRODUCTS_FIXTURE.read_text()).get("results") or []
+        self.products = pricehistory.ProductIndex.build(products)
+
+    def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
+        from pipeline import tcgcsv
+
+        readings: Dict[str, object] = {}
+        refusals: Dict[str, str] = {}
+        for row in rows:
+            sku = str(row.get(tcgcsv.SKU_COLUMN) or "")
+            product = self.products.find(row.get("Number"), row.get(tcgcsv.NAME_COLUMN))
+            series = (
+                self.pricehistory.parse_history(self.payload, product, self.RANGE).get(sku)
+                if product else None
+            )
+            if series is None:
+                refusals[sku] = "no committed reading for this SKU"
+                continue
+            readings[sku] = self.pricehistory.Reading(
+                sku=sku, product_id=product, series={self.RANGE: series}
+            )
+        return readings, refusals
+
+
+def write_archive() -> int:
+    """The price-history archive (D219), holding the one reading above. Returns buckets written.
+
+    Read by `#/product` (archive first, D227) and by `#/revenue`'s "Value my stock" (D236), so
+    both draw a real month for Vilemaw on the published page. The export row comes from the
+    committed Riftbound export, and `at` is the demo's own clock, so a rebuild is
+    byte-identical.
+    """
+    from pipeline import pricearchive, tcgcsv
+
+    export = tcgcsv.read_export(FIXTURES / "riftbound_export_untouched.csv")
+    rows = {
+        str(row.get(tcgcsv.SKU_COLUMN)): dict(row)
+        for row in export.rows
+        if str(row.get(tcgcsv.SKU_COLUMN)) in ARCHIVED_SKUS
+    }
+    if not rows:
+        return 0
+    buckets, sources, refusals, _ = pricearchive.sweep(
+        rows, FixtureMarket(), (FixtureMarket.RANGE,), now=int(NOW.timestamp())
+    )
+    with Store().write() as snapshot:
+        snapshot.archive.upsert(buckets)
+        snapshot.archive.record_pass(sources)
+    return len(buckets)
+
+
 # ------------------------------------------------------------------------------- entry
 
 
@@ -787,6 +881,7 @@ def main() -> int:
 
     counts, placed = build_store(args.force)
     counts["answers"] = write_corpus(placed)
+    counts["archived"] = write_archive()
 
     home = store_files.home()
     counts["runs"] = 0
@@ -795,7 +890,7 @@ def main() -> int:
             counts["runs"] += 1
 
     print("demo store seeded at %s" % home)
-    for key in ("boxes", "cards", "photos", "listings", "answers", "review",
+    for key in ("boxes", "cards", "photos", "listings", "answers", "archived", "review",
                 "runs", "orders", "sold", "retired", "moved", "captured"):
         print("  %-9s %d" % (key, counts.get(key, 0)))
     return 0

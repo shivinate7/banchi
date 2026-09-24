@@ -4603,7 +4603,7 @@ COMPONENTS = [
                 # the export carries whole and a card record carries in halves.
                 "governed_by": ["D3", "D4", "D7", "D10", "D13", "D20", "D21", "D25", "D26", "D39",
                                 "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86", "D87",
-                                "D172", "D213"],
+                                "D172", "D213", "D216", "D219", "D227", "D236"],
             },
             "demo-record.py": {
                 "does": "spawns its own capture server over the demo store on its own port, "
