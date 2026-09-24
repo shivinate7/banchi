@@ -5459,6 +5459,49 @@ COMPONENTS = [
                                          "that inlines its own <svg> is the drift this file exists "
                                          "to prevent.",
                                  "governed_by": ["D5", "D13", "D94"]},
+            "src/kit/data.tsx": {"does": "THE KIT'S DATA PRIMITIVES, one drawing each for every "
+                                         "screen (UX overhaul wave 0, 2026-09-23, the owner's "
+                                         "durability ask: a page built tomorrow inherits the rest). "
+                                         "Money (mono, always `$`), Count, FilterCount (`12 of 40 "
+                                         "cards, filtered by`), StatusBadge, ProductLink and "
+                                         "OrderLink (open by SKU or order key, a sheet when one is "
+                                         "registered, the page otherwise), CardLine (the finish is "
+                                         "always said), CardThumb (one no-photo state), BoxLabel "
+                                         "(name, then Box N), Location (over PositionLabel), Sep "
+                                         "(the one CSS separator), and the pick list Select, "
+                                         "FilterChips and SortControl draw: Capture's option rows, "
+                                         "in the kit's own panel, never the native OS menu, every "
+                                         "facet usable in any order.",
+                                 "governed_by": ["D5", "D118", "D132", "D212", "D218", "D221"]},
+            "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
+                                         "in a filter bar (`--bn-control-h`) and one width floor "
+                                         "and cap. Mono for machine strings only.",
+                                 "governed_by": ["D50", "D117", "D118", "D218"]},
+            "src/kit/dataRules.ts": {"does": "the pure half of `data.tsx`: STATUS_TONES (amber is "
+                                             "only 'needs the owner', blue only 'moving now') and "
+                                             "`boxesMostRecentFirst` (this browser's hand, then the "
+                                             "newest box by `bid`, then the number). No React, so a "
+                                             "spec can import it.",
+                                     "governed_by": ["D132", "D142", "D145"]},
+            "src/kit/data.specimens.tsx": {"does": "every data primitive in every state a screen "
+                                                   "can put it in, on invented data. The kit page "
+                                                   "mounts `DataSpecimens`; `tests/kit-data/` "
+                                                   "mounts it too.",
+                                           "governed_by": ["D5"]},
+            "src/kit/sheets.ts": {"does": "one way to open a thing from wherever it is named: "
+                                          "`registerSheet`, `openSheet`, `closeSheet`, and "
+                                          "`useOpenSheet` for the shell's host. With no sheet "
+                                          "registered, a kind opens its own page (`product` to "
+                                          "`#/product?sku=`, `order` to `#/orders?order=`). A "
+                                          "product opens by SKU, never by one copy.",
+                                  "governed_by": ["D212", "D227"]},
+            "src/kit/match.ts": {"does": "ONE FORGIVING MATCHER for every search the browser runs "
+                                         "(the owner's ruling, 2026-09-23): every word in any "
+                                         "order; case, accents and punctuation folded; a card "
+                                         "number with or without its leading zeros; `B4` for a "
+                                         "box; a SKU by its start. The rules are stated in its "
+                                         "header so the server's search can fold the same way.",
+                                 "governed_by": ["D5"]},
             "src/kit/toast.tsx": {"does": "one toast stack for the product: any screen calls "
                                           "`toast()`, the shell renders `<Toaster/>` once. FOUR "
                                           "KINDS AND THE DIFFERENCE IS THE RULE — a `receipt` "
@@ -7698,7 +7741,11 @@ COMPONENTS = [
                                      "different sentences.",
                              # D33 is the money gate, whose receipt this now carries.
                              "governed_by": ["D33"]},
-            "src/dates.ts": {"does": "A SALE DATE, SAID THE SAME WAY EVERYWHERE — `saleDate`. "
+            "src/dates.ts": {"does": "A DATE, SAID ONE OF TWO WAYS — `relativeDate` (`5 minutes "
+                                     "ago`, `yesterday`, then the absolute form past a week) and "
+                                     "`absoluteDate` (`Sep 4, 2026`, no leading zero). "
+                                     "`saleDate`, the older padded form, stays until its two "
+                                     "callers move. "
                                      "Extracted 2026-09-20, a UX review follow-up: Revenue.tsx "
                                      "had padded its own 'Last sold' column against a jittering "
                                      "un-padded `toLocaleDateString()`, and ProductHistory.tsx "
@@ -7851,16 +7898,20 @@ COMPONENTS = [
             },
             "src/SearchField.tsx": {"does": "the debounced query box. Owner gets a `/` hotkey and a key "
                                             "hint; the Fulfiller gets neither — his screens are touch "
-                                            "and show no keys.",
-                                    "governed_by": ["D5", "D13"]},
-            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5", "D50", "D117"]},
+                                            "and show no keys. With `onSubmit`, Enter or its "
+                                            "button runs the search, and an empty press says what "
+                                            "to type in a line reserved from the first paint.",
+                                    "governed_by": ["D5", "D13", "D118"]},
+            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5", "D50", "D117", "D118"]},
             "src/keys.ts": {"does": "isEditableTarget, hoisted at its fourth copy — the one "
                                      "question every keyboard handler asks first. The three "
                                      "prior copies each recorded the hoist as due; this is "
                                      "the debt paid.",
                             "governed_by": ["D5", "D13"]},
             "src/useSearch.ts": {"does": "GET /search behind a debounce, with an out-of-order guard so a "
-                                         "slow early answer cannot overwrite a fast later one",
+                                         "slow early answer cannot overwrite a fast later one; and "
+                                         "`useQueryFilter`, a list the browser holds narrowed by "
+                                         "the one matcher in `kit/match.ts`",
                                  "governed_by": ["D5", "D13"]},
             # ---- what checks the above ----
             "eslint.config.js": {
@@ -8188,6 +8239,27 @@ COMPONENTS = [
                         "that renders nothing, which is this repo's vacuous green. Only a "
                         "browser can say the row was drawn. Not a harness test and not in "
                         "harness/run.py:TESTS; it runs with the other Playwright specs.",
+            },
+            "tests/kit-data.spec.ts": {
+                "does": "the kit's data primitives and the one matcher. Pure half: the matcher's "
+                        "rules, the two date formats, money's words, the box order, the status "
+                        "tones. Browser half: every specimen at 1440, 820, 720 and 390 in both "
+                        "themes with no sideways scroll and one control height, money in mono, a "
+                        "drawn separator, two printings told apart, one no-photo state, a product "
+                        "link landing on `#/product?sku=`, the pick list never native and keyed, "
+                        "filters in any order, the empty search press. Run by `make design-check`.",
+                "governed_by": ["D118", "D212", "D218", "D221"],
+            },
+            "tests/kit-data/index.html": {
+                "does": "a test page the dev server serves and the build never ships: it mounts "
+                        "`DataSpecimens` alone, so `kit-data.spec.ts` does not wait on the kit "
+                        "page to mount them.",
+                "governed_by": ["D5"],
+            },
+            "tests/kit-data/harness.tsx": {
+                "does": "the test page's entry: the tokens, the kit styles and the specimens, "
+                        "with `?theme=dark` for the dark theme.",
+                "governed_by": ["D5"],
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "
