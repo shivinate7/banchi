@@ -44,13 +44,16 @@
 .bn-filtercount {
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0 var(--bn-2);
+  min-width: 0;
   min-height: var(--bn-control-h-sm);
   font-size: var(--bn-fs-md);
   line-height: var(--bn-lh-base);
   color: var(--bn-ink-3);
 }
+.bn-filtercount-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bn-filtercount-clear { flex: none; }
 .bn-filtercount-figure { color: var(--bn-ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .bn-filtercount-clear {
   padding: 0 var(--bn-1);
@@ -216,7 +219,7 @@
    and the label is text. */
 .bn-fchip[data-active='true'] > .bn-pick .bn-pick-label { color: var(--bn-accent-hover); }
 .bn-fchip[data-active='true'] > .bn-pick .bn-pick-chev { visibility: hidden; }
-.bn-fchip-more { font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.bn-fchip-more { font-weight: 500; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 .bn-fchip-clear {
   position: absolute;
   top: 0;
@@ -354,19 +357,6 @@
 .bn-pick-opt[data-multiple='true'][aria-selected='true'] .bn-pick-mark { background: var(--bn-accent); border-color: var(--bn-accent); }
 .bn-pick-opt[aria-selected='true'] .bn-pick-mark .bn-icon { opacity: 1; transform: none; }
 .bn-pick-empty { padding: var(--bn-2); font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
-.bn-pick-foot { flex: none; display: flex; justify-content: flex-end; padding: var(--bn-1) var(--bn-1-5); border-top: 1px solid var(--bn-line); }
-.bn-pick-clear {
-  min-height: var(--bn-control-h-sm);
-  padding: 0 var(--bn-2);
-  border-radius: var(--bn-r-sm);
-  font: inherit;
-  font-size: var(--bn-fs-md);
-  font-weight: 600;
-  color: var(--bn-accent);
-  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
-}
-.bn-pick-clear:hover { background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
-.bn-pick-clear:disabled { opacity: var(--bn-disabled); }
 
 /* THE THUMB FLOOR (D117) for the kit-data controls that are not already a control's height.
    The same pointer-and-width test `tokens.css` raises `--bn-control-h-sm` on. */

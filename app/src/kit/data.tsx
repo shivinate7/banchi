@@ -146,6 +146,8 @@ export function FilterCount({
   /* The Clear press removes itself, so focus moves to the line it sat on before it goes: a
    * press never leaves focus on nothing. */
   const line = useRef<HTMLParagraphElement | null>(null)
+  const figure = narrowed ? `${countText(shown)} of ${countText(total)} ${word}` : `${countText(shown)} ${word}`
+  const by = filters.length > 0 ? `, filtered by ${listWords(filters)}` : ''
   return (
     <p
       ref={line}
@@ -154,11 +156,12 @@ export function FilterCount({
       aria-live="polite"
       tabIndex={-1}
     >
-      <span className="bn-filtercount-text">
-        <span className="bn-filtercount-figure">
-          {narrowed ? `${countText(shown)} of ${countText(total)} ${word}` : `${countText(shown)} ${word}`}
-        </span>
-        {filters.length > 0 ? `, filtered by ${listWords(filters)}` : null}
+      {/* ONE LINE, ALWAYS: a long filter list ellipsizes rather than wrapping, so a pick never
+          pushes what is under the line (D118). The whole sentence stays in the DOM, so a screen
+          reader hears all of it, and the title shows it on hover. */}
+      <span className="bn-filtercount-text" title={figure + by}>
+        <span className="bn-filtercount-figure">{figure}</span>
+        {by === '' ? null : by}
       </span>
       {narrowed && onClear !== undefined ? (
         <button
@@ -579,7 +582,6 @@ function PickPanel<T extends string>({
   anchor,
   onPick,
   onClose,
-  onClear,
 }: {
   readonly id: string
   readonly label: string
@@ -590,7 +592,6 @@ function PickPanel<T extends string>({
   readonly onPick: (value: T) => void
   /** `true` hands focus back to the trigger. */
   readonly onClose: (returnFocus: boolean) => void
-  readonly onClear?: () => void
 }) {
   const place = useAnchoredPlace(true, anchor)
   const panel = useRef<HTMLDivElement | null>(null)
@@ -754,25 +755,9 @@ function PickPanel<T extends string>({
         })}
         {shown.length === 0 ? <p className="bn-pick-empty">Nothing matches that.</p> : null}
       </div>
-      {/* Drawn whenever the list can be cleared, so the panel does not change height on the
-          first pick (D118). With nothing picked it is off, never gone. */}
-      {onClear === undefined ? null : (
-        <div className="bn-pick-foot">
-          <button
-            type="button"
-            className="bn-pick-clear"
-            disabled={selected.size === 0}
-            onClick={() => {
-              /* Focus moves into the list first: the press is about to turn itself off. */
-              if (searchable) entry.current?.focus()
-              else list.current?.focus()
-              onClear()
-            }}
-          >
-            Clear
-          </button>
-        </div>
-      )}
+      {/* NO CLEAR INSIDE THE LIST. Tab closes the list (so the next Tab reaches the next
+          control), which left an in-list Clear with no keyboard path. The filter's own clear
+          press, beside its trigger, is the one way to clear a facet, by pointer or by key. */}
     </div>,
     document.body,
   )
@@ -1021,7 +1006,6 @@ function FacetChip({
             onChange(selected.has(value) ? picked.filter((one) => one !== value) : [...picked, value])
           }}
           onClose={pick.close}
-          onClear={() => onChange([])}
         />
       ) : null}
     </span>

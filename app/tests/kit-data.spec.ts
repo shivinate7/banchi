@@ -107,9 +107,22 @@ test.describe('matchQuery', () => {
     expect(matchQuery('box 4', inBox(4, ['Pikachu'], [], 'Box 4'))).toBe(true)
     expect(matchQuery('box 4', inBox(14, ['Pikachu'], [], 'Box 14'))).toBe(false)
     expect(matchQuery('#12', inBox(112, ['Pikachu'], ['012/100']))).toBe(true)
-    /* A digit word in text is a whole word: `12` finds `00012`, never `112`. */
+    /* A digit word in text is a whole word or the START of one, zeros ignored: `12` finds
+       `00012`, never `112`; `0001` finds `00012` while an order label is typed. */
     expect(matchQuery('12', inBox(3, ['Order 112']))).toBe(false)
     expect(matchQuery('12', inBox(3, ['09-03-26_00012']))).toBe(true)
+    expect(matchQuery('0001', inBox(3, ['09-03-26_00012']))).toBe(true)
+    expect(matchQuery('12', inBox(3, ['Order 123']))).toBe(true)
+    expect(matchQuery('09-03-26_1', inBox(3, ['09-03-26_00012']))).toBe(true)
+    expect(matchQuery('09-03-26_0001', inBox(3, ['09-03-26_00012']))).toBe(true)
+    expect(matchQuery('09-03-26_0002', inBox(3, ['09-03-26_00012']))).toBe(false)
+    expect(matchQuery('09-03-27', inBox(3, ['09-03-26_00012']))).toBe(false)
+    const order = inBox(3, ['A2FFC195-000001-00007'])
+    expect(matchQuery('A2FFC195-000001-0000', order)).toBe(true)
+    expect(matchQuery('a2ffc195-000001', order)).toBe(true)
+    expect(matchQuery('a2ffc195-00000', order)).toBe(true)
+    expect(matchQuery('A2FFC195-000002', order)).toBe(false)
+    expect(matchQuery('A2FFC195-000001-00008', order)).toBe(false)
   })
 
   test('an apostrophe or a hyphen never splits a word the query runs together', () => {
@@ -397,19 +410,31 @@ test('Tab from an open list goes back to its trigger, and the next Tab reaches t
   await expect(rarity).toBeFocused()
 })
 
-test("the list's own Clear keeps focus in the list, and Escape still closes it", async ({ page }) => {
+test('a facet is picked and cleared from the keyboard alone, and the list holds no Clear', async ({ page }) => {
   await open(page, 1440, 'light')
   const bar = page.locator('[data-specimen="Filters"]')
   const set = bar.locator('.bn-pick', { hasText: 'Set' })
-  await set.click()
+  await set.focus()
+  await page.keyboard.press('ArrowDown')
   const list = page.getByRole('listbox', { name: 'Set' })
-  await list.getByRole('option', { name: /Origins/ }).click()
-  await page.locator('[data-bn-pick-panel] .bn-pick-clear').click()
   await expect(list).toBeFocused()
-  await expect(list).toBeVisible()
-  await page.keyboard.press('Escape')
+  /* The one way to clear a facet is its own x beside the trigger: the list has no Clear. */
+  await expect(page.locator('[data-bn-pick-panel] button')).toHaveCount(0)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(list.getByRole('option', { selected: true })).toHaveCount(2)
+  await page.keyboard.press('Tab')
   await expect(list).toBeHidden()
   await expect(set).toBeFocused()
+  /* The next Tab reaches the facet's clear press, and Enter on it clears the facet. */
+  await page.keyboard.press('Tab')
+  const clear = bar.getByRole('button', { name: 'Clear Set' })
+  await expect(clear).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(bar.locator('.bn-fchip').nth(1)).not.toHaveAttribute('data-active', 'true')
+  await expect(set).toBeFocused()
+  await expect(set.locator('.bn-pick-value')).toHaveText('Any')
 })
 
 test('Clear all and the count line Clear leave focus on something that stays', async ({ page }) => {
@@ -439,8 +464,11 @@ for (const width of [1440, 390] as const) {
   test(`a pick, a second pick and a clear move no filter in the bar at ${width}`, async ({ page }) => {
     await open(page, width, 'light')
     const bar = page.locator('[data-specimen="Filters"]')
+    /* The filters, the count line under them, and the Sort control under that. */
     const rects = () =>
-      bar.locator('.bn-fchip, .bn-filterchips-clear').evaluateAll((els) =>
+      page
+        .locator('[data-specimen="Filters"] .bn-fchip, [data-specimen="Filters"] .bn-filterchips-clear, [data-specimen="Filtered count"], [data-specimen="Sort"] .bn-sort')
+        .evaluateAll((els) =>
         els.map((el) => {
           const r = el.getBoundingClientRect()
           /* Page coordinates: opening a list may scroll the page to show it, and a scroll is
@@ -449,14 +477,22 @@ for (const width of [1440, 390] as const) {
         }),
       )
     const start = await rects()
-    expect(start.length).toBe(4)
+    expect(start.length).toBe(6)
 
+    /* Three picks, which made the count line wrap before it was held to one line. */
     await bar.locator('.bn-pick', { hasText: 'Set' }).click()
     await page.getByRole('listbox', { name: 'Set' }).getByRole('option', { name: /Scarlet/ }).click()
     await page.getByRole('listbox', { name: 'Set' }).getByRole('option', { name: /Obsidian/ }).click()
     await page.keyboard.press('Escape')
-    await expect(bar.locator('.bn-fchip[data-active="true"]')).toHaveCount(2)
-    expect(await rects(), 'a pick moved a filter').toEqual(start)
+    await bar.locator('.bn-pick', { hasText: 'Rarity' }).click()
+    await page.getByRole('listbox', { name: 'Rarity' }).getByRole('option', { name: /Special Illustration Rare/ }).click()
+    await page.keyboard.press('Escape')
+    await expect(bar.locator('.bn-fchip[data-active="true"]')).toHaveCount(3)
+    await expect(page.locator('[data-specimen="Filtered count"] .bn-filtercount-text')).toHaveAttribute(
+      'title',
+      '37 of 122 cards, filtered by Pokémon, Scarlet & Violet, Obsidian Flames and Special Illustration Rare',
+    )
+    expect(await rects(), 'a pick moved a filter, the count line or Sort').toEqual(start)
 
     await bar.getByRole('button', { name: 'Clear Game' }).click()
     expect(await rects(), 'a clear moved a filter').toEqual(start)
@@ -497,6 +533,9 @@ test('every kit-data control a thumb presses is 40px tall at 390', async ({ page
 /** The WCAG contrast of an element's text against the ground under it, both read from the
  *  computed style of the element and its first painted ancestor, alpha composited in order. */
 async function contrastOf(page: Page, selector: string): Promise<number> {
+  /* Every running transition finishes first. A ground read mid-fade is lighter than the one
+     that stays, and it reads a pass that is not there. */
+  await page.evaluate(() => Promise.all(document.getAnimations().map((one) => one.finished.catch(() => undefined))))
   return page.locator(selector).first().evaluate((el) => {
     const parse = (value: string): number[] => {
       const m = value.match(/rgba?\(([^)]+)\)/)
@@ -534,6 +573,12 @@ for (const theme of ['light', 'dark'] as const) {
     await open(page, 1440, theme)
     /* The active filter's label, on its tint over the page. */
     expect(await contrastOf(page, '[data-specimen="Filters"] .bn-fchip[data-active="true"] .bn-pick-label')).toBeGreaterThanOrEqual(4.5)
+    /* The `+N` on an active filter, once a facet holds two picks. */
+    await page.locator('[data-specimen="Filters"] .bn-pick', { hasText: 'Set' }).click()
+    await page.getByRole('listbox', { name: 'Set' }).getByRole('option', { name: /Scarlet/ }).click()
+    await page.getByRole('listbox', { name: 'Set' }).getByRole('option', { name: /Origins/ }).click()
+    await page.keyboard.press('Escape')
+    expect(await contrastOf(page, '[data-specimen="Filters"] .bn-pick-value .bn-fchip-more')).toBeGreaterThanOrEqual(4.5)
     /* The empty money figure. */
     expect(await contrastOf(page, '[data-specimen="Money"] .bn-money[data-empty="true"]')).toBeGreaterThanOrEqual(4.5)
     /* A choice with a count of 0, at rest and under the pointer. */

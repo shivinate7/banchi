@@ -37,8 +37,11 @@
  *     some text field:
  *      - A word with a letter is found as a substring of a folded field. Mid-word works:
  *        `ventor` finds `Inventor`.
- *      - A word of digits only is found only as a WHOLE word, zeros in front ignored: `12`
- *        finds `00012` and not `112`.
+ *      - A word of digits only is found as a WHOLE word or the START of a word, zeros in front
+ *        ignored. Typed with no zeros in front, it is the start of a word with its zeros
+ *        dropped: `12` finds `00012` and `123`, never `112`. Typed with zeros in front, it is
+ *        the start of the word as written, or equal once the zeros go: `0001` finds `00012`, so
+ *        an order label narrows as it is typed, and `0002` never finds `26`.
  *     As a fallback, a token with a letter in it matches when its compact form is a substring
  *     of a field's compact form: `hooh` finds `Ho-Oh ex`, `porygonz` finds `Porygon-Z`.
  *     Text fields are what the row draws: a name, a set, a condition (`Damaged`), a buyer, a
@@ -124,8 +127,9 @@ type NumberParts = { readonly whole: string; readonly first: string; readonly se
 type Prepared = {
   readonly folded: readonly string[]
   readonly compact: readonly string[]
-  /** Every whole word of every folded text field, for the digits-only rule. */
-  readonly words: ReadonlySet<string>
+  /** Every digits-only word of every folded text field, as written and with its zeros in
+   *  front dropped, for the digits-only rule. */
+  readonly words: readonly { readonly raw: string; readonly bare: string }[]
   readonly numbers: readonly NumberParts[]
   readonly skus: readonly string[]
 }
@@ -133,8 +137,10 @@ type Prepared = {
 function prepare(fields: MatchFields): Prepared {
   const text = [...(fields.text ?? []).filter(present), ...(fields.boxes ?? []).map((one) => one.name).filter(present)]
   const folded = text.map(foldText).filter((one) => one !== '')
-  const words = new Set<string>()
-  for (const one of folded) for (const word of one.split(' ')) if (DIGITS.test(word)) words.add(dropLeadingZeros(word))
+  const words: { raw: string; bare: string }[] = []
+  for (const one of folded) {
+    for (const word of one.split(' ')) if (DIGITS.test(word)) words.push({ raw: word, bare: dropLeadingZeros(word) })
+  }
   return {
     folded,
     compact: folded.map((one) => one.replace(/ /gu, '')),
@@ -170,12 +176,24 @@ function numberMatch(raw: string, row: Prepared): boolean {
   return false
 }
 
+/** Rule 7's digits-only word: the start of a digits-only text word, as written or with the zeros
+ *  in front of both dropped. */
+function digitWordMatch(word: string, row: Prepared): boolean {
+  const bare = dropLeadingZeros(word)
+  /* A word typed WITH zeros in front is being typed as written, so it is the start of the word
+   * as written (`0001` of `00012`), or equal once the zeros are dropped. A word typed without
+   * them is the start of a word whose zeros are dropped (`12` of `00012`). So `0002` never
+   * finds `26`, and `12` never finds `112`. */
+  if (word !== bare) return row.words.some((one) => one.raw.startsWith(word) || one.bare === bare)
+  return row.words.some((one) => one.bare.startsWith(bare))
+}
+
 /** Rule 7, for one raw token. */
 function textMatch(raw: string, row: Prepared): boolean {
   const words = foldText(raw).split(' ').filter((word) => word !== '')
   if (words.length === 0) return false
   const each = words.every((word) =>
-    DIGITS.test(word) ? row.words.has(dropLeadingZeros(word)) : row.folded.some((field) => field.includes(word)),
+    DIGITS.test(word) ? digitWordMatch(word, row) : row.folded.some((field) => field.includes(word)),
   )
   if (each) return true
   const compact = words.join('')
