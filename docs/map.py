@@ -4601,9 +4601,9 @@ COMPONENTS = [
                 # a first version wrote a top-level `answers` map that `Corpus.parse` kept as
                 # `unknown` and no reader ever saw. D25 is the per-game number split, which
                 # the export carries whole and a card record carries in halves.
-                "governed_by": ["D3", "D4", "D7", "D10", "D13", "D21", "D25", "D26", "D39",
-                                "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86",
-                                "D87", "D172"],
+                "governed_by": ["D3", "D4", "D7", "D10", "D13", "D20", "D21", "D25", "D26", "D39",
+                                "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86", "D87",
+                                "D172", "D213"],
             },
             "demo-record.py": {
                 "does": "spawns its own capture server over the demo store on its own port, "
@@ -4614,7 +4614,8 @@ COMPONENTS = [
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D76"],
+                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D159", "D172",
+                                "D183", "D213", "D216", "D227"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "

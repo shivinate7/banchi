@@ -17,10 +17,13 @@ WHAT IS REAL AND WHAT IS NOT, because the distinction is the whole design:
   INVENTED   which of those cards are in which box at which index, what sold, what is
             held back and to whom it shipped. None of it describes a physical object.
 
-  SYNTHETIC  the photographs. `card_image()` draws them. NOT real card art and not real
-            photographs: a published demo carries neither somebody else's illustration
-            nor a picture of the owner's desk, and a drawn card is reproducible from this
-            file, which a photograph never is.
+  CURATED    the photographs. Real photographs of the owner's own cards, on the owner's
+            ruling (see `write_photo`), read from `demo-assets/` — the one tracked-image
+            exception — and QR-cleared twice: at full resolution when `make demo-photos`
+            curates them, and again on the published bytes when `demo-record.py` copies
+            them. A live code card is a bearer instrument (D70). This paragraph said
+            SYNTHETIC, drawn by `card_image()`, until 2026-09-24; that function was gone
+            since 2026-09-06 (`docs/specs/demo.md` §3).
 
 DETERMINISTIC. One RNG, seeded from a constant, so re-running writes the same store. The
 recorder downstream turns this into a fixture bundle, and a bundle that changed every time
@@ -401,6 +404,15 @@ def build_store(force: bool) -> dict:
                 % (home, len(inventory.cards))
             )
 
+        # EVERY BOX HAS A NAME. The owner ruled that a box number is never shown, so a demo box
+        # with no name would draw whatever fallback a screen invents for one.
+        box_names = {spec["box"]: str(spec.get("name") or "").strip() for spec in BOXES}
+        unnamed = sorted(box for box, name in box_names.items() if not name)
+        if unnamed:
+            raise SystemExit("every demo box needs a name; box(es) %s have none" % unnamed)
+        if len(set(box_names.values())) != len(box_names):
+            raise SystemExit("two demo boxes share a name, and D20 makes a name unique")
+
         for spec in BOXES:
             number = spec["box"]
             inventory.boxes[str(number)] = Box(
@@ -471,6 +483,13 @@ def build_store(force: bool) -> dict:
                     card.sku = row.sku
                     card.confidence = "high"
                     card.run = "demo-run-%d" % number
+                    # D213: THE SET AND THE CATALOGUE'S RARITY ARE STORED FACTS, written with
+                    # the SKU. The manifest carries both off the identification this
+                    # photograph really received, so they are the facts `pkmnscan cards
+                    # variants` would backfill. Without them every card read `null` for both,
+                    # and `#/inventory`'s Set and Rarity menus offered one empty choice each.
+                    card.set_name = row.set_name or None
+                    card.rarity = row.rarity or None
                 if state == "retired":
                     card.retire_reason = "damaged"
                 if state == "moved":
@@ -591,7 +610,10 @@ def build_store(force: bool) -> dict:
                     position=card.key,
                     box=card.box,
                     index=card.index,
-                    label="Box %d · Card %d" % (card.box, card.index),
+                    # BY THE BOX'S NAME, NEVER ITS NUMBER (the owner's ruling: a box number
+                    # is never shown). `/queues` re-labels every entry through the server's
+                    # own place formula, so this string is a fallback nothing draws today.
+                    label="%s, card %d" % (box_names[card.box], card.index),
                     photo=card.photo,
                     read={
                         "name": row.name,
