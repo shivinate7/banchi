@@ -158,17 +158,24 @@ def hashed_slot(root: Path) -> int:
     return int.from_bytes(digest[:4], "big") % SLOTS
 
 
+def refuse_json_constant(constant: str) -> float:
+    """`NaN`, `Infinity` and `-Infinity` are not JSON, and JSON.parse refuses them."""
+    raise ValueError(f"{constant} is not JSON")
+
+
 def read_claims(registry: Optional[Path] = None) -> dict:
     """Every claimed slot, `{canonical path: slot}`. Empty when the file cannot be read.
 
     Only whole-number slots inside the band are kept, so a hand-edited or damaged entry reads
-    as "not claimed" and never as a port outside the band.
+    as "not claimed" and never as a port outside the band. A slot written `149.0` is a float
+    here and is refused; `app/devPort.ts:wholeNumbersOnly` refuses it on the other side.
+    NaN and Infinity make the whole file unreadable, because JSON.parse refuses them there.
     """
     path = registry if registry is not None else slot_registry()
     if path is None:
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"), parse_constant=refuse_json_constant)
     except (OSError, ValueError):
         return {}
     slots = data.get("slots") if isinstance(data, dict) else None

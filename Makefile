@@ -28,6 +28,10 @@ NPM_GUARD = @[ -d app/node_modules ] || { \
 # and server/ports.py and app/devPort.ts read it. The primary checkout claims nothing. It fails
 # open and says so: the ports then fall back to the hash, and app/checkoutIdentity.ts still
 # refuses a test run against another checkout's server.
+# `.claude/launch.json` names a port too, so `scripts/launch-config.py` claims BEFORE it writes
+# that file. `make launch-config`, `make venv` and `make worktree-setup` reach the claim
+# through it, and so does the SessionStart hook. A file written from the hash port before a
+# claim moved the tree would open ANOTHER tree's server in the Browser pane.
 PORT_CLAIM = @python3 scripts/port-slots.py claim --quiet
 
 # `venv` is already idempotent — the venv module tolerates an existing dir and pip happily
@@ -352,7 +356,6 @@ worktree-setup:
 	fi; \
 	$(MAKE) --no-print-directory venv; \
 	bash scripts/worktree-provision.sh "$$main"
-	$(PORT_CLAIM)
 	@echo "worktree ready. \`make harness\` should now be green without spending anything."
 
 # scripts/worktree-provision.sh's app/node_modules clone/install/staleness logic

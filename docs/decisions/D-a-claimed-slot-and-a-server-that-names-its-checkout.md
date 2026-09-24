@@ -16,27 +16,32 @@
 
 1. Entries whose path is no longer a directory are dropped. A removed worktree frees its slot.
 2. A checkout that holds a slot keeps it. D43's outcome, "the same worktree answers the same port on every run", holds.
-3. A new claim starts at the path's hash slot. A tree whose slot nobody contested keeps the port it always had. The claim steps past a slot that another checkout claimed, or whose dev or capture port another checkout's server holds now. A port that THIS checkout's own server holds does not count against it: the Vite names this checkout at `/__checkout`, or `lsof` shows the listener's working directory inside this checkout.
+3. A new claim starts at the path's hash slot. A tree whose slot nobody contested keeps the port it always had. The claim steps past a slot that another checkout claimed, or whose dev or capture port another checkout's server holds now. A port that THIS checkout's own server holds does not count against it: the Vite names this checkout at `/__checkout`, or `lsof` shows the listener's working directory inside this checkout. A directory that holds a `.git` between the listener and this checkout is another checkout nested inside it, as `scripts/reap.py:linked_worktrees` rules, and its listener counts as another checkout's.
 
-**Where claims run.** `make dev`, `make server`, `make up`, `make design-check`, `make design-check-quiet` and `make worktree-setup` claim first, through the Makefile's `PORT_CLAIM`. A claim that cannot be made fails open and says so. The ports then fall back to the hash, as before this entry, and (c) still refuses a foreign server. So a registry problem never stops `make dev`.
+**Where claims run.** `make dev`, `make server`, `make up`, `make design-check` and `make design-check-quiet` claim first, through the Makefile's `PORT_CLAIM`. `.claude/launch.json` names a port too, and the Browser pane reuses a server already on that port. So `scripts/launch-config.py` claims BEFORE it writes the file. Its two writers, the SessionStart hook and `make launch-config`, claim through it, and `make venv` and `make worktree-setup` reach it through `make launch-config`. A file written before the claim named the hash port, which another checkout can hold (review finding, 2026-09-24). A claim that cannot be made fails open and says so. The ports then fall back to the hash, as before this entry, and (c) still refuses a foreign server. So a registry problem never stops `make dev`.
 
 **What each part protects.**
 
-- (c) protects the verdict. A green run proves this checkout's code, or the run does not happen.
+- (c) protects the verdict. A green run proves this checkout's code, or the run does not happen. `scripts/screenshot.sh` asks the same question before it renders this checkout's dev origin, so a picture of another tree's code is refused too.
 - (b) protects D43's outcome, one store per checkout: the app in tree A must not read or write tree B's store through a shared capture port. Playwright seals the capture port, so (c) does not cover a person using `make dev`. (b) does, for every checkout that claimed.
 
 **Known limits, recorded.**
 
 - A tree that runs code older than this entry does not read the registry. It keeps its hash slot. A claimed tree can share a slot with it until it updates. (c) still refuses a test run in the new tree. The claim steps past such a tree's slot only while its server is up.
-- The capture server does not answer `/__checkout`. The claim identifies a capture-port holder by `lsof` only. Where `lsof` is missing, an unknown holder counts as another checkout's, so the claim steps away from it. That can move a tree off its own slot once. It never puts two trees on one slot.
-- `/__checkout` gives the checkout's path to anyone who can reach the dev server on the LAN. The Vite dev server already serves source under `/@fs/` with absolute paths, so this adds no new exposure.
+- The capture server does not answer `/__checkout`. So `scripts/lan-check.py`, which reads the capture port, cannot ask it, and does not. The claim identifies a capture-port holder by `lsof` only. Where `lsof` is missing, an unknown holder counts as another checkout's, so the claim steps away from it. That can move a tree off its own slot once. It never puts two trees on one slot.
+- `/__checkout` gives the checkout's path to anyone who can reach the dev server on the LAN. The dev server already gives it out: Vite's dev transform puts the module's absolute path into every module it serves. Measured 2026-09-24: `GET /src/App.tsx` from this lane's own Vite held the checkout's absolute path twice. So this adds no new exposure.
 - More than 300 live linked checkouts leave no free slot. The claim then says so and the hash answers.
+- A damaged registry reads as nothing claimed. A claim that must write over it first keeps a copy, `port-slots.json.bad-<stamp>`, and prints that every claim the file held is lost. Those checkouts claim again the next time they serve.
+- A slot is a whole number written as one. `149.0`, `1.49e2` and a file that holds `NaN` read as nothing claimed, on both sides. JSON.parse reads `149.0` as 149 and Python reads it as a float, so `app/devPort.ts` decides by the written text.
 
 **The reader.** `make port-slots-selftest`, in `make check` and `make ci-check`, never in the commit hook (D18). It forces two throwaway trees into one hash slot. It picks a slot whose ports are free, so it never reaches a real checkout's server. It starts a real Vite in tree B and runs a real Playwright in tree A.
 
 - With nothing claimed, tree A's run must refuse tree B's server by name. With the `globalSetup` line removed, the run passes against tree B's server: the incident, red. With the plugin removed from `vite.config.ts`, the refusal no longer names tree B and the own-slot run fails: red.
 - After both claim, A and B hold different slots. `server/ports.py` and a copy of `app/devPort.ts` answer the same ports. A second claim does not move A. With the step past a held port removed from the claim, this arm goes red.
 - The same Playwright run in tree A then starts A's own Vite and passes.
-- A removed tree's slot is freed. A damaged registry reads as nothing claimed, on both sides.
+- A copy of `scripts/screenshot.sh` in tree A refuses tree B's server by name, and does not refuse A's own. With the check removed from `render`, this arm is red.
+- A listener in a linked worktree nested inside a checkout does not count as that checkout's. With the nested test removed from `_inside`, this arm is red.
+- A removed tree's slot is freed. A damaged registry reads as nothing claimed, on both sides. A claim over it keeps the `.bad-<stamp>` copy and names it. Without the copy, this arm is red.
+- Two throwaway trees run the real `launch-config.py`, once as the SessionStart hook calls it and once as `make launch-config` does, over a registry that gives each tree's hash slot to another checkout. Then the tree claims, and `launch-config.py --check` must say `current` at the claimed port. With the claim after the write, as it was, both arms are red.
 
-`make port-agreement` also compares both languages over one temporary registry with a claimed entry.
+`make port-agreement` also compares both languages over one temporary registry: a claimed entry, a damaged file, a decimal, an exponent and a fractional slot, and a `NaN`. Before `app/devPort.ts` read the written text, the decimal and exponent cases were red, and before `server/ports.py` refused `NaN`, that case was red.

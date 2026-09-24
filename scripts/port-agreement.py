@@ -43,6 +43,8 @@ WHAT IT COMPARES, and it is deliberately two different things:
      read one registry of claimed slots before the hash. A temporary registry claims a slot
      for the linked-worktree copy that its hash would never give it, and both sides must
      answer that slot. A damaged registry must read as nothing claimed, on both sides.
+     So must a slot written as a decimal (`149.0`) or with an exponent, and a file
+     holding NaN: Python's json and JSON.parse read those differently.
 
   4. THE TWO FALLBACKS that do not use the derivation. `app/src/server.ts` bundled with NO
      port define, with `fetch` stubbed, must refuse by name and address no base port. A copy
@@ -160,18 +162,30 @@ def expected(kind: str, slot: int) -> tuple:
 
 
 def registry_failures(tmp: Path, tree: Path) -> list:
-    """Both sides over one temporary registry: a claimed slot, then a damaged file."""
+    """Both sides over one temporary registry: a claimed slot, then files neither may trust."""
     registry = tmp / "port-slots.json"
     claimed = (ports.hashed_slot(tree) + 7) % ports.SLOTS
     copy = str(tree / "app" / "devPort.ts")
     failures = []
     saved = os.environ.get(ports.SLOT_REGISTRY_ENV)
     os.environ[ports.SLOT_REGISTRY_ENV] = str(registry)
+    key = json.dumps(ports.canonical(tree))
+    hashed = ports.hashed_slot(tree)
     try:
         for label, text, want in (
             ("a claimed slot", json.dumps({"version": 1, "slots": {ports.canonical(tree): claimed}}),
              claimed),
-            ("a damaged registry", "{not json", ports.hashed_slot(tree)),
+            ("a damaged registry", "{not json", hashed),
+            # A slot written as a decimal is not a whole slot, even when its value is whole.
+            # JSON.parse reads `149.0` as the integer 149 and Python reads it as a float, so
+            # only the written text can decide, and both sides must refuse it the same way.
+            ("a decimal slot", '{"version": 1, "slots": {%s: %d.0}}' % (key, claimed), hashed),
+            ("an exponent slot", '{"version": 1, "slots": {%s: %de0}}' % (key, claimed), hashed),
+            ("a fractional slot", '{"version": 1, "slots": {%s: %d.5}}' % (key, claimed), hashed),
+            # Python's json reads NaN, and JSON.parse refuses the whole file. So a file that
+            # holds one is damaged as a whole, on both sides.
+            ("a NaN beside a good claim",
+             '{"version": 1, "slots": {%s: %d, "/elsewhere": NaN}}' % (key, claimed), hashed),
         ):
             registry.write_text(text, encoding="utf-8")
             node_tree = node_answers([str(tree)], [copy])
@@ -349,7 +363,7 @@ def main() -> int:
             f"port agreement: {len(as_strings)} paths, slots identical; "
             f"this checkout dev {ports.dev_port()} / capture {ports.capture_port()} on both "
             f"sides; {len(trees)} copied trees ({', '.join(TREE_KINDS)}) answer their own kind; "
-            f"a claimed slot and a damaged registry read alike; "
+            f"a claimed slot and five registries neither side may trust read alike; "
             f"a client with no port define refuses; screenshot.sh falls back only when primary"
         )
         return 0

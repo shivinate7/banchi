@@ -685,7 +685,7 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   inventory in a worktree is correct — the real one is the main checkout's. A hash of the
   path put two live worktrees on one port, so a linked checkout now CLAIMS its slot once in
   `~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`). `make dev`, `server`, `up`,
-  `design-check` and `worktree-setup` claim first. A test run refuses a reused dev server
+  `design-check` and `scripts/launch-config.py` claim first. A test run refuses a reused dev server
   that does not name this checkout (`app/checkoutIdentity.ts`,
   D-a-claimed-slot-and-a-server-that-names-its-checkout).
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.

@@ -77,6 +77,10 @@ cd "$(dirname "$0")/.." 2>/dev/null || exit 0
 # something a person put there; `make launch-config` is the deliberate, forcing half.
 # `--quiet` so the ordinary case — already correct — says nothing at all.
 #
+# THE PORT CLAIM RUNS INSIDE IT, FIRST (D-a-claimed-slot-and-a-server-that-names-its-checkout).
+# A claim can move a linked checkout off its hash slot. `scripts/launch-config.py` claims
+# before it derives the port, so the file never names the hash port another tree holds.
+#
 # BEFORE THE VENV IS BUILT, deliberately: the port is wanted whether or not the pip install
 # ever succeeds, and `scripts/launch-config.py` is stdlib-only for exactly that reason.
 if [ -f scripts/launch-config.py ] && [ -f server/ports.py ]; then

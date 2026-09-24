@@ -3318,10 +3318,12 @@ COMPONENTS = [
                         "moves; a new claim starts at the hash slot and steps past a slot "
                         "another checkout claimed or whose port another checkout's server "
                         "holds. `make dev`, `server`, `up`, `design-check` and "
-                        "`worktree-setup` claim first. Fails open, loudly. `selftest` forces "
-                        "two throwaway trees into one slot and proves, with a real Vite and a "
-                        "real Playwright, that a run refuses the other tree's server and that "
-                        "the claim gives each its own slot.",
+                        "`scripts/launch-config.py` claim first. Over a damaged registry, a "
+                        "claim keeps a `.bad-<stamp>` copy and says so. Fails open, loudly. "
+                        "`selftest` forces two throwaway trees into one slot and proves, with "
+                        "a real Vite and a real Playwright, that a run refuses the other "
+                        "tree's server and that the claim gives each its own slot, and that "
+                        "`.claude/launch.json` names the claimed port.",
                 "governed_by": ["D18", "D43", "D122", "D-no-git-no-live-port", "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
             },
             "set-hint-agreement.py": {
@@ -3799,8 +3801,8 @@ COMPONENTS = [
                 # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
-                "governed_by": ["D16", "D18", "D43", "D47", "D42", "D53", "D139",
-                                "D176", "D257"],
+                "governed_by": ["D16", "D18", "D42", "D43", "D47", "D53", "D139", "D176", "D257",
+                                "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
             },
             "worktree-provision.sh": {
                 "does": "the cache-copy, image-mirror-symlink and node_modules provisioning "
@@ -4556,7 +4558,9 @@ COMPONENTS = [
                         "unasked at session start, and `make status` passes `--check` and "
                         "writes nothing. Only an ABSENT file or this repo's own shape at "
                         "the wrong port is rewritten; anything a person edited is reported "
-                        "and left alone, which is D44's asymmetry rather than a new one.",
+                        "and left alone, which is D44's asymmetry rather than a new one. "
+                        "Both writers claim the port slot FIRST, so the file never names a "
+                        "hash port another checkout holds.",
                 # D43 is the whole subject — the port follows the checkout's PATH, and this
                 # file was the sixth reader that entry found after the other five moved. The
                 # amendment naming it says why it is the worst to get wrong: a stale port
@@ -4567,7 +4571,8 @@ COMPONENTS = [
                 # icloud-sweep` deletes only what is provably a duplicate and only ever
                 # reports what differs, because guessing is the one way a cleanup tool
                 # destroys work. A provisioner running unasked has more reason, not less.
-                "governed_by": ["D18", "D43", "D44"],
+                "governed_by": ["D18", "D43", "D44",
+                                "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
                 "note": "STDLIB ONLY, AND BARE `python3` MUST RUN IT. The hook calls this "
                         "BEFORE it builds `.venv`, because the port is wanted whether or "
                         "not the pip install ever succeeds — so an import needing a package "
@@ -4698,7 +4703,9 @@ COMPONENTS = [
                 # the store, and this script had been the one caller that did not follow it.
                 # D18 is the rule that keeps it off `make check`: it writes, and nothing
                 # that writes may run on the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18", "D43", "D129", "D-no-git-no-live-port"],
+                "governed_by": ["D5", "D13", "D18", "D43", "D129",
+                                "D-a-claimed-slot-and-a-server-that-names-its-checkout",
+                                "D-no-git-no-live-port"],
             },
             "screenshot.mjs": {
                 "does": "the browser half of `make screenshot`: one render, and the proof "

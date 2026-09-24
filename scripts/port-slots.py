@@ -29,6 +29,10 @@ WHAT IT NEVER DOES: kill, signal or connect to anything beyond a one-second prob
 anywhere but the registry and its lock. The primary checkout claims nothing: it keeps 8000
 and 5173.
 
+A DAMAGED REGISTRY IS KEPT, NEVER SILENTLY LOST. A reader reads it as nothing claimed. A
+claim that must write over it first copies it to `port-slots.json.bad-<stamp>` and prints
+that every claim it held is gone.
+
 A CLAIM THAT CANNOT BE MADE FAILS OPEN, LOUDLY. The derivation then answers the hash, as it
 did before this file existed, and `app/checkoutIdentity.ts` still refuses a test run against
 a server that is not this checkout's. So `make dev` never fails because of this file.
@@ -36,6 +40,8 @@ a server that is not this checkout's. So `make dev` never fails because of this 
 `selftest` builds two throwaway trees forced into one slot and proves both halves of the
 decision end to end: a real Playwright run in one tree refuses the other tree's real Vite,
 and after both claim, each has its own slot and the same run passes against its own server.
+It also proves that `.claude/launch.json`, which the Browser pane opens, names the claimed
+port and not the hash port, for both of the file's writers.
 """
 
 from __future__ import annotations
@@ -50,6 +56,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
@@ -119,8 +126,21 @@ def listener_cwds(port: int) -> list:
 
 
 def _inside(path: str, root: str) -> bool:
+    """Is `path` in the checkout at `root`, and not in another checkout nested inside it?
+
+    A linked worktree can sit inside another checkout's folder (`.claude/worktrees/<name>`).
+    It is another checkout with its own ports, as `scripts/reap.py:linked_worktrees` rules. So
+    a directory between `path` and `root` that holds a `.git` ends the answer: not inside.
+    """
     real = os.path.realpath(path)
-    return real == root or real.startswith(root.rstrip("/") + "/")
+    if not (real == root or real.startswith(root.rstrip("/") + "/")):
+        return False
+    here = real
+    while len(here) > len(root.rstrip("/")):
+        if os.path.lexists(os.path.join(here, ".git")):
+            return False
+        here = os.path.dirname(here)
+    return True
 
 
 def held_by_other(port: int, root: str) -> Optional[str]:
@@ -170,6 +190,45 @@ def write_claims(registry: Path, claims: dict) -> None:
         raise
 
 
+def damage(registry: Path) -> Optional[str]:
+    """None when the file is absent or every entry in it reads. Else what is wrong with it.
+
+    `ports.read_claims` reads a damaged file as "nothing claimed", which is right for a
+    reader. A WRITER that trusted that answer would replace the file and lose every other
+    checkout's claim with no word. So the writer asks this first.
+    """
+    try:
+        text = registry.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return f"could not be read ({exc})"
+    try:
+        data = json.loads(text, parse_constant=ports.refuse_json_constant)
+    except ValueError:
+        return "is not JSON"
+    slots = data.get("slots") if isinstance(data, dict) else None
+    if not isinstance(slots, dict):
+        return "has no table of slots"
+    unread = len(slots) - len(ports.read_claims(registry))
+    if unread:
+        return f"has {unread} entry(ies) that are not a whole slot in the band"
+    return None
+
+
+def replace(registry: Path, claims: dict, damaged: Optional[str]) -> str:
+    """Write the claims. Over a damaged file, keep a copy of it first. Returns a note."""
+    note = ""
+    if damaged:
+        stamp = time.strftime("%Y%m%dT%H%M%S") + f"-{os.getpid()}"
+        kept = registry.with_name(f"{registry.name}.bad-{stamp}")
+        shutil.copy2(registry, kept)
+        note = (f"; the registry {damaged}, so it was REPLACED, and any claim it held is "
+                f"lost. The old file is kept at {kept}")
+    write_claims(registry, claims)
+    return note
+
+
 def claim(
     root: Path,
     registry: Path,
@@ -178,13 +237,14 @@ def claim(
     """Claim a slot for `root`. Returns (slot or None, what happened, in one sentence)."""
     key = ports.canonical(root)
     with locked(registry):
+        damaged = damage(registry)
         before = ports.read_claims(registry)
         live = {path: slot for path, slot in before.items() if os.path.isdir(path)}
         dropped = sorted(set(before) - set(live))
         note = f"; dropped {len(dropped)} removed checkout(s)" if dropped else ""
         if key in live:
             if dropped:
-                write_claims(registry, live)
+                note += replace(registry, live, damaged)
             return live[key], f"kept slot {live[key]}{note}"
         taken = set(live.values())
         start = ports.hashed_slot(root)
@@ -207,7 +267,7 @@ def claim(
                 skipped.append(holder)
                 continue
             live[key] = slot
-            write_claims(registry, live)
+            note += replace(registry, live, damaged)
             why = f" ({skipped[0]})" if skipped else ""
             return slot, f"claimed slot {slot}, hash slot {start}{why}{note}"
         return None, "no free slot among all " + str(ports.SLOTS)
@@ -228,7 +288,7 @@ def cmd_claim(args: argparse.Namespace) -> int:
     if slot is None:
         print(f"port-slots: claim FAILED, {what}. The ports fall back to the path hash.")
         return 0
-    if not (args.quiet and what.startswith("kept") and "dropped" not in what):
+    if not (args.quiet and what == f"kept slot {slot}"):
         print(f"port-slots: {what}. This checkout serves dev {ports.DEV_LOW + slot}, "
               f"capture {ports.CAPTURE_LOW + slot}.")
     return 0
@@ -268,6 +328,9 @@ def build_tree(tree: Path) -> None:
     for name in APP_FILES:
         shutil.copy2(ROOT / "app" / name, app / name)
     (app / "index.html").write_text("<!doctype html><title>probe</title>\n", encoding="utf-8")
+    for rel in ("scripts/screenshot.sh", "server/ports.py"):
+        (tree / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / rel, tree / rel)
     (app / "tests" / "identity-probe.spec.ts").write_text(PROBE_SPEC, encoding="utf-8")
     modules = app / "node_modules"
     modules.mkdir()
@@ -322,6 +385,19 @@ def run_playwright(tree: Path, env: dict) -> subprocess.CompletedProcess:
     )
 
 
+def run_screenshot(tree: Path, env: dict, port: int) -> str:
+    """The tree's copy of `scripts/screenshot.sh` over its own dev origin. Its stderr.
+
+    The tree has no `scripts/screenshot.mjs`, so a render that is not refused stops there and
+    loads no page.
+    """
+    done = subprocess.run(
+        ["bash", "scripts/screenshot.sh", f"http://localhost:{port}/", "identity-probe"],
+        cwd=str(tree), env=env, capture_output=True, text=True, timeout=60, check=False,
+    )
+    return done.stdout + done.stderr
+
+
 def node_ports(tree: Path, env: dict) -> tuple:
     """(DEV_PORT, CAPTURE_PORT) the tree's own copy of `app/devPort.ts` answers."""
     done = subprocess.run(
@@ -334,6 +410,77 @@ def node_ports(tree: Path, env: dict) -> tuple:
         raise SystemExit("port-slots selftest: node could not read devPort.ts — unproven:\n"
                          + done.stderr.strip())
     return tuple(json.loads(done.stdout.strip().splitlines()[-1]))
+
+
+def launch_config_failures(base: Path, registry: Path, env: dict) -> list:
+    """`.claude/launch.json` must name the CLAIMED port, whoever writes it first.
+
+    The Browser pane opens the port that file names, and it reuses a server already there. So
+    a file written from the hash, before the claim moved the tree, previews ANOTHER tree.
+    Each throwaway tree gets the real `launch-config.py`, this script and `server/ports.py`.
+    The registry already gives the tree's hash slot to another checkout. Each tree then runs
+    one caller's call (the SessionStart hook's, and `make launch-config`'s), then the claim
+    every serving target makes next, then the read-only check `make status` makes. The check
+    must say `current`, at the claimed port.
+    """
+    failures = []
+    holder = base / "launch-holder"
+    holder.mkdir()
+    for label, flags in (("the SessionStart hook", ["--if-needed", "--quiet"]),
+                         ("make launch-config", [])):
+        tree = base / ("launch-" + ("hook" if flags else "make"))
+        for sub in ("scripts", "server"):
+            (tree / sub).mkdir(parents=True)
+        (tree / ".git").write_text("gitdir: /nowhere/.git/worktrees/launch\n", encoding="utf-8")
+        for rel in ("scripts/launch-config.py", "scripts/port-slots.py", "server/ports.py"):
+            shutil.copy2(ROOT / rel, tree / rel)
+        hashed = ports.hashed_slot(tree)
+        registry.parent.mkdir(parents=True, exist_ok=True)
+        registry.write_text(json.dumps({"version": 1, "slots": {str(holder): hashed}}),
+                            encoding="utf-8")
+
+        def run(*args: str, tree: Path = tree) -> str:
+            done = subprocess.run([sys.executable, *args], cwd=str(tree), env=env,
+                                  capture_output=True, text=True, timeout=180, check=False)
+            return done.stdout + done.stderr
+
+        run("scripts/launch-config.py", *flags)
+        run("scripts/port-slots.py", "claim", "--quiet")
+        checked = run("scripts/launch-config.py", "--check")
+        slot = ports.read_claims(registry).get(ports.canonical(tree))
+        try:
+            named = json.loads((tree / ".claude" / "launch.json").read_text(encoding="utf-8"))
+            named = named["configurations"][0]["port"]
+        except (OSError, ValueError, KeyError, IndexError, TypeError):
+            named = None
+        if slot is None or slot == hashed:
+            failures.append(f"{label}: the tree never claimed a slot away from its hash slot "
+                            f"{hashed}, which another checkout holds (got {slot})")
+        elif named != ports.DEV_LOW + slot or "launch-config: current" not in checked:
+            failures.append(
+                f"{label}: .claude/launch.json names {named}, but the tree claimed slot "
+                f"{slot} (dev {ports.DEV_LOW + slot}). The Browser pane would open the port "
+                f"of the checkout that holds slot {hashed}. The claim must run before the file "
+                f"is written. `--check` said: {checked.strip()}")
+    return failures
+
+
+def nested_failures(base: Path) -> list:
+    """A listener in a checkout nested inside this one is another checkout's, never ours."""
+    tree = base / "outer"
+    nested = tree / ".claude" / "worktrees" / "inner"
+    (nested / "app").mkdir(parents=True)
+    (tree / "app").mkdir()
+    (tree / ".git").write_text("gitdir: /nowhere/.git/worktrees/outer\n", encoding="utf-8")
+    (nested / ".git").write_text("gitdir: /nowhere/.git/worktrees/inner\n", encoding="utf-8")
+    root = ports.canonical(tree)
+    failures = []
+    if not _inside(str(tree / "app"), root):
+        failures.append("a listener in this checkout's own app/ must count as this checkout's")
+    if _inside(str(nested / "app"), root):
+        failures.append("a listener in a linked worktree nested inside this checkout counted as "
+                        "this checkout's, so a claim would keep a port another tree serves on")
+    return failures
 
 
 def free_pair(slot: int) -> bool:
@@ -355,6 +502,12 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
            if k not in ("CI", "PKMNSCAN_CHECKOUT_IDENTITY", ports.PORT_ENV)}
     foreign = None
     try:
+        # 0. THE FILE THE BROWSER PANE READS names the claimed port, on its own registry.
+        launch_registry = base / "launch-registry" / "port-slots.json"
+        failures += launch_config_failures(
+            base, launch_registry, {**env, ports.SLOT_REGISTRY_ENV: str(launch_registry)})
+        failures += nested_failures(base)
+
         # Two paths FORCED into one hash slot, on a slot whose ports and the next slot's are
         # free on this machine right now, so no real checkout's server is ever reached.
         by_slot: dict = {}
@@ -390,6 +543,10 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
         elif "REFUSED" not in said or str(tree_b) not in said:
             failures.append("tree A's run failed, but not by refusing tree B's server by "
                             "name:\n" + said[-1500:])
+        shot = run_screenshot(tree_a, env, want[0])
+        if "REFUSED" not in shot or str(tree_b) not in shot:
+            failures.append("scripts/screenshot.sh in tree A did not refuse tree B's server "
+                            "by name before it rendered:\n" + shot[-1500:])
 
         # 2. THE CLAIM. A claims first and B's live server pushes it one slot on. B claims
         #    next and keeps its own slot, because the server on it names B.
@@ -414,6 +571,14 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
         if passed.returncode != 0 or "1 passed" not in passed.stdout:
             failures.append("tree A's run on its own claimed slot did not pass:\n"
                             + (passed.stdout + passed.stderr)[-1500:])
+        own = start_vite(tree_a, env)
+        try:
+            shot = run_screenshot(tree_a, env, ports.DEV_LOW + slot_a)
+        finally:
+            stop(own)
+        if "REFUSED" in shot:
+            failures.append("scripts/screenshot.sh in tree A refused tree A's own server:\n"
+                            + shot[-1500:])
 
         # 4. A removed checkout frees its slot, and a damaged file reads as nothing claimed.
         stop(foreign)
@@ -427,6 +592,17 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
             ports.DEV_LOW + ports.hashed_slot(tree_a), ports.CAPTURE_LOW + ports.hashed_slot(tree_a)
         ):
             failures.append("a damaged registry must read as nothing claimed, on both sides")
+
+        # 5. A claim over a damaged registry replaces it, so every other tree's claim in it
+        #    is gone. The claim keeps the damaged file beside it and says where.
+        _, what = claim(tree_a, registry)
+        kept = sorted(registry.parent.glob(registry.name + ".bad-*"))
+        if (len(kept) != 1 or kept[0].read_text(encoding="utf-8") != "{not json"
+                or str(kept[0]) not in what):
+            failures.append(
+                "a claim over a damaged registry must keep a copy of it beside it "
+                f"(.bad-<stamp>) and name that copy; it kept {[p.name for p in kept]} and "
+                f"said: {what}")
     finally:
         if foreign is not None:
             stop(foreign)
@@ -443,8 +619,10 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
         return 1
     print(f"port-slots selftest: two trees forced into slot {shared}; a run in one refused "
           f"the other's server by name; after claiming, each holds its own slot on both "
-          f"sides and the run passed on its own server; a removed tree's slot is freed; a "
-          f"damaged registry reads as nothing claimed")
+          f"sides and the run passed on its own server; screenshot.sh refused the other "
+          f"tree's server and not its own; a removed tree's slot is freed; a "
+          f"damaged registry reads as nothing claimed, and a claim over it keeps a copy and "
+          f"says so; .claude/launch.json names the claimed port for both of its writers")
     return 0
 
 

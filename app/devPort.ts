@@ -123,11 +123,22 @@ function slotRegistry(): string | null {
   }
 }
 
+// A SLOT WRITTEN `149.0` OR `1.49e2` IS NOT A WHOLE SLOT. JSON.parse reads both as the
+// integer 149, and Python's json reads them as floats, which `read_claims` refuses. Only the
+// written text can tell them apart, so every number literal with a fraction or an exponent
+// becomes `null` before the parse. The pattern matches a whole string first, so a digit
+// inside a path is never read as a number. `scripts/port-agreement.py` asks both sides.
+function wholeNumbersOnly(text: string): string {
+  return text.replace(/"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (token) =>
+    token.startsWith('"') || !/[.eE]/.test(token) ? token : 'null',
+  )
+}
+
 function claimedSlot(root: string): number | null {
   const path = slotRegistry()
   if (!path) return null
   try {
-    const data: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    const data: unknown = JSON.parse(wholeNumbersOnly(readFileSync(path, 'utf-8')))
     const slots = (data as { slots?: unknown } | null)?.slots
     if (!slots || typeof slots !== 'object') return null
     const value = (slots as Record<string, unknown>)[canonical(root)]
