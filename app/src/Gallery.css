@@ -31,7 +31,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .kit-index-link {
   position: relative;
@@ -62,8 +62,11 @@
 /* ---- sections ------------------------------------------------------------------ */
 .kit-sections { display: flex; flex-direction: column; gap: var(--bn-8); min-width: 0; }
 .kit-section { scroll-margin-top: var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-4); }
-.kit-section-head { display: flex; flex-direction: column; gap: 4px; }
-.kit-section-lede { font-size: var(--bn-fs-base); color: var(--bn-ink-3); max-width: 72ch; }
+/* Each section is the kit's own `Section` (an h2, its lede under it). The sheet spaces them with
+   its column's gap, so the kit's own section-to-section margin and head margin step aside here. */
+.kit-sections > .bn-section + .bn-section { margin-top: 0; }
+.kit-section > .bn-section-head { margin-bottom: 0; }
+.kit-section > .bn-section-lede { margin: calc(-1 * var(--bn-3)) 0 0; }
 .kit-code { font-family: var(--bn-font-mono); font-size: 0.9em; color: var(--bn-ink-2); background: var(--bn-surface-2); padding: 1px 5px; border-radius: var(--bn-r-xs); }
 
 .kit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--bn-4); }
@@ -101,7 +104,7 @@
 }
 .kit-swatch-sample { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-lg); }
 .kit-swatch-name { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink); margin-top: 4px; }
-.kit-swatch-token { font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
+.kit-swatch-token { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
 
 .kit-faces { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--bn-3); }
 .kit-face {
@@ -127,8 +130,8 @@
 }
 .kit-type-row:last-child { border-bottom: 0; }
 .kit-type-meta { display: flex; gap: var(--bn-2); align-items: baseline; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
-.kit-type-px { color: var(--bn-ink-4); }
-.kit-type-role { color: var(--bn-ink-4); }
+.kit-type-px { color: var(--bn-ink-3); }
+.kit-type-role { color: var(--bn-ink-3); }
 .kit-type-sample { color: var(--bn-ink); letter-spacing: -0.01em; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The text roles, laid out like the swatches: sample, name, class. The sample keeps the
@@ -146,7 +149,7 @@
 }
 .kit-role-sample { display: flex; align-items: center; min-height: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kit-role-name { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink); margin-top: 6px; }
-.kit-role-token { font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
+.kit-role-token { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
 
 .kit-spaces { display: flex; flex-direction: column; gap: 6px; }
 .kit-space { display: flex; align-items: center; gap: var(--bn-3); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
@@ -181,7 +184,7 @@
   to { transform: translateX(28px); opacity: 1; }
 }
 .kit-motion-label { display: flex; flex-direction: column; gap: 2px; font-size: var(--bn-fs-xs); color: var(--bn-ink-2); margin-left: 24px; }
-.kit-motion-ease { color: var(--bn-ink-4); }
+.kit-motion-ease { color: var(--bn-ink-3); }
 .kit-motion-play { margin-left: auto; color: var(--bn-ink-4); }
 
 .kit-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--bn-2); }
@@ -219,7 +222,7 @@
   line-height: 1;
   color: var(--bn-ink-2);
 }
-.kit-keycap-blank { color: var(--bn-ink-4); border-style: dashed; border-bottom-width: 1px; }
+.kit-keycap-blank { color: var(--bn-ink-3); border-style: dashed; border-bottom-width: 1px; }
 .kit-toasts { display: flex; flex-direction: column; gap: var(--bn-2); max-width: 380px; }
 .kit-menu-inline { width: 260px; }
 /* `--pos-slot` IS ONLY HALF OF WHAT A SITE SETS, AND THIS SPECIMEN SET ONLY THAT HALF (D119).

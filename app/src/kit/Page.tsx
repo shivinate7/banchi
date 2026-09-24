@@ -1,6 +1,7 @@
-import { createContext, useContext, useId } from 'react'
-import type { ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 import { Icon, type IconName } from './Icon'
+import { useInOverlay } from './overlay'
 
 /* THE PAGE SCAFFOLD. Every screen is built from this from now on (D-one-page-width).
  *
@@ -50,8 +51,8 @@ export type PageProps = {
   /** Draws `Loading` in the list region. The header keeps its shape (UX-098). */
   readonly loading?: boolean
   /** The answer to a press: a refusal, a retry, a notice. Pass `null` to reserve the slot
-   *  before anything is in it; leave it out for a screen that never answers in place. The
-   *  slot holds its height either way, so a notice never moves the rows (D118). */
+   *  before anything is in it; leave it out for a screen that never answers in place. The slot
+   *  is at least one notice high either way, so a one-line answer never moves the rows (D118). */
   readonly status?: ReactNode
   /** The accessible name of the toolbar. */
   readonly toolbarLabel?: string
@@ -75,6 +76,13 @@ export function Page({
   const route = usePageRoute()
   const heading = title ?? route?.title ?? route?.label ?? null
   const titleId = useId()
+  /* A PAGE WITH NO H1 IS A DEFECT THAT DRAWS NOTHING WRONG. With no `title` and no route around
+     it, the page renders without its heading and nothing looks broken, so it says so in dev. */
+  useEffect(() => {
+    if (import.meta.env.DEV && heading === null) {
+      console.error('<Page> has no title: pass `title`, or draw it inside the shell\'s PageRouteContext. A page with no h1 has no name for a screen reader.')
+    }
+  }, [heading])
   return (
     <main className={['bn-page', className].filter(Boolean).join(' ')} data-bn-page="" aria-labelledby={heading === null ? undefined : titleId}>
       <header className="bn-head bn-page-head">
@@ -118,10 +126,10 @@ export function Toolbar({ children, label = 'Filters', className }: { readonly c
   )
 }
 
-/** THE STATUS SLOT HOLDS ITS SPACE (D118). It is one notice high whether or not a notice is
- *  in it, so the answer to a press lands where the press was and moves nothing below it. A
- *  notice drawn here should be `compact`: its one line fits the slot, and "What the server
- *  said" opens OVER the page rather than pushing it. */
+/** THE STATUS SLOT HOLDS ITS SPACE (D118). It is at least one notice high whether or not a
+ *  notice is in it, so a one-line answer to a press lands where the press was and moves nothing
+ *  below it. A longer answer grows the slot rather than being cut: the sentence is never clipped.
+ *  "What the server said" opens OVER the page, inside its gutter. */
 export function StatusSlot({ children, className }: { readonly children?: ReactNode; readonly className?: string }) {
   return (
     <div className={['bn-status-slot', className].filter(Boolean).join(' ')} aria-live="polite">
@@ -130,49 +138,91 @@ export function StatusSlot({ children, className }: { readonly children?: ReactN
   )
 }
 
-/** The one loading shape: rows the height of the rows that will replace them. */
-export function Loading({ rows = 5, label = 'Loading', className }: { readonly rows?: number; readonly label?: string; readonly className?: string }) {
+/** The one loading style, in the shape of what will replace it (UX-098): `rows` for a list,
+ *  `cards` for a grid of tiles, `summary` for a band of figures that opens a screen. */
+export function Loading({
+  rows = 5,
+  shape = 'rows',
+  label = 'Loading',
+  className,
+}: {
+  readonly rows?: number
+  readonly shape?: 'rows' | 'cards' | 'summary'
+  readonly label?: string
+  readonly className?: string
+}) {
+  const count = Array.from({ length: rows }, (_, i) => i)
   return (
-    <div className={['bn-loading', className].filter(Boolean).join(' ')} role="status" aria-busy="true">
+    <div className={['bn-loading', `bn-loading-${shape}`, className].filter(Boolean).join(' ')} role="status" aria-busy="true" data-shape={shape}>
       <span className="bn-sr">{label}</span>
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="bn-loading-row" aria-hidden="true">
-          <span className="bn-skeleton bn-loading-thumb" />
-          <span className="bn-loading-lines">
+      {shape === 'summary' ? (
+        <>
+          <span className="bn-skeleton bn-loading-headline" aria-hidden="true" />
+          <span className="bn-loading-figures" aria-hidden="true">
+            {[0, 1, 2, 3].map((i) => (
+              <span key={i} className="bn-skeleton bn-loading-figure" />
+            ))}
+          </span>
+        </>
+      ) : shape === 'cards' ? (
+        count.map((i) => (
+          <div key={i} className="bn-loading-card" aria-hidden="true">
+            <span className="bn-skeleton bn-loading-card-art" />
             <span className="bn-skeleton bn-loading-line" />
             <span className="bn-skeleton bn-loading-line bn-loading-line-short" />
-          </span>
-        </div>
-      ))}
+          </div>
+        ))
+      ) : (
+        count.map((i) => (
+          <div key={i} className="bn-loading-row" aria-hidden="true">
+            <span className="bn-skeleton bn-loading-thumb" />
+            <span className="bn-loading-lines">
+              <span className="bn-skeleton bn-loading-line" />
+              <span className="bn-skeleton bn-loading-line bn-loading-line-short" />
+            </span>
+          </div>
+        ))
+      )}
     </div>
   )
 }
 
-/** A titled part of a page. The title is an h2, so every visible section title is a heading
- *  a screen reader can jump to (UX-095). */
+/** A titled part of a page. The title is a heading a screen reader can jump to (UX-095): an h2
+ *  on a page, an h3 inside a `Sheet` or `Modal` (whose own title is the h2), or the `level` you
+ *  name. `lede` is one line under the title. Every other attribute (`id`, `data-*`, `aria-*`)
+ *  reaches the `<section>`. */
 export function Section({
   title,
   count,
   actions,
+  lede,
+  level,
   children,
   className,
-}: {
+  ...rest
+}: Omit<HTMLAttributes<HTMLElement>, 'title'> & {
   readonly title: ReactNode
   readonly count?: ReactNode
   readonly actions?: ReactNode
+  readonly lede?: ReactNode
+  readonly level?: 2 | 3 | 4
   readonly children?: ReactNode
   readonly className?: string
 }) {
   const id = useId()
+  const inOverlay = useInOverlay()
+  const depth = level ?? (inOverlay ? 3 : 2)
+  const Heading = depth === 2 ? 'h2' : depth === 3 ? 'h3' : 'h4'
   return (
-    <section className={['bn-section', className].filter(Boolean).join(' ')} aria-labelledby={id}>
+    <section className={['bn-section', className].filter(Boolean).join(' ')} aria-labelledby={id} {...rest}>
       <header className="bn-section-head">
-        <h2 className="bn-h2" id={id}>
+        <Heading className={depth === 2 ? 'bn-h2' : 'bn-h3'} id={id}>
           {title}
           {count === undefined || count === null ? null : <span className="bn-section-count">{count}</span>}
-        </h2>
+        </Heading>
         {actions ? <div className="bn-section-actions">{actions}</div> : null}
       </header>
+      {lede ? <p className="bn-section-lede">{lede}</p> : null}
       {children}
     </section>
   )

@@ -18,7 +18,7 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.inv-readage.is-unread { color: var(--bn-ink-4); font-style: italic; }
+.inv-readage.is-unread { color: var(--bn-ink-3); font-style: italic; }
 
 /* THE SPLIT UNDER A LIVE COUNT (D115): "4 when read · 2 sold here since". One step louder than
    `.inv-readage` because it carries FIGURES rather than an age — a reader who sees two numbers

@@ -71,7 +71,7 @@
   display: flex;
   justify-content: space-between;
   font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   margin-top: var(--bn-1);
 }
 
@@ -159,7 +159,7 @@
 .revenue-table > tbody > tr { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
 
 .revenue-market { white-space: normal; }
-.revenue-market-none { color: var(--bn-ink-4); }
+.revenue-market-none { color: var(--bn-ink-3); }
 .revenue-market-delta { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 
 .revenue-market-refresh { display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; }

@@ -22,7 +22,7 @@
   font-weight: 600;
   letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   line-height: 1.45;
 }
 
@@ -58,7 +58,7 @@
 .nb-skip {
   font-size: var(--nb-skip, 11px);
   line-height: 1.4;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

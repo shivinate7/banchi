@@ -134,7 +134,7 @@
     font-weight: 600;
     letter-spacing: var(--bn-tracking-caps);
     text-transform: uppercase;
-    color: var(--bn-ink-4);
+    color: var(--bn-ink-3);
   }
   /* a row with no order or no run draws nothing for it, rather than a labelled blank */
   .graveyard-table td[data-empty] { display: none; }

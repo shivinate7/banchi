@@ -55,18 +55,19 @@
   --bn-ink-3: #666c76;           /* metadata, captions, placeholders — 4.85:1 on --bn-bg,
                                     4.55:1 on --bn-surface-2 (was #6b7280, 4.43:1 / 4.16:1,
                                     failing this token's own documented job; measured 2026-09-20) */
-  --bn-ink-4: #6b717b;           /* faint: icons, separators, disabled, and the lightest word on screen —
-                                    4.51:1 on --bn-bg, 4.91:1 on --bn-surface. Was #7f8791 (3.33:1 on the
-                                    page, failing 4.5:1 under words a person reads; UX-047, 2026-09-23) */
+  --bn-ink-4: #7f8791;           /* NOT FOR TEXT (2026-09-23): icons, separators, rules, a field's edge.
+                                    3.33:1 on --bn-bg, 3.64:1 on --bn-surface, 3.13:1 on --bn-surface-2 —
+                                    the 3:1 a graphic needs, and a visible step below ink-3. A word is
+                                    ink-3 at the faintest (UX-047) */
 
   --bn-line: rgba(15, 18, 23, 0.08);
   --bn-line-strong: rgba(15, 18, 23, 0.16);
   --bn-line-focus: rgba(61, 90, 241, 0.55);
-  /* THE EDGE OF A CONTROL YOU TYPE INTO OR TICK, at 3:1 (UX-094). `--bn-line-strong` is 1.41:1 on
-     a white field, which D50 set at 3.36:1 before the legacy `--field` moved onto it. A new name,
-     so every hairline that reads `--bn-line-strong` keeps its weight: 3.34:1 on --bn-surface,
-     3.06:1 on --bn-bg. */
-  --bn-field-edge: #878d97;
+  /* THE EDGE OF A CONTROL YOU TYPE INTO OR TICK, at 3:1 on every ground (UX-094).
+     `--bn-line-strong` is 1.41:1 on a white field, which D50 set at 3.36:1 before the legacy
+     `--field` moved onto it. A name of its own, so every hairline that reads `--bn-line-strong`
+     keeps its weight. It is ink-4, because a field's edge is exactly ink-4's job: a graphic. */
+  --bn-field-edge: var(--bn-ink-4);
 
   /* ---- brand ------------------------------------------------------------- */
   --bn-accent: #3d5af1;          /* action. Buttons, links, selection, focus ring */
@@ -108,8 +109,9 @@
   --bn-pill-ink-accent: var(--bn-accent-hover);
   --bn-pill-ink-ok: #11733a;
   --bn-pill-ink-warn: #a14b09;
-  --bn-pill-ink-danger: var(--bn-danger);
-  --bn-pill-ink-live: #b33020;
+  /* danger is crimson and live is vermilion, so the two pills read apart at a glance */
+  --bn-pill-ink-danger: #b3123e;
+  --bn-pill-ink-live: #a53f12;
 
   /* ---- elevation --------------------------------------------------------- */
   --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
@@ -275,7 +277,7 @@
      `--bn-page-w` at every screen, fluid below it, and the title sits `--bn-page-top` below the
      shell's own edge. `--bn-page-max` and `--bn-page-w-rows` stay for the screens that have not
      moved onto `Page` yet, and go dead one screen at a time as they do. */
-  --bn-page-top: var(--bn-6);
+  --bn-page-top: var(--bn-6);    /* 16px below 768: the phone's own page inset */
 
   --bn-control-h: 34px;
   --bn-control-h-lg: 40px;
@@ -324,13 +326,11 @@
   --bn-ink: #eef0f4;
   --bn-ink-2: #b9bfc9;
   --bn-ink-3: #838b98;
-  --bn-ink-4: #7c8492;           /* 5.13:1 on the dark page, 4.77:1 on --bn-surface. Was #707886
-                                    (4.04:1 on the surface; UX-047, 2026-09-23) */
+  --bn-ink-4: #707886;           /* not for text: 4.34:1 on the dark page, 3.71:1 on --bn-surface-3 */
 
   --bn-line: rgba(255, 255, 255, 0.08);
   --bn-line-strong: rgba(255, 255, 255, 0.16);
   --bn-line-focus: rgba(129, 146, 255, 0.6);
-  --bn-field-edge: #626977;      /* 3.26:1 on --bn-surface, 3.5:1 on --bn-bg */
 
   --bn-accent: #7f90ff;
   --bn-accent-hover: #93a2ff;
@@ -370,6 +370,11 @@
 
 /* A thumb needs 40px. Every kit control reads these, so the floor is raised once — and it
    follows the POINTER, not the width: an iPad in portrait is 820px wide and all thumb. */
+/* The gap above a page's title follows the page's own side inset: 16px on a phone. */
+@media (max-width: 767px) {
+  :root { --bn-page-top: var(--bn-4); }
+}
+
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
   :root {
     --bn-control-h-sm: 40px;

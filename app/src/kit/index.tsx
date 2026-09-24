@@ -73,6 +73,14 @@ export function Kbd({ children, className }: { readonly children: ReactNode; rea
   )
 }
 
+/* ---- KeyHint ---------------------------------------------------------------------- */
+/** A PHRASE THAT NAMES KEYS, as one unit: "<KeyHint>Press <Kbd>,</Kbd> then a letter to jump</KeyHint>".
+ *  On a touch screen the whole phrase hides, so no sentence is left with a hole where its key
+ *  was (UX-040). A bare `Kbd` in running text never hides by itself: wrap the phrase instead. */
+export function KeyHint({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
+  return <span className={['bn-keyhint', className].filter(Boolean).join(' ')}>{children}</span>
+}
+
 /* ---- Pill ------------------------------------------------------------------------- */
 export type PillTone = 'default' | 'accent' | 'ok' | 'warn' | 'danger' | 'live'
 export function Pill({
@@ -313,7 +321,10 @@ export function Retry({
   )
 }
 
-/** The shape `server.ts:describeFailure` says a failure is: a refusal or a retry. */
+/** The shape `server.ts:describeFailure` says a failure is: a refusal or a retry. The server's
+ *  own text is NEVER the title (D196, D-notice-detail): the title is a plain sentence, the one
+ *  passed, or a default that says only whether trying again can help. The server's words and its
+ *  code sit behind "What the server said". */
 export function FailureNotice({
   failure,
   title,
@@ -329,10 +340,10 @@ export function FailureNotice({
 }) {
   if (failure.kind === 'retry' && onRetry !== undefined) {
     return (
-      <Retry title={title ?? failure.message} code={failure.code} detail={title === undefined ? undefined : failure.message} onRetry={onRetry} busy={busy} compact={compact} />
+      <Retry title={title ?? 'That did not go through.'} code={failure.code} detail={failure.message} onRetry={onRetry} busy={busy} compact={compact} />
     )
   }
-  return <Refusal title={title ?? failure.message} code={failure.code} detail={title === undefined ? undefined : failure.message} compact={compact} />
+  return <Refusal title={title ?? 'That cannot be done here.'} code={failure.code} detail={failure.message} compact={compact} />
 }
 
 /* ---- Reload ---------------------------------------------------------------------------------- */
@@ -657,7 +668,8 @@ export function applyTheme(theme: Theme): void {
    is how a new screen inherits every other screen's frame (D-one-page-width). */
 export { Page, PageRouteContext, usePageRoute, Verdict, Toolbar, StatusSlot, Loading, Section } from './Page'
 export type { PageProps, PageRoute } from './Page'
-export { Sheet, Modal, Popover, ConfirmSheet, SheetHost, useFocusTrap, useReturnFocus } from './overlay'
+export { Sheet, Modal, Popover, ConfirmSheet, SheetHost, useFocusTrap, useReturnFocus, useOverlayLayer, overlayOpen, useInOverlay } from './overlay'
+export type { OverlayLayerOptions } from './overlay'
 
 /* ---- the data primitives and the sheet registry (kit-data) ---------------------------------
    Screens import these from here, never from `./data` or `./sheets` directly. */
@@ -669,5 +681,5 @@ export type {
   BoxRecency, StatusKind, StatusTone, CardThumbSize, PickOption, FilterFacet, FilterValue, SortOption, SortValue,
 } from './data'
 export { registerSheet, openSheet, closeSheet, useOpenSheet, sheetHref, hasSheet } from './sheets'
-export type { SheetProps, SheetKind, OpenSheet } from './sheets'
+export type { SheetProps, SheetKind, OpenSheet, SheetHostProps } from './sheets'
 export { matchQuery } from './match'

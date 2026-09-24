@@ -17,7 +17,7 @@
 }
 
 /* ---- Money: an empty figure is faint, never a zero -------------------------------------------- */
-.bn-money[data-empty='true'] { color: var(--bn-ink-4); font-weight: 400; }
+.bn-money[data-empty='true'] { color: var(--bn-ink-3); font-weight: 400; }
 
 /* ---- Count: ONE count style, a quiet badge in tabular figures ---------------------------------- */
 .bn-count {
@@ -113,7 +113,7 @@
   overflow: hidden;
   border-radius: var(--bn-r-sm);
   background: var(--bn-surface-2);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .bn-thumb-sm { width: 40px; border-radius: var(--bn-r-xs); }
 .bn-thumb-md { width: 64px; }
@@ -262,7 +262,7 @@
   flex: none;
   padding: 0 var(--bn-3);
   border-bottom: 1px solid var(--bn-line);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .bn-pick-entry-input {
   flex: 1 1 auto;
@@ -275,7 +275,7 @@
   font-size: var(--bn-fs-md);
 }
 .bn-pick-entry-input:focus { outline: none; }
-.bn-pick-entry-input::placeholder { color: var(--bn-ink-4); }
+.bn-pick-entry-input::placeholder { color: var(--bn-ink-3); }
 .bn-pick-list {
   display: flex;
   flex-direction: column;
@@ -301,7 +301,7 @@
 }
 .bn-pick-opt[data-active='true'] { background: var(--bn-hover); color: var(--bn-ink); box-shadow: inset 0 0 0 1px var(--bn-line-focus); }
 .bn-pick-opt[aria-selected='true'] { color: var(--bn-ink); font-weight: 600; }
-.bn-pick-opt[data-zero='true'] { color: var(--bn-ink-4); }
+.bn-pick-opt[data-zero='true'] { color: var(--bn-ink-3); }
 .bn-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bn-pick-count {
   font-size: var(--bn-fs-xs);
