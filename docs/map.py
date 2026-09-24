@@ -2312,7 +2312,7 @@ COMPONENTS = [
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D141", "D215"],
+                "governed_by": ["D16", "D18", "D136", "D141", "D215", "D-page-scaffold"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -4396,6 +4396,33 @@ COMPONENTS = [
                         "person choosing to accept today's count as the new ceiling, never by "
                         "the check itself.",
                 "governed_by": ["D18", "D229", "D256"]},
+            "kit-adoption.mjs": {
+                "does": "`make kit-adoption` — does every screen inherit the page scaffold "
+                        "(D-page-scaffold)? Reads the TypeScript AST, like user-strings.mjs. "
+                        "R1: every `ROUTES` view in App.tsx renders `<Page>` from the kit, "
+                        "directly or through a screen component it renders (named or default "
+                        "import), at any depth, with no cap (Shipping reaches OrdersHub in "
+                        "Orders.tsx). R2: outside app/src/kit/, no `role=\"dialog\"`/"
+                        "`\"alertdialog\"` or native `<dialog>`, no `<input type=\"search\">` or "
+                        "text input labelled like a search box outside SearchField.tsx, no raw "
+                        "`<select>`, no kit-reserved class name (Gallery.tsx, the specimen "
+                        "sheet, is exempt from that one rule), no hand-rolled date format "
+                        "(`toLocaleDateString`/`toLocaleTimeString`/`Intl.DateTimeFormat`, or "
+                        "`toLocaleString` with date options) outside dates.ts, no hand-rolled "
+                        "dollar amount (a `$` before a template or JSX interpolation, `'$' + x`, "
+                        "a currency `Intl.NumberFormat`) outside money.ts. The heuristic edges "
+                        "are stated in its header. "
+                        "`scripts/kit-adoption-allow.json` is a SHRINKING offender list, file -> "
+                        "rule -> lane: it fails on an unlisted violation, on a stale entry, AND "
+                        "on any key the list at the merge-base with origin/main does not hold, "
+                        "unless that key's rule is not defined at the merge-base (a rule born "
+                        "on the branch, read from RULES and scaffold.spec.ts's PER_ROUTE and "
+                        "SHELL_WIDE there, and printed with its reason). Plain git reads; fails "
+                        "open, printed, with no merge-base or no list there. Never a pinned count. `--self-test` proves each rule on in-memory "
+                        "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
+                        "app/tests/scaffold.spec.ts, so the spec and the check read one table "
+                        "with one reader.",
+                "governed_by": ["D18", "D173", "D-page-scaffold"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -4417,7 +4444,7 @@ COMPONENTS = [
                                 "D171", "D172", "D173", "D176", "D178", "D189", "D212", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D254", "D256", "D-no-git-no-live-port"],
+                                "D247", "D250", "D254", "D256", "D-no-git-no-live-port", "D-page-scaffold"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -8082,6 +8109,27 @@ COMPONENTS = [
                         "reverted to `start`, turned the capture block's own two fix buttons "
                         "red — \"Open the camera\" 147.3px against \"Pick a box\" 107.0px — and "
                         "restoring both files turned it green again.",
+            },
+            "tests/scaffold.spec.ts": {
+                "does": "every screen inherits the page scaffold, in a browser "
+                        "(D-page-scaffold). Reads ROUTES through `scripts/kit-adoption.mjs "
+                        "--routes`, the static check's own reader, and cross-checks it against "
+                        "`routesFromNav`. Per route, at 1440, 820, 720 and 390: one "
+                        "`[data-bn-page]`, one visible h1 equal to `title ?? label`, max-width "
+                        "`--bn-page-w` (a `max-width` that is not a finite length, like "
+                        "`none`, fails), h1 gap `--bn-page-top`, no sideways scroll. On a fake "
+                        "clock, with normal and with reduced motion, read every 500ms for 30s: "
+                        "one fixed `document.title`, \"番地 \" and the screen name in lowercase. "
+                        "Two fixture tests prove the width and title judges fail on their "
+                        "defect. "
+                        "A Fulfiller route is exempt from width, top and title by name "
+                        "(`EXEMPT`, D5), never by allow entry. Once, at "
+                        "1440: the palette's Go to group and the keyboard sheet name every "
+                        "route. Exceptions are `scripts/kit-adoption-allow.json`'s `runtime` "
+                        "block, route -> assertion -> lane: an unlisted failure is red and an "
+                        "entry that now passes at every width is red (stale). Writes nothing. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D5", "D173", "D-page-scaffold"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "

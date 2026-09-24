@@ -217,7 +217,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check +
                     #   css-var-check + css-var-check-selftest + token-literal-check +
-                    #   ignore-check +
+                    #   kit-adoption + ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
                     #   mutate-anchors +
                     #   githooks-selftest + merge-selftest + revert-selftest +
@@ -234,7 +234,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
                     #   subagent-override-selftest + guard-scope-selftest +
-                    #   token-literal-check-selftest,
+                    #   token-literal-check-selftest + kit-adoption-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -260,6 +260,18 @@ make token-literal-check-selftest  # that checker, on fixtures in both direction
                     #   passes, the same value under a different family's property passes, a
                     #   raised/lowered/unseen per-file count and a stale allow-list entry are
                     #   each proved.
+make kit-adoption   # every ROUTES view renders <Page> from the kit, and no screen hand-rolls
+                    #   a kit primitive: a dialog role, a search input, a <select>, a kit
+                    #   class, a date format, a money format (D-page-scaffold). TypeScript
+                    #   AST. `scripts/kit-adoption-allow.json` is a SHRINKING offender list,
+                    #   file -> rule -> lane: an unlisted violation fails, a stale entry fails,
+                    #   and a key that the list at the merge-base with origin/main does not
+                    #   hold fails, unless its rule is not defined at the merge-base (a rule
+                    #   born on the branch). The output names each such rule and why. A
+                    #   removed or renamed rule refuses all growth. With no merge-base it
+                    #   fails open and says so.
+make kit-adoption-selftest  # that checker, on in-memory fixtures in both directions. Writes
+                    #   nothing (D18).
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
 make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
                     #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.
@@ -423,6 +435,21 @@ below).
 #/product      Product history one product's market history and the owner's own sales on
                               it, by SKU. Off-nav, deep-linked (D226)
 ```
+
+**A new screen is one `ROUTES` entry plus a view that returns `<Page>`** (D-page-scaffold).
+`Page` in `app/src/kit/Page.tsx` carries what every page shares. That is one width, one top
+gap and one h1 from the route's `title ?? label`. It is also the verdict, the toolbar, the
+status slot and the loading shape. `make kit-adoption` fails a route view that does not render
+it, and a screen that hand-rolls a primitive that the kit owns. `app/tests/scaffold.spec.ts` asserts the frame in a
+browser, per route, at 1440, 820, 720 and 390. The exceptions are one shrinking offender list,
+`scripts/kit-adoption-allow.json` (file -> rule -> lane). It fails on an unlisted violation and
+on a stale entry. It also fails on a key that the list at the merge-base with `origin/main` does
+not hold. So every rule that exists at the merge-base only shrinks. The one exception is a rule
+that the merge-base does not define, which is a rule born on the branch. Its first offenders may
+be listed, and the check prints which rule allowed them and why. The exception holds only while
+every rule that the merge-base defines still exists. If a branch removes or renames a rule, the
+check refuses all growth and names that rule. A lane that moves a screen onto
+`Page` deletes that screen's entries in the same commit.
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
 stage strip, joined client-side on order number. Not D31's defect returning: one sale, two
