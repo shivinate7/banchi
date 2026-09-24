@@ -59,8 +59,9 @@
    a screen's primary action. */
 .search-field-submit {
   flex: none;
-  align-self: stretch;
-  margin: var(--bn-1) calc(var(--bn-1) * -1) var(--bn-1) 0;
+  align-self: center;
+  min-height: var(--bn-control-h-sm);
+  margin-right: calc(var(--bn-1) * -1);
   padding: 0 var(--bn-3);
   border-radius: var(--bn-r-sm);
   font: inherit;

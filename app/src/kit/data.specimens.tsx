@@ -21,6 +21,7 @@ import {
 } from './data'
 import { absoluteDate, relativeDate } from '../dates'
 import { SearchField } from '../SearchField'
+import type { Place } from '../types'
 
 /* THE DATA PRIMITIVES, DRAWN ON THE KIT PAGE. Every one of them, in every state a screen can
  * put it in, so a new screen picks from what it can see here. The kit page mounts
@@ -28,6 +29,24 @@ import { SearchField } from '../SearchField'
 
 /** A 1x1 transparent image, so the photo specimen draws a frame with no request. */
 const BLANK_PHOTO = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='
+
+/** A PLACE BLOCK AS THE SERVER SENDS IT, the same fixture shape `Gallery.tsx` keeps. Its
+ *  `label` is wire data (`pipeline/join.py:Position.label`), never text this file writes for
+ *  the eye: `Location` splits it and CSS draws the separators (D218). */
+const WIRE_PLACE: Place = {
+  label: 'Box 3 · Section 2 · Card 15',
+  box: 3,
+  index: 40,
+  slot: 40,
+  section: 2,
+  card: 15,
+  box_name: 'RB Epics',
+  section_start: 26,
+  section_end: 50,
+  box_total: 250,
+  box_closed: true,
+  fraction: 0.16,
+}
 
 /** A fixed moment, so the date specimens read the same on every run. */
 const NOW = new Date('2026-09-23T15:00:00')
@@ -144,8 +163,8 @@ export function DataSpecimens() {
       </Specimen>
 
       <Specimen name="Place">
-        <Location label="Box 3 · Section 2 · Card 15" boxName="RB Epics" />
-        <Location label="Box 3 · Section 2 · Card 15" flow="run" />
+        <Location place={WIRE_PLACE} />
+        <Location place={WIRE_PLACE} flow="run" />
         <Location label={null} />
       </Specimen>
 

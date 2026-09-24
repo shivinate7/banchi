@@ -17,7 +17,7 @@
 }
 
 /* ---- Money: an empty figure is faint, never a zero -------------------------------------------- */
-.bn-money[data-empty='true'] { color: var(--bn-ink-4); font-weight: 400; }
+.bn-money[data-empty='true'] { color: var(--bn-ink-3); font-weight: 400; }
 
 /* ---- Count: ONE count style, a quiet badge in tabular figures ---------------------------------- */
 .bn-count {
@@ -153,7 +153,7 @@
   height: var(--bn-control-h);
   min-width: 96px;
   max-width: 280px;
-  padding: 0 var(--bn-2) 0 var(--bn-3);
+  padding: 0 0 0 var(--bn-3);
   border: 1px solid var(--bn-line-strong);
   border-radius: var(--bn-r);
   background: var(--bn-surface);
@@ -173,38 +173,61 @@
 .bn-pick[aria-expanded='true'] { border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
 .bn-pick-icon { flex: none; color: var(--bn-ink-3); }
 .bn-pick-label { flex: none; font-weight: 500; color: var(--bn-ink-3); }
-.bn-pick-value {
+/* THE VALUE SLOT IS AS WIDE AS THE WIDEST VALUE IT CAN SHOW. Every possible value sits in the
+   one grid cell, all but the current one invisible, so a pick changes the words and never the
+   width (D118). The cap above still holds: past it, the current value ellipsizes. */
+.bn-pick-slot {
   flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, auto);
+  min-width: 0;
+  text-align: left;
+}
+.bn-pick-value,
+.bn-pick-sizer {
+  grid-area: 1 / 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
-  color: var(--bn-ink);
 }
+.bn-pick-value { color: var(--bn-ink); }
+.bn-pick-sizer { visibility: hidden; }
 .bn-pick-placeholder { font-weight: 400; color: var(--bn-ink-3); }
-.bn-pick-chev { flex: none; margin-left: auto; color: var(--bn-ink-3); }
+/* The chevron sits in a slot one control wide, which is the slot a filter's clear press takes
+   over once the filter is on. */
+.bn-pick-chev {
+  flex: none;
+  box-sizing: content-box;
+  padding-inline: calc((var(--bn-control-h) - 14px) / 2);
+  margin-left: auto;
+  color: var(--bn-ink-3);
+}
 
 /* An ACTIVE filter reads as picked from across the room: the accent edge and tint, with its clear
    press joined to it. */
-.bn-fchip { display: inline-flex; align-items: stretch; max-width: 100%; }
+.bn-fchip { position: relative; display: inline-flex; align-items: stretch; max-width: 100%; }
 .bn-fchip[data-active='true'] > .bn-pick {
   border-color: var(--bn-accent);
   background: var(--bn-accent-tint);
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
 }
-.bn-fchip[data-active='true'] > .bn-pick .bn-pick-label { color: var(--bn-accent); }
+/* The hover ink, not the accent: the accent on its own tint over the page is 4.29:1 in light,
+   and the label is text. */
+.bn-fchip[data-active='true'] > .bn-pick .bn-pick-label { color: var(--bn-accent-hover); }
+.bn-fchip[data-active='true'] > .bn-pick .bn-pick-chev { visibility: hidden; }
 .bn-fchip-more { font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 .bn-fchip-clear {
+  position: absolute;
+  top: 0;
+  right: 0;
   display: grid;
   place-items: center;
   width: var(--bn-control-h);
-  height: var(--bn-control-h);
-  border: 1px solid var(--bn-accent);
-  border-left: 0;
+  height: 100%;
   border-radius: 0 var(--bn-r) var(--bn-r) 0;
-  background: var(--bn-accent-tint);
-  color: var(--bn-accent);
+  background: transparent;
+  color: var(--bn-accent-hover);
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .bn-fchip-clear:hover { background: var(--bn-accent-tint-2); color: var(--bn-accent-hover); }
@@ -221,6 +244,8 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .bn-filterchips-clear:hover { background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
+/* Off until two facets are on: it keeps its place in the bar and is not drawn. */
+.bn-filterchips-clear[data-off='true'] { visibility: hidden; }
 
 /* SortControl: the key, then which way, both in words, one height. */
 .bn-sort { display: inline-flex; align-items: center; gap: var(--bn-1); }
@@ -301,7 +326,7 @@
 }
 .bn-pick-opt[data-active='true'] { background: var(--bn-hover); color: var(--bn-ink); box-shadow: inset 0 0 0 1px var(--bn-line-focus); }
 .bn-pick-opt[aria-selected='true'] { color: var(--bn-ink); font-weight: 600; }
-.bn-pick-opt[data-zero='true'] { color: var(--bn-ink-4); }
+.bn-pick-opt[data-zero='true'] { color: var(--bn-ink-3); }
 .bn-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bn-pick-count {
   font-size: var(--bn-fs-xs);
@@ -341,10 +366,23 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .bn-pick-clear:hover { background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
+.bn-pick-clear:disabled { opacity: var(--bn-disabled); }
+
+/* THE THUMB FLOOR (D117) for the kit-data controls that are not already a control's height.
+   The same pointer-and-width test `tokens.css` raises `--bn-control-h-sm` on. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .bn-datalink { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
+  .bn-filtercount-clear { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
+}
 
 /* A phone: the floor and the cap give way to the column, so a bar of three never scrolls sideways. */
 @media (max-width: 639px) {
   .bn-pick { min-width: 0; max-width: 100%; }
+  /* A PHONE STACKS THE FILTERS, ONE A ROW AND ALL ONE WIDTH (D195): each trigger already holds
+     the width of its widest value, so three of them no longer share a row at 390, and a stack of
+     three different widths is the ragged column D195 refuses. */
+  .bn-filterchips > .bn-fchip { flex: 1 1 100%; }
+  .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -5473,7 +5473,7 @@ COMPONENTS = [
             "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
                                          "in a filter bar (`--bn-control-h`) and one width floor "
                                          "and cap. Mono for machine strings only.",
-                                 "governed_by": ["D50", "D117", "D118", "D218"]},
+                                 "governed_by": ["D50", "D117", "D118", "D195", "D218"]},
             "src/kit/dataRules.ts": {"does": "the pure half of `data.tsx`: STATUS_TONES (amber is "
                                              "only 'needs the owner', blue only 'moving now') and "
                                              "`boxesMostRecentFirst` (this browser's hand, then the "
@@ -5484,7 +5484,7 @@ COMPONENTS = [
                                                    "can put it in, on invented data. The kit page "
                                                    "mounts `DataSpecimens`; `tests/kit-data/` "
                                                    "mounts it too.",
-                                           "governed_by": ["D5"]},
+                                           "governed_by": ["D5", "D218"]},
             "src/kit/sheets.ts": {"does": "one way to open a thing from wherever it is named: "
                                           "`registerSheet`, `openSheet`, `closeSheet`, and "
                                           "`useOpenSheet` for the shell's host. With no sheet "
@@ -5495,9 +5495,12 @@ COMPONENTS = [
             "src/kit/match.ts": {"does": "ONE FORGIVING MATCHER for every search the browser runs "
                                          "(the owner's ruling, 2026-09-23): every word in any "
                                          "order; case, accents and punctuation folded; a card "
-                                         "number with or without its leading zeros; `B4` for a "
-                                         "box; a SKU by its start. The rules are stated in its "
-                                         "header so the server's search can fold the same way.",
+                                         "number with or without its leading zeros, split by a "
+                                         "space, a hyphen or a slash; `B4` or `box 4` for a box, "
+                                         "and a digit never finds a box by its number; a SKU by "
+                                         "its start. The rules are stated in its header, so "
+                                         "another search can be checked against them. The "
+                                         "server's own search does not use it.",
                                  "governed_by": ["D5"]},
             "src/kit/toast.tsx": {"does": "one toast stack for the product: any screen calls "
                                           "`toast()`, the shell renders `<Toaster/>` once. FOUR "
@@ -8227,7 +8230,7 @@ COMPONENTS = [
                         "drawn separator, two printings told apart, one no-photo state, a product "
                         "link landing on `#/product?sku=`, the pick list never native and keyed, "
                         "filters in any order, the empty search press. Run by `make design-check`.",
-                "governed_by": ["D118", "D212", "D218", "D221"],
+                "governed_by": ["D118", "D195", "D212", "D218", "D221"],
             },
             "tests/kit-data/index.html": {
                 "does": "a test page the dev server serves and the build never ships: it mounts "

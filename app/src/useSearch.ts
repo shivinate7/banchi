@@ -153,10 +153,10 @@ export function useSearch(options: { debounceMs?: number } = {}): SearchState {
   return { query, setQuery, results, loading, failure, reload }
 }
 
-/** A list the BROWSER already holds, narrowed by what is typed — by the one forgiving matcher
- *  every search in the app shares (`kit/match.ts`: every word, any order, case, accents,
- *  punctuation and the zeros in front of a card number folded away). The store's own search
- *  above asks the server instead, and the server folds its side by the same rules.
+/** A list the BROWSER already holds, narrowed by what is typed, by the one forgiving matcher in
+ *  `kit/match.ts` (every word, any order, case, accents, punctuation and the zeros in front of
+ *  a card number folded away). The store's own search above asks the server instead, and
+ *  does not use this matcher.
  *
  *  `fieldsOf` says what each row DRAWS, because what the row shows is what the search must find
  *  (FLT-07). Keep it stable (a module-level function, or `useCallback`), or the list is

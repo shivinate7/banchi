@@ -143,8 +143,17 @@ export function FilterCount({
 }) {
   const narrowed = filters.length > 0 || shown !== total
   const word = (narrowed ? total : shown) === 1 ? noun.one : noun.many
+  /* The Clear press removes itself, so focus moves to the line it sat on before it goes: a
+   * press never leaves focus on nothing. */
+  const line = useRef<HTMLParagraphElement | null>(null)
   return (
-    <p className={['bn-filtercount', className].filter(Boolean).join(' ')} role="status" aria-live="polite">
+    <p
+      ref={line}
+      className={['bn-filtercount', className].filter(Boolean).join(' ')}
+      role="status"
+      aria-live="polite"
+      tabIndex={-1}
+    >
       <span className="bn-filtercount-text">
         <span className="bn-filtercount-figure">
           {narrowed ? `${countText(shown)} of ${countText(total)} ${word}` : `${countText(shown)} ${word}`}
@@ -152,7 +161,14 @@ export function FilterCount({
         {filters.length > 0 ? `, filtered by ${listWords(filters)}` : null}
       </span>
       {narrowed && onClear !== undefined ? (
-        <button type="button" className="bn-filtercount-clear" onClick={onClear}>
+        <button
+          type="button"
+          className="bn-filtercount-clear"
+          onClick={() => {
+            line.current?.focus()
+            onClear()
+          }}
+        >
           Clear
         </button>
       ) : null}
@@ -663,7 +679,11 @@ function PickPanel<T extends string>({
         onClose(true)
         return
       case 'Tab':
-        onClose(false)
+        /* Back to the trigger, so the next Tab reaches the control after it. Letting the
+         * browser move on from inside a portal at the end of the page would send focus to
+         * the page's first control. */
+        event.preventDefault()
+        onClose(true)
         return
       default:
     }
@@ -735,13 +755,25 @@ function PickPanel<T extends string>({
         })}
         {shown.length === 0 ? <p className="bn-pick-empty">Nothing matches that.</p> : null}
       </div>
-      {onClear !== undefined && selected.size > 0 ? (
+      {/* Drawn whenever the list can be cleared, so the panel does not change height on the
+          first pick (D118). With nothing picked it is off, never gone. */}
+      {onClear === undefined ? null : (
         <div className="bn-pick-foot">
-          <button type="button" className="bn-pick-clear" onClick={onClear}>
+          <button
+            type="button"
+            className="bn-pick-clear"
+            disabled={selected.size === 0}
+            onClick={() => {
+              /* Focus moves into the list first: the press is about to turn itself off. */
+              if (searchable) entry.current?.focus()
+              else list.current?.focus()
+              onClear()
+            }}
+          >
             Clear
           </button>
         </div>
-      ) : null}
+      )}
     </div>,
     document.body,
   )
@@ -771,6 +803,7 @@ function PickTrigger({
   open,
   label,
   value,
+  sizer,
   icon,
   active,
   onToggle,
@@ -782,6 +815,10 @@ function PickTrigger({
   readonly open: boolean
   readonly label: string
   readonly value: ReactNode
+  /** EVERY VALUE THE TRIGGER CAN SHOW, drawn invisibly in the same cell as `value`, so the
+   *  slot is as wide as the widest of them from the first paint and a pick never widens the
+   *  trigger or moves the control beside it (D118). */
+  readonly sizer: readonly ReactNode[]
   readonly icon?: IconName
   readonly active: boolean
   readonly onToggle: () => void
@@ -802,7 +839,14 @@ function PickTrigger({
     >
       {icon === undefined ? null : <Icon name={icon} size={14} className="bn-pick-icon" />}
       <span className="bn-pick-label">{label}</span>
-      {value === null ? null : <span className="bn-pick-value">{value}</span>}
+      <span className="bn-pick-slot">
+        <span className="bn-pick-value">{value}</span>
+        {sizer.map((one, at) => (
+          <span key={at} className="bn-pick-sizer" aria-hidden="true">
+            {one}
+          </span>
+        ))}
+      </span>
       <Icon name={open ? 'chevronUp' : 'chevronDown'} size={14} className="bn-pick-chev" />
     </button>
   )
@@ -842,6 +886,7 @@ export function Select<T extends string>({
   const pick = usePick()
   const current = options.find((option) => option.value === value)
   const selected = useMemo(() => new Set(value === null ? [] : [value]), [value])
+  const sizer = useMemo(() => [placeholder, ...options.map((option) => option.label)], [placeholder, options])
   return (
     <>
       <PickTrigger
@@ -850,6 +895,7 @@ export function Select<T extends string>({
         open={pick.open}
         label={label}
         value={current === undefined ? <span className="bn-pick-placeholder">{placeholder}</span> : current.label}
+        sizer={sizer}
         icon={icon}
         active={false}
         onToggle={pick.toggle}
@@ -892,13 +938,28 @@ export type FilterValue = Readonly<Record<string, readonly string[]>>
 function pickedWords(facet: FilterFacet, picked: readonly string[]): ReactNode {
   const first = facet.options.find((option) => option.value === picked[0])
   const head = first === undefined ? (picked[0] ?? '') : first.label
-  return picked.length <= 1 ? head : (
+  return picked.length <= 1 ? head : <MoreWords head={head} more={picked.length - 1} />
+}
+
+function MoreWords({ head, more }: { readonly head: ReactNode; readonly more: number }) {
+  return (
     <>
       {head}
-      <span className="bn-fchip-more">{` +${picked.length - 1}`}</span>
+      <span className="bn-fchip-more">{` +${more}`}</span>
     </>
   )
 }
+
+/** What a facet's trigger may ever show: `Any`, every label, and for a multiple facet every
+ *  label with the widest `+N` it can carry. */
+function facetSizer(facet: FilterFacet): ReactNode[] {
+  const more = facet.options.length - 1
+  const labels = facet.options.map((option) => option.label)
+  if (facet.multiple === false || more < 1) return [ANY, ...labels]
+  return [ANY, ...labels.map((label, at) => <MoreWords key={at} head={label} more={more} />)]
+}
+
+const ANY = 'Any'
 
 function FacetChip({
   facet,
@@ -913,6 +974,7 @@ function FacetChip({
   const pick = usePick()
   const multiple = facet.multiple !== false
   const selected = useMemo(() => new Set(picked), [picked])
+  const sizer = useMemo(() => facetSizer(facet), [facet])
   const active = picked.length > 0
   return (
     <span className="bn-fchip" data-active={active ? 'true' : undefined}>
@@ -921,12 +983,14 @@ function FacetChip({
         triggerRef={pick.trigger}
         open={pick.open}
         label={facet.label}
-        value={active ? pickedWords(facet, picked) : null}
+        value={active ? pickedWords(facet, picked) : <span className="bn-pick-placeholder">{ANY}</span>}
+        sizer={sizer}
         icon={facet.icon}
         active={active}
         onToggle={pick.toggle}
         onKeyDown={openOnArrow(pick.open, pick.toggle)}
       />
+      {/* Drawn over the chevron's own slot, so the trigger is one width picked or not (D118). */}
       {active ? (
         <button
           type="button"
@@ -983,8 +1047,9 @@ export function FilterChips({
   readonly className?: string
 }) {
   const activeCount = facets.filter((facet) => (value[facet.key] ?? []).length > 0).length
+  const group = useRef<HTMLDivElement | null>(null)
   return (
-    <div className={['bn-filterchips', className].filter(Boolean).join(' ')} role="group" aria-label={label}>
+    <div ref={group} className={['bn-filterchips', className].filter(Boolean).join(' ')} role="group" aria-label={label}>
       {facets.map((facet) => (
         <FacetChip
           key={facet.key}
@@ -993,11 +1058,22 @@ export function FilterChips({
           onChange={(next) => onChange({ ...value, [facet.key]: next })}
         />
       ))}
-      {activeCount >= 2 ? (
-        <button type="button" className="bn-filterchips-clear" onClick={() => onChange({})}>
-          Clear all
-        </button>
-      ) : null}
+      {/* Always drawn, so its arrival never wraps the bar (D118); hidden, and out of the tab
+          order, until two facets are on. The press hides itself, so focus goes back to the
+          first facet's trigger before it does. */}
+      <button
+        type="button"
+        className="bn-filterchips-clear"
+        data-off={activeCount < 2 ? 'true' : undefined}
+        tabIndex={activeCount < 2 ? -1 : undefined}
+        aria-hidden={activeCount < 2 ? true : undefined}
+        onClick={() => {
+          group.current?.querySelector<HTMLButtonElement>('.bn-pick')?.focus()
+          onChange({})
+        }}
+      >
+        Clear all
+      </button>
     </div>
   )
 }
