@@ -8585,26 +8585,34 @@ def do_review_group_answer(payload: dict) -> dict:
     neither queue file matches and the operator a question — which eleven? — that nothing
     on his screen can answer.
 
-    TWO GROUP REFUSALS ON TOP OF THE SHAPE ERRORS, and they send the operator two
+    THREE GROUP REFUSALS ON TOP OF THE SHAPE ERRORS, and they send the operator three
     different ways:
 
-      group_entry_refused   one or more positions fail the single answer's own checks —
-                            `already_answered`, `sku_not_a_candidate`,
-                            `condition_mismatch` and the rest. The group may well have
-                            qualified when the screen drew it; the store has moved past
-                            that screen. Every failing position is named WITH ITS OWN CODE
-                            in the message, so one 409 still reports per position. Reload
-                            and re-filter.
-      group_not_uniform     the group never qualified: more than one reason code, an entry
-                            offering more than one row, or two condition strings across
-                            the group. Those cards are answered one at a time, each beside
-                            its own photograph — which is D4 unchanged, and the reason
-                            this refusal exists at all.
+      group_entry_refused    one or more positions fail the single answer's own checks —
+                             `already_answered`, `sku_not_a_candidate`, `sku_unknown`,
+                             `condition_mismatch` and the rest. The group may well have
+                             qualified when the screen drew it; the store has moved past
+                             that screen. Every failing position is named WITH ITS OWN CODE
+                             in the message, so one 409 still reports per position. Reload
+                             and re-filter.
+      group_listing_disputed  identity-follows-sku.md §8.1, review round: one or more
+                             members are `listing_disputed` entries. The card is already
+                             HELD and the same chosen sku means "confirm" or "correct"
+                             depending on what the card's OWN current sku is — a per-card
+                             decision `do_review_answer` makes alone, never a group write.
+                             Checked ahead of `group_not_uniform`, because a
+                             `listing_disputed` group is always the wrong door regardless
+                             of whether it would also fail uniformity.
+      group_not_uniform      the group never qualified: more than one reason code, an entry
+                             offering more than one row, or two condition strings across
+                             the group. Those cards are answered one at a time, each beside
+                             its own photograph — which is D4 unchanged, and the reason
+                             this refusal exists at all.
 
-    Entry failures are checked before uniformity, deliberately: a stale screen's remedy is
-    a reload, and telling it "not uniform" about a group whose real problem is that half
-    of it is already answered would send the operator to un-filter a queue that simply
-    needs re-reading.
+    Entry failures are checked before the other two, deliberately: a stale screen's remedy
+    is a reload, and telling it "not uniform" or "listing disputed" about a group whose real
+    problem is that half of it is already answered would send the operator to un-filter a
+    queue that simply needs re-reading.
 
     THE REVERSAL IS NOT ON THIS ROUTE, AND THAT IS THE UNDO'S SHAPE RATHER THAN A GAP.
     Each position gets its own `answered` history line with its own `restores_to`, exactly
