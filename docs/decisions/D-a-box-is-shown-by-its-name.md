@@ -37,9 +37,10 @@ its `B` sigil so that it reads apart from a count. Both put the box number on th
   was never on the screen. Nothing changes there.
 - **D20** protects a unique name for every box. The stored default name keeps that. A default
   name never moves, so a later box never takes an old box's label.
-- **D68** protects a departed record that names itself, apart from any live card. Its label
-  now uses the box name and the past tense ("was in Mixed Singles"). The composer stays the
-  one place that writes it.
+- **D68** protects a departed record that names itself, apart from any live card. The owner
+  ruled its new form. The label reads the box name, the section and the card's number within the
+  section, so the place stays. A visual mark, not the word "sold" or "departed", shows that the
+  card has left. The store key leaves the screen. `join.departed_label` stays the one composer.
 - **D92** protects one `#` per card on a screen. Section-relative numbers now carry their section
   in the same label (slug `a-card-is-counted-in-its-section`). The key sigil leaves the screen,
   so the collision it guarded cannot happen there.
@@ -51,16 +52,17 @@ its `B` sigil so that it reads apart from a count. Both put the box number on th
 - Every picker, rail, receipt and toast draws the name only.
 - A box created with no name gets its default name at creation, in the store, not at render
   time.
-- The existing boxes with no name need a one-time default. That is a store write over the
-  owner's real boxes, so it previews first and needs the owner's word.
+- The existing boxes with no name get a one-time backfill, by the owner's ruling. Each gets the
+  stored name "Box" and its number today. So nothing visible changes, and the physical labels
+  still match. The owner can rename any of them after. The backfill is a store write, so it
+  previews first.
 
 ### What is still open
 
 - How a departed card from a box that was later deleted names its box. The record keeps the
   name it had. The composer must not read the name from a registry row that is gone.
-- Which lanes carry the change. It touches place labels in the locating lane and every screen
-  lane. No lane in the round-two plan names it yet.
-
 ### What is built
 
-NOT BUILT.
+NOT BUILT. The locating lane builds it: the server's place labels, `departed_label`, the
+receipts, the default name at creation and the backfill. The lane moves to the larger model
+tier, because it now writes to the store. The kit-data lane's `BoxLabel` draws the name only.

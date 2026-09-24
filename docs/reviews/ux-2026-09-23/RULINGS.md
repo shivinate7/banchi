@@ -146,3 +146,6 @@
 - So: a box is shown ONLY by its name, everywhere (screens, place labels, departed labels, receipts, pickers). The number (and bid) stay internal. A count of boxes may show.
 - A new box with no name given gets a STORED default name "Box <count+1>". It is a name, so it never renumbers. If that name is taken, use the next free one (D20: names are unique).
 - Overrides the orchestrator's BoxLabel call ("Mixed Singles, Box 4") and D68's "Box 3 · departed · B3 #96" form. Server-composed place labels must use the name.
+- Existing unnamed boxes: backfill the stored name "Box N" from today's number, so nothing visible changes and physical labels still match. Renamable after.
+- Departed card label: box NAME + section + card number within the section (the location stays). Sold/retired/moved is shown by a VISUAL differentiator (not the word "sold"/"departed"). Replaces D68's "Box 3 · departed · B3 #96" and the store key on screen.
+- Lane: the server-side label composition (place labels, departed_label, receipts), the default-name-on-create, and the backfill go to the LOCATING lane, upgraded to Opus (it touches store writes: the backfill and box creation). The kit-data BoxLabel shows the name only.

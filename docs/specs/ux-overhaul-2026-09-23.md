@@ -113,7 +113,7 @@ those entries.
 | Home | The button stays as it is. "Behind that" lines that repeat a figure are cut. | D121 (the front page says what is owed). The home lane writes the amendment. |
 | Capture | A fresh device always asks for a box ("No box yet"). Home's tile says what it shows: the newest box. | D142 (the setup outlives the browser). The capture lane writes it. |
 | Box lists | Most recent first everywhere: the Inventory rail, the Capture picker, Home and Cards to pull. | D132, D142. Slug `a-press-reorders-and-nothing-else-moves`. |
-| Box names | A box is shown only by its name, everywhere. The number and the `bid` stay inside the store. A count of boxes may show. A box with no name gets a stored default name, "Box" and the count plus one. This overrides the earlier call on "Mixed Singles, Box 4". | D145 (the number is a label), D68 (the departed label), D92 (the key's sigil), D20 (names are unique). Slug `a-box-is-shown-by-its-name`. |
+| Box names | A box is shown only by its name, everywhere. The number and the `bid` stay inside the store. A count of boxes may show. A box with no name gets a stored default name, "Box" and the count plus one. Today's unnamed boxes are backfilled with "Box" and their number, so nothing visible changes. A departed card's label reads box name, section and card, and a visual mark shows it has left. This overrides the earlier call on "Mixed Singles, Box 4". The locating lane builds it. | D145 (the number is a label), D68 (the departed label), D92 (the key's sigil), D20 (names are unique). Slug `a-box-is-shown-by-its-name`. |
 | Orders and Shipping | Two sidebar rows, no tabs. The walk keeps its model and gets the screen's full height (an orchestrator call, stated to the owner). | D220 (Orders is inventory's screen). Slug `orders-and-shipping-are-two-rows`. |
 | Inventory | "Slots" names the box's capacity, in Inventory's box header and strip only. Every other place says "cards" (an orchestrator call). | D58. Slug `a-card-is-counted-in-its-section`. |
 | Sales | Rows lead with the card name. The table shows the top rows and "Show all". "On the shelf" moves above the table. | D214 (a gross-revenue retrospective), D250 (unsold stock on Sales). |
@@ -365,8 +365,6 @@ search, and the owner of the money check. Still open:
 9. Five measurements the flow review listed before any send is built. The first touches the
    real TCGplayer account and needs the owner's word.
 10. The duplicate entries in section 4.13.
-11. Which lane carries the box-name ruling. No lane in the round-two plan names it. The default
-    names for boxes that have none today are a store write, so they need the owner's word.
 
 ### 7.1 An incident, and two findings, now in lanes
 

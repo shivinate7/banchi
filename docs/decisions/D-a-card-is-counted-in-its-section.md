@@ -59,7 +59,8 @@ two ends say which end is the far back.
   every place label that becomes text or an accessible name.
 - Each drawing of a box or a section marks the far back (card 1) and the near end (the highest
   number).
-- A departed card has no place. It says where it was, in the past tense (LOC-09).
+- A departed card keeps its place in its label: box name, section and card. A visual mark shows
+  that it has left (slug `a-box-is-shown-by-its-name`). It never offers a pull (LOC-01).
 
 ### What is built
 
