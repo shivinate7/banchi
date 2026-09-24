@@ -72,8 +72,10 @@ const EDGE_PUNCTUATION = /^[^\p{L}\p{N}#]+|[^\p{L}\p{N}]+$/gu
 
 /** Rule 2: the raw tokens of a query. */
 export function queryTokens(query: string): string[] {
+  /* Commas become spaces first, then one white-space split: a query is not a CSV row. */
   return query
-    .split(/[\s,]+/u)
+    .replace(/,/gu, ' ')
+    .split(/\s+/u)
     .map((token) => token.replace(EDGE_PUNCTUATION, ''))
     .filter((token) => token !== '' && token !== '#')
 }

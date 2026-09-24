@@ -4,12 +4,18 @@ import { createPortal } from 'react-dom'
 
 import { Icon, type IconName } from './Icon'
 import { cropStyle, type Crop } from './index'
+import { STATUS_TONES, type StatusKind } from './dataRules'
 import { hasSheet, openSheet, sheetHref } from './sheets'
-import { storedBoxRecency } from '../deviceMemory'
 import { moneyGrouped, moneySigned } from '../money'
 import { PositionLabel } from '../PositionLabel'
 import type { Place } from '../types'
 import './data.css'
+
+/* The pure half — the status tones and the box order — lives in `dataRules.ts`, so a spec and a
+ * non-React caller can import it without a stylesheet. It is re-exported here: this file is
+ * still the one place a screen imports a data primitive from. */
+export { STATUS_TONES, boxesMostRecentFirst } from './dataRules'
+export type { BoxRecency, StatusKind, StatusTone } from './dataRules'
 
 /* THE KIT'S DATA PRIMITIVES: how a figure, a card, a box, a place, a status and a filter are
  * drawn, ONE WAY EACH, on every screen.
@@ -139,10 +145,12 @@ export function FilterCount({
   const word = (narrowed ? total : shown) === 1 ? noun.one : noun.many
   return (
     <p className={['bn-filtercount', className].filter(Boolean).join(' ')} role="status" aria-live="polite">
-      <span className="bn-filtercount-figure">
-        {narrowed ? `${countText(shown)} of ${countText(total)} ${word}` : `${countText(shown)} ${word}`}
+      <span className="bn-filtercount-text">
+        <span className="bn-filtercount-figure">
+          {narrowed ? `${countText(shown)} of ${countText(total)} ${word}` : `${countText(shown)} ${word}`}
+        </span>
+        {filters.length > 0 ? `, filtered by ${listWords(filters)}` : null}
       </span>
-      {filters.length > 0 ? <span className="bn-filtercount-by">{`, filtered by ${listWords(filters)}`}</span> : null}
       {narrowed && onClear !== undefined ? (
         <button type="button" className="bn-filtercount-clear" onClick={onClear}>
           Clear
@@ -155,36 +163,6 @@ export function FilterCount({
 /* ============================================================================================
  * StatusBadge — one tone per meaning.
  * ============================================================================================ */
-
-/** The meanings a status can have. A screen maps its own states onto these, and the tone
- *  follows: the review found "needs pricing" in two colours on one screen, and blue meaning
- *  several different things. */
-export type StatusKind =
-  /** Waits on the OWNER. The one attention tone. */
-  | 'needs'
-  /** Moving now, with nothing for the owner to do. */
-  | 'working'
-  /** Finished well. */
-  | 'done'
-  /** Stopped, and the owner must look. */
-  | 'failed'
-  /** Waits on somebody else: a buyer, the marketplace, a run. */
-  | 'waiting'
-  /** A plain fact with no state. */
-  | 'neutral'
-
-export type StatusTone = 'warn' | 'accent' | 'ok' | 'danger' | 'default'
-
-/** The one tone for each meaning. Amber is ONLY "needs the owner"; blue is ONLY "moving now";
- *  a neutral count is never coloured. */
-export const STATUS_TONES: Readonly<Record<StatusKind, StatusTone>> = {
-  needs: 'warn',
-  working: 'accent',
-  done: 'ok',
-  failed: 'danger',
-  waiting: 'default',
-  neutral: 'default',
-}
 
 const STATUS_ICONS: Readonly<Record<StatusKind, IconName | null>> = {
   needs: 'alert',
@@ -356,10 +334,12 @@ export function CardLine({
       {facts.length === 0 ? null : (
         <span className="bn-cardline-facts">
           {layout === 'inline' ? <Sep /> : null}
+          {/* The dot TRAILS its fact, so a line that wraps ends on a dot rather than opening
+              on one. */}
           {facts.map((fact, at) => (
             <span key={fact.key} className="bn-cardline-fact">
-              {at === 0 ? null : <Sep />}
               {fact.node}
+              {at === facts.length - 1 ? null : <Sep />}
             </span>
           ))}
         </span>
@@ -454,29 +434,6 @@ export function BoxLabel({
       )}
     </span>
   )
-}
-
-/** When this browser last reached for each box, by box number (`deviceMemory.ts`). */
-export type BoxRecency = ReadonlyMap<number, string>
-
-/** A list of boxes, MOST RECENT FIRST (the owner's ruling, 2026-09-23, for every list of boxes).
- *
- *  THREE TERMS. The box this browser reached for last leads. A box it never reached for sorts
- *  after every box it has, NEWEST BOX FIRST by its true index `bid` (D145), which only grows as
- *  boxes are made. The box number breaks what is left. Returns a new array. */
-export function boxesMostRecentFirst<T extends { readonly box: number; readonly bid?: number | null }>(
-  boxes: readonly T[],
-  recency: BoxRecency = storedBoxRecency(),
-): T[] {
-  return [...boxes].sort((left, right) => {
-    const ra = recency.get(left.box) ?? ''
-    const rb = recency.get(right.box) ?? ''
-    if (ra !== rb) return ra > rb ? -1 : 1
-    const ba = left.bid ?? -1
-    const bb = right.bid ?? -1
-    if (ba !== bb) return bb - ba
-    return left.box - right.box
-  })
 }
 
 /* ============================================================================================
@@ -637,11 +594,15 @@ function PickPanel<T extends string>({
   const [active, setActive] = useState(firstSelected === -1 ? 0 : firstSelected)
   const activeAt = shown.length === 0 ? -1 : Math.min(active, shown.length - 1)
 
-  /* Focus lands inside on open: the entry when the list is long, the list itself otherwise. */
+  /* Focus lands inside once the panel is drawn: the entry when the list is long, the list
+   * itself otherwise. Not before: the first render places nothing, so there is nothing to hold
+   * focus yet, and a key pressed then would land on the trigger and close the list. */
+  const drawn = place !== null
   useEffect(() => {
+    if (!drawn) return
     if (searchable) entry.current?.focus()
     else list.current?.focus()
-  }, [searchable])
+  }, [drawn, searchable])
 
   /* The active row stays in view as the arrows move it. */
   useEffect(() => {
