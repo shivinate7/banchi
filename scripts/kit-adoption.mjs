@@ -96,6 +96,7 @@
  * touches no disk.
  */
 
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -135,12 +136,12 @@ const MAX_DEPTH = 4
 /** Every rule id the allow list may name. An entry naming anything else is refused. */
 export const RULES = {
   R1: 'the route view never renders <Page> from the kit',
-  'R2-dialog': 'role="dialog" or role="alertdialog" outside the kit (use Sheet, Modal, Popover)',
-  'R2-search': '<input type="search"> outside SearchField (use SearchField)',
+  'R2-dialog': 'role="dialog", role="alertdialog" or a native <dialog> outside the kit (use Sheet, Modal, Popover)',
+  'R2-search': '<input type="search">, or a text input labelled like a search box, outside SearchField (use SearchField)',
   'R2-select': 'a raw <select> outside the kit (use Select)',
   'R2-class': 'a kit-reserved class name outside the kit',
   'R2-date': 'a hand-rolled date format outside app/src/dates.ts',
-  'R2-money': 'a hand-rolled $ amount (`$${x.toFixed(...)}`) outside app/src/money.ts',
+  'R2-money': 'a hand-rolled $ amount outside app/src/money.ts (use the kit\'s Money, or money() from money.ts)',
 }
 
 /** The class names only the kit may write. A token equal to one of these is reserved. */
@@ -189,13 +190,15 @@ function unwrap(expr) {
   return e
 }
 
-/** `import { A as B } from './x'` -> B: { file, imported: 'A' }; `import * as K` -> K: { file, ns }. */
+/** `import { A as B } from './x'` -> B: { file, imported: 'A' }; `import D from './x'` -> D:
+ *  { file, imported: 'default' }; `import * as K` -> K: { file, ns }. */
 function importsOf(sf, rel, reader) {
   const named = new Map()
   const namespaces = new Map()
   for (const st of sf.statements) {
     if (!ts.isImportDeclaration(st) || !st.importClause || !ts.isStringLiteral(st.moduleSpecifier)) continue
     const file = reader.resolve(rel, st.moduleSpecifier.text)
+    if (st.importClause.name) named.set(st.importClause.name.text, { file, imported: 'default' })
     const bindings = st.importClause.namedBindings
     if (bindings && ts.isNamedImports(bindings)) {
       for (const el of bindings.elements) {
@@ -208,10 +211,29 @@ function importsOf(sf, rel, reader) {
   return { named, namespaces }
 }
 
+const hasModifier = (node, kind) => (ts.canHaveModifiers(node) ? ts.getModifiers(node) ?? [] : []).some((m) => m.kind === kind)
+
 /** A top-level component named `name`: a function declaration, or `const name = <function>`,
- *  or `const name = memo(<function>)`. Or a re-export `export { name } from './x'`. */
-function findComponent(sf, name) {
+ *  or `const name = memo(<function>)`. Or a re-export `export { name } from './x'`, or a local
+ *  alias `export { local as name }`. `name` may be 'default': `export default function X`,
+ *  `export default X`, `export default memo(...)` or `export { X as default }`. */
+function findComponent(sf, name, depth = 0) {
+  if (depth > 8) return null
   for (const st of sf.statements) {
+    if (name === 'default') {
+      if (ts.isFunctionDeclaration(st) && hasModifier(st, ts.SyntaxKind.DefaultKeyword)) return { node: st }
+      if (ts.isExportAssignment(st) && !st.isExportEquals) {
+        let e = unwrap(st.expression)
+        if (ts.isIdentifier(e)) return findComponent(sf, e.text, depth + 1)
+        if (ts.isCallExpression(e) && e.arguments.length > 0) e = unwrap(e.arguments[0])
+        return { node: e }
+      }
+    }
+    if (ts.isExportDeclaration(st) && !st.moduleSpecifier && st.exportClause && ts.isNamedExports(st.exportClause)) {
+      for (const el of st.exportClause.elements) {
+        if (el.name.text === name && el.propertyName && el.propertyName.text !== name) return findComponent(sf, el.propertyName.text, depth + 1)
+      }
+    }
     if (ts.isFunctionDeclaration(st) && st.name?.text === name) return { node: st }
     if (ts.isVariableStatement(st)) {
       for (const decl of st.declarationList.declarations) {
@@ -245,8 +267,11 @@ function jsxTags(node) {
 }
 
 /** Does component `name` in `rel` render `<Page>` from the kit, directly or through a component
- *  it renders? Returns the chain that reached it, or null. */
-function rendersPage(rel, name, reader, depth = 0, seen = new Set()) {
+ *  it renders, at any depth? Returns the chain that reached it, or null. `seen` is the one
+ *  visited set for this question: it ends a cycle, and because there is no depth cap, a node
+ *  marked visited has had every path out of it tried, so the walk's order cannot change the
+ *  answer. */
+function rendersPage(rel, name, reader, seen = new Set()) {
   const key = `${rel}#${name}`
   if (seen.has(key) || rel.startsWith(KIT_DIR)) return null
   seen.add(key)
@@ -256,7 +281,7 @@ function rendersPage(rel, name, reader, depth = 0, seen = new Set()) {
   if (found === null) return null
   if (found.reexport !== undefined) {
     const next = reader.resolve(rel, found.reexport)
-    return next === null ? null : rendersPage(next, found.imported, reader, depth, seen)
+    return next === null ? null : rendersPage(next, found.imported, reader, seen)
   }
   const { named, namespaces } = importsOf(sf, rel, reader)
   const tags = jsxTags(found.node)
@@ -266,15 +291,14 @@ function rendersPage(rel, name, reader, depth = 0, seen = new Set()) {
     const dot = tag.indexOf('.')
     if (dot > 0 && tag.slice(dot + 1) === 'Page' && KIT_MODULES.has(namespaces.get(tag.slice(0, dot)))) return [`${rel}#${name}`]
   }
-  if (depth >= MAX_DEPTH) return null
   for (const tag of new Set(tags)) {
     if (!/^[A-Z]/.test(tag) || tag.includes('.')) continue
     const imp = named.get(tag)
     let chain = null
     if (imp) {
-      if (imp.file !== null && !imp.file.startsWith(KIT_DIR)) chain = rendersPage(imp.file, imp.imported, reader, depth + 1, seen)
+      if (imp.file !== null && !imp.file.startsWith(KIT_DIR)) chain = rendersPage(imp.file, imp.imported, reader, seen)
     } else if (findComponent(sf, tag) !== null) {
-      chain = rendersPage(rel, tag, reader, depth + 1, seen)
+      chain = rendersPage(rel, tag, reader, seen)
     }
     if (chain !== null) return [`${rel}#${name}`, ...chain]
   }
@@ -313,10 +337,13 @@ export function readRoutes(files) {
     const viewName = props.view.ident
     const imp = named.get(viewName)
     let file = null
-    let view = viewName
+    /* `view` is the name App.tsx uses, so a message names what a person reads there; `exported`
+       is the name the view's own file exports it under, which is what the reader looks up. For a
+       default import (`import Home from './Home'`) the two differ: `Home` and 'default'. */
+    let exported = viewName
     if (imp) {
       file = imp.file
-      view = imp.imported
+      exported = imp.imported
     } else if (findComponent(sf, viewName) !== null) {
       file = APP_FILE
     }
@@ -326,7 +353,8 @@ export function readRoutes(files) {
       label: props.label,
       title: typeof props.title === 'string' ? props.title : null,
       persona: typeof props.persona === 'string' ? props.persona : null,
-      view,
+      view: viewName,
+      exported,
       file,
       line: lineOf(sf, el),
     })
@@ -379,6 +407,50 @@ function callsToFixed(node) {
   return hit
 }
 
+/** R2-search's heuristic: a text input labelled like a search box. Read from a literal
+ *  `placeholder` or `aria-label` only. */
+export const SEARCHISH = /\b(search|find|filter|look ?up)/i
+/** R2-date's heuristic: an options object with any of these keys is asking for a date or a time. */
+export const DATE_OPTIONS = ['dateStyle', 'timeStyle', 'year', 'month', 'day', 'weekday', 'hour', 'minute', 'second', 'era', 'timeZoneName', 'hour12', 'hourCycle', 'dayPeriod']
+/** R2-money: text that ends in a dollar sign, then at most white space, right before a value. */
+const DOLLAR_END = /\$\s?$/
+const DOLLAR_END_JSX = /\$\s*$/
+
+/** The object literals among a call's arguments, as a map of key -> initializer. */
+function optionObjects(args) {
+  const out = []
+  for (const arg of args ?? []) {
+    const a = unwrap(arg)
+    if (!a || !ts.isObjectLiteralExpression(a)) continue
+    const keys = new Map()
+    for (const p of a.properties) {
+      if ((ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) && p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name))) {
+        keys.set(p.name.text, ts.isPropertyAssignment(p) ? p.initializer : null)
+      }
+    }
+    out.push(keys)
+  }
+  return out
+}
+
+const asksCurrency = (args) =>
+  optionObjects(args).some((o) => o.has('currency') || (o.get('style') !== undefined && o.get('style') !== null && literalsOf(o.get('style')).includes('currency')))
+const asksDate = (args) => optionObjects(args).some((o) => DATE_OPTIONS.some((k) => o.has(k)))
+
+/** Does this expression END in a string literal that ends in `$` (then one optional space)?
+ *  `'$'`, `'Total: $'`, and `a + '$'` (the right end of a `+` chain) do. */
+function endsInDollar(expr) {
+  const e = unwrap(expr)
+  if (!e) return false
+  if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return DOLLAR_END.test(e.text)
+  if (ts.isTemplateExpression(e)) return false
+  if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.PlusToken) return endsInDollar(e.right)
+  return false
+}
+
+const isIntlNumberFormat = (callee) =>
+  ts.isPropertyAccessExpression(callee) && callee.name.text === 'NumberFormat' && ts.isIdentifier(callee.expression) && callee.expression.text === 'Intl'
+
 function attr(element, name) {
   const attrs = ts.isJsxSelfClosingElement(element) || ts.isJsxOpeningElement(element) ? element.attributes.properties : []
   return attrs.find((a) => ts.isJsxAttribute(a) && a.name.getText() === name)
@@ -408,7 +480,33 @@ function scanFile(rel, sf) {
     } else if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
       const tag = n.tagName.getText(sf)
       if (tag === 'select') add('R2-select', n, '<select>')
-      if (tag === 'input' && attrLiterals(attr(n, 'type')).includes('search')) add('R2-search', n, '<input type="search">')
+      if (tag === 'dialog') add('R2-dialog', n, '<dialog>')
+      if (tag === 'input') {
+        const typeAttr = attr(n, 'type')
+        const types = attrLiterals(typeAttr)
+        if (types.includes('search')) add('R2-search', n, '<input type="search">')
+        else if (typeAttr === undefined || types.includes('text')) {
+          const label = [...attrLiterals(attr(n, 'placeholder')), ...attrLiterals(attr(n, 'aria-label'))].find((t) => SEARCHISH.test(t))
+          if (label !== undefined) add('R2-search', n, `a text <input> labelled "${label}"`)
+        }
+      }
+    } else if (ts.isJsxElement(n) || ts.isJsxFragment(n)) {
+      /* A `$` in JSX text, or a `{'$'}` child, directly before a `{...}` child. */
+      const kids = n.children
+      for (let i = 0; i + 1 < kids.length; i += 1) {
+        const k = kids[i]
+        const next = kids[i + 1]
+        if (!ts.isJsxExpression(next) || !next.expression) continue
+        const dollar = ts.isJsxText(k) ? DOLLAR_END_JSX.test(k.text) : ts.isJsxExpression(k) && k.expression !== undefined && endsInDollar(k.expression)
+        if (dollar) add('R2-money', next, 'a `$` in JSX before `{...}`')
+      }
+    } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken && endsInDollar(n.left)) {
+      add('R2-money', n, "`'$' + ...`")
+    } else if ((ts.isNewExpression(n) || ts.isCallExpression(n)) && isIntlNumberFormat(n.expression) && asksCurrency(n.arguments)) {
+      add('R2-money', n, "Intl.NumberFormat with style 'currency'")
+    } else if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'toLocaleString') {
+      if (asksCurrency(n.arguments)) add('R2-money', n, "toLocaleString with style 'currency'")
+      else if (asksDate(n.arguments)) add('R2-date', n, 'toLocaleString with a date or time option')
     } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isPropertyAccessExpression(n.left) && n.left.name.text === 'className') {
       for (const t of classTokens(n.right)) if (reserved(t)) add('R2-class', n, t)
     } else if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'add' && ts.isPropertyAccessExpression(n.expression.expression) && n.expression.expression.name.text === 'classList') {
@@ -420,7 +518,7 @@ function scanFile(rel, sf) {
     } else if (ts.isTemplateExpression(n)) {
       let before = n.head.text
       for (const span of n.templateSpans) {
-        if (before.endsWith('$') && callsToFixed(span.expression)) add('R2-money', span.expression, '`$${... .toFixed(...)}`')
+        if (DOLLAR_END.test(before)) add('R2-money', span.expression, callsToFixed(span.expression) ? '`$${... .toFixed(...)}`' : '`$${...}`')
         before = span.literal.text
       }
     }
@@ -436,11 +534,12 @@ export function analyze(files) {
   const routes = readRoutes(files)
   const violations = []
   for (const route of routes) {
-    if (rendersPage(route.file, route.view, reader) === null) {
+    if (rendersPage(route.file, route.exported, reader) === null) {
       const sf = reader.parse(route.file)
-      const found = sf === null ? null : findComponent(sf, route.view)
+      const found = sf === null ? null : findComponent(sf, route.exported)
       const line = found?.node ? lineOf(sf, found.node) : 1
-      violations.push({ file: route.file, rule: 'R1', line, detail: `the view ${route.view} for ${route.path}` })
+      const how = route.exported === 'default' ? ' (the default export)' : ''
+      violations.push({ file: route.file, rule: 'R1', line, detail: `the view ${route.view}${how} for ${route.path}` })
     }
   }
   for (const rel of [...files.keys()].sort()) {
@@ -482,6 +581,52 @@ export function judge(violations, allow) {
     return { file, rule, lane }
   })
   return { errors, unlisted, stale, listed }
+}
+
+/** Every key of a two-level block, `outer -> inner`, as `outer -> inner` strings. */
+function pairs(block) {
+  const out = new Set()
+  if (block === null || typeof block !== 'object' || Array.isArray(block)) return out
+  for (const [outer, inner] of Object.entries(block)) {
+    if (inner === null || typeof inner !== 'object' || Array.isArray(inner)) continue
+    for (const key of Object.keys(inner)) out.add(`${outer} -> ${key}`)
+  }
+  return out
+}
+
+/** ONLY SHRINKS. Every key `head` holds in `static` or `runtime` that `base` did not. `base` null
+ *  means there was nothing to compare against: the caller fails open and prints why. */
+export function growth(base, head) {
+  if (base === null) return null
+  const grown = []
+  for (const block of ['static', 'runtime']) {
+    const before = pairs(base?.[block])
+    for (const key of pairs(head?.[block])) if (!before.has(key)) grown.push({ block, key })
+  }
+  return grown
+}
+
+/** The allow list as it stood at the merge-base with origin/main, or the reason there is none.
+ *  Two plain reads (`git merge-base`, `git show`), so nothing is written (D18). */
+function allowAtBase(reference = 'origin/main') {
+  const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  let base
+  try {
+    base = git('merge-base', 'HEAD', reference)
+  } catch {
+    return { allow: null, reason: `no merge-base between HEAD and ${reference} (no git, no ${reference}, or no shared history)` }
+  }
+  let text
+  try {
+    text = git('show', `${base}:${ALLOW_FILE}`)
+  } catch {
+    return { allow: null, reason: `${ALLOW_FILE} does not exist at the merge-base ${base.slice(0, 8)}, so this branch gives it its birth and every entry is new` }
+  }
+  try {
+    return { allow: JSON.parse(text), base }
+  } catch (err) {
+    return { allow: null, reason: `${ALLOW_FILE} at the merge-base ${base.slice(0, 8)} is not JSON (${err.message})` }
+  }
 }
 
 /* ---- the real tree ------------------------------------------------------------------------- */
@@ -532,10 +677,23 @@ function run() {
         `<Page> from ./kit, or use the kit's primitive. D-page-scaffold says why.`,
     )
   }
+  const atBase = allowAtBase()
+  const grown = growth(atBase.allow, allow)
+  if (grown === null) {
+    console.log(`kit-adoption: only-shrinks not compared: ${atBase.reason}. Failing open.`)
+  } else {
+    for (const g of grown) {
+      console.error(
+        `kit-adoption: ${ALLOW_FILE}: ${g.block} gained "${g.key}", which the merge-base ` +
+          `${atBase.base.slice(0, 8)} with origin/main does not hold. The list only shrinks: fix the ` +
+          `screen instead of excusing it.`,
+      )
+    }
+  }
   const lanes = {}
   for (const lane of listed.values()) lanes[lane] = (lanes[lane] ?? 0) + 1
   const byLane = Object.entries(lanes).sort().map(([l, n]) => `${l} ${n}`).join(', ')
-  if (errors.length || unlisted.length || stale.length) process.exit(1)
+  if (errors.length || unlisted.length || stale.length || (grown !== null && grown.length > 0)) process.exit(1)
   console.log(
     `kit-adoption: ${result.routes.length} routes, ${result.violations.length} violations, every one ` +
       `listed; ${listed.size} allow-list entries still owed (${byLane || 'none'}).`,
@@ -670,6 +828,119 @@ function selfTest() {
     const routes = readRoutes(tree({}, "{ path: '/k', label: 'Kit', title: 'The kit', view: Home, persona: 'owner' }"))
     const r = routes[0]
     return routes.length === 1 && r.path === '/k' && r.label === 'Kit' && r.title === 'The kit' && r.persona === 'owner' && r.file === 'app/src/Home.tsx'
+  })
+
+  /* R1: order, depth and cycles (F6). */
+  const chain = (n, last) => Array.from({ length: n }, (_, i) => `function L${i}() { return <${i + 1 < n ? `L${i + 1}` : last} /> }`).join('\n')
+  add('R1 does not depend on JSX order: a component first met deep in one branch is still found through a short one', () => {
+    /* Home renders <L0/> first. L0, L1, L2 lead to C at depth 4, the old cap: the old reader
+       looked at C's own tags, found no <Page>, marked C visited and stopped. Then Home renders
+       <P/>, and P renders C at depth 2, but C was already visited. C renders D, and D renders
+       <Page>. The old reader said R1 (measured against the old file); the answer is green. */
+    const src = [
+      "import { Page } from './kit'",
+      chain(3, 'C'),
+      'function D() { return <Page /> }',
+      'function C() { return <D /> }',
+      'function P() { return <C /> }',
+      'export function Home() { return <><L0 /><P /></> }',
+    ].join('\n')
+    return green(outcome(tree({ 'app/src/Home.tsx': src })))
+  })
+  add('R1 follows a chain deeper than four levels to <Page>', () =>
+    green(outcome(tree({ 'app/src/Home.tsx': `import { Page } from './kit'\n${chain(7, 'Page')}\nexport function Home() { return <L0 /> }\n` }))))
+  add('R1 ends a cycle that never reaches <Page>, and says R1', () => {
+    const src = 'function A() { return <B /> }\nfunction B() { return <A /> }\nexport function Home() { return <A /> }\n'
+    return has(outcome(tree({ 'app/src/Home.tsx': src })).unlisted, 'app/src/Home.tsx', 'R1')
+  })
+
+  /* R1: a view imported as a default export. */
+  const defaultRoute = ["{ path: '/', label: 'Home', view: Home }", "import Home from './Home'"]
+  add('a view imported as a default export (`export default function`) that renders <Page> is green', () =>
+    green(outcome(tree({ 'app/src/Home.tsx': "import { Page } from './kit'\nexport default function Home() { return <Page /> }\n" }, ...defaultRoute))))
+  add('a view imported as a default export (`export default Home`, and memo) is green', () =>
+    green(outcome(tree({ 'app/src/Home.tsx': "import { Page } from './kit'\nfunction Home() { return <Page /> }\nexport default Home\n" }, ...defaultRoute))) &&
+    green(outcome(tree({ 'app/src/Home.tsx': "import { memo } from 'react'\nimport { Page } from './kit'\nexport default memo(() => <Page />)\n" }, ...defaultRoute))))
+  add('a default-export view without <Page> is R1, and the message names the view, not "default"', () => {
+    const r = outcome(tree({ 'app/src/Home.tsx': 'export default function Home() { return <main /> }\n' }, ...defaultRoute))
+    const v = r.unlisted.find((x) => x.rule === 'R1')
+    return v !== undefined && v.file === 'app/src/Home.tsx' && v.detail.includes('Home (the default export)')
+  })
+  add('a screen component imported as a default export is followed', () =>
+    green(outcome(tree({
+      'app/src/Home.tsx': "import Body from './Body'\nexport function Home() { return <Body /> }\n",
+      'app/src/Body.tsx': "import { Page } from './kit'\nexport default function Body() { return <Page /> }\n",
+    }))))
+
+  /* R2: the shapes F4 added. Each red in a screen; the money and date ones green in their home. */
+  const rule = (src, r, file = 'app/src/S.tsx') => outcome(tree({ [file]: src })).violations.filter((v) => v.file === file && v.rule === r).length
+  add('a native <dialog> in a screen is R2-dialog', () => rule('export const S = () => <dialog open />\n', 'R2-dialog') === 1)
+  add('a text input labelled like a search box is R2-search (type text or none; placeholder or aria-label)', () =>
+    rule('export const S = () => <input type="text" placeholder="Search cards" />\n', 'R2-search') === 1 &&
+    rule('export const S = () => <input aria-label="Filter the rows" />\n', 'R2-search') === 1 &&
+    rule("export const S = () => <input placeholder={x ? 'Find a box' : 'Look up a card'} />\n", 'R2-search') === 1)
+  add('a text input labelled otherwise, or a number input, is not R2-search', () =>
+    rule('export const S = () => <><input type="text" placeholder="Name" /><input type="number" aria-label="Search depth" /></>\n', 'R2-search') === 0)
+  add('toLocaleString with a date or time option is R2-date; bare or with number options is not', () =>
+    rule("export const s = (d) => d.toLocaleString(undefined, { month: 'short', day: 'numeric' })\n", 'R2-date') === 1 &&
+    rule("export const s = (n) => n.toLocaleString() + n.toLocaleString('en-US', { maximumFractionDigits: 2 })\n", 'R2-date') === 0)
+  add("Intl.NumberFormat or toLocaleString with style 'currency' is R2-money, and green in money.ts", () =>
+    rule("export const f = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })\n", 'R2-money') === 1 &&
+    rule("export const f = (n) => Intl.NumberFormat('en-US', { currency: 'USD' }).format(n)\n", 'R2-money') === 1 &&
+    rule("export const s = (n) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })\n", 'R2-money') === 1 &&
+    rule("export const f = new Intl.NumberFormat('en-US', { style: 'percent' })\n", 'R2-money') === 0 &&
+    green(outcome(tree({ 'app/src/money.ts': "export const f = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })\n" }))))
+  add("`'$' + x.toFixed(2)`, `'Total: $' + x` and `a + '$' + x` are R2-money; a regex's `+ '$'` is not", () =>
+    rule("export const s = (x) => '$' + x.toFixed(2)\n", 'R2-money') === 1 &&
+    rule("export const s = (x) => 'Total: $' + x\n", 'R2-money') === 1 &&
+    rule("export const s = (a, x) => a + '$ ' + x\n", 'R2-money') === 1 &&
+    rule("export const r = (x) => new RegExp('^' + x + '$')\n", 'R2-money') === 0)
+  add('a template `$` or `$ ` before any interpolation is R2-money, with or without toFixed; `${n}%` is not', () =>
+    rule('export const s = (x) => `$${x}`\n', 'R2-money') === 1 &&
+    rule('export const s = (x) => `Over $ ${x} each`\n', 'R2-money') === 1 &&
+    rule('export const s = (n) => `${n}% and ${n} items`\n', 'R2-money') === 0)
+  add("a `$` in JSX text, or a {'$'} child, before {...} is R2-money; `{n} items` is not", () =>
+    rule('export const S = ({ p }) => <span>${p}</span>\n', 'R2-money') === 1 &&
+    rule('export const S = ({ p }) => <span>could be $ {p}</span>\n', 'R2-money') === 1 &&
+    rule("export const S = ({ p }) => <span>{'$'}{p}</span>\n", 'R2-money') === 1 &&
+    rule('export const S = ({ n }) => <span>{n} items, $5 flat</span>\n', 'R2-money') === 0)
+  add('every money shape is green inside money.ts, its home', () =>
+    green(outcome(tree({ 'app/src/money.ts': "export const a = (x) => `$${x}`\nexport const b = (x) => '$' + x\n" }))))
+
+  /* ONLY SHRINKS (F3): the growth read against the merge-base. */
+  const base = { static: { 'app/src/A.tsx': { R1: 'home', 'R2-class': 'home' } }, runtime: { '/': { page: 'home' } } }
+  const clone = (o) => JSON.parse(JSON.stringify(o))
+  add('a new static key (a new file) is growth, so red', () => {
+    const head = clone(base)
+    head.static['app/src/B.tsx'] = { R1: 'x' }
+    const g = growth(base, head)
+    return g.length === 1 && g[0].block === 'static' && g[0].key === 'app/src/B.tsx -> R1'
+  })
+  add('a new rule under a file the list already names is growth, so red', () => {
+    const head = clone(base)
+    head.static['app/src/A.tsx']['R2-date'] = 'home'
+    return growth(base, head).length === 1
+  })
+  add('a new runtime key is growth, so red', () => {
+    const head = clone(base)
+    head.runtime['/']['width'] = 'home'
+    const g = growth(base, head)
+    return g.length === 1 && g[0].block === 'runtime' && g[0].key === '/ -> width'
+  })
+  add('a removed key is the list shrinking, so green; a changed lane is not growth', () => {
+    const head = clone(base)
+    delete head.static['app/src/A.tsx']['R2-class']
+    delete head.runtime['/']
+    head.static['app/src/A.tsx'].R1 = 'capture'
+    return growth(base, head).length === 0
+  })
+  add('no allow list at the merge-base fails open (null), never a silent pass', () => growth(null, base) === null)
+  add('the git read sees its subject: the committed list at HEAD, plus one key, is growth', () => {
+    const at = allowAtBase('HEAD')
+    if (at.allow === null) throw new Error(`nothing to read: ${at.reason}`)
+    const head = clone(at.allow)
+    head.static['app/src/NotARealScreen.tsx'] = { R1: 'x' }
+    return growth(at.allow, at.allow).length === 0 && growth(at.allow, head).length === 1
   })
 
   let failed = 0
