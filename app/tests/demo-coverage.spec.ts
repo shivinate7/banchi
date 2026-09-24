@@ -6,7 +6,7 @@
  * stopped writing when D183 moved them), undo, the order walk, the graveyard, product history,
  * value bands, facet counts or a typed search. Each of those failed as a quiet refusal or a
  * broken image, so a reviewer could not tell a demo gap from a product defect. This spec reads
- * the BUILT artefact, `dist-demo/`, and fails when one of those screens goes back to refusing.
+ * the BUILT artifact, `dist-demo/`, and fails when one of those screens goes back to refusing.
  *
  * WHAT IT RUNS AGAINST. The files `make demo-static` wrote, served on this checkout's own dev
  * origin under the demo's base path, exactly as a static host serves them (every request under
@@ -18,7 +18,16 @@
  *
  * SKIPPED, BY NAME, WHEN THERE IS NO BUILD. `make design-check` does not build the demo, so a
  * tree without `dist-demo/` skips these cases with the reason rather than failing them.
- * Run `make demo-static` first.
+ * Run `make demo-static` first. `DEMO_REQUIRED=1` turns the skip into a failure: that is how
+ * `.github/workflows/demo.yml` runs it, after its own build and before it publishes.
+ *
+ * EVERY SCREEN IS REACHED THE WAY A VISITOR REACHES IT, WITH ONE NAMED EXCEPTION. The page opens
+ * on the demo's root with no hash, and each case moves by the sidebar or by a control on the
+ * screen. The one exception is `#/product`. D227 makes it a deep link reached by SKU, and no
+ * screen or palette row links to it today, so the case opens the link a shared URL would carry.
+ * No other route is typed. So the spec is not a roster of routes (`make docs-audit`'s
+ * `route rosters` row), and it proves the hash router works under the demo's base path, which
+ * only a published build can get wrong.
  */
 import { test, expect, type Page } from '@playwright/test'
 import { existsSync, readFileSync, statSync } from 'node:fs'
@@ -32,6 +41,7 @@ const DIST = join(HERE, '..', '..', 'dist-demo')
 const BUNDLE = join(HERE, '..', 'demo', 'bundle.json')
 const BUILT = existsSync(join(DIST, 'index.html'))
 const PREVIEW = process.env.DEMO_PREVIEW_URL?.replace(/\/$/, '') ?? null
+const REQUIRED = process.env.DEMO_REQUIRED === '1'
 
 /** The base path the build was made for (`DEMO_BASE`), read off its own index.html. */
 function basePath(): string {
@@ -41,18 +51,20 @@ function basePath(): string {
 }
 
 const REFUSAL = 'Not in this demo.'
-const HOME = '#/'
-/** The Fulfiller's screen. Its sidebar row opens a new window, so it is opened by hash. */
-const FULFILLER = '#/fulfillment'
 
 sealEveryTest()
 
-test.skip(!BUILT, 'no dist-demo/ in this checkout: run `make demo-static` first')
+test.skip(!BUILT && !REQUIRED, 'no dist-demo/ in this checkout: run `make demo-static` first')
 
-/** Serve the built demo on this checkout's own origin, the way a static host would. */
+test('the demo was built', () => {
+  expect(BUILT, 'DEMO_REQUIRED=1 and there is no dist-demo/index.html').toBe(true)
+})
+
+/** Serve the built demo on this checkout's own origin, the way a static host would. On the
+ *  CONTEXT, so a window the demo opens (the Fulfiller's screen) is served too. */
 async function serveDemo(page: Page): Promise<string> {
   const base = basePath()
-  await page.route(`${DEV_URL}${base}**`, async (route) => {
+  await page.context().route(`${DEV_URL}${base}**`, async (route) => {
     const url = new URL(route.request().url())
     if (PREVIEW !== null) {
       const response = await route.fetch({ url: `${PREVIEW}${url.pathname}` })
@@ -74,28 +86,43 @@ async function serveDemo(page: Page): Promise<string> {
   return `${DEV_URL}${base}`
 }
 
-/** Open the built demo at a hash and wait for its first read to land. */
-async function open(page: Page, hash: string): Promise<void> {
+/** The demo's own root, no hash typed, and its first read landed. */
+async function openRoot(page: Page): Promise<void> {
   const origin = await serveDemo(page)
-  await page.goto(`${origin}${hash}`)
+  await page.goto(origin)
   await page.locator('main').first().waitFor()
   // The demo answers every read after a 45-135 ms pause, on purpose (`demoRequest`).
   await page.waitForTimeout(600)
 }
 
-/**
- * Arrive at a screen the way a visitor does: land on Home, press its row in the sidebar.
- *
- * BY THE SIDEBAR, NOT BY A TYPED HASH. This spec names the screens reviewers could not grade,
- * one case each. It is not a roster of every route, and it must not read as one
- * (`make docs-audit`'s `route rosters` row). Arriving by the sidebar also proves the hash
- * router works under the demo's base path, which only a published build can get wrong.
- */
+/** A deep link, opened the way a shared URL opens it. Only `#/product` uses this (D227). */
+async function openLink(page: Page, link: string): Promise<void> {
+  const origin = await serveDemo(page)
+  await page.goto(`${origin}${link}`)
+  await page.locator('main').first().waitFor()
+  await page.waitForTimeout(600)
+}
+
+/** Arrive at a screen the way a visitor does: land on the root, press its row in the sidebar.
+ *  `Home` is the root itself. */
 async function visit(page: Page, screen: string): Promise<void> {
-  await open(page, HOME)
+  await openRoot(page)
+  if (screen === 'Home') return
   await page.locator('.bn-side').getByRole('link', { name: new RegExp(`^${screen}`) }).first().click()
   await page.locator('main').first().waitFor()
   await page.waitForTimeout(600)
+}
+
+/** The Fulfiller's screen: its sidebar row opens it in a new window, as it does at the desk. */
+async function visitFulfiller(page: Page): Promise<Page> {
+  await openRoot(page)
+  const [fulfiller] = await Promise.all([
+    page.waitForEvent('popup'),
+    page.locator('.bn-side').getByRole('link', { name: /^Cards to pull/ }).first().click(),
+  ])
+  await fulfiller.locator('main, body').first().waitFor()
+  await fulfiller.waitForTimeout(600)
+  return fulfiller
 }
 
 /** Every demo photograph the page asked for, with the status it got. */
@@ -125,9 +152,13 @@ test.describe('the published demo draws what reviewers grade', () => {
 
   for (const screen of ['Inventory', 'Review', 'Pricing', 'Home', 'Cards to pull'] as const) {
     test(`${screen} draws its photographs, and every one answers 200`, async ({ page }) => {
-      const photos = watchPhotos(page)
-      if (screen === 'Cards to pull') await open(page, FULFILLER)
-      else await visit(page, screen)
+      let photos = watchPhotos(page)
+      if (screen === 'Cards to pull') {
+        const fulfiller = await visitFulfiller(page)
+        photos = watchPhotos(fulfiller)
+        await fulfiller.reload()
+        page = fulfiller
+      } else await visit(page, screen)
       await expect.poll(() => photos.length, { message: `${screen} asked for no photograph` }).toBeGreaterThan(0)
       expect(photos.filter((photo) => photo.status !== 200)).toEqual([])
       const broken = await page.evaluate(
@@ -177,7 +208,7 @@ test.describe('the published demo draws what reviewers grade', () => {
   })
 
   test('Cards to pull: search finds a card', async ({ page }) => {
-    await open(page, FULFILLER)
+    page = await visitFulfiller(page)
     await page.getByPlaceholder(/For example/).pressSequentially('Crowd', { delay: 40 })
     await expect(page.getByText('Crowd Favorite').first()).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
@@ -208,13 +239,15 @@ test.describe('the published demo draws what reviewers grade', () => {
   })
 
   test('Product history draws the one real reading the demo carries', async ({ page }) => {
-    await open(page, '#/product?sku=9189317')
+    // The one typed link in this file: see the header for why.
+    await openLink(page, '#/product?sku=9189317')
     await expect(page.getByRole('heading', { name: 'Vilemaw' })).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 
   test('Pricing: the value band draws its cards', async ({ page }) => {
-    await open(page, '#/pricing?band=top')
+    await visit(page, 'Pricing')
+    await page.getByRole('button', { name: 'Rank inventory by value' }).first().click()
     await expect(page.getByRole('heading', { name: /worth pulling/i })).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })

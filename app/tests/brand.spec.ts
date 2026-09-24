@@ -338,27 +338,19 @@ test('the chevron is quiet, and it is pinned to the row edge rather than floatin
   await expect(page.locator('.bn-brand-chevron')).toBeHidden()
 })
 
-/* THE TAB TITLE ALTERNATES, AND THE THREE PLACES IT MUST NOT.
+/* THE TAB TITLE IS ONE FIXED STRING, AND THE ONE PLACE IT CARRIES NO BRAND.
  *
- * `Inventory · 番地 banchi` is twenty characters and a browser tab shows perhaps a dozen, so the
- * concatenation truncates and the half that survives is whichever came first. The owner asked for
- * the two to take turns instead. That is a `setInterval` on `document.title`, which is the kind of
- * thing that breaks quietly: a stale timer surviving a route change fights the new one, and a
- * cleanup that runs too eagerly leaves the tab frozen on one half. Neither shows up in a
- * screenshot and neither throws.
- *
- * THE EXEMPTIONS ARE THE POINT AS MUCH AS THE ALTERNATION. Home has nothing to alternate WITH —
- * the screen and the product are the same word. The Fulfiller's tab names his task, not whose
- * product it is. And `prefers-reduced-motion` falls back to the concatenation, because a title
- * that changes on a timer may be announced by a screen reader every time it changes, and that
- * query is how this product is told to stop moving things.
+ * The owner's ruling, 2026-09-23: "番地 " and the screen's name in lowercase ("番地 pricing",
+ * "番地 home"), with no alternation and no joined form under reduced motion. It replaced a title
+ * that took turns with "番地 banchi" on a 6s + 4s timer. `app/tests/scaffold.spec.ts` reads every
+ * route's title over 30 seconds under both motion settings; these cases keep the two things that
+ * spec does not: a timer from the route just left must not survive to write the old title, and
+ * the Fulfiller's tab names his task with no brand (D5).
  *
  * THE SCREENS ARE READ OFF THE NAV, NOT TYPED. `make docs-audit`'s `route rosters` row refused an
- * earlier draft of this file for pinning four hashes, and it was right to: a list somebody typed
- * goes stale silently, and the route added next month is simply not in it. What these cases need
- * is not a roster but "some named screen" and "the Fulfiller's", and the sidebar knows both — his
- * link is the only `.bn-nav-link` it draws outside `<nav>`, which is the same structural fact
- * `cursor.spec.ts` harvests on. */
+ * earlier draft of this file for pinning four hashes. What these cases need is "some named
+ * screen" and "the Fulfiller's", and the sidebar knows both — his link is the only `.bn-nav-link`
+ * it draws outside `<nav>`, which is the same structural fact `cursor.spec.ts` harvests on. */
 async function screens(page: import('@playwright/test').Page) {
   await page.goto('/#/')
   await expect(page.locator('.bn-side a.bn-nav-link').first()).toBeVisible()
@@ -371,89 +363,47 @@ async function screens(page: import('@playwright/test').Page) {
   )
   const named = found.find((r) => r.href !== '#/' && !r.outsideNav)
   const fulfiller = found.find((r) => r.outsideNav)
-  expect(named, 'the sidebar drew no named screen to alternate on').toBeTruthy()
+  expect(named, 'the sidebar drew no named screen').toBeTruthy()
   expect(fulfiller, "the sidebar drew no link outside <nav> — the Fulfiller's has moved").toBeTruthy()
   return { named: named!, fulfiller: fulfiller! }
 }
 
-/* THE CLOCK IS FAKED AND ONLY EVER ADVANCED, WHICH IS A CHANGE TO THE WAIT AND NOT TO THE
- * ASSERTION (D136). These three cases were the suite's longest by a distance — 46.5s, 17.5s and
- * 17.0s on the runner, all of it `waitForTimeout` on a 6s + 4s cadence — and the owner ruled on
- * 2026-09-11 that a sleep on a real clock may become a fake one. `page.clock.install()` goes in
- * BEFORE the first navigation, with no fixed time: the page's clock starts at the real time and
- * keeps ticking at the real pace (measured, not assumed — a probe against 1.58 saw a 500ms
- * interval fire on schedule under it), so the 63 `toLocaleDateString` sites draw today. What
- * `runFor` adds is a jump: every timer and interval due inside the span fires, in order, with
- * `Date.now()` moving in step. The title timer is a chained `setTimeout`, so a jump of 500ms is
- * exactly one real 500ms to it. Same samples, same window, same expected set.
- *
- * MUTATION-TESTED, because a faked wait that stays green through a broken app is worse than the
- * sleep it replaced: with the first `setTimeout(flip, ...)` deleted from App.tsx the alternation
- * case fails on the sampled set, and with the effect's cleanup deleted the Home case fails on
- * `after` — the surviving timer keeps writing the old route's halves. */
-test('the tab title alternates on a named screen, and holds still where it should', async ({ page }) => {
+/* THE CLOCK IS FAKED AND ONLY EVER ADVANCED (D136). `page.clock.install()` goes in before the
+ * first navigation with no fixed time, so the page's clock keeps real pace and `runFor` jumps it.
+ * The window is this file's own number, never App.tsx's: a test that reads the value it checks
+ * passes when that value is wrong. */
+test('the tab title holds one fixed title per screen, and none survives the screen it named', async ({ page }) => {
   await page.clock.install()
   const { named } = await screens(page)
 
   await page.goto(`/${named.href}`)
   await page.waitForTimeout(400)
-  /* Sampled across more than one full cycle. The dwell is ASYMMETRIC — the screen holds longer
-     than the name — so the window has to clear the sum of both, not twice the shorter one. Sixteen
-     seconds at 500ms covers a 6s + 4s cycle with room for the machine to be slow, and it is
-     deliberately not derived from the constants: a test that reads the value it is checking
-     passes when that value is wrong. A fake clock advanced by an explicit number honours that
-     just the same — the number is still this file's and not App.tsx's. */
   const seen = new Set<string>()
   for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.clock.runFor(500) }
-  expect([...seen].sort(), 'the tab shows each half in turn, neither truncated into the other')
-    .toEqual([named.label.toLowerCase(), '番地 banchi'].sort())
+  expect([...seen], 'one fixed title, the screen in lowercase after the brand')
+    .toEqual([`番地 ${named.label.toLowerCase()}`])
 
-  // Home: one word for both the screen and the product, so nothing to take turns with
+  // and the screen we just left writes nothing over Home's own title
   await page.goto('/#/')
-  await page.clock.runFor(8000)   // past the longer dwell, so a timer would have shown by now
-  const home = await page.title()
-  await page.clock.runFor(8000)
-  expect(await page.title(), 'Home has nothing to alternate with and must hold still').toBe(home)
-  expect(home).toBe('番地 banchi')
-
-  // and the timer from the screen we just left must not have survived to fight this one
   const after = new Set<string>()
   for (let i = 0; i < 26; i++) { after.add(await page.title()); await page.clock.runFor(500) }
-  expect([...after], 'a timer from the previous route is still running').toEqual(['番地 banchi'])
+  expect([...after], 'a timer from the previous route is still writing the title').toEqual(['番地 home'])
 
-  /* THE TAB IS LOWERCASE AND THE NAV IS NOT, which is the whole shape of this change. The label
-     is one string drawn by the sidebar, the palette and the keyboard sheet; lowercasing it at the
-     source would have rewritten all three. Asserting the nav's casing here is what stops the
-     cheap fix from passing. */
+  /* THE TAB IS LOWERCASE AND THE NAV IS NOT. The label is one string drawn by the sidebar, the
+     palette and the keyboard sheet; lowercasing it at the source would have rewritten all three. */
   expect(named.label, 'the nav keeps Title Case — only the tab speaks lowercase')
     .not.toBe(named.label.toLowerCase())
 })
 
 test("the Fulfiller's tab names his task, not the product", async ({ page }) => {
-  await page.clock.install()   // two jumps past the longer dwell, to prove it does not move
+  await page.clock.install()   // two jumps past any old dwell, to prove it does not move
   const { fulfiller } = await screens(page)
   await page.goto(`/${fulfiller.href}`)
   await page.clock.runFor(8000)
   const first = await page.title()
   await page.clock.runFor(8000)
   expect(first, 'his tab says what he is doing, lowercase like every other tab').toBe('cards to pull')
-  expect(await page.title(), 'and it does not alternate at him').toBe(first)
-})
-
-/* `reducedMotion` is set on an explicit CONTEXT rather than through `test.use`, which this
-   Playwright's fixture types do not accept it in. */
-test('with reduced motion the tab stops taking turns and shows both at once', async ({ browser, baseURL }) => {
-  const ctx = await browser.newContext({ reducedMotion: 'reduce', baseURL })
-  const page = await ctx.newPage()
-  await page.clock.install()   // a full cycle's worth of samples, to prove none of them differ
-  const { named } = await screens(page)
-  await page.goto(`/${named.href}`)
-  await page.waitForTimeout(600)
-  const seen = new Set<string>()
-  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.clock.runFor(500) }
-  await ctx.close()
-  expect([...seen], 'reduced motion gets one steady title, concatenated')
-    .toEqual([`${named.label.toLowerCase()} · 番地 banchi`])
+  expect(await page.title(), 'and it does not change at him').toBe(first)
 })
 
 /* THE BRAND IS THE CONTROL — the user's own instruction, after the 22px chevron proved
@@ -595,7 +545,8 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
  * against 32. Each fails at 1440 and again at 820. */
 for (const rail of [
   { name: 'the rail', width: 1440, collapse: true },
-  { name: 'the 768-1023 media rail', width: 820, collapse: false },
+  { name: 'the 640-1023 media rail', width: 820, collapse: false },
+  { name: 'the media rail at half-width Chrome', width: 720, collapse: false },
 ] as const) {
   test(`every foot row in ${rail.name} draws one glyph, on the nav's own spine`, async ({ page }) => {
     await page.setViewportSize({ width: rail.width, height: 900 })
@@ -719,8 +670,9 @@ test('the phone drawer draws the lockup, and no wordmark or tagline beside it', 
   await expect(page.locator('.bn-brand-tag')).toHaveCount(0)
   await expect(page.getByText('every card has an address')).toHaveCount(0)
 
-  // the sidebar's server line, count and all — it said only `Server online` here until section 19
-  await expect(page.locator('.bn-drawer .bn-server .bn-server-detail')).toContainText('cards')
+  /* the sidebar's server line, and nothing more (TXT-45): it printed the store's card count, a
+     third count in the chrome to compare against the screen's own */
+  await expect(page.locator('.bn-drawer .bn-server')).toHaveText('Server online')
 })
 
 test('every lockup the product draws clears the size floor', async ({ page }) => {
@@ -736,7 +688,7 @@ test('every lockup the product draws clears the size floor', async ({ page }) =>
     await page.setViewportSize({ width: w, height: h })
     for (const hash of ['/', GALLERY]) {
       await page.goto(hash)
-      if (w < 768 && hash === '/') await page.getByText('More', { exact: true }).click()
+      if (w < 640 && hash === '/') await page.getByText('More', { exact: true }).click()
       await page.waitForTimeout(400)
       const sizes = await page.locator('.bn-lockup').evaluateAll((els) =>
         els.map((el) => Number(el.getAttribute('width'))))
@@ -776,6 +728,15 @@ test('the phone wordmark is the lockup roman, set as text', async ({ page }) => 
       trackPx: Number.parseFloat(cs.letterSpacing),
       sizePx: Number.parseFloat(cs.fontSize),
       opacity: Number(cs.opacity),
+      color: cs.color,
+      ink3: (() => {
+        const probe = document.createElement('span')
+        probe.style.color = 'var(--bn-ink-3)'
+        document.body.append(probe)
+        const c = getComputedStyle(probe).color
+        probe.remove()
+        return c
+      })(),
     }
   })
 
@@ -798,7 +759,10 @@ test('the phone wordmark is the lockup roman, set as text', async ({ page }) => 
     `the wordmark tracks ${seen.trackPx.toFixed(2)}px against the roman's ${(wantEm * seen.sizePx).toFixed(2)}`,
   ).toBeLessThan(0.5)
 
-  expect(seen.opacity, 'the roman is drawn at section 13’s own opacity').toBeCloseTo(PARAMS.romanOpacity, 3)
+  /* FULL INK, NOT THE DRAWING'S 45% (the kit-frame review). Set as text alone in the bar, the
+     roman at 45% measured under 4.5:1; it takes the shell's muted text colour at full strength. */
+  expect(seen.opacity, 'the wordmark is drawn at full opacity').toBe(1)
+  expect(seen.color, 'the wordmark is the muted text colour, --bn-ink-3').toBe(seen.ink3)
 
   /* AND THE WORD IS THE ONLY THING IN THE BAR THAT GROWS, which is why no negative margin is
      needed for the trailing letter's tracking — asserted here so the reasoning in App.css has a

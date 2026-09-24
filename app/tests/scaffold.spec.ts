@@ -29,7 +29,7 @@ import { sealEveryTest } from './shell'
  *            (6000 + 4000), once per motion setting. Every read must be the one fixed title. The
  *            window is this file's own number, never read from App.tsx: a test that reads the
  *            value it checks passes when that value is wrong (brand.spec.ts says the same).
- *   palette  the command palette's "Go to" group lists the route
+ *   palette  the palette ("Go to", D-palette-go-to) lists the route in its Screens group
  *   keys     the keyboard sheet, every screen shown, has an entry that names the route
  *
  * THE ROUTES ARE READ FROM `ROUTES` ITSELF, by the same reader the static check uses
@@ -292,25 +292,47 @@ test('the title judge refuses a title that changes over the window, and an empty
   expect(titleFailure([], '番地 kit')).not.toBeNull()
 })
 
+/* AND THE READ OVER TIME, IN A BROWSER, ON A TITLE THAT IS RIGHT FIRST AND WRONG LATER. The judge
+   above is fed arrays; this proves `readTitles` itself sees a change that lands mid-window, on the
+   same fake clock the route tests use. The fixture is a page timer that rewrites the title seven
+   seconds in, the shape of the old alternation. The first read must be the right title, or the
+   test would pass on a title that was never right. */
+test('the over-time title read goes red when a right title changes later (fixture)', async ({ page }) => {
+  await page.clock.install()
+  await page.goto('/#/gallery')
+  await expect(page.locator('main').first()).toBeVisible()
+  const want = tabTitleOf({ path: '/gallery', label: 'Kit', title: null, persona: null, view: '', file: '' })
+  expect(titleFailure(await readTitles(page), want), 'the Kit page holds its title as it stands').toBeNull()
+
+  await page.evaluate(() => {
+    window.setTimeout(() => {
+      document.title = '番地 banchi'
+    }, 7000)
+  })
+  const reads = await readTitles(page)
+  expect(reads[0], 'the fixture starts on the right title').toBe(want)
+  expect(titleFailure(reads, want), 'a title that changes seven seconds in must fail').toContain('番地 banchi')
+})
+
 test('the palette and the keyboard sheet name every route', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/#/')
   await settle(page)
 
   await page.keyboard.press('ControlOrMeta+k')
-  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  const palette = page.getByRole('dialog', { name: 'Go to' })
   await expect(palette).toBeVisible()
   const goTo = await palette.evaluate((root) => {
     const out: string[] = []
     for (const section of Array.from(root.querySelectorAll('[role="listbox"] > div'))) {
-      if (section.querySelector('.bn-cmdk-group')?.textContent?.trim() !== 'Go to') continue
+      if (section.querySelector('.bn-cmdk-group')?.textContent?.trim() !== 'Screens') continue
       for (const option of Array.from(section.querySelectorAll('[role="option"] > span:not(.bn-cmdk-item-hint)'))) {
         out.push((option.textContent ?? '').trim())
       }
     }
     return out
   })
-  expect(goTo.length, 'the palette drew no "Go to" group: did its markup move?').toBeGreaterThan(3)
+  expect(goTo.length, 'the palette drew no Screens group: did its markup move?').toBeGreaterThan(3)
   await page.keyboard.press('Escape')
   await expect(palette).toBeHidden()
 
@@ -335,7 +357,7 @@ test('the palette and the keyboard sheet name every route', async ({ page }) => 
   const problems: string[] = []
   for (const route of ROUTE_TABLE) {
     const failures = new Map<string, string[]>()
-    if (!goTo.includes(route.label)) failures.set('palette', [`"${route.label}" is not in the palette's Go to group`])
+    if (!goTo.includes(route.label)) failures.set('palette', [`"${route.label}" is not in the palette's Screens group`])
     if (!entries.includes(route.label)) failures.set('keys', [`no keyboard-sheet entry names "${route.label}"`])
     problems.push(...reconcile(route, failures, SHELL_WIDE))
   }
