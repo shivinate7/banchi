@@ -191,8 +191,11 @@ const FULFILLMENT_KEYS: ScreenKeys = {
 /* THE ONE REGISTRATION POINT (D-page-scaffold). A new screen is one row here plus a view that
    returns `<Page>` from the kit. From this row alone it gets its nav row (`nav: true`), its
    "Go to" entry in the palette, its jump entry and its own keys in the keyboard sheet, its tab
-   title, the page scaffold through `PageRouteContext`, and the sheet host. Nothing else in the
-   shell names a route. `app/tests/nav.spec.ts` proves it with a throwaway row. */
+   title, the page scaffold through `PageRouteContext`, and the sheet host. The nav, the ring, the
+   phone tab bar and the Fulfiller's door in the sidebar and drawer foot all read this table.
+   Three places name a path on purpose, because each is a chosen door and not a list of screens:
+   the brand links to Home, the dead-end page offers Home and Inventory, and the crash page offers
+   Home. `app/tests/nav.spec.ts` proves the rest with a throwaway row. */
 export const ROUTES: readonly Route[] = [
   { path: '/', label: 'Home', icon: 'home', view: Home, persona: 'owner', group: 'home', hotkey: 'h', nav: true, keywords: 'start overview' },
   { path: '/capture', label: 'Capture', icon: 'camera', view: CaptureScreen, persona: 'owner', group: 'work', hotkey: 'c', nav: true, tab: true, keywords: 'camera photograph scan feeder new box section', keys: CAPTURE_KEYS },
@@ -269,6 +272,17 @@ const OFF_NAV: readonly Group[] = ['aside']
 function inNav(route: Route): boolean {
   return route.nav === true && !OFF_NAV.includes(route.group)
 }
+
+/** The rows the nav draws in one group, in table order. The sidebar, the drawer and the ring all
+ *  read this, so the ring cannot step in an order the nav does not draw (D51). */
+function navRows(group: Group): readonly Route[] {
+  return ROUTES.filter((route) => route.group === group && inNav(route))
+}
+
+/* THE FULFILLER'S DOOR, FROM THE TABLE. Each Fulfiller route opens in its own tab from the
+   sidebar foot and the drawer, as it does from the palette: his screen has no way back, so it
+   never replaces the owner's. */
+const OWN_TAB: readonly Route[] = ROUTES.filter((route) => route.persona === 'fulfiller')
 
 const CHROME_FREE: ReadonlySet<Persona> = new Set<Persona>(['fulfiller'])
 const LEADER = ','
@@ -360,7 +374,10 @@ const STEP_KEYS = [
   { key: 'ArrowUp', delta: -1 },
   { key: 'ArrowDown', delta: 1 },
 ] as const
-const RING: readonly Route[] = ROUTES.filter((r) => r.hotkey !== undefined)
+/* THE RING IS THE DRAWN ORDER (D51): the groups in the order the nav draws them, then the table
+   within each group. A row declared outside its group's block in `ROUTES` is still drawn in its
+   group, and the step reaches it there. Only a row with a letter is a step (D51's "which"). */
+const RING: readonly Route[] = GROUPS.flatMap((group) => navRows(group.id)).filter((r) => r.hotkey !== undefined)
 const STEP_SHORTCUTS = 'Meta+ArrowLeft Meta+ArrowRight'
 
 function useRouteStep(enabled: boolean, path: string): void {
@@ -740,7 +757,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
         />
       </div>
       <div className="bn-cmdk-list" role="listbox" id={listId} aria-label="Results" ref={list}>
-        {matches.length === 0 && !cards.loading ? <div className="bn-cmdk-empty">Nothing matches “{query}”.</div> : null}
+        {matches.length === 0 && !cards.loading && !refused ? <div className="bn-cmdk-empty">Nothing matches “{query}”.</div> : null}
         {grouped.map((section) => (
           <div key={section.group}>
             <div className="bn-cmdk-group">{section.group}</div>
@@ -1143,7 +1160,7 @@ function Sidebar({
         {GROUPS.map((group) => (
           <div key={group.id} className="bn-nav-group">
             {group.label ? <div className="bn-nav-group-label">{group.label}</div> : null}
-            {ROUTES.filter((r) => r.group === group.id && inNav(r)).map((route) => (
+            {navRows(group.id).map((route) => (
               <NavLink key={route.path} route={route} current={route.path === path} />
             ))}
           </div>
@@ -1152,11 +1169,13 @@ function Sidebar({
       {/* ONE ICON COLUMN AND ONE ROW HEIGHT FOR THE WHOLE SIDEBAR (UX-134): the foot's rows are
           sized to the nav's own in App.css. */}
       <div className="bn-side-foot">
-        <a className="bn-nav-link" href="#/fulfillment" target="_blank" rel="noopener" data-tip="Cards to pull">
-          <Icon name="hand" size={18} />
-          <span className="bn-nav-text">Cards to pull</span>
-          <Icon name="external" size={14} className="bn-faint" />
-        </a>
+        {OWN_TAB.map((route) => (
+          <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" data-tip={route.label}>
+            <Icon name={route.icon} size={18} />
+            <span className="bn-nav-text">{route.label}</span>
+            <Icon name="external" size={14} className="bn-faint" />
+          </a>
+        ))}
         <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Go to" aria-haspopup="dialog">
           <span className="bn-side-foot-text">Go to</span>
           <Kbd>⌘K</Kbd>
@@ -1254,17 +1273,19 @@ function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: b
         {GROUPS.map((group) => (
           <div key={group.id} className="bn-nav-group">
             {group.label ? <div className="bn-nav-group-label">{group.label}</div> : null}
-            {ROUTES.filter((r) => r.group === group.id && inNav(r)).map((route) => (
+            {navRows(group.id).map((route) => (
               <NavLink key={route.path} route={route} current={route.path === path} onNavigate={onClose} />
             ))}
           </div>
         ))}
         <div className="bn-nav-group bn-drawer-more">
-          <a className="bn-nav-link" href="#/fulfillment" target="_blank" rel="noopener" onClick={onClose}>
-            <Icon name="hand" size={18} />
-            <span className="bn-nav-text">Cards to pull</span>
-            <Icon name="external" size={14} className="bn-faint" />
-          </a>
+          {OWN_TAB.map((route) => (
+            <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" onClick={onClose}>
+              <Icon name={route.icon} size={18} />
+              <span className="bn-nav-text">{route.label}</span>
+              <Icon name="external" size={14} className="bn-faint" />
+            </a>
+          ))}
           <button type="button" className="bn-nav-link" onClick={onToggleTheme}>
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
             <span className="bn-nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
@@ -1356,6 +1377,8 @@ export function App() {
         return
       }
       if ((event.metaKey || event.ctrlKey) && event.key === '.') {
+        /* The rail is under the layer, so the key is the layer's (UX-014). */
+        if (overlayOpen()) return
         event.preventDefault()
         toggleRail()
         return

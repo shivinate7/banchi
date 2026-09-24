@@ -717,8 +717,12 @@ test('an unknown route keeps the owner’s shell, and offers no door to the Fulf
    second time anywhere would miss the row, and this case would go red naming what it missed.
    The row's view is built from `Page` and React's own `createElement`, both of which the served
    module already imports, so the view is exactly "a view that returns <Page>". */
-test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold with no other edit', async ({ page }) => {
-  await stub(page)
+/** Serve `App.tsx` with one row the repo does not have, inserted FIRST in `ROUTES`. First on
+ *  purpose: its group is the library, which the nav draws after three other groups, so a shell
+ *  that orders anything by declaration rather than by what it draws puts the row in the wrong
+ *  place, and the ring case below goes red on that. The row carries a letter (`z`, which no screen takes), so it is in the
+ *  ring and the `,` chord as well as the nav. */
+async function serveThrowawayRow(page: Page): Promise<void> {
   await page.route(/\/src\/App\.tsx(\?|$)/, async (route) => {
     const response = await route.fetch()
     const body = await response.text()
@@ -727,12 +731,17 @@ test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold wit
     const h = `${react![1]}.createElement`
     const view = `function __Throwaway() { return ${h}(Page, null, ${h}("p", null, "A throwaway screen.")) }\n`
     const row =
-      '{ path: "/throwaway", label: "Throwaway", icon: "grid", view: __Throwaway, persona: "owner", group: "library", nav: true, ' +
+      '{ path: "/throwaway", label: "Throwaway", icon: "grid", view: __Throwaway, persona: "owner", group: "library", hotkey: "z", nav: true, ' +
       'keys: { rows: [{ keys: ["Z"], does: "Throw it away" }] } },\n'
     const anchor = 'export const ROUTES = [\n'
     expect(body.includes(anchor), 'the served App.tsx has no `export const ROUTES = [` line').toBe(true)
     await route.fulfill({ response, body: body.replace(anchor, `${view}${anchor}${row}`) })
   })
+}
+
+test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold with no other edit', async ({ page }) => {
+  await stub(page)
+  await serveThrowawayRow(page)
 
   await page.goto('/#/')
   await expect(page.locator(VIEW['#/'])).toBeVisible()
@@ -765,6 +774,46 @@ test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold wit
   await expect(sheet.locator('dd', { hasText: /^Throwaway/ })).toHaveCount(1)
   await expect(sheet.getByRole('heading', { name: 'Throwaway' })).toBeVisible()
   await expect(sheet.locator('dd', { hasText: 'Throw it away' })).toBeVisible()
+})
+
+/* THE RING IS THE ORDER THE NAV DRAWS, NOT THE ORDER ROUTES DECLARES (D51: the step walks the
+   strip in the order it is drawn). The nav draws by group, so a row declared outside its group's
+   block is drawn in its group, and the step must reach it there. The throwaway row is declared
+   first and drawn in the library group, after the Sell group. */
+test('a throwaway row with a letter takes its drawn place in the ring, and its chord works', async ({ page }) => {
+  await stub(page)
+  await serveThrowawayRow(page)
+  await page.goto('/#/')
+  await expect(page.locator(VIEW['#/'])).toBeVisible()
+
+  const drawn = await page.evaluate(
+    (selector) => Array.from(document.querySelectorAll<HTMLAnchorElement>(selector)).map((a) => a.getAttribute('href') ?? ''),
+    NAV_LINK,
+  )
+  /* Drawn in its own group, after the Sell group, and not first where `ROUTES` declares it. */
+  expect(drawn.filter((href) => href !== '#/throwaway'), 'the nav no longer draws the ring the roster pins').toEqual([...RING])
+  expect(drawn.indexOf('#/throwaway'), 'the throwaway row is drawn first, in declaration order').toBeGreaterThan(drawn.indexOf('#/revenue'))
+
+  /* Step from the first drawn row to the last. Each press must land on the NEXT DRAWN row. The
+     wait is for the nav to mark the row current, not for the hash: the step reads the path the
+     shell has RENDERED, so a press sent between the hash change and that render steps from the
+     screen before. */
+  const arrived = (href: string) => page.locator(`${NAV_LINK}[href="${href}"][aria-current="page"]`)
+  for (const next of drawn.slice(1)) {
+    await page.keyboard.press('Meta+ArrowRight')
+    await expect(arrived(next), `the step did not go to ${next}`).toBeVisible()
+  }
+  // and back again, to the first
+  for (const previous of [...drawn].reverse().slice(1)) {
+    await page.keyboard.press('Meta+ArrowLeft')
+    await expect(arrived(previous), `the step back did not go to ${previous}`).toBeVisible()
+  }
+
+  // THE CHORD: `,` then its letter arrives there
+  await page.keyboard.press(',')
+  await page.keyboard.press('z')
+  await expect(arrived('#/throwaway')).toBeVisible()
+  await expect(page.getByText('A throwaway screen.')).toBeVisible()
 })
 
 /* ---- the palette is "Go to", and it finds cards (D-palette-go-to, amends D95) ------------------ */
@@ -828,12 +877,17 @@ test('a refused card search hides the Cards group and says so in one line', asyn
   const palette = page.getByRole('dialog', { name: 'Go to' })
   await palette.getByRole('combobox').fill('abra')
   /* The line is the demo's own sentence in the published build (`__BN_DEMO__`); this dev build
-     says the server did not answer. Either way it is ONE line, and no Cards group. */
+     says the server did not answer. Either way it is ONE line, and no Cards group. "abra" matches
+     no screen, so the palette's own "Nothing matches" line is the second line this could draw.
+     It is counted too, and it must not show beside the refusal. */
   await expect(palette.locator('.bn-cmdk-note')).toHaveCount(1)
+  await expect(palette.locator('.bn-cmdk-empty')).toHaveCount(0)
   await expect(palette.locator('.bn-cmdk-group', { hasText: 'Cards' })).toHaveCount(0)
-  // and the screens still answer beside it
+  // and the screens still answer beside it, under the one refusal line and no empty line
   await palette.getByRole('combobox').fill('pricing')
   await expect(palette.getByRole('option').first()).toHaveText(/Pricing/)
+  await expect(palette.locator('.bn-cmdk-note')).toHaveCount(1)
+  await expect(palette.locator('.bn-cmdk-empty')).toHaveCount(0)
 })
 
 /* ---- focus: the layers hold it, and a navigation hands it to the screen ------------------------ */
@@ -884,13 +938,18 @@ test('no global key acts under an open layer', async ({ page }) => {
   await expect(page.locator('.bn-drawer')).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.querySelector('.bn-drawer')?.contains(document.activeElement))).toBe(true)
 
-  // the chord does not arm, and the step does not step, behind the drawer
+  // the chord does not arm, the step does not step, and the rail does not move, behind the drawer
+  /* Read, not assumed: at this width the rail starts folded, so "not folded" would pass on a
+     press that unfolded it. */
+  const railBefore = await page.locator('.bn-shell').getAttribute('data-rail')
   await page.keyboard.press(',')
   await page.keyboard.press('c')
   await page.keyboard.press('Meta+ArrowRight')
+  await page.keyboard.press('Meta+.')
   await page.waitForTimeout(200)
   expect(await page.evaluate(() => window.location.hash)).toBe('#/')
   await expect(page.locator('.bn-drawer')).toBeVisible()
+  expect(await page.locator('.bn-shell').getAttribute('data-rail'), 'Cmd-. moved the rail under the drawer').toBe(railBefore)
 })
 
 test('the first Tab reaches the skip link, and a navigation hands focus to the screen (UX-092)', async ({ page }) => {
