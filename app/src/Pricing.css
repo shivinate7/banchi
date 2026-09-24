@@ -1283,8 +1283,18 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
     text-transform: uppercase;
     color: var(--bn-ink-3);
   }
-  .pricing-price { grid-column: 3; grid-row: 1 / 3; }
-  .pricing-actions { grid-column: 4; grid-row: 1 / 3; }
+  /* ANCHORED FROM THE END, NOT COUNTED FROM THE FRONT (review round 2, compact-tier
+     markdown lens). `grid-column: 3` / `4` assumed the FOUR-track template above
+     (`36px minmax(0, 1fr) 132px auto`), where price is track 3 and actions is track 4. The
+     `data-copies='none'` template two lines up has only THREE tracks
+     (`minmax(0, 1fr) 132px auto`) — no thumb, so no first 36px track — and the same two
+     rules still asked for tracks 3 and 4: price landed in the actions track ("auto", sized
+     to content), the true 132px price track sat empty as the ~160px gap at 700px, and
+     actions fell into an IMPLICIT fourth column the template never declared. Both templates
+     still end in the same two tracks, `132px auto`, so the fix is the same one UX-002 used
+     on the table tier: count from the end. */
+  .pricing-price { grid-column: -3 / -2; grid-row: 1 / 3; }
+  .pricing-actions { grid-column: -2 / -1; grid-row: 1 / 3; }
   .pricing-meta .pricing-row-note { display: none; }
 }
 

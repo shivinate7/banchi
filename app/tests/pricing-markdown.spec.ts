@@ -531,3 +531,84 @@ test('neither run ship bar is drawn on a lens', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Push these prices' })).toHaveCount(1)
   await expect(page.getByRole('button', { name: /Write the import file/ })).toHaveCount(0)
 })
+
+/* ---- UX-002, THE LENS'S OWN THIRD GRID AXIS: `data-copies='none'` --------------------------------
+ *
+ * `Pricing.css`'s `--pricing-cols` templates are shared with `pricing.spec.ts`'s run path, and
+ * `data-copies='none'` is the one variant only this screen ever draws — a live listing carries no
+ * thumbnail and no quantity cell (see this file's own header), so the section drops those two
+ * tracks. TWO SEPARATE BUGS lived in that variant, at two tiers, and this file is the only one
+ * that can catch either: the table tier's `--pricing-cols` still ended in the same `132px 68px`
+ * pair UX-002's anchor fixed for every source, but the COMPACT tier (600-939px) hard-coded
+ * `.pricing-price { grid-column: 3 }` / `.pricing-actions { grid-column: 4 }` against the
+ * FOUR-track `data-copies='some'` template, and never noticed the three-track `none` one two
+ * lines above it — price landed in the actions track, actions fell into an implicit fourth
+ * column the template never declared, and the row grew past its own container by about the
+ * width of a price field. Fixed the same way UX-002 was: anchored to the grid's last two
+ * lines, which both templates share.
+ */
+
+const LONG_PRICE = '1234.56'
+
+/** No horizontal clipping — the same measurement `pricing.spec.ts`'s own `legible()` makes,
+ *  duplicated rather than imported: this file's own header states its independence from that
+ *  suite on purpose. */
+async function legible(page: Page, name: string): Promise<void> {
+  const clipped = await page
+    .getByRole('textbox', { name })
+    .evaluate((el: HTMLInputElement) => el.scrollWidth > el.clientWidth + 1)
+  expect(clipped, `the ${name} field clips its own value`).toBe(false)
+}
+
+test('the row and caption tracks agree at the table tier, and the price is not clipped (data-copies=none)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page)
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect(page.locator('.pricing-section')).toHaveAttribute('data-copies', 'none')
+  await expect(page.locator('.pricing-thumb')).toHaveCount(0) // the absence this screen's own header states
+
+  const [row, caption] = await Promise.all([
+    page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+    page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+  ])
+  expect(row, `row tracks "${row}" disagree with caption tracks "${caption}"`).toBe(caption)
+
+  const field = page.getByRole('textbox', { name: 'Price for Articuno' })
+  await field.click()
+  await field.fill(LONG_PRICE)
+  await expect(field).toHaveValue(LONG_PRICE)
+  await legible(page, 'Price for Articuno')
+})
+
+test('the compact-tier price and actions land in their own tracks, not an implicit fourth column, at 700px (data-copies=none)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 700, height: 900 })
+  await open(page)
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect(page.locator('.pricing-section')).toHaveAttribute('data-copies', 'none')
+  await expect(page.locator('.pricing-caption')).toBeHidden() // the compact tier, confirmed
+
+  /* THE GEOMETRIC PROOF, MEASURED RATHER THAN GUESSED: the row's OWN width does not overflow
+     even when broken, because `minmax(0, 1fr)` (the id/facts column) absorbs the deficit by
+     shrinking — the defect is a GAP, not a scrollbar. Measured on origin/main's CSS before
+     this fix: the empty reserved 132px track plus the column-gap left 156px of dead space
+     between `.pricing-facts` and `.pricing-price`, against `column-gap: var(--bn-3)` (12px)
+     plus `.pricing-price`'s own `margin-left: var(--bn-2)` (8px) — 20px, measured with the
+     fix in place — the row asks for everywhere else. The floor is comfortably under 156px and
+     comfortably over the 20px the fix itself measures. */
+  const gap = await page.evaluate(() => {
+    const facts = document.querySelector('.pricing-facts')!.getBoundingClientRect()
+    const price = document.querySelector('.pricing-price')!.getBoundingClientRect()
+    return price.x - facts.right
+  })
+  expect(gap, `${gap}px of dead space sits between the facts column and the price field`).toBeLessThanOrEqual(24)
+
+  const field = page.getByRole('textbox', { name: 'Price for Articuno' })
+  await field.click()
+  await field.fill(LONG_PRICE)
+  await expect(field).toHaveValue(LONG_PRICE)
+  await legible(page, 'Price for Articuno')
+})

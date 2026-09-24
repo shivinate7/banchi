@@ -4004,3 +4004,95 @@ for (const width of [1024, 820, 720, 390, 360]) {
     await typeAndCheck(page)
   })
 }
+
+/* ---- UX-073: the focus ring is measured, not screenshotted -------------------------------------- */
+
+/** `getComputedStyle` on a border returns an `rgb()` string; `--bn-accent` is a hex token. A
+ *  probe element's own computed `color` is the browser's own conversion of the SAME token, in
+ *  the SAME theme, so this compares like with like rather than a hand-copied rgb() literal that
+ *  would silently stop meaning anything the day the token's value moves. */
+async function accentRGB(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement('div')
+    probe.style.color = 'var(--bn-accent)'
+    document.body.appendChild(probe)
+    const rgb = getComputedStyle(probe).color
+    probe.remove()
+    return rgb
+  })
+}
+
+test('the focus ring on a TYPED price field is --bn-accent, not the halo alone (UX-073)', async ({
+  page,
+}) => {
+  /* A TYPED ANSWER, NOT A SUGGESTION — the finding's own case, and the one the two-class
+     `.pricing-price[data-answer='typed'] .pricing-field` rule outranked. `[data-answer='suggested']`
+     had its own focus-within override already and was never broken. */
+  await open(page, {
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '4.50' } },
+  })
+  const typedRow = page.locator(".pricing-price[data-answer='typed']").first()
+  await expect(typedRow, 'the fixture answered this row, or the case proves nothing').toHaveCount(1)
+
+  const input = field(page).first()
+  await input.click()
+  /* `.pricing-field`'s `border-color` EASES over `--bn-t-fast` (120ms). Read right after the
+     click, the computed style is mid-transition — measured once as `rgb(122, 131, 153)`,
+     neither the grey start nor the accent end. `settleMotion` (`motionSettled.ts`) is the
+     same wait this file already uses before reading a position out of a moving page. */
+  await settleMotion(page)
+
+  const accent = await accentRGB(page)
+  const border = await page
+    .locator(".pricing-price[data-answer='typed'] .pricing-field")
+    .first()
+    .evaluate((el) => getComputedStyle(el).borderColor)
+  expect(border, `the typed field's focused border is ${border}, not the accent ${accent}`).toBe(accent)
+})
+
+/* ---- Compare ON: the anchor holds at three reference columns and at four ------------------------- */
+
+/** `.pricing-caption` and `.pricing-row` both read `--pricing-cols` off the same `.pricing-section`
+ *  (`Pricing.css`'s own "the caption and the grid" rule), so their resolved `grid-template-columns`
+ *  agree by construction — this asserts that fact rather than assuming it, the way
+ *  `pricing-markdown.spec.ts`'s own `--pricing-cols` check already does for its screen. */
+async function tracksAgree(page: Page): Promise<void> {
+  const [row, caption] = await Promise.all([
+    page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+    page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+  ])
+  expect(row, `row tracks "${row}" disagree with caption tracks "${caption}"`).toBe(caption)
+}
+
+test('Compare on with no Direct column: three reference columns, the anchor still holds', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, {
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+  })
+  await page.getByRole('button', { name: 'Compare' }).first().click()
+  await expect(page.locator('.pricing-ref-low')).toHaveCount(1) // Compare is really on
+  await expect(page.locator(".pricing-section[data-direct='none']")).toHaveCount(1)
+  await tracksAgree(page)
+  await typeAndCheck(page)
+})
+
+test('Compare on with a Direct column: four reference columns, the anchor still holds', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, {
+    skus: [
+      sku({
+        snap: { market: '22.03', direct_low: '21.50', low: '21.98', low_with_shipping: '22.98', now: null },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+  })
+  await page.getByRole('button', { name: 'Compare' }).first().click()
+  await expect(page.locator('.pricing-ref-direct_low')).toHaveCount(1) // Compare is really on, direct really drawn
+  await expect(page.locator(".pricing-section[data-direct='some']")).toHaveCount(1)
+  await tracksAgree(page)
+  await typeAndCheck(page)
+})
