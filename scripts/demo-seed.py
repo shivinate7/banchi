@@ -17,10 +17,13 @@ WHAT IS REAL AND WHAT IS NOT, because the distinction is the whole design:
   INVENTED   which of those cards are in which box at which index, what sold, what is
             held back and to whom it shipped. None of it describes a physical object.
 
-  SYNTHETIC  the photographs. `card_image()` draws them. NOT real card art and not real
-            photographs: a published demo carries neither somebody else's illustration
-            nor a picture of the owner's desk, and a drawn card is reproducible from this
-            file, which a photograph never is.
+  CURATED    the photographs. Real photographs of the owner's own cards, on the owner's
+            ruling (see `write_photo`), read from `demo-assets/` — the one tracked-image
+            exception — and QR-cleared twice: at full resolution when `make demo-photos`
+            curates them, and again on the published bytes when `demo-record.py` copies
+            them. A live code card is a bearer instrument (D70). This paragraph said
+            SYNTHETIC, drawn by `card_image()`, until 2026-09-24; that function was gone
+            since 2026-09-06 (`docs/specs/demo.md` §3).
 
 DETERMINISTIC. One RNG, seeded from a constant, so re-running writes the same store. The
 recorder downstream turns this into a fixture bundle, and a bundle that changed every time
@@ -401,6 +404,15 @@ def build_store(force: bool) -> dict:
                 % (home, len(inventory.cards))
             )
 
+        # EVERY BOX HAS A NAME. The owner ruled that a box number is never shown, so a demo box
+        # with no name would draw whatever fallback a screen invents for one.
+        box_names = {spec["box"]: str(spec.get("name") or "").strip() for spec in BOXES}
+        unnamed = sorted(box for box, name in box_names.items() if not name)
+        if unnamed:
+            raise SystemExit("every demo box needs a name; box(es) %s have none" % unnamed)
+        if len(set(box_names.values())) != len(box_names):
+            raise SystemExit("two demo boxes share a name, and D20 makes a name unique")
+
         for spec in BOXES:
             number = spec["box"]
             inventory.boxes[str(number)] = Box(
@@ -471,6 +483,13 @@ def build_store(force: bool) -> dict:
                     card.sku = row.sku
                     card.confidence = "high"
                     card.run = "demo-run-%d" % number
+                    # D213: THE SET AND THE CATALOGUE'S RARITY ARE STORED FACTS, written with
+                    # the SKU. The manifest carries both off the identification this
+                    # photograph really received, so they are the facts `pkmnscan cards
+                    # variants` would backfill. Without them every card read `null` for both,
+                    # and `#/inventory`'s Set and Rarity menus offered one empty choice each.
+                    card.set_name = row.set_name or None
+                    card.rarity = row.rarity or None
                 if state == "retired":
                     card.retire_reason = "damaged"
                 if state == "moved":
@@ -505,6 +524,18 @@ def build_store(force: bool) -> dict:
                     counts["moved"] += 1
                     counts["identified"] = counts.get("identified", 0) - 1
                     break
+
+        # THE ONE CARD WITH A REAL PRICE HISTORY STAYS ON HAND, for the reason the moved card
+        # above is guaranteed: a state no demo store holds is a screen no viewer sees. The
+        # archive below holds one real reading (`write_archive`), and "Value my stock" values
+        # only what is on hand, so a sold copy would leave that press empty.
+        for card, _ in placed:
+            if card.sku in ARCHIVED_SKUS and card.state in ("sold", "retired"):
+                counts[card.state] = counts.get(card.state, 0) - 1
+                card.state = "identified"
+                card.retire_reason = None
+                inventory.cards[card.key] = card
+                counts["identified"] = counts.get("identified", 0) + 1
 
         # ------------------------------------------------------------------- listings
         # One row per SKU, holding QUANTITIES rather than addresses (D7 amended). `live` is a
@@ -591,7 +622,10 @@ def build_store(force: bool) -> dict:
                     position=card.key,
                     box=card.box,
                     index=card.index,
-                    label="Box %d · Card %d" % (card.box, card.index),
+                    # BY THE BOX'S NAME, NEVER ITS NUMBER (the owner's ruling: a box number
+                    # is never shown). `/queues` re-labels every entry through the server's
+                    # own place formula, so this string is a fallback nothing draws today.
+                    label="%s, card %d" % (box_names[card.box], card.index),
                     photo=card.photo,
                     read={
                         "name": row.name,
@@ -744,6 +778,88 @@ def write_corpus(placed: List[Tuple[Card, "Row"]]) -> int:
     return len(skus)
 
 
+# --------------------------------------------------------------------- the price archive
+
+# A REAL READING, COMMITTED AS GROUND TRUTH: one month of what Vilemaw (Unleashed, Near Mint
+# Foil) sold for on TCGplayer, captured 2026-08-30 and kept under `fixtures/` for the harness.
+# Every other price history in this product is read from a host that refuses an honest
+# User-Agent (D216), so a published page built in CI can fetch none of them. This is the one
+# the demo can carry without a network call and without inventing a price.
+PRICE_HISTORY_FIXTURE = FIXTURES / "tcgplayer_price_history_vilemaw_month.json"
+PRODUCTS_FIXTURE = FIXTURES / "tcgcsv_riftbound_unleashed_products.json"
+ARCHIVED_SKUS = frozenset(
+    str(result.get("skuId"))
+    for result in json.loads(PRICE_HISTORY_FIXTURE.read_text()).get("result") or []
+)
+
+
+class FixtureMarket:
+    """`pipeline/pricearchive.py:_MarketLike`, answered from the committed reading only.
+
+    THE REAL SWEEP DOES THE WORK. `write_archive` hands this to `pricearchive.sweep`, so the
+    buckets the archive holds are built by the same code `pkmnscan archive sweep --write`
+    runs — this class replaces only the network. A SKU the fixture does not carry is a
+    refusal, named, never an invented series.
+    """
+
+    RANGE = "month"
+
+    def __init__(self) -> None:
+        from pipeline import pricehistory
+
+        self.pricehistory = pricehistory
+        self.payload = json.loads(PRICE_HISTORY_FIXTURE.read_text())
+        products = json.loads(PRODUCTS_FIXTURE.read_text()).get("results") or []
+        self.products = pricehistory.ProductIndex.build(products)
+
+    def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
+        from pipeline import tcgcsv
+
+        readings: Dict[str, object] = {}
+        refusals: Dict[str, str] = {}
+        for row in rows:
+            sku = str(row.get(tcgcsv.SKU_COLUMN) or "")
+            product = self.products.find(row.get("Number"), row.get(tcgcsv.NAME_COLUMN))
+            series = (
+                self.pricehistory.parse_history(self.payload, product, self.RANGE).get(sku)
+                if product else None
+            )
+            if series is None:
+                refusals[sku] = "no committed reading for this SKU"
+                continue
+            readings[sku] = self.pricehistory.Reading(
+                sku=sku, product_id=product, series={self.RANGE: series}
+            )
+        return readings, refusals
+
+
+def write_archive() -> int:
+    """The price-history archive (D219), holding the one reading above. Returns buckets written.
+
+    Read by `#/product` (archive first, D227) and by `#/revenue`'s "Value my stock" (D236), so
+    both draw a real month for Vilemaw on the published page. The export row comes from the
+    committed Riftbound export, and `at` is the demo's own clock, so a rebuild is
+    byte-identical.
+    """
+    from pipeline import pricearchive, tcgcsv
+
+    export = tcgcsv.read_export(FIXTURES / "riftbound_export_untouched.csv")
+    rows = {
+        str(row.get(tcgcsv.SKU_COLUMN)): dict(row)
+        for row in export.rows
+        if str(row.get(tcgcsv.SKU_COLUMN)) in ARCHIVED_SKUS
+    }
+    if not rows:
+        return 0
+    buckets, sources, refusals, _ = pricearchive.sweep(
+        rows, FixtureMarket(), (FixtureMarket.RANGE,), now=int(NOW.timestamp())
+    )
+    with Store().write() as snapshot:
+        snapshot.archive.upsert(buckets)
+        snapshot.archive.record_pass(sources)
+    return len(buckets)
+
+
 # ------------------------------------------------------------------------------- entry
 
 
@@ -765,6 +881,7 @@ def main() -> int:
 
     counts, placed = build_store(args.force)
     counts["answers"] = write_corpus(placed)
+    counts["archived"] = write_archive()
 
     home = store_files.home()
     counts["runs"] = 0
@@ -773,7 +890,7 @@ def main() -> int:
             counts["runs"] += 1
 
     print("demo store seeded at %s" % home)
-    for key in ("boxes", "cards", "photos", "listings", "answers", "review",
+    for key in ("boxes", "cards", "photos", "listings", "answers", "archived", "review",
                 "runs", "orders", "sold", "retired", "moved", "captured"):
         print("  %-9s %d" % (key, counts.get(key, 0)))
     return 0

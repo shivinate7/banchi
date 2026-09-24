@@ -77,10 +77,6 @@
     "app/src/OrdersWalkPane.tsx": {
       "R2-class": "orders"
     },
-    "app/src/PriceHistory.tsx": {
-      "R2-class": "product",
-      "R2-money": "product"
-    },
     "app/src/PriceTrend.tsx": {
       "R2-class": "b-pricing"
     },
@@ -90,10 +86,6 @@
       "R2-class": "b-pricing",
       "R2-date": "b-pricing",
       "R2-money": "b-pricing"
-    },
-    "app/src/ProductHistory.tsx": {
-      "R1": "product",
-      "R2-class": "product"
     },
     "app/src/Revenue.tsx": {
       "R1": "sales",
@@ -202,11 +194,6 @@
     },
     "/fulfillment": {
       "page": "fulfillment"
-    },
-    "/product": {
-      "page": "product",
-      "width": "product",
-      "top": "product"
     }
   }
 }
