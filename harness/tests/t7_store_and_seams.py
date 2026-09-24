@@ -18598,7 +18598,7 @@ def check_send_review_r3(checks: Checks) -> None:
             except pipeline_routes.PipelineRefusal as refusal:
                 code, said = refusal.code, str(refusal)
             checks.ok(
-                code == "send_held" and "price change" in said and "13:00" in said,
+                code == "price_change_held" and "price change" in said and "13:00" in said,
                 f"{label}: THE LISTING SEND NAMES THE MARK-DOWN THAT BLOCKS IT: {code}: {said}",
             )
             checks.ok(

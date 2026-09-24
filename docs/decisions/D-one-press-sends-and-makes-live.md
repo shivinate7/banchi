@@ -184,3 +184,40 @@ WHAT IS NOT KNOWN, AND WHERE THE CODE DOES NOT GUESS. TCGplayer's upload answer 
 count of rows it took, not which rows. So a turned-away row is named by the check after the
 wait, not at the send. Whether the portal's `Messages` name the rows is not measured.
 
+
+### Round 3: what the second review found, and the fixes (2026-09-24)
+
+The review of round 2 failed. Each finding is fixed at its cause, and each has a T7 case in
+`check_send_review_r3` that went red on the round-2 build before the fix. F3 is a screen
+finding, so its red case is in `app/tests/pricing.spec.ts`.
+
+- **F1, a failure after the receipt.** A step that timed out, or any error before the send,
+  left the receipt at `deciding`. It then read `sending` while the server lived, and both
+  buttons stayed off. Now every failure after the receipt exists ends known. If the press
+  counted copies, the send is UNKNOWN: the copies stay counted, the claim holds them, and the
+  check past the wait resolves it. If it counted nothing, it leaves no receipt and no claim.
+  A receipt reads `sending` only while its press runs. In this server that is exact: the one
+  press lock names the press it runs.
+- **F2, a mark-down press that died.** A dead press left a claim that nothing released. Now a
+  mark-down claim that no running press holds is an unknown mark-down. The check past the
+  wait compares TCGplayer's prices with the file's, and releases the claim. The owner never
+  sends a price again to free the cards. An error inside a mark-down press is held when the
+  push had started, and released when it had not. A listing send over those cards is refused,
+  and the refusal names the price change by the time it was pressed.
+- **F3, the Staged warning.** The card keeps "do not publish it there" after the check, beside
+  Take back, for as long as it draws the receipt.
+- **F4, the baseline.** The receipt records what TCGplayer held before any copy is counted.
+  A press that dies after the count leaves the check a real baseline, not zero. Sales since a
+  send are dated by the card when the receipt has no figure.
+- **F5.** A press that adds no copy writes no claim.
+- **F6.** The claim's stale check has its own case: a hand `emit` between a press's plan and
+  its save makes the press refuse. The case is red with the check removed.
+- **The listing door and D100.** A listing row must add at least one copy. A row adding none
+  only moves a price, and a price goes through the price door, where D100's zero rule holds
+  whole. The open question above still stands for the listing door as a whole.
+- **A mark-down's new price.** A listing row carries a price. A listing send now leaves out
+  the cards that a mark-down re-priced inside the publish lag, so that it cannot put the old
+  price back. Their copies stay on the list for a later press, and the receipt names them.
+- **A downloaded file (the orchestrator's call).** Take them back is offered only after a
+  SECOND check, one wait after the first. The wait counts from when Banchi wrote the file, and
+  the owner uploads it by hand at an unknown time.

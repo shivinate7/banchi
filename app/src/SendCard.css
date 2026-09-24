@@ -38,6 +38,11 @@
   gap: var(--bn-1);
 }
 
+/* The Staged warning under a checked receipt's sentence (F3): the notice's own body text. */
+.send-staged {
+  margin: var(--bn-1) 0 0;
+}
+
 /* A card list under a notice: the name reads first, the figure beside it in the reading face. */
 .send-names {
   display: grid;

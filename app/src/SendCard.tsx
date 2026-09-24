@@ -55,6 +55,8 @@ function refusalTitle(code: string): string {
       return 'A send to TCGplayer is already running, so nothing was sent again.'
     case 'send_held':
       return 'Some of these cards wait on a send TCGplayer has not confirmed, so nothing was sent.'
+    case 'price_change_held':
+      return 'Some of these cards wait on a price change TCGplayer has not confirmed, so nothing was sent.'
     case 'send_unknown':
       return 'TCGplayer did not confirm this send. Do not send these copies again.'
     case 'take_back_not_yet':
@@ -105,6 +107,17 @@ function MissingList({ send }: { readonly send: SendSummary }) {
   )
 }
 
+/** The upload TCGplayer never confirmed may still wait in its Staged list. SAID FOR AS LONG AS
+ *  THE RECEIPT IS DRAWN, before the check and after it, beside Take back too (the round-2
+ *  review, F3): nothing here can see that upload leave Staged, and publishing it by hand after
+ *  a take-back would list the same copies twice. */
+const STAGED_WARNING = 'The upload may still wait in TCGplayer’s Staged list. Do not publish it there.'
+
+function StagedWarning({ send }: { readonly send: SendSummary }) {
+  if (!send.unknown?.staged) return null
+  return <p className="send-staged">{STAGED_WARNING}</p>
+}
+
 /** One receipt, in one sentence and at most one list. `takeBack` is drawn only when the server
  *  says the copies are takeable, which it says only after a check past the wait. */
 function SendStanding({
@@ -134,9 +147,7 @@ function SendStanding({
     case 'unknown':
       return (
         <Notice tone="warn" compact className="send-standing send-unknown" title={`TCGplayer has not confirmed ${copies}.`}>
-          {send.unknown?.staged
-            ? 'The upload may still wait in TCGplayer’s Staged list. Do not publish it there.'
-            : 'They may be live.'}{' '}
+          {send.unknown?.staged ? STAGED_WARNING : 'They may be live.'}{' '}
           {send.held
             ? `Until Banchi checks, after ${clockTime(send.check_after)}, they stay out of every send.`
             : `Banchi checks after ${clockTime(send.check_after)}.`}{' '}
@@ -167,6 +178,7 @@ function SendStanding({
       return (
         <Notice tone="ok" compact className="send-standing" title={`Live and checked at ${clockTime(send.checked_at)}.`}>
           {send.check.found} of {send.check.expected} found at TCGplayer.
+          <StagedWarning send={send} />
         </Notice>
       )
     case 'short':
@@ -179,6 +191,7 @@ function SendStanding({
           title={`${send.check.found} of ${send.check.expected} found at TCGplayer at ${clockTime(send.checked_at)}.`}
           action={action}
         >
+          <StagedWarning send={send} />
           <MissingList send={send} />
         </Notice>
       )

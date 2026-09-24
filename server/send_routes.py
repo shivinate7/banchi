@@ -708,7 +708,7 @@ def _markdown_blocks(conflict: dict, step: str) -> PipelineRefusal:
     after = f"after {clock(wait)}" if wait is not None else "after the wait"
     return PipelineRefusal(
         HTTPStatus.CONFLICT,
-        "send_held",
+        "price_change_held",
         f"{count} of these cards are in the price change pressed at {pressed}, and TCGplayer "
         f"has not confirmed it. They stay out of every send until Banchi checks what is live "
         f"{after}. Nothing was {step}.",

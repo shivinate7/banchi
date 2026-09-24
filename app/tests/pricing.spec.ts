@@ -1315,6 +1315,56 @@ test('a send TCGplayer did not confirm is held, names the upload waiting, and of
   await expect(page.getByRole('button', { name: /^Take .* back$/ })).toHaveCount(0)
 })
 
+test('an unconfirmed send whose upload may wait in Staged keeps saying so after the check, beside Take back', async ({
+  page,
+}) => {
+  /* THE ROUND-2 REVIEW, F3. Past the wait the check found none of the copies, so they can come
+     back. The upload TCGplayer never confirmed may still wait in its Staged list: taking the
+     copies back and then publishing that upload by hand would list them twice. The warning
+     stays for as long as the receipt is drawn. */
+  const staged = { stage: 'publish', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' }
+  const short = sendSummary({
+    state: 'short',
+    published_at: null,
+    held: false,
+    takeable: 3,
+    checked_at: '2026-09-24T12:18:00+00:00',
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+    unknown: staged,
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
+  const card = page.locator('.send-short-check')
+  await expect(card).toContainText('0 of 3 found at TCGplayer')
+  await expect(card).toContainText('may still wait in TCGplayer’s Staged list')
+  await expect(card).toContainText('Do not publish it there')
+  await expect(card.getByRole('button', { name: 'Take 3 copies back' })).toBeVisible()
+})
+
+test('an unconfirmed send the check found whole still names the upload that may wait in Staged', async ({ page }) => {
+  /* NOTHING HERE CAN SAY THE UPLOAD LEFT STAGED: the copies found live may be that upload, or a
+     hand upload of the same file. The warning outlives the check (F3). Checked moments ago, so
+     the card still draws it. */
+  const found = sendSummary({
+    state: 'checked',
+    published_at: null,
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 3, expected: 3, missing: [] },
+    unknown: { stage: 'publish', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [found] }) })
+  const card = page.locator('.send-standing')
+  await expect(card).toContainText('3 of 3 found at TCGplayer')
+  await expect(card).toContainText('may still wait in TCGplayer’s Staged list')
+})
+
+test('a press over cards a price change holds is refused by name, with no retry', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'price_change_held' }) })
+  await sendPress(page).click()
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('Some of these cards wait on a price change TCGplayer has not confirmed, so nothing was sent.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+})
+
 test('a press over held cards is refused by name, with no retry', async ({ page }) => {
   await open(page, { send: () => ({ status: 409, code: 'send_held' }) })
   await sendPress(page).click()
