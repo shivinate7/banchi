@@ -191,6 +191,17 @@ async function stubBox(page: Page, boxName: string): Promise<void> {
 async function frame(page: Page, size: (typeof SIZES)[number], theme: (typeof THEMES)[number]) {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.emulateMedia({ colorScheme: theme })
+  /* SOLD SHOWN, so the departed copy is on the list to be read. Seeded before first paint, the
+     same call `inventory.spec.ts` makes for the same device key. */
+  await page.addInitScript(() => {
+    try {
+      /* eslint-disable-next-line no-restricted-syntax -- seeding the walk's own device key into
+         a known state before first paint, as `inventory.spec.ts` does. */
+      window.localStorage.setItem('banchi.inventory.hide-sold', 'show')
+    } catch {
+      /* unreadable storage folds sold away, which the departed assertions below would name */
+    }
+  })
 }
 
 const NO_BOX_NUMBER = /\bBox\s+\d+\b|\bBOX\s+\d+\b/

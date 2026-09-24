@@ -238,19 +238,23 @@
   gap: 8px;
   /* The kit's large control height, because the pill is a link to the card (LOC-26: it was 30px,
      with a 12px path and a 15px figure, the one place cue while the owner judges a card). */
-  height: var(--bn-control-h-lg);
-  padding: 0 14px 0 12px;
-  border-radius: var(--bn-r-full);
+  min-height: var(--bn-control-h-lg);
+  padding: var(--bn-1) 14px var(--bn-1) 12px;
+  border-radius: var(--bn-r-lg);
   background: var(--bn-surface-glass);
   backdrop-filter: saturate(1.3) blur(10px);
   -webkit-backdrop-filter: saturate(1.3) blur(10px);
   box-shadow: var(--bn-shadow-1);
   color: var(--bn-ink);
   --pos-slot: 18px;
-  white-space: nowrap;
   max-width: calc(100% - var(--bn-5) * 2);
-  overflow: hidden;
 }
+/* THE PLACE WRAPS BETWEEN ITS PARTS, NEVER INSIDE ONE, AND NEVER CLIPS. A box is named now, not
+   numbered (D-a-box-is-shown-by-its-name), so the pill is as long as the name: at 390 the card's
+   own number fell off the end under `overflow: hidden`. Each part keeps one line. */
+.review-caption .position-run { white-space: normal; line-height: var(--bn-lh-snug); }
+.review-caption .position-run-path,
+.review-caption .position-run-num { white-space: nowrap; }
 .review-caption > .bn-icon { color: var(--bn-accent); flex: none; }
 .review-caption .position-run {
   font-size: var(--pos-slot); line-height: 1; letter-spacing: 0;

@@ -222,6 +222,18 @@ export function placePartsOf(label: string | null | undefined): PlaceText | null
   return null
 }
 
+/** A place label as the words a screen draws one per element, the separator drawn by CSS (D218):
+ *  `['RB Origins', 'Section 2', 'Card 5']`, or the label whole when it is no place. */
+export function placeWordsOf(label: string): string[] {
+  const place = placePartsOf(label)
+  if (place === null) return [label]
+  return [
+    place.box,
+    ...(place.section === null ? [] : [`Section ${place.section}`]),
+    ...(place.card === null ? [] : [`Card ${place.card}`]),
+  ]
+}
+
 /** The second scale: how far into its own SECTION a card sits. Null when there is no honest
  *  answer — a pooled card, a degraded block, a box the server cannot size. */
 export type SectionDepth = {

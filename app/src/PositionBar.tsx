@@ -145,6 +145,15 @@ export function PositionBar({
         />
       </div>
 
+      {/* THE FULFILLER'S STRIP SAYS WHICH END IS CARD 1 TOO (the owner's orientation: the far back),
+          at his 20px floor. The owner's is written once under the ruler, inside the zoom block. */}
+      {persona !== 'fulfiller' ? null : (
+        <p className="position-bar-ends" aria-hidden="true">
+          <span className="position-bar-end-back">Back</span>
+          <span className="position-bar-end-front">Front</span>
+        </p>
+      )}
+
       {!sectionDepth ? null : (
         <div className="position-bar-zoom">
           <div className="position-bar-track position-bar-sectiontrack">

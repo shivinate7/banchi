@@ -21,7 +21,7 @@
  * PositionLabel.css.
  */
 
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 
 import { placePartsOf, sayPlace } from './position'
 import { STORE_KEY } from './storeKey'
@@ -124,24 +124,28 @@ export function PositionLabel({
   if (place.section !== null) path.push({ key: 'Section', value: String(place.section), note: sectioned })
   const slot: Part | null = place.card === null ? null : { key: 'Card', value: String(place.card) }
 
-  /* THE SPOKEN FORM IS THE PLACE AS A SENTENCE, commas and spaces (LOC-12 heard `BOX 1SECTION
-     3CARD13`), and a departed card's is in the past tense. */
-  const spoken = [named, place.section === null ? null : `Section ${place.section}`, slot === null ? null : `Card ${slot.value}`]
-    .filter((part): part is string => part !== null)
-    .join(', ')
-  const aria = gone ? `Was at ${spoken}` : spoken
+  /* THE SPOKEN FORM IS THE SERVER'S LABEL AS A SENTENCE (LOC-12 heard `BOX 1SECTION 3CARD13`):
+     since the owner's ruling it already names the box by its name, with commas, and `sayPlace`
+     reads an older dotted label the same way. A departed card's is in the past tense. */
+  const aria = gone ? `Was at ${sayPlace(label)}` : sayPlace(label)
 
   if (flow === 'run') {
     return (
       <span className="position-run" role="group" aria-label={aria} data-departed={gone ? 'true' : undefined}>
+        {/* A `<wbr>` AFTER EACH PART: the parts touch with no space between them (the gap is a
+            margin), so without it a narrow line had no place to break and clipped the card's own
+            number off the end. It adds nothing to the text. */}
         {path.map((part, at) => (
-          <span className="position-run-path" key={part.key + part.value + at}>
-            {part.key === '' ? null : `${part.key.toUpperCase()} `}
-            <b>{part.value}</b>
-            {part.note === null || part.note === undefined ? null : (
-              <span className="position-run-note">{part.note}</span>
-            )}
-          </span>
+          <Fragment key={part.key + part.value + at}>
+            <span className="position-run-path">
+              {part.key === '' ? null : `${part.key.toUpperCase()} `}
+              <b>{part.value}</b>
+              {part.note === null || part.note === undefined ? null : (
+                <span className="position-run-note">{part.note}</span>
+              )}
+            </span>
+            <wbr />
+          </Fragment>
         ))}
         {slot === null ? null : (
           <>

@@ -1546,8 +1546,9 @@ async function cardRow(page: Page, name: string): Promise<Locator> {
  *  web-first assertion that can only wait for the second half. */
 /** D218: the seam between `PlaceText`'s parts is CSS now (`.ff-place-elem::before`), which
  *  `allTextContents` never sees — generated content is not part of an element's `textContent`.
- *  `expected` keeps the server's own spelling, dot and all, because that is still what a caller
- *  reads and what `aria-label` would carry; this strips the same seam from it before comparing,
+ *  `expected` keeps the server's own spelling, commas and all (the label has typed no dot since
+ *  D-a-box-is-shown-by-its-name), because that is what a caller reads and what `aria-label`
+ *  would carry; this strips the same seam from it before comparing,
  *  so the assertion is about which PARTS are drawn and in what order, not about a character this
  *  component was told to stop typing. */
 async function expectWalk(page: Page, expected: readonly string[]): Promise<void> {
@@ -1555,7 +1556,7 @@ async function expectWalk(page: Page, expected: readonly string[]): Promise<void
     await openEveryBox(page)
     const drawn = await view(page).locator('.fulfillment-row .fulfillment-place').allTextContents()
     expect(drawn.map((one) => one.replace(/\s+/g, ' ').trim())).toEqual(
-      expected.map((one) => one.replace(/\s*·\s*/g, '')),
+      expected.map((one) => one.replace(/\s*[·,]\s*/g, '')),
     )
   }).toPass({ timeout: 20_000 })
 }
@@ -1678,7 +1679,7 @@ async function sellOpenCard(page: Page): Promise<void> {
  *  still passes the server's own spelling, dot and all, so it reads like the label everywhere
  *  else in this file; this is the one place that strips it before the match. */
 function receiptFor(page: Page, place: string): Locator {
-  return view(page).locator('.fulfillment-panel', { hasText: place.replace(/\s*·\s*/g, '') })
+  return view(page).locator('.fulfillment-panel', { hasText: place.replace(/\s*[·,]\s*/g, '') })
 }
 
 // ------------------------------------------------------------------------------ the table

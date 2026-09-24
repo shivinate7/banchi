@@ -29,7 +29,7 @@ import { PullConfirm } from './PullConfirm'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
-import { placePartsOf, sayPlace } from './position'
+import { placePartsOf, placeWordsOf, sayPlace } from './position'
 import { Icon, Logo, Modal, useOverlayLayer } from './kit'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
@@ -1006,7 +1006,7 @@ export function Fulfillment() {
                     server's raw label off a variable, so the reader's plain-string scan never
                     saw the dot in it. Same string, same register; the seam is CSS now. */}
                 <span className="ff-receipt-place">
-                  {sale.card.place.split(' · ').map((part, at) => (
+                  {placeWordsOf(sale.card.place).map((part, at) => (
                     <span key={at}>{part}</span>
                   ))}
                 </span>
@@ -1454,7 +1454,7 @@ export function Fulfillment() {
                           never saw the dot in it. Same string, same register; the seam is CSS
                           now. */}
                       <span className="fulfillment-say ff-done-place">
-                        {row.place.split(' · ').map((part, at) => (
+                        {placeWordsOf(row.place).map((part, at) => (
                           <span key={at}>{part}</span>
                         ))}
                       </span>
