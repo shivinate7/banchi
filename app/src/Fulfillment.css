@@ -1277,6 +1277,11 @@
 .ff-zoom {
   position: fixed;
   inset: 0;
+  /* A FALLBACK ONLY, for the instant before `useOverlayLayer` (`kit/overlay.tsx`) attaches and
+   * overrides it inline. The zoom is now on the kit's own layer stack, the same one the "?"
+   * sheet's `Modal` joins, so which of the two paints on top is decided by open order, not by
+   * this number — see that hook's own comment for why a static value here once meant the
+   * photo always won regardless of which was opened last. */
   z-index: 70;
   width: 100%;
   display: flex;

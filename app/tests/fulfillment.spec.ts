@@ -1,6 +1,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 
 /* docs/DESIGN.md's Fulfillment constraints table, every row of it, as assertions.
  *
@@ -1012,7 +1013,10 @@ type Run = { text: string; where: string; size: number; color: string; ground: s
  */
 async function runsIn(view: Locator): Promise<Run[]> {
   return view.evaluate((root) => {
-    /* `checkVisibility()` alone, not the box: see the comment above this function. */
+    /* `checkVisibility()` alone, not the box: see the comment above this function. KNOWN GAP,
+     * not this screen's shape: a 0x0 wrapper with `overflow: visible` holding text that
+     * paints outside its own box is read as unpainted here too — the box checked is the
+     * TEXT'S OWN PARENT, never where its content actually renders. */
     const painted = (element: Element): boolean => {
       if (!element.checkVisibility()) return false
       const box = element.getBoundingClientRect()
@@ -2033,6 +2037,13 @@ test('"?" opens this screen\'s own keyboard reference, and closes it again', asy
   await expect(sheet).toBeVisible()
   await expect(sheet).toContainText('Esc')
   await expect(sheet).toContainText('Close the enlarged photograph')
+  // THE MODAL'S OWN ENTRANCE ANIMATION (`bn-dialog-in`/`bn-sheet-up`, kit.css) SCALES AND
+  // TRANSLATES IT IN over `--bn-t-slow` — a transform, so `getBoundingClientRect()` reads the
+  // TRANSIENT painted size mid-animation, not the settled one. `toBeVisible()` above passes
+  // from the animation's first frame, well before that. Measured: the Close button's own
+  // 44px floor read 43.79px under load, mid-scale. `settleMotion` (`motionSettled.ts`) is the
+  // fix `orders.spec.ts`'s D118 guard already uses for the same shape of reading.
+  await settleMotion(page)
   // THE FLOOR TABLE REACHES THE SHEET TOO — its key caps and text are on screen exactly
   // like any other card, and `battery` holds them to the same nine rows while it is open.
   await battery(page, 'keyboard shortcuts sheet')
@@ -2047,6 +2058,56 @@ test('"?" opens this screen\'s own keyboard reference, and closes it again', asy
   await expect(page.locator('.ff-keys')).toHaveCount(0)
 })
 
+/* THE ZOOM AND THE "?" SHEET ARE BOTH REACHABLE AT ONCE — zoom a photo, then press "?" — and
+ * before this test neither knew about the other. The zoom answered its own Escape with a
+ * plain `document` listener; the kit `Modal`'s own listener is on `window`, in the CAPTURE
+ * phase, and stops the event once it decides it is the top layer — which it always was,
+ * being the only thing on the kit's stack. So Escape closed the sheet BEHIND the photo and
+ * the photo, visually on top the whole time, never moved: a real regression, since the
+ * screen never told him which of the two his key press had just answered.
+ *
+ * Both now join the kit's one stack (`kit/overlay.tsx`) through `useOverlayLayer`, so the
+ * sheet — opened SECOND — is the one Escape closes first, and paints above the zoom for the
+ * same reason: a stack position, not a class-wide constant, decides both. */
+test('a zoomed photo and the "?" sheet share one Escape and one order, and each gives focus back', async ({
+  page,
+}) => {
+  await openList(page)
+  await openCard(page, 'Charizard ex')
+  const photoBtn = view(page).getByRole('button', { name: 'Show the photo bigger' })
+  await photoBtn.click()
+  const zoomEl = page.locator('.ff-zoom')
+  await expect(zoomEl).toBeVisible()
+  await expect(zoomEl).toBeFocused()
+
+  await page.keyboard.press('?')
+  const sheet = page.locator('.ff-keys')
+  await expect(sheet).toBeVisible()
+  // BOTH REACHABLE: opening the sheet did not close the photo behind it.
+  await expect(zoomEl).toBeVisible()
+
+  // THE SHEET OPENED LAST, SO IT PAINTS ON TOP — read off the two layers' own z-index
+  // rather than a point on screen, which is what `useOverlayLayer` actually sets.
+  const [zoomZ, sheetZ] = await Promise.all([
+    zoomEl.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+    sheet.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+  ])
+  expect(sheetZ, `zoom z-index ${zoomZ}, sheet z-index ${sheetZ}`).toBeGreaterThan(zoomZ)
+
+  // FIRST ESCAPE closes the sheet — the shared stack's own top — and gives focus back to
+  // the photo, which is what had focus the moment "?" opened it.
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await expect(zoomEl).toBeVisible()
+  await expect(zoomEl).toBeFocused()
+
+  // SECOND ESCAPE closes the zoom, now the stack's own top on its own, and gives focus back
+  // to the card's own photo button.
+  await page.keyboard.press('Escape')
+  await expect(zoomEl).toHaveCount(0)
+  await expect(photoBtn).toBeFocused()
+})
+
 /* ONE COLUMN FOR THE KEYS, MEASURED — a `display: grid` on each `<li>` looked right and was
  * not: grid tracks size PER CONTAINER, so "Esc" (3 characters) and "?" (1) each sized their
  * OWN first column, and the two rows' sentences landed about 18px apart (612 vs 594 at
@@ -2058,6 +2119,10 @@ async function keysSentenceXs(page: Page): Promise<number[]> {
   // Unscoped: the kit's `Modal` portals `.ff-keys` to `document.body`, not into `main.fulfillment`.
   const rows = page.locator('.ff-keys-list li .fulfillment-say')
   await expect(rows).toHaveCount(2)
+  // The Modal's own entrance animation transforms the whole panel; an x read mid-scale is a
+  // transient one, not the settled layout this test is about (see the comment beside the
+  // other `settleMotion` call above).
+  await settleMotion(page)
   return rows.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().x))
 }
 

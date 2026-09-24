@@ -30,7 +30,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { sayPlace } from './position'
-import { Icon, Logo, Modal } from './kit'
+import { Icon, Logo, Modal, useOverlayLayer } from './kit'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
 import './Fulfillment.css'
@@ -529,6 +529,10 @@ export function Fulfillment() {
   const [now, setNow] = useState(() => Date.now())
   /** The photo he tapped, so focus comes back to it when the big photo closes. */
   const photoBtn = useRef<HTMLButtonElement>(null)
+  /** The zoomed photo itself — on the kit's own layer stack (`kit/overlay.tsx`), so it and the
+   *  "?" sheet's `Modal` share one Escape and one z-order even though neither is portalled from
+   *  the other's own call. */
+  const zoomOverlay = useRef<HTMLButtonElement>(null)
 
   const reread = useCallback(() => setReads((n) => n + 1), [])
 
@@ -630,17 +634,18 @@ export function Fulfillment() {
        zoom is open — and focus would land on whatever is in that slot now. This is the node
        he tapped. */
     const opener = photoBtn.current
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setZoom(false)
-    }
-    document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('keydown', onKey)
       /* The page is hidden under the big photo, which drops focus; hand it back to the photo
          he tapped. Null once the card has left the screen, and then there is nothing to do. */
       opener?.focus({ preventScroll: true })
     }
   }, [zoom])
+
+  /* ON THE KIT'S OWN LAYER STACK (`kit/overlay.tsx`), the same one the "?" sheet's `Modal`
+   * joins — so whichever of the two opened last is the one Escape closes and the one painted
+   * on top, and Escape pressed again then reaches the other. `trap: false`: the zoomed photo's
+   * only control is itself (closing it, on click or Escape), so nothing needs to cycle by Tab. */
+  useOverlayLayer(zoomOverlay, { active: zoom, onEscape: () => setZoom(false), trap: false })
 
   /* THE ONE BINDING THIS SCREEN ANSWERS TO ON ITS OWN, no shell to carry it (D5). `?` opens
    * the small reference below; `isEditableTarget` yields to typing, `App.tsx`'s own rule for
@@ -1600,6 +1605,7 @@ export function Fulfillment() {
   const bigPhoto =
     zoom && chosen !== null && photoMissing !== chosen.key ? (
       <button
+        ref={zoomOverlay}
         className="ff-zoom"
         type="button"
         aria-label="Close the big photo"

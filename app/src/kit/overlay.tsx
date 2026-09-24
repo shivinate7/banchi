@@ -17,6 +17,11 @@ import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
  *     drawer), joins it through `useOverlayLayer`. ONLY THE TOP LAYER traps focus and takes
  *     Escape, so a layer opened over another closes first and gives focus back to the control
  *     inside the layer beneath it.
+ *   - WHICHEVER OPENED LAST PAINTS ON TOP: `useOverlayLayer` sets each layer's own z-index from
+ *     its position in the stack at the moment it joins, so a caller elsewhere in the tree — not
+ *     a sibling of the portal, so not tied by DOM paint order the way two kit panels are — still
+ *     stacks correctly against one it opens over or under (Fulfillment's own photo zoom, the
+ *     first caller that is not a kit primitive).
  *   - FOCUS GOES BACK to the control that opened the layer. If that control has left the page,
  *     focus goes to the page's h1, never to body. If the person has moved focus somewhere else
  *     on purpose, it stays there.
@@ -45,6 +50,10 @@ function isTop(root: HTMLElement): boolean {
   return stack[stack.length - 1] === root
 }
 
+/** `.bn-dialog`/`.bn-sheet`'s own z-index (kit.css) — the floor a layer's inline z-index never
+ *  goes below, and what a layer falls back to for the instant before this hook's first paint. */
+const BASE_LAYER_Z = 61
+
 /** True while an overlay layer is open. The shell asks this before it takes a key of its own. */
 export function overlayOpen(): boolean {
   return stack.length > 0
@@ -69,9 +78,20 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
     const root = ref.current
     if (!active || root === null) return
     stack.push(root)
+    /* WHICHEVER OPENED LAST PAINTS ON TOP. `.bn-dialog`/`.bn-sheet`/`.bn-popover`'s own static
+     * z-index (kit.css) ties two layers that are not siblings in DOM paint order — a portalled
+     * panel and a plain fixed-position overlay elsewhere in the tree (Fulfillment's own photo
+     * zoom, `useOverlayLayer`'d for exactly this) do not share a DOM-order tiebreak the way two
+     * portals of the same kind do. The inline style set here beats the stylesheet's number for
+     * this one element, and reads `stack`'s length AT THIS PUSH, so it only ever compares
+     * layers that are open AT THE SAME TIME — a layer that closed and reopened later still
+     * lands above whatever was already open, without the count ever growing unbounded across a
+     * long session. */
+    root.style.zIndex = String(BASE_LAYER_Z + stack.length - 1)
     return () => {
       const at = stack.lastIndexOf(root)
       if (at >= 0) stack.splice(at, 1)
+      root.style.zIndex = ''
     }
   }, [ref, active])
 
