@@ -143,14 +143,38 @@ def _flatten_div(node: ast.AST) -> Optional[List[str]]:
     return None
 
 
+def _dotted_to_subject(dotted: str) -> Optional[str]:
+    """`"store.db"` -> `"store/db.py"` when the top-level package is local, else `None`.
+
+    A bare package name with no submodule (`"store"` alone) names no single file — that
+    shape is `visit_ImportFrom`'s own `from store import x` branch to resolve, which reads
+    `node.names` for the part this function is never given.
+    """
+    parts = dotted.split(".")
+    if len(parts) > 1 and parts[0] in LOCAL_PACKAGES:
+        return "/".join(parts) + ".py"
+    return None
+
+
 class _PathCollector(ast.NodeVisitor):
-    """Every local-package import and every `Path`-chain in a module, wherever it sits.
+    """Every local-package import, every `Path`-chain and every dynamic `import_module`
+    string, wherever any of them sits in a module.
 
     `ast.walk` would also re-visit every inner `BinOp` of a chain as if it were its own
     top-level one (`ROOT / "scripts"` inside `ROOT / "scripts" / "x.py"`), which would add
     the bare directory `scripts` as a "subject" and defeat the whole point — a change
     anywhere under `scripts/` would then re-arm every target. Overriding `visit_BinOp` and
     skipping `generic_visit` once a chain resolves keeps only the outermost, full chain.
+
+    `visit_Call` reads `importlib.import_module("store.db")` (or a bare `import_module(...)`
+    reached through `from importlib import import_module`) the same way `visit_ImportFrom`
+    reads a static import — the argument is a STRING LITERAL, fully visible to the AST, not
+    the runtime-built string D247's own "WHAT THIS DOES NOT COVER" section describes (a
+    name assembled from an f-string, a variable, or an environment lookup stays invisible,
+    on purpose — this reads only what the source spells out literally). This is why
+    `scripts/price-postings-selftest.py` needs no decoy import beside its real, dynamic
+    `importlib.import_module("store.db")` / `("store.session")` calls: this visitor now
+    resolves those two calls' own literal arguments directly.
     """
 
     def __init__(self) -> None:
@@ -168,11 +192,25 @@ class _PathCollector(ast.NodeVisitor):
         if node.module:
             parts = node.module.split(".")
             if parts[0] in LOCAL_PACKAGES:
-                if len(parts) > 1:
-                    self.hits.add("/".join(parts) + ".py")
+                subject = _dotted_to_subject(node.module)
+                if subject:
+                    self.hits.add(subject)
                 else:
                     for alias in node.names:
                         self.hits.add(f"{parts[0]}/{alias.name}.py")
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        is_import_module = (
+            (isinstance(node.func, ast.Attribute) and node.func.attr == "import_module")
+            or (isinstance(node.func, ast.Name) and node.func.id == "import_module")
+        )
+        if is_import_module and node.args:
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                subject = _dotted_to_subject(first.value)
+                if subject:
+                    self.hits.add(subject)
         self.generic_visit(node)
 
 
@@ -372,6 +410,70 @@ def selftest() -> int:
         got3 = derive_subjects(fixture)
         check("only the full chain is kept, never the bare directory prefix",
               "scripts" in got3, False)
+
+    # ---- MUTATION ARM: `importlib.import_module("<literal>")` resolution is real, proved
+    # by removing it. `scripts/price-postings-selftest.py` needs this exactly — its real
+    # subjects (`store/postings.py`, `store/session.py`) are reached only by loading
+    # `store.session` by NAME, never by a static `from store import ...`. A `.bak`-shaped
+    # copy of THIS file has `visit_Call` deleted by one literal string replacement (the
+    # same technique `price-postings-selftest.py`'s own `_mutate_to_upsert` uses on
+    # `store/db.py`) and is imported under a throwaway module name, its `ROOT` repointed at
+    # the real repo root so the mutant's own file-existence filter still resolves; against a
+    # fixture calling `importlib.import_module("store.db")`, the mutant's `derive_subjects`
+    # MUST miss the subject the real one catches, or this resolution is not being tested at
+    # all.
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "fixture_import_module.py"
+        fixture.write_text(
+            'import importlib\n'
+            'db_module = importlib.import_module("store.db")\n'
+        )
+        got4 = derive_subjects(fixture)
+        check('importlib.import_module("store.db") resolves to store/db.py',
+              "store/db.py" in got4, True)
+
+        own_src = Path(__file__).read_text()
+        anchor = (
+            '    def visit_Call(self, node: ast.Call) -> None:\n'
+            '        is_import_module = (\n'
+            '            (isinstance(node.func, ast.Attribute) and node.func.attr == '
+            '"import_module")\n'
+            '            or (isinstance(node.func, ast.Name) and node.func.id == '
+            '"import_module")\n'
+            '        )\n'
+            '        if is_import_module and node.args:\n'
+            '            first = node.args[0]\n'
+            '            if isinstance(first, ast.Constant) and isinstance(first.value, '
+            'str):\n'
+            '                subject = _dotted_to_subject(first.value)\n'
+            '                if subject:\n'
+            '                    self.hits.add(subject)\n'
+            '        self.generic_visit(node)\n'
+        )
+        if own_src.count(anchor) != 1:
+            check(
+                "MUTATION ANCHOR NOT FOUND EXACTLY ONCE — visit_Call moved, this arm proves "
+                "nothing until the anchor is updated to match it",
+                False, True,
+            )
+        else:
+            mutant_path = Path(tmp) / "guard_scope_mutant.py"
+            mutant_path.write_text(own_src.replace(anchor, ""))
+            spec = importlib.util.spec_from_file_location(
+                "_guard_scope_mutant", mutant_path)
+            mutant = importlib.util.module_from_spec(spec)
+            sys.modules["_guard_scope_mutant"] = mutant
+            try:
+                spec.loader.exec_module(mutant)
+                mutant.ROOT = ROOT  # the mutant's own `__file__` sits under `tmp`, not here
+                got5 = mutant.derive_subjects(fixture)
+                check(
+                    "MUTATION: without visit_Call, the same import_module call is "
+                    "invisible — store/db.py must NOT be found",
+                    "store/db.py" in got5, False,
+                )
+            finally:
+                del sys.modules["_guard_scope_mutant"]
 
     # ---- fail-open, exercised for real against this repository's own git history.
     check("an unscoped target runs",

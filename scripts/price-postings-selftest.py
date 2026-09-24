@@ -29,17 +29,14 @@ the exception it was when written — the "own precedent" it used to cite was
 `pricearchive-selftest.py`'s OWN prior exemption, and that exemption is gone: once it's
 done, it only needs to be tested when touched.
 
-TWO STATIC IMPORTS BELOW EXIST ONLY SO THE GATE CAN SEE ITS OWN SUBJECT. The real proof
-loads `store.db` and `store.session` by NAME (`importlib.import_module`, further down),
-purging `sys.modules` first — the only way to swap in a mutated copy of `store/db.py` for
-the mutation arm without a stale, pre-mutation module staying bound. That string-shaped
-import is invisible to `scripts/guard-scope.py:derive_subjects`'s AST walk (D247's own text
-names this class of gap: "a subprocess call built from a runtime string... a self-test would
-then skip on a change that should have run it"). `store/postings.py` and `store/session.py`
-are the two real subjects this omission would have hidden — `store/db.py` alone surfaces
-only because `_mutate_to_upsert` reads its source off a literal `Path` chain. `_postings_subject`
-and `_session_subject` below are never called; they exist to put both modules in this file's
-own AST so the deriver's next call sees them, with nothing hand-typed beside it.
+`store.db` and `store.session` ARE LOADED BY NAME (`importlib.import_module`, further
+down), purging `sys.modules` first — the only way to swap in a mutated copy of
+`store/db.py` for the mutation arm without a stale, pre-mutation module staying bound.
+That call's own STRING LITERAL is what `scripts/guard-scope.py:derive_subjects`'s AST walk
+reads directly: `_PathCollector.visit_Call` resolves an `importlib.import_module("<dotted
+name>")` argument the same way `visit_ImportFrom` resolves a static import, so
+`store/postings.py` and `store/session.py` are derived subjects with no decoy import here
+and nothing hand-typed beside it.
 """
 
 from __future__ import annotations
@@ -55,8 +52,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from store import files  # noqa: E402
-from store import postings as _postings_subject  # noqa: E402,F401 — see the header: never
-from store import session as _session_subject  # noqa: E402,F401 — called, read for subjects only.
 
 PASS = 0
 FAIL = 0
@@ -81,15 +76,21 @@ def _fresh_home() -> Path:
     return home
 
 
-def run_suite(db_module, session_module) -> None:
+def run_suite(db_module, session_module, postings_module) -> None:
     """The whole proof, over whichever `store.db` module is handed in — the real one, or a
-    mutated copy. Never imports `store.db`/`store.session` at module scope, so this function
-    can be run twice in one process against two different implementations.
+    mutated copy. Never imports `store.db`/`store.session`/`store.postings` at module
+    scope, so this function can be run twice in one process against two different
+    implementations.
     """
     Store = session_module.Store
 
     # ------------------------------------------------------------ 1. a posted price lands
     with Store().write() as writable:
+        ok(isinstance(writable.postings, postings_module.Postings),
+           "`Store.write()` hands the caller `store/postings.py`'s own `Postings`, "
+           "not a stand-in — proves `store/session.py`'s `postings=Postings()` wiring "
+           "reaches the real class, in whichever `store/` copy this run loaded",
+           type(writable.postings))
         writable.postings.record(sku="9999001", price="4.99", source="emit", run="run-a")
     rows = db_module.postings_for_sku(_conn(db_module), "9999001")
     ok(len(rows) == 1, "one posting lands one row", rows)
@@ -227,15 +228,17 @@ def _run_against(home: Path, mutate: bool) -> int:
                     del sys.modules[name]
             db_module = importlib.import_module("store.db")
             session_module = importlib.import_module("store.session")
+            postings_module = importlib.import_module("store.postings")
         else:
             for name in list(sys.modules):
                 if name == "store" or name.startswith("store."):
                     del sys.modules[name]
             db_module = importlib.import_module("store.db")
             session_module = importlib.import_module("store.session")
+            postings_module = importlib.import_module("store.postings")
 
         try:
-            run_suite(db_module, session_module)
+            run_suite(db_module, session_module, postings_module)
         except Exception as exc:  # noqa: BLE001 — a crash under mutation IS a failure, not a hang
             import traceback
             traceback.print_exc()
