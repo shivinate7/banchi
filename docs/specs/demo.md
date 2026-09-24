@@ -1,7 +1,7 @@
 # The public demo, and why it is not a fork
 
 **COVERAGE WIDENED 2026-09-24**: photographs, undo, facet counts, the order walk, a typed
-search, the graveyard, one product history and the value bands (§3, §5, §8, §8a).
+search, the graveyard, the price histories and the value bands (§3, §5, §8, §8a).
 
 **STATUS, 2026-09-13: BUILT and LIVE.** `make demo` / `demo-seed` / `demo-record` /
 `demo-static` / `demo-preview` / `demo-freshness` are all real, all re-runnable, and the
@@ -136,8 +136,9 @@ reviewer could not tell a demo gap from a product defect. `sweep_coverage` adds 
   and `/orders/walk-plan` for every set of orders a person can tick. Seven orders give 127
   sets. The recorder refuses more than seven.
 
-Measured 2026-09-24: 646 recorded routes, 5.1 MB of JSON on disk. The walk plans are 1.5 MB of
-it. The built `demoServer` chunk is 3.1 MB, 168 KB gzipped. A POST read is keyed
+Measured 2026-09-24, with the recorded price histories: 786 recorded routes, 9.0 MB of JSON on
+disk. The walk plans are 1.5 MB of it. The built `demoServer` chunk is 5.3 MB, and 364 KB after
+gzip compression. A POST read is keyed
 `POST <path> <body>`, with the body's keys sorted (`demo-record.py:post_key`).
 
 **Every box has a name.** The owner ruled that a box number is never shown. So the seed refuses
@@ -246,35 +247,66 @@ under it names which refusal it was. The reasons in the table above are for the 
   graveyard, and a recorded walk plan still lists it.
 - **The order ledger.** The pull, the close and the fill each write it, and its arithmetic is
   server logic. All three are refused.
-- **A typed catalog lookup on Review**, and the per-run price history on `#/pricing`. The run
-  history needs the `month` and the `annual` range of a host that refuses an honest
-  User-Agent (D216). No committed reading holds `annual`.
+- **A typed catalog lookup on Review.** Only the empty lookup a card opens with could be
+  recorded, and the demo's queued cards carry no run, so even that one refuses.
 - **The shipping export on Home and Orders.** The Shipping stage reads the recorded export
   when it opens, and holds it in the browser's memory. Home and the Orders tab say "no
   export" until then. The fix is in `OrdersShipStage.tsx`, not here.
 
-### One real price history
+### The price histories are recorded once, on the owner's Mac
 
-`fixtures/tcgplayer_price_history_vilemaw_month.json` is a real month of Vilemaw sales,
-captured 2026-08-30 and committed for the harness. The seed writes it into the price archive
-(D219) through the real `pipeline/pricearchive.py:sweep`. A `FixtureMarket` takes the
-network's place. The seed also keeps that one card on hand. So `#/product?sku=9189317` draws a
-real month, and "Value my stock" values one real SKU. No other SKU has a reading. The demo
-never draws an invented price.
+**The owner's ruling (2026-09-24).** Every price history this product draws is read from
+`infinite-api.tcgplayer.com`. That host refuses the honest User-Agent (D216), and the owner
+allows the browser signature from the owner's own machine only. So CI never fetches a history.
+`make demo-histories` records them on the owner's Mac, when the owner chooses:
+
+    PKMNSCAN_TCG_USER_AGENT="<the browser's User-Agent>" make demo-histories
+
+- It reads every demo card that a committed export can place, over all four ranges
+  (`pipeline/pricehistory.py:RANGES`). It writes a NEW directory,
+  `fixtures/demo-price-history/<date>/`, and refuses if that directory exists. So a fixture is
+  never modified.
+- Each file is one product and one range, the endpoint's answer verbatim except that `result`
+  keeps only the SKUs the demo holds. `index.json` maps each SKU to its product.
+- Before it writes, every key of every answer is checked against an allow list of public market
+  figures (`scripts/demo-histories.py:ALLOWED_RESULT` and `ALLOWED_BUCKET`). A key outside the
+  list refuses the whole run. The User-Agent is never written.
+- Without `PKMNSCAN_TCG_USER_AGENT` it refuses, and names the variable.
+
+Measured on the first run, 2026-09-24: 92 SKUs read, 368 files, 0 refused, 3.2 MB. The 40
+Pokemon cards in `demo-assets/` have no row in a committed export, so none of them has a
+history.
+
+**Two readers, both on the newest directory.** The seed writes the price archive (D219) through
+the real `pipeline/pricearchive.py:sweep`, with a `FixtureMarket` in the network's place. So
+`#/product` and "Value my stock" draw real ranges. The recorder copies the files into the demo
+home's own market cache (`demo-record.py:warm_history_cache`), stamped at record time. So the
+per-run price history on `#/pricing` and the trend strip answer from them, and no history
+request leaves the build. The product lookup still asks the public tcgcsv mirror for a product
+number. That mirror answers the honest User-Agent. The demo never draws an invented price.
 
 ## 8a. The coverage spec
 
-`app/tests/demo-coverage.spec.ts` reads the BUILT artefact, `dist-demo/`. It serves the files
+`app/tests/demo-coverage.spec.ts` reads the BUILT artifact, `dist-demo/`. It serves the files
 on this checkout's own origin under the demo's base path, as a static host would. It checks
 that every recorded card has its photograph in the build. It checks that each screen draws its
 photographs with a 200. It presses Mark sold then Undo, a Game pick, a typed search and a
 review answer with its undo. It opens the order walk, the graveyard, product history, the
 value band and "Value my stock". No screen may draw "Not in this demo." on arrival.
 
-Run `make demo-static` first. Without `dist-demo/` the cases skip, with that reason. Set
-`DEMO_PREVIEW_URL` to a running `make demo-preview` to read every file from the preview
-server instead. Measured 2026-09-24: 17 of 17 pass on this tree. With the old `demoServer.ts`
-and no photographs, 13 of 17 fail.
+Every screen is reached from the demo's root, by the sidebar or by a control on the screen.
+The one typed link is `#/product?sku=…`, because D227 makes that view a deep link and no screen
+links to it yet.
+
+Run `make demo-static` first. Without `dist-demo/` the cases skip, with that reason.
+`DEMO_REQUIRED=1` makes a missing build a failure. Set `DEMO_PREVIEW_URL` to a running
+`make demo-preview` to read every file from the preview server instead. Measured 2026-09-24:
+18 of 18 pass on this tree. With `DEMO_REQUIRED=1` and no build, 18 of 18 fail.
+
+**CI runs both guards before it publishes.** `.github/workflows/demo.yml` runs
+`python3 scripts/demo-record.py --self-test` and then this spec with `DEMO_REQUIRED=1`, after
+`make demo-static` and before the upload. A red step stops the job, so nothing is published.
+No workflow calls `make demo-histories`.
 
 ## 9. No secret can reach a published page, and it is checked against the artifact
 

@@ -519,6 +519,38 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
 WALK_PLAN_ORDERS = 7
 
 
+HISTORIES_ROOT = REPO_ROOT / "fixtures" / "demo-price-history"
+
+
+def warm_history_cache(home: Path) -> int:
+    """The recorded histories, placed where the server's own `Market` looks first.
+
+    THE OWNER'S RULING (2026-09-24): price histories are recorded once, on the owner's Mac, by
+    `make demo-histories`, and never fetched from CI — the host refuses the honest User-Agent
+    (D216). The server reads a history through `pipeline/pricehistory.py:Market`, which answers
+    from `<home>/.cache/market/history/<product>-<range>.json` before it opens a socket. So
+    the newest recorded directory is copied there, stamped now, and the run history panel, the
+    trend strip and the product view all answer from real recorded data. Returns files placed.
+
+    The cache lives in the DEMO home (`server/pipeline_routes.py:market_cache_dir`), never in a
+    real store. A history the recording lacks still reaches the host, and is refused there.
+    """
+    if not HISTORIES_ROOT.is_dir():
+        return 0
+    dated = sorted(p for p in HISTORIES_ROOT.iterdir() if (p / "index.json").is_file())
+    if not dated:
+        return 0
+    target = home / ".cache" / "market" / "history"
+    target.mkdir(parents=True, exist_ok=True)
+    placed = 0
+    stamp = time.time()
+    for source in sorted((dated[-1] / "history").glob("*.json")):
+        entry = {"fetched_at": stamp, "payload": json.loads(source.read_text())}
+        (target / source.name).write_text(json.dumps(entry))
+        placed += 1
+    return placed
+
+
 def _run_skus(home: Path, run: str) -> List[str]:
     """Every SKU in one run's pricing table, in the order the table holds them."""
     table = home / "runs" / run / "pricing.json"
@@ -737,6 +769,7 @@ def main() -> int:
         )
 
     space = parameter_space(home)
+    warmed = warm_history_cache(home)
     port = free_port()
     with Server(home, port) as server:
         recorded, skipped = sweep(server, space)
@@ -784,6 +817,7 @@ def main() -> int:
     products = sum(1 for path in recorded if path.startswith("/pipeline/products/"))
     plans = sum(1 for path in recorded if path.startswith("POST /orders/walk-plan "))
     print("  walk    %d ticked set(s) planned; %d product histor(ies)" % (plans, products))
+    print("  cache   %d recorded history file(s) placed from fixtures/demo-price-history/" % warmed)
     histories = sum(1 for path in recorded if "/history?" in path)
     trends = sum(1 for path in recorded if "/trends?" in path)
     print("  history %d SKU reading(s), %d trend strip(s)" % (histories, trends))
