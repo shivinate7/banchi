@@ -189,9 +189,14 @@
   gap: var(--bn-2);
   margin-bottom: var(--bn-4);
 }
+/* A field in the toolbar takes the room that is left, up to a reading width, and never pushes
+   its neighbours onto a line of their own. */
+.bn-toolbar > .bn-input,
+.bn-toolbar > .bn-input-wrap,
+.bn-toolbar > .search-field { flex: 1 1 16rem; width: auto; max-width: 28rem; min-width: 0; }
 @container bn-page (max-width: 640px) {
   .bn-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
-  .bn-toolbar > * { width: 100%; min-width: 0; }
+  .bn-toolbar > * { width: 100%; max-width: none; min-width: 0; }
   .bn-page-head .bn-head-actions { width: 100%; }
 }
 .bn-page-body { min-width: 0; }

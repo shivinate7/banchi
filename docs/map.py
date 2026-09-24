@@ -6454,7 +6454,8 @@ COMPONENTS = [
                                 "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95", "D102", "D118", "D119", "D117"],
                                 "note": "THE SHEET DREW FOUR REAL CARDS OUT OF THE OWNER'S STORE UNTIL 2026-09-06. Its `CardLocations` fixtures carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the Fulfiller skin sourced each `<img>` from `photoUrl(box, index)` — so the one page whose entire purpose is being compared against a reference was the one page whose contents depended on which capture server was up and what was in boxes 3, 4 and 7 that day, and `GET /photo/<box>/<index>` serves stored bytes without knowing a code card from a Thievul (D24). The one-line fix — `has_photo: false` on all four — was NOT taken: it buys a closed sheet by deleting the photo-bearing shell from the page whose job is drawing every shell, which is the trade `app/tests/gallery.spec.ts` exists to refuse. The image names its own colors, which is the same exception `src/kit/markPalettes.ts` argues at D102: an illustration's colors, on stage ground that is dark in both themes."},
             "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
-                                "governed_by": ["D5", "D94", "D118", "D119", "D117"]},
+                                "governed_by": ["D5", "D94", "D117", "D118", "D119",
+                                                "D-one-page-width"]},
 
             # ---- the search-and-sell core: one set of components, two densities ----
             #

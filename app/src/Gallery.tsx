@@ -6,9 +6,13 @@ import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
-import { Button, EmptyState, Icon, Kbd, Lockup, Logo, Notice, Pill, Segmented, Stat, VARIANTS as LOGO_VARIANTS, type ButtonSize, type ButtonVariant, type IconName, type PillTone } from './kit'
+import {
+  Button, Chip, ConfirmSheet, EmptyState, Icon, Kbd, Loading, Lockup, Logo, Modal, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
+  Section as PageSection, Segmented, Sheet, SheetHost, Stat, StatusSlot, Toolbar, Verdict, sheetChannel, VARIANTS as LOGO_VARIANTS,
+  type ButtonSize, type ButtonVariant, type IconName, type PillTone,
+} from './kit'
 import { MARKS } from './kit/markPalettes'
-import { ICON_NAMES } from './kit/Icon'
+import { ICON_MEANINGS, ICON_NAMES } from './kit/Icon'
 import './Gallery.css'
 
 /* THE KIT — every primitive Banchi is built from, on one page, so the tokens are looked at
@@ -210,6 +214,7 @@ const SPECIMEN_SVG =
 const SPECIMEN_PHOTO = `data:image/svg+xml;utf8,${encodeURIComponent(SPECIMEN_SVG)}`
 
 const SECTIONS: readonly { id: string; label: string; group: string }[] = [
+  { id: 'page', label: 'Page', group: 'Foundations' },
   { id: 'color', label: 'Color', group: 'Foundations' },
   { id: 'type', label: 'Type', group: 'Foundations' },
   { id: 'space', label: 'Space & radius', group: 'Foundations' },
@@ -222,6 +227,8 @@ const SECTIONS: readonly { id: string; label: string; group: string }[] = [
   { id: 'fields', label: 'Fields', group: 'Primitives' },
   { id: 'segmented', label: 'Segmented & tabs', group: 'Primitives' },
   { id: 'notice', label: 'Notice', group: 'Primitives' },
+  { id: 'failure', label: 'Refusal & retry', group: 'Primitives' },
+  { id: 'overlays', label: 'Sheets & popovers', group: 'Primitives' },
   { id: 'receipt', label: 'Receipt & toast', group: 'Primitives' },
   { id: 'empty', label: 'Empty state', group: 'Primitives' },
   { id: 'skeleton', label: 'Skeleton & progress', group: 'Primitives' },
@@ -267,7 +274,7 @@ const TEXT_ROLES: readonly { cls: string; name: string; sample: string }[] = [
   { cls: 'bn-mono', name: 'Mono · machine strings', sample: '2026-09-02-box3-01' },
   { cls: 'bn-tnum', name: 'Tabular figures · Inter', sample: '1,625 cards · 443 SKUs' },
   { cls: 'bn-muted', name: 'Muted · ink-3', sample: 'Metadata and captions' },
-  { cls: 'bn-faint', name: 'Faint · ink-4', sample: 'Disabled and dividers' },
+  { cls: 'bn-faint', name: 'Faint · ink-4', sample: 'The lightest word' },
 ]
 
 const TYPE_SCALE: readonly { token: string; px: number; role: string }[] = [
@@ -296,7 +303,7 @@ function Section({ id, title, lede, children }: { id: string; title: string; led
   return (
     <section className="kit-section" id={`kit-${id}`} data-kit-section={id}>
       <header className="kit-section-head">
-        <h2 className="bn-section-title">{title}</h2>
+        <h2 className="bn-h2">{title}</h2>
         {lede ? <p className="kit-section-lede">{lede}</p> : null}
       </header>
       {children}
@@ -337,6 +344,167 @@ function MotionDemo({ duration, ease }: { duration: string; ease: string }) {
   )
 }
 
+/* THE PAGE SCAFFOLD'S PARTS, drawn one by one. The page itself is `Page`: this sheet is one. */
+function ScaffoldSpecimens() {
+  const [said, setSaid] = useState(false)
+  const [sort, setSort] = useState<'new' | 'old'>('new')
+  return (
+    <div className="kit-grid">
+      <Spec name="verdict" label="verdict: where things stand" wide>
+        <Verdict>12 cards are waiting to be priced.</Verdict>
+      </Spec>
+      <Spec name="toolbar" label="toolbar: folds as one unit" wide>
+        <Toolbar label="Specimen filters">
+          <input className="bn-input" placeholder="Find a card" aria-label="Find a card" />
+          <Chip pressed>Unsold</Chip>
+          <Chip>Sold</Chip>
+          <Segmented
+            value={sort}
+            onChange={setSort}
+            size="sm"
+            label="Sort"
+            options={[
+              { value: 'new', label: 'Newest' },
+              { value: 'old', label: 'Oldest' },
+            ]}
+          />
+        </Toolbar>
+      </Spec>
+      <Spec name="status-slot" label="status slot: holds its space" wide>
+        <div className="kit-row">
+          <Button size="sm" onClick={() => setSaid((v) => !v)}>
+            {said ? 'Clear the answer' : 'Press for an answer'}
+          </Button>
+        </div>
+        <StatusSlot>
+          {said ? (
+            <Refusal title="This box is closed." code="box_closed" detail="POST /boxes/3/sections">
+              Open it on the capture screen.
+            </Refusal>
+          ) : null}
+        </StatusSlot>
+        <div className="bn-list-row kit-under-slot" data-kit-under-slot="">
+          <Icon name="box" size={16} /> <span className="bn-grow">The row under the slot does not move</span>
+        </div>
+      </Spec>
+      <Spec name="section" label="section: an h2 with its count" wide>
+        <PageSection title="Recent boxes" count={3} actions={<Button size="sm" variant="ghost">All boxes</Button>}>
+          <p className="bn-read">A part of a page. Its title is a heading a screen reader can jump to.</p>
+        </PageSection>
+      </Spec>
+      <Spec name="loading" label="loading: the shape of the rows" wide>
+        <Loading rows={3} />
+      </Spec>
+    </div>
+  )
+}
+
+/* TWO SHAPES FOR "THAT DID NOT WORK", AND THE ONE RELOAD. */
+function FailureSpecimens() {
+  const [trying, setTrying] = useState(false)
+  const [reloading, setReloading] = useState(false)
+  const pulse = (set: (v: boolean) => void) => {
+    set(true)
+    window.setTimeout(() => set(false), 1600)
+  }
+  return (
+    <div className="kit-grid">
+      <Spec name="refusal" label="refusal: no retry">
+        <Refusal title="This cannot be done in the demo." code="demo_read_only">
+          Selling and pricing a card do work here.
+        </Refusal>
+      </Spec>
+      <Spec name="retry" label="retry: shows that it is trying">
+        <Retry title="The server did not answer." code="unreachable" busy={trying} onRetry={() => pulse(setTrying)} />
+      </Spec>
+      <Spec name="reload" label="reload: one place, one key">
+        <div className="kit-row">
+          <ReloadButton busy={reloading} onReload={() => pulse(setReloading)} hotkey={false} />
+        </div>
+      </Spec>
+    </div>
+  )
+}
+
+/* THE KIT'S OVERLAYS. One header, one Close, focus kept inside and given back. */
+function OverlaySpecimens() {
+  const [sheet, setSheet] = useState(false)
+  const [modal, setModal] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const [pop, setPop] = useState(false)
+  const anchor = useRef<HTMLButtonElement>(null)
+  const hosted = () =>
+    sheetChannel.show({
+      key: 'specimen',
+      render: () => (
+        <Sheet open onClose={() => sheetChannel.show(null)} title="A registered sheet" icon="layers">
+          <p className="bn-read">Drawn by the one sheet host the shell mounts.</p>
+        </Sheet>
+      ),
+    })
+  return (
+    <div className="kit-grid">
+      <Spec name="overlays" label="sheet, modal, confirm, popover, host" wide>
+        <div className="kit-row kit-row-wrap">
+          <Button onClick={() => setSheet(true)} data-kit-open="sheet">
+            Open a sheet
+          </Button>
+          <Button onClick={() => setModal(true)} data-kit-open="modal">
+            Open a modal
+          </Button>
+          <Button variant="danger" onClick={() => setConfirm(true)} data-kit-open="confirm">
+            Delete 3 cards
+          </Button>
+          <Button ref={anchor} iconRight="chevronDown" onClick={() => setPop((v) => !v)} aria-expanded={pop} data-kit-open="popover">
+            Open a popover
+          </Button>
+          <Button onClick={hosted} data-kit-open="host">
+            Open through the host
+          </Button>
+        </div>
+        <Sheet
+          open={sheet}
+          onClose={() => setSheet(false)}
+          title="Set a hint"
+          icon="tag"
+          footer={
+            <>
+              <Button variant="primary" onClick={() => setSheet(false)}>
+                Save
+              </Button>
+              <Button variant="ghost" onClick={() => setSheet(false)}>
+                Cancel
+              </Button>
+            </>
+          }
+        >
+          <label className="bn-field">
+            <span className="bn-field-label">Set</span>
+            <input className="bn-input" defaultValue="ME01" data-autofocus="" />
+          </label>
+        </Sheet>
+        <Modal open={modal} onClose={() => setModal(false)} title="One decision" footer={<Button onClick={() => setModal(false)}>Done</Button>}>
+          <p className="bn-read">A modal stops the page for one decision.</p>
+        </Modal>
+        <ConfirmSheet open={confirm} onClose={() => setConfirm(false)} onConfirm={() => setConfirm(false)} title="Delete 3 cards?" confirmLabel="Delete 3 cards">
+          <p className="bn-read">This cannot be undone. The photographs go too.</p>
+        </ConfirmSheet>
+        <Popover open={pop} onClose={() => setPop(false)} anchor={anchor} label="Specimen menu">
+          <button type="button" className="bn-menu-item" onClick={() => setPop(false)}>
+            <Icon name="divider" size={16} /> Put in a divider
+          </button>
+          <button type="button" className="bn-menu-item" onClick={() => setPop(false)}>
+            <Icon name="tag" size={16} /> Set a hint
+          </button>
+        </Popover>
+      </Spec>
+    </div>
+  )
+}
+
+/* TODO(kit-data integration): kit-data's `data.specimens.tsx` mounts here, under its own
+   section, once `ux/kit-data` and this branch meet. Its file does not exist on this base. */
+
 function useActiveSection(): string | null {
   const [active, setActive] = useState<string | null>(null)
   useEffect(() => {
@@ -368,25 +536,7 @@ export function Gallery() {
   const groups = [...new Set(SECTIONS.map((s) => s.group))]
 
   return (
-    <main className="gallery bn-page">
-      <header className="bn-head kit-head">
-        <div className="bn-head-text">
-          <span className="bn-eyebrow">Design system</span>
-          <h1 className="bn-title">
-            <Icon name="grid" size={22} />
-            Kit
-          </h1>
-          <p className="bn-lede">Every primitive the screens are built from, drawn from the tokens. Switch the theme in the nav to see both.</p>
-        </div>
-        <div className="bn-head-actions">
-          <Pill tone="accent" mono>
-            tokens.css
-          </Pill>
-          <Pill mono>kit.css</Pill>
-          <Pill mono>kit/index.tsx</Pill>
-        </div>
-      </header>
-
+    <Page className="gallery" title="Kit" icon="grid" lede="Every primitive the screens are built from, drawn from the tokens.">
       <div className="kit-layout">
         <nav className="kit-index" aria-label="Sections">
           {groups.map((group) => (
@@ -406,12 +556,12 @@ export function Gallery() {
           <Section
             id="mark"
             title="The mark"
-            lede={<>Six locked marks, <Code>bluesteel</Code> the default. <Code>docs/specs/logo.md</Code> is the state of record and <Code>scripts/build-mark.mjs</Code> generates the geometry from that spec&rsquo;s own generator &mdash; nothing here is hand-drawn.</>}
+            lede="Six marks. Bluesteel is the default."
           >
             <Spec
               label="The small cut · below 64px"
               wide
-              note={<>What ships. Stroke 4.2, no taper, no <Code>feTurbulence</Code> &mdash; swept in section 11 at 16, 28, 32 and 44px, which is every size this app draws. The display cut&rsquo;s brackets are gone by 28px and its marbling loses to this flat prism gradient.</>}
+              note="What the app draws, at every size it draws."
             >
               <div className="kit-marks">
                 {LOGO_VARIANTS.map((v) => (
@@ -425,7 +575,7 @@ export function Gallery() {
             <Spec
               label="The display cut · 64px and up"
               wide
-              note={<>The holographic foil, drawn with a variable-width taper and a displacement map. Nothing in the product reaches this size; it is here so the cut that is locked can be looked at.</>}
+              note="The foil cut. Nothing in the app draws it this large."
             >
               <div className="kit-marks">
                 {LOGO_VARIANTS.map((v) => (
@@ -439,7 +589,7 @@ export function Gallery() {
             <Spec
               label="Across its size range"
               wide
-              note={<>40 is both crash pages, 44 the puller&rsquo;s header, and 16 to 32 the favicon&rsquo;s range. The whole shell draws the LOCKUP now &mdash; the sidebar at kanji 40, its rail and the phone bar as the empty slot at 32, the drawer at kanji 40 (sections 16 and 19) &mdash; so the sizes below 40 are specimens here rather than call sites. The mark is fixed dark in both themes on purpose &mdash; a light ground was derived and lost its silhouette (section 12).</>}
+              note="Dark in both themes."
             >
               <div className="kit-marks kit-marks-tight">
                 {[16, 26, 30, 32, 40, 44, 64].map((px) => (
@@ -458,12 +608,12 @@ export function Gallery() {
           <Section
             id="lockup"
             title="The lockup"
-            lede="番地 over BANCHI inside the mark&rsquo;s own brackets — the expanded form, and the only place the product spells its name in two scripts. Every parameter was settled by forced choice over thirty-seven rounds (section 13); nothing here is drawn by hand."
+            lede="番地 over BANCHI, inside the mark's brackets."
           >
             <Spec
               label="At the sizes it is drawn"
               wide
-              note={<>The sidebar draws it at kanji 40 &mdash; a 128&times;93 block in 212px (section 16). Below kanji 32 it is not drawn at all: 番&rsquo;s counters close before the bracket does (section 11). The type is OUTLINED, so no font ships and it cannot fall back to another face.</>}
+              note="The sidebar draws it at 40. Never below 32."
             >
               <div className="kit-marks">
                 {[32, 40, 56].map((px) => (
@@ -477,7 +627,7 @@ export function Gallery() {
             <Spec
               label="On the dark ground"
               wide
-              note={<>Section 16 gives the bracket <Code>bluesteel</Code>&rsquo;s own four-stop chrome on dark, so the lockup and the rail mark are one object in one metal; on light it is flat ink. The roman sits at 0.45 of the ink &mdash; under this product&rsquo;s own floor for a word, argued in section 13 rather than overlooked.</>}
+              note="On dark, the bracket takes the mark's metal."
             >
               {/* a real dark island rather than a dark rectangle: `data-theme` flips the tokens
                   AND the bracket's fill, so this shows the treatment rather than a light lockup
@@ -486,6 +636,10 @@ export function Gallery() {
                 <span className="kit-mark"><Lockup size={40} /></span>
               </div>
             </Spec>
+          </Section>
+
+          <Section id="page" title="Page" lede="Every screen is a Page: one width, one top gap, one h1, and these parts.">
+            <ScaffoldSpecimens />
           </Section>
 
           <Section id="color" title="Color" lede="Three registers: ink is what you read, line is what separates, brand is where to look. Indigo for action, vermilion for what is live.">
@@ -540,6 +694,28 @@ export function Gallery() {
                 </div>
               ))}
             </div>
+            <div className="kit-headings" data-specimen="heading-scale">
+              <div className="kit-heading-row">
+                <span className="bn-title kit-heading-h1">Page title</span>
+                <span className="bn-mono kit-type-px">h1, --bn-fs-h1</span>
+              </div>
+              <div className="kit-heading-row">
+                <span className="bn-h2">A section</span>
+                <span className="bn-mono kit-type-px">h2, --bn-fs-h2</span>
+              </div>
+              <div className="kit-heading-row">
+                <span className="bn-h3">A part of a section</span>
+                <span className="bn-mono kit-type-px">h3, --bn-fs-h3</span>
+              </div>
+              <div className="kit-heading-row">
+                <span className="bn-read">A sentence a person must read is 13px or more.</span>
+                <span className="bn-mono kit-type-px">--bn-fs-read</span>
+              </div>
+              <div className="kit-heading-row">
+                <span className="bn-label">A label</span>
+                <span className="bn-mono kit-type-px">--bn-fs-label</span>
+              </div>
+            </div>
           </Section>
 
           <Section id="space" title="Space & radius" lede="A 4px scale, and radii from 4px to a pill.">
@@ -571,7 +747,7 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="motion" title="Motion" lede="Three durations, three curves. Press a tile to play it. Everything the operator causes should be visible; reduced motion collapses all of it.">
+          <Section id="motion" title="Motion" lede="Three durations, three curves. Press a tile to play it. Reduced motion stops all of it but a busy ring.">
             <div className="kit-motions">
               {['--bn-t-fast', '--bn-t', '--bn-t-slow'].map((d) =>
                 ['--bn-ease', '--bn-ease-out', '--bn-ease-spring'].map((e) => <MotionDemo key={d + e} duration={d} ease={e} />),
@@ -579,7 +755,7 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="icons" title="Icons" lede={<>{ICON_NAMES.length} names on a 24 grid, 1.75 stroke, round joins. Never inline an <Code>&lt;svg&gt;</Code> in a screen — add a path here.</>}>
+          <Section id="icons" title="Icons" lede={<>{ICON_NAMES.length} icons on a 24 grid. One icon, one meaning.</>}>
             <div className="kit-icons">
               {ICON_NAMES.map((name: IconName) => (
                 <div key={name} className="kit-icon">
@@ -588,6 +764,16 @@ export function Gallery() {
                 </div>
               ))}
             </div>
+            <dl className="bn-kv kit-meanings" data-specimen="icon-meanings">
+              {Object.entries(ICON_MEANINGS).map(([name, meaning]) => (
+                <div key={name} className="kit-meaning">
+                  <dt>
+                    <Icon name={name as IconName} size={16} /> <span className="bn-mono">{name}</span>
+                  </dt>
+                  <dd>{meaning}</dd>
+                </div>
+              ))}
+            </dl>
           </Section>
 
           {/* -------------------------------------------------------------- primitives */}
@@ -646,7 +832,7 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="kbd" title="Keycaps" lede="An hour in the review queue is a keyboard, so every choice shows its key. Hidden on coarse pointers.">
+          <Section id="kbd" title="Keycaps" lede="A keycap sits after its label, inside the control it presses. Hidden on a touch screen.">
             <div className="kit-grid">
               <Spec label="kbd">
                 <div className="kit-row kit-row-wrap">
@@ -677,7 +863,7 @@ export function Gallery() {
                   </Button>
                 </div>
               </Spec>
-              <Spec label="row keycap · 28px" note={<>The review queue's row keycap is the kit's <Code>.bn-kbd-lg</Code>.</>}>
+              <Spec label="row keycap · 28px" note="A target a finger lands on. It stays on a touch screen.">
                 <div className="kit-row">
                   <kbd className="kit-keycap">1</kbd>
                   <kbd className="kit-keycap">2</kbd>
@@ -741,21 +927,36 @@ export function Gallery() {
               <Spec label="input-wrap · icon and key">
                 <span className="bn-input-wrap">
                   <Icon name="search" size={16} />
-                  <input className="bn-input" placeholder="Find a card" />
+                  <input className="bn-input" placeholder="Find a card" aria-label="Find a card" />
                   <Kbd>/</Kbd>
                 </span>
               </Spec>
               <Spec label="select · textarea">
-                <select className="bn-select" defaultValue="market">
-                  <option value="market">Market price</option>
-                  <option value="low">Lowest listing</option>
-                </select>
-                <textarea className="bn-textarea" defaultValue="Held back: bullish above $5." />
+                <label className="bn-field">
+                  <span className="bn-field-label">Price from</span>
+                  <select className="bn-select" defaultValue="market">
+                    <option value="market">Market price</option>
+                    <option value="low">Lowest listing</option>
+                  </select>
+                </label>
+                <label className="bn-field">
+                  <span className="bn-field-label">Note</span>
+                  <textarea className="bn-textarea" defaultValue="Held back: bullish above $5." />
+                </label>
               </Spec>
               <Spec label="large · mono · disabled">
-                <input className="bn-input bn-input-lg" placeholder="Type the name of the card" />
-                <input className="bn-input bn-input-mono" defaultValue="2026-09-02-box6-01" />
-                <input className="bn-input" defaultValue="Disabled" disabled />
+                <label className="bn-field">
+                  <span className="bn-field-label">Card name</span>
+                  <input className="bn-input bn-input-lg" placeholder="Type the name of the card" />
+                </label>
+                <label className="bn-field">
+                  <span className="bn-field-label">Run</span>
+                  <input className="bn-input bn-input-mono" defaultValue="2026-09-02-box6-01" />
+                </label>
+                <label className="bn-field">
+                  <span className="bn-field-label">Disabled</span>
+                  <input className="bn-input" defaultValue="Not editable" disabled />
+                </label>
               </Spec>
               <Spec label="checks">
                 <div className="kit-row kit-row-wrap">
@@ -803,22 +1004,22 @@ export function Gallery() {
                 </div>
               </Spec>
               <Spec label="tabs">
-                <div className="bn-tabs">
-                  <button type="button" className="bn-tab" aria-selected="true">
+                <div className="bn-tabs" role="tablist" aria-label="Queue">
+                  <button type="button" role="tab" className="bn-tab" aria-selected="true">
                     <Icon name="inbox" size={14} /> Review <Pill tone="warn">12</Pill>
                   </button>
-                  <button type="button" className="bn-tab">
+                  <button type="button" role="tab" className="bn-tab" aria-selected="false" tabIndex={-1}>
                     <Icon name="flag" size={14} /> Parked <Pill>6</Pill>
                   </button>
-                  <button type="button" className="bn-tab">
-                    <Icon name="history" size={14} /> Answered
+                  <button type="button" role="tab" className="bn-tab" aria-selected="false" tabIndex={-1}>
+                    <Icon name="check" size={14} /> Answered
                   </button>
                 </div>
               </Spec>
             </div>
           </Section>
 
-          <Section id="notice" title="Notice" lede="Four tones; the code line is where the machine string goes.">
+          <Section id="notice" title="Notice" lede="Four tones. The machine's own words sit behind What the server said.">
             <div className="kit-grid">
               <Spec label="info">
                 <Notice title="The export is fetched to a scope this process names">Every card of this game carries a set hint, so the scope is one set.</Notice>
@@ -828,9 +1029,9 @@ export function Gallery() {
                   Emit them together, so the live cap is spent once.
                 </Notice>
               </Spec>
-              <Spec label="danger · with code">
-                <Notice tone="danger" title="The answer was refused" code="sku_not_a_candidate · Box 2 · Section 1 · Card 14">
-                  The queue file was rewritten after this screen read it. Reload to see the rows the route will take.
+              <Spec name="notice-said" label="danger, with what the server said">
+                <Notice tone="danger" title="The answer was refused" code="sku_not_a_candidate" detail="POST /review/2/14/answer">
+                  The queue changed after this screen read it. Reload to see it as it is now.
                 </Notice>
               </Spec>
               <Spec label="ok">
@@ -839,6 +1040,14 @@ export function Gallery() {
                 </Notice>
               </Spec>
             </div>
+          </Section>
+
+          <Section id="failure" title="Refusal & retry" lede="A refusal offers no retry. A retry shows that it is trying.">
+            <FailureSpecimens />
+          </Section>
+
+          <Section id="overlays" title="Sheets & popovers" lede="One header, one Close. Focus stays inside and goes back where it was.">
+            <OverlaySpecimens />
           </Section>
 
           <Section id="receipt" title="Receipt & toast" lede="A receipt is an undo anchored beside the thing it undoes, draining over its window. A toast is the same shape, floating.">
@@ -887,8 +1096,8 @@ export function Gallery() {
                   <div className="bn-toast bn-toast-refusal">
                     <Icon name="alert" size={16} className="bn-toast-icon" />
                     <div className="bn-toast-text">
-                      <div className="bn-toast-title">The store is busy behind a running join</div>
-                      <div className="bn-toast-body">store_busy</div>
+                      <div className="bn-toast-title">The store is busy</div>
+                      <div className="bn-toast-body">Try again in a moment.</div>
                     </div>
                   </div>
                 </div>
@@ -991,8 +1200,8 @@ export function Gallery() {
                   </span>
                 </div>
               </Spec>
-              <Spec label="table" wide>
-                <div className="bn-panel">
+              <Spec name="table" label="table" wide>
+                <div className="bn-panel kit-table-scroll" role="region" aria-label="Table specimen" tabIndex={0}>
                   <table className="bn-table">
                     <thead>
                       <tr>
@@ -1013,7 +1222,7 @@ export function Gallery() {
                           <td>{name}</td>
                           <td>{cond}</td>
                           <td className="bn-mono">{sku}</td>
-                          <td className="num">${market}</td>
+                          <td className="num bn-money">${market}</td>
                           <td className="num">{n}</td>
                         </tr>
                       ))}
@@ -1084,7 +1293,7 @@ export function Gallery() {
               <Spec name="pressed" label="pressed" forcePressed>
                 <PullConfirm label="Pull this card" onConfirm={noop} />
               </Spec>
-              <Spec name="disabled" label="disabled" note="Never appears in the Fulfillment view; that view has no disabled state.">
+              <Spec name="disabled" label="disabled" note="Never drawn for the Fulfiller.">
                 <PullConfirm label="Pull this card" onConfirm={noop} disabled />
               </Spec>
               <Spec name="with-key" label="default + key hint · owner-side only">
@@ -1161,12 +1370,12 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="locations" title="Card locations" lede="One card and every row shape it draws: six copies — four in a box, one of those sold; one departed, and so in no slot at all; one pooled, which is a count rather than a place. The owner's spec names a current copy too, and that row is identical in shape to every other. Same group, same actions; the prop that differs is the persona.">
+          <Section id="locations" title="Card locations" lede="One card and every row shape it draws, for the owner and for the Fulfiller.">
             <div className="kit-stack">
               <Spec
                 name="locations-owner"
                 label="owner · a bar on every row that has one"
-                note="Two rows deliberately carry no bar: the pooled copy has no coordinate to draw and the departed one is in no slot at all. The copy the walk is standing on draws a bar like every other row — it carries a Viewing marker and a neutral rail, and nothing else (D119)."
+                note="The pooled and departed copies draw no position."
               >
                 {/* `.kit-copies` is a `copies` query container. Without it every
                     `@container copies` rule in CardLocations.css is dead here and this
@@ -1178,13 +1387,13 @@ export function Gallery() {
               <Spec
                 name="locations-owner-lone"
                 label="owner · one copy, no SKU"
-                note="A card the pipeline has never identified. The header drops the live figure and the Pushed / Staged / headroom line — with no SKU there is no listing record, every one of those numbers is a structural zero, and `Room for 1 more live` is a promise nothing can keep. `no SKU yet` in the meta line is the whole of what is left to say."
+                note="A card not yet identified draws no listing figures."
               >
                 <div className="kit-copies">
                   <CardLocations group={LOOSE_GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} />
                 </div>
               </Spec>
-              <Spec name="locations-fulfiller" label="fulfiller · every copy is its own card" note="The photograph is this sheet's own specimen, not a stored capture: nothing here asks the capture server, so the page renders the same in every checkout. Two copies carry no image and draw the missing-photo sentence, which is a real state.">
+              <Spec name="locations-fulfiller" label="fulfiller · every copy is its own card" note="A drawn specimen, not a stored photograph.">
                 <CardLocations
                   group={GROUP}
                   persona="fulfiller"
@@ -1199,6 +1408,7 @@ export function Gallery() {
           </Section>
         </div>
       </div>
-    </main>
+      <SheetHost />
+    </Page>
   )
 }

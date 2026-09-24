@@ -260,9 +260,16 @@ button and never has to redraw one.**
 | `Chip` | choose one of a set, or filter a list. Pressed is ink-on-page, not accent | a button with a rounded corner |
 | `Pill` | a state, a count, a lane — something the row IS | anything pressable |
 | `Kbd` | the key that does this thing, owner-side only | the Fulfiller's screens, which are touch |
-| `PageHeader` | every owner screen's first element: eyebrow, title, lede, actions | a panel heading — that is `.bn-section-title` |
+| `Page` | every screen, from now on: one width, one top gap, one h1, the verdict, the toolbar, the status slot, the loading and empty states (D-one-page-width) | a panel inside a screen |
+| `Section` | a titled part of a page. Its title is an h2 | a heading inside a card, which is `.bn-h3` |
+| `PageHeader` | a screen not yet on `Page`. It stays for backward compatibility | a new screen, which uses `Page` |
 | `EmptyState` | a list with nothing in it, saying what would put something there | an error |
-| `Notice` | a refusal, a warning, a standing condition, with the server's own code under it | a receipt of something that worked — that is a toast |
+| `Notice` | a warning or a standing condition. The code and any server text go behind "What the server said" (D-notice-detail) | a receipt of something that worked — that is a toast |
+| `Refusal` / `Retry` | a press that cannot be done here, with no retry / a failure that may pass, with a busy "Try again" | a warning that asks for nothing |
+| `ReloadButton` | the one reload: in the page's actions, labelled, on `R`, busy while it reads | a second reload with a key on the same page |
+| `Loading` | the one loading shape: rows the height of the rows that replace them | a spinner and a sentence |
+| `Sheet` / `Modal` / `Popover` | work beside the page / one decision that stops it / a small menu under its control. One header, one "Close". Focus stays inside and goes back | a screen's own `role="dialog"` |
+| `ConfirmSheet` | a press that cannot be undone. It says what happens, and to how many | a press that can be undone, which acts and puts Undo on its toast |
 | `Segmented` | two to four exclusive views of the same thing | navigation between screens |
 | `Stat` | one figure with its label, on a dashboard row | a value in a key/value list (`.bn-kv`) |
 | `Logo` | the mark, in the shell and on the crash page | decoration inside a screen |
@@ -279,6 +286,22 @@ They inherit `currentColor` and are `aria-hidden`, so an icon is never the acces
 anything. **Add an icon by adding a path**; a screen that draws its own `<svg>` inline is the
 drift the file exists to prevent, and `ICON_NAMES` is what draws the whole set on
 `#/gallery`.
+
+**One icon, one meaning** (UX-118). `ICON_MEANINGS` in `app/src/kit/Icon.tsx` names what each
+contested icon means. `history` is a log of past events. `headstone` is the graveyard. `chart`
+is a price over time. A new meaning gets a new path.
+
+**One place for a keycap** (UX-145). A keycap sits after its label, on the same line, inside
+the control that it presses. On a touch screen every keycap hides (UX-040). `.bn-kbd-lg` stays,
+because it is a target and not a hint.
+
+**Ask first, or undo after** (UX-099). A press that cannot be undone asks first, in a
+`ConfirmSheet` that names the count. A press that can be undone acts at once, and its receipt
+toast carries Undo. No press does both. No destructive press does neither.
+
+**The answer to a press lands where the press was** (D118, UX-058). A screen that answers in
+place passes `status` to `Page`. The status slot is one notice high, full or empty. Its "What
+the server said" opens over the page.
 
 **Every primitive is on one page, at `#/gallery`.** It is the kit rather than a component
 sheet now, it is reachable from the command palette (never the nav), `make screenshot`
@@ -365,9 +388,17 @@ chrome at all on the Fulfiller's route — not-rendered rather than hidden. `⌘
 command palette over any of them and `?` opens the one keyboard reference sheet, which is
 where a binding is documented now that the inline key hints are gone.
 
-**The widths this build was walked at are 390, 820 and 1440.** A phone, an iPad in portrait,
-and the owner's Mac. **820 is the width that catches the mistake**: it is above every phone
-breakpoint and all thumb, which is why the control heights follow the pointer instead.
+**The widths this build is walked at are 390, 720, 820 and 1440.** They are a phone, the
+owner's half-width Chrome window, an iPad in portrait, and the owner's Mac. **820 is the width
+that catches the mistake**: it is above every phone breakpoint and all thumb, which is why the
+control heights follow the pointer instead. **720 is the owner's own second view** (ruling,
+2026-09-23): two Chrome tabs side by side at 1440. It gets the DESKTOP rail, not the phone
+chrome. So a page at 720 is a desktop page in a narrow column, and it must look designed. The
+page is a query container, so its tiers follow that column and not the window.
+
+**One width for every page** (D-one-page-width, amends D197). A `Page` is 1600 px at most, and
+fluid below that, under one top gap, `--bn-page-top`. It ignores `--bn-page-max`. That token
+stays for the screens not yet on `Page`, and goes when the last of them moves.
 
 **Every width the shell reacts at is named below, and `make docs-audit`'s `breakpoints` row
 reads this block.** It replaced a sentence that published two counts — "54 media blocks hang
@@ -421,7 +452,9 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   pricing 939   Pricing — the row becomes a compact two-line row
   pricing 1040  Pricing — the DIRECT column joins the table
   (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
-  bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line
+  bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line;
+                Gallery — the specimen grids go to one column
+  bn-page 879   Gallery — the section index becomes a strip over the specimens
 
 COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
   Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column
