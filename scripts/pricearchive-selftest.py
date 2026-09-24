@@ -806,14 +806,14 @@ def main() -> int:
            mutated_refusals)
 
         # ---------------------- resolve by the SKU, never by the card's own read fields
-        # (D-pricehistory-resolves-by-sku, owner's ruling 2026-09-23, replacing a session's
+        # (D254, owner's ruling 2026-09-23, replacing a session's
         # earlier attempt to weigh a card's read name against the number it found). The
         # reviewer's re-measurement found 15 of 20 new refusals from that attempt had a
         # CORRECT old answer, and 1 of 29 flips was WRONG — a Riftbound "Champion, Title"
         # card's READ name is the unreliable field, so the fix is to never ask the card at
         # all: resolve by the SKU, either the archive's own already-verified productId or
         # the SKU's own row in the store's cached Filtered Export.
-        print("\n-- pipeline/pricearchive.py: resolve_by_sku (D-pricehistory-resolves-by-sku) --")
+        print("\n-- pipeline/pricearchive.py: resolve_by_sku (D254) --")
 
         card_row_misread = _row("SKU-M", "Totally Wrong Name", "misread-number", "Origins")
         export_row_correct = _row("SKU-M", "Twisted Fate, Gambler", "200/298", "Origins")
@@ -981,7 +981,7 @@ def main() -> int:
             shutil.rmtree(no_exports_home, ignore_errors=True)
 
         # --------- pipeline/productview.py: row_for_sku prefers the SKU's own export row
-        # (D-pricehistory-resolves-by-sku) — the live-fallback path's own tier (b), a real
+        # (D254) — the live-fallback path's own tier (b), a real
         # store and a real cached export together, the same shape `GET /pipeline/products/
         # <sku>/history` reaches when the archive has never swept a SKU.
         print("\n-- pipeline/productview.py: row_for_sku prefers the export row --")

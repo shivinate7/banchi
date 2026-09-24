@@ -1,4 +1,4 @@
-## D-sku-name-contradictions — One SKU, two stored names: the sibling check D242 cannot see
+## D255 — One SKU, two stored names: the sibling check D242 cannot see
 
 **What this builds.** `pipeline/sku_name_contradictions.py` and `pkmnscan cards sku-names`
 find every card whose own stored `name` disagrees with the product name of its SKU. The

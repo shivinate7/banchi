@@ -1,4 +1,4 @@
-## D-name-and-number-agree — A card lists off name AND number agreeing, never off the number alone
+## D253 — A card lists off name AND number agreeing, never off the number alone
 
 **The owner's ruling, 2026-09-23.** A card should match off name and number together. A
 name that is not exactly right should still be allowed to fuzzy match, or recorrect,
@@ -14,7 +14,7 @@ the check at all. Three reasons carry no row: `ambiguous_no_signal`, `set_ambigu
 candidates.
 
 **The count, corrected.** This branch first counted 13 such entries, review queue only,
-with a confident "true card" for three of them. `D-a-name-tolerance-fit` re-measured,
+with a confident "true card" for three of them. `D251` re-measured,
 reading both the review and the parked queue, over every reason. It found 45 answered
 entries whose read name disputed every candidate offered. In all 45 the owner's own answer
 picked a SKU outside the offered candidates. The number was wrong every time, by the
@@ -69,7 +69,7 @@ never as a rounding error.
 **Fuzzy recorrection was already built.** This entry reuses it rather than inventing a
 second one. `name_disputes`'s `NAME_DISPUTE_SIMILARITY` constant is the tolerance a read
 must clear to not dispute a row. Containment counts. A `difflib` ratio at or above the
-constant also counts. `D-a-name-tolerance-fit` (branch `claude/d240-tolerance-fit`) fit
+constant also counts. `D251` (branch `claude/d240-tolerance-fit`) fit
 that number and settled it at 0.80. The highest known misread ratio is 0.632. Containment
 holds in zero of the true misreads. 0.80 sits 0.014 above the highest accepted near-miss
 the store carries, `Blast Cadet` against `Blast Corps Cadet` at 0.786. This entry leaves
@@ -179,7 +179,7 @@ widens the reach of, never the rule itself), D167 (the queue-refresh precedent f
 re-resolving an already-queued entry against fresh evidence), D240 (the premise this closes
 a slice of, cited above by sentence), D242 (name agreement over mere existence, the same
 shape one register over, a stored fact's own copies rather than one card's two readings),
-and `D-a-name-tolerance-fit` (the sibling measurement this entry's own count defers to, and
+and `D251` (the sibling measurement this entry's own count defers to, and
 the source of the 0.80 tolerance figure above).
 
 **What this does not do.** It does not change `_walk`, any join key strategy, D55's

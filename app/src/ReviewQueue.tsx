@@ -396,7 +396,7 @@ const TAG_TITLES: Readonly<Record<Evidence, string>> = {
 /* WHICH SIGNAL ARGUED FOR THIS ROW, drawn only where the list holds more than one answer.
  *
  * `found_by` is on the wire wherever `cli/resolve.py:_candidate_rows` was handed a
- * non-empty `name_matched`, which was `name_disputed` alone until D-name-and-number-agree
+ * non-empty `name_matched`, which was `name_disputed` alone until D253
  * (2026-09-23): a card already queued for a reason of its own — `ambiguous_no_signal`,
  * `rarity_claim_mismatch`, `set_ambiguous` — can now carry both readings too, under its
  * OWN reason. Reading the FIELD rather than the reason code is deliberate and is what
@@ -2026,7 +2026,7 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
 }
 
 /** Exported for `CardHero.tsx`'s listing-correction control, which reuses this row rather
- *  than forking one (D-correct-a-listed-answer, on this file's own header: "if reusing the
+ *  than forking one (D252, on this file's own header: "if reusing the
  *  pane needs a component lifted out... do that — that is added to inventory... not a
  *  fork"). No behavior here changed to make that reuse possible. */
 export function CandidateButton({

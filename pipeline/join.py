@@ -839,7 +839,7 @@ def name_disputes(read_name, rows: Sequence[tcgcsv.Row]) -> bool:
 def name_reads_exactly(read_name, row: tcgcsv.Row) -> bool:
     """Is the model's read name BYTE-IDENTICAL to this row's, through the fold?
 
-    THE NARROWER HALF OF `name_corroborates`, split out for D-name-and-number-agree.
+    THE NARROWER HALF OF `name_corroborates`, split out for D253.
     `name_corroborates` is True on an exact fold match AND on a containment-with-coverage
     near miss (`Corfish` for `Corphish`); this answers only the first half, which is what
     tells `join_batch` whether a resolved card's stored name has anything to correct. A
@@ -881,7 +881,7 @@ class NameSide(NamedTuple):
     `settled` is that answer stated rather than guessed at.
 
     `resolution` IS THE LADDER'S OWN ANSWER OVER THESE ROWS, carried rather than
-    discarded, and `None` unless `settled` is True. D-name-and-number-agree needs it: a
+    discarded, and `None` unless `settled` is True. D253 needs it: a
     card already queued for a reason of its own — `rarity_claim_mismatch`,
     `ambiguous_no_signal`, `set_ambiguous`, … — has no stage or reason of its own to keep
     once the NAME settles it, because the one it carried was a review reason and the card
@@ -903,7 +903,7 @@ def name_alternatives(
     """The rows the READ NAME finds, for a card whose NUMBER found something else.
 
     `disputed_row` IS NONE FOR A CARD THE LADDER NEVER RESOLVED AT ALL, since
-    D-name-and-number-agree — `rarity_claim_mismatch` and `ambiguous_no_signal` both carry
+    D253 — `rarity_claim_mismatch` and `ambiguous_no_signal` both carry
     no row (`variant.Resolution(stage=REVIEW, reason=...)`, `row` defaulted), and
     `set_ambiguous` is built the same way one level up. The SKU filter below is a no-op in
     that case, not a defect: there is no number's row to exclude the name's rows from.
@@ -935,7 +935,7 @@ def name_alternatives(
     this screen has always drawn.
 
     `name_corroborated=False`, NOT TRUE — CORRECTED 2026-09-23 (a review finding on
-    D-name-and-number-agree). This call passed `True` from 2026-09-12 until then, on the
+    D253). This call passed `True` from 2026-09-12 until then, on the
     argument that "these rows were found BY the name, so the name agrees with them." That
     argument is circular: `rows_for_name` finding a row BECAUSE its name matches is not a
     SECOND signal independent of the name — D146's release needs two, and this call had
@@ -1438,7 +1438,7 @@ class Catalog:
         # `pokemon` catalog (see its docstring).
         #
         # KEYED BY THE CATALOG-SIDE COMPARE FOLD, NOT THE PLAIN INDEX — CORRECTED
-        # 2026-09-23 (a review finding on D-name-and-number-agree). `name_index_key` alone
+        # 2026-09-23 (a review finding on D253). `name_index_key` alone
         # never strips a trailing qualifier, so `Pyke, Returned (Alternate Art)` indexed
         # under its own full string and `rows_for_name("Pyke, Returned")` never found it —
         # `distinct_cards` then saw one product where the export actually stocks two, and
@@ -2178,7 +2178,7 @@ class JoinReport:
     below_threshold: SubThresholdBucket = field(default_factory=SubThresholdBucket)
     cards_in: int = 0
     collisions: int = 0
-    # D-name-and-number-agree — `(box, index) -> catalog product name`, for a card whose
+    # D253 — `(box, index) -> catalog product name`, for a card whose
     # read name AGREED with the row it resolved to WITHOUT being byte-identical to it (the
     # near-miss half of `name_corroborates`, never the exact half — that has nothing to
     # correct — and never a disputed card, whether it settled onto the name's own row or
@@ -2521,7 +2521,7 @@ def join_batch(
         # at the photograph has already answered the question this would ask, and re-raising
         # it is the sixteen-cards failure D3 rung 0 exists to prevent. `store/queues.py`
         # would not even re-queue the card: it would be listed nowhere and asked nowhere.
-        # THE GATE WIDENED 2026-09-23 (D-name-and-number-agree). Until then this fired only
+        # THE GATE WIDENED 2026-09-23 (D253). Until then this fired only
         # `not resolution.needs_review and resolution.row is not None` — a card the ladder
         # had already resolved OUTSIDE review. A card ALREADY queued for a reason of its
         # own — `rarity_claim_mismatch`, `ambiguous_no_signal`, `set_ambiguous`, … — never
@@ -2588,7 +2588,7 @@ def join_batch(
             # "EXACTLY ONE CARD" COUNTS PRODUCTS THE RARITY CLAIM AGREES WITH, WHEN THERE
             # IS ONE — CORRECTED 2026-09-23, a review finding. `named` alone answers a
             # PRODUCT count that a qualifier variant (`rows_for_name` now reaching it,
-            # D-name-and-number-agree) can raise past one even where the claim already
+            # D253) can raise past one even where the claim already
             # picks a single product out of it: `Pyke, Returned` (base, Rare) and
             # `Pyke, Returned (Alternate Art)` (Showcase) are two products under one
             # folded name, and a `rarity_claim=['Showcase']` names exactly one of them.
@@ -2672,7 +2672,7 @@ def join_batch(
                     market_price=resolution.market_price,
                 )
 
-        # D-name-and-number-agree, THE NEAR-MISS HALF. A card that resolved OUTSIDE review
+        # D253, THE NEAR-MISS HALF. A card that resolved OUTSIDE review
         # (whether the ladder settled it directly or the dispute above settled it here)
         # whose read name agreed with the row it landed on WITHOUT being byte-identical to
         # it — `Corfish` for `Corphish`, the model's own spelling a character or two out —

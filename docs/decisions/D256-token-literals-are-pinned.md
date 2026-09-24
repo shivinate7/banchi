@@ -1,4 +1,4 @@
-## D-token-literals-are-pinned — A literal that duplicates a token is caught by family, and the ratchet is pinned per file
+## D256 — A literal that duplicates a token is caught by family, and the ratchet is pinned per file
 
 `docs/reviews/ux-2026-09-20/RANKING.md` section 4 names a defect class. It is "literals that
 duplicate a token exactly". `css-var-check.py` cannot see it. That checker catches a `var()`

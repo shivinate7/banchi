@@ -1226,7 +1226,7 @@ export function undoAnswer(box: number, index: number): Promise<AnswerResult> {
 
 /**
  * Correct a card that was answered onto the WRONG catalog row — `POST
- * /inventory/<box>/<index>/correct` (D-correct-a-listed-answer).
+ * /inventory/<box>/<index>/correct` (D252).
  *
  * THE GAP `undoAnswer` LEAVES: its own `undo_too_late` refuses the moment the wrong SKU has
  * gone out — pushed, staged or live — which for a real mistake is usually already true. This

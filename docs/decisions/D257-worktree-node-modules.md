@@ -1,4 +1,4 @@
-## D-worktree-node-modules — a worktree's node_modules is provisioned, not reported
+## D257 — a worktree's node_modules is provisioned, not reported
 
 **A fresh worktree failed tsc, lint and design-check on day one.** None of the three
 messages named `node_modules`. `scripts/worktree-provision.sh` — shared by

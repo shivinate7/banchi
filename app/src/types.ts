@@ -1120,7 +1120,7 @@ export type AnswerResult = {
   restores_to: AnswerOrigin | null
 }
 
-/** `POST /inventory/<box>/<index>/correct`, both directions (D-correct-a-listed-answer).
+/** `POST /inventory/<box>/<index>/correct`, both directions (D252).
  *
  *  THE GAP `AnswerResult`'s OWN UNDO LEAVES: `undo_too_late` refuses the moment the wrong SKU
  *  has gone out — pushed, staged or live — which for a real mistake is usually already true.

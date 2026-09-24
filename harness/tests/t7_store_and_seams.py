@@ -11377,7 +11377,7 @@ def check_review_catalog(checks: Checks) -> None:
 
 
 def check_correct_answer(checks: Checks) -> None:
-    """POST /inventory/<box>/<index>/correct — D-correct-a-listed-answer.
+    """POST /inventory/<box>/<index>/correct — D252.
 
     THE SCENARIO THIS ROUTE WAS BUILT FOR, off the real fixture. A card answered onto the
     wrong catalog row, with the wrong SKU already pushed and live — `do_review_answer`'s own
@@ -11658,7 +11658,7 @@ def check_correct_answer(checks: Checks) -> None:
 
 def check_correct_answer_live_release(checks: Checks) -> None:
     """POST /inventory/<box>/<index>/correct — the `live` stage of the release, and the
-    stamps a round trip must not corrupt. D-correct-a-listed-answer, review round 2.
+    stamps a round trip must not corrupt. D252, review round 2.
 
     `Listing.release`'s own rule is least-committed-first: `pushed`, then `staged`, then
     `live`. Every other case in `check_correct_answer` leaves `pushed` non-zero, so the
@@ -27879,7 +27879,7 @@ def check_price_history(checks: Checks) -> None:
         "unglued number behaves exactly as before",
     )
 
-    # ------------------------------------------ D-pricehistory-resolves-by-sku: a caller
+    # ------------------------------------------ D254: a caller
     # that already has a productId in hand — the archive's own already-verified answer for
     # this SKU, `store/pricearchive.py:Bucket.product_id` — skips resolving the row at all.
     # The owner's ruling (2026-09-23) closed a session's earlier attempt to weigh a card's
@@ -27915,7 +27915,7 @@ def check_price_history(checks: Checks) -> None:
     checks.equal(
         verified_reading.product_id, 555,
         "reading_for_row(product_id=555) trusts the given id as-is, over a row that would "
-        "otherwise refuse — the archive-verified tier, D-pricehistory-resolves-by-sku",
+        "otherwise refuse — the archive-verified tier, D254",
     )
     checks.equal(
         verified_reading.series, {},

@@ -2565,7 +2565,7 @@ export function BoxBrowse({
                     market={panelRow.card.run === null ? undefined : priced[panelRow.card.run]}
                     listings={listings}
                     phone={phone}
-                    // "Inventory only" (owner's ruling, D-correct-a-listed-answer): `correctable`
+                    // "Inventory only" (owner's ruling, D252): `correctable`
                     // defaults false — an allow-list of one screen — so this is the one call
                     // site that opts in. The smallest edit that ruling reaches into this file for.
                     correctable

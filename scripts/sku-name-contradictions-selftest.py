@@ -103,7 +103,7 @@ def test_disputes_and_proposes_alternative():
 
 def test_alternate_art_qualifier_is_offered_as_a_candidate():
     print("a catalogue qualifier like `(Alternate Art)` does not hide a real alternative — "
-          "D-sku-name-contradictions review finding 1, the owner-confirmed `4/442` case")
+          "D255 review finding 1, the owner-confirmed `4/442` case")
     # The export carries the SAME card twice: the plain printing and the Alternate Art one,
     # exactly the `4/442` "Pyke, Returned" / "Pyke, Returned (Alternate Art)" shape the
     # owner confirmed on the real store — SKU 9191942 (145a/219) is the true card.
@@ -256,7 +256,7 @@ def test_mutation_exact_equality_overflags_a_legitimate_near_miss():
 
 def test_rank_candidates_survives_an_uncatalogued_game():
     print("rank_candidates does not crash the whole report over one card's unscorable "
-          "claim — D-sku-name-contradictions review finding 2")
+          "claim — D255 review finding 2")
     rows = [
         row("SKU5", "Twilight Reveler", "10/300", set_name="Origins"),
         row("SKU6", "Twilight Reveler", "10/166", set_name="Vendetta"),
@@ -276,7 +276,7 @@ def test_rank_candidates_survives_an_uncatalogued_game():
 def test_mutation_false_negative_fails_cleanly():
     print("mutation — name_disputes forced to always return False must be caught by a "
           "clean `ok()` failure, never by an unguarded index crashing the run — "
-          "D-sku-name-contradictions review finding 3")
+          "D255 review finding 3")
     import pipeline.sku_name_contradictions as skn_module
 
     original = skn_module.name_disputes

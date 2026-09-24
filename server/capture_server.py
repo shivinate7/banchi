@@ -24,7 +24,7 @@
     POST   /inventory/<box>/<index>/correct  a wrong catalog row corrected to the right one,
                                            whether or not the card is still in any queue —
                                            the SKU it leaves is recorded as over-listed by
-                                           one copy, or its undo (D-correct-a-listed-answer)
+                                           one copy, or its undo (D252)
     DELETE /boxes/<box>                    delete a whole box — records, photos, sidecars,
                                            queue entries, cache, registry (D10, owner ruling
                                            3, amended D134 — a departed record no longer
@@ -563,7 +563,7 @@ _REVIEW_STAND_DOWN_RE = re.compile(r"^/review/(\d+)/(\d+)/stand-down$")
 _SOLD_RE = re.compile(r"^/inventory/(\d+)/(\d+)/sold$")
 _RETIRE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/retire$")
 _RESHOOT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/photo$")
-# D-correct-a-listed-answer. A different verb on a longer path than `/inventory/<box>/<index>`,
+# D252. A different verb on a longer path than `/inventory/<box>/<index>`,
 # exactly like `_SOLD_RE` and `_RETIRE_RE` beside it, so it cannot shadow or be shadowed by the
 # PUT/DELETE routes on the shorter path.
 _CORRECT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/correct$")
@@ -799,7 +799,7 @@ STAND_DOWN_FIELDS = ("reason", "undo")
 # accept a pair the single route would refuse.
 GROUP_ANSWER_ENTRY_FIELDS = ("box", "index", "sku", "condition")
 
-# What `POST /inventory/<box>/<index>/correct` carries (D-correct-a-listed-answer). Only the
+# What `POST /inventory/<box>/<index>/correct` carries (D252). Only the
 # new SKU — the row is re-read from the card's own export exactly as `from_catalog` answers
 # already are (D46), and `condition` is never accepted from the client for the same reason it
 # is never accepted there: it comes off the chosen row, not off the wire. `undo` is the same
@@ -1186,7 +1186,7 @@ BURIED = "buried"
 # `pushed`/`staged`/`live` are not members of `master.STATES` in the first place.
 LISTINGS_RELEASED = "listings_released"
 
-# THE ELEVENTH AND TWELFTH ROUTE-WRITTEN EVENTS (D-correct-a-listed-answer). A card that was
+# THE ELEVENTH AND TWELFTH ROUTE-WRITTEN EVENTS (D252). A card that was
 # answered onto the wrong catalog row (D4) gets a SECOND catalog row, chosen the same way the
 # first one was — a human, looking at the photograph, picking from this card's own export
 # (D46) — after the first SKU has already gone out (D28's undo refuses `undo_too_late` at
@@ -7363,7 +7363,7 @@ def _reverse_answer(box: int, index: int) -> dict:
 
 
 def _correction_event(events, key: str) -> Optional[dict]:
-    """The newest `sku_corrected` line at this position, or None. D-correct-a-listed-answer.
+    """The newest `sku_corrected` line at this position, or None. D252.
 
     `_clearing_event`'s shape, narrowed to one event name. There is no companion event to
     tell apart here the way `stood_down` and `answered` are: the ground truth for whether a
@@ -7439,7 +7439,7 @@ def _give_back_listing(
 
 
 def do_correct_answer(box: int, index: int, payload: dict) -> dict:
-    """Correct a card that was answered onto the WRONG catalog row. D-correct-a-listed-answer.
+    """Correct a card that was answered onto the WRONG catalog row. D252.
 
     THE GAP THIS CLOSES. `do_review_answer`'s own undo refuses `undo_too_late` the moment the
     wrong SKU has gone out — pushed, staged or live — which for a real mistake is usually
@@ -7620,7 +7620,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
 
 
 def _reverse_correction(box: int, index: int) -> dict:
-    """Take one SKU correction back. D-correct-a-listed-answer, `_reverse_answer`'s twin.
+    """Take one SKU correction back. D252, `_reverse_answer`'s twin.
 
     FOUR REFUSALS: `card_not_found` (no record); `not_corrected` (the log names no
     `sku_corrected` line here, or the card's own `sku`/`condition` no longer match the newest
@@ -13348,7 +13348,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_reshoot(int(match.group(1)), int(match.group(2)), self._body())
                 return self._json(HTTPStatus.OK, body)
-            # D-correct-a-listed-answer. A different verb on the same longer-path pattern as
+            # D252. A different verb on the same longer-path pattern as
             # the sale and the two D26 routes just above, so it cannot shadow the PUT and
             # DELETE routes on `/inventory/<box>/<index>` either.
             match = _CORRECT_RE.match(path)

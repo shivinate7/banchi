@@ -392,7 +392,7 @@ test('undoing the newest pull returns it to Mark sold, and the older copy stays 
 /* -------------------------------------------------------------------------------------- 5 */
 
 test('the walk\'s card pane carries no listing-correction control — Inventory only', async ({ page }) => {
-  /* D-correct-a-listed-answer, the owner's ruling verbatim in intent: "Inventory only." This
+  /* D252, the owner's ruling verbatim in intent: "Inventory only." This
    * pane is `CardHero.tsx`'s shared `CardDetailsSection`, the same component `#/inventory`
    * draws (§13, "Inventory's card pane, unchanged... reused whole") — `OrdersWalkPane.tsx`
    * passes `correctable={false}` at its one call site, so the control this file's sibling

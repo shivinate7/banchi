@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # `make worktree-provision-selftest` — scripts/worktree-provision.sh's app/node_modules
-# provisioning (D-worktree-node-modules), proved against a throwaway fixture.
+# provisioning (D257), proved against a throwaway fixture.
 #
 # WHY A FIXTURE RATHER THAN THE REAL TREE. Eight cases matter: a fresh worktree cloning from
 # main, a worktree whose lockfile has moved needing a real install, an already-current

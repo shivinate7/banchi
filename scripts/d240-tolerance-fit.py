@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fits D240's proposed name-agreement tolerance against the owner's own hand answers
 rather than borrowing D239's 0.82 unmeasured for this shape. The result is recorded in the
-decision entry `D-a-name-tolerance-fit`, measured 2026-09-23 on the owner's store.
+decision entry `D251`, measured 2026-09-23 on the owner's store.
 
 THE LABELS ARE SELECTED BY THE GATE THEY FIT. A `name_disputed` entry exists only because
 `pipeline/join.py:name_disputes` fired, which is ratio below `NAME_DISPUTE_SIMILARITY` and no

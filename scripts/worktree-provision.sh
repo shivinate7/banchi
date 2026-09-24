@@ -102,7 +102,7 @@ if [ ! -e harness/images ]; then
   fi
 fi
 
-# app/node_modules (D-worktree-node-modules). This used to be REPORT-ONLY, per the
+# app/node_modules (D257). This used to be REPORT-ONLY, per the
 # Makefile's NPM_GUARD argument that an implicit install hides a slow network step.
 # NPM_GUARD's outcome is still protected: a
 # session is never left waiting on a bare `npm ci` it did not see coming. What changed is

@@ -716,7 +716,7 @@ class ProductIndex:
     at all. A wrong answer costs a wrong sales chart on a screen nobody has built yet. A
     wrong answer in `pipeline/join.py` costs a card listed as a different card.
 
-    THIS CLASS TAKES ONLY A NUMBER AND A NAME, NEVER A SKU (D-pricehistory-resolves-by-sku).
+    THIS CLASS TAKES ONLY A NUMBER AND A NAME, NEVER A SKU (D254).
     A session briefly widened `find` to weigh a CARD's own read name against the number it
     found (D240's measured seam), and the owner's review reversed it: `pipeline/pricearchive.py`
     and `pipeline/productview.py:row_for_sku` now decide WHICH `(number, name)` pair this
@@ -1145,7 +1145,7 @@ class Market:
         an uncatalogued `misc` card has no `Product Line` to look up and refuses here on the
         first hop, saying so.
 
-        THIS IS NOT THE ONLY WAY A PRODUCT IS RESOLVED (D-pricehistory-resolves-by-sku). A
+        THIS IS NOT THE ONLY WAY A PRODUCT IS RESOLVED (D254). A
         caller that already knows the productId — the archive's own already-verified answer
         for this SKU, `store/pricearchive.py:Bucket.product_id` — never calls this at all;
         `reading_for_row`/`readings_for_rows` below take that id directly and skip this
@@ -1194,7 +1194,7 @@ class Market:
         the answer by its number, so no variant or condition string is ever matched.
 
         `product_id`, WHEN GIVEN, SKIPS `product_id_for_row` ENTIRELY
-        (D-pricehistory-resolves-by-sku). A caller that already knows the answer — the
+        (D254). A caller that already knows the answer — the
         archive's own already-verified productId for this SKU — passes it straight through;
         `row` is then read only for its SKU, never its name or number. Trusted as given: this
         function does not re-verify a productId it was handed.
@@ -1232,7 +1232,7 @@ class Market:
         request per range rather than four.
 
         `product_ids`, SKU -> A KNOWN PRODUCTID, SKIPS `product_id_for_row` FOR THOSE SKUS
-        (D-pricehistory-resolves-by-sku). The caller's own already-verified answers —
+        (D254). The caller's own already-verified answers —
         typically `store/pricearchive.py:Bucket.product_id` from a prior sweep — win over a
         fresh catalogue walk for any SKU named here; every other row still resolves through
         `product_id_for_row` exactly as before.

@@ -256,6 +256,13 @@
     "D247-guard-self-test-scope.md",
     "D248-turn-end-drops-the-harness-and-code-cards-fold-in.md",
     "D249-unclaimed-headings-are-found-by-complement.md",
-    "D250-a-holdings-value-on-screen.md"
+    "D250-a-holdings-value-on-screen.md",
+    "D251-a-name-tolerance-fit.md",
+    "D252-correct-a-listed-answer.md",
+    "D253-name-and-number-agree.md",
+    "D254-pricehistory-resolves-by-sku.md",
+    "D255-sku-name-contradictions.md",
+    "D256-token-literals-are-pinned.md",
+    "D257-worktree-node-modules.md"
   ]
 }

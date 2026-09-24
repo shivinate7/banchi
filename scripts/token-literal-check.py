@@ -296,7 +296,7 @@ _DURATION_FULL_RE = re.compile(r"(" + _NUM + r")(ms|s)", re.IGNORECASE)
 
 def _parse_duration_ms(value: str) -> Optional[float]:
     """`480ms` -> 480.0, `0.7s` / `.7s` -> 700.0 — normalized so a stylesheet spelling the same
-    duration either way is still caught (D-token-literals-are-pinned names this explicitly).
+    duration either way is still caught (D256 names this explicitly).
     Units match case-insensitively, same as every other family."""
     m = re.fullmatch(_DURATION_FULL_RE.pattern, value.strip(), re.IGNORECASE)
     if not m:

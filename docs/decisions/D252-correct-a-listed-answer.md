@@ -1,4 +1,4 @@
-## D-correct-a-listed-answer — A wrong answer gets a correct route, and the SKU it leaves is over-listed by exactly what it gave up
+## D252 — A wrong answer gets a correct route, and the SKU it leaves is over-listed by exactly what it gave up
 
 **The owner found three cards on the live server, 2026-09-23.** Nothing was written yet. `4/176` read "Daisy!" and was answered onto SKU 9189722 (Lilting Lullaby). The right row was 9197749 (Daisy!, 196/219, Near Mint Foil). `4/442` read "Pyke, Returned" and was answered onto 9199579 (Vex, Apathetic). The right row was 9191942 (Pyke, Returned, Alternate Art). `6/563` read "Frigid Jewel" and was answered onto 9197044 (Rengar, Unseen). The right row was 9189327 (Frigid Jewel). All three wrong SKUs had already gone out. `POST /review/<box>/<index>/answer` with `{"undo": true}` refused every one as `undo_too_late` (D28). The message said: "that SKU is already out of this Mac ... correct the card by hand." There was no hand to do it with.
 

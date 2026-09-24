@@ -1,4 +1,4 @@
-## D-pricehistory-resolves-by-sku — A product is resolved from its SKU, never from a card's own read fields
+## D254 — A product is resolved from its SKU, never from a card's own read fields
 
 **The reversed attempt.** A session widened `pipeline/pricehistory.py:ProductIndex.find` to
 weigh a card's own READ name against the number it found (D240's measured seam). The owner's

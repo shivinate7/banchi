@@ -1854,7 +1854,7 @@ class Inventory:
         SKU it resolved. A caller with no catalogue row (a bare state transition) passes
         neither and leaves them as they were.
 
-        `name` FOLLOWS THE SAME RULE, AND IS NARROWER STILL (D-name-and-number-agree). It
+        `name` FOLLOWS THE SAME RULE, AND IS NARROWER STILL (D253). It
         is not the model's identification — `record_identification` owns that write and
         this never touches it — it is the catalogue's own spelling of a card whose read
         name agreed with its row without being identical to it (`Corfish` for `Corphish`).

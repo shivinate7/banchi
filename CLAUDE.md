@@ -246,7 +246,7 @@ make css-var-check  # a `var(--x)` with no fallback where `--x` is defined nowhe
 make css-var-check-selftest  # that checker, on fixtures in both directions: a genuinely
                     #   undefined `var()`, one with a fallback, one defined only from TSX.
 make token-literal-check  # a CSS literal exactly equal to a design token's value, in its
-                    #   own property family (D-token-literals-are-pinned) — `font-size: 22px`
+                    #   own property family (D256) — `font-size: 22px`
                     #   where `--bn-fs-2xl: 22px` means the two can silently diverge. Reads
                     #   tokens.css itself every run, matched by property family (spacing,
                     #   radius, font-size, line-height, letter-spacing, duration), not value
@@ -1174,6 +1174,13 @@ D247 Fifteen guard self-tests are path-gated, and no target was found dead
 D248 The harness leaves turn end, and code cards fold into one rules file
 D249 Recognition by the complement, never by the expected pattern
 D250 Unsold stock reaches `#/revenue`, and D236's wire is spent exactly as written
+D251 The name tolerance stays at 0.80, and the answers cannot fit a number above it
+D252 A wrong answer gets a correct route, and the SKU it leaves is over-listed by exactly what it gave up
+D253 A card lists off name AND number agreeing, never off the number alone
+D254 A product is resolved from its SKU, never from a card's own read fields
+D255 One SKU, two stored names: the sibling check D242 cannot see
+D256 A literal that duplicates a token is caught by family, and the ratchet is pinned per file
+D257 a worktree's node_modules is provisioned, not reported
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

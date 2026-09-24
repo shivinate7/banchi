@@ -309,7 +309,7 @@ CHECKS = (
                    "other's finding. Durations normalize (`0.7s` = `700ms`) before "
                    "comparing. `var(--x, fallback)` and `calc(...)` are never read as a "
                    "literal. RATCHETED PER FILE in scripts/token-literal-check.json "
-                   "(D-token-literals-are-pinned, D229's shape) — main already carries many "
+                   "(D256, D229's shape) — main already carries many "
                    "of these, so the gate is a ceiling on each file's own count, never zero. "
                    "scripts/token-literal-allow.json excuses a named one-off, refused if it "
                    "matches no real finding.",
@@ -622,7 +622,7 @@ CHECKS = (
     {
         "target": "pricearchive-selftest",
         "runs": "python3 scripts/pricearchive-selftest.py",
-        "asserts": "D-pricehistory-resolves-by-sku's whole rebuild: resolve_by_sku's three "
+        "asserts": "D254's whole rebuild: resolve_by_sku's three "
                    "tiers (an archive-verified productId, the SKU's own row in a cached "
                    "Filtered Export, the card's own stored fields as the last resort), "
                    "merged_export_rows_by_sku against real cached-export files on disk and "
@@ -645,7 +645,7 @@ CHECKS = (
                                "standing as cid-selftest right above it.",
         "gates": True,
         "governed_by": ("D18", "D166", "D219", "D222", "D223", "D224", "D233", "D234",
-                        "D240", "D-pricehistory-resolves-by-sku"),
+                        "D240", "D254"),
     },
     {
         "target": "archive-review-selftest",
@@ -770,7 +770,7 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
                                "price-postings-selftest above it.",
         "gates": True,
-        "governed_by": ("D62", "D219", "D227", "D247", "D-pricehistory-resolves-by-sku"),
+        "governed_by": ("D62", "D219", "D227", "D247", "D254"),
     },
     {
         "target": "sku-number-contradictions-selftest",

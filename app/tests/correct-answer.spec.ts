@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 
-/* THE LISTING-CORRECTION CONTROL — D-correct-a-listed-answer, asserted where nothing else can
+/* THE LISTING-CORRECTION CONTROL — D252, asserted where nothing else can
  * reach it. `app/src/CardHero.tsx:ListingCorrection` is the one control the owner's ruling
  * asked for: "a 'this answer was wrong' press on Review and inventory." This file is the
  * `#/inventory` half — `CLAUDE.md`'s hard rule again, "a route is not a feature... nothing is

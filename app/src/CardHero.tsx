@@ -36,7 +36,7 @@ import { Button, Icon, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace } from './position'
 // D46's own picker, reused rather than forked — this file's own header rule: "added to
-// inventory and both screens get it, not a fork" (D-correct-a-listed-answer).
+// inventory and both screens get it, not a fork" (D252).
 import { CatalogPanel } from './ReviewQueue'
 import { correctAnswer, describeFailure, photoUrl, reviewCatalog, undoCorrectAnswer } from './server'
 import type { CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload } from './types'
@@ -375,7 +375,7 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
  *  open/closed state (default open unless `phone`, same as before) rather than reading it off
  *  the caller, so both screens get the identical control with no prop to keep in step.
  *
- *  `correctable` IS THE SCREEN'S OWN WORD, on the owner's ruling (D-correct-a-listed-answer):
+ *  `correctable` IS THE SCREEN'S OWN WORD, on the owner's ruling (D252):
  *  "Inventory only" — the listing-correction control shows on `#/inventory` and not on
  *  `#/orders`, and the screen says so rather than this file guessing from the route. DEFAULTS
  *  FALSE — an ALLOW-LIST of one screen, on the owner's OWN wording, so a THIRD screen that
@@ -433,7 +433,7 @@ export function CardDetailsSection({
 
 /* -------------------------------------------------------- correcting a listed answer */
 
-/** D-correct-a-listed-answer: a card answered onto the wrong catalog row, whose wrong SKU is
+/** D252: a card answered onto the wrong catalog row, whose wrong SKU is
  *  already pushed or live, has no way back through `do_review_answer`'s own undo —
  *  `undo_too_late` refuses it by name, and the message says "correct the card by hand". This
  *  is that hand: `POST /inventory/<box>/<index>/correct` rewrites the card to a DIFFERENT

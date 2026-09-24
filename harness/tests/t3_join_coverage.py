@@ -168,7 +168,7 @@ def _multi_set_catalog(export, second_set=SECOND_SET):
     return join.Catalog(tcgcsv.Export(header=export.header, rows=tuple(rows)))
 
 
-# D-name-and-number-agree's qualifier fix (the review's second CRITICAL finding). The
+# D253's qualifier fix (the review's second CRITICAL finding). The
 # committed fixture carries no parenthetical-qualifier name — no `(Alternate Art)`, no
 # `(Overnumbered)` — to test the real shape against, so this clones ONE synthetic
 # printing under a different number and a different rarity, the same approach and the
@@ -2082,7 +2082,7 @@ def run() -> Result:
             "and both are claimed by the name, so the screen can say so on each",
         )
 
-    # --- D-name-and-number-agree, 2026-09-23: THE GATE REACHES A CARD ALREADY QUEUED -----
+    # --- D253, 2026-09-23: THE GATE REACHES A CARD ALREADY QUEUED -----
     #
     # Until this date the whole block above only fired `not resolution.needs_review and
     # resolution.row is not None` — a card the ladder had already resolved OUTSIDE review.
@@ -2302,7 +2302,7 @@ def run() -> Result:
             "back to",
         )
 
-    # --- D-name-and-number-agree, THE NEAR-MISS HALF: a read that agreed WITHOUT being ---
+    # --- D253, THE NEAR-MISS HALF: a read that agreed WITHOUT being ---
     # byte-identical offers the catalogue's own spelling as a correction; an exact read
     # offers none, because there is nothing to correct.
     near_miss = join.join_batch(

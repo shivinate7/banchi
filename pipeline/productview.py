@@ -53,7 +53,7 @@ def row_for_sku(snapshot: Snapshot, sku: str) -> dict:
     this one SKU. Raises `ProductNotFound` when no card has ever carried it.
 
     RESOLVED BY THE SKU, NEVER BY THE CARD'S OWN READ FIELDS FIRST
-    (D-pricehistory-resolves-by-sku). This function is reached ONLY from the live-fallback
+    (D254). This function is reached ONLY from the live-fallback
     branch of `GET /pipeline/products/<sku>/history` — `archive_payload` already answers
     from the archive when it has anything for this SKU at all, so a SKU reaching here has
     never been swept and carries no `Bucket.product_id` to trust (tier (a) cannot apply).

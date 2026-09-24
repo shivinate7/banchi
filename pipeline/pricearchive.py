@@ -685,7 +685,7 @@ def sweep(
     report which source answered rather than silently swapping one in.
 
     `archive`/`export_rows`, WHEN GIVEN, RUN `resolve_by_sku` BEFORE ANY ROW REACHES `market`
-    (D-pricehistory-resolves-by-sku). Neither defaults to being fetched here — a caller
+    (D254). Neither defaults to being fetched here — a caller
     passes its own `Snapshot.archive` and its own `merged_export_rows_by_sku()` once, rather
     than this function opening either per call. Omitting both is every SKU resolved tier
     (c), `rows` unchanged — this function's own shape before 2026-09-23, byte for byte.

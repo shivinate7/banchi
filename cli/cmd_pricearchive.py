@@ -210,7 +210,7 @@ def _sweep(args, say) -> int:
         return 1
 
     # RESOLVED BY THE SKU, NEVER BY THE CARD'S OWN READ FIELDS FIRST
-    # (D-pricehistory-resolves-by-sku, owner's ruling 2026-09-23). Read once, here, so
+    # (D254, owner's ruling 2026-09-23). Read once, here, so
     # every chunk's own `sweep()` call sees the same archive and the same export cache
     # rather than each chunk re-deriving `export_rows` off disk.
     export_index = archive_walk.merged_export_rows_by_sku()
