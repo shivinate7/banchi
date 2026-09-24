@@ -5661,8 +5661,9 @@ COMPONENTS = [
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28",
                                             "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61",
                                             "D63", "D66", "D69", "D70", "D94", "D95", "D100",
-                                            "D105", "D109", "D120", "D123", "D134", "D159", "D207",
-                                            "D227"]},
+                                            "D105", "D109", "D120", "D123", "D134", "D159", "D196",
+                                            "D204", "D207", "D227", "D-drawer-foot-joins-the-list",
+                                            "D-page-scaffold", "D-palette-go-to"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -5708,7 +5709,8 @@ COMPONENTS = [
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51",
                                             "D94", "D95", "D110", "D117", "D118", "D123", "D134",
-                                            "D152", "D204", "D205", "D218"]},
+                                            "D152", "D204", "D205", "D218",
+                                            "D-drawer-foot-joins-the-list", "D-palette-go-to"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -8129,7 +8131,7 @@ COMPONENTS = [
                         "block, route -> assertion -> lane: an unlisted failure is red and an "
                         "entry that now passes at every width is red (stale). Writes nothing. "
                         "Run by `make design-check`.",
-                "governed_by": ["D5", "D173", "D-page-scaffold"],
+                "governed_by": ["D5", "D173", "D-page-scaffold", "D-palette-go-to"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
@@ -8227,7 +8229,7 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117", "D204"],
+                "governed_by": ["D50", "D95", "D117", "D204", "D-drawer-foot-joins-the-list"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
                         "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "
@@ -8379,7 +8381,8 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134", "D174", "D192"]},
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
+                                "D124", "D125", "D134", "D174", "D192", "D-palette-go-to"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -8423,7 +8426,9 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D109", "D134", "D174", "D192", "D20"],
+                "governed_by": ["D5", "D20", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D95",
+                                "D100", "D105", "D109", "D134", "D174", "D192", "D-page-scaffold",
+                                "D-palette-go-to"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "

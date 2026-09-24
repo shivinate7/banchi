@@ -35,6 +35,10 @@ with `elementFromPoint`. It stays, and it now also asserts that the drawer draws
 
 ### What is built
 
-NOT BUILT. The shell lane of the 2026-09-23 overhaul builds it, beside the palette changes that
-amend D95 (the shell is a rail, a palette and a reference sheet). The drawer also becomes modal
-and holds focus (UX-014).
+BUILT by the shell lane of the 2026-09-23 overhaul, beside the palette changes in
+D-palette-go-to (amends D95, the shell is a rail, a palette and a reference sheet). The drawer is
+the kit's `Sheet` now, so it is modal and holds focus (UX-014). Its last group holds Cards to
+pull, the theme toggle and the server line. `--bn-drawer-foot-h` is gone. D204's tap sweep in
+`app/tests/phone.spec.ts` is still skipped (DEBT29). A new case in that file asserts that the
+drawer draws no fixed foot. It also asserts that every screen in the drawer shows without a
+scroll at 390x844.
