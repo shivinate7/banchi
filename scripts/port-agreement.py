@@ -28,17 +28,26 @@ WHAT IT COMPARES, and it is deliberately two different things:
      where both sides are looking at the same tree. That is one case, and it is the case that
      matters: it is the pair a running `make server` and a running `make dev` actually use.
 
-WHAT IT DOES NOT COVER, said plainly rather than implied by a green run: the main tree's
-branch of the derivation is asserted against the documented constants on the Python side only,
-because proving TypeScript's requires running it from a checkout whose `.git` is a directory
-and this test does not move itself between trees.
+  3. THE THREE KINDS OF TREE, on COPIES (D-no-git-no-live-port, a copied tree never gets
+     the live port). Both files are copied into three throwaway trees, and each copy is asked
+     for its OWN default ports, through the same module-location read a real build makes:
+       - `.git` a DIRECTORY, the primary checkout: 8000 and 5173, on both sides.
+       - `.git` a FILE, a linked worktree: its band plus its slot, on both sides.
+       - NO `.git`, a scratch copy or an exported tree: its band plus its slot, on both
+         sides, and NEVER 8000 or 5173. On 2026-09-23 a copy of main with no `.git` built
+         an app that called the owner's live server on 8000. This arm holds that case.
+     A copy, not a path fed to a function, because the incident was the module reading where
+     it LIVES. Only a copy reaches that read.
 
 Stdlib only, and it never writes outside the temporary directory it creates and destroys.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -52,20 +61,36 @@ from server import ports  # noqa: E402
 CASES = 12
 
 
-def node_answers(paths: list[str]) -> dict:
-    """Run the real `app/devPort.ts` — never a copy of it — and read back its answers."""
+# The three kinds of tree the derivation must tell apart, by what sits at `<root>/.git`.
+TREE_KINDS = ("primary", "linked", "no-git")
+
+
+def node_answers(paths: list[str], copies: list[str]) -> dict:
+    """Run the real `app/devPort.ts`, and each COPY of it, and read back their answers.
+
+    `copies` are the `app/devPort.ts` files inside the throwaway trees. Each one is imported
+    from where it sits, so its `DEV_PORT` and `CAPTURE_PORT` are what a build from that tree
+    would bake.
+    """
     script = (
         "const m = await import(%s);\n"
         "const paths = JSON.parse(process.argv[1]);\n"
+        "const copies = JSON.parse(process.argv[2]);\n"
+        "const trees = [];\n"
+        "for (const url of copies) {\n"
+        "  const c = await import(url);\n"
+        "  trees.push({ devPort: c.DEV_PORT, capturePort: c.CAPTURE_PORT });\n"
+        "}\n"
         "console.log(JSON.stringify({\n"
         "  slots: paths.map((p) => m.slotFor(p)),\n"
         "  devPort: m.DEV_PORT,\n"
         "  capturePort: m.CAPTURE_PORT,\n"
+        "  trees,\n"
         "}));\n" % json.dumps((ROOT / "app" / "devPort.ts").as_uri())
     )
     done = subprocess.run(
         ["node", "--experimental-strip-types", "--input-type=module", "-e", script,
-         json.dumps(paths)],
+         json.dumps(paths), json.dumps([Path(c).as_uri() for c in copies])],
         cwd=str(ROOT), capture_output=True, text=True, check=False,
     )
     if done.returncode != 0:
@@ -74,6 +99,54 @@ def node_answers(paths: list[str]) -> dict:
             "not the same as agreed:\n" + (done.stderr.strip() or "(no stderr)")
         )
     return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def build_tree(tmp: Path, kind: str) -> Path:
+    """A throwaway tree holding copies of both files, with `.git` shaped by `kind`."""
+    tree = tmp / f"copy-{kind}"
+    (tree / "server").mkdir(parents=True)
+    (tree / "app").mkdir()
+    shutil.copy2(ROOT / "server" / "ports.py", tree / "server" / "ports.py")
+    shutil.copy2(ROOT / "app" / "devPort.ts", tree / "app" / "devPort.ts")
+    # `app/package.json` says `"type": "module"`. The copy needs the same, or node reads
+    # `import.meta` in a CommonJS scope.
+    (tree / "app" / "package.json").write_text('{"type": "module"}\n', encoding="utf-8")
+    if kind == "primary":
+        (tree / ".git").mkdir()
+    elif kind == "linked":
+        (tree / ".git").write_text("gitdir: /nowhere/.git/worktrees/copy\n", encoding="utf-8")
+    return tree
+
+
+def python_answers(tree: Path) -> dict:
+    """Load the COPY of `server/ports.py` and read its no-argument answers.
+
+    The copy's `REPO_ROOT` is the copy's own tree, as it is for a server started there.
+    `PKMNSCAN_PORT` is set aside for the call: it is an override, and this reads the
+    derivation under it.
+    """
+    spec = importlib.util.spec_from_file_location(
+        f"ports_copy_{tree.name.replace('-', '_')}", tree / "server" / "ports.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    saved = os.environ.pop(ports.PORT_ENV, None)
+    try:
+        return {
+            "devPort": module.dev_port(),
+            "capturePort": module.capture_port(),
+            "slot": module.slot_for(tree),
+        }
+    finally:
+        if saved is not None:
+            os.environ[ports.PORT_ENV] = saved
+
+
+def expected(kind: str, slot: int) -> tuple:
+    """(dev, capture) a tree of this kind must answer. The constants are the module's own."""
+    if kind == "primary":
+        return ports.DEV_BASE_PORT, ports.CAPTURE_BASE_PORT
+    return ports.DEV_LOW + slot, ports.CAPTURE_LOW + slot
 
 
 def main() -> int:
@@ -87,7 +160,8 @@ def main() -> int:
         roots.append(ROOT)
         as_strings = [str(path) for path in roots]
 
-        theirs = node_answers(as_strings)
+        trees = [build_tree(Path(tmp), kind) for kind in TREE_KINDS]
+        theirs = node_answers(as_strings, [str(t / "app" / "devPort.ts") for t in trees])
         mine = [ports.slot_for(path) for path in roots]
 
         failures = []
@@ -102,12 +176,25 @@ def main() -> int:
             if want != got:
                 failures.append(f"{label} disagrees for this checkout: python {want}, node {got}")
 
-        # The main-tree branch, Python side. One-sided and the docstring says so.
-        main_tree = Path(tmp) / "main-like"
-        main_tree.mkdir()
-        (main_tree / ".git").mkdir()
-        if ports.capture_port(main_tree) != ports.CAPTURE_BASE_PORT:
-            failures.append("a checkout whose .git is a DIRECTORY must answer the base port")
+        # The three kinds of tree, each a copy asked for its own default ports.
+        for kind, tree, node_tree in zip(TREE_KINDS, trees, theirs["trees"]):
+            py_tree = python_answers(tree)
+            want_dev, want_capture = expected(kind, py_tree["slot"])
+            for side, got in (("python", py_tree), ("node", node_tree)):
+                if (got["devPort"], got["capturePort"]) != (want_dev, want_capture):
+                    failures.append(
+                        f"{kind} tree: {side} answers dev {got['devPort']} / capture "
+                        f"{got['capturePort']}, want dev {want_dev} / capture {want_capture}"
+                    )
+                if kind != "primary" and (
+                    got["capturePort"] == ports.CAPTURE_BASE_PORT
+                    or got["devPort"] == ports.DEV_BASE_PORT
+                ):
+                    failures.append(
+                        f"{kind} tree: {side} answers the PRIMARY checkout's live port. A "
+                        f"build here would call the owner's live server "
+                        f"(D-no-git-no-live-port, a copied tree never gets the live port)"
+                    )
 
         if failures:
             print("port agreement: FAILED")
@@ -117,7 +204,8 @@ def main() -> int:
 
         print(
             f"port agreement: {len(as_strings)} paths, slots identical; "
-            f"this checkout dev {ports.dev_port()} / capture {ports.capture_port()} on both sides"
+            f"this checkout dev {ports.dev_port()} / capture {ports.capture_port()} on both "
+            f"sides; {len(trees)} copied trees ({', '.join(TREE_KINDS)}) answer their own kind"
         )
         return 0
 

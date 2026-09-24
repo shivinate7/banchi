@@ -3291,7 +3291,7 @@ COMPONENTS = [
                 # node, and the git hook runs bare python3 with nothing installed, so it lives
                 # in `make check` beside the other two self-tests rather than on the commit
                 # path.
-                "governed_by": ["D18", "D43"],
+                "governed_by": ["D18", "D43", "D-no-git-no-live-port"],
             },
             "set-hint-agreement.py": {
                 "does": "port-agreement.py's shape, one decision over: proves "
@@ -4738,14 +4738,16 @@ COMPONENTS = [
         "modules": {
             "ports.py": {
                 "does": "which ports THIS checkout serves on, derived from where the checkout "
-                        "is. The main tree keeps :8000 and :5173; a linked worktree gets its "
-                        "own pair from one slot off its path. `PKMNSCAN_PORT` overrides and an "
+                        "is. The main tree keeps :8000 and :5173, and only a tree whose `.git` "
+                        "is a DIRECTORY is the main tree; a linked worktree, or a copy with no "
+                        "`.git`, gets its own pair from one slot off its path. `PKMNSCAN_PORT` "
+                        "overrides and an "
                         "out-of-range value is ignored rather than obeyed.",
                 # D43 is the decision. D13 is why it matters: one truth on the Mac, and the
                 # store already defaults per-checkout — so a shared port meant one tree's UI
                 # writing into another tree's store, which is that entry's promise broken by
                 # a socket rather than by a design.
-                "governed_by": ["D13", "D43"],
+                "governed_by": ["D13", "D43", "D-no-git-no-live-port"],
                 "note": "Stdlib only, like the server it serves. `scripts/status.py` imports "
                         "it and the git hook never does.",
             },
@@ -5257,9 +5259,10 @@ COMPONENTS = [
                                    "configs hardcoding 5173 is what let design-check attach "
                                    "to the MAIN tree's server from a worktree and assert "
                                    "DESIGN.md's floors against code the branch never had — "
-                                   "green, and meaningless. Detects a worktree the way "
-                                   "scripts/worktree-guard.sh does: `.git` is a file",
-                           "governed_by": ["D5", "D13", "D43"]},
+                                   "green, and meaningless. Only a tree whose `.git` is a "
+                                   "DIRECTORY keeps 5173; a linked worktree and a copy with "
+                                   "no `.git` both take a slot",
+                           "governed_by": ["D5", "D13", "D43", "D-no-git-no-live-port"]},
             "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
                                        "Makefile and scripts/views.txt would all three be wrong. "

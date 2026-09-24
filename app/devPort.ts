@@ -31,9 +31,8 @@ import { fileURLToPath } from 'node:url'
 // docs/specs, and in the muscle memory of anyone who has run this. Nothing about the
 // ordinary single-checkout workflow changes; only a linked worktree moves.
 //
-// A LINKED WORKTREE'S `.git` IS A FILE, not a directory — the same one fact
-// `scripts/worktree-guard.sh` and `scripts/docs-audit.py` both detect on, kept identical
-// here on purpose so there is one rule to learn rather than three spellings of it.
+// THE MAIN TREE'S `.git` IS A DIRECTORY, and that is the one fact that keeps 5173. A linked
+// worktree's `.git` is a FILE. A copy with no `.git` has neither. Both of those move.
 //
 // DERIVED, NOT ALLOCATED, so it is stable. The same worktree answers the same port on every
 // run, which is what makes the printed URL worth bookmarking and what keeps two concurrent
@@ -83,13 +82,20 @@ function canonical(root: string): string {
   }
 }
 
-function isLinkedWorktree(root: string): boolean {
+// ONLY A `.git` DIRECTORY KEEPS 5173 AND 8000 (D-no-git-no-live-port, a copied tree never
+// gets the live port). This used to ask "is `.git` a FILE?" and read every other answer as
+// "the main tree". On 2026-09-23 a scratch copy of main with no `.git` built an app. It
+// baked 8000, the owner's LIVE capture server, and the page read the real store. So the
+// base ports now go to the one tree that proves it is the primary checkout. A linked
+// worktree, a tarball, a container copy and a `cp -r` of the tree all take a slot from their
+// own path. A wrong guess here costs a moved port, never a write to the owner's store.
+// `server/ports.py:is_primary_checkout` is the twin, and `make port-agreement` asks both
+// of them over a copy of each kind of tree.
+function isPrimaryCheckout(root: string): boolean {
   try {
-    return statSync(resolve(root, '.git')).isFile()
+    return statSync(resolve(root, '.git')).isDirectory()
   } catch {
-    // No `.git` at all — a tarball, a container copy, a CI checkout that stripped it.
-    // Behave like the main tree: 5173 is what every doc says, and inventing a port for a
-    // checkout that has no identity to derive one from would be worse than the default.
+    // No `.git` at all, or a stat that fails: not the primary checkout.
     return false
   }
 }
@@ -104,7 +110,7 @@ export function slotFor(root: string): number {
 
 function portFor(base: number, low: number): number {
   const root = repoRoot()
-  if (!isLinkedWorktree(root)) return base
+  if (isPrimaryCheckout(root)) return base
   return low + slotFor(root)
 }
 
