@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { realpathSync, statSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // ONE DEV PORT PER CHECKOUT, DERIVED FROM WHERE THE CHECKOUT IS.
@@ -40,11 +41,15 @@ import { fileURLToPath } from 'node:url'
 // give one tree a different answer every run, and `strictPort` would then be unable to tell
 // "someone else is here" from "I moved".
 //
-// COLLISIONS ARE POSSIBLE AND ARE LOUD. Two worktree paths can hash into one slot; with 300
-// slots and a handful of trees it is a couple of percent. `vite.config.ts` keeps
-// `strictPort`, so the second one refuses to start rather than quietly serving elsewhere —
-// which is the same reason that flag is set at all. The remedy is to rename the worktree
-// directory; the port follows the path.
+// COLLISIONS WERE NOT A COUPLE OF PERCENT, AND ONE WAS SILENT
+// (D-a-claimed-slot-and-a-server-that-names-its-checkout). With about 35 worktrees on this Mac
+// and 300 slots, a shared slot is more likely than not. On 2026-09-24 two live worktrees
+// derived 5218, and a design-check in one ATTACHED to the other's Vite and passed. So two
+// things changed. A checkout may CLAIM a slot in one machine-wide registry, and `slotFor`
+// reads it before the hash (`scripts/port-slots.py claim` is the one writer; `make dev`,
+// `make server`, `make up` and `make design-check` claim first). And a server this suite
+// reuses must say which checkout it serves: `checkoutIdentity.ts` refuses the run otherwise.
+// `vite.config.ts` still keeps `strictPort`, so a second server on one port refuses to start.
 //
 // THE CAPTURE SERVER'S PORT IS DERIVED HERE TOO, FROM THE SAME SLOT (D43). This file solved
 // the shared-port fault for Vite and Playwright and stopped there; `server/capture_server.py`
@@ -102,12 +107,53 @@ function isPrimaryCheckout(root: string): boolean {
   }
 }
 
-// Exported so `scripts/port-agreement.py` can feed it the same synthetic paths it feeds
-// `server/ports.py:slot_for` and diff the answers. A pure function of a string is the only
-// part of this that can be compared across two languages without a filesystem in the way.
-export function slotFor(root: string): number {
+// THE CLAIMED SLOTS, `server/ports.py:read_claims`'s twin. `PKMNSCAN_SLOT_REGISTRY`
+// overrides where the file is. A missing, unreadable or malformed file reads as "nothing
+// claimed", and so does an entry that is not a whole slot inside the band. This file only
+// ever READS the registry.
+export const SLOT_REGISTRY_ENV = 'PKMNSCAN_SLOT_REGISTRY'
+
+function slotRegistry(): string | null {
+  const override = (process.env[SLOT_REGISTRY_ENV] ?? '').trim()
+  if (override) return override
+  try {
+    return join(homedir(), '.pkmnscan', 'port-slots.json')
+  } catch {
+    return null
+  }
+}
+
+function claimedSlot(root: string): number | null {
+  const path = slotRegistry()
+  if (!path) return null
+  try {
+    const data: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    const slots = (data as { slots?: unknown } | null)?.slots
+    if (!slots || typeof slots !== 'object') return null
+    const value = (slots as Record<string, unknown>)[canonical(root)]
+    return Number.isInteger(value) && (value as number) >= 0 && (value as number) < WORKTREE_SLOTS
+      ? (value as number)
+      : null
+  } catch {
+    return null
+  }
+}
+
+// The slot the path alone derives, used when no slot is claimed.
+export function hashedSlot(root: string): number {
   const digest = createHash('sha256').update(canonical(root)).digest()
   return digest.readUInt32BE(0) % WORKTREE_SLOTS
+}
+
+// Exported so `scripts/port-agreement.py` can feed it the same paths it feeds
+// `server/ports.py:slot_for`, over the same registry, and diff the answers.
+export function slotFor(root: string): number {
+  return claimedSlot(root) ?? hashedSlot(root)
+}
+
+// The resolved path of THIS checkout. `checkoutIdentity.ts` serves it and compares it.
+export function checkoutRoot(): string {
+  return canonical(repoRoot())
 }
 
 function portFor(base: number, low: number): number {
