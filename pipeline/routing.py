@@ -92,15 +92,13 @@ NAME_DISPUTED = "name_disputed"
 # long after the join ran. Label on screen, `app/src/ReviewQueue.tsx`'s own `QUESTIONS` map
 # (§7.3's exact words): "Is the listing the right card?"
 #
-# DELIBERATELY NOT IN `ROUTING_REASONS` BELOW. That tuple is `route()`'s own emitted
-# vocabulary, reconciled against `app/src/reasons.ts` and `docs/DESIGN.md` by `make
-# docs-audit`'s `reason codes`/`reason emissions` rows — neither file is lane 2's to touch
-# (see the lane's own fence). A reason outside the roster still renders: `#/review`'s
-# `reasonLabel` falls back to the raw string exactly as it does for any code `reasons.ts`
-# has not labelled yet (`app/src/reasons.ts`'s own docstring: "an unknown code renders as
-# itself... so a reason added to the pipeline shows up here as a plain string rather than a
-# blank line"). Wiring this into the roster, `reasons.ts` and `docs/DESIGN.md` is real work
-# a later lane owns.
+# IN `ROUTING_REASONS` BELOW, EVEN THOUGH `route()` NEVER EMITS IT. That tuple is read two
+# ways by `make docs-audit` (`reason codes`, `reason emissions`) as "every reason routing
+# can put on a card", not "every reason `route()` itself computes" — `NO_MARKET_DATA` right
+# above already sits in the tuple as a destination rather than a `route()` output, and this
+# is the same shape: a reason this MODULE owns, opened by a caller other than `route()`.
+# Its producer, for `reason emissions`' own AST walk, is `pipeline/
+# identity_binding.py:held_review_entry`, which loads this name to build the entry.
 LISTING_DISPUTED = "listing_disputed"
 
 # ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
@@ -121,6 +119,7 @@ ROUTING_REASONS = (
     NUMBER_UNREAD_NAME_MATCHED,
     NAME_DISPUTED,
     NO_MARKET_DATA,
+    LISTING_DISPUTED,
 )
 
 # Hard failures: no usable answer at all, so no price can be reasoned about. Always main,

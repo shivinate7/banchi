@@ -174,14 +174,24 @@ def distinct_products_by_line(skus: Mapping[str, SkuRow]) -> Dict[str, List[SkuR
 def matching_products(
     read_name: Optional[str], products: Sequence[SkuRow]
 ) -> List[Tuple[str, str]]:
-    """The distinct `(set_name, number)` products, among `products`, whose name the read
-    does NOT dispute (D162's own test, run against the SKU table rather than a `Catalog` —
-    §3.2's own argument for why the table exists). `name_disputes` is the reused primitive;
-    this is a grouping over its answer, not a second dispute rule.
+    """The distinct `(set_name, number)` products, among `products`, this read NAMES —
+    D162's own uniqueness question, "how many products does this name name", answered the
+    same way `pipeline/join.py:Catalog.rows_for_name`/`_by_name` already answer it: an EXACT
+    fold-bucket lookup (`_name_compare_key`, catalog side folded, read side not), never
+    `name_disputes`'s lenient near-miss threshold. The two tests answer different questions
+    — `name_disputes` asks "does this read disagree with ONE specific row" (T5's gate,
+    deliberately lenient so a typo does not read as a different card); this asks "which
+    products, exactly, does this spelling identify" (a lookup, and D162's own worked
+    example — `Aspirant's Climb` — is an exact match on both sides). Reusing the lenient
+    test here over-counted: measured on the owner's store, it moved 6 cards from T4u into
+    T4s that the exact fold correctly keeps unique.
     """
+    key = _name_compare_key(read_name)
+    if not key:
+        return []
     out: List[Tuple[str, str]] = []
     for row in products:
-        if not name_disputes(read_name, [_row_dict(row)]):
+        if _name_compare_key(row.product_name, catalog_side=True) == key:
             out.append((row.set_name, row.number))
     return out
 

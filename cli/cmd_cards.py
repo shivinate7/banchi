@@ -484,10 +484,15 @@ def _print_plan(plan: "ib.MigrationPlan", findings: "ib.AuditFindings", say) -> 
         f"({identified_held} identified, {sold_held} sold"
         + (f", {other_held} other" if other_held else "") + ")")
 
+    # §7.2's own test for this list: the READ DISPUTES THE ROW (`ib.name_disputes`, the
+    # exact test T5's gate already runs), never a bare string inequality — a T1/T2-shaped
+    # spelling difference reaching T3 by way of a human's own correction is not a dispute,
+    # and counting it as one over-reported this list 148-for-38 on the owner's store before
+    # this fix.
     disputed_names = [
         p for p in plan.plans
-        if p.cls == ib.T3 and p.classification.new_name is not None
-        and (p.read_name or "").strip().upper() != p.classification.new_name.strip().upper()
+        if p.cls == ib.T3 and p.classification.row is not None
+        and ib.name_disputes(p.read_name, [ib._row_dict(p.classification.row)])
     ]
     if disputed_names:
         say("")
@@ -532,9 +537,11 @@ def _identity(args, say) -> int:
 
     started = time.monotonic()
     census = {
-        "bound": 0, "unchanged": 0, "held": 0, "review_opened": 0, "sold_reported": 0,
+        "bound": 0, "unchanged": 0, "held": 0, "review_opened": 0,
+        "review_already_open": 0, "review_blocked": 0, "sold_reported": 0,
         "skipped_moved": 0,
     }
+    blocked_entries: List[Tuple[str, str]] = []
     with Store().write() as snapshot:
         for p in plan.plans:
             card = snapshot.inventory.cards.get(p.key)
@@ -575,8 +582,29 @@ def _identity(args, say) -> int:
                     card.identity_source = IDENTITY_READ
                     census["held"] += 1
                 if card.state == master.IDENTIFIED:
-                    entry = ib.held_review_entry(card, p.classification.row, plan)
-                    if snapshot.review.upsert(entry):
+                    # MEASURED ON THE OWNER'S STORE: two held, identified cards (3/968,
+                    # 3/987) already carry a HUMAN-CLEARED entry under `no_catalog_row`
+                    # from 2026-09-01 — a real answer to a DIFFERENT, older question, at a
+                    # position the join once could not resolve at all. §7.3's own premise
+                    # ("a held card has no answered entry... every held card is in the
+                    # no-human class") is false for these two. `Queue.upsert` (D167/D4's own
+                    # protection: never re-queue a position a human already answered)
+                    # correctly refuses rather than overwriting that human's line, so this
+                    # is reported rather than forced through.
+                    existing = snapshot.review.entries.get(p.key)
+                    if existing is not None and existing.cleared_by_human:
+                        census["review_blocked"] += 1
+                        blocked_entries.append((p.key, existing.reason))
+                    elif existing is not None and existing.reason == "listing_disputed":
+                        # RE-RUNNABLE (§7.3): an entry this same press already opened is
+                        # left exactly as it is rather than upserted again — upserting an
+                        # identical entry is harmless, but "re-runnable" means the SECOND
+                        # `--write` is a no-op, and this is the one write this branch could
+                        # otherwise repeat on every pass.
+                        census["review_already_open"] += 1
+                    else:
+                        entry = ib.held_review_entry(card, p.classification.row, plan)
+                        snapshot.review.upsert(entry)
                         census["review_opened"] += 1
                 elif card.state == master.SOLD:
                     census["sold_reported"] += 1
@@ -588,6 +616,13 @@ def _identity(args, say) -> int:
     say(f"  already correctly bound, skipped: {census['unchanged']}")
     say(f"  held (identity_source=read): {census['held']}")
     say(f"  review entries opened (listing_disputed): {census['review_opened']}")
+    if census["review_already_open"]:
+        say(f"  already open from an earlier --write, untouched: {census['review_already_open']}")
+    if census["review_blocked"]:
+        say(f"  HELD, IDENTIFIED, BUT ALREADY HUMAN-CLEARED UNDER A DIFFERENT REASON — no "
+            f"new entry opened, D167/D4's own protection: {census['review_blocked']}")
+        for key, reason in blocked_entries:
+            say(f"    {key}  already cleared under {reason!r}")
     say(f"  sold and held, report only: {census['sold_reported']}")
     if census["skipped_moved"]:
         say(f"  SKIPPED, SKU moved since the preview: {census['skipped_moved']}")

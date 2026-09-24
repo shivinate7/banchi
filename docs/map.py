@@ -496,7 +496,7 @@ COMPONENTS = [
                                      "cannot be re-taken",
                              "governed_by": ["D172", "D183",
                                              "D26", "D88", "D89",
-                                             "D162", "D213", "D239",
+                                             "D162", "D167", "D213", "D239",
                                              "D240", "D242", "D253", "D255"],
                              "tested_by": ["T7"]},
             # RETIRED INTO `cmd_cards.py:identity` (identity-follows-sku.md §5.5, lane 2,
