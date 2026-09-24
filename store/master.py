@@ -2287,16 +2287,16 @@ class Inventory:
         card = self.cards.get(key)
         if card is None:
             return None
-        for field in self.IDENTITY_SNAPSHOT_FIELDS:
-            if field == "bound_at":
+        for attr in self.IDENTITY_SNAPSHOT_FIELDS:
+            if attr == "bound_at":
                 # `bound_at` IS THE ONE EXCEPTION, and it is `unbind_sku`'s own precedent
                 # (that method's docstring, verbatim): "a restore is itself an act
                 # happening now, not a trip back to the moment the original bind wrote".
                 # Skipped in the verbatim-copy loop and re-stamped unconditionally below,
                 # whether or not `snapshot` even carries the key.
                 continue
-            if field in snapshot:
-                setattr(card, field, snapshot[field])
+            if attr in snapshot:
+                setattr(card, attr, snapshot[attr])
         card.bound_at = now()
         self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run, **extra)
         return card
