@@ -8,6 +8,7 @@ import type {
   OrdersPayload,
   PickRow,
   Place,
+  ProductHistoryPayload,
   ResolvedLine,
   ResolvedOrder,
   ShippingBatch,
@@ -732,11 +733,70 @@ export async function seedPopulatedGraveyard(page: Page): Promise<void> {
   )
 }
 
+/* ------------------------------------------------------------------------- the product */
+
+/** `#/product` WITH A SKU, the only state that route draws anything real in. The SKU is
+ *  `severalOrders()`'s first line (Volcanion, `9191486`), so the owner's own fill on it comes
+ *  off the same `/orders` stub the Orders screen reads, and the page draws both of its marks.
+ *  A fresh fixture off `types.ts:ProductHistoryPayload`, not an import of
+ *  `product-history.spec.ts`'s own: that file belongs to the product lane. */
+export const PRODUCT_SKU = '9191486'
+
+/** The route the three text sweeps append to the nav harvest. `#/product` is off-nav (it is a
+ *  deep link by SKU), so no nav or drawer harvest ever returns it. It is kept in this module,
+ *  not in a spec, for the reason the roster block below gives. */
+export const PRODUCT_ROUTE = `#/product?sku=${PRODUCT_SKU}`
+
+export function productHistory(): ProductHistoryPayload {
+  return {
+    sku: PRODUCT_SKU,
+    product_id: 42,
+    name: 'Volcanion',
+    set_name: 'Steam Siege',
+    condition: 'Near Mint',
+    source: 'archive',
+    history_begins: '2026-03-01',
+    never_sold: false,
+    ranges: [
+      {
+        range: 'month',
+        width_days: 1,
+        buckets: 4,
+        from: '2026-08-26',
+        to: '2026-08-29',
+        latest_market: '1.31',
+        points: [
+          { at: '2026-08-26', market: '1.20', quantity: 2, low: '1.05', high: '1.40' },
+          { at: '2026-08-27', market: '1.22', quantity: 1, low: '1.10', high: '1.40' },
+          { at: '2026-08-28', market: null, quantity: 0, low: null, high: null },
+          { at: '2026-08-29', market: '1.31', quantity: 1, low: '1.15', high: '1.52' },
+        ],
+      },
+    ],
+  }
+}
+
+/** Stub the product's own history read. Its fills come off `seedPopulatedOrders`'s `/orders`,
+ *  and its printings switch reads `/search`, which `shell.ts:stubStore` already answers. */
+export async function seedPopulatedProduct(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(productHistory()),
+    }),
+  )
+}
+
 /* ------------------------------------------------------------------------- the roster */
 
-/** The five routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
- *  populates it — `text-shape.spec.ts` and `machine-words.spec.ts`'s own use, kept here
- *  rather than duplicated in either.
+/** The six routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
+ *  populates it — read by `routeSweep.ts:sweepEveryRoute`, which REGISTERS EVERY SEED ONCE,
+ *  before the sweep starts, so every route reads the same populated store at both widths.
+ *  (Registering each seed on arrival at its route piled the handlers up in nav order: a route
+ *  drawn before `#/orders` at 1440 read the empty ledger, and the same route at 390 read the
+ *  full one. That was the whole of the run-to-run variation the first build blamed on a
+ *  "seeded-random" fixture. Nothing in this fixture is random.)
  *
  *  DELIBERATELY NOT IN A `*.spec.ts` FILE. `scripts/docs-audit.py`'s `route rosters` row
  *  reconciles a hand-typed list of THREE OR MORE route hashes found in a spec against
@@ -753,4 +813,5 @@ export const POPULATED_ROUTE_SEEDS: Record<string, (page: Page) => Promise<void>
   '#/shipping': seedPopulatedShipping,
   '#/codes': seedPopulatedCodes,
   '#/graveyard': seedPopulatedGraveyard,
+  [PRODUCT_ROUTE]: seedPopulatedProduct,
 }

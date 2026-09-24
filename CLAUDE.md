@@ -202,14 +202,15 @@ make suite-lock-selftest # the lock, proved by violating it, including a holder 
                     #   In `check`.
 make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
                     #   real tree (D215). In `check`.
-make text-density   # the owner's third D194 replacement (`D-text-shape-checks`): a
-                    #   REPEATABLE, ON-DEMAND word-density review, never a gate (D18: it
-                    #   writes). `scripts/text-density/density.mjs` against THIS checkout's
-                    #   own dev server, its port derived through `app/devPort.ts` — never a
-                    #   hardcoded URL, never the published demo. Prints a per-route cut table.
+make text-density   # the owner's third D194 replacement (`D-text-shape-checks`): an
+                    #   ON-DEMAND density pass, never a gate (D18: it writes one receipt,
+                    #   `.serve/text-density.json`). Runs `text-shape.spec.ts` in a report
+                    #   mode (`TEXT_DENSITY=1`), so it reads the SAME seeded screens as the
+                    #   gates, at 1440 and 390, with no dev server or store needed. Prints a
+                    #   CUT TABLE: per route, the largest prose blocks with word counts, then
+                    #   what repeats and what runs long. ARGS="--route '#/pricing' --top 8".
                     #   NOT in `make check` or `make design-check`. The skill
-                    #   `.claude/skills/text-density/SKILL.md` carries the how-to for a
-                    #   session with no memory of the 2026-09-23 density review.
+                    #   `.claude/skills/text-density/SKILL.md` says how to read the table.
 make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
                     #   is not a fork, what is real and what is invented, why VITE_DEMO is
@@ -497,10 +498,10 @@ first paint, cross-faded as one mechanism. A screen not looked at in dark is not
 everything), `--bn-font-mono` (JetBrains Mono, machine strings only — SKUs, run names, reason
 codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono, except
 money: a dollar figure takes the mono face through `.bn-money`, never a hand-rolled
-declaration (D221). **NOT MECHANIZED:** a machine cannot tell a dollar figure
-from another tabular machine string by its CSS alone. Mono, 600-weight and tabular-nums
-already mark SKUs, run ids and card numbers throughout `app/src`. Which face a span deserves
-is read from what it holds, never from its declaration. Body is 14px.
+declaration (D221). Mechanized by `app/tests/money-face.spec.ts`, in a real browser. CSS
+alone cannot tell a dollar figure from a SKU, because mono, 600-weight and tabular-nums mark
+both. So the spec reads what a span HOLDS. Every `$` figure in the rendered text fails unless
+its resolved face is JetBrains Mono, whole dollars and inputs included. Body is 14px.
 
 **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders all of it. Reach for
 the kit before writing a primitive. A fourth hand-rolled button is how a design system dies.
@@ -516,11 +517,16 @@ owner's ruling). Three checks replace it, none of them a count.
 repeating cards or rows. A number-plus-noun fact stated twice. A sentence over 25 words. A
 caption repeating 60%+ of its heading. `app/tests/machine-words.spec.ts` closes D196's own
 gap. It reads rendered `innerText`, not just JSX literals. `app/tests/money-face.spec.ts`
-reads D221: every dollar figure must sit in the mono face. Each reads a shrinking pending list
-(`text-shape-allow.json`, `machine-words-allow.json`, `money-face-allow.json`), route ->
-assertion -> lane, that fails on an unlisted hit and on a stale entry.
-`make text-density` (`scripts/text-density/`) is the third piece of the owner's ruling, a
-repeatable on-demand reviewer, never a gate (D18: it writes).
+reads D221: every dollar figure must sit in the mono face. All three read every route through
+one sweep, `app/tests/routeSweep.ts`, at 1440 and 390. The seeded store is deterministic, and
+a screen is read only once it is loaded.
+Each reads a shrinking pending list in `app/tests/`, keyed to the finding. An entry excuses
+one finding, and a new one on the same route is red. `text-shape-allow.json` is route ->
+assertion -> finding text -> lane. `machine-words-allow.json` is route -> word -> lane, with
+no wildcard route. `money-face-allow.json` is route -> amount -> lane. Each fails on an
+unlisted finding and on a stale entry.
+`make text-density` is the third piece of the owner's ruling, an on-demand cut table off the
+same sweep, never a gate (D18: it writes).
 
 **The mark is generated** (D102). `Logo` renders `docs/specs/logo.md`'s locked set, six
 variants, `bluesteel` default. `scripts/build-mark.mjs` writes its geometry and

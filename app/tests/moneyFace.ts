@@ -27,10 +27,16 @@ export interface MoneyFaceResult {
  *  would see `MONEY_RE is not defined` the moment this ran — measured the first time this
  *  file was built. */
 export function scanMoneyFace(): MoneyFaceResult {
-  // `$1.23`, `$66,334.71`, `+$1.20`, `−$0.35` (U+2212, `moneySigned`'s own minus) or
-  // `-$1.20` (a plain hyphen, in case a value was typed rather than formatted) — always two
-  // decimal places, matching `money.ts`'s own `toFixed(2)`.
-  const MONEY_RE = /[+−-]?\$\d[\d,]*\.\d{2}/g
+  // `$1.23`, `$66,334.71`, `+$1.20`, `−$0.35` (U+2212, `moneySigned`'s own minus),
+  // `-$1.20` (a plain hyphen, in case a value was typed rather than formatted), and a WHOLE-
+  // DOLLAR figure, `$50` or `$1,200`, which prose uses ("under $50") and `money.ts` never
+  // emits. A comma is part of the figure only when three digits follow it, so the comma
+  // after "$50," in a sentence is not read as part of the amount.
+  const MONEY_RE = /[+−-]?\$\d+(?:,\d{3})*(?:\.\d{2})?/g
+
+  // A FORM FIELD's value is only read as money when it carries cents or a `$`: a quantity
+  // field holding "3" is a number, not a price. Anchored, so it tests the whole value.
+  const FIELD_MONEY_RE = /^[+−-]?\$?\d+(?:,\d{3})*\.\d{2}$|^[+−-]?\$\d/
 
   // JetBrains Mono is `--bn-font-mono`'s first, named face (`tokens.css`) — the only font
   // this repo ships that is actually monospaced, so a resolved `font-family` string is
@@ -87,13 +93,10 @@ export function scanMoneyFace(): MoneyFaceResult {
     if (!visible(field) || isSrOnly(field)) return
     const value = field.value ?? ''
     const placeholder = field.getAttribute('placeholder') ?? ''
-    const probe = value || placeholder
-    if (!probe.includes('$') && !/^\d*\.?\d*$/.test(value)) return
     // A bare numeric value with no `$` still needs the mono face when the FIELD is a money
-    // field — read from its own placeholder or a leading `$`-shaped value, the only signals
-    // available with no semantic `type="money"` in HTML.
-    const looksLikeMoney = MONEY_RE.test(`$${value}`) || MONEY_RE.test(placeholder)
-    MONEY_RE.lastIndex = 0
+    // field — read from a cents-shaped value or a `$` in the value or placeholder, the only
+    // signals available with no semantic `type="money"` in HTML.
+    const looksLikeMoney = FIELD_MONEY_RE.test(value.trim()) || placeholder.includes('$')
     if (!looksLikeMoney) return
     if (!isMono(field)) {
       fieldHits.push({
@@ -105,4 +108,16 @@ export function scanMoneyFace(): MoneyFaceResult {
   })
 
   return { text: textHits, fields: fieldHits }
+}
+
+/* THE MUTATION HOOK for `money-face.spec.ts` (`MONEY_FACE_MUTATE=<hash>`): one dollar figure
+ * drawn in Inter, appended inside that route's `.bn-view` through `page.evaluate`, never an
+ * edit under `app/src`. `$987.65` is on no screen of the fixture, so the finding it makes is
+ * always a NEW amount, even on a route that already has an amount listed. */
+export function injectInterMoney(): void {
+  const host = document.querySelector('.bn-view') ?? document.body
+  const span = document.createElement('span')
+  span.style.fontFamily = "'Inter', sans-serif"
+  span.textContent = '$987.65'
+  host.appendChild(span)
 }

@@ -1,6 +1,18 @@
 {
-  "_about": "THE SHRINKING PENDING LIST for `machine-words.spec.ts` (D196, amended 2026-09-23 by `D-text-shape-checks`: 'a new browser check reads the rendered text of every route'). route -> word or path (lower-cased) -> the lane that owes the fix. A different list from `scripts/machine-words-allow.json` on purpose: that one keys by FILE, for the AST walk over JSX literals; this one keys by ROUTE, for rendered `innerText`, which carries no source file. `machine-words.spec.ts` fails on a hit not listed here AND on a listed entry that no longer matches anything (stale — delete it). `\"*\"` in place of a route means the term is allowed on ANY route: `CardLocations`'s `Pushed` count renders on whichever populated route the seeded card data (`sealEveryTest({ cards: 122 })`, not per-test-seeded) happens to place it on — measured moving between #/gallery and #/orders across runs and worker orderings. A route-pinned entry for it would flake stale the moment it landed elsewhere. Measured repeatably on the populated fixture at 1440 and 390, 2026-09-23: five real hits.",
-  "#/capture": { "index": "capture", "span": "capture", "manual:c": "capture" },
-  "#/runs": { "emit": "b-runs" },
-  "*": { "pushed": "inventory" }
+  "_about": "THE SHRINKING PENDING LIST for `machine-words.spec.ts` (D196, amended 2026-09-23 by `D-text-shape-checks`: 'a new browser check reads the rendered text of every route'). KEY SHAPE: route -> word or path (lower-cased) -> the lane that owes the fix. There is NO wildcard route: the fixture is deterministic (`routeSweep.ts` registers every seed once and reads each screen only once it is loaded), so a word lands on the same route every run. A different list from `scripts/machine-words-allow.json` on purpose: that one keys by FILE, for the AST walk over JSX literals; this one keys by ROUTE, for rendered `innerText`, which carries no source file. `machine-words.spec.ts` fails on a hit not listed here AND on a listed entry that matches nothing (stale — delete it). `#/orders`'s pair is `CardLocations`'s 'Pushed 0 Staged 0' count, drawn in the order walk; that component is the inventory lane's. Both it and `#/codes`'s 'Box 12index 1' were invisible to a `\\b` word boundary, because innerText joins adjacent spans with no space; the matcher uses a LETTER boundary for that reason (`machineWords.ts:wordPattern`). Measured at 1440 and 390, 2026-09-24: every entry below matched at both widths.",
+  "#/capture": {
+    "index": "capture",
+    "span": "capture",
+    "manual:c": "capture"
+  },
+  "#/runs": {
+    "emit": "b-runs"
+  },
+  "#/orders": {
+    "pushed": "inventory",
+    "staged": "inventory"
+  },
+  "#/codes": {
+    "index": "library"
+  }
 }

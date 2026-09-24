@@ -38,15 +38,16 @@ export function scanMachineWords(args: {
   const text = (view as HTMLElement).innerText || ''
   if (!text.trim()) return empty
 
-  // THE SAME \b-WRAPPING RULE `scripts/docs-audit.py:_word_pattern` USES: a bare
-  // identifier-shaped word gets `\b` on both sides so `emit` does not match inside
-  // `emitted`; a phrase with a space or a path-shaped entry with a `/` is matched as a
-  // plain literal, because `\b` either side of a `/` checks the wrong transition.
+  // `scripts/docs-audit.py:_word_pattern`'s RULE, WITH A LETTER BOUNDARY IN PLACE OF `\b`: a
+  // bare identifier-shaped word may not touch a LETTER on either side, so `emit` does not
+  // match inside `emitted` and `Staged` does not match inside `unstaged`. A letter boundary,
+  // not `\b`, because rendered `innerText` joins two adjacent inline spans with no space:
+  // `#/orders` draws "Pushed 0Staged 0", and `\bStaged` never matches after the digit. A
+  // phrase with a space or a path-shaped entry with a `/` is matched as a plain literal.
   function wordPattern(word: string): string {
-    if (/^[\w-]+$/.test(word)) {
-      return `\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
-    }
-    return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const literal = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (/^[\w-]+$/.test(word)) return `(?<![A-Za-z])${literal}(?![A-Za-z])`
+    return literal
   }
 
   const words = Object.keys(args.words)
@@ -85,4 +86,16 @@ export function scanMachineWords(args: {
   }
 
   return { words: wordsHit, paths: pathsHit }
+}
+
+/* THE MUTATION HOOK for `machine-words.spec.ts` (`MACHINE_WORDS_MUTATE=<hash>`): one sentence
+ * naming a word on the list, appended inside that route's `.bn-view` through
+ * `page.evaluate`, never an edit under `app/src`. "the resolver" is on the list and on no
+ * screen, so the finding it makes is always a NEW one. */
+export function injectMachineWord(): void {
+  const root = document.querySelector('.bn-view')
+  if (!root) return
+  const p = document.createElement('p')
+  p.textContent = 'This mutation line names the resolver on purpose.'
+  root.appendChild(p)
 }

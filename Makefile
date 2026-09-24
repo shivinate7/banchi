@@ -64,8 +64,8 @@ help:
 	@echo "                    THE ONE GENERATOR: it writes and gates nothing (D18)."
 	@echo "                    Previews. ARGS=--write applies. ARGS=--selftest proves it."
 	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
-	@echo "  make text-density  on-demand word-density review over THIS checkout's own dev"
-	@echo "                    server (D-text-shape-checks). Never a gate. Needs make dev/up."
+	@echo "  make text-density  on-demand cut table over the text checks' own seeded screens"
+	@echo "                    (D-text-shape-checks). Never a gate. ARGS=\"--route '#/x'\"."
 	@echo "  make orient       which component renders the thing, and what selects it."
 	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
 	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
@@ -522,16 +522,17 @@ map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
 
 # THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D194): a
-# REPEATABLE, ON-DEMAND text-density review, never a gate (D18: it writes — one report to
-# `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never wired to a
-# hook, `map-fix`'s own standing. Targets THIS checkout's own dev server, port derived through
-# `app/devPort.ts` exactly the way every other tool here derives it — never a hardcoded port,
-# never the published demo (the HAZARD `make worktree-setup` and `CLAUDE.md` both name: a
-# build with no `.git` falls back to :8000, the owner's LIVE server). `make dev` or `make up`
-# must already be running; this refuses rather than guessing a fallback. ARGS reaches the
-# script raw, e.g. `ARGS="--route /pricing --theme dark"`.
+# REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one
+# receipt, `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never
+# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-shape.spec.ts` with
+# `TEXT_DENSITY=1`, so it reads the SAME populated fixture and the same loaded screens as the
+# two gates, at 1440 and 390, whatever this checkout's own store holds. Playwright starts or
+# reuses this checkout's own Vite (D43); every read is stubbed, so no store is read. One
+# worker, `line` reporter, so `.serve/design-check.json` is never touched. ARGS reaches the
+# script raw, e.g. `ARGS="--route '#/pricing' --top 8"`.
 text-density:
-	@node --experimental-strip-types scripts/text-density/density.mjs $(ARGS)
+	$(NPM_GUARD)
+	@node scripts/text-density/density.mjs $(ARGS)
 
 # WHICH COMPONENT RENDERS THE THING, AND WHAT SELECTS IT. A RENDERER — it writes nothing and
 # gates nothing, so D18 does not reach it, the same standing `make map` has.

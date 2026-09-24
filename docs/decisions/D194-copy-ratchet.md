@@ -123,7 +123,7 @@ different way."* A stagnant static pin was not what he wanted kept.
 `app/tests/copy-budget.spec.ts`, `app/tests/copy-budget.json` and `scripts/copy-budget.mjs`
 are gone.
 `app/tests/routeFixtures.ts`'s populated-seed fixtures — the part of this entry that survives —
-are now read by `text-shape.spec.ts` and `machine-words.spec.ts` instead.
+are now read by `app/tests/routeSweep.ts`, the one sweep the three text checks share.
 
 **What is kept: the reasons a naive replacement would have been worse.** A blind word count
 still cannot tell whether an addition was worth its words (see "Not mechanized" above). A
