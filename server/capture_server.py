@@ -7229,6 +7229,10 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             "set_name": card.set_name,
             "rarity": card.rarity,
         }
+        # D28, review round: the FULL snapshot, for the event's own restores_to — the
+        # WIRE response's own `restores_to` (built above, and `body["restores_to"]` below)
+        # stays the narrow four-field shape a screen has always read, unchanged.
+        full_snapshot = snapshot.inventory.identity_snapshot(key)
 
         # identity-follows-sku.md §4.1/§4.2: THE ONE WRITER. `bind_sku` sets `sku`,
         # `condition`, `set_name`, `rarity` — this route's own old fields — AND `name`,
@@ -7271,7 +7275,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             condition=offered_condition,
             queue=offering.name,
             reason=governing.reason,
-            restores_to=restores_to,
+            restores_to=full_snapshot,
             # D46. Present only when it is true, because `_history` drops a None extra — so
             # every line already on disk keeps its exact shape and a reader can tell a row the
             # PIPELINE offered from a row a HUMAN went and found. Those are different claims
@@ -8042,7 +8046,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
             name=card.name,
             number=card.number,
             printed_total=card.printed_total,
-            restores_to=result["restores_to"],
+            restores_to=result["full_snapshot"],
             released=result["released"] or None,
             old_sku=result["previous_sku"],
             stamps=result["stamps_before"],

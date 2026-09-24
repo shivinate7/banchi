@@ -4687,6 +4687,7 @@ def check_review_answer(checks: Checks) -> None:
         )
 
         # ------------------------------------------------ the pair the answer overwrote
+        before_overwrite = Store().read().inventory.identity_snapshot("3/1")
         overwrote = capture_server.do_review_answer(3, 1, good)
         checks.equal(
             overwrote["restores_to"],
@@ -4697,10 +4698,10 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             last_event("3/1").get("restores_to"),
-            dict(prior),
-            "and the `answered` line carries the same real pair — the other half of the "
-            "blocker's regression: the null-pair line above cannot tell `logged the prior "
-            "pair` from `logged a default`",
+            before_overwrite,
+            "and the `answered` line carries the same real pair, as a FULL snapshot — the "
+            "other half of the blocker's regression: the null-pair line above cannot tell "
+            "`logged the prior pair` from `logged a default`",
         )
 
         # THE D28 BOUNDARY, FIRST SIDE: while the answer stands, store/queues.py holds the
@@ -12377,11 +12378,18 @@ def check_identity_binding(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.skus.entries[held_sku] = held_row
             # 63/1 — the held card: a SKU already on it, a read that disputes it, and
-            # `identity_source` left at its default (never bound) — §7.3's T5/T4s shape.
+            # `identity_source = read` — §7.3's own T5 shape ("write identity_source =
+            # read. Leave every identity field exactly as it is today").
             snapshot.inventory.set_state("63/1", master.IDENTIFIED, sku=held_sku)
             snapshot.inventory.cards["63/1"].game = "riftbound"
             snapshot.inventory.cards["63/1"].read_name = "Yi, Ionia"
+            # §3.1: "read: ...the identity fields equal the evidence fields" — a real held
+            # card's `name` already equals its own `read_name`, so the fixture sets both
+            # rather than leaving `name` at its default and asking the confirm's undo to
+            # derive one restore_identity was never built to derive.
+            snapshot.inventory.cards["63/1"].name = "Yi, Ionia"
             snapshot.inventory.cards["63/1"].read_disputes = True
+            snapshot.inventory.cards["63/1"].identity_source = master.IDENTITY_READ
             # 63/2 — never identified, for `not_identified`.
             # 63/3 — sold, for `card_departed`.
             snapshot.inventory.set_state(
@@ -12609,6 +12617,76 @@ def check_identity_binding(checks: Checks) -> None:
             before_disputed_correction,
             Store().read().inventory.identity_snapshot("64/2"),
             "a listing_disputed correction's undo, through do_correct_answer",
+        )
+
+    # -------------------- §4, review round: a group answer refuses listing_disputed entries
+    with isolated_home():
+        held_sku_a = "7200001"
+        held_row_a = SkuRow(
+            product_line="Riftbound League of Legends Trading Card Game",
+            set_name="Origins", product_name="Jax, Icathia", number="1/14",
+            rarity="Epic", condition="Near Mint", grade="Near Mint", printing=None,
+            first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+        )
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(65))
+        with Store().write() as snapshot:
+            snapshot.skus.entries[held_sku_a] = held_row_a
+            for i in (1, 2):
+                snapshot.inventory.set_state(f"65/{i}", master.IDENTIFIED, sku=held_sku_a)
+                snapshot.inventory.cards[f"65/{i}"].game = "riftbound"
+                snapshot.inventory.cards[f"65/{i}"].read_name = "Jax, Icathia"
+                snapshot.inventory.cards[f"65/{i}"].name = "Jax, Icathia"
+                snapshot.inventory.cards[f"65/{i}"].identity_source = master.IDENTITY_READ
+            # 65/3, an ordinary metadata_detection_disagreement entry, offering the SAME
+            # sku and condition — proving the `listing_disputed` refusal fires ahead of
+            # the ordinary reasons/uniformity check (which this mixed-reason group would
+            # also fail), never folded into `group_not_uniform`'s own findings.
+            snapshot.inventory.set_state("65/3", master.IDENTIFIED)
+            disputed_candidates = [
+                {
+                    "sku": held_sku_a, "name": "Jax, Icathia", "set": "Origins",
+                    "number": "1/14", "condition": "Near Mint", "market": "1.00",
+                    "rarity": "Epic",
+                },
+            ]
+            snapshot.review.upsert(
+                entry(65, 1, reason=routing.LISTING_DISPUTED, candidates=disputed_candidates)
+            )
+            snapshot.review.upsert(
+                entry(65, 2, reason=routing.LISTING_DISPUTED, candidates=disputed_candidates)
+            )
+            snapshot.review.upsert(entry(65, 3, candidates=disputed_candidates))
+
+        def member65(index: int) -> dict:
+            return {"box": 65, "index": index, "sku": held_sku_a, "condition": "Near Mint"}
+
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member65(1), member65(2), member65(3)]}
+            ),
+            "§4, review round: a group carrying a `listing_disputed` entry refuses — the "
+            "confirm/correct decision is per card and a group write has no way to make it "
+            "safely",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "group_listing_disputed",
+                "refused by its own name, not folded into group_not_uniform",
+            )
+            checks.ok(
+                "65/1" in str(caught) and "65/2" in str(caught) and "65/3" not in str(caught),
+                "and it names the DISPUTED members only — 65/3 is an ordinary entry and "
+                "was never the problem",
+                str(caught),
+            )
+        checks.ok(
+            Store().read().inventory.cards["65/1"].bound_by is None
+            and Store().read().inventory.cards["65/2"].bound_by is None
+            and Store().read().inventory.cards["65/3"].sku is None,
+            "and nothing was written — not even the ordinary member, because the group is "
+            "refused whole",
         )
 
 
@@ -13181,6 +13259,7 @@ def check_review_stand_down(checks: Checks) -> None:
             snapshot.review.upsert(entry(3, 3, market="12.00"))
             snapshot.parked.upsert(entry(3, 3, market="0.05"))
             # 3/4 is identified and in no queue at all.
+            _seed_sku_table(snapshot, CANDIDATES)
 
         refusal(
             checks,
