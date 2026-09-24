@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { CAPTURE_PORT } from '../devPort'
 
 /* THE SHELL'S KEYBOARD, AND THE FIRST TEST THIS APP HAS HAD OF THE CHROME EVERY SCREEN SITS IN.
  *
@@ -698,4 +699,230 @@ test('an unknown route keeps the owner’s shell, and offers no door to the Fulf
   await expect(page.locator('.no-such-view-door[href="#/fulfillment"]')).toHaveCount(0)
   await expect(page.locator('.no-such-view-door[href="#/"]')).toBeVisible()
   await expect(page.locator('.no-such-view-door[href="#/inventory"]')).toBeVisible()
+})
+
+/* ================================================================================================
+   ONE ROUTES ROW IS THE WHOLE REGISTRATION (the owner's durability rule, 2026-09-23; D-page-scaffold)
+   ================================================================================================
+
+   "Say a new page in the sidebar gets built tomorrow, it should be able to autocall/inherit the
+   properties of the other pages." So a new screen is ONE `ROUTES` row plus a view that returns
+   `<Page>`, and nothing else in the shell is edited.
+
+   THE PROOF ADDS A ROW THE REPO DOES NOT HAVE, IN THE BROWSER, AND EDITS NOTHING. The dev server
+   serves `App.tsx` as a module; this case intercepts that one response and inserts one row and a
+   four-line view into it. Nothing else in the served app changes. If the row then has its nav
+   link, its palette entry, its jump entry and its own keys in the sheet, its tab title and the
+   page scaffold, the shell derived every one of them from the row. A shell that listed routes a
+   second time anywhere would miss the row, and this case would go red naming what it missed.
+   The row's view is built from `Page` and React's own `createElement`, both of which the served
+   module already imports, so the view is exactly "a view that returns <Page>". */
+test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold with no other edit', async ({ page }) => {
+  await stub(page)
+  await page.route(/\/src\/App\.tsx(\?|$)/, async (route) => {
+    const response = await route.fetch()
+    const body = await response.text()
+    const react = /import (\w+) from "(\/node_modules\/\.vite\/deps\/react\.js[^"]*)"/.exec(body)
+    expect(react, 'the served App.tsx no longer imports React the way this case reads it').not.toBeNull()
+    const h = `${react![1]}.createElement`
+    const view = `function __Throwaway() { return ${h}(Page, null, ${h}("p", null, "A throwaway screen.")) }\n`
+    const row =
+      '{ path: "/throwaway", label: "Throwaway", icon: "grid", view: __Throwaway, persona: "owner", group: "library", nav: true, ' +
+      'keys: { rows: [{ keys: ["Z"], does: "Throw it away" }] } },\n'
+    const anchor = 'export const ROUTES = [\n'
+    expect(body.includes(anchor), 'the served App.tsx has no `export const ROUTES = [` line').toBe(true)
+    await route.fulfill({ response, body: body.replace(anchor, `${view}${anchor}${row}`) })
+  })
+
+  await page.goto('/#/')
+  await expect(page.locator(VIEW['#/'])).toBeVisible()
+
+  // NAV: the row is a link in the sidebar
+  await expect(page.locator(`${NAV_LINK}[href="#/throwaway"]`)).toHaveText(/Throwaway/)
+
+  // PALETTE: its Screens group lists it, and Enter goes there
+  await page.keyboard.press('Meta+k')
+  const palette = page.getByRole('dialog', { name: 'Go to' })
+  await expect(palette).toBeVisible()
+  await palette.getByRole('combobox').fill('throwaway')
+  await expect(palette.getByRole('option').first()).toHaveText(/Throwaway/)
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#\/throwaway$/)
+
+  // SCAFFOLD: one page, one h1 from the row's own label
+  await expect(page.locator('[data-bn-page]')).toHaveCount(1)
+  await expect(page.locator('h1')).toHaveText('Throwaway')
+  await expect(page.getByText('A throwaway screen.')).toBeVisible()
+
+  // TITLE: the fixed tab title
+  await expect(page).toHaveTitle('番地 throwaway')
+
+  // KEYS: a jump entry, and the screen's own group, open by default on its own screen
+  await page.locator('h1').focus()
+  await page.keyboard.press('?')
+  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  await expect(sheet).toBeVisible()
+  await expect(sheet.locator('dd', { hasText: /^Throwaway/ })).toHaveCount(1)
+  await expect(sheet.getByRole('heading', { name: 'Throwaway' })).toBeVisible()
+  await expect(sheet.locator('dd', { hasText: 'Throw it away' })).toBeVisible()
+})
+
+/* ---- the palette is "Go to", and it finds cards (D-palette-go-to, amends D95) ------------------ */
+
+test('the palette lists every screen, off-nav ones included, and finds a card', async ({ page }) => {
+  await open(page, RING[0])
+  await page.route(/\/search\?/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'abra',
+        groups: [
+          {
+            sku: '4242', names: ['Abra'], number: '63', printed_total: '102', number_display: '063/102',
+            set_hint: null, set: 'Base Set', rarity: 'Common', condition: 'Near Mint',
+            listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null, on_hand: 1, listable: 1, copies: [],
+          },
+        ],
+      }),
+    }),
+  )
+  await page.keyboard.press('Meta+k')
+  const palette = page.getByRole('dialog', { name: 'Go to' })
+  await expect(palette).toBeVisible()
+
+  // every screen, the three off the nav included (UX-003)
+  for (const label of ['Product history', 'Kit', 'Cards to pull']) {
+    await expect(palette.getByRole('option', { name: new RegExp(`^${label}`) })).toHaveCount(1)
+  }
+
+  // a card (UX-022, FLT-28): typed, found, and opened as its product
+  const input = palette.getByRole('combobox')
+  await input.fill('abra')
+  const card = palette.getByRole('option', { name: /Abra/ })
+  await expect(card).toBeVisible()
+  await expect(palette.locator('.bn-cmdk-group', { hasText: 'Cards' })).toBeVisible()
+  /* The product it opens reads its own history. That is the product lane's screen and not this
+     case's subject, so its reads are answered with a refusal here rather than left to the seal. */
+  await page.route(new RegExp(`^[a-z+.-]+://[^/]+:${CAPTURE_PORT}/(?!search\\?|status$)`), (route) =>
+    route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: { code: 'not_in_this_case', message: 'Not stubbed in this case.' } }) }),
+  )
+  await card.click()
+  /* `openSheet('product', …)`: a registered product sheet opens over the page; with none, the
+     product's own page opens. Either is the product, by its SKU. */
+  await expect
+    .poll(() => page.evaluate(() => window.location.hash.startsWith('#/product?sku=4242') || document.querySelector('[data-bn-sheet-host="product"]') !== null))
+    .toBe(true)
+})
+
+test('a refused card search hides the Cards group and says so in one line', async ({ page }) => {
+  await open(page, RING[0])
+  await page.route(/\/search\?/, (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'demo_not_recorded', message: 'Not in this demo.' } }),
+    }),
+  )
+  await page.keyboard.press('Meta+k')
+  const palette = page.getByRole('dialog', { name: 'Go to' })
+  await palette.getByRole('combobox').fill('abra')
+  /* The line is the demo's own sentence in the published build (`__BN_DEMO__`); this dev build
+     says the server did not answer. Either way it is ONE line, and no Cards group. */
+  await expect(palette.locator('.bn-cmdk-note')).toHaveCount(1)
+  await expect(palette.locator('.bn-cmdk-group', { hasText: 'Cards' })).toHaveCount(0)
+  // and the screens still answer beside it
+  await palette.getByRole('combobox').fill('pricing')
+  await expect(palette.getByRole('option').first()).toHaveText(/Pricing/)
+})
+
+/* ---- focus: the layers hold it, and a navigation hands it to the screen ------------------------ */
+
+/** Tab forward N times and collect whether each stop was inside `root`. */
+async function tabStops(page: Page, root: string, n: number): Promise<boolean[]> {
+  const inside: boolean[] = []
+  for (let i = 0; i < n; i++) {
+    await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab')
+    inside.push(await page.evaluate((sel) => document.querySelector(sel)?.contains(document.activeElement) ?? false, root))
+  }
+  return inside
+}
+
+test('focus never escapes the open palette, keys sheet or phone drawer (UX-014)', async ({ page }) => {
+  await open(page, RING[0])
+
+  await page.keyboard.press('Meta+k')
+  await expect(page.locator('.bn-cmdk[role="dialog"]')).toHaveAttribute('aria-modal', 'true')
+  expect(await tabStops(page, '.bn-cmdk', 12)).not.toContain(false)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.bn-cmdk')).toHaveCount(0)
+
+  await page.keyboard.press('?')
+  await expect(page.locator('.app-keys[role="dialog"]')).toBeVisible()
+  expect(await tabStops(page, '.app-keys', 12)).not.toContain(false)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.app-keys')).toHaveCount(0)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const more = page.getByRole('button', { name: 'More' })
+  await more.click()
+  const drawer = page.locator('.bn-drawer[role="dialog"]')
+  await expect(drawer).toHaveAttribute('aria-modal', 'true')
+  await expect(more).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(() => page.evaluate(() => document.querySelector('.bn-drawer')?.contains(document.activeElement))).toBe(true)
+  expect(await tabStops(page, '.bn-drawer', 20)).not.toContain(false)
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
+  // and focus goes back to the one door it came from
+  await expect(more).toBeFocused()
+})
+
+test('no global key acts under an open layer', async ({ page }) => {
+  await open(page, RING[0])
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'More' }).click()
+  await expect(page.locator('.bn-drawer')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.querySelector('.bn-drawer')?.contains(document.activeElement))).toBe(true)
+
+  // the chord does not arm, and the step does not step, behind the drawer
+  await page.keyboard.press(',')
+  await page.keyboard.press('c')
+  await page.keyboard.press('Meta+ArrowRight')
+  await page.waitForTimeout(200)
+  expect(await page.evaluate(() => window.location.hash)).toBe('#/')
+  await expect(page.locator('.bn-drawer')).toBeVisible()
+})
+
+test('the first Tab reaches the skip link, and a navigation hands focus to the screen (UX-092)', async ({ page }) => {
+  await open(page, RING[0])
+  await page.keyboard.press('Tab')
+  const skip = page.getByRole('button', { name: 'Skip to the screen' })
+  await expect(skip).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => page.evaluate(() => document.activeElement?.closest('.bn-view') !== null)).toBe(true)
+
+  // a sidebar link pressed from the keyboard: focus lands on the new screen, not on the link
+  await page.locator(`${NAV_LINK}[href="#/codes"]`).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator(VIEW['#/codes'])).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.activeElement?.closest('.bn-view') !== null && document.activeElement?.closest('.bn-side') === null)).toBe(true)
+
+  // a chord from nowhere: the same
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await page.keyboard.press(',')
+  await page.keyboard.press('g')
+  await expect(page.locator(VIEW['#/graveyard'])).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.activeElement?.closest('.bn-view') !== null)).toBe(true)
+})
+
+test('the phone tab bar lights More when the screen is behind it (UX-046)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, '#/pricing')
+  const more = page.getByRole('button', { name: 'More' })
+  await expect(more).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.bn-topbar').getByRole('button', { name: 'Menu' }), 'one door to the drawer (UX-072)').toHaveCount(0)
+
+  await open(page, '#/capture')
+  await expect(more).not.toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.bn-tabbar a[href="#/capture"]')).toHaveAttribute('aria-current', 'page')
 })
