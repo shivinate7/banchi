@@ -109,3 +109,40 @@
 - $0.00 lines: owner's words, "TCGplayer has all the data of what items sold at what prices tho". So the fix is NOT to exclude them: find the real sale price from TCGplayer's own data (order detail, the shipping export, or another export) and fill it in. First measure whether live lines have an empty unit_price at all (the demo has 6). Only where no TCGplayer source has a price, say so on the line.
 - "On the shelf" loads on arrival (after one timing on the real store).
 - Thumbnails: yes, a server lookup by SKU for another copy's photo, with a plain tile fallback.
+
+## Pricing re-interview (pricing-deliberation.md)
+- Q1 first view: EVERY ROW, the rows that need the owner on top, then the rest by value. (Not the fold-into-a-count proposal.)
+- Q2 needs-you rows: no market price, OR worth $5+, OR typed price 25%+ away from today's market. Count these on the owner's store first.
+- Q3 Send with unpriced rows: send every ready copy; unpriced rows stay on the list.
+- Q4 slim bar: sticky at the top at 1440 and 720; on a phone, one line pinned above the tab bar.
+
+## Orchestrator calls (reversible, stated to the owner)
+- Search ignores accents (the "forgiving" ruling covers it).
+- BoxLabel keeps D132's name-first address ("Mixed Singles, Box 4").
+- Rendered-page money check (D221): owned by text-checks (it already reads rendered text).
+- "Card 1 at the far back" belongs to the locating lane (the ruler redesign), not to fulfillment.
+- Q5 rule and cut-off: one line above the list with "Change", which opens one sheet (the rule, the cut-off, a box's own cut-off).
+- Q6 mark-down: a "Live" tab on Pricing with the same rows. The separate sheet goes.
+- Q7 mark-down send: ONE PRESS, and NO "Put the old prices back" control.
+- Double-send guard (owner's words): "maybe before submitting prices there's a mandatory reconciliation that auto runs seeing my sales and live inventory". So every Send (new listings and mark-downs) first runs a live reconcile automatically (live export + sales). It sends only the copies TCGplayer does not already hold, and refuses or trims a send that would double a quantity. It shows what it trimmed.
+
+## Search-server lane note (from Photo issues analysis)
+- Reuse the number rules in store/numbers.py (strip_set_code, join_key, split_catalog_number on their branch) and pipeline/join.py:number_index_key. Keep it game-aware: Riftbound keeps its code verbatim, Pokemon composes zfill(3)/printedTotal. Fuzzy "54" to "054" is fine in SEARCH, and must never feed the join ("zfill is COMPOSITION only, never matching").
+- Live check cannot run (signed out, slow): Send REFUSES and says why, with "Try again".
+- Value list (What's worth pulling, D159 bands): becomes an Inventory "by value" sort via the shared SortControl. Leaves Pricing.
+- Suggest-a-rule: MEASURE the owner's typed prices first; if most follow one pattern, Pricing offers "Make this the rule" once.
+- Send menu: NOTHING beside Send. The caps (at most N per card, only above the cut-off) leave the Send press. "Split in two files" lives under "Download the file instead".
+
+## Orchestrator calls on consolidation round 2 (stated to the owner)
+- The "cut everything" text ruling also applies to the HIR and HOR cut lists.
+- D196 (codes behind a disclosure) wins over the 2026-09-20 taste call for Review's Close dialog.
+- UX-013 stays S1: the Fulfiller was sent to pull a card that had left the box.
+- "Slots" (HIR-05, LOC-22): "slots" in Inventory's header and strip (the box's capacity), "cards" elsewhere.
+- Orders layout (D220): keep the walk model; the walk gets the screen's full height; Orders and Shipping become TWO SIDEBAR ROWS, no tabs. Amends D220's layout half and the one-screen-two-stages note in CLAUDE.md.
+- Filter memory (FLT-11): in the URL on every screen (link, bookmark and back restore the view). The CLAUDE.md storage-key roster changes in docs-sweep.
+
+## Box numbers are never shown (owner, 2026-09-23)
+- Owner's words: "I don't want to see "Box 4" part at all, those box numbers are arbitrary index values that you get to keep on the back end, having a count of boxes is great, having each box labeled with a number is not ok. If I choose to not name a box, it can default to count+1 Box as a default name".
+- So: a box is shown ONLY by its name, everywhere (screens, place labels, departed labels, receipts, pickers). The number (and bid) stay internal. A count of boxes may show.
+- A new box with no name given gets a STORED default name "Box <count+1>". It is a name, so it never renumbers. If that name is taken, use the next free one (D20: names are unique).
+- Overrides the orchestrator's BoxLabel call ("Mixed Singles, Box 4") and D68's "Box 3 · departed · B3 #96" form. Server-composed place labels must use the name.

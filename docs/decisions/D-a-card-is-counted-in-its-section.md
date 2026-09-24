@@ -45,8 +45,8 @@ makes the card behind it take its number, now within the section. The stored ind
 
 **D92 (a bare `#` is the count, the key carries a sigil)** protects one rule: one `#` never
 names two cards on one screen. With section counts, `#1` exists once per section. So a card
-number always travels with its section in the same label. The store key keeps its `B<box>`
-sigil (D68, a departed label names the record).
+number always travels with its section in the same label. The box number and its store key
+leave the screen: a box is shown by its name only (slug `a-box-is-shown-by-its-name`).
 
 **D155** protects a precise place at the section scale, with the box scale kept quiet. The new
 ruler keeps that. It draws one scale, section numbers, and one mark on the exact card. Its
@@ -63,6 +63,15 @@ two ends say which end is the far back.
 
 ### What is built
 
-NOT BUILT. The locating lane of the 2026-09-23 overhaul builds it (LOC-03 to LOC-07, and the
-ruler). The kit-data lane's position primitives follow the same count. `docs/specs/box-map.md`
-uses the same orientation for its move receipts.
+NOT BUILT. The locating lane builds it (LOC-03 to LOC-07, and the ruler). It moved to wave 1 in
+the round-two plan, so the screen lanes use its vocabulary. `docs/specs/box-map.md` uses the same
+orientation for its move receipts.
+
+The round-two plan names three locating entries for the same rulings (slugs `section-ruler`,
+`card-one-at-back` and `section-card-number`). One copy of each argument must go before either
+merges.
+
+### One more word: slots
+
+The orchestrator called it in round two (HIR-05, LOC-22). "Slots" names the box's capacity, and
+it appears only in Inventory's box header and strip. Every other place says "cards".

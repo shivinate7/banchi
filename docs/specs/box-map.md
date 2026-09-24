@@ -123,7 +123,8 @@ Every box is drawn from above, as the owner sees it on the desk. **The far back 
 1, is at the top. The end nearest the owner, the highest number, is at the bottom.** The boxes
 stand side by side.
 
-- **The box head:** number, name, cards on hand, a lock when sealed. A press opens the walk at
+- **The box head:** its name, cards on hand, a lock when sealed. No box number shows (slug
+  `a-box-is-shown-by-its-name`). A press opens the walk at
   that box.
 - **One block per section.** Its height follows its count, with a floor of 44px so a small
   section is still a target. It carries the section name (or "Section 2") and its count. Cards
@@ -134,7 +135,8 @@ stand side by side.
 - **An empty section** (a divider with no card) is a thin dashed block, because the plastic is
   still in the box.
 - **A sealed box** is drawn, and it is not a target (D20, a box is an object).
-- **A last column, "New box",** is a target that splits a section into a new box.
+- **A last column, "New box",** is a target that splits a section into a new box. A new box
+  with no name gets its stored default name, "Box" and the count plus one.
 
 The owner's store holds about 7 boxes and 40 sections. That needs no canvas.
 
@@ -172,17 +174,17 @@ does not fire on touch.
 ### 5.4 The receipt is the physical instruction
 
 The move saves at once. A receipt opens under the map. It is the checklist the hand follows,
-in the owner's orientation. Example, for a section moved into the middle of Box 4:
+in the owner's orientation. Example, for a section moved from RB Origins into the middle of Mixed Singles:
 
-> **Move 10 cards from Box 1 to Box 4.**
-> 1. In Box 1, find the divider **Uncommons**. Its first card is **Hextech Anomaly**. Its last
+> **Move 10 cards from RB Origins to Mixed Singles.**
+> 1. In RB Origins, find the divider **Uncommons**. Its first card is **Hextech Anomaly**. Its last
 >    card is **Sacred Shears**.
 > 2. Take out that divider and the 10 cards on your side of it, up to the next divider.
-> 3. In Box 4, find the divider **Rares**. Put the Uncommons divider and its 10 cards just on
->    the far side of it, in the same order, card 1 farthest from you.
+> 3. In Mixed Singles, find the divider **Rares**. Put the Uncommons divider and its 10 cards
+>    just on the far side of it, in the same order, card 1 farthest from you.
 >
-> In Box 1, Signatures moves from Section 3 to Section 2. In Box 4, Rares moves from Section 2
-> to Section 3. **Undo** (U)
+> In RB Origins, Signatures moves from Section 3 to Section 2. In Mixed Singles, Rares moves
+> from Section 2 to Section 3. **Undo** (U)
 
 The rules for the receipt:
 
@@ -196,7 +198,7 @@ The rules for the receipt:
 - **The renumber line.** A card's number counts within its section. So a section move changes
   no card number. It can change section numbers, and the receipt says which ones.
 - **Cards owed to open orders** add a line: "3 of these are owed to open orders. The pull list
-  now says Box 4."
+  now says Mixed Singles."
 - **A move into the box on the Capture screen** adds a line: the next capture joins the moved
   section when it is last. Press S first to start a new section.
 - **The receipt stays** until the owner closes it or the next move replaces it. Its "Done" press

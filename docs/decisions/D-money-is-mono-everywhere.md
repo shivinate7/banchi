@@ -43,7 +43,7 @@ numbers, key caps and money.
 
 ### What is built, and what is still open
 
-NOT BUILT. The kit-data lane builds the primitive. No lane in the 2026-09-23 plan names the
-rendered-page check yet. The plan must give it an owner before this entry counts as enforced.
+NOT BUILT. The kit-data lane builds the primitive. The text-checks lane builds the rendered-page
+check, by the orchestrator's call, because that lane already reads rendered text.
 CLAUDE.md's type paragraph carries a NOT MECHANIZED sentence about money. That sentence goes
 when the check lands, in the same change.

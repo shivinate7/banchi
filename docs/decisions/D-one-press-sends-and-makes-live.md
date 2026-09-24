@@ -54,15 +54,38 @@ accepted that cost. These protections stay, and they are D106's own promises:
 The owner still decides every price on Pricing before the press. The live check after the lag
 reports any copy that did not land.
 
-### D100's invariant needs a replacement, and the mechanism is not ruled
+### Every send first reads what is live, and never doubles a quantity
 
 D100 makes the transport refuse any row whose Add to Quantity is not 0. That is what makes a
 re-upload harmless. A listing file adds quantity, so it cannot pass that check. The outcome D100
-protects still holds: one file sent twice must not double a quantity. The review proposed a
-receipt guard: the server refuses a second push of a file digest it already pushed.
+protects still holds: one file sent twice must not double a quantity.
 
-**The owner has not ruled on the mechanism.** A builder must not send a listing file through
-the transport until a mechanism is chosen and proved red on a double send.
+The owner ruled the mechanism in the Pricing re-interview, in these words:
+
+```
+maybe before submitting prices there's a mandatory reconciliation that auto runs seeing my
+sales and live inventory
+```
+
+So every Send runs a live reconcile first, by itself, for new listings and for mark-downs
+alike. It reads the live export and the sales. Then it sends only the copies TCGplayer does not
+already hold. A send that would double a quantity is refused or trimmed, and the screen shows
+what it trimmed. When the live check cannot run, because the owner is signed out or TCGplayer
+is slow, Send refuses. It says why and offers "Try again". It never sends blind.
+
+This amends D106 further: its two presses were one margin, and this read is another. It amends
+D87 (the reconcile is store-wide): the reconcile is no longer only a check after the fact. It
+is a gate in front of every send. The guard must go red on a double send before any listing
+file uses the transport.
+
+### Four more answers from the Pricing re-interview
+
+- **Unpriced rows.** Send takes every ready copy. A row with no price stays on the list.
+- **Mark-downs.** One press sends a mark-down and makes it live, as for listings. There is no
+  "Put the old prices back" control. The Live tab on Pricing replaces the Mark-down sheet.
+- **Nothing beside Send.** The caps (at most N per card, only above the cut-off) leave the Send
+  press. "Split in two files" lives under "Download the file instead".
+- The screen shape is the entry with slug `pricing-is-one-list-and-one-send`.
 
 ### The other decisions this touches
 
@@ -71,7 +94,8 @@ the transport until a mechanism is chosen and proved red on a double send.
 - **D87 (the reconcile is store-wide).** The live check moves off Runs. It runs after the lag
   and shows a preview only when something needs a decision.
 - **D105 (the markdown lives where prices are decided).** Extended: listings are sent from the
-  same place. The Mark-down sheet's shell command becomes the "Check what is live" press.
+  same place. The Mark-down sheet becomes a Live tab on Pricing. Its shell command becomes the
+  "Check what is live" press, which Q7 places there.
 - **D156 (every unsent copy is one worklist).** A run's status names its real next step, for
   example "Ready to send", never "Needs pricing" once pricing is answered.
 - **The export fetch and its scope (D64, D65, D76, D166, D170).** The rules stay. The fetch now
@@ -80,15 +104,12 @@ the transport until a mechanism is chosen and proved red on a double send.
 
 ### What is still open
 
-1. D100's replacement mechanism (above).
-2. Whether the one press also reaches the Mark-down sheet, where D106's two presses live now.
-   Q2 names the send, and the sheet is a separate flow. Ask the owner.
-3. The Runs screen's final shape (Q6).
-4. Whether a run stays open until its copies are live, or only until they are sent.
-5. Five measurements the review listed before any build. The first pushes one real row to
+1. The Runs screen's final shape (Q6).
+2. Whether a run stays open until its copies are live, or only until they are sent.
+3. Five measurements the review listed before any build. The first pushes one real row to
    Staged and rolls it back. It touches the real account, so it needs the owner's word.
 
 ### What is built
 
-NOT BUILT. The runs lane builds it after the pricing lane frees Pricing's write bar. The
-pricing lane waits for the Pricing re-interview.
+NOT BUILT. The pricing lane builds the send, the guard and the Live tab. The runs lane follows
+it, because both need Pricing's bar.

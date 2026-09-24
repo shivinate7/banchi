@@ -55,6 +55,13 @@ screen keeps that, and the kit-data lane's `BoxLabel` list draws it once for all
 
 ### What is built
 
-NOT BUILT. The filtering lane builds rulings 1 and 2. The kit-data lane builds ruling 3.
-`app/tests/inventory.spec.ts` already asserts D118 around a sale. The filtering lane extends it
-to the next click after a sale, red on today's tree first.
+NOT BUILT. In the round-two plan, the orders lane builds ruling 1 and the inventory lane builds
+ruling 2. The kit-data lane builds ruling 3. `app/tests/inventory.spec.ts` already asserts D118
+around a sale. The inventory lane extends it to the next click after a sale, red on today's
+tree first.
+
+The round-two plan also names lane entries for rulings 1 and 2 (slugs `orders-sort-press` and
+`nothing-jumps`). One copy of each argument must go before either merges.
+
+A related call: a filter's state lives in the URL on every screen. A link, a bookmark and the
+back button then restore the view (FLT-11). The filtering lane records it.

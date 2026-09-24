@@ -43,19 +43,19 @@ contradict a settled decision on purpose. The owner weighs that.
 
 ## Before you rank anything, read this
 
-1. **The counts.** The first seven lenses logged 250 findings. The consolidation merged them
-   into 164 distinct findings: 2 S1, 35 S2, 89 S3 and 38 S4. The filtering lens adds 38, the
-   locating lens 29, and the held-screen pass 74. Those overlap the 164 in places. Each finding
-   names its prior.
+1. **The counts.** The first seven lenses logged 250 findings, which merged into 164 distinct
+   findings. Round two added 142 lens findings: 38 FLT, 29 LOC, 35 HOR, 39 HIR and one incident.
+   The second consolidation merged all 392 into **272 distinct findings**, UX-001 to UX-272: 9
+   S1, 74 S2, 138 S3 and 51 S4. Each round-two finding maps to exactly one UX id.
 2. **Coverage is uneven.** Every file ends with what it could not check. An UNKNOWN is not a
    pass. The demo has no server, so seven write paths are refused there. The demo also has no
    photographs and no recording for several reads.
 3. **The live look was GET only.** The visual lens loaded five screens of the owner's live app,
    10 loads in all. The held-orders reviewer's scratch copy also read the live store once by
    accident. `RULINGS.md` records that incident.
-4. **A second consolidation** was running when this record was copied. `CONSOLIDATED.md` here is
-   the FIRST consolidation: 164 findings, UX-001 to UX-164. The second adds findings from UX-165
-   on, and it was not done when this copy was made.
+4. **`CONSOLIDATED.md` is the second consolidation.** Every round-one id is stable. The first
+   version, with 164 findings, is in this folder's git history. The lane plan that follows from
+   it is section 5 of `docs/specs/ux-overhaul-2026-09-23.md`.
 
 ## What was changed from the reviewers' own files
 
@@ -71,7 +71,9 @@ The copies here differ from the files the reviewers wrote, in six ways only.
 4. **No real buyer name appears.** The held-orders pass gave its seeded orders invented names.
    Those names are the only buyer names here.
 5. **Line numbers were dropped from code citations.** A citation names a symbol, never a line.
-   A citation of a file at a line now names the file alone.
-6. **Two small spellings changed** so the path and id audits read them right. A request path
+   Where a finding cited a file at a line, it now names the file alone.
+6. **A few spellings changed** so the path and id audits read them right. In
+   `CONSOLIDATED.md`, each theme id became "Theme" and its number, because a T id reads as a
+   harness test. A request path
    got its method (`GET /pipeline/price-now`). One card place, written as a short code, became
    words.

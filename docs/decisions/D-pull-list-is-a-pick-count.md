@@ -52,7 +52,9 @@ The owner also ruled on the Fulfiller's screen, and called it "not a big rock". 
 ### What is built, and who builds it
 
 NOT BUILT. The fulfillment lane of the 2026-09-23 overhaul builds it (UX-001, UX-013, UX-089,
-UX-101). `docs/specs/ux-overhaul-2026-09-23.md` holds the lane plan.
+UX-101). `docs/specs/ux-overhaul-2026-09-23.md` holds the lane plan. Round two widened the
+lane with LOC-01, LOC-02 and LOC-15. It also made UX-013 an S1, because the Fulfiller was sent
+to pull a card that had left the box.
 
 ### What protects the outcome once built
 

@@ -52,12 +52,23 @@ server and in a browser spec for the client.
 
 ### What is still open
 
-- **Accents.** The lens asked for accents folded (FLT-05). The ruling names case and punctuation
-  only. The builder asks the owner.
 - **Typos and a near match.** FLT-05 asked for the closest name on a miss. Not ruled.
 - **Speed at the owner's scale.** Measure before and after on a store of 2,500 cards or more.
 
+Accents are settled. The orchestrator ruled that the matcher folds them, because the
+"forgiving" ruling covers them. The owner can reverse that call.
+
+### Search is not the join
+
+The matcher reuses the number rules the join already has: `pipeline/join.py:number_index_key`
+and the store's own number helpers. It stays game-aware. Riftbound keeps its code verbatim, and
+Pokemon composes the zero-padded number over the printed total. A fuzzy match such as `54` to
+`054` is fine in search. It must never feed the join. CLAUDE.md already says why: zero padding is
+composition only, never matching.
+
 ### What is built
 
-NOT BUILT. The filtering lane builds it, on the kit-data lane's search primitives. The server
-half touches `server/capture_server.py`, so a reviewer must see it.
+NOT BUILT. In the round-two plan, the filtering lane writes the one case table and the browser
+matcher. The search-server lane makes the server pass the same table. The server half touches
+`server/capture_server.py`, so a reviewer must see it. The filtering lane's plan also names an
+entry for the matcher (slug `one-matcher`). One of the two must go before either merges.
