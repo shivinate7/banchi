@@ -27613,6 +27613,15 @@ def check_order_walk_plan_route(checks: Checks) -> None:
                 "and `condition` rides beside them even where nothing agrees (null here — "
                 "no listing recorded and no card carries one)",
             )
+            checks.equal(
+                (take.get("listed"), take.get("sold_here"), take.get("live_as_of")),
+                ({stage: 0 for stage in master.LISTING_STAGES}, 0, None),
+                "AND `listed`/`sold_here`/`live_as_of` RIDE BESIDE THEM TOO — "
+                "`_listing_reading`, the one composer `_walk_plan_take` and `do_search`'s "
+                "`_group_row` both call now, off no listing record for this SKU: zero every "
+                "stage, zero sold here, null read time — the same shape a SKU with no "
+                "listing gets from `/search` (D115), never a fabricated absence",
+            )
 
 
 def check_order_places_scoped(checks: Checks) -> None:

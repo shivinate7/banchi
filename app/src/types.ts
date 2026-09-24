@@ -3263,6 +3263,16 @@ export type WalkPlanTake = {
   wanted: number
   for: WalkPlanRef[]
   copies: WalkPlanCopy[]
+  /** The same three fields `SearchGroup` carries for this SKU, off the SAME `Listing` read
+   *  `condition`'s own fallback already makes server-side — so a caller synthesising a
+   *  `SearchGroup` from a take (`Fulfillment.tsx`'s Owed section) can draw the honest
+   *  live-count sentence rather than a fabricated zero. Zeros and null, never absent, for a
+   *  SKU with no listing record yet — the same shape `do_search` sends. Optional so a fixture
+   *  built before this field existed still type-checks; a caller reading it falls back to the
+   *  same zero shape an absent listing sends. */
+  listed?: { pushed: number; staged: number; live: number }
+  sold_here?: number
+  live_as_of?: string | null
 }
 
 /** One reach: a drawer to open, and what to take out of it. A pooled stop (D24) is one

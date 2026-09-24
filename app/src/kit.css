@@ -704,6 +704,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   color: var(--bn-accent);
 }
 .bn-icon-badge--ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.bn-icon-badge--warn { background: var(--bn-warn-tint); color: var(--bn-warn); }
 
 /* ---- notice / callout --------------------------------------------------------------- */
 .bn-notice {

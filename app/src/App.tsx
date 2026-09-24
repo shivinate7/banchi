@@ -826,11 +826,8 @@ const SHORTCUTS: readonly KeyGroup[] = [
     id: 'fulfillment',
     title: 'Cards to pull',
     icon: 'hand',
-    where: 'The hand-off screen. It runs without this shell, so these two are all it answers to — and this sheet cannot be opened from it.',
-    rows: [
-      { keys: ['/'], does: 'Jump into the search field' },
-      { keys: ['Esc'], does: 'Close the enlarged photograph' },
-    ],
+    where: 'The hand-off screen. It runs without this shell, so this sheet cannot be opened from it — press ? on the screen itself for its own short list.',
+    rows: [{ keys: ['Esc'], does: 'Close the enlarged photograph' }],
   },
 ]
 

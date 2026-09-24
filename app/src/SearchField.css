@@ -105,9 +105,15 @@
   min-height: 56px;
   border-radius: var(--bn-r-lg);
 }
+/* UX-055: the placeholder is a card's own name, and a name has no length limit — at 390px
+   this drew "Piercing Li", a raw mid-word cut with nothing saying it was cut. `overflow` and
+   `text-overflow` reach a placeholder the same way they reach typed text, so a long one now
+   ends in an honest "…" instead. Scoped to the Fulfiller's own input, not the owner's. */
 .search-field-fulfiller .search-field-input {
   font-size: 24px;
   padding: var(--bn-3) var(--bn-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* THE THUMB FLOOR (D117). This sheet had no breakpoint of any kind — the box reads

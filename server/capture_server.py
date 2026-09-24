@@ -9115,6 +9115,30 @@ def _agreed(values: Iterable) -> Optional[str]:
     return seen[0] if len(seen) == 1 else None
 
 
+def _listing_reading(listing: Optional[master.Listing]) -> dict:
+    """`listed`/`sold_here`/`live_as_of` — the live-count reading for one SKU, off ONE
+    `Listing` record, in the ONE shape `do_search`'s `_group_row` and `_walk_plan_take` both
+    need. Two composers wrote this block field for field until this function; the review that
+    found the duplicate is the review this docstring answers to.
+
+    ZEROS RATHER THAN NULL FOR A SKU WITH NO LISTING RECORD. "Nothing has been emitted for
+    this SKU" is a fact, not an absence — `emit` creates the record when it writes the row —
+    so the screen can draw 0/0/0 without having to tell "not listed" from "the server did not
+    say". `sold_here` is BESIDE `listed` and not inside it (D115): `listed` is a walk over
+    `LISTING_STAGES` and the counter is deliberately not a stage. The estimate a screen draws
+    is `listed.live - sold_here`, floored, and the client subtracts because a derived value
+    never rides `asdict`.
+    """
+    return {
+        "listed": {
+            stage: (int(getattr(listing, stage)) if listing is not None else 0)
+            for stage in master.LISTING_STAGES
+        },
+        "sold_here": int(getattr(listing, "sold_here", 0) or 0) if listing is not None else 0,
+        "live_as_of": getattr(listing, "live_as_of", None) if listing is not None else None,
+    }
+
+
 def _copy_row(places: _Places, card: master.Card) -> dict:
     """One physical copy in a search result: where it is, what state it is in, its photo.
 
@@ -9313,23 +9337,9 @@ def do_search(query: str) -> dict:
                 "rarity": _agreed(card.rarity for card in copies),
                 "condition": _agreed(card.condition for card in copies)
                 or (listing.condition if listing is not None else None),
-                # ZEROS RATHER THAN NULL FOR A SKU WITH NO LISTING RECORD. "Nothing has been
-                # emitted for this SKU" is a fact, not an absence — `emit` creates the record
-                # when it writes the row — so the screen can draw 0/0/0 without having to
-                # tell "not listed" from "the server did not say".
-                "listed": {
-                    stage: (int(getattr(listing, stage)) if listing is not None else 0)
-                    for stage in master.LISTING_STAGES
-                },
-                # BESIDE `listed` AND NOT INSIDE IT (D115). `listed` is a walk over
-                # `LISTING_STAGES` and the counter is deliberately not a stage — putting it in
-                # that dict would make it a fourth listing stage on three screens and inside
-                # D34's release. These two are what a screen needs to draw both figures: the
-                # READING TCGplayer gave and WHEN, and what has sold here since. The estimate
-                # is `live - sold_here`, floored, and the client subtracts because a derived
-                # value never rides `asdict`.
-                "sold_here": int(getattr(listing, "sold_here", 0) or 0) if listing is not None else 0,
-                "live_as_of": getattr(listing, "live_as_of", None) if listing is not None else None,
+                # `listed`/`sold_here`/`live_as_of` — `_listing_reading`'s own docstring has
+                # the argument for why these three ride together and why zero and not null.
+                **_listing_reading(listing),
                 "on_hand": on_hand,
                 # D7 IN ONE FIELD: "listed quantity is min(cap, on hand)". The cap above is the
                 # RULE and this is what the rule comes to for THIS SKU, which are different
@@ -9380,11 +9390,10 @@ def do_search(query: str) -> dict:
                 "set": _agreed(card.set_name for card in loose),
                 "rarity": _agreed(card.rarity for card in loose),
                 "condition": _agreed(card.condition for card in loose),
-                "listed": {stage: 0 for stage in master.LISTING_STAGES},
                 # THE LOOSE BAG HAS NO SKU, so it has no listing record and no reading —
-                # zero and null, the same shape every other row carries (D115).
-                "sold_here": 0,
-                "live_as_of": None,
+                # `_listing_reading(None)` is the same zero-and-null shape every other row
+                # carries (D115).
+                **_listing_reading(None),
                 "on_hand": loose_on_hand,
                 # The same min as the keyed group above. Zero listing stages and no SKU to list
                 # under, so this can only ever be read as "what it WOULD be worth if identified"
@@ -10837,6 +10846,13 @@ def _walk_plan_take(
         "wanted": take.wanted,
         "for": _walk_plan_refs(ledger, take.orders),
         "copies": rows,
+        # `_listing_reading`, the SAME composer `do_search`'s `_group_row` calls, over the
+        # SAME `listing` already read above for `condition` — added so a caller synthesising a
+        # `SearchGroup` from a take (`Fulfillment.tsx`'s Owed section) can draw the honest
+        # live-count sentence `CardLocations`'s Fulfiller skin always shows, rather than a
+        # fabricated zero. Never a second Listing read: one `inventory.listings.get` call
+        # answers both this and `condition`'s fallback above.
+        **_listing_reading(listing),
     }
 
 

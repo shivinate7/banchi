@@ -3,14 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type {
   InventoryCard,
   OrderRow,
-  OrdersPayload,
-  PickRow,
   Place,
   PullTarget,
-  ResolvedLine,
   SaleResult,
   SearchCopy,
   SearchGroup,
+  WalkPlan,
+  WalkPlanRef,
+  WalkPlanTake,
 } from './types'
 import {
   ServerError,
@@ -23,6 +23,7 @@ import {
   pullCopy,
   undoPull,
   undoSale,
+  walkPlan,
 } from './server'
 import { PullConfirm } from './PullConfirm'
 import { SearchField } from './SearchField'
@@ -30,6 +31,7 @@ import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { sayPlace } from './position'
 import { Icon, Logo } from './kit'
+import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
 import './Fulfillment.css'
 
@@ -38,16 +40,23 @@ import './Fulfillment.css'
  * jargon and nothing destructive, and every floor in docs/DESIGN.md's Fulfillment table (20px
  * body, 32px place, 44px targets 12px apart, 7:1, undo >= 10s) is kept on merit here.
  *
- * Shape: the orders first. `GET /orders` resolves every open order to the copies that fill it
- * (D69), and those copies ARE his list — order by order, each order's cards in the order he
- * walks the boxes — with search as the second way in. A card is one screen — its name, a big
- * photograph, where it is, and one button. A card an order is waiting for is sold THROUGH the
- * order (`pullCopy`), so the owner's ledger counts it; any other card is marked sold on its own.
- * A sale drops a receipt into a sheet at the bottom of the screen with Undo and a clock he can
- * see draining, and the next card the orders want opens under it. "Pulled today" keeps a record
- * after the clock runs out. */
+ * Shape: the orders first, and never a preselected copy. `GET /orders` names what is open;
+ * `POST /orders/walk-plan` resolves the open orders' own demand to every on-hand copy of each
+ * SKU (D212, D93, and the owner's own ruling, 2026-09-23: "if an order has 2 of card X but I
+ * have 14 in inventory, I shouldn't just see 2 cards that are preselected — I should be told I
+ * need to pick 2, and here's where all the copies are"). One card owed is one entry: "Pick N",
+ * the card, and every copy the store holds, ranked, none ahead of the others — with search as
+ * the second way in. A copy an order is waiting for is sold THROUGH the order (`pullCopy`), so
+ * the owner's ledger counts it; any other copy is marked sold on its own. A sale drops a
+ * receipt into a sheet at the bottom of the screen with Undo and a clock he can see draining.
+ * "Pulled today" keeps a record after the clock runs out. */
 
-const GONE = new Set(['sold', 'retired'])
+/** `store/master.py:TERMINAL_STATES` — `sold`, `retired`, and `moved` (D83's third door: a
+ *  card leaves a box without being sold or retired, and is exactly as gone from it). This set
+ *  had only the first two, so a moved card kept reaching his list, labelled `departed` by
+ *  `pipeline/join.py:departed_label` — the owner's review finding UX-013, "Cards to pull lists
+ *  a sold card as 'departed B1 #19'". */
+const GONE = new Set(['sold', 'retired', 'moved'])
 
 function forSale(card: InventoryCard): boolean {
   return !GONE.has(card.state)
@@ -67,9 +76,9 @@ function pooledCopy(copy: SearchCopy): boolean {
  *  he can go and fetch. */
 const SHOWN_PER_BOX = 30
 
-/** Orders drawn in full before the rest fold under one button. Twenty open orders carry
- *  eighty-odd cards, and the boxes under them have to stay reachable. */
-const SHOWN_ORDERS = 6
+/** Owed cards drawn in full before the rest fold under one button, so a long list of SKUs
+ *  stays reachable rather than pushing the box browse off the phone screen. */
+const SHOWN_OWED = 6
 
 /** The same words CardLocations uses for the same card, so one route says it one way. */
 const NO_NAME = 'This card has no name yet'
@@ -140,12 +149,11 @@ type Sellable = {
   /** The place block, for the bar and the "between" sentence. */
   where: Place | null
   /** THE CARD'S OWN NAME FOR ITS PHOTOGRAPH (D172), or null where the row it was built from
-   *  has none. TWO OF THE THREE SOURCES CARRY ONE: `sellable` reads an `InventoryCard` and
-   *  `asSellable` a `SearchCopy`, both of which the server names; `pickSellable` reads a
-   *  `PickRow` off the order resolver, which carries `capture_id` and no `cid` at all — so an
-   *  order pick addresses the slot, exactly as it always did. Null and not absent, because
-   *  this is a view model built three ways and a missing key would read as an oversight in
-   *  whichever constructor forgot it. */
+   *  has none. `sellable` reads an `InventoryCard`, `asSellable` a `SearchCopy`, and
+   *  `orderByKey` (below) a `WalkPlanCopy` — the same three fields `_copy_row` composes on
+   *  every route, so every constructor carries one. Null and not absent, because this is a
+   *  view model built three ways and a missing key would read as an oversight in whichever
+   *  constructor forgot it. */
   cid: string | null
   /** Set when an open order is waiting for this copy. The sale then goes through the order
    *  rather than around it, so the owner's ledger counts the pull. */
@@ -166,9 +174,130 @@ type Done = { key: string; name: string; place: string; order: string | null }
 
 type BoxGroup = { box: number; name: string | null; cards: Sellable[] }
 
-/** One open order as he sees it: its number, the cards in the boxes that fill it in walk
- *  order, and how many of the things it wants are not cards in the boxes at all. */
-type OrderGroup = { key: string; number: string; buyer: string | null; cards: Sellable[]; elsewhere: number }
+/** One SKU an open order still owes, and every on-hand copy in the store — the owner's own
+ *  ruling, 2026-09-23: "I shouldn't just see 2 cards that are preselected. I should be told I
+ *  need to pick 2, and here's where all the copies are." No `pick` is preselected here; D212
+ *  (every copy is fungible) and D93 (the copies panel is the picker) both already ruled this
+ *  for the resolver and for a search result, and this is the same rule reaching the walk. */
+type Owed = {
+  key: string
+  sku: string
+  name: string
+  about: string[] | null
+  numberDisplay: string | null
+  set: string | null
+  rarity: string | null
+  condition: string | null
+  /** How many copies of this SKU the open orders still owe, capped at what the store holds —
+   *  `WalkPlanTake.wanted` summed over every stop the solver split this SKU across. A SKU the
+   *  store cannot fill AT ALL never reaches this type; `plan.shortfall` carries that one. */
+  wanted: number
+  /** Every open order waiting on this SKU, oldest first — `pipeline/walkplan.py:demand`'s own
+   *  order. A copy pulled for this card is recorded against `refs[0]`, the oldest order that
+   *  still owes it; a re-read after the write is what keeps that true, because a fulfilled
+   *  order drops out of its own next `for` list. */
+  refs: WalkPlanRef[]
+  /** Every on-hand copy of this SKU, store-wide — never only the solver's own stop. Order is
+   *  the wire's own (`WalkPlanTake.copies`'s own comment): pressable, none hidden, none ahead
+   *  of the others by rule. */
+  copies: WalkPlanTake['copies']
+  /** The same three fields `SearchGroup` carries, off `WalkPlanTake`'s own added ones — the
+   *  honest live-listing count, never a fabricated zero (`owedGroup`'s own comment). The take
+   *  field is optional on the wire type, so an older server's answer falls back to the same
+   *  all-zero shape an unlisted SKU sends. */
+  listed: { pushed: number; staged: number; live: number }
+  soldHere: number
+  liveAsOf: string | null
+}
+
+/** The open orders' own demand, folded to one entry per SKU — `plan.stops[].takes[]` can name
+ *  the SAME sku more than once when the solver split it across drawers, and the walk here
+ *  draws no drawers at all, so every take for one SKU is one card he sees once. `wanted` sums
+ *  across the splits (the total still owed); `copies`/`listed`/`soldHere`/`liveAsOf` are read
+ *  off the FIRST take only, because `_walk_plan_take` sends the whole on-hand list and the
+ *  whole listing reading on every split — the same store-wide facts, not a stop's own slice —
+ *  so a second read would only repeat them. */
+function owedFrom(plan: WalkPlan): Owed[] {
+  const bySku = new Map<string, Owed>()
+  for (const stop of plan.stops) {
+    for (const take of stop.takes) {
+      const existing = bySku.get(take.sku)
+      if (existing === undefined) {
+        const about = [take.condition, take.number_display].filter(
+          (part): part is string => typeof part === 'string' && part.trim() !== '',
+        )
+        bySku.set(take.sku, {
+          key: take.sku,
+          sku: take.sku,
+          name: take.name ?? NO_NAME,
+          about: about.length === 0 ? null : about,
+          numberDisplay: take.number_display,
+          set: take.set,
+          rarity: take.rarity,
+          condition: take.condition,
+          wanted: take.wanted,
+          refs: [...take.for],
+          copies: take.copies,
+          listed: take.listed ?? { pushed: 0, staged: 0, live: 0 },
+          soldHere: take.sold_here ?? 0,
+          liveAsOf: take.live_as_of ?? null,
+        })
+        continue
+      }
+      existing.wanted += take.wanted
+      for (const ref of take.for) {
+        if (!existing.refs.some((held) => held.key === ref.key)) existing.refs.push(ref)
+      }
+    }
+  }
+  return [...bySku.values()]
+}
+
+/** An owed card with the copies sold on this screen taken out — `stillHere`'s own rule, one
+ *  register up: `soldSet` is optimistic, ahead of the store's own next read. Null once nothing
+ *  is left to show; the card leaves the list rather than standing empty. */
+function stillOwed(item: Owed, gone: ReadonlySet<string>): Owed | null {
+  const here = item.copies.filter((copy) => !GONE.has(copy.state) && !gone.has(copy.key))
+  if (here.length === 0) return null
+  return { ...item, copies: here }
+}
+
+/** `SearchGroup` synthesised from one owed card's own wire fields — `OrdersWalkPane.tsx`'s own
+ *  `currentGroup` does the same fold for the owner's skin, one register up. `copies` rides in
+ *  the WIRE's OWN ORDER, never re-sorted here, and `CardLocations` reads it with
+ *  `preserveOrder` so its fullest-section re-rank never runs over it. `listed`/`sold_here`/
+ *  `live_as_of` are off `WalkPlanTake`'s own added fields (server/capture_server.py:
+ *  `_walk_plan_take`) — the same read `do_search` makes for a live SKU group, not a fabricated
+ *  zero, because the Fulfiller's skin always draws that sentence. */
+function owedGroup(item: Owed): SearchGroup {
+  return {
+    sku: item.sku,
+    names: item.name === NO_NAME ? [] : [item.name],
+    number: null,
+    printed_total: null,
+    number_display: item.numberDisplay,
+    set_hint: null,
+    set: item.set,
+    rarity: item.rarity,
+    condition: item.condition,
+    listed: item.listed,
+    sold_here: item.soldHere,
+    on_hand: item.copies.length,
+    listable: item.copies.length,
+    live_as_of: item.liveAsOf,
+    copies: item.copies.map(
+      (copy): SearchCopy => ({
+        key: copy.key,
+        state: copy.state,
+        state_at: null,
+        has_photo: copy.has_photo,
+        capture_id: copy.capture_id,
+        cid: copy.cid,
+        place: copy.place,
+      }),
+    ),
+  }
+}
 
 function sellable(key: string, card: InventoryCard): Sellable | null {
   const place = positionLabel(card)
@@ -206,41 +335,6 @@ function asSellable(group: SearchGroup, copy: SearchCopy): Sellable {
   }
 }
 
-/** A copy the resolver offered an order, as a card he can go and fetch — or null when it is
- *  not one: no place to name, already gone, already spoken for, or nothing to aim the pull at. */
-function pickSellable(order: OrderRow, line: ResolvedLine, pick: PickRow): Sellable | null {
-  const label = pick.place.label
-  if (label === null || pick.place.located === false) return null
-  if (pick.state === null || GONE.has(pick.state)) return null
-  if (pick.held_by !== null) return null
-  if (pick.capture_id === null || pick.capture_id.trim() === '') return null
-  const about = [pick.condition, pick.card_number].filter(
-    (part): part is string => typeof part === 'string' && part.trim() !== '',
-  )
-  return {
-    key: `${pick.box}/${pick.index}`,
-    box: pick.box,
-    index: pick.index,
-    place: label,
-    name: pick.card_name ?? NO_NAME,
-    about: about.length === 0 ? null : about,
-    where: pick.place,
-    // THE SLOT ROUTE FOR AN ORDER PICK, BECAUSE `PickRow` CARRIES NO NAME. The order
-    // resolver's row is built for aiming a WRITE — `capture_id` is what `POST /orders/pull`
-    // checks against the card actually at the slot — and D93's carve-out kept it to that; a
-    // `cid` has never been on it. `GET /photo/<box>/<index>` is the correct address here.
-    cid: null,
-    order: {
-      orderKey: order.key,
-      source: order.source,
-      number: order.number,
-      buyer: order.buyer ?? null,
-      sku: line.sku,
-      capture_id: pick.capture_id,
-    },
-  }
-}
-
 /** How he reads an order he does not have raw access to: the buyer's name where the ledger
  *  has one (D193), the id always present but never alone — paired as `secondary` rather than
  *  standing for the order by itself. A nameless order reads "No name", the same fallback
@@ -248,59 +342,6 @@ function pickSellable(order: OrderRow, line: ResolvedLine, pick: PickRow): Sella
 function orderLabel(buyer: string | null, number: string): { primary: string; secondary: string } {
   const trimmed = buyer?.trim() ?? ''
   return { primary: trimmed === '' ? 'No name' : trimmed, secondary: `#${number}` }
-}
-
-/** The open orders, each with its cards in walk order. A physical copy is offered once. */
-function orderGroups(payload: OrdersPayload): OrderGroup[] {
-  const rows = new Map(payload.orders.map((order) => [order.key, order]))
-  const seen = new Set<string>()
-  const groups: OrderGroup[] = []
-  for (const resolved of payload.resolution.orders) {
-    const row = rows.get(resolved.key)
-    if (row === undefined || !row.open) continue
-    const cards: Sellable[] = []
-    let elsewhere = 0
-    for (const line of resolved.lines) {
-      let found = 0
-      for (const pick of line.picks) {
-        const card = pickSellable(row, line, pick)
-        if (card === null || seen.has(card.key)) continue
-        seen.add(card.key)
-        cards.push(card)
-        found += 1
-      }
-      const recorded = row.progress.find((progress) => progress.sku === line.sku)?.recorded ?? 0
-      elsewhere += Math.max(0, line.wanted - recorded - found)
-    }
-    if (cards.length === 0 && elsewhere === 0) continue
-    groups.push({
-      key: resolved.key,
-      number: resolved.number,
-      buyer: row.buyer ?? null,
-      cards: inWalkOrder(cards),
-      elsewhere,
-    })
-  }
-  return groups
-}
-
-function withoutCard(groups: OrderGroup[], key: string): OrderGroup[] {
-  return groups.map((group) =>
-    group.cards.some((card) => card.key === key)
-      ? { ...group, cards: group.cards.filter((card) => card.key !== key) }
-      : group,
-  )
-}
-
-/** The card back in its order, after an undo, in the place the walk gives it. */
-function withCard(groups: OrderGroup[], card: Sellable): OrderGroup[] {
-  const order = card.order
-  if (order === null) return groups
-  return groups.map((group) =>
-    group.key !== order.orderKey || group.cards.some((row) => row.key === card.key)
-      ? group
-      : { ...group, cards: inWalkOrder([...group.cards, card]) },
-  )
 }
 
 function aimAt(card: Sellable, order: OrderRef): PullTarget {
@@ -378,6 +419,17 @@ function count(n: number, one: string, many: string): string {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
+/** A sort comparator over a number that may be null, WITHOUT the `Infinity - Infinity = NaN`
+ *  trap: `a - b` reads as a comparator return only while both sides are real numbers. A null
+ *  sorts after every real number (there is nothing to rank it against, so it is put last
+ *  rather than guessed into first); two nulls compare equal, 0 — the correct "no opinion"
+ *  answer a NaN silently was not. */
+function compareNullable(a: number | null, b: number | null): number {
+  if (a === null) return b === null ? 0 : 1
+  if (b === null) return -1
+  return a - b
+}
+
 /** `Box 3`, `Section 1`, `Card 17`, the figures ranked above the words. The text content of each
  *  part is the server's string character for character; only the weight changes. Each part is
  *  its own span (D218) so a narrow screen can stack them on purpose, breaking before `Card N`
@@ -441,10 +493,16 @@ export function Fulfillment() {
   const [unplaced, setUnplaced] = useState(0)
   const [loadFailed, setLoadFailed] = useState(false)
   const [reads, setReads] = useState(0)
-  /** The open orders, resolved to cards; null until the first read answers. */
-  const [orders, setOrders] = useState<OrderGroup[] | null>(null)
+  /** The open orders, raw off `GET /orders` — null until the first read answers. */
+  const [orders, setOrders] = useState<OrderRow[] | null>(null)
+  /** Real picks: every open order's own demand, resolved to every on-hand copy of each SKU
+   *  (`POST /orders/walk-plan`, D212/D93 reaching this screen). Null until the first read
+   *  answers, and left null (never an empty plan) while no order is open, so `owed` below
+   *  stays `[]` without a `keys_required` refusal for a request this screen never needs to
+   *  send. */
+  const [plan, setPlan] = useState<WalkPlan | null>(null)
   const [ordersFailed, setOrdersFailed] = useState(false)
-  const [allOrders, setAllOrders] = useState(false)
+  const [allOwed, setAllOwed] = useState(false)
 
   const { query, setQuery, results, loading, failure } = useSearch()
 
@@ -461,6 +519,10 @@ export function Fulfillment() {
   const [photoMissing, setPhotoMissing] = useState<string | null>(null)
   const [photoReady, setPhotoReady] = useState<string | null>(null)
   const [zoom, setZoom] = useState(false)
+  /** The keyboard reference for this screen alone (UX-101: the app shell's own `?` sheet
+   *  cannot open here — D5, no shell — and the dead `/` row it once listed for this group is
+   *  removed at the source, `App.tsx`'s own `SHORTCUTS` table). */
+  const [showKeys, setShowKeys] = useState(false)
   const [openBoxes, setOpenBoxes] = useState<number[]>([])
   /** Search groups whose "more copies" disclosure he has opened, by group key. */
   const [openMore, setOpenMore] = useState<string[]>([])
@@ -476,11 +538,11 @@ export function Fulfillment() {
    * gave `#/inventory`, `#/` and the order-resolution paths their own lean, box-scoped or
    * top-K reads, but no cheap replacement exists yet for "every sellable card, lean shape" —
    * building one under this item's own budget would be the band-aid CLAUDE.md's "fix the
-   * cause" rule refuses. Order resolution itself never touched `getInventory()` here: `GET
-   * /orders` already resolves every open order's lines to picks carrying their own place and
-   * capture id (`orderGroups`, above), so this is the ONE call site left on the full walk.
-   * DEBT27 is the named debt: the measured cost, why this cannot be box-scoped,
-   * and the candidate primitive. */
+   * cause" rule refuses. Order resolution itself never touched `getInventory()` here: `POST
+   * /orders/walk-plan` already resolves every open order's demand to real copies carrying
+   * their own place and capture id (`owedFrom`, above), so this is the ONE call site left on
+   * the full walk. DEBT27 is the named debt: the measured cost, why this cannot be
+   * box-scoped, and the candidate primitive. */
   useEffect(() => {
     let livePage = true
     getInventory()
@@ -507,19 +569,32 @@ export function Fulfillment() {
     }
   }, [reads])
 
-  /* The orders, read beside the cards and from the same trigger, so a sale re-reads both. */
+  /* The orders, read beside the cards and from the same trigger, so a sale re-reads both.
+   * TWO CALLS, ONE EFFECT: `GET /orders` answers no picks at all any more (2026-09-16, its own
+   * doc comment) — 52% of its wall time was decorating a `place` for every candidate copy of
+   * every unfulfilled order, most of them for a buyer nobody had opened. `POST
+   * /orders/walk-plan` is the second tier that resolves real picks for exactly the keys named,
+   * over EVERY on-hand copy of each SKU rather than one preselected pick each (D212/D93,
+   * widened 2026-09-19) — the same primitive `#/orders`' own walk already reads
+   * (`OrdersWalkPane.tsx`). Skipped with no open order, since the route refuses an empty
+   * `keys` list by name (`keys_required`) rather than answering an empty plan. */
   useEffect(() => {
     let livePage = true
-    getOrders()
-      .then((payload) => {
+    void (async () => {
+      try {
+        const payload = await getOrders()
         if (!livePage) return
-        setOrders(orderGroups(payload))
+        setOrders(payload.orders)
+        const openKeys = payload.orders.filter((order) => order.open).map((order) => order.key)
+        const freshPlan = openKeys.length === 0 ? null : await walkPlan(openKeys)
+        if (!livePage) return
+        setPlan(freshPlan)
         setOrdersFailed(false)
-      })
-      .catch(() => {
+      } catch {
         if (!livePage) return
         setOrdersFailed(true)
-      })
+      }
+    })()
     return () => {
       livePage = false
     }
@@ -567,25 +642,126 @@ export function Fulfillment() {
     }
   }, [zoom])
 
-  /* The walk: every card an open order is waiting for, order by order, each order's cards in
-     box order. `Start with Box N` opens the first; a sale opens the next. */
-  const waiting = useMemo(
-    () => (orders ?? []).filter((group) => group.cards.length > 0),
+  /* THE ONE BINDING THIS SCREEN ANSWERS TO ON ITS OWN, no shell to carry it (D5). `?` opens
+   * the small reference below; `isEditableTarget` yields to typing, `App.tsx`'s own rule for
+   * the same key. Escape closes whichever of the two overlays this screen has open, the
+   * sheet taking priority since it sits on top. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === '?' && !event.repeat && !isEditableTarget(event.target)) {
+        setShowKeys((held) => !held)
+        return
+      }
+      if (event.key === 'Escape' && showKeys) setShowKeys(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showKeys])
+
+  const soldSet = useMemo(() => new Set(soldHere), [soldHere])
+
+  /** Every open order, by key — `pipeline/walkplan.py:demand`'s own lookup, restated for the
+   *  order's `source` (`OrderRef.source`, which a `WalkPlanRef` does not carry). */
+  const ordersByKey = useMemo(() => new Map((orders ?? []).map((order) => [order.key, order])), [orders])
+  const openOrderKeys = useMemo(
+    () => (orders ?? []).filter((order) => order.open).map((order) => order.key),
     [orders],
   )
-  const walk = useMemo(() => waiting.flatMap((group) => group.cards), [waiting])
-  const orderByKey = useMemo(() => new Map(walk.map((card) => [card.key, card])), [walk])
+
+  /** The open orders' own demand, one card per SKU still owed — never a preselected copy
+   *  (`owedFrom`'s own comment). `stillOwed` takes this session's own sales out before he sees
+   *  them again, the same optimism `found` below already gives search results. Sorted by the
+   *  PLACE of each card's own first copy — box, then section, then card — so the list follows
+   *  the walk rather than `pipeline/walkplan.py:plan`'s own order (count descending, then SKU,
+   *  never a position at all: `Take` carries no address). The solver is untouched; this is a
+   *  client-side sort over its answer, for a screen with no drawer-by-drawer stop concept of
+   *  its own. */
+  const owed = useMemo(() => {
+    if (plan === null) return []
+    const items: Owed[] = []
+    for (const item of owedFrom(plan)) {
+      const here = stillOwed(item, soldSet)
+      if (here !== null) items.push(here)
+    }
+    return [...items].sort((a, b) => {
+      const pa = a.copies[0]?.place
+      const pb = b.copies[0]?.place
+      if (pa === undefined || pb === undefined) return 0
+      return (
+        pa.box - pb.box ||
+        compareNullable(pa.section, pb.section) ||
+        compareNullable(pa.card, pb.card)
+      )
+    })
+  }, [plan, soldSet])
+
+  /** How many copies to pick, across every card still owed — the "Today" figure. */
+  const totalWanted = useMemo(() => owed.reduce((sum, item) => sum + item.wanted, 0), [owed])
+  /** How many copies the open orders want that the store cannot place at all —
+   *  `plan.shortfall`'s own count, the reason the empty state may never claim "nothing waits"
+   *  while an order is open and unfillable (the owner's own review finding, UX-001). */
+  const shortfallCount = useMemo(
+    () => (plan?.shortfall ?? []).reduce((sum, short) => sum + short.short, 0),
+    [plan],
+  )
+
+  /** Every copy an owed card names, as the full `Sellable` a sale through the order needs —
+   *  keyed by copy so a card reached through a box or a search is ALSO sold through the order
+   *  that is waiting for it (`claim`, below). The order picked for a copy is `item.refs[0]`,
+   *  the oldest order still owing the SKU (`pipeline/walkplan.py:demand`'s own order) —
+   *  re-read after every sale, so a fulfilled order drops off its own next `for` list rather
+   *  than needing a per-press tally here (`OrdersWalkPane.tsx:pickOrderFor` solves the same
+   *  problem for a live pass over several stops; this screen re-fetches instead, because one
+   *  sale here is one request-and-reread, never a run of several before the next read). */
+  const orderByKey = useMemo(() => {
+    const map = new Map<string, Sellable>()
+    for (const item of owed) {
+      let ref: WalkPlanRef | undefined
+      let row: OrderRow | undefined
+      for (const candidate of item.refs) {
+        const found = ordersByKey.get(candidate.key)
+        if (found !== undefined) {
+          ref = candidate
+          row = found
+          break
+        }
+      }
+      if (ref === undefined || row === undefined) continue
+      for (const copy of item.copies) {
+        if (copy.capture_id === null || GONE.has(copy.state) || copy.place.located === false) continue
+        map.set(copy.key, {
+          key: copy.key,
+          box: copy.place.box,
+          index: copy.place.index,
+          place: copy.place.label ?? '',
+          name: item.name,
+          about: item.about,
+          where: copy.place,
+          cid: copy.cid,
+          order: {
+            orderKey: ref.key,
+            source: row.source,
+            number: ref.number,
+            buyer: ref.buyer,
+            sku: item.sku,
+            capture_id: copy.capture_id,
+          },
+        })
+      }
+    }
+    return map
+  }, [owed, ordersByKey])
 
   /** A real card from THIS store for the search field's example, rather than a name from a
    *  game that may hold none of this store's cards (D21 — game is a per-card claim, not a
-   *  fixed catalog). Prefers what he is already holding — the walk — so the hint matches the
-   *  card he is most likely to try next; falls back to any named card on hand, and to a
+   *  fixed catalog). Prefers what he is already holding — an owed card — so the hint matches
+   *  the card he is most likely to try next; falls back to any named card on hand, and to a
    *  generic noun when the store has named nothing yet. */
   const exampleCardName = useMemo(() => {
-    const named = (list: Sellable[] | null): string | null =>
-      (list ?? []).find((card) => card.name !== NO_NAME)?.name ?? null
-    return named(walk) ?? named(cards)
-  }, [walk, cards])
+    const owedNamed = owed.find((item) => item.name !== NO_NAME)?.name ?? null
+    if (owedNamed !== null) return owedNamed
+    return (cards ?? []).find((card) => card.name !== NO_NAME)?.name ?? null
+  }, [owed, cards])
 
   /** The order's own copy of a card wherever one exists, so a card reached through a box or a
    *  search is still sold through the order that is waiting for it. */
@@ -598,7 +774,6 @@ export function Fulfillment() {
     if (chosenKey === null) return null
     return orderByKey.get(chosenKey) ?? cards?.find((card) => card.key === chosenKey) ?? null
   }, [chosenKey, orderByKey, cards])
-  const soldSet = useMemo(() => new Set(soldHere), [soldHere])
   const boxes = useMemo(() => (cards === null ? [] : byBox(cards)), [cards])
 
   const found = useMemo(() => {
@@ -631,7 +806,6 @@ export function Fulfillment() {
 
   const drop = useCallback((card: Sellable) => {
     setCards((prev) => (prev === null ? prev : prev.filter((row) => row.key !== card.key)))
-    setOrders((prev) => (prev === null ? prev : withoutCard(prev, card.key)))
     setSoldHere((held) => (held.includes(card.key) ? held : [...held, card.key]))
     setChosenKey(null)
     setPulledKey(null)
@@ -643,9 +817,6 @@ export function Fulfillment() {
       if (busyKey !== null) return
       setBusyKey(card.key)
       setTrouble(null)
-      /* The card after this one in the walk, found before the list moves. */
-      const at = walk.findIndex((row) => row.key === card.key)
-      const next = at < 0 ? null : (walk[at + 1] ?? null)
       try {
         let reversible: boolean
         if (card.order === null) {
@@ -667,7 +838,6 @@ export function Fulfillment() {
           { key: card.key, name: card.name, place: card.place, order: card.order?.number ?? null },
           ...held.filter((row) => row.key !== card.key),
         ])
-        if (next !== null) openCard(next)
         reread()
       } catch (err) {
         const code = refusalCode(err)
@@ -679,7 +849,6 @@ export function Fulfillment() {
             canUndo: false,
             note: 'Somebody else sold this card, so it has come off your list.',
           })
-          if (next !== null) openCard(next)
           reread()
           return
         }
@@ -693,7 +862,7 @@ export function Fulfillment() {
         setBusyKey(null)
       }
     },
-    [busyKey, walk, drop, remember, openCard, reread],
+    [busyKey, drop, remember, reread],
   )
 
   const doUndo = useCallback(
@@ -716,7 +885,6 @@ export function Fulfillment() {
         setCards((prev) =>
           prev === null ? prev : inWalkOrder([...prev.filter((row) => row.key !== card.key), card]),
         )
-        setOrders((prev) => (prev === null ? prev : withCard(prev, card)))
         setSoldHere((held) => held.filter((key) => key !== card.key))
         setSales((held) => held.filter((standing) => standing.card.key !== card.key))
         setDone((held) => held.filter((row) => row.key !== card.key))
@@ -842,7 +1010,7 @@ export function Fulfillment() {
               <button
                 className="ff-undo"
                 type="button"
-                aria-label={`Undo ${sale.card.place}`}
+                aria-label={`Undo ${sayPlace(sale.card.place)}`}
                 onClick={() => void doUndo(sale.card)}
               >
                 <Icon name="undo" size={22} />
@@ -932,8 +1100,6 @@ export function Fulfillment() {
        card in his hand is the card on the screen, so it had better be this card's. */
     const src = photoUrl(chosen.box, chosen.index, chosen.cid)
     const forOrder = chosen.order
-    const walkAt = walk.findIndex((card) => card.key === chosen.key)
-    const next = walkAt < 0 ? null : (walk[walkAt + 1] ?? null)
 
     body = (
       <>
@@ -942,12 +1108,6 @@ export function Fulfillment() {
             <Icon name="arrowLeft" size={24} />
             Back to the cards
           </button>
-          {next === null ? null : (
-            <button className="ff-quiet ff-next" type="button" onClick={() => openCard(next)}>
-              Next card
-              <Icon name="arrowRight" size={24} />
-            </button>
-          )}
         </div>
 
         <article className="ff-card">
@@ -976,7 +1136,7 @@ export function Fulfillment() {
                     className="fulfillment-photo"
                     data-ready={photoReady === chosen.key ? 'true' : 'false'}
                     src={src}
-                    alt={`The card in ${chosen.place}`}
+                    alt={`The card in ${sayPlace(chosen.place)}`}
                     onLoad={() => setPhotoReady(chosen.key)}
                     onError={() => setPhotoMissing(chosen.key)}
                   />
@@ -994,11 +1154,8 @@ export function Fulfillment() {
               around it — name, photo, place, button. */}
           <div className="ff-card-side">
           <header className="ff-card-head">
-            {forOrder === null || walkAt < 0 ? null : (
+            {forOrder === null ? null : (
               <p className="fulfillment-say ff-card-eyebrow">
-                <span className="ff-card-step">
-                  Pull {walkAt + 1} of {walk.length}
-                </span>
                 <span className="ff-card-order">
                   For <b>{orderLabel(forOrder.buyer, forOrder.number).primary}</b>{' '}
                   <span className="ff-card-order-id">
@@ -1079,8 +1236,14 @@ export function Fulfillment() {
         </div>
       )
     } else if (failure !== null) {
+      /* UX-049: "Type the name again" is a remedy that cannot work — the search FAILED, so
+         retyping asks the same broken thing again. The one step that does something is
+         already on screen (the clear button beside the field), so the sentence says what it
+         does rather than a step of its own. */
       hits = (
-        <p className="fulfillment-say ff-say">The search did not finish. Type the name again.</p>
+        <p className="fulfillment-say ff-say">
+          The search could not run right now. Clear it to look through a box instead.
+        </p>
       )
     } else if (found === null) {
       hits = null
@@ -1158,16 +1321,18 @@ export function Fulfillment() {
       })
     }
 
-    /* ---- today: what the orders are waiting for, and where to start --------------------- */
+    /* ---- today: what the orders still owe, and whether it can all be found ------------- */
     let today: ReactNode
-    const first = walk[0]
     if (orders === null) {
       today = ordersFailed ? null : (
         <div className="ff-loading" aria-busy="true">
           <span className="ff-skel ff-skel-today" />
         </div>
       )
-    } else if (first === undefined) {
+    } else if (openOrderKeys.length === 0) {
+      /* No order is open at all — the ONE state allowed to say "nothing waits" (the owner's
+         own review finding, UX-001: a green "nothing waits" while orders are open and unread
+         is the defect this screen had). */
       today = (
         <p className="fulfillment-say ff-today-none">
           <span className="bn-icon-badge bn-icon-badge--ok">
@@ -1176,32 +1341,49 @@ export function Fulfillment() {
           No orders are waiting for a card right now. You can still find any card by name.
         </p>
       )
+    } else if (owed.length === 0) {
+      /* Orders are open, but not one copy any of them wants is on hand — never drawn as
+         "nothing waits", which would read as caught up rather than stuck. */
+      today = (
+        <p className="fulfillment-say ff-today-none" data-tone="warn">
+          <span className="bn-icon-badge bn-icon-badge--warn">
+            <Icon name="alert" size={22} />
+          </span>
+          {count(openOrderKeys.length, 'order is', 'orders are')} waiting, but
+          {' '}
+          {count(shortfallCount, 'copy', 'copies')} {shortfallCount === 1 ? 'is' : 'are'} not in
+          the boxes. Ask for help finding {shortfallCount === 1 ? 'it' : 'them'}.
+        </p>
+      )
     } else {
       today = (
         <section className="ff-today" aria-label="Today">
           <div className="ff-today-text">
             <p className="ff-today-figure">
-              <b className="ff-today-num">{walk.length.toLocaleString()}</b>
+              <b className="ff-today-num">{totalWanted.toLocaleString()}</b>{' '}
               <span className="ff-today-words">
-                {walk.length === 1 ? 'card to pull' : 'cards to pull'}
+                {totalWanted === 1 ? 'copy to pick' : 'copies to pick'}
               </span>
             </p>
             <p className="fulfillment-say ff-today-say">
-              For {count(waiting.length, 'order', 'orders')}, listed below in the order you
-              walk the boxes.
+              For {count(openOrderKeys.length, 'order', 'orders')}, listed below with every
+              copy the store holds.
             </p>
+            {shortfallCount === 0 ? null : (
+              <p className="fulfillment-say ff-today-warn">
+                <Icon name="alert" size={18} className="ff-today-warn-icon" />
+                {count(shortfallCount, 'more copy', 'more copies')}{' '}
+                {shortfallCount === 1 ? 'is' : 'are'} not in the boxes. Ask for help with{' '}
+                {shortfallCount === 1 ? 'it' : 'those'}.
+              </p>
+            )}
           </div>
-          <button className="ff-start" type="button" onClick={() => openCard(first)}>
-            <Icon name="hand" size={26} />
-            Start with Box {first.box}
-            <Icon name="arrowRight" size={26} className="ff-start-arrow" />
-          </button>
         </section>
       )
     }
 
-    const shownOrders = allOrders ? waiting : waiting.slice(0, SHOWN_ORDERS)
-    const hiddenOrders = waiting.length - shownOrders.length
+    const shownOwed = allOwed ? owed : owed.slice(0, SHOWN_OWED)
+    const hiddenOwed = owed.length - shownOwed.length
 
     body = (
       <>
@@ -1273,62 +1455,56 @@ export function Fulfillment() {
               </section>
             )}
 
-            {walk.length === 0 ? null : (
-              <section className="ff-orders" aria-label="Orders to fill">
+            {owed.length === 0 ? null : (
+              <section className="ff-owed" aria-label="Cards to pick">
                 <h2 className="ff-h2">
                   <span className="ff-h2-icon">
                     <Icon name="cart" size={18} />
                   </span>
-                  Orders to fill
+                  Cards to pick
                 </h2>
-                <div className="ff-order-list">
-                  {shownOrders.map((group, at) => (
-                    <article
-                      className="ff-order"
-                      key={group.key}
-                      style={{ animationDelay: `${Math.min(at, 8) * 40}ms` }}
-                    >
-                      <header className="ff-order-head">
-                        <span className="ff-order-rank" aria-hidden="true">
-                          {at + 1}
-                        </span>
-                        <span className="ff-order-text">
-                          <span className="fulfillment-say ff-order-title">
-                            <b>{orderLabel(group.buyer, group.number).primary}</b>{' '}
-                            <span className="ff-order-id">
-                              {orderLabel(group.buyer, group.number).secondary}
+                <div className="ff-found ff-owed-list">
+                  {shownOwed.map((item, at) => {
+                    const group = owedGroup(item)
+                    return (
+                      <div
+                        className="ff-owed-card"
+                        key={item.key}
+                        style={{ animationDelay: `${Math.min(at, 8) * 40}ms` }}
+                      >
+                        <p className="fulfillment-say ff-owed-pick">
+                          <b className="ff-owed-pick-num">Pick {item.wanted}</b>
+                          {item.refs.length < 2 ? null : (
+                            <span className="ff-owed-pick-for">
+                              for {count(item.refs.length, 'order', 'orders')}
                             </span>
-                          </span>
-                          <span className="fulfillment-say ff-order-count">
-                            {count(group.cards.length, 'card', 'cards')} to pull
-                            {group.elsewhere === 0 ? null : (
-                              <span className="ff-order-elsewhere">
-                                {count(group.elsewhere, 'thing', 'things')} on this order {group.elsewhere === 1 ? 'is' : 'are'} not in
-                                the boxes yet — tell the owner before you seal this one
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                      </header>
-                      <ul className="fulfillment-list ff-list ff-order-cards">
-                        {group.cards.map((card) => (
-                          <CardRow card={card} onOpen={openCard} key={card.key} />
-                        ))}
-                      </ul>
-                    </article>
-                  ))}
+                          )}
+                        </p>
+                        <CardLocations
+                          group={group}
+                          persona="fulfiller"
+                          preserveOrder
+                          onSell={(copy) => doSellCopy(group, copy)}
+                          busyKey={busyKey}
+                          soldKeys={soldSet}
+                          listedAt={item.liveAsOf}
+                          renderAction={(copy) => actionFor(group, copy)}
+                        />
+                      </div>
+                    )
+                  })}
                 </div>
-                {hiddenOrders === 0 && !allOrders ? null : (
+                {hiddenOwed === 0 && !allOwed ? null : (
                   <button
                     className="ff-quiet ff-orders-more"
                     type="button"
-                    aria-expanded={allOrders}
-                    onClick={() => setAllOrders((held) => !held)}
+                    aria-expanded={allOwed}
+                    onClick={() => setAllOwed((held) => !held)}
                   >
-                    <Icon name={allOrders ? 'chevronUp' : 'chevronDown'} size={22} />
-                    {allOrders
-                      ? 'Show fewer orders'
-                      : `Show the other ${count(hiddenOrders, 'order', 'orders')}`}
+                    <Icon name={allOwed ? 'chevronUp' : 'chevronDown'} size={22} />
+                    {allOwed
+                      ? 'Show fewer cards'
+                      : `Show the other ${count(hiddenOwed, 'card', 'cards')}`}
                   </button>
                 )}
               </section>
@@ -1436,11 +1612,54 @@ export function Fulfillment() {
           className="ff-zoom-img"
           /* The same address the confirm frame drew, so the big view is a cache hit. */
           src={photoUrl(chosen.box, chosen.index, chosen.cid)}
-          alt={`The card in ${chosen.place}, bigger`}
+          alt={`The card in ${sayPlace(chosen.place)}, bigger`}
         />
         <span className="fulfillment-say ff-zoom-hint">Tap anywhere to go back.</span>
       </button>
     ) : null
+
+  /* The one thing this screen answers to on its own — UX-101, "the key works for the
+     Fulfiller, or it leaves the list". The kit's own scrim/dialog primitives (`bn-scrim`,
+     `bn-dialog` — `App.tsx`'s own `.app-keys` is the same pair, scaled up for its own
+     many-screen table); no route out, closed by Esc, the scrim, or its own button. THE KEY
+     CAP IS NOT `.bn-kbd` — that chip is 10px, sized for the owner's dense reference sheet,
+     and this screen's own floor table reaches it too (`.ff-keys-key`, Fulfillment.css). */
+  const keysSheet = !showKeys ? null : (
+    <>
+      <div className="bn-scrim" onClick={() => setShowKeys(false)} />
+      <div
+        className="bn-dialog ff-keys"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ff-keys-title"
+      >
+        <header className="ff-keys-head">
+          <h2 className="fulfillment-title ff-keys-title" id="ff-keys-title">
+            Keyboard shortcuts
+          </h2>
+          <button
+            className="ff-quiet ff-keys-close"
+            type="button"
+            aria-label="Close"
+            autoFocus
+            onClick={() => setShowKeys(false)}
+          >
+            <Icon name="x" size={24} />
+          </button>
+        </header>
+        <ul className="ff-keys-list">
+          <li>
+            <kbd className="ff-keys-key">Esc</kbd>
+            <span className="fulfillment-say">Close the enlarged photograph</span>
+          </li>
+          <li>
+            <kbd className="ff-keys-key">?</kbd>
+            <span className="fulfillment-say">Open or close this list</span>
+          </li>
+        </ul>
+      </div>
+    </>
+  )
 
   return (
     <main
@@ -1455,6 +1674,7 @@ export function Fulfillment() {
       </div>
       {sheet}
       {bigPhoto}
+      {keysSheet}
     </main>
   )
 }
