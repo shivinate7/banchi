@@ -455,6 +455,9 @@ def build_parser() -> argparse.ArgumentParser:
     emit.add_argument("--send-dir", metavar="DIR", help=argparse.SUPPRESS)
     emit.add_argument("--send-claim", metavar="STAMP", help=argparse.SUPPRESS)
     emit.add_argument("--claim-holder", type=int, metavar="PID", help=argparse.SUPPRESS)
+    # SKUs a mark-down re-priced inside the publish lag: none of their copies go this press,
+    # because a listing row carries a price and would put the old one back. Send press only.
+    emit.add_argument("--price-wait", action="append", metavar="SKU", help=argparse.SUPPRESS)
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile

@@ -298,9 +298,11 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
 
     `listing` IS THE ONE DOOR FOR A FILE THAT ADDS COPIES (`D-one-press-sends-and-makes-live`),
     and it is a keyword so no existing caller can reach it by position. A price file keeps
-    D100's zero rule exactly as it was. A listing row must add a whole number of copies, 0 or
-    more, and never fewer: the listing file is written by `emit` behind the double-send guard
-    (`pipeline/sendguard.py`), and a negative figure is a file this repo did not write. WHETHER
+    D100's zero rule exactly as it was. A listing row must add a whole number of copies, 1 or
+    more: the listing file is written by `emit` behind the double-send guard
+    (`pipeline/sendguard.py`), and a negative figure is a file this repo did not write. A row
+    adding 0 would change only a price, and a price goes through the price door, where D100's
+    zero rule stays whole (the round-2 review). WHETHER
     THIS DOOR SHOULD EXIST IS STILL THE OWNER'S OPEN QUESTION (the decision entry's "D100's
     check on the transport"), and nothing sends through it before the owner's first test.
     """
@@ -336,7 +338,10 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
                 f"SKU {sku} carries an Add to Quantity that is not an integer. Nothing was sent.",
             ) from None
         if listing:
-            if quantity < 0:
+            if quantity <= 0:
+                # A LISTING ROW ADDS AT LEAST ONE COPY. A row adding none would only move a
+                # price, and a price moves through a mark-down's door, where D100's zero rule
+                # holds whole (the round-2 review). `emit` never writes such a row.
                 raise FetchRefusal(
                     "tcg_import_moves_quantity",
                     f"SKU {sku} carries Add to Quantity {quantity}. A listing file only ever "

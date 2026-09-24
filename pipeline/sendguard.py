@@ -163,13 +163,20 @@ def trims(
     return out
 
 
-def report(export: str, checked: int, trimmed: Sequence[Trim]) -> dict:
-    """The one JSON object `cli/cmd_emit.py` prints and `server/send_routes.py` reads."""
+def report(
+    export: str, checked: int, trimmed: Sequence[Trim], waiting: Sequence[str] = ()
+) -> dict:
+    """The one JSON object `cli/cmd_emit.py` prints and `server/send_routes.py` reads.
+
+    `waiting` is the SKUs held out because a mark-down changed their price inside the publish
+    lag (`cli/cmd_emit.py:_price_wait`): a separate reason from a trim, named separately.
+    """
     return {
         "send_guard": {
             "export": export,
             "checked": int(checked),
             "trimmed": [trim.as_dict() for trim in trimmed],
             "trimmed_copies": sum(trim.would - trim.goes for trim in trimmed),
+            "waiting_on_price": sorted(str(sku) for sku in waiting),
         }
     }

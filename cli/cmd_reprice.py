@@ -42,7 +42,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 from cli import runs
 from pipeline import corpus, decisions, pricing, reprice, tcgcsv
@@ -96,7 +96,16 @@ SEND_RECEIPT = "send.json"
 PUBLISH_LAG_S = 15 * 60
 
 
-def published_recently(now: Optional[datetime] = None, window_s: int = PUBLISH_LAG_S) -> Dict[str, str]:
+#: The two kinds of receipt `published_recently` reads. A caller may ask for one kind only.
+MARKDOWN_RECEIPTS = "markdown"
+SEND_RECEIPTS = "send"
+
+
+def published_recently(
+    now: Optional[datetime] = None,
+    window_s: int = PUBLISH_LAG_S,
+    kinds: Sequence[str] = (MARKDOWN_RECEIPTS, SEND_RECEIPTS),
+) -> Dict[str, str]:
     """SKUs published to TCGplayer inside the window, mapped to when.
 
     WHY THIS EXISTS. `Export From Live` is not read-your-writes (D106, measured): after a
@@ -121,9 +130,17 @@ def published_recently(now: Optional[datetime] = None, window_s: int = PUBLISH_L
     # the listing send's `send.json` beside the file it pushed (`files[0]`). Before the send
     # press existed a listing publish happened by hand in the portal, which no receipt could
     # see — the flow review's second hazard.
+    #
+    # `kinds` NARROWS THE READ, never the rule. The listing send asks for mark-downs alone
+    # (`server/send_routes.py:_send`): a price a mark-down just set is one a listing row would
+    # put back, and a listing's own recent publish is not.
     receipts = []
-    for root, name in ((_markdowns_dir(), "push.json"), (files.inventory_dir() / SENDS, SEND_RECEIPT)):
-        if root.is_dir():
+    roots = (
+        (MARKDOWN_RECEIPTS, _markdowns_dir(), "push.json"),
+        (SEND_RECEIPTS, files.inventory_dir() / SENDS, SEND_RECEIPT),
+    )
+    for kind, root, name in roots:
+        if kind in kinds and root.is_dir():
             receipts += [(directory, directory / name) for directory in root.iterdir()]
     for directory, receipt in receipts:
         record = files.read_json(receipt, {}) or {}

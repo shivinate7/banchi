@@ -10,7 +10,9 @@ THE OWNER'S RULINGS, 2026-09-23 AND 2026-09-24 (`D-one-press-sends-and-makes-liv
     on its next visit to Pricing or Home. No server job runs unattended — this module has no
     timer, and `do_live_check` runs only when a request asks.
   - "Take them back" is offered ONLY AFTER a live check has run past the wait for that receipt
-    (2026-09-24). Before that, the screen says when it will be safe.
+    (2026-09-24). Before that, the screen says when it will be safe. A DOWNLOADED file needs a
+    SECOND check, one wait after the first (the orchestrator's call, round 3): its wait counts
+    from when Banchi wrote the file, and the owner uploads it by hand at a time nobody knows.
 
 WHAT ONE PRESS DOES, IN ORDER, AND WHERE EACH STEP STOPS (`do_send`):
 
@@ -43,6 +45,12 @@ THE RECEIPT IS A FILE BESIDE A COPY OF WHAT WENT, under `inventory/sends/<stamp>
 BEFORE the first byte reaches TCGplayer and advanced at each step (`phase`), so a server that
 dies mid-press leaves a receipt that says how far it got. `cli/cmd_reprice.py:
 published_recently` reads it, so the lag guard (D106's measurement) covers a listing publish.
+
+EVERY FAILURE AFTER THE RECEIPT EXISTS ENDS KNOWN (`_settle`, round 3): a failed press whose
+copies were counted is UNKNOWN, holds its cards and waits for the check, and one that counted
+nothing leaves nothing behind. A receipt reads "sending" only while its press is running —
+in this server, the one press `_press` holds; in another, a live process. The round-2 review
+found a timed-out step leaving a receipt "sending" for as long as the server lived.
 
 NOTHING HERE HAS EVER REACHED TCGPLAYER. Every path is proved against the loopback portal in
 `harness/tests/t7_store_and_seams.py`. The first real send is the owner's to authorize.
@@ -158,6 +166,27 @@ def _holder() -> dict:
         _HOLDER["pid"] = str(pid)
         _HOLDER["start"] = proc_start(pid)
     return {"pid": pid, "proc_start": _HOLDER.get("start")}
+
+
+def _claim_running(claim: "sendclaims.SendClaim") -> bool:
+    """Is the press that holds this claim still running? In THIS server the answer is exact:
+    `_press` names the one press it runs. In another process, `sendclaims.alive` reads it."""
+    if claim.pid == os.getpid():
+        return _RUNNING.get("stamp") == claim.stamp
+    return sendclaims.alive(claim)
+
+
+def _press_running(record: dict) -> bool:
+    """Is the press that wrote this receipt still running? `_claim_running`'s rule, over the
+    receipt's own `holder`. A press in this server that raised, or whose request thread died,
+    is NOT running, whatever its receipt's phase says (the round-2 review, F1)."""
+    holder = record.get("holder")
+    if isinstance(holder, dict) and holder.get("pid") == os.getpid():
+        recorded = holder.get("proc_start")
+        if recorded and recorded != _holder().get("proc_start"):
+            return False
+        return _RUNNING.get("stamp") == record.get("stamp")
+    return _holder_alive(holder)
 
 
 def _holder_alive(holder: Optional[dict]) -> bool:
@@ -278,6 +307,44 @@ def _checked_past_wait(record: dict) -> bool:
     )
 
 
+def _uncertain(record: dict) -> bool:
+    """A receipt whose outcome TCGplayer never confirmed, or whose press stopped mid-way."""
+    return bool(record.get("unknown")) or (record.get("phase") or PHASE_DONE) in IN_FLIGHT
+
+
+def _second_check(record: dict) -> bool:
+    """Does this receipt need a SECOND check past its wait before its copies can come back?
+
+    A DOWNLOADED FILE DOES (the orchestrator's call, round 3). Its wait counts from when Banchi
+    wrote the file; the owner uploads it by hand, at a time nobody here knows, so one check
+    past the wait can run before the upload has shown. A second check one wait after the first
+    is what makes "not found" mean "not sent".
+    """
+    return record.get("kind") == KIND_DOWNLOAD and not _uncertain(record)
+
+
+def _take_back_ready(record: dict) -> bool:
+    """May "Take them back" be offered for this receipt now? The take-back ruling's test."""
+    if not _checked_past_wait(record):
+        return False
+    if not _second_check(record):
+        return True
+    first = _parse(record.get("first_checked_at"))
+    last = _parse(record.get("checked_at"))
+    return first is not None and last is not None and last >= first + _lag()
+
+
+def _take_back_after(record: dict) -> Optional[datetime]:
+    """The moment "Take them back" can first be offered, for the screen's sentence."""
+    wait = _wait_until(record)
+    if not _second_check(record):
+        return wait
+    first = _parse(record.get("first_checked_at"))
+    if first is not None:
+        return first + _lag()
+    return wait + _lag() if wait is not None else None
+
+
 def state_of(record: dict, now: Optional[datetime] = None) -> str:
     """One word for where a send stands. The screen draws one sentence per word.
 
@@ -296,13 +363,13 @@ def state_of(record: dict, now: Optional[datetime] = None) -> str:
         return "failed" if record.get("failure") else "taken_back"
     check = record.get("check") or {}
     phase = record.get("phase") or PHASE_DONE
-    if phase in IN_FLIGHT and _holder_alive(record.get("holder")) and not record.get("checked_at"):
+    if phase in IN_FLIGHT and not record.get("checked_at") and _press_running(record):
         return "sending"
-    uncertain = bool(record.get("unknown")) or phase in IN_FLIGHT
+    uncertain = _uncertain(record)
     if record.get("kind") == KIND_DOWNLOAD and not uncertain:
         if check and check.get("found", 0) >= check.get("expected", 0) > 0:
             return "checked"
-        if check and _checked_past_wait(record):
+        if check and _take_back_ready(record):
             return "short"
         return "written"
     if uncertain:
@@ -318,21 +385,24 @@ def state_of(record: dict, now: Optional[datetime] = None) -> str:
     return "checked"
 
 
+def _next_check(record: dict, now: Optional[datetime] = None) -> Optional[datetime]:
+    """When the live check should next read this receipt, or None for "whenever asked"."""
+    if state_of(record, now) == "written":
+        # A DOWNLOADED FILE IS READ AT MOST ONCE PER LAG. The owner may not have uploaded it
+        # yet, and a check on every visit would open a socket to TCGplayer each time. The
+        # second read, one wait after the first, is the one that can offer the copies back.
+        last = _parse(record.get("checked_at"))
+        if last is not None:
+            return last + _lag()
+    return _wait_until(record)
+
+
 def _due(record: dict, now: datetime) -> bool:
     """Is this receipt one the live check should read now?"""
-    state = state_of(record, now)
-    if state == "written":
-        # A DOWNLOADED FILE IS READ AT MOST ONCE PER LAG. The owner may not have uploaded it
-        # yet, and a check on every visit would open a socket to TCGplayer each time.
-        last = _parse(record.get("checked_at"))
-        wait = _wait_until(record)
-        if last is None:
-            return wait is None or wait <= now
-        return last + _lag() <= now
-    if state not in ("waiting", "unknown"):
+    if state_of(record, now) not in ("waiting", "unknown", "written"):
         return False
-    wait = _wait_until(record)
-    return wait is None or wait <= now
+    moment = _next_check(record, now)
+    return moment is None or moment <= now
 
 
 def _takeable(record: dict) -> Dict[str, int]:
@@ -341,7 +411,7 @@ def _takeable(record: dict) -> Dict[str, int]:
     ONLY WHAT THE CHECK DID NOT FIND. A copy the check found is live at TCGplayer, and putting
     it back on the list would send it twice.
     """
-    if record.get("taken_back_at") or not _checked_past_wait(record):
+    if record.get("taken_back_at") or not _take_back_ready(record):
         return {}
     out: Dict[str, int] = {}
     for row in (record.get("check") or {}).get("missing") or []:
@@ -358,7 +428,8 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
     accepted = pushed.get("accepted")
     wait = _wait_until(record)
     offer = _takeable(record)
-    waiting_to_take = state in ("unknown", "written") and not _checked_past_wait(record)
+    waiting_to_take = state in ("unknown", "written") and not _take_back_ready(record)
+    take_after = _take_back_after(record)
     return {
         "stamp": stamp,
         "kind": record.get("kind"),
@@ -380,7 +451,10 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "unknown": record.get("unknown"),
         "held": stamp in held,
         "takeable": sum(offer.values()),
-        "take_back_after": _iso(wait) if waiting_to_take and wait is not None else None,
+        "take_back_after": _iso(take_after) if waiting_to_take and take_after is not None else None,
+        # CARDS THIS PRESS LEFT ON THE LIST because a mark-down changed their price moments
+        # ago: a listing row would have put the old price back.
+        "waiting_on_price": list((record.get("guard") or {}).get("waiting_on_price") or []),
         "files": record.get("files") or [],
         "taken_back_at": record.get("taken_back_at"),
     }
@@ -584,6 +658,10 @@ def _claim_refusal(console: str, step: str) -> Optional[PipelineRefusal]:
     held = []
     for conflict in conflicts:
         stamp = str(conflict.get("stamp") or "")
+        if stamp.startswith(MARKDOWN_CLAIM):
+            # A PRICE CHANGE HOLDS THESE CARDS (the round-2 review, F2): named by when it was
+            # pressed, and by whether it is running now or waiting for the check.
+            return _markdown_blocks(conflict, step)
         record = _read(sends_dir() / stamp) if _STAMP.match(stamp) else {}
         if record and state_of(record) == "unknown":
             held.append(conflict)
@@ -609,6 +687,31 @@ def _claim_refusal(console: str, step: str) -> Optional[PipelineRefusal]:
         "send_in_progress",
         f"Another send moved {len(said.get('stale') or [])} of these cards while this one was "
         f"deciding. Nothing was {step}; press again to send what is left.",
+    )
+
+
+def _markdown_blocks(conflict: dict, step: str) -> PipelineRefusal:
+    """The listing send's refusal when a mark-down's claim holds some of its cards."""
+    stamp = str(conflict.get("stamp") or "")
+    count = len(conflict.get("skus") or [])
+    started = _parse(conflict.get("started_at"))
+    pressed = clock(started) if started is not None else "earlier"
+    claim = Store().read().send_claims.get(stamp)
+    if claim is not None and claim.live and _claim_running(claim):
+        return PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "send_in_progress",
+            f"The price change pressed at {pressed} is being sent to TCGplayer now, and it holds "
+            f"{count} of these cards. Nothing was {step}.",
+        )
+    wait = _markdown_wait(claim, stamp[len(MARKDOWN_CLAIM):])
+    after = f"after {clock(wait)}" if wait is not None else "after the wait"
+    return PipelineRefusal(
+        HTTPStatus.CONFLICT,
+        "send_held",
+        f"{count} of these cards are in the price change pressed at {pressed}, and TCGplayer "
+        f"has not confirmed it. They stay out of every send until Banchi checks what is live "
+        f"{after}. Nothing was {step}.",
     )
 
 
@@ -650,9 +753,14 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
     live_name, live_path = _fetch_live(step)
     _reconcile(live_path, step)
     live_before = _live_quantities(live_path, step)
+    # THE PRICE WAIT (round 3). A mark-down published inside the lag changed a price the live
+    # export cannot show yet, and a listing row carries a price: sending one of those cards
+    # now would put the old price back. Their copies stay on the list for a later press.
+    waiting = sorted(cmd_reprice.published_recently(kinds=(cmd_reprice.MARKDOWN_RECEIPTS,)))
 
     # 3. THE WRITE, INTO THIS PRESS'S OWN DIRECTORY, BEHIND THE GUARD AND THE CLAIM.
     stamp = _new_stamp()
+    _RUNNING["stamp"] = stamp
     directory = sends_dir() / stamp
     record = {
         "stamp": stamp,
@@ -662,13 +770,41 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
         "run": sorted(d.name for d in directories)[-1],
         "phase": PHASE_DECIDING,
         "holder": _holder(),
+        # THE BASELINE, WRITTEN BEFORE ANY COPY IS COUNTED (the round-2 review, F4). Every SKU
+        # TCGplayer held at the read, and how many; a SKU not named held none. A press that
+        # dies after `emit` counts its copies still leaves the check the figure to measure
+        # from, where the round-2 receipt left it nothing and the check read zero.
+        "live_export": live_name,
+        "live_seen": {sku: n for sku, n in sorted(live_before.items()) if n > 0},
     }
     # WRITTEN BEFORE `emit` RUNS, so a server that dies after emit counted the copies leaves a
     # receipt naming them rather than a claim nobody can see.
     _write(directory, record)
+    try:
+        return _write_and_send(payload, directories, download, record, live_path, live_before, waiting)
+    except Exception as caught:  # noqa: BLE001 — every failure after the receipt ends known
+        _settle(directory, caught)
+        raise
+
+
+def _write_and_send(
+    payload: dict,
+    directories: Sequence[Path],
+    download: bool,
+    record: dict,
+    live_path: Path,
+    live_before: Dict[str, int],
+    waiting: Sequence[str],
+) -> dict:
+    """Steps 3 on, once the receipt exists. Any exception here reaches `_settle`."""
+    step = "written" if download else "sent"
+    stamp = record["stamp"]
+    directory = sends_dir() / stamp
     argv = [str(pipeline_routes.PKMNSCAN), "emit", *[str(d) for d in directories]]
     argv += ["--live-guard", str(live_path), "--send-dir", str(directory)]
     argv += ["--send-claim", stamp, "--claim-holder", str(os.getpid())]
+    for sku in waiting:
+        argv += ["--price-wait", sku]
     if download and payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += pipeline_routes._quantity_flags(payload)
@@ -677,8 +813,9 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
     claim = Store().read().send_claims.get(stamp)
     written = sorted(directory.glob("import*.csv"))
 
-    if claim is None or not written:
-        # NOTHING WAS COUNTED SENT: `emit` refused, or wrote nothing new. The press's own
+    if claim is None:
+        # NOTHING WAS COUNTED SENT: `emit` refused, or wrote nothing new. The claim and the
+        # count are one store write, so no claim means no copy counted. The press's own
         # directory is its scratch and goes with it; no receipt is left for a press that sent
         # nothing.
         shutil.rmtree(directory, ignore_errors=True)
@@ -686,8 +823,15 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
         if refused is not None:
             raise refused
         trimmed = guard.get("trimmed") or []
-        if code == 0 or trimmed or "nothing to write" in console or "nothing new" in console:
+        held_price = guard.get("waiting_on_price") or []
+        if code == 0 or trimmed or held_price or "nothing to write" in console or "nothing new" in console:
             held = f" {len(trimmed)} card{'s' if len(trimmed) != 1 else ''} held back." if trimmed else ""
+            if held_price:
+                held += (
+                    f" {len(held_price)} card{'s' if len(held_price) != 1 else ''} "
+                    f"{'wait' if len(held_price) != 1 else 'waits'} for a price change to show "
+                    f"at TCGplayer, and can go in a few minutes."
+                )
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT,
                 "nothing_to_send",
@@ -700,6 +844,10 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
             "write_refused",
             f"The file was not written, so nothing was {step}. {last}",
         )
+    if not written:
+        # COUNTED, WITH NO FILE. `emit` writes the file before the store write, so this is a
+        # file that went missing after it; `_settle` makes the press unknown and holds it.
+        raise RuntimeError("the copies were counted and no file was found")
 
     kept = [path.name for path in written]
     copies: Dict[str, int] = {}
@@ -714,7 +862,6 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
             "copies": copies,
             "copies_total": sum(copies.values()),
             "names": names,
-            "live_export": live_name,
             "live_before": {sku: live_before.get(sku, 0) for sku in copies},
             "sold_before": _sold_by_sku(copies),
             "guard": guard,
@@ -740,14 +887,57 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
 
     record["phase"] = PHASE_SENDING
     _write(directory, record)
+    return _push_and_publish(directory, record, console)
+
+
+def _settle(directory: Path, caught: BaseException) -> None:
+    """A press raised after its receipt existed: make the receipt say where it stands.
+
+    THE ROUND-2 REVIEW'S F1. A failure after the receipt was written as "deciding" (a step
+    that timed out, any exception before "sending") left it in flight, so it read "sending" for
+    as long as the server lived, the claim stayed, and both buttons stayed off. Now:
+
+      - the press already wrote its outcome (`_fail`, `_unknown`, a refusal that removed its
+        directory): nothing to do, and the caller re-raises what was raised;
+      - it counted nothing (no claim, still deciding): the directory goes, as a refusal's does,
+        and the caller re-raises the original refusal — a step that timed out before the
+        count is its own answer;
+      - otherwise it is UNKNOWN (`_unknown`): the copies stay counted, the claim stays, and
+        the check past the wait resolves it. Never "sending", and never a take-back on a guess.
+    """
+    if not (directory / RECEIPT).is_file():
+        return
+    on_disk = _read(directory)
+    phase = on_disk.get("phase") or PHASE_DONE
+    if phase not in IN_FLIGHT:
+        return
+    stamp = str(on_disk.get("stamp") or directory.name)
     try:
-        return _push_and_publish(directory, record, console)
-    except PipelineRefusal:
-        raise
-    except Exception as caught:  # noqa: BLE001 — anything else mid-press is UNKNOWN
-        # AN ERROR THIS MODULE DID NOT FORESEE, AFTER THE COPIES WERE COUNTED. Whatever it is,
-        # the one thing that must not happen is a take-back on a guess: the upload may exist.
-        _unknown(directory, record, "error", None, None, f"{type(caught).__name__}")
+        claim = Store().read().send_claims.get(stamp)
+        readable = True
+    except Exception:  # noqa: BLE001 — a store that cannot be read is no proof of "nothing"
+        claim, readable = None, False
+    if readable and claim is None and phase == PHASE_DECIDING:
+        shutil.rmtree(directory, ignore_errors=True)
+        return
+    if claim is not None and not on_disk.get("copies"):
+        on_disk["copies"] = dict(claim.skus)
+        on_disk["copies_total"] = sum(int(n) for n in claim.skus.values())
+    if not on_disk.get("files"):
+        on_disk["files"] = [path.name for path in sorted(directory.glob("import*.csv"))]
+    pushed = on_disk.get("pushed") or {}
+    stage = {PHASE_DECIDING: "deciding", PHASE_SENDING: "push"}.get(phase, "publish")
+    cause = caught.code if isinstance(caught, PipelineRefusal) else type(caught).__name__
+    # A PUSH THAT STARTED MAY HAVE OPENED AN UPLOAD, whether or not its id came back.
+    _unknown(
+        directory,
+        on_disk,
+        stage,
+        pushed.get("upload_id"),
+        None,
+        str(cause),
+        staged=phase in (PHASE_SENDING, PHASE_PUBLISHING),
+    )
 
 
 def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
@@ -865,6 +1055,7 @@ def _unknown(
     upload_id: Optional[str],
     rolled_back: Optional[bool],
     cause: str,
+    staged: Optional[bool] = None,
 ) -> NoReturn:
     """Record that TCGplayer did not say what happened, HOLD the copies, and raise it.
 
@@ -875,7 +1066,7 @@ def _unknown(
     now = _now()
     # THE UPLOAD MAY STILL WAIT IN STAGED whenever one was opened and its rollback was not
     # answered — after an unclear publish too, if the publish did not in fact happen.
-    waits = bool(upload_id) and not rolled_back
+    waits = (bool(upload_id) and not rolled_back) if staged is None else bool(staged)
     record["unknown"] = {
         "stage": stage,
         "upload_id": upload_id,
@@ -897,6 +1088,8 @@ def _unknown(
     )
     if stage == "publish" or stage == "error":
         first = "TCGplayer did not say whether these copies went live."
+    elif stage == "deciding":
+        first = "Banchi stopped partway through this send, after it counted the copies."
     else:
         first = "TCGplayer did not finish this send."
     message = (
@@ -930,7 +1123,7 @@ def do_sends() -> dict:
         if state_of(record, now) in ("written", "unknown")
     ]
     pending = [
-        _wait_until(record)
+        _next_check(record, now)
         for _, record in receipts
         if state_of(record, now) in ("waiting", "unknown", "written")
     ]
@@ -974,8 +1167,8 @@ def do_take_back(stamp: str, payload: dict) -> dict:
     record = _read(directory)
     offer = _takeable(record)
     if not offer:
-        if not record.get("taken_back_at") and not _checked_past_wait(record):
-            wait = _wait_until(record)
+        if not record.get("taken_back_at") and not _take_back_ready(record):
+            wait = _take_back_after(record)
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT,
                 "take_back_not_yet",
@@ -1014,6 +1207,42 @@ def _copies_of(stamp: str, record: dict, claims) -> Dict[str, int]:
     return dict(claim.skus) if claim is not None else {}
 
 
+def _baseline(record: dict) -> Dict[str, int]:
+    """SKU -> what TCGplayer held before this send, as the check measures the rise from.
+
+    `live_before` names the copies the file sent. A press that died before writing it still
+    wrote `live_seen` (every SKU live at the read) before any copy was counted, so the check
+    never reads a missing baseline as zero where a real one exists (the round-2 review, F4).
+    A receipt with neither predates both, and reads zero as the round-2 check did.
+    """
+    before = record.get("live_before")
+    if before is None:
+        before = record.get("live_seen")
+    return {str(sku): int(n) for sku, n in (before or {}).items()}
+
+
+def _sold_since(record: dict, sku: str, sold_now: Dict[str, int]) -> int:
+    """Copies of `sku` marked sold since this send, which the live figure no longer shows.
+
+    `sold_before` when the receipt recorded it; otherwise the cards whose sale is dated after
+    the send's own start (`Card.state_at`), which is the same answer for a press that died
+    before it wrote the figure.
+    """
+    recorded = record.get("sold_before")
+    if isinstance(recorded, dict) and sku in recorded:
+        return max(0, sold_now.get(sku, 0) - int(recorded[sku]))
+    started = _parse(record.get("at"))
+    if started is None:
+        return 0
+    inventory = Store().read().inventory
+    return sum(
+        1
+        for card in inventory.positions_for_sku(sku)
+        if card.state == master.SOLD
+        and (_parse(card.state_at) or started) >= started
+    )
+
+
 def do_live_check(payload: dict) -> dict:
     """`POST /pipeline/live-check` — read what is live, settle the store, confirm the sends.
 
@@ -1050,12 +1279,11 @@ def do_live_check(payload: dict) -> dict:
     # THE POOL: per SKU, the rise since the oldest due baseline, plus what sold since then.
     pool: Dict[str, int] = {}
     for stamp, record in due:
-        before = record.get("live_before") or {}
-        sold_before = record.get("sold_before") or {}
+        before = _baseline(record)
         for sku in sent_by[stamp]:
             if sku in pool:
                 continue
-            sold_since = max(0, sold_now.get(sku, 0) - int(sold_before.get(sku, 0)))
+            sold_since = _sold_since(record, sku, sold_now)
             pool[sku] = max(0, live_now.get(sku, 0) - int(before.get(sku, 0)) + sold_since)
 
     checked = []
@@ -1085,6 +1313,10 @@ def do_live_check(payload: dict) -> dict:
         record.setdefault("copies", copies)
         record["copies_total"] = record.get("copies_total") or sum(copies.values())
         record["checked_at"] = _iso(now)
+        if _checked_past_wait(record) and not record.get("first_checked_at"):
+            # THE FIRST CHECK PAST THE WAIT, KEPT: a downloaded file's copies come back only
+            # after a second one, one wait later (`_second_check`).
+            record["first_checked_at"] = _iso(now)
         _write(sends_dir() / stamp, record)
         # A CHECK PAST THE WAIT RESOLVES A HOLD: what is live is now known, and what is not can
         # be taken back. The claim goes whether the copies were found or not.
@@ -1129,6 +1361,13 @@ def do_markdown_send(stamp: str, payload: dict) -> dict:
     receipt with its upload id and holds the SKUs until the live check past the wait compares
     TCGplayer's prices with the file's. There is no "Put the old prices back" (the owner's
     ruling): the way a live price changes again is another mark-down.
+
+    A PRESS THAT STOPS PARTWAY IS NEVER A CLAIM NOTHING RELEASES (the round-2 review, F2). An
+    error after the push began is held as unknown (`_markdown_settle`); one before it releases
+    the claim, since nothing can be waiting at TCGplayer. A press whose SERVER DIED leaves a
+    claim no running press holds, and `_markdown_records` reads that claim as an unknown
+    mark-down, so the check past the wait resolves it by comparing prices. The owner never
+    has to send a price again to free the cards.
     """
     directory = pipeline_routes._open_markdown(stamp)
     if not (directory / cmd_reprice.IMPORT).is_file():
@@ -1145,10 +1384,15 @@ def do_markdown_send(stamp: str, payload: dict) -> dict:
             "nothing was sent.",
         )
     with _press("markdown"):
-        return _markdown_send(stamp, directory)
+        progress: Dict[str, bool] = {}
+        try:
+            return _markdown_send(stamp, directory, progress)
+        except Exception as caught:  # noqa: BLE001 — every failure after the claim ends known
+            _markdown_settle(stamp, directory, progress, caught)
+            raise
 
 
-def _markdown_send(stamp: str, directory: Path) -> dict:
+def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> dict:
     record = pipeline_routes._read_push(directory)
     if record is not None and record.get("published_at"):
         raise PipelineRefusal(
@@ -1156,7 +1400,11 @@ def _markdown_send(stamp: str, directory: Path) -> dict:
             "already_published",
             f"These prices went live at {record['published_at']}. Nothing was sent.",
         )
-    if _markdown_unknown(record):
+    claim = f"{MARKDOWN_CLAIM}{stamp}"
+    earlier = Store().read().send_claims.get(claim)
+    if _markdown_unknown(record) or (earlier is not None and earlier.live):
+        # A LIVE CLAIM OF ITS OWN, WITH NO PRESS RUNNING, is a press that died: its outcome is
+        # the check's to say, exactly as an unclear publish's is.
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "send_held",
@@ -1165,7 +1413,6 @@ def _markdown_send(stamp: str, directory: Path) -> dict:
         )
     if record is not None and (record.get("unknown") or {}).get("resolved"):
         record = None  # A RESOLVED, NOT-LIVE UPLOAD: this press starts a fresh one.
-    claim = f"{MARKDOWN_CLAIM}{stamp}"
     skus = _markdown_skus(directory)
     with Store().write() as writable:
         conflicts = writable.send_claims.overlap(skus, excluding=claim)
@@ -1181,6 +1428,8 @@ def _markdown_send(stamp: str, directory: Path) -> dict:
             f"Another send (started {other.started_at}) holds {len(shared)} of these cards. "
             f"Nothing was sent.",
         )
+    _RUNNING["stamp"] = claim
+    progress["claimed"] = True
     try:
         _, live_path = _fetch_live("sent")
         _reconcile(live_path, "sent")
@@ -1191,6 +1440,8 @@ def _markdown_send(stamp: str, directory: Path) -> dict:
         rows = tcg_import.rows_from_csv(
             (directory / cmd_reprice.IMPORT).read_text(encoding="utf-8")
         )
+        # FROM HERE AN UPLOAD MAY EXIST AT TCGPLAYER, whether or not its id comes back.
+        progress["pushing"] = True
         try:
             upload = tcg_import.push_to_staged(rows, filename=cmd_reprice.IMPORT)
         except tcg_import.PushFailed as failed:
@@ -1203,6 +1454,7 @@ def _markdown_send(stamp: str, directory: Path) -> dict:
             raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, refusal.code, refusal.message) from None
         pipeline_routes._record_push(directory, upload)
         record = pipeline_routes._read_push(directory) or {}
+    progress["pushing"] = True
     upload_id = str(record["upload_id"])
     try:
         answer = tcg_import.move_to_live(upload_id)
@@ -1223,6 +1475,35 @@ def _markdown_send(stamp: str, directory: Path) -> dict:
     pipeline_routes._write_push(directory, record)
     _release(claim, "published")
     return {"published": record, "stamp": stamp}
+
+
+def _markdown_settle(
+    stamp: str, directory: Path, progress: Dict[str, bool], caught: BaseException
+) -> None:
+    """A mark-down press raised after it claimed: release it or hold it, never neither.
+
+    The press's own exits (a clean refusal released, a hold written, a publish recorded) are
+    left alone, and the caller re-raises. Anything else: before the push began, nothing can be
+    waiting at TCGplayer, so the claim is released; after, the outcome is unknown and held.
+    """
+    if not progress.get("claimed"):
+        return
+    claim = f"{MARKDOWN_CLAIM}{stamp}"
+    held = Store().read().send_claims.get(claim)
+    if held is None or not held.live:
+        return
+    record = pipeline_routes._read_push(directory) or {}
+    if record.get("published_at"):
+        _release(claim, "published")
+        return
+    if _markdown_unknown(record):
+        return
+    if not progress.get("pushing"):
+        _release(claim, "failed")
+        return
+    cause = caught.code if isinstance(caught, PipelineRefusal) else type(caught).__name__
+    fresh = {k: v for k, v in record.items() if k != "unknown"}
+    _markdown_hold(directory, fresh, "error", None, str(cause))
 
 
 def _markdown_hold(
@@ -1249,26 +1530,50 @@ def _markdown_hold(
     )
 
 
-def _markdown_records() -> List[Tuple[str, Path, dict]]:
-    out = []
+def _markdown_wait(claim: Optional["sendclaims.SendClaim"], stamp: str) -> Optional[datetime]:
+    """When the check can say what happened to a held mark-down: its receipt's own wait, or —
+    for a press that died with no receipt saying so — its claim's start, plus the transport's
+    timeout, plus the lag (`_wait_until`'s rule for a listing press that died)."""
+    record = pipeline_routes._read_push(pipeline_routes._markdowns_dir() / stamp) or {}
+    written = _parse(record.get("check_after")) if _markdown_unknown(record) else None
+    if written is not None:
+        return written
+    started = _parse(claim.started_at) if claim is not None else None
+    if started is None:
+        return None
+    return started + timedelta(seconds=tcg_export.TIMEOUT_S) + _lag()
+
+
+def _markdown_records() -> List[Tuple[str, Optional[datetime]]]:
+    """Every mark-down whose outcome the check must resolve, with the moment it can.
+
+    TWO KINDS. A receipt that says unknown (an unclear publish, a held error), and a LIVE CLAIM
+    NO RUNNING PRESS HOLDS: a press whose server died at the live read, the push or the
+    publish, which wrote no receipt saying so (the round-2 review, F2).
+    """
+    out: List[Tuple[str, Optional[datetime]]] = []
+    seen = set()
     for stamp in pipeline_routes._stamps():
-        directory = pipeline_routes._markdowns_dir() / stamp
-        record = pipeline_routes._read_push(directory)
+        record = pipeline_routes._read_push(pipeline_routes._markdowns_dir() / stamp)
         if _markdown_unknown(record):
-            out.append((stamp, directory, record))
+            out.append((stamp, _parse((record or {}).get("check_after"))))
+            seen.add(stamp)
+    for claim in Store().read().send_claims.live():
+        if claim.kind != sendclaims.KIND_MARKDOWN or not claim.stamp.startswith(MARKDOWN_CLAIM):
+            continue
+        stamp = claim.stamp[len(MARKDOWN_CLAIM):]
+        if stamp in seen or _claim_running(claim):
+            continue
+        out.append((stamp, _markdown_wait(claim, stamp)))
     return out
 
 
 def _markdown_waits() -> List[Optional[datetime]]:
-    return [_parse(record.get("check_after")) for _, _, record in _markdown_records()]
+    return [wait for _, wait in _markdown_records()]
 
 
 def _markdown_due_list(now: datetime) -> List[str]:
-    return [
-        stamp
-        for stamp, _, record in _markdown_records()
-        if (_parse(record.get("check_after")) or now) <= now
-    ]
+    return [stamp for stamp, wait in _markdown_records() if (wait or now) <= now]
 
 
 def _markdown_due(now: datetime) -> bool:
@@ -1286,21 +1591,33 @@ def _resolve_markdown(stamp: str, live_path: Path, now: datetime) -> None:
     """A held mark-down, past its wait: did TCGplayer's prices become the file's?
 
     ALL MATCH: it went live, and the receipt says so. ANY DIFFERS: it did not, and the receipt
-    is marked resolved so the next press starts a fresh upload. Either way the hold goes.
+    is marked resolved so the next press starts a fresh upload. Either way the hold goes. A
+    press that died before it pushed has no receipt, and gets one only if its prices went live.
     """
+    claim = f"{MARKDOWN_CLAIM}{stamp}"
     directory = pipeline_routes._markdowns_dir() / stamp
     record = pipeline_routes._read_push(directory) or {}
-    wanted = {
-        str(row.get(tcgcsv.SKU_COLUMN) or "").strip(): _price(row.get(tcgcsv.PRICE_COLUMN) or "")
-        for row in tcgcsv.read_export(directory / cmd_reprice.IMPORT).rows
-    }
+    if record.get("published_at"):
+        # IT WENT LIVE AND SAID SO; only the release was lost.
+        _release(claim, "checked")
+        return
+    try:
+        wanted = {
+            str(row.get(tcgcsv.SKU_COLUMN) or "").strip(): _price(row.get(tcgcsv.PRICE_COLUMN) or "")
+            for row in tcgcsv.read_export(directory / cmd_reprice.IMPORT).rows
+        }
+    except (OSError, ValueError, tcgcsv.MalformedCsv):
+        wanted = {}
     live = _live_prices(live_path)
-    matched = all(_price(live.get(sku, "")) == price for sku, price in wanted.items() if sku)
+    matched = bool(wanted) and all(
+        _price(live.get(sku, "")) == price for sku, price in wanted.items() if sku
+    )
     if matched:
         record["published_at"] = _iso(now)
-    unknown = dict(record.get("unknown") or {})
-    unknown["resolved"] = "live" if matched else "not_live"
-    unknown["checked_at"] = _iso(now)
-    record["unknown"] = unknown
-    pipeline_routes._write_push(directory, record)
-    _release(f"{MARKDOWN_CLAIM}{stamp}", "checked")
+    if record or matched:
+        unknown = dict(record.get("unknown") or {})
+        unknown["resolved"] = "live" if matched else "not_live"
+        unknown["checked_at"] = _iso(now)
+        record["unknown"] = unknown
+        pipeline_routes._write_push(directory, record)
+    _release(claim, "checked")
