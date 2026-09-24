@@ -95,6 +95,18 @@ BUILT in the locating lane, server half:
 T7's `check_box_names_and_place_labels` asserts the label, the departed place, the default
 name, the clear, the refusal wording and the backfill.
 
+**The clear's own count excluded the wrong box (round 3, 2026-09-24).** The bullet above said
+the box's own name does not count as taken. But `Inventory.default_box_name` only carried
+that exclusion into the collision loop.
+The STARTING count, `len(self.boxes) + 1`, still counted the box being cleared. `set_name`
+calls `ensure_box` first, so the row is already in the registry when the default is computed.
+A lone box cleared read `Box 2`, never back to `Box 1`. The fix excludes `number`'s own row
+from the count too, not only from the taken-name check. `count` is now how many OTHER boxes
+stand. A lone box cleared now stays `Box 1`. A box that already carries its own default still
+keeps it — that case's first candidate was already free. T7's `check_box_names` case ("Two
+boxes stand, so it stores `Box 3`") is now "One other box stands, so it stores `Box 2`". The
+test change landed in the same commit as the fix.
+
 **Two departed copies at one place may look the same (the owner's ruling, 2026-09-24).** Two
 copies of one card that left from next to each other read the same place, because they left
 the same place. The owner accepted this: no date and no key tell them apart. Nothing on screen

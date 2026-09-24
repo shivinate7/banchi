@@ -2230,13 +2230,23 @@ class Inventory:
     def default_box_name(self, count: Optional[int] = None, number: Optional[int] = None) -> str:
         """`Box <count+1>`, or the next free `Box <n>` above it (D-a-box-is-shown-by-its-name).
 
-        `count` defaults to how many boxes the registry holds now: before a new box is added,
-        so the first box is `Box 1`. Names are unique (D20, `_check_name_free`), so when
-        `Box <count+1>` is taken (a box was deleted, or the owner named one that way) the next
-        free number is used. `number` is a box whose own name does not count as taken: the box
-        being cleared (`set_name`), which may keep the default name it already carries.
+        `count` defaults to how many OTHER boxes the registry holds now. At creation `number`
+        is None and the new box is not in the registry yet, so `count` is every box that
+        exists and the first box is `Box 1`. At a clear, `number` is the box being cleared,
+        which the route ALREADY WROTE INTO THE REGISTRY before this runs (`ensure_box`) — so
+        without excluding it here, its own row inflated `count` by one and pushed the default
+        past its own number (a lone box cleared read `Box 2`, never back to `Box 1`).
+        ORCHESTRATOR CALL, 2026-09-24, on the locating review: `number`'s row does not count
+        as taken anywhere in this computation, not only in the collision loop below — so a
+        lone box stays `Box 1`, and a box that already carries its own default keeps it.
+        Names are unique (D20, `_check_name_free`), so when `Box <count+1>` is taken (a box
+        was deleted, or the owner named one that way) the next free number is used.
         """
-        n = (len(self.boxes) if count is None else int(count)) + 1
+        if count is None:
+            count = len(self.boxes)
+            if number is not None and str(number) in self.boxes:
+                count -= 1
+        n = int(count) + 1
         while self._name_taken(f"Box {n}", number):
             n += 1
         return f"Box {n}"

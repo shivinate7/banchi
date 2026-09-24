@@ -8776,18 +8776,22 @@ def check_box_names(checks: Checks) -> None:
         # --- clearing stores the default name ---------------------------------------------
         # A box is shown by its name only (D-a-box-is-shown-by-its-name), so a clear cannot
         # leave it with none: it stores the default `Box <count+1>`, the orchestrator's call
-        # on the locating review, 2026-09-24.
+        # on the locating review, 2026-09-24 — ANOTHER ORCHESTRATOR CALL, 2026-09-24, AMENDS
+        # THE COUNT: the box being cleared is already in the registry when this runs, and its
+        # own row does not count toward `<count+1>` any more than its own name counts as
+        # taken. One box stands beside it here, so the default is `Box 2`, not `Box 3`.
         cleared = capture_server.do_put_box(1, {"name": None})
         checks.equal(
             cleared["name"],
-            "Box 3",
+            "Box 2",
             "`{name: null}` clears the name — the shape a cleared text field sends, and a "
-            "legitimate edit rather than a refusal. Two boxes stand, so it stores `Box 3`",
+            "legitimate edit rather than a refusal. One OTHER box stands (`mega pulls`), so "
+            "it stores `Box 2`: the box being cleared does not count itself",
         )
         cleared_event = [e for e in Store().history() if e["event"] == "box_renamed"][-1]
         checks.equal(
             [cleared_event["name_from"], cleared_event.get("name_to")],
-            ["ME01 commons, tray 2", "Box 3"],
+            ["ME01 commons, tray 2", "Box 2"],
             "and the clear is logged like any other rename, with both names on the line: "
             "after this write there is no other evidence the box was ever called anything, "
             "so what the line carries is the whole record",
