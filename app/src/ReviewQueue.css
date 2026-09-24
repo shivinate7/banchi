@@ -259,11 +259,11 @@
 /* THE LABEL AND, UNDER IT, WHICH WAY THE BOX RUNS (UX-228): `back`, the neighbour toward the
    back, this card, the neighbour toward the front, `front`. One compact line; a long name is
    cut with an ellipsis here only, because the whole sentence rides the screen-reader text. */
-.review-caption-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.review-caption-body { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .review-caption-order {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   min-width: 0;
   font-size: var(--bn-fs-sm);
   line-height: var(--bn-lh-snug);
