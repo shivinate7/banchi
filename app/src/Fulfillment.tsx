@@ -659,7 +659,12 @@ export function Fulfillment() {
 
   /** The open orders' own demand, one card per SKU still owed — never a preselected copy
    *  (`owedFrom`'s own comment). `stillOwed` takes this session's own sales out before he sees
-   *  them again, the same optimism `found` below already gives search results. */
+   *  them again, the same optimism `found` below already gives search results. Sorted by the
+   *  PLACE of each card's own first copy — box, then section, then card — so the list follows
+   *  the walk rather than `pipeline/walkplan.py:plan`'s own order (count descending, then SKU,
+   *  never a position at all: `Take` carries no address). The solver is untouched; this is a
+   *  client-side sort over its answer, for a screen with no drawer-by-drawer stop concept of
+   *  its own. */
   const owed = useMemo(() => {
     if (plan === null) return []
     const items: Owed[] = []
@@ -667,7 +672,16 @@ export function Fulfillment() {
       const here = stillOwed(item, soldSet)
       if (here !== null) items.push(here)
     }
-    return items
+    return [...items].sort((a, b) => {
+      const pa = a.copies[0]?.place
+      const pb = b.copies[0]?.place
+      if (pa === undefined || pb === undefined) return 0
+      return (
+        pa.box - pb.box ||
+        (pa.section ?? Infinity) - (pb.section ?? Infinity) ||
+        (pa.card ?? Infinity) - (pb.card ?? Infinity)
+      )
+    })
   }, [plan, soldSet])
 
   /** How many copies to pick, across every card still owed — the "Today" figure. */
@@ -1211,8 +1225,14 @@ export function Fulfillment() {
         </div>
       )
     } else if (failure !== null) {
+      /* UX-049: "Type the name again" is a remedy that cannot work — the search FAILED, so
+         retyping asks the same broken thing again. The one step that does something is
+         already on screen (the clear button beside the field), so the sentence says what it
+         does rather than a step of its own. */
       hits = (
-        <p className="fulfillment-say ff-say">The search did not finish. Type the name again.</p>
+        <p className="fulfillment-say ff-say">
+          The search could not run right now. Clear it to look through a box instead.
+        </p>
       )
     } else if (found === null) {
       hits = null

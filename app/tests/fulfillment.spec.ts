@@ -441,36 +441,6 @@ const ORDER_NUMBER = 'A2FFC195-0000F4-006AC'
 const ORDER_SKU = '9191486'
 const ORDER_KEY = `TCGplayer:${ORDER_NUMBER}`
 
-const ORDER_PICK = {
-  box: 3,
-  index: 7,
-  capture_id: 'cap-charizard',
-  source: 'card',
-  run: null,
-  card_name: 'Charizard ex',
-  card_number: '006',
-  condition: 'Near Mint',
-  state: 'identified',
-  held_by: null,
-  place: {
-    label: 'Box 3 · Section 1 · Card 7',
-    located: true,
-    box: 3,
-    index: 7,
-    slot: 7,
-    section: 1,
-    card: 7,
-    box_name: null,
-    section_start: 1,
-    section_end: 25,
-    box_total: 25,
-    box_closed: true,
-    fraction: 0.28,
-    neighbors: null,
-    section_gaps: 0,
-  },
-}
-
 const ORDER_LINE = {
   sku: ORDER_SKU,
   quantity: 1,
@@ -527,7 +497,12 @@ const ONE_OPEN_ORDER = {
             retired: 0,
             pooled: 0,
             line: ORDER_LINE,
-            picks: [ORDER_PICK],
+            // THE REAL SHAPE SINCE 2026-09-16: `GET /orders` answers no picks at all, on
+            // ANY server — `do_orders`'s own docstring, `OrdersPayload`'s own comment. A
+            // fixture that sent `[ORDER_PICK]` here was exercising a read this screen no
+            // longer makes, which is why the old walk-based tests passed against a bug the
+            // real server has had for a week: they proved the mock, not the app.
+            picks: [],
           },
         ],
       },
@@ -614,10 +589,8 @@ const EMPTY_PLAN = {
   counts: { stops: 0, boxes: 0, copies: 0, sections_considered: 0, sections_candidate: 0, exact: true, solve_ms: 0 },
 }
 
-/** The real pick `ONE_OPEN_ORDER` resolves to, field for field the place `ORDER_PICK.place`
- *  above already carries — same card, same address, because the two fixtures describe the
- *  same physical copy through the two different wires (`GET /orders`, `POST
- *  /orders/walk-plan`) the real routes actually split it across. */
+/** The real place `ONE_OPEN_ORDER`'s SKU resolves to — the box and index the store holds it
+ *  at, the only fixture that carries it now that `GET /orders`'s own `picks` are `[]`. */
 const ORDER_COPY_PLACE = {
   label: 'Box 3 · Section 1 · Card 7',
   located: true,
@@ -706,6 +679,118 @@ const ORDER_WITH_ELSEWHERE_PLAN = {
       for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
     },
   ],
+}
+
+/** THE OWNER'S OWN CASE, VERBATIM (2026-09-23 ruling): "if an order has 2 of card X but I
+ *  have 14 in inventory, I shouldn't just see 2 cards that are preselected — I should be told
+ *  I need to pick 2, and here's where all the copies are." One SKU, wanted 2, THREE copies on
+ *  hand in three different places — the fixture the ruling itself describes, at a size a test
+ *  can hold. */
+const MULTI_ORDER_NUMBER = 'M-PICK-2'
+const MULTI_ORDER_KEY = `TCGplayer:${MULTI_ORDER_NUMBER}`
+const MULTI_SKU = '9199001'
+
+function multiCopy(key: string, box: number, section: number, card: number, sectionEnd: number): {
+  key: string
+  state: string
+  has_photo: boolean
+  capture_id: string
+  cid: null
+  place: Record<string, unknown>
+  here: boolean
+} {
+  return {
+    key,
+    state: 'identified',
+    has_photo: true,
+    capture_id: `cap-${key.replace('/', '-')}`,
+    cid: null,
+    place: {
+      label: `Box ${box} · Section ${section} · Card ${card}`,
+      located: true,
+      box,
+      index: card,
+      slot: card,
+      section,
+      card,
+      box_name: null,
+      section_start: 1,
+      section_end: sectionEnd,
+      box_total: sectionEnd,
+      box_closed: true,
+      fraction: 0.4,
+      neighbors: null,
+      section_gaps: 0,
+    },
+    here: box === 1,
+  }
+}
+
+const MULTI_COPIES = [
+  multiCopy('1/5', 1, 1, 5, 20),
+  multiCopy('2/9', 2, 1, 9, 15),
+  multiCopy('4/2', 4, 2, 2, 10),
+]
+
+const MULTI_ORDER = {
+  summary: '1 order',
+  orders: [
+    {
+      key: MULTI_ORDER_KEY,
+      source: 'TCGplayer',
+      number: MULTI_ORDER_NUMBER,
+      buyer: 'Priya Nair',
+      placed_at: '2026-09-20T10:00:00+00:00',
+      status: 'Ready to ship',
+      first_seen: '2026-09-21T09:00:00+00:00',
+      changed_at: null,
+      wanted: 2,
+      recorded: 0,
+      open: true,
+      lines: [{ ...ORDER_LINE, sku: MULTI_SKU, quantity: 2, name: 'Promising Future' }],
+      progress: [
+        { sku: MULTI_SKU, wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], at: null },
+      ],
+    },
+  ],
+  resolution: { orders: [], counts: { resolved: 0, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 } },
+}
+
+const MULTI_PLAN = {
+  cost: 'sections',
+  stops: [
+    {
+      key: 'box/1/section/1',
+      box: 1,
+      box_name: null,
+      section: 1,
+      section_name: null,
+      pooled: false,
+      game: null,
+      game_display: null,
+      order: 1,
+      span: { start: 1, end: 20 },
+      box_total: 20,
+      takes: [
+        {
+          sku: MULTI_SKU,
+          name: 'Promising Future',
+          number_display: '115/298',
+          set: 'Riftbound',
+          rarity: null,
+          condition: 'Near Mint',
+          wanted: 2,
+          for: [{ key: MULTI_ORDER_KEY, number: MULTI_ORDER_NUMBER, buyer: 'Priya Nair' }],
+          copies: MULTI_COPIES,
+          listed: { pushed: 0, staged: 0, live: 0 },
+          sold_here: 0,
+          live_as_of: null,
+        },
+      ],
+    },
+  ],
+  shortfall: [],
+  counts: { stops: 1, boxes: 1, copies: 2, sections_considered: 1, sections_candidate: 1, exact: true, solve_ms: 1 },
 }
 
 async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<Store> {
@@ -1685,6 +1770,32 @@ test('a card an open order owes is drawn as "Pick N" with every copy the store h
   await battery(page, 'sold through an order')
 })
 
+/* THE OWNER'S OWN CASE. `MULTI_PLAN`'s own comment has the ruling verbatim: two wanted,
+ * three on hand, three different boxes -- and the screen must say "Pick 2" and offer every
+ * one of the three, never two preselected copies standing in for the SKU. */
+test('a SKU owed 2 with 3 copies on hand shows "Pick 2" and every copy, none preselected', async ({
+  page,
+}) => {
+  await openList(page, [], { orders: MULTI_ORDER, plan: MULTI_PLAN })
+
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Promising Future' })
+  await expect(card.locator('.ff-owed-pick')).toContainText('Pick 2')
+
+  // ALL THREE, not two -- the wanted count never caps the copies list (D212, D93).
+  await expect(card.locator('.card-locations-copy')).toHaveCount(3)
+  await expect(card.locator('.card-locations-place-large')).toHaveText([
+    'Box 1 · Section 1 · Card 5',
+    'Box 2 · Section 1 · Card 9',
+    'Box 4 · Section 2 · Card 2',
+  ])
+
+  // NONE PRESELECTED: every one of the three offers the same first-step control, none of
+  // them already "Pulled." or otherwise singled out.
+  await expect(card.getByRole('button', { name: 'Pull' })).toHaveCount(3)
+  await expect(card.locator('.card-locations-copy', { hasText: 'Pulled.' })).toHaveCount(0)
+  await battery(page, 'owed SKU with 3 copies')
+})
+
 /* A card the same order also claims, reached by browsing a box instead of through "Cards to
  * pick" -- the walk-in case (`claim`, `Fulfillment.tsx`): a copy an order is waiting for is
  * sold through the order however he reaches it. This is also where "No name" is asserted now:
@@ -1734,6 +1845,30 @@ test('the search hint names a real card from this store, not a fixed example', a
     'placeholder',
     'For example, Iono',
   )
+})
+
+/* UX-101: this screen has no shell (D5), so the owner's own `?` sheet (`App.tsx`) cannot open
+ * here at all -- and the dead `/` row that once claimed otherwise for this screen is deleted
+ * from `App.tsx`'s own `SHORTCUTS` table. This is the screen's own small answer to `?`,
+ * proved end to end: it opens, it names what this screen actually takes, and it closes. */
+test('"?" opens this screen\'s own keyboard reference, and closes it again', async ({ page }) => {
+  await openList(page)
+  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+
+  await page.keyboard.press('?')
+  const sheet = view(page).locator('.ff-keys')
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toContainText('Esc')
+  await expect(sheet).toContainText('Close the enlarged photograph')
+
+  await page.keyboard.press('Escape')
+  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+
+  // And the close button works the same way.
+  await page.keyboard.press('?')
+  await expect(view(page).locator('.ff-keys')).toBeVisible()
+  await view(page).getByRole('button', { name: 'Close' }).click()
+  await expect(view(page).locator('.ff-keys')).toHaveCount(0)
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
@@ -2733,14 +2868,21 @@ test('the screen with no card of that name is his too', async ({ page }) => {
   await expectWalk(page, WALK)
 })
 
-test('a search that does not answer says what happened and what to do, in his words', async ({
+/* UX-049: the old sentence, "Type the name again," was a remedy that cannot work — the
+ * search FAILED, and retyping asks the same broken thing again. It also read the same for a
+ * real failure and for a genuine no-match ("zzzz"), which `found.total === 0`'s own branch
+ * already answers correctly and is untouched here. The fix says the search itself could not
+ * run and points at the one control on screen that helps: clearing it. */
+test('a search that cannot run says so and offers a step that helps, in his words', async ({
   page,
 }) => {
   const mood: Mood = { searchFail: true }
   await openList(page, [], mood)
   await searchBox(page).fill('Eiscue')
 
-  await expect(view(page)).toContainText('The search did not finish. Type the name again.')
+  await expect(view(page)).toContainText(
+    'The search could not run right now. Clear it to look through a box instead.',
+  )
   /* None of the server's own words. `useSearch` hands this screen a `Failure` carrying the
    * server's sentence and its code, and `server.ts:describeFailure` says in its own comment
    * that this view does not use it — those strings name a file and a state, and every one of

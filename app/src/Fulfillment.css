@@ -647,16 +647,15 @@
 .ff-card-about { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 /* D218: condition and number are sibling spans; the seam is CSS. */
 .ff-card-about > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
-/* Where he is in the walk, and which order this card is for. */
+/* Which order this card is for — the walk-position sibling this once seamed against
+   (`.ff-card-step`) is gone with the redesign (D212/D93: no preselected copy, no linear walk
+   count), so there is one child here now and no seam to draw. */
 .ff-card-eyebrow {
   color: var(--bn-ink-2);
   line-height: 1.35;
   margin-bottom: var(--bn-1);
 }
-.ff-card-step { font-weight: 700; color: var(--bn-ink); font-variant-numeric: tabular-nums; }
 .ff-card-order b { color: var(--bn-ink); }
-/* D218: the walk position and the order are sibling spans; the seam is CSS. */
-.ff-card-order::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 
 .ff-photo-wrap { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
 .ff-photo-btn {
