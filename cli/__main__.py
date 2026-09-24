@@ -27,6 +27,7 @@ from cli import (  # noqa: E402
     cmd_reprice,
     cmd_rescue,
     cmd_scan,
+    cmd_skus,
     runs,
 )
 from identify import images  # noqa: E402
@@ -535,6 +536,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     readings_sub.add_parser("show", help="what the table holds, and which files it last read")
 
+    # ----------------------------------------------------------------------------- skus
+    #
+    # THE STORE-OWNED SKU TABLE (docs/specs/identity-follows-sku.md §3.2, lane 0 — owner's
+    # ruling, 2026-09-24: "yes I'd been saying we build this"). `adopt` is the one-time
+    # backfill over every export already cached on disk; a fetch route folds one export in
+    # as it arrives, in a later lane. Previews by default, `readings adopt`'s own shape —
+    # though UNLIKE `readings adopt` this is a FOLD onto whatever the table already holds,
+    # never a full replace: `store/skus.py`'s whole argument is that this table never
+    # deletes a row.
+    skus = sub.add_parser(
+        "skus",
+        help="the store-owned TCGplayer SKU table: fold every export already on disk in",
+    )
+    skus_sub = skus.add_subparsers(dest="skus_command")
+    skus_adopt = skus_sub.add_parser(
+        "adopt",
+        help="walk every cached export (.exports/<game>/*.csv, .live/*.csv) and fold what "
+        "it says into the table",
+    )
+    skus_adopt.add_argument(
+        "--write", action="store_true", help="actually write; previews without it"
+    )
+
     # ------------------------------------------------------------------------- archive
     #
     # THE PRICE-HISTORY ARCHIVE (D219, `docs/specs/revenue-plan.md` §4).
@@ -665,6 +689,7 @@ COMMANDS = {
     "reconcile": cmd_reconcile.run,
     "prices": cmd_prices.run,
     "readings": cmd_readings.run,
+    "skus": cmd_skus.run,
     "archive": cmd_pricearchive.run,
     "queue": cmd_queue.run,
     "reprice": cmd_reprice.run,

@@ -821,6 +821,34 @@ CHECKS = (
         "governed_by": ("D189", "D18", "D86", "D88"),
     },
     {
+        "target": "skus-selftest",
+        "runs": "python3 scripts/skus-selftest.py",
+        "asserts": "the store-owned SKU table (store/skus.py) and the walk that fills it "
+                   "(pipeline/skus.py), docs/specs/identity-follows-sku.md §3.2 lane 0. "
+                   "split_condition over every recognized grade plus the sealed exception; "
+                   "an empty store; one export with a repeated SKU line folding to one row "
+                   "(rows equal distinct ids); a second adopt over an unchanged file "
+                   "(no-op); an older file arriving after a newer one already won (STALE, "
+                   "never overwrites); a newer file disagreeing with the table (CHANGED, "
+                   "exactly one sku_facts_changed event, durably recorded in the store's "
+                   "history); a source file vanishing from disk (the row it carried "
+                   "survives — no delete path, proved behaviourally and by inspecting "
+                   "Skus's own write surface); a live export folding in the same way a "
+                   "fetched export does; an unstamped filename skipped rather than "
+                   "guessed at; the sku_products/sku_printings views; a genuine "
+                   "schema-10-shaped file (table dropped, column dropped, re-stamped) "
+                   "opening to 11 with every other table's row count unchanged; and a "
+                   "timed fill of the real fixtures/riftbound_export_untouched.csv.",
+        "needs": ("python3",),
+        "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
+                  "repointed for the whole run, so the operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
+                               "readings-selftest and pricearchive-selftest.",
+        "gates": True,
+        "governed_by": ("D88", "D166", "D189", "D219"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "

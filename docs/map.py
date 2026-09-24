@@ -457,6 +457,18 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
+            # THE BACKFILL PRESS OVER EVERY EXPORT ALREADY ON DISK (identity-follows-sku.md
+            # §3.2, lane 0). `store/skus.py`'s never-delete argument means this is a FOLD
+            # onto whatever the table already holds, never `readings adopt`'s full replace.
+            "cmd_skus.py": {"does": "`pkmnscan skus adopt` runs `pipeline/skus.py:fill` "
+                                    "against an in-memory copy of the table for a preview, "
+                                    "or against the real, lock-held snapshot on `--write` — "
+                                    "the SAME walk either way, never run twice per "
+                                    "invocation. The spec names one subcommand; `skus show`, "
+                                    "the sibling every other table-backed command here "
+                                    "carries, is deliberately not built unasked.",
+                            "governed_by": ["D88", "D189"],
+                            "tested_by": []},
             "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|contradictions|"
                                      "sku-names|photos|variants>` — the card's stable name "
                                      "(D172). `name` "
@@ -1188,6 +1200,32 @@ COMPONENTS = [
                                     "directly, so `tested_by` is empty rather than a "
                                     "citation nothing backs — `check_readings_adopt_cli` in "
                                     "T7 exercises it only through the CLI dispatch."},
+            # THE WALK THAT FILLS `skus` (identity-follows-sku.md §3.2, lane 0). Every
+            # cached export, oldest stamp first, folded through `store/skus.py:Skus.fold`.
+            "skus.py": {"does": "`stamp_of` reads the UNIX second out of a fetched or live "
+                                "export's own filename (never its mtime — D166's own rule "
+                                "applied here). `_ordered_files` walks `.exports/<game>/"
+                                "*.csv` for every game and `.live/*.csv`, sorted ascending "
+                                "by that stamp, because the ORDER decides whether a "
+                                "`sku_facts_changed` event correctly says 'an older reading "
+                                "disagreed with a newer one' rather than silently landing "
+                                "on the right final row for the wrong reason. `row_from_csv` "
+                                "turns one export row into `(sku, SkuRow)`, splitting "
+                                "`Condition` through `store/skus.py:split_condition`. "
+                                "`apply_rows` folds one already-read export's rows in, "
+                                "appending one event per CHANGED fold — pulled out, "
+                                "`pipeline/readings.py:reading_from_export`'s own shape, so "
+                                "a later lane's fetch route can call it on the one file it "
+                                "already has in hand rather than re-walking the whole disk. "
+                                "`fill` is the whole-disk walk `pkmnscan skus adopt` runs. "
+                                "Never raises: an unstamped file or one that will not parse "
+                                "costs its own row in `Report.files_skipped`.",
+                        "governed_by": ["D63", "D166", "D189"],
+                        "note": "PROVED BY `make skus-selftest`, against real fixture data "
+                                "(`fixtures/riftbound_export_untouched.csv`, timed) and "
+                                "synthetic ones — a second adopt no-op, an older file "
+                                "refused, a changed fact logged, a source file vanishing "
+                                "from disk changing nothing, an unstamped file skipped."},
             # THE SWEEP `pkmnscan archive sweep` RUNS (D219,
             # D224, D223, D222).
             # Reads `pipeline/pricehistory.py`'s live endpoint for every SKU
@@ -1838,6 +1876,34 @@ COMPONENTS = [
                                         "and IN `make check` as of D247's sixteenth entry "
                                         "(owner's word, 2026-09-23) — no network, over a "
                                         "throwaway store."},
+            # THE STORE-OWNED SKU TABLE (identity-follows-sku.md §3.2, lane 0 — owner's
+            # ruling, 2026-09-24: "yes I'd been saying we build this"). `price_history`'s
+            # shape and not `readings`'s: never a full replace, never a delete.
+            "skus.py": {"does": "`skus` — one row per TCGplayer Id this repo has ever read "
+                                "out of a cached export: the six fact cells verbatim "
+                                "(`product_line`, `set_name`, `product_name`, `number`, "
+                                "`rarity`, `condition`), `grade`/`printing` split off "
+                                "`condition` at write time by `split_condition` (five "
+                                "recognized grades, measured across every committed "
+                                "fixture export; `Unopened` and anything else stays "
+                                "unsplit), `first_seen`/`last_seen`/`source` off the file's "
+                                "own name, and the whole CSV row in `raw`. `Skus.fold()` is "
+                                "the ONLY write path: `INSERTED` for a new SKU, `STALE` for "
+                                "an incoming row older than what is stored (a no-op even "
+                                "where the facts differ), `UNCHANGED` for an incoming row "
+                                "whose six facts agree (`last_seen`/`source`/`raw` still "
+                                "move forward), `CHANGED` for a newer row with different "
+                                "facts (`first_seen` resets to this file, the old row is "
+                                "handed back for the caller to log beside it). NEVER "
+                                "DELETES — the class exposes exactly one write method.",
+                       "governed_by": ["D88", "D137", "D166", "D189", "D219"],
+                       "note": "PROVED BY `make skus-selftest`: rows equal distinct ids, a "
+                               "second adopt no-op, an older file refused, a changed fact "
+                               "logged and kept, no delete path (behaviourally and by "
+                               "inspecting the class's own write surface), a version-10 "
+                               "store upgrading to 11 with every other table's rows intact. "
+                               "No harness test exercises it, so `tested_by` is empty "
+                               "rather than a citation nothing backs."},
             # THE PRICE-POSTINGS LEDGER (D243). Unlike `pricearchive.py`
             # and `readings.py`, this one is NEVER an upsert — see the module docstring for
             # why a posted price has no live source to be re-read from, so a second posting
@@ -2676,6 +2742,25 @@ COMPONENTS = [
                         "(its SKU drops out — a cache refresh, never an accumulating "
                         "ledger). Thirty-one assertions, all passing.",
                 "governed_by": ["D189", "D18", "D86", "D88"],
+            },
+            "skus-selftest.py": {
+                "does": "proves store/skus.py and pipeline/skus.py against a throwaway "
+                        "store (identity-follows-sku.md §3.2, lane 0). split_condition "
+                        "over every recognized grade plus Unopened; rows equal distinct "
+                        "ids (a repeated SKU line folds to one row); a second adopt is a "
+                        "no-op; an older file never overwrites a newer one's facts "
+                        "(STALE); a newer file's changed facts write the row and log "
+                        "exactly one sku_facts_changed event, durably in the store's "
+                        "history; a source file vanishing from disk changes the table "
+                        "not at all — no delete path, proved behaviourally and by "
+                        "inspecting Skus's own write surface (fold() alone); a live "
+                        "export folds like a fetched one; an unstamped filename is "
+                        "skipped rather than guessed at; the sku_products/sku_printings "
+                        "views; a genuine schema-10-shaped file (table dropped, column "
+                        "dropped, re-stamped) opens to 11 with every other table's row "
+                        "count unchanged; a timed fill of the real "
+                        "fixtures/riftbound_export_untouched.csv.",
+                "governed_by": ["D88", "D166", "D189", "D219"],
             },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "

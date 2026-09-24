@@ -132,6 +132,11 @@ help:
 	@echo "  make readings-selftest  the cached market-reading table, proved against an"
 	@echo "                    independent reimplementation of its own two-source walk."
 	@echo "                    In \`check\`, never in the hook."
+	@echo "  make skus-selftest  the store-owned SKU table (identity-follows-sku.md lane 0):"
+	@echo "                    rows equal distinct ids, an older file never overwrites a"
+	@echo "                    newer one, a changed fact writes one event and keeps the row,"
+	@echo "                    no delete path, a version-10 store upgrades to 11 with every"
+	@echo "                    other table's rows intact. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -213,6 +218,7 @@ help:
 	@echo "                    identity-checks-selftest + price-postings-selftest +"
 	@echo "                    product-history-selftest +"
 	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
+	@echo "                    skus-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -582,6 +588,7 @@ check:
 	@$(MAKE) --no-print-directory product-history-selftest
 	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
+	@$(MAKE) --no-print-directory skus-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -639,6 +646,7 @@ ci-check:
 	@$(MAKE) --no-print-directory product-history-selftest
 	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
+	@$(MAKE) --no-print-directory skus-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -1235,7 +1243,19 @@ cid-audit:
 readings-selftest:
 	@$(PYTHON) scripts/readings-selftest.py
 
-.PHONY: submission-selftest readings-selftest
+# THE STORE-OWNED SKU TABLE, PROVED AGAINST A THROWAWAY STORE (identity-follows-sku.md §3.2,
+# lane 0). Rows equal distinct ids, a second adopt over unchanged files changes nothing, an
+# older file never overwrites a newer one's facts, a changed fact writes one
+# `sku_facts_changed` event and keeps the row, `store/skus.py` has no delete path anywhere,
+# and a version-10 store upgrades to 11 with every other table's rows intact.
+#
+# IN `check`, NEVER IN THE GIT HOOK: it writes a temp store under `mktemp -d` (D18). Answers
+# from the tree alone (its one real-fixture read is `fixtures/riftbound_export_untouched.csv`,
+# committed), so it is in `ci-check` too.
+skus-selftest:
+	@$(PYTHON) scripts/skus-selftest.py
+
+.PHONY: submission-selftest readings-selftest skus-selftest
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null

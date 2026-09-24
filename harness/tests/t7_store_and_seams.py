@@ -14899,11 +14899,18 @@ def check_cli_refusals(checks: Checks) -> None:
     # show` only reads. Unlike `readings adopt`, `sweep --write` is never a full replace —
     # a bucket a pass does not mention survives, because the source's own 357-day window
     # means it may be the only copy of that observation left anywhere.
+    #
+    # `skus` IS THE THIRTEENTH, AND IT ARRIVED WITH LANE 0 OF
+    # `docs/specs/identity-follows-sku.md` (owner's ruling, 2026-09-24: "yes I'd been saying
+    # we build this"). `skus adopt` writes the store-owned SKU table on `--write` and
+    # nowhere else. Unlike every other writer here, it never fully replaces and never
+    # deletes — `store/skus.py`'s own argument, `price_history`'s shape and not
+    # `readings`'s — so a SKU an export no longer lists keeps its row.
     checks.equal(
         sorted(entry.COMMANDS),
         ["archive", "cards", "emit", "identify", "join", "prices", "queue", "readings",
-         "reconcile", "reprice", "rescue", "scan"],
-        "twelve commands are registered, and only twelve",
+         "reconcile", "reprice", "rescue", "scan", "skus"],
+        "thirteen commands are registered, and only thirteen",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
