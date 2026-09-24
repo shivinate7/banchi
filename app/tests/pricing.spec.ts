@@ -1357,6 +1357,26 @@ test('an unconfirmed send the check found whole still names the upload that may 
   await expect(card).toContainText('may still wait in TCGplayer’s Staged list')
 })
 
+test('a send that stopped partway is held, says so, and leaves every press on', async ({ page }) => {
+  /* THE ROUND-2 REVIEW, F1: a failure after the receipt used to leave it "sending", with both
+     buttons off for as long as the server lived. Now it is unknown, and nothing is stuck. */
+  const stopped = sendSummary({
+    state: 'unknown',
+    published_at: null,
+    held: true,
+    accepted: null,
+    take_back_after: '2026-09-24T12:17:00+00:00',
+    check_after: '2026-09-24T12:17:00+00:00',
+    unknown: { stage: 'deciding', upload_id: null, staged: false, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [stopped] }) })
+  const held = page.locator('.send-unknown')
+  await expect(held).toContainText('Banchi stopped partway through this send.')
+  await expect(held).toContainText('stay out of every send')
+  await expect(sendPress(page)).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Check what is live' })).toBeEnabled()
+})
+
 test('a press over cards a price change holds is refused by name, with no retry', async ({ page }) => {
   await open(page, { send: () => ({ status: 409, code: 'price_change_held' }) })
   await sendPress(page).click()

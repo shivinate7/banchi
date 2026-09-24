@@ -147,7 +147,13 @@ function SendStanding({
     case 'unknown':
       return (
         <Notice tone="warn" compact className="send-standing send-unknown" title={`TCGplayer has not confirmed ${copies}.`}>
-          {send.unknown?.staged ? STAGED_WARNING : 'They may be live.'}{' '}
+          {/* A PRESS THAT STOPPED BEFORE IT SENT (the round-2 review, F1) is still held until the
+              check, and says so plainly rather than "they may be live". */}
+          {send.unknown?.staged
+            ? STAGED_WARNING
+            : send.unknown?.stage === 'deciding'
+              ? 'Banchi stopped partway through this send.'
+              : 'They may be live.'}{' '}
           {send.held
             ? `Until Banchi checks, after ${clockTime(send.check_after)}, they stay out of every send.`
             : `Banchi checks after ${clockTime(send.check_after)}.`}{' '}
