@@ -792,6 +792,55 @@ test('in production, a third scrimmed layer opens (clamped) and logs once, never
   await page.evaluate(() => (window as unknown as { __overlaySetDevModeForTest: (v: boolean | null) => void }).__overlaySetDevModeForTest(null))
 })
 
+/** The rendered width of the single space between two known words inside an element's own text
+ *  node, isolated with a `Range` rather than read off the whole element — the only way to
+ *  measure one character's own advance rather than the string's total width. Returns -1 if the
+ *  two words are not adjacent, single-spaced text inside the element. */
+async function wordSpaceWidth(el: Locator, before: string, after: string): Promise<number> {
+  return el.evaluate(
+    (node, [b, a]) => {
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+      for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
+        const content = text.textContent ?? ''
+        const at = content.indexOf(`${b} ${a}`)
+        if (at < 0) continue
+        const range = document.createRange()
+        range.setStart(text, at + b.length)
+        range.setEnd(text, at + b.length + 1)
+        return range.getBoundingClientRect().width
+      }
+      return -1
+    },
+    [before, after] as [string, string],
+  )
+}
+
+/* `.bn-overlay-title` IS AN `h2` (kit/overlay.tsx) with no class of its own governing type, so
+ * it falls to base.css's bare `h1, h2, h3, h4` rule: Manrope, `letter-spacing:
+ * var(--bn-tracking-tight)`, -0.02em, -0.32px at this title's own 16px (`--bn-fs-h3`).
+ * `letter-spacing` is added after EVERY character INCLUDING THE SPACE GLYPH, and Manrope's own
+ * space advance at 16px is narrow enough that this shaves it to under 3px — a two-word title
+ * reads as one word: "Go to" measured at 2.9px wide, visually "Goto". The defect is
+ * viewport-independent (letter-spacing is a font-metric effect, not a layout one), but this
+ * checks both widths this suite otherwise verifies, in case a future rule makes it size-aware.
+ * OBSERVED RED BEFORE IT WAS KEPT. Mutation: `.bak` `kit.css` and drop `.bn-overlay-title`'s
+ * `word-spacing` rule (below). The measured space falls back under 3px at both widths and the
+ * assertion below fails. */
+for (const width of [1440, 390]) {
+  test(`an overlay title's word space stays visible at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const opener = page.locator('[data-kit-open="modal"]')
+    await opener.scrollIntoViewIfNeeded()
+    await opener.click()
+    const dialog = page.locator('[data-bn-overlay="modal"]').filter({ hasText: 'One decision' })
+    await expect(dialog).toBeVisible()
+    const space = await wordSpaceWidth(dialog.locator('.bn-overlay-title'), 'One', 'decision')
+    expect(space, "the rendered width of the space in the overlay title's two words").toBeGreaterThanOrEqual(3.5)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+  })
+}
+
 test('a popover closes on Escape, and on Tab past its last item, and gives focus back to its trigger', async ({ page }) => {
   const opener = page.locator('[data-kit-open="popover"]')
   await opener.scrollIntoViewIfNeeded()

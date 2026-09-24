@@ -1209,6 +1209,13 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   min-width: 0;
   font-size: var(--bn-fs-h3);
   line-height: var(--bn-lh-snug);
+  /* base.css's bare `h1, h2, h3, h4` rule gives every heading -0.02em tracking, added after
+     EVERY character including the space glyph itself. At this title's own 16px that is
+     -0.32px, and Manrope's own space advance here is narrow enough that a two-word title
+     read as one ("Go to" measured 2.9px wide — visually "Goto"). `word-spacing` widens only
+     the space glyph, so the letters keep the product's own tight tracking and only the gap
+     between words opens back up. Measured >=3.5px at 1440 and 390 (gallery.spec.ts). */
+  word-spacing: 0.1em;
 }
 .bn-overlay-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--bn-5); }
 .bn-overlay-foot {
