@@ -186,7 +186,8 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   Backgrounds itself. Read `.serve/design-check.json` ONCE when the run
                     #   lands. It says `"running"` until it finishes, so a stale `running`
                     #   after exit means the run died. No file at all means it never reached
-                    #   Playwright. Never poll it. Never pipe it through `tail` (both
+                    #   Playwright. A run with zero tests says `"empty"`, never `"pass"`, and
+                    #   a `--list` run writes nothing. Never poll it. Never pipe it through `tail` (both
                     #   documented traps in `docs/debts/`). Guarded twice: `make docs-audit`'s
                     #   `verdict file` row, and `make verdict-selftest` (D129, floor 1.58.0).
                     #   No browser, no dev server: in `check` and `ci-check`, no lock.
