@@ -13,7 +13,11 @@ import { sealEveryTest } from './shell'
  *     (D-a-card-is-counted-in-its-section).
  *   - A departed card keeps the place it left, drawn with a mark, never a word; it speaks in the
  *     past tense.
- *   - Review's place pill opens the card, and a screen reader hears it as a sentence.
+ *   - Review's place pill opens the card, and a screen reader hears it as a sentence. It shows
+ *     which end is the back and the card's neighbours (UX-228).
+ *   - The neighbour sentence says back and front ("It sits in front of X and behind Y."), and an
+ *     unread neighbour counts, said in words (UX-186, LOC-28).
+ *   - A place link pressed while Inventory is open walks to that card (a hash change, no mount).
  *
  * THE FIXTURE IS THE SERVER'S OWN ARITHMETIC, written out. One box of twelve slots, dividers at
  * indices 1, 5 and 9 (three sections), and index 6 sold. So index 7 is the second card of section
@@ -54,7 +58,7 @@ function placeOf(index: number, boxName: string) {
   const at = gone ? OCCUPIED.filter((i) => i < index).length + 1 : (slot as number)
   const card = at - sectionStart + 1
   const neighbor = (i: number | undefined) =>
-    i === undefined ? null : { index: i, slot: OCCUPIED.indexOf(i) + 1, name: NAMES[i] ?? null, skipped: 0 }
+    i === undefined ? null : { index: i, slot: OCCUPIED.indexOf(i) + 1, name: NAMES[i] ?? null, unread: 0 }
   const before = OCCUPIED.filter((i) => i < index)
   const after = OCCUPIED.filter((i) => i > index)
   return {
@@ -251,7 +255,12 @@ for (const size of SIZES) {
       await expect(bar.locator('.position-bar-segment-num')).toHaveText(['1', '2', '3'])
       await expect(bar.locator('.position-bar-here .position-bar-segment-num')).toHaveText('2')
 
-      /* NEIGHBOURS FROM BACK TO FRONT, this card between them. */
+      /* NEIGHBOURS FROM BACK TO FRONT, this card between them, and the sentence says which is
+         which (UX-186): index 5 is toward the back, index 8 toward the front. */
+      await expect(current.locator('.nb')).toHaveAttribute(
+        'aria-label',
+        'It sits in front of Towering Combatant and behind Relentless Pursuit.',
+      )
       await expect(current.locator('.nb-row')).toHaveCount(3)
       expect(await current.locator('.nb-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-side')))).toEqual([
         'back',
@@ -266,7 +275,7 @@ for (const size of SIZES) {
       const strike = await gone.locator('.position-num').evaluate((el) => getComputedStyle(el).textDecorationLine)
       expect(strike).toContain('line-through')
       expect((await gone.innerText()).toLowerCase()).not.toMatch(/departed|sold|\bb\d+ #\d+/)
-      await expect(page.locator('.card-locations-row.is-gone .nb')).toHaveAttribute('aria-label', /^Was between /)
+      await expect(page.locator('.card-locations-row.is-gone .nb')).toHaveAttribute('aria-label', /^It was in front of /)
 
       /* A SECTION TITLE KEEPS ITS NAME WHOLE AND SAYS ITS COUNT ONCE (LOC-21). */
       /* The walk list is on the page beside the card from 820 up; below that it is in the rail sheet. */
@@ -324,6 +333,60 @@ for (const size of SIZES) {
       expect(await pill.innerText()).not.toMatch(/[·•]/)
       const height = (await pill.boundingBox())?.height ?? 0
       expect(height, 'the pill is a press, at the kit floor').toBeGreaterThanOrEqual(40)
+
+      /* THE PILL SHOWS WHICH END IS THE BACK, AND ITS NEIGHBOURS (UX-228): back, the card toward
+         the back (index 9), this card, the card toward the front (index 11), front. In that order
+         on screen, left to right, and the sentence a screen reader hears says the same. */
+      const order = pill.locator('.review-caption-order')
+      await expect(order).toBeVisible()
+      const parts = await order.locator(':scope > span').evaluateAll((els) =>
+        els.map((el) => ({ text: (el.textContent ?? '').trim(), x: el.getBoundingClientRect().x })),
+      )
+      expect(parts.map((part) => part.text)).toEqual(['back', 'Punch First', 'this card', 'Hextech Anomaly', 'front'])
+      expect(parts.every((part, at) => at === 0 || part.x > (parts[at - 1]?.x ?? 0)), 'drawn back to front').toBe(true)
+      await expect(pill.locator('.bn-sr')).toHaveText('It sits in front of Punch First and behind Hextech Anomaly.')
+      /* The pill stays inside the page at every width: no sideways scroll at 390. */
+      const box = await pill.boundingBox()
+      expect(box !== null && box.x + box.width <= size.width, 'the pill fits the width').toBe(true)
     })
   }
 }
+
+test('an unread neighbour is said in words on the ladder, never as a figure (LOC-28)', async ({ page }) => {
+  await frame(page, SIZES[0], 'light')
+  await stubBox(page, 'RB Origins')
+  /* The card toward the front of index 7 has not been read, and neither has the one after it:
+     the neighbour is "2 unread cards", the owner's words (amends D116). Newer routes win. */
+  const cards = Object.fromEntries(INDICES.map((i) => [`${BOX}/${i}`, row(i, 'RB Origins')]))
+  const seven = cards[`${BOX}/7`] as ReturnType<typeof row>
+  seven.place.neighbors = {
+    prev: seven.place.neighbors.prev,
+    next: { index: 8, slot: 7, name: null, unread: 2 } as unknown as typeof seven.place.neighbors.prev,
+  }
+  await page.route(/\/inventory\/1$/, (route) => json(route, { version: 2, cards, listings: {} }))
+  await page.goto(`/#/inventory?box=${BOX}&card=cid-7`)
+  await settleFonts(page)
+
+  const current = page.locator('.card-locations-row.is-current')
+  await expect(current.locator('.nb-row[data-side="front"] .nb-unread')).toHaveText('2 unread cards')
+  await expect(current.locator('.nb')).toHaveAttribute(
+    'aria-label',
+    'It sits in front of Towering Combatant and behind 2 unread cards.',
+  )
+})
+
+test('a place link pressed while Inventory is open walks to that card', async ({ page }) => {
+  await frame(page, SIZES[0], 'light')
+  await stubBox(page, 'RB Origins')
+  await page.goto(`/#/inventory?box=${BOX}&card=cid-7`)
+  await settleFonts(page)
+  const label = page.locator('.card-locations-row.is-current .position-parts')
+  await expect(label).toHaveAttribute('aria-label', 'RB Origins, Section 2, Card 2')
+
+  /* A SECOND LINK, NO NEW MOUNT: the hash changes inside `#/inventory` (Review's pill, a copy
+     link). The walk must follow it, not stay on the card the first link opened. */
+  await page.evaluate(() => {
+    window.location.hash = '#/inventory?box=1&card=cid-11'
+  })
+  await expect(label).toHaveAttribute('aria-label', 'RB Origins, Section 3, Card 3')
+})

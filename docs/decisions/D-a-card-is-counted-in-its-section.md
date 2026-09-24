@@ -79,6 +79,33 @@ BUILT in the locating lane:
   and its accessible name is `Was between ...`.
 - `app/tests/locating.spec.ts` asserts it at 1440, 820, 720 and 390, in both themes.
 
+### An unread card is a neighbour (amends D116)
+
+**The owner's ruling, 2026-09-24 (LOC-28):** unread cards count as neighbours, said as
+"an unread card" or "N unread cards".
+
+**The premise that no longer holds.** D116 (a card nobody has named is not a landmark) walked
+past an unnamed card to the nearest named one, because the bare `#270` it drew read as a sold
+card. The walk dropped a real card from the sentence (UX-264): "after Galio" named a card
+three along.
+
+**What D116 protected, and what protects it now.** D116 protected a sentence with no bare
+figure in it. The words "an unread card" keep that. D30 protected a sentence that never sends a
+hand to the wrong card. The adjacent card is now always the neighbour, so nothing is skipped.
+
+**What is built.** `server/capture_server.py:_Places._company` sends the adjacent on-hand card
+on each side, and `unread`, the run of unread cards from it to the next named card. The wire
+field `skipped` is gone. `app/src/server.ts:neighborWords` says the run.
+
+### The neighbour sentence says back and front (UX-186)
+
+"Between X and Y" did not say which card is at the back. The sentence is now "It sits in front
+of X and behind Y.", composed once in `app/src/server.ts:placeParts`. X is toward the back and
+Y toward the front, so the words agree with card 1 at the far back. A departed card reads "It
+was ...". The Fulfiller reads this sentence, and it is the accessible name of the owner's
+neighbour ladder. Review's place pill draws back, the two neighbours and front on one line
+under the label.
+
 ### One more word: slots
 
 The owner ruled it in the final interview (HIR-05, LOC-22). "Slots" names the box's capacity, and

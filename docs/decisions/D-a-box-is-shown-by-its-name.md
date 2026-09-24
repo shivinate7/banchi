@@ -81,9 +81,26 @@ BUILT in the locating lane, server half:
   ./pkmnscan boxes names --write    # one transaction; a second run changes nothing
   ```
 
-T7's `check_box_names_and_place_labels` asserts the label, the departed place, the default
-name and the backfill.
+- A cleared name stores the default name `Box <count+1>`, the next free one. It is never
+  None, so no box falls back to a bare number (the orchestrator's call on the locating review,
+  2026-09-24). The box's own name does not count as taken, so a box that already has that
+  default keeps it.
+- The backfill gives each unnamed box its own `Box <number>` where that name is free, and
+  only then moves the boxes that clash. A clash never pushes a later box off a free name.
+- A server refusal that names a box or a card says the box's name, and for a card its section
+  and card in the section, through `pipeline/join.py:said_place`. The store's own refusals use
+  `store/master.py:Inventory.box_title`. Both read `store/numbers.py:box_title`. The error
+  codes do not change.
 
-Still open: two departed copies that stood next to each other read the same place. The store
-key told them apart before. A screen that lists both draws each copy's own state beside it.
-A box whose name is cleared falls back to `Box <number>` until the backfill runs again.
+T7's `check_box_names_and_place_labels` asserts the label, the departed place, the default
+name, the clear, the refusal wording and the backfill.
+
+**Two departed copies at one place may look the same (the owner's ruling, 2026-09-24).** Two
+copies of one card that left from next to each other read the same place, because they left
+the same place. The owner accepted this: no date and no key tell them apart. Nothing on screen
+claims otherwise.
+
+**Still open.** Two refusals still name a box by its number:
+`store/master.py:Inventory.box_disowns_run` (a box number deleted and used again after a run,
+so the number is the subject), and the server's "No box N" refusals for a box that does not
+exist (it has no name to say).

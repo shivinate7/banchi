@@ -2162,18 +2162,19 @@ class _Places:
     seventeenth SLOT, not the seventeenth card you can count, and once a section has holes
     (every sale and every retirement makes one, permanently — D10) the two stop being the
     same number and every label in the section becomes uncountable by hand. So a located
-    block also says what makes the label countable again: `neighbors` — the nearest NAMED
+    block also says what makes the label countable again: `neighbors` — the adjacent
     non-terminal record on either side in the same box, each as `{index, slot, name,
-    skipped}`, null at the box's ends and null where nothing that way can be named — and
+    unread}`, null at the box's ends — and
     `section_gaps`, how many indices inside this card's own section bounds hold a record
     that is sold or retired. Permanent gaps only: an unallocated tail index has no record
     and is not a gap, and counting terminal RECORDS is what makes that true by
     construction rather than by a bounds check.
 
-    A CARD NOBODY HAS NAMED IS NOT A LANDMARK, WHICH IS D116. The walk passes over an
-    unnamed on-hand card the way it passes over a departed one and keeps going, and
-    `skipped` says how many it passed so the row can state the distance rather than
-    quietly move a landmark. `_company` has the argument.
+    AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending D116).
+    D116 walked past an unnamed on-hand card to the nearest named one. Now the adjacent card
+    is the neighbour, named or not, and `unread` says how many unread cards stand in a row
+    from it, so the sentence can say "an unread card" or "3 unread cards". `_company` has
+    the argument.
 
     THE DECORATION DEGRADES WHOLE, AND IT NEVER GUESSES. The walk that finds a neighbour
     is a scan over every record's own `box` and `index` — the same fields `box_fill`'s
@@ -2414,32 +2415,23 @@ class _Places:
     ) -> Tuple[Optional[dict], Optional[int]]:
         """`(neighbors, section_gaps)` for one located card, both None when degraded.
 
-        `neighbors` walks OUTWARD from `at` over the box's non-terminal records: the
-        nearest NAMED card on each side, `{index, slot, name, skipped}`, null past either
-        end of the box. A sold or retired record is passed over rather than named — a
-        departed card cannot be the thing you count from, which is the whole reason D30
-        wants the sentence.
+        `neighbors` is the ADJACENT non-terminal record on each side of `at`, `{index,
+        slot, name, unread}`, null past either end of the box. A sold or retired record is
+        passed over rather than named — a departed card cannot be the thing you count from,
+        which is the whole reason D30 wants the sentence.
 
-        AND SO IS A CARD NOBODY HAS NAMED, WHICH IS D116 AND IS NEW. This used to stop at
-        the nearest non-terminal record whatever it was, sending `name: null` for a card no
-        identification ever produced a name for, and the app drew `#270` for it. That
-        number is a real live card at a real count — the owner read it as a sold card
-        leaking into the ladder, which it never was — but a bare figure names nothing you
-        can recognise while flipping a box, which is the ladder's only job. So an unnamed
-        on-hand card is now passed over as a LANDMARK, exactly as a departed one is, and
-        the walk keeps going outward until it finds a card it can name.
+        AN UNREAD CARD IS A NEIGHBOUR, WHICH AMENDS D116 (the owner's ruling, 2026-09-24,
+        LOC-28). D116 passed over an on-hand card no identification had named and walked on
+        to the nearest named one, because the app drew a bare `#270` for it. The owner read
+        that walk as dropping a real card from the sentence (UX-264), and ruled that an
+        unread card counts: the sentence says "an unread card", or "3 unread cards" for a
+        run of them. It never draws a bare figure, which was D116's real complaint.
 
-        `skipped` IS WHAT KEEPS THAT HONEST, and it is why the skip is a count rather than
-        a silence. D30 forbids a sentence that sends a hand to the wrong slot, and a
-        landmark two cards away instead of one does exactly that unless the row says so.
-        It is the number of on-hand cards passed over on that side — never the departed
-        ones, which are not between anything: the box closed up over them (D58) and
+        `unread` IS THE RUN: how many cards nothing has named stand in a row on that side,
+        starting with this neighbour and ending at the next named card or the box's end.
+        Zero on a named neighbour. It counts on-hand cards only — never the departed ones,
+        which are not between anything: the box closed up over them (D58) and
         `section_gaps` is where they are counted.
-
-        A SIDE WITH NO NAMED CARD BEYOND IT IS NULL, the same answer the box's own edge
-        gives, and it is honest for the same reason: there is nothing over there this
-        sentence can name. A box straight off the feeder — every card captured, none
-        identified — therefore draws no ladder at all rather than a ladder of figures.
 
         BOTH NUMBERS, BECAUSE THE ROW DRAWS ONE AND A FUTURE CALLER WANTS THE OTHER (D92).
         `index` is the store key — `/inventory/<box>/<index>`, the `<index>.jpg` — and
@@ -2484,28 +2476,33 @@ class _Places:
 
         # `where + 1` IS THE SLOT: `occupants` is ascending and holds only cards on hand, so
         # a neighbour's ordinal in it is `Position.slot` by the same bisect that property
-        # runs. `from_` is the position the search STARTED at, so the cards passed over are
-        # the distance between the two — one subtraction, in the space both numbers live in,
-        # rather than a second count of the same cards.
-        def side(where: int, from_: int) -> dict:
+        # runs. `unread` is how many cards nothing has named stand in a row on that side,
+        # starting with this neighbour: the distance to the nearest named card (or past the
+        # box's end) — one subtraction, in the space both numbers live in.
+        def side(where: int, unread: int) -> dict:
             return {
                 "index": occupants[where][0],
                 "slot": where + 1,
                 "name": occupants[where][1],
-                "skipped": abs(where - from_),
+                "unread": unread,
             }
 
-        # The outward walk, as two bisects into `named` rather than a scan over `occupants`
-        # — see `_walk` for why: an unidentified box is the case where a scan is O(n²), and
-        # it is the case a box has just after the feeder and before `join`.
-        back = bisect_right(named, before) - 1
-        prev_of = None if before < 0 or back < 0 else side(named[back], before)
-        forward = bisect_left(named, after)
-        next_of = (
-            None
-            if after >= len(occupants) or forward >= len(named)
-            else side(named[forward], after)
-        )
+        # THE NEIGHBOUR IS THE ADJACENT CARD ON HAND, NAMED OR NOT (the owner's ruling,
+        # 2026-09-24, LOC-28, amending D116). An unread card is a neighbour: the sentence
+        # says "an unread card" or "3 unread cards", and never walks past it to a name
+        # further along. `unread` is the run, found as two bisects into `named` rather than
+        # a scan over `occupants` — see `_walk` for why: an unidentified box is the case
+        # where a scan is O(n²), and it is the case a box has just after the feeder.
+        prev_of = None
+        if before >= 0:
+            back = bisect_right(named, before) - 1
+            landmark = named[back] if back >= 0 else -1
+            prev_of = side(before, before - landmark)
+        next_of = None
+        if after < len(occupants):
+            forward = bisect_left(named, after)
+            landmark = named[forward] if forward < len(named) else len(occupants)
+            next_of = side(after, landmark - after)
 
         low = bisect_left(gaps, start)
         high = len(gaps) if end is None else bisect_right(gaps, end)

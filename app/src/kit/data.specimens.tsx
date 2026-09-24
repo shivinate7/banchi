@@ -34,7 +34,7 @@ const BLANK_PHOTO = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAAL
  *  `label` is wire data (`pipeline/join.py:Position.label`), never text this file writes for
  *  the eye: `Location` splits it and CSS draws the separators (D218). */
 const WIRE_PLACE: Place = {
-  label: 'Box 3 · Section 2 · Card 15',
+  label: 'RB Epics, Section 2, Card 15',
   box: 3,
   index: 40,
   slot: 40,
@@ -47,6 +47,9 @@ const WIRE_PLACE: Place = {
   box_closed: true,
   fraction: 0.16,
 }
+
+/** The same place after its card left: the label keeps the place, the slot is gone. */
+const GONE_PLACE: Place = { ...WIRE_PLACE, slot: null, card: null, fraction: null }
 
 /** A fixed moment, so the date specimens read the same on every run. */
 const NOW = new Date('2026-09-23T15:00:00')
@@ -166,6 +169,7 @@ export function DataSpecimens() {
         <Location place={WIRE_PLACE} />
         <Location place={WIRE_PLACE} flow="run" />
         <Location label={null} />
+        <Location place={GONE_PLACE} />
       </Specimen>
 
       <Specimen name="Links">

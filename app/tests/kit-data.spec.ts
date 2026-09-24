@@ -276,6 +276,20 @@ test('a box is drawn by its name and never by its number', async ({ page }) => {
   await expect(page.locator('[data-specimen="Box"]')).not.toContainText(/Box \d/)
 })
 
+test('a departed place is marked through the kit, and its label keeps the place', async ({ page }) => {
+  /* The kit's `Location` passes `departed` to `PositionLabel` (read off the place block), so a
+     wave-2 screen drawing a place through the kit marks a card that has left without being told.
+     The label keeps the place it left; the struck figure and the past tense are the mark. */
+  await open(page, 1440, 'light')
+  const places = page.locator('[data-specimen="Place"] .bn-location .position-parts, [data-specimen="Place"] .bn-location .position-run')
+  const gone = places.last()
+  await expect(gone).toHaveAttribute('data-departed', 'true')
+  await expect(gone).toHaveAttribute('aria-label', 'Was at RB Epics, Section 2, Card 15')
+  const strike = await gone.locator('.position-num').first().evaluate((el) => getComputedStyle(el).textDecorationLine)
+  expect(strike).toContain('line-through')
+  await expect(places.first()).not.toHaveAttribute('data-departed', 'true')
+})
+
 test('two printings of one card read differently', async ({ page }) => {
   await open(page, 1440, 'light')
   const lines = page.locator('[data-specimen="Card"] .bn-cardline')

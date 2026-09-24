@@ -256,6 +256,36 @@
 .review-caption .position-run-path,
 .review-caption .position-run-num { white-space: nowrap; }
 .review-caption > .bn-icon { color: var(--bn-accent); flex: none; }
+/* THE LABEL AND, UNDER IT, WHICH WAY THE BOX RUNS (UX-228): `back`, the neighbour toward the
+   back, this card, the neighbour toward the front, `front`. One compact line; a long name is
+   cut with an ellipsis here only, because the whole sentence rides the screen-reader text. */
+.review-caption-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.review-caption-order {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--bn-fs-sm);
+  line-height: var(--bn-lh-snug);
+  color: var(--bn-ink-2);
+  white-space: nowrap;
+}
+.review-caption-end {
+  flex: none;
+  font-size: var(--bn-fs-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
+}
+.review-caption-nb {
+  min-width: 0;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.review-caption-nb.is-unread { font-style: italic; color: var(--bn-ink-3); }
+.review-caption-this { flex: none; font-weight: 600; color: var(--bn-ink); }
+.review-caption-arrow { flex: none; color: var(--bn-ink-3); }
 .review-caption .position-run {
   font-size: var(--pos-slot); line-height: 1; letter-spacing: 0;
   /* repainted by `.review-caption-link:hover`; a <span> is outside the floor's reach. */

@@ -6,6 +6,7 @@ import type {
   AnswerResult,
   CandidateRow,
   CatalogLookup,
+  Place,
   QueueEntryWire,
   QueueName,
   QueueRead,
@@ -20,6 +21,9 @@ import {
   answerReviewGroup,
   describeFailure,
   getQueues,
+  isDeparted,
+  neighborWords,
+  placeParts,
   photoUrl,
   refreshQueues,
   retireCard,
@@ -2359,7 +2363,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
 
   if (entry.photo === null) {
     return (
-      <AbsentPhoto title="No photograph was stored" detail="photo: null" label={entry.label} box={entry.box} cid={entry.cid}>
+      <AbsentPhoto title="No photograph was stored" detail="photo: null" label={entry.label} box={entry.box} cid={entry.cid} place={entry.place}>
         The record carries no photograph at all.
       </AbsentPhoto>
     )
@@ -2377,7 +2381,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
 
   if (absent) {
     return (
-      <AbsentPhoto title="The file is not on disk" detail={src} label={entry.label} box={entry.box} cid={entry.cid}>
+      <AbsentPhoto title="The file is not on disk" detail={src} label={entry.label} box={entry.box} cid={entry.cid} place={entry.place}>
         The entry has a photograph and nothing here can restore it. The card is still at its slot.
       </AbsentPhoto>
     )
@@ -2407,7 +2411,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
           aria-hidden="true"
         />
       )}
-      <PositionCaption label={entry.label} box={entry.box} cid={entry.cid} />
+      <PositionCaption label={entry.label} box={entry.box} cid={entry.cid} place={entry.place} />
       <span className="review-stage-hint" aria-hidden="true">
         <Icon name="scan" size={12} />
         1:1 under the pointer
@@ -2416,7 +2420,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
   )
 }
 
-function AbsentPhoto({ title, detail, label, box, cid, children }: { title: string; detail: ReactNode; label: string; box?: number; cid?: string | null; children: ReactNode }) {
+function AbsentPhoto({ title, detail, label, box, cid, place, children }: { title: string; detail: ReactNode; label: string; box?: number; cid?: string | null; place?: Place; children: ReactNode }) {
   return (
     <div className="review-absent">
       <span className="review-absent-art">
@@ -2425,7 +2429,7 @@ function AbsentPhoto({ title, detail, label, box, cid, children }: { title: stri
       <p className="review-absent-title">{title}</p>
       <p className="review-absent-body">{children}</p>
       <p className="review-code review-absent-detail">{detail}</p>
-      <PositionCaption label={label} box={box} cid={cid} />
+      <PositionCaption label={label} box={box} cid={cid} place={place} />
     </div>
   )
 }
@@ -2434,12 +2438,52 @@ function AbsentPhoto({ title, detail, label, box, cid, children }: { title: stri
  * (`#/inventory?box=<n>&card=<cid>`), not the box at its first card (LOC-12). The label names
  * the box by its name (D-a-box-is-shown-by-its-name), and its accessible name is the place as a
  * sentence (`Box 1, Section 3, Card 13`). A card with no box has no destination and draws the
- * plain caption; a card the server sent no name for opens its box. */
-function PositionCaption({ label, box, cid }: { label: string; box?: number; cid?: string | null }) {
+ * plain caption; a card the server sent no name for opens its box.
+ *
+ * THE PILL SHOWS WHICH END IS THE BACK, AND ITS NEIGHBOURS (UX-228, LOC-26). The owner's ruling:
+ * every position drawing shows the orientation, card 1 at the far back. Two thirty-character
+ * names and a label do not fit a pill over the photograph, so the neighbours ride one compact
+ * line under the label: `back`, the card toward the back, this card, the card toward the front,
+ * `front`, with arrows drawn by the kit and never typed (D218). A screen reader hears the
+ * same sentence the Fulfiller reads (`placeParts`), not the arrows. */
+function CaptionOrder({ place }: { place?: Place }) {
+  if (place === undefined || place.located === false) return null
+  const parts = placeParts(place, isDeparted(place))
+  const side = (which: 'back' | 'front') => {
+    const neighbor = parts === null ? null : which === 'back' ? parts.prev : parts.next
+    if (neighbor === null) return null
+    return (
+      <span className={`review-caption-nb${neighbor.name === null ? ' is-unread' : ''}`} data-side={which}>
+        {neighborWords(neighbor)}
+      </span>
+    )
+  }
+  const back = side('back')
+  const front = side('front')
+  return (
+    <>
+      <span className="review-caption-order" aria-hidden="true">
+        <span className="review-caption-end">back</span>
+        {back}
+        {back === null ? null : <Icon name="arrowRight" size={12} className="review-caption-arrow" />}
+        <span className="review-caption-this">this card</span>
+        {front === null ? null : <Icon name="arrowRight" size={12} className="review-caption-arrow" />}
+        {front}
+        <span className="review-caption-end">front</span>
+      </span>
+      {parts === null ? null : <span className="bn-sr">{parts.said}</span>}
+    </>
+  )
+}
+
+function PositionCaption({ label, box, cid, place }: { label: string; box?: number; cid?: string | null; place?: Place }) {
   const inner = (
     <>
       <Icon name="pin" size={14} />
-      <PositionLabel label={label} flow="run" />
+      <span className="review-caption-body">
+        <PositionLabel label={label} flow="run" />
+        <CaptionOrder place={place} />
+      </span>
     </>
   )
   if (box === undefined || box < 1) return <span className="review-caption review-position">{inner}</span>

@@ -5528,7 +5528,8 @@ COMPONENTS = [
                                          "FilterChips and SortControl draw: Capture's option rows, "
                                          "in the kit's own panel, never the native OS menu, every "
                                          "facet usable in any order.",
-                                 "governed_by": ["D5", "D118", "D132", "D212", "D218", "D221"]},
+                                 "governed_by": ["D5", "D118", "D132", "D212", "D218", "D221",
+                                                 "D-a-box-is-shown-by-its-name"]},
             "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
                                          "in a filter bar (`--bn-control-h`) and one width floor "
                                          "and cap. Mono for machine strings only.",
@@ -6306,8 +6307,8 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D137", "D162", "D167", "D172", "D194", "D252", "D253",
-                                "D-a-box-is-shown-by-its-name"],
+                                "D87", "D137", "D162", "D167", "D172", "D194", "D218", "D252",
+                                "D253", "D-a-box-is-shown-by-its-name"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -8156,8 +8157,8 @@ COMPONENTS = [
                         "Review's pill links to the card and reads as a sentence. Its fixture is "
                         "`pipeline/join.py:Position`'s arithmetic written out. Run by "
                         "`make design-check`.",
-                "governed_by": ["D-a-box-is-shown-by-its-name", "D-a-card-is-counted-in-its-section",
-                                "D58", "D155", "D218"],
+                "governed_by": ["D58", "D116", "D155", "D218", "D-a-box-is-shown-by-its-name",
+                                "D-a-card-is-counted-in-its-section"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "

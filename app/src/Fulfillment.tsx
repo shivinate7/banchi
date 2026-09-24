@@ -1205,7 +1205,7 @@ export function Fulfillment() {
               </div>
             )}
             {between === null ? null : (
-              <p className="fulfillment-say ff-where-between">It sits {between}.</p>
+              <p className="fulfillment-say ff-where-between">{between}</p>
             )}
           </section>
 

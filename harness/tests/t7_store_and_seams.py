@@ -9123,16 +9123,15 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             rows["4/3"]["place"]["neighbors"],
             {
-                "prev": {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
-                "next": None,
+                "prev": {"index": 1, "slot": 1, "name": "Mantine", "unread": 0},
+                "next": {"index": 5, "slot": 3, "name": None, "unread": 1},
             },
-            "a card between two gaps names the nearest NON-TERMINAL, NAMED record — the "
-            "sold card at 2 and the retired card at 4 are skipped as landmarks, never "
-            "named: a departed card cannot be the thing you count from (D30) — and each "
-            "side carries BOTH numbers (D92): the store key and D58's count, which this "
-            "box has already pulled apart. `next` is NULL and not the unnamed card at 5: "
-            "past that card there is nothing this box can name, and a side with no "
-            "landmark answers the same null the box's own edge does (D116)",
+            "a card between two gaps names the nearest NON-TERMINAL record — the sold card "
+            "at 2 and the retired card at 4 are skipped, never named: a departed card cannot "
+            "be the thing you count from (D30) — and each side carries BOTH numbers (D92): "
+            "the store key and D58's count, which this box has already pulled apart. `next` "
+            "IS THE UNREAD CARD AT 5, `unread: 1`: the owner's ruling of 2026-09-24 (LOC-28, "
+            "amending D116) counts an unread card as a neighbour, where D116 answered null",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -9153,31 +9152,24 @@ def check_place_neighbors(checks: Checks) -> None:
         )
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["prev"],
-            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 1},
-            "AND A CARD NOBODY HAS NAMED IS SKIPPED AS A LANDMARK TOO, WHICH IS D116 AND "
-            "IS THE REVERSE OF WHAT THIS CASE ASSERTED. It pinned `{index: 3, slot: 2, "
-            "name: None}` — the adjacent card, sent nameless for the app to draw as `#2` "
-            "— and the owner read that figure on their own store as a sold card leaking "
-            "into the ladder. It never was one: index 425 in box 3 is a live card at "
-            "count 270, one of 7 the model returned no name for. But a figure names "
-            "nothing you can recognise while flipping a box, so the walk passes it and "
-            "names Mantine instead. THE TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED "
-            "TOGETHER (D92): the card at index 3 is the SECOND card in this box. And "
-            "`skipped: 1` is the price — one on-hand card lies between Mantine and this "
-            "one, so a hand counting from Mantine lands one short unless the row says so",
+            {"index": 3, "slot": 2, "name": None, "unread": 1},
+            "AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending "
+            "D116). D116 walked past the unread card at 3 to name Mantine, and the screen "
+            "said `with 1 unidentified card in between`; the owner's word is that the card "
+            "next to this one is the neighbour, read or not, said as `an unread card`. THE "
+            "TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED TOGETHER (D92): the card at "
+            "index 3 is the SECOND card in this box",
         )
         checks.equal(
             [
-                rows["4/3"]["place"]["neighbors"]["prev"]["skipped"],
+                rows["4/3"]["place"]["neighbors"]["prev"]["unread"],
                 rows["4/3"]["place"]["section_gaps"],
             ],
             [0, 2],
-            "and `skipped` COUNTS THE ON-HAND CARDS PASSED OVER AND NEVER THE DEPARTED "
-            "ONES: card 3 reaches Mantine across a sold record at 2 and answers 0, while "
-            "the same two departed records are its section's gaps. The box closed up over "
-            "them (D58), so they lie between nothing and a hand counting from Mantine "
-            "arrives at card 3 exactly — the two numbers count different things and this "
-            "pins them apart",
+            "and `unread` COUNTS ON-HAND CARDS AND NEVER THE DEPARTED ONES: card 3 reaches "
+            "Mantine across a sold record at 2 and answers 0, while the same two departed "
+            "records are its section's gaps. The box closed up over them (D58), so they lie "
+            "between nothing",
         )
 
         # --- a sold card is not a landmark, and the sale is what proves it ---------------
@@ -9197,19 +9189,46 @@ def check_place_neighbors(checks: Checks) -> None:
         before_sale = capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]
         checks.equal(
             before_sale["prev"],
-            {"index": 2, "slot": 2, "name": "Thievul", "skipped": 0},
+            {"index": 2, "slot": 2, "name": "Thievul", "unread": 0},
             "with every card on hand, card 3's `prev` is the card next to it — the "
             "landmark this case is about to sell",
         )
         capture_server.do_mark_sold(6, 2, {})
         checks.equal(
             capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]["prev"],
-            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
+            {"index": 1, "slot": 1, "name": "Mantine", "unread": 0},
             "AND SELLING IT MOVES THE LANDMARK RATHER THAN NAMING A SOLD CARD. Thievul is "
             "not in that drawer any more, so a sentence naming him sends a hand to a slot "
             "the card has left (D30) — the walk names Mantine, who has closed up to be "
-            "the card in front (D58), and `skipped` stays 0 because a departed card lies "
+            "the card in front (D58), and `unread` stays 0 because a departed card lies "
             "between nothing at all",
+        )
+
+        # --- a run of unread cards is one neighbour, with its count ----------------------
+        # Box 8: Mantine, then three cards nothing has named, then this card, then Thievul.
+        # The owner's words for the run are "N unread cards", so `unread` is the length of the
+        # run, counted from the neighbour outward to the next named card.
+        for _ in range(6):
+            capture_server.do_capture(capture_payload(8))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["8/1"].name = "Mantine"
+            snapshot.inventory.cards["8/5"].name = "Charizard"
+            snapshot.inventory.cards["8/6"].name = "Thievul"
+        run = capture_server.do_inventory()["cards"]["8/5"]["place"]["neighbors"]
+        checks.equal(
+            run,
+            {
+                "prev": {"index": 4, "slot": 4, "name": None, "unread": 3},
+                "next": {"index": 6, "slot": 6, "name": "Thievul", "unread": 0},
+            },
+            "THREE UNREAD CARDS IN A ROW ARE THE NEIGHBOUR TOWARD THE BACK, SAID AS `3 unread "
+            "cards`: `prev` is the adjacent card, and `unread: 3` is the run up to Mantine",
+        )
+        checks.equal(
+            capture_server.do_inventory()["cards"]["8/2"]["place"]["neighbors"]["next"],
+            {"index": 3, "slot": 3, "name": None, "unread": 2},
+            "and the run is counted from the neighbour outward, not from the box's start: "
+            "card 2's front side holds two unread cards before Charizard",
         )
 
         # --- an unallocated tail is not a gap --------------------------------------------

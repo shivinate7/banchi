@@ -52,17 +52,9 @@
 .nb-name b { font-weight: 600; }
 .nb-rest { color: var(--bn-ink-3); }
 
-/* How many on-hand cards the walk passed over to reach this landmark, drawn only where that
-   is not zero. Muted and one step down, because it qualifies the name above it rather than
-   competing with it — and it is the row's SECOND line, so it may not read as a second name. */
-.nb-skip {
-  font-size: var(--nb-skip, 11px);
-  line-height: 1.4;
-  color: var(--bn-ink-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* An unread neighbour, said in words (LOC-28): muted, because it names no card a hand can
+   recognise by its face, only a count of cards nothing has read. */
+.nb-unread { color: var(--bn-ink-3); font-style: italic; }
 
 /* THIS CARD, between its two neighbours (the owner's orientation: back on top, front below). It is
    the row the eye lands on, so it carries the weight; a departed card's row is muted, because the

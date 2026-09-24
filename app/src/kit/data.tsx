@@ -8,6 +8,7 @@ import { STATUS_TONES, UNNAMED_BOX, type StatusKind } from './dataRules'
 import { hasSheet, openSheet, sheetHref } from './sheets'
 import { moneyGrouped, moneySigned } from '../money'
 import { PositionLabel } from '../PositionLabel'
+import { isDeparted } from '../server'
 import type { Place } from '../types'
 import './data.css'
 
@@ -460,7 +461,13 @@ export function BoxLabel({
 
 /** Where a card is, as the server's place label says it, drawn by `PositionLabel`. The card
  *  number in that label counts WITHIN THE SECTION (the owner's ruling, 2026-09-23;
- *  `pipeline/join.py:Position.card`). Give `place` and the box and section names come with it. */
+ *  `pipeline/join.py:Position.card`). Give `place` and the box and section names come with it.
+ *
+ *  A DEPARTED PLACE IS MARKED HERE TOO. A card that has left keeps the place it left in its label
+ *  (D-a-box-is-shown-by-its-name), and only the mark tells it apart: the struck figure and the
+ *  past-tense accessible name `PositionLabel` draws for `departed`. Read off the place block by
+ *  `isDeparted` unless the caller says, so every screen that draws a place through the kit marks
+ *  a departed one without being told. */
 export function Location({
   place,
   label,
@@ -469,6 +476,7 @@ export function Location({
   flow,
   lead,
   fallback = 'No place on record',
+  departed,
   className,
 }: {
   readonly place?: Place | null
@@ -480,9 +488,12 @@ export function Location({
   readonly lead?: 'path' | 'slot'
   /** What is drawn where there is no label: a card kept as a count, or one not placed yet. */
   readonly fallback?: ReactNode
+  /** The card has left its box. Defaults to `isDeparted(place)`. */
+  readonly departed?: boolean
   readonly className?: string
 }) {
   const text = place?.label ?? label ?? null
+  const gone = departed ?? (place != null && isDeparted(place))
   const usable = typeof text === 'string' && text.trim() !== ''
   return (
     <span className={['bn-location', className].filter(Boolean).join(' ')}>
@@ -493,6 +504,7 @@ export function Location({
           lead={lead}
           boxName={place?.box_name ?? boxName ?? null}
           sectionName={place?.section_name ?? sectionName ?? null}
+          departed={gone}
         />
       ) : (
         <span className="bn-location-none">{fallback}</span>

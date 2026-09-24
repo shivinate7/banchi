@@ -29,11 +29,10 @@
  * thirty-character strings cannot take a 44px treatment, and D41's own amendment measured
  * what that costs a list — 44px in the copies row is +86px and drops a copy below the fold.
  *
- * A CARD NOBODY HAS NAMED IS NOT A LANDMARK (D116, 2026-09-07). The server walks past an
- * unnamed on-hand card to the nearest one it can name, so this block stopped drawing the bare
- * `#270` the owner read as a sold card leaking into the ladder. It was never that — it was a
- * live card at a real count — but a figure names nothing you can recognise while flipping a
- * box, which is this block's only job. `Skipped` is what the walk costs, stated on the row.
+ * AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending D116). D116
+ * walked past an unnamed on-hand card to a named one, because the bare `#270` it drew read as a
+ * sold card. The owner ruled the unread card is the neighbour, said in words: "an unread card",
+ * or "3 unread cards" for a run of them (`server.ts:neighborWords`). Never a bare figure.
  *
  * THE FULFILLER NEVER IMPORTS THIS. `CardLocations.tsx:FulfillerCard` draws the joined
  * sentence at `.card-locations-say`, 20px body, which `app/tests/fulfillment.spec.ts` floors
@@ -43,7 +42,7 @@
  */
 import type { ReactNode } from 'react'
 
-import { placeParts } from './server'
+import { neighborWords, placeParts } from './server'
 import type { Place, PlaceNeighbor } from './types'
 import './PlaceNeighbors.css'
 
@@ -61,14 +60,9 @@ function seam(name: string): [string, string | null] {
 }
 
 function Name({ side }: { side: PlaceNeighbor }): ReactNode {
-  /* A NAMELESS SIDE IS AN OLDER SERVER AND NOTHING ELSE, since D116: `_company` walks past a
-     card nothing has named and answers null rather than naming it, so a current server never
-     sends one. The slot fallback stays for the older one — never a blank, and never the
-     INDEX, which is what it drew until D92: `#41` composed from the store key names a card
-     that is not the one a hand counting to 41 arrives at, and the two diverge by every card
-     that has left the box in front of it — 76 in box 3. `side.index` is still on the wire and
-     must not be drawn bare. */
-  if (side.name === null) return <b>#{side.slot}</b>
+  /* A NAMELESS SIDE IS AN UNREAD CARD, OR A RUN OF THEM (LOC-28): said in words, muted, never
+     the slot and never the INDEX (D92: `side.index` is on the wire and must not be drawn bare). */
+  if (side.name === null) return <span className="nb-unread">{neighborWords(side)}</span>
 
   const [champion, epithet] = seam(side.name)
   return (
@@ -76,27 +70,6 @@ function Name({ side }: { side: PlaceNeighbor }): ReactNode {
       <b>{champion}</b>
       {epithet === null ? null : <span className="nb-rest">, {epithet}</span>}
     </>
-  )
-}
-
-/* HOW FAR AWAY THE LANDMARK REALLY IS, on the rows where that is not one card (D116).
- *
- * The walk passes over an on-hand card nothing has named, so `after Rell, Noxus` can name the
- * card two along — and a hand counting from it lands one short, which is the failure D30 says
- * this sentence may never cause. The line is the price of the skip and is drawn only where
- * the skip happened: 27 rows on the owner's store, none in a fully identified box.
- *
- * ITS OWN LINE RATHER THAN A SUFFIX, and that is the same width argument the file's header
- * makes: these names run to thirty characters at a `ladder` flow already, and a trailing
- * clause is what would wrap them. A DEPARTED card is never counted here — the box closed up
- * over it (D58), so it is between nothing at all. */
-function Skipped({ side }: { side: PlaceNeighbor }): ReactNode {
-  const n = side.skipped ?? 0
-  if (n === 0) return null
-  return (
-    <span className="nb-skip">
-      {n} unidentified card{n === 1 ? '' : 's'} between
-    </span>
   )
 }
 
@@ -110,7 +83,9 @@ function Skipped({ side }: { side: PlaceNeighbor }): ReactNode {
  * bare label beside a name, `AFTER Piercing Light` read as "the next card is Piercing Light".
  *
  * A DEPARTED CARD SPEAKS IN THE PAST TENSE (LOC-09). Its middle row reads `was here`, and the
- * accessible name says it was between them. It never says the card IS between them.
+ * accessible name says where it was ("It was in front of ... and behind ..."). It never says the
+ * card IS there. The accessible name is `placeParts`'s own sentence, the one the Fulfiller reads,
+ * so the two personas hear one wording.
  *
  * `placeParts` answers null (and this renders nothing, never a guess) for a pooled card (D24), an
  * older server, a decoration the server degraded, and the card whose box holds nothing else. */
@@ -124,20 +99,10 @@ export function PlaceNeighbors({
   /** The card has left its box. Callers read it off `isDeparted(place)`. */
   departed?: boolean
 }): ReactNode {
-  const parts = placeParts(place)
+  const parts = placeParts(place, departed)
   if (parts === null) return null
 
-  const name = (side: PlaceNeighbor): string => side.name ?? 'an unread card'
-  const sides = [
-    parts.prev === null ? null : `${name(parts.prev)} toward the back`,
-    parts.next === null ? null : `${name(parts.next)} toward the front`,
-  ].filter((part): part is string => part !== null)
-  /* THE SKIP IS STATED WHERE IT HAPPENED (D116): a landmark two cards away must say so, or the
-     sentence sends a hand to the wrong slot. One clause covers both sides. */
-  const skipped = (parts.prev?.skipped ?? 0) + (parts.next?.skipped ?? 0)
-  const skip = skipped > 0 ? `, with ${skipped} unidentified card${skipped === 1 ? '' : 's'} in between` : ''
-  const lead = sides.length === 2 ? (departed ? 'Was between' : 'Between') : departed ? 'Was next to' : 'Next to'
-  const said = `${lead} ${sides.join(' and ')}${skip}`
+  const said = parts.said
   const here = place?.card ?? null
 
   return (
@@ -151,7 +116,6 @@ export function PlaceNeighbors({
             <span className="nb-name-line">
               <Name side={parts.prev} />
             </span>
-            <Skipped side={parts.prev} />
           </span>
         </p>
       )}
@@ -170,7 +134,6 @@ export function PlaceNeighbors({
             <span className="nb-name-line">
               <Name side={parts.next} />
             </span>
-            <Skipped side={parts.next} />
           </span>
         </p>
       )}

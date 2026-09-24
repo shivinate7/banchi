@@ -2784,6 +2784,36 @@ test('a body this screen cannot read fails the same way a dead server does', asy
   await battery(page, 'unreadable body')
 })
 
+test('the card says which neighbour is at the back and which at the front, in a sentence', async ({ page }) => {
+  /* UX-186. The sentence was "It sits between X and Y", which never said which of the two is at
+     the back. Card 1 is at the far back (the owner's orientation), so the card toward the back
+     is the one this card sits IN FRONT OF, and the card toward the front is the one it sits
+     BEHIND. An unread neighbour counts, said as "an unread card" or "2 unread cards" (LOC-28). */
+  const states = await stubServer(page, [])
+  await page.route(/\/inventory$/, async (route) => {
+    const body = inventoryBody(states) as { version: number; cards: Record<string, Record<string, unknown>> }
+    body.cards['3/7'] = {
+      ...body.cards['3/7'],
+      place: {
+        ...ORDER_COPY_PLACE,
+        neighbors: {
+          prev: { index: 6, slot: 6, name: 'Pidgeot ex', unread: 0 },
+          next: { index: 8, slot: 8, name: null, unread: 2 },
+        },
+      },
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await openCard(page, 'Charizard ex')
+
+  await expect(view(page).locator('.ff-where-between')).toHaveText(
+    'It sits in front of Pidgeot ex and behind 2 unread cards.',
+  )
+  await battery(page, 'the neighbour sentence')
+})
+
 test('the screen with nothing to pull is his too', async ({ page }) => {
   await openList(page, [], { empty: true })
   await expect(view(page)).toContainText('No cards are for sale right now.')

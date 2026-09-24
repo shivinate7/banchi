@@ -1615,17 +1615,41 @@ export function BoxBrowse({
   const jumpBox = useRef<number | null>(null)
 
   /* THE CARD THE HASH NAMED, walked to once its box's rows have landed. The same `jump` a
-     copies-list press takes, so the box, the fold, the mark and the scroll arrive together. */
-  const wantedCard = useRef<string | null>(cardParam())
+     copies-list press takes, so the box, the fold, the mark and the scroll arrive together.
+
+     READ ON EVERY HASH CHANGE INSIDE `#/inventory`, NOT ONLY ON MOUNT. Review's pill is a link,
+     and a second pill pressed while this screen is already open changes the hash without a new
+     mount; reading the hash once left the walk on the first card. A card in another box moves
+     the walk to that box first (its `box=`), and this runs again when that box's rows land. */
+  const [wantedCard, setWantedCard] = useState<{ cid: string; box: number | null } | null>(() => {
+    const cid = cardParam()
+    return cid === null ? null : { cid, box: boxParam() }
+  })
   useEffect(() => {
-    const cid = wantedCard.current
-    if (cid === null || rows === null) return
-    const row = rows.find((candidate) => candidate.card.cid === cid)
-    if (row === undefined) return
-    wantedCard.current = null
+    const onHash = () => {
+      if (!window.location.hash.startsWith('#/inventory')) return
+      const cid = cardParam()
+      if (cid !== null) setWantedCard({ cid, box: boxParam() })
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  useEffect(() => {
+    if (wantedCard === null || rows === null) return
+    const row = rows.find((candidate) => candidate.card.cid === wantedCard.cid)
+    if (row === undefined) {
+      const box = wantedCard.box
+      if (box !== null && box !== shelf && shelves.includes(box)) {
+        /* A NAMED CARD, NEVER A RE-RANK — `selectShelf`'s own reason (D118). */
+        shelfSource.current = 'manual'
+        setShelf(box)
+      }
+      return
+    }
+    setWantedCard(null)
     jumpBox.current = typeof row.card.box === 'number' ? row.card.box : null
     setJump(row.key)
-  }, [rows])
+  }, [rows, wantedCard, shelf, shelves])
   useEffect(() => {
     if (goTo === undefined || goTo === null) return
     if (askedAt.current === goTo.at) return

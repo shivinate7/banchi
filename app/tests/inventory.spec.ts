@@ -62,7 +62,7 @@ type Wire = { method: string; path: string; body: unknown }
    nameless neighbour draws, `index` is the store key and is never drawn bare. The fixtures
    below keep them UNEQUAL on purpose — a box with a departure in front is the case that
    tells a renderer reading the wrong field from one reading the right one. */
-type Neighbor = { index: number; slot: number; name: string | null; skipped?: number }
+type Neighbor = { index: number; slot: number; name: string | null; unread?: number }
 
 function card(input: {
   index: number
@@ -4234,11 +4234,10 @@ const NEIGHBORLY: Cards = {
        at some other punctuation. */
     neighbors: { prev: null, next: { index: 4, slot: 3, name: 'Conscription' } },
   }),
-  /* D116'S ROW: a landmark the walk had to REACH. Two on-hand cards between this one and
-     Galio carry no name, so the nearest card that can be named is three along — which is
-     `after Galio` for a card a hand counting from Galio arrives at three cards early. The
-     row says so or the sentence is the wrong-slot claim D30 forbids. `next` skips nothing,
-     in the same fixture, so a renderer that drew the line unconditionally fails too. */
+  /* LOC-28'S ROW: two on-hand cards toward the back carry no name. The owner's ruling of
+     2026-09-24 (amending D116) makes them the neighbour, said as "2 unread cards", where D116
+     walked past them to Galio. `next` is a named card, in the same fixture, so a renderer that
+     drew every side as unread fails too. */
   '2/5': card({
     index: 5,
     state: 'identified',
@@ -4248,8 +4247,8 @@ const NEIGHBORLY: Cards = {
     sectionStart: 1,
     sectionEnd: 6,
     neighbors: {
-      prev: { index: 18, slot: 17, name: 'Galio, Indefaticable', skipped: 2 },
-      next: { index: 22, slot: 21, name: 'Conscription', skipped: 0 },
+      prev: { index: 20, slot: 19, name: null, unread: 2 },
+      next: { index: 22, slot: 21, name: 'Conscription', unread: 0 },
     },
   }),
 }
@@ -4283,7 +4282,7 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
      which is what the one-composer rule in server.ts is for. */
   await expect(band).toHaveAttribute(
     'aria-label',
-    'Between Galio, Indefaticable toward the back and Evelynn, Entrancing toward the front',
+    'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
   )
 })
 
@@ -4335,7 +4334,7 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
   await expect(key).toHaveCSS('text-transform', 'uppercase')
 })
 
-test('a card at the front of the box gets one row, not a pretend between', async ({ page }) => {
+test('a card at the back of the box gets one row, not a pretend between', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
     search: (query) => searchAnswer(query, NEIGHBORLY),
@@ -4354,45 +4353,40 @@ test('a card at the front of the box gets one row, not a pretend between', async
      Pokemon name takes this branch and is drawn exactly as the server sent it. */
   await expect(front.locator('.nb-name b')).toHaveText(['Conscription'])
   await expect(front.locator('.nb-rest')).toHaveCount(0)
-  await expect(front).toHaveAttribute('aria-label', 'Next to Conscription toward the front')
+  /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
+     neighbour and in front of nothing (UX-186). */
+  await expect(front).toHaveAttribute('aria-label', 'It sits behind Conscription.')
 })
 
-test('a landmark the walk had to reach says how far it reached (D116)', async ({ page }) => {
+test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
     search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
-  /* THE OWNER READ A BARE FIGURE IN THIS BLOCK AS A SOLD CARD (2026-09-07). It was not one —
-     the ladder has never named a departed card — it was a LIVE card at a real count that no
-     identification ever named, 7 of them on their store. The server now walks past such a card
-     to the nearest one it can name, so the figure is gone; what replaces it is the distance,
-     because `after Galio` naming a card three along is a sentence somebody counts slots
-     against and comes out two short, which is the one thing D30 says this block may not do.
+  /* THE OWNER'S RULING, 2026-09-24 (amending D116): an unread card is a neighbour. D116 walked
+     past it to the nearest named card and added "with 2 unidentified cards in between"; the
+     owner read that as a real card dropped from the sentence (UX-264). Now the side IS the
+     unread run, "2 unread cards", and never a bare figure (D116's own complaint).
 
-     THE THIRD COPY IS THE SUBJECT and its two sides are the case: `prev` reached across two
-     unnamed cards, `next` reached across none. A renderer that drew the line unconditionally
-     fails on the second row, and one that never drew it fails on the first. */
+     THE THIRD COPY IS THE SUBJECT and its two sides are the case: `prev` is two unread cards,
+     `next` is a named card. A renderer that drew every side as unread fails on the second row,
+     and one that dropped the unread side fails on the first. */
   const reached = page.locator('.card-locations-owner .nb').nth(2)
   await expect(reached).toBeVisible()
-  await expect(reached.locator('.nb-name b')).toHaveText(['Galio', 'Conscription'])
-  await expect(reached.locator('.nb-skip')).toHaveText(['2 unidentified cards between'])
+  await expect(reached.locator('.nb-row[data-side="back"] .nb-unread')).toHaveText('2 unread cards')
+  await expect(reached.locator('.nb-name b')).toHaveText(['Conscription'])
+  await expect(reached.locator('.nb-row[data-side="back"]')).not.toContainText(/#\d/)
 
-  /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px.
-     One clause covers both sides on purpose: every card the walk passed lies strictly between
-     the two landmarks, whichever side it was on. */
-  await expect(reached).toHaveAttribute(
-    'aria-label',
-    'Between Galio, Indefaticable toward the back and Conscription toward the front, with 2 unidentified cards in between',
-  )
+  /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px. */
+  await expect(reached).toHaveAttribute('aria-label', 'It sits in front of 2 unread cards and behind Conscription.')
 
-  /* A ROW THAT SKIPPED NOTHING SAYS NOTHING, asserted on a DIFFERENT copy so it cannot pass by
-     the line simply never rendering: the first copy's neighbours are both adjacent. */
+  /* A ROW WHOSE NEIGHBOURS ARE BOTH NAMED SAYS NO "unread", asserted on a DIFFERENT copy. */
   const adjacent = page.locator('.card-locations-owner .nb').first()
-  await expect(adjacent.locator('.nb-skip')).toHaveCount(0)
+  await expect(adjacent.locator('.nb-unread')).toHaveCount(0)
   await expect(adjacent).toHaveAttribute(
     'aria-label',
-    'Between Galio, Indefaticable toward the back and Evelynn, Entrancing toward the front',
+    'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
   )
 })
 
@@ -4413,7 +4407,7 @@ function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
       section: 1,
       sectionStart: 1,
       sectionEnd: 6,
-      neighbors: { prev: { index: 0, slot: 0, name: 'Mantine', skipped: 0 }, next: null },
+      neighbors: { prev: { index: 0, slot: 0, name: 'Mantine', unread: 0 }, next: null },
     }),
     '2/3': card({
       index: 3,
@@ -4423,7 +4417,7 @@ function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
       section: 1,
       sectionStart: 1,
       sectionEnd: 6,
-      neighbors: { prev: { index: 1, slot: 1, name: 'Mantine', skipped: 0 }, next: null },
+      neighbors: { prev: { index: 1, slot: 1, name: 'Mantine', unread: 0 }, next: null },
     }),
     '2/5': card({
       index: 5,
@@ -4434,7 +4428,7 @@ function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
       sectionStart: 1,
       sectionEnd: 6,
       neighbors: {
-        prev: { index: 3, slot: 2, name: 'Bashful Bloom', skipped: 0 },
+        prev: { index: 3, slot: 2, name: 'Bashful Bloom', unread: 0 },
         next: null,
       },
     }),
@@ -4450,7 +4444,7 @@ function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
         const behind = cards['2/5']
         if (behind !== undefined) {
           behind.place.neighbors = {
-            prev: { index: 1, slot: 1, name: 'Mantine', skipped: 0 },
+            prev: { index: 1, slot: 1, name: 'Mantine', unread: 0 },
             next: null,
           }
         }

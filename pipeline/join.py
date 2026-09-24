@@ -608,11 +608,11 @@ def departed_label(box_name: str, section: Optional[int], card: int) -> str:
     the two apart by the mark it draws for a departed copy (`Place.slot` is null on the wire,
     which is what every client reads, via `app/src/server.ts:isDeparted`).
 
-    WHAT THE STORE KEY PROTECTED, AND WHAT PROTECTS IT NOW. D68 added `B3 #96` because two
-    sold copies of one card in one box drew one identical string. With this form, two
-    departed copies that stood next to each other still read the same place, which is true:
-    they left the same place. A screen that lists them draws each copy's own state and date
-    beside the label. The key stays on the wire (`Place.index`) and in the route path.
+    WHAT THE STORE KEY PROTECTED. D68 added `B3 #96` because two sold copies of one card in
+    one box drew one identical string. With this form, two departed copies that stood next to
+    each other read the same place, which is true: they left the same place. The owner's
+    ruling of 2026-09-24 accepts that they may look the same; nothing on screen tells them
+    apart. The key stays on the wire (`Place.index`) and in the route path.
 
     `section` is None only for a caller that could not read the layout, and then the label
     says the box and the card count within the box, which is what `Position` answers there.
