@@ -69,15 +69,16 @@ PORTS
 )
 EOF
 
-# A LINKED WORKTREE THAT CANNOT DERIVE ITS PORT RENDERS NOTHING. `.git` as a FILE is the
-# linked-worktree test, the same one fact app/devPort.ts, server/ports.py and
-# scripts/worktree-guard.sh all detect on. Refusing is the answer here rather than an
-# obstacle: falling back to the documented default would render the main checkout's app and
-# the renders would look fine, which is the failure being fixed and not a degraded version
-# of it. The main tree has nothing to derive and needs none of this.
+# A TREE THAT IS NOT THE PRIMARY CHECKOUT AND CANNOT DERIVE ITS PORT RENDERS NOTHING. Only a
+# `.git` DIRECTORY is the primary checkout, the same one fact server/ports.py and
+# app/devPort.ts detect on (D-no-git-no-live-port, a copied tree never gets the live port).
+# A linked worktree (`.git` a FILE) and a copy with no `.git` both refuse. Refusing is the
+# answer here rather than an obstacle: falling back to the documented default would render
+# the main checkout's app and the renders would look fine, which is the failure being fixed
+# and not a degraded version of it. The main tree has nothing to derive and needs none of this.
 if [ -z "${DEV_PORT:-}" ]; then
-  if [ -f .git ]; then
-    echo "screenshot: this is a linked worktree and its dev port could not be derived." >&2
+  if [ ! -d .git ]; then
+    echo "screenshot: this is not the primary checkout and its dev port could not be derived." >&2
     echo "  Without it the manifest's :5173 would render the MAIN checkout's app — a branch's" >&2
     echo "  screenshots showing main's code, over the owner's real store (D43). Refusing." >&2
     echo "  Fix: python3 must be able to import server/ports.py from $(pwd)" >&2

@@ -135,9 +135,12 @@ import type {
  * inventory from a branch, in the other writing real capture photographs into a directory
  * that is deleted with the worktree.
  *
- * The literal below is the last-resort fallback for a bundle built without that define — a
- * bare `tsc`, a test harness, an editor's type server. It is the main tree's port, which is
- * the right guess when nothing has told us which tree this is.
+ * A bundle built without that define — a bare `tsc`, a test harness, an editor's type server,
+ * a bundler that never read `vite.config.ts` — cannot know its tree's port: the browser cannot
+ * hash a path. It used to guess `http://localhost:8000`, the primary checkout's LIVE server,
+ * which is the guess that must never be made (D-no-git-no-live-port, a copied tree never gets
+ * the live port). It now has NO address. `about:invalid` opens no socket, so a photo or file
+ * link built on it loads nothing, and `request` refuses by name before any fetch.
  *
  * THE HOST IS RESOLVED AT RUNTIME AND ONLY THE PORT IS BAKED, WHICH IS WHAT LETS THIS PAGE BE
  * OPENED FROM ANOTHER DEVICE. `VITE_CAPTURE_DEFAULT` is a whole URL and its host is
@@ -157,7 +160,7 @@ import type {
  * exists because the default could not follow the address bar; it still wins, and it is still
  * the answer for pointing a device at a DIFFERENT machine. What it is no longer needed for is
  * the ordinary case of reaching this one by its own name. */
-const FALLBACK_BASE = 'http://localhost:8000'
+const FALLBACK_BASE = 'about:invalid'
 const derivedUrl: unknown = import.meta.env.VITE_CAPTURE_DEFAULT
 const derivedPort: unknown = import.meta.env.VITE_CAPTURE_PORT
 
@@ -224,8 +227,8 @@ let demoModule: Promise<typeof import('./demoServer')> | null = null
  */
 export class ServerError extends Error {
   /** The server's own code (`box_invalid`, `store_busy`, `card_not_found`, …), or one of
-   *  the three this client invents when there is no server answer to quote: `unreachable`,
-   *  `origin_blocked` and `bad_response`. Codes are stable strings and are worth branching
+   *  the four this client invents when there is no server answer to quote: `unreachable`,
+   *  `origin_blocked`, `bad_response` and `no_server_address`. Codes are stable strings and are worth branching
    *  on; messages are worth showing.
    *
    *  `origin_blocked` is the newest and the only one that is a CLAIM ABOUT THE SERVER rather
@@ -634,6 +637,17 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   if (DEMO) {
     demoModule ??= import('./demoServer')
     return (await demoModule).demoRequest(path, init)
+  }
+
+  /* A bundle that does not know its server's address refuses, and never guesses the live
+   * port. See `FALLBACK_BASE`. */
+  if (base === FALLBACK_BASE) {
+    throw new ServerError(
+      'no_server_address',
+      'This copy of the app was built without the address of its capture server, so it ' +
+        'will not guess one. Nothing was sent. Build it again with `make up`.',
+      0,
+    )
   }
 
   const url = `${base}${path}`

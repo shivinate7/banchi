@@ -2480,10 +2480,11 @@ COMPONENTS = [
                         "the previous bundle byte-identical, the build in flight that answers "
                         "200 throughout, and a PATH with no node on it — the API up, `GET /` "
                         "503, the log naming `make launch-agent`. THE PORT IS PINNED with "
-                        "`PKMNSCAN_PORT` and that is not a shortcut: a copied tree is not a "
-                        "LINKED worktree, so the derivation calls it the main checkout and it "
-                        "claims :8000 — measured, against the owner's live server, the first "
-                        "time this ran. In `check`, never in the git hook (D18). "
+                        "`PKMNSCAN_PORT` and that is not a shortcut: the first time this ran, a "
+                        "copied tree claimed :8000 — measured, against the owner's live server. "
+                        "A copy with no `.git` now takes a slot (D-no-git-no-live-port), and a "
+                        "free socket still cannot collide the way a slot can. "
+                        "In `check`, never in the git hook (D18). "
                         "IT ALSO REPRODUCES BOTH OF D158\'s INCIDENTS in a third "
                         "tree that is a REAL git checkout with a real `main`: a tree moving "
                         "under a live supervisor, and a cold start through `serve.py run` — "
@@ -2491,7 +2492,7 @@ COMPONENTS = [
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
                         "reload is scheduled and the guard is never reached.",
-                "governed_by": ["D18", "D43", "D53", "D138", "D158", "D176"],
+                "governed_by": ["D18", "D43", "D53", "D138", "D158", "D176", "D-no-git-no-live-port"],
                 "tested_by": [],
             },
             "primary_sync.py": {
@@ -3306,7 +3307,7 @@ COMPONENTS = [
                 # node, and the git hook runs bare python3 with nothing installed, so it lives
                 # in `make check` beside the other two self-tests rather than on the commit
                 # path.
-                "governed_by": ["D18", "D43"],
+                "governed_by": ["D18", "D43", "D-no-git-no-live-port"],
             },
             "set-hint-agreement.py": {
                 "does": "port-agreement.py's shape, one decision over: proves "
@@ -4112,7 +4113,7 @@ COMPONENTS = [
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
                 "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138", "D139",
-                                "D158", "D176"],
+                                "D158", "D176", "D-no-git-no-live-port"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -4416,8 +4417,7 @@ COMPONENTS = [
                                 "D171", "D172", "D173", "D176", "D178", "D189", "D212", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D254",
-                                "D256"],
+                                "D247", "D250", "D254", "D256", "D-no-git-no-live-port"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -4631,7 +4631,8 @@ COMPONENTS = [
                         "derivation — and substitutes a worktree's own port before rendering, "
                         "saying so as it goes. Before that, `make screenshot` in a worktree "
                         "photographed the MAIN tree's app over the owner's real store, and the "
-                        "renders looked perfectly correct. A linked worktree that cannot "
+                        "renders looked perfectly correct. Any tree whose `.git` is not a "
+                        "DIRECTORY (a linked worktree, or a copy with no `.git`) that cannot "
                         "derive its port renders NOTHING rather than falling back to a port "
                         "that would be another tree's.",
                 # D5 is why the loop exists: the agent cannot see its own output, and the
@@ -4641,7 +4642,7 @@ COMPONENTS = [
                 # the store, and this script had been the one caller that did not follow it.
                 # D18 is the rule that keeps it off `make check`: it writes, and nothing
                 # that writes may run on the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18", "D43", "D129"],
+                "governed_by": ["D5", "D13", "D18", "D43", "D129", "D-no-git-no-live-port"],
             },
             "screenshot.mjs": {
                 "does": "the browser half of `make screenshot`: one render, and the proof "
@@ -4753,14 +4754,16 @@ COMPONENTS = [
         "modules": {
             "ports.py": {
                 "does": "which ports THIS checkout serves on, derived from where the checkout "
-                        "is. The main tree keeps :8000 and :5173; a linked worktree gets its "
-                        "own pair from one slot off its path. `PKMNSCAN_PORT` overrides and an "
+                        "is. The main tree keeps :8000 and :5173, and only a tree whose `.git` "
+                        "is a DIRECTORY is the main tree; a linked worktree, or a copy with no "
+                        "`.git`, gets its own pair from one slot off its path. `PKMNSCAN_PORT` "
+                        "overrides and an "
                         "out-of-range value is ignored rather than obeyed.",
                 # D43 is the decision. D13 is why it matters: one truth on the Mac, and the
                 # store already defaults per-checkout — so a shared port meant one tree's UI
                 # writing into another tree's store, which is that entry's promise broken by
                 # a socket rather than by a design.
-                "governed_by": ["D13", "D43"],
+                "governed_by": ["D13", "D43", "D-no-git-no-live-port"],
                 "note": "Stdlib only, like the server it serves. `scripts/status.py` imports "
                         "it and the git hook never does.",
             },
@@ -4857,7 +4860,7 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D168", "D172", "D174", "D183", "D189", "D191",
                                 "D192", "D193", "D203", "D212", "D213", "D219", "D225", "D227",
-                                "D252"],
+                                "D252", "D-no-git-no-live-port"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5272,9 +5275,10 @@ COMPONENTS = [
                                    "configs hardcoding 5173 is what let design-check attach "
                                    "to the MAIN tree's server from a worktree and assert "
                                    "DESIGN.md's floors against code the branch never had — "
-                                   "green, and meaningless. Detects a worktree the way "
-                                   "scripts/worktree-guard.sh does: `.git` is a file",
-                           "governed_by": ["D5", "D13", "D43"]},
+                                   "green, and meaningless. Only a tree whose `.git` is a "
+                                   "DIRECTORY keeps 5173; a linked worktree and a copy with "
+                                   "no `.git` both take a slot",
+                           "governed_by": ["D5", "D13", "D43", "D-no-git-no-live-port"]},
             "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
                                        "Makefile and scripts/views.txt would all three be wrong. "
@@ -5678,7 +5682,8 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236", "D252"]},
+                                              "D225", "D227", "D236", "D252",
+                                              "D-no-git-no-live-port"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "

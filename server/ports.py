@@ -27,7 +27,10 @@ answer differently every run, and `strictPort` could then not tell "someone else
 from "I moved".
 
 THE MAIN WORKING TREE KEEPS 8000, exactly as it keeps 5173, so nothing about the ordinary
-single-checkout workflow changes and every doc that names the number stays true.
+single-checkout workflow changes and every doc that names the number stays true. ONLY the
+main working tree keeps them: a tree must show a `.git` DIRECTORY to get the base ports, and
+a tree with no `.git` takes a slot like a linked worktree (D-no-git-no-live-port, a copied
+tree never gets the live port).
 
 TWO IMPLEMENTATIONS OF ONE ALGORITHM, WHICH IS A DRIFT RISK AND IS TESTED RATHER THAN
 TRUSTED. Python serves and TypeScript addresses, and neither can import the other. They agree
@@ -61,14 +64,44 @@ SLOTS = 300
 def is_linked_worktree(root: Path) -> bool:
     """A linked worktree's `.git` is a FILE, not a directory.
 
-    The same one fact `app/devPort.ts`, `scripts/worktree-guard.sh` and
-    `scripts/docs-audit.py` all detect on, spelled the same way on purpose. No `.git` at all
-    — a tarball, a container copy, a CI checkout that stripped it — behaves like the main
-    tree, because inventing a port for a checkout with no identity to derive one from is
-    worse than the documented default.
+    The same one fact `scripts/worktree-guard.sh` and `scripts/docs-audit.py` detect on,
+    spelled the same way on purpose. `scripts/serve.py` and `scripts/status.py` call it to
+    ask "is this a linked worktree?" and nothing else.
+
+    THE PORT DOES NOT ASK THIS QUESTION ANY MORE (D-no-git-no-live-port, a copied tree never
+    gets the live port). A tree with no `.git` is not a linked worktree, and this answers
+    False for it, as it always did. The port used to read that False as "the primary
+    checkout" and gave such a tree 8000. `is_primary_checkout` below is the question the
+    port asks now.
     """
     try:
         return (root / ".git").is_file()
+    except OSError:
+        return False
+
+
+def is_primary_checkout(root: Path) -> bool:
+    """The primary checkout's `.git` is a DIRECTORY. Only this tree keeps 8000 and 5173.
+
+    D-no-git-no-live-port, a copied tree never gets the live port. On 2026-09-23 a scratch
+    copy of main with no `.git` built an app. The old rule read "no `.git`" as "the primary
+    checkout", so that app called 8000, the owner's LIVE capture server, and read the real
+    store. Any press there would have written to it.
+
+    So the base port is kept by the one tree that proves it is a primary checkout: a
+    `.git` directory. Everything else takes a slot from its own path, as a linked worktree
+    does. That covers a tarball, a container copy, a copy without its `.git`, and a failed
+    stat. A wrong guess here now costs a moved port, never a write to the owner's store.
+
+    A plain `cp -r` copies `.git` too, and so does a second clone. Such a tree IS a primary
+    checkout of its own and still gets 8000. That is an accepted risk, recorded in the
+    decision entry.
+
+    `app/devPort.ts:isPrimaryCheckout` is its twin, and `make port-agreement` asks both
+    of them over a copy of each kind of tree.
+    """
+    try:
+        return (root / ".git").is_dir()
     except OSError:
         return False
 
@@ -87,7 +120,7 @@ def slot_for(root: Path) -> int:
 
 
 def _port(root: Path, base: int, low: int) -> int:
-    return base if not is_linked_worktree(root) else low + slot_for(root)
+    return base if is_primary_checkout(root) else low + slot_for(root)
 
 
 def capture_port(root: Path = REPO_ROOT) -> int:

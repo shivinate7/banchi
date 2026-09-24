@@ -1000,9 +1000,10 @@ CHECKS = (
         "needs": ("python3",),
         "writes": "two throwaway checkouts, their `.serve/` directories and the supervisors "
                   "and capture servers running under them, all inside `mktemp -d`. The "
-                  "capture port is PINNED with `PKMNSCAN_PORT` rather than derived: a copied "
-                  "tree is not a linked worktree, so it would call itself the main checkout "
-                  "and claim :8000 — the owner's live server.",
+                  "capture port is PINNED with `PKMNSCAN_PORT` to a free socket rather than "
+                  "derived: a copy with no `.git` takes a slot from its path "
+                  "(D-no-git-no-live-port), and a slot can collide with another worktree's "
+                  "where a free socket cannot.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
         "gates": True,

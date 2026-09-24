@@ -9901,13 +9901,21 @@ def check_origin_gate(checks: Checks) -> None:
         "constant 5173 while D43 made the dev port per-checkout, so a linked worktree "
         "served an app whose every write its own server then refused",
     )
-    with tempfile.TemporaryDirectory() as plain:
+    with tempfile.TemporaryDirectory() as primary:
+        (Path(primary) / ".git").mkdir()
         checks.equal(
-            ports.dev_port(Path(plain)),
+            ports.dev_port(Path(primary)),
             5173,
-            "AND THE MAIN TREE IS UNMOVED: a root that is not a linked worktree still "
+            "AND THE MAIN TREE IS UNMOVED: a root whose .git is a DIRECTORY still "
             "derives 5173, so this list is byte-identical to the constant it replaced "
             "wherever the owner actually works, and every doc naming that number stays true",
+        )
+    with tempfile.TemporaryDirectory() as plain:
+        checks.ok(
+            ports.dev_port(Path(plain)) != 5173,
+            "and a root with NO .git does not derive 5173 (D-no-git-no-live-port, a copied "
+            "tree never gets the live port): a scratch copy of main once derived the main "
+            "tree's ports and its app read the owner's live store",
         )
     if ports.is_linked_worktree(ports.REPO_ROOT):
         checks.ok(
