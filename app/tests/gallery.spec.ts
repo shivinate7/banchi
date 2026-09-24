@@ -416,20 +416,27 @@ test('a notice keeps the machine\'s words behind "What the server said" (D-notic
   await expect(code).toHaveText('sku_not_a_candidate')
 })
 
-test('the status slot: a one-line answer moves nothing, and "What the server said" opens over the page (D118)', async ({ page }) => {
-  const spec = page.locator('[data-specimen="status-slot"]')
-  const under = spec.locator('[data-kit-under-slot]')
-  await spec.scrollIntoViewIfNeeded()
-  const top = () => under.evaluate((el) => Math.round(el.getBoundingClientRect().top + window.scrollY))
-  const before = await top()
-  await spec.locator('[data-kit-answer="short"]').click()
-  await expect(spec.locator('.bn-notice')).toBeVisible()
-  const answered = await top()
-  await spec.locator('summary').click()
-  await expect(spec.locator('.bn-notice-code')).toBeVisible()
-  const opened = await top()
-  expect(answered, 'a one-line answer moved the row under the slot').toBe(before)
-  expect(opened, 'opening "What the server said" moved the row under the slot').toBe(before)
+test('the status slot: a one-line answer moves nothing at 390, 720, 820 and 1440 (D118)', async ({ page }) => {
+  for (const width of [390, 720, 820, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    const spec = page.locator('[data-specimen="status-slot"]')
+    const under = spec.locator('[data-kit-under-slot]')
+    await spec.getByRole('button', { name: 'Clear' }).click()
+    await expect(spec.locator('.bn-notice')).toHaveCount(0)
+    await spec.scrollIntoViewIfNeeded()
+    const top = () => under.evaluate((el) => el.getBoundingClientRect().top + window.scrollY)
+    const before = await top()
+    await spec.locator('[data-kit-answer="short"]').click()
+    await expect(spec.locator('.bn-notice')).toBeVisible()
+    const lines = await spec.locator('.bn-notice-text').evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)))
+    expect(lines, `${width}: the specimen answer is one line`).toBeLessThanOrEqual(1)
+    const answered = await top()
+    await spec.locator('summary').click()
+    await expect(spec.locator('.bn-notice-code')).toBeVisible()
+    const opened = await top()
+    expect(Math.abs(answered - before), `${width}: a one-line answer moved the row under the slot`).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(opened - before), `${width}: opening "What the server said" moved the row under the slot`).toBeLessThanOrEqual(0.5)
+  }
 })
 
 test('at 390 a 300-character answer is never cut, and its disclosure stays inside the gutter', async ({ page }) => {
@@ -651,19 +658,22 @@ for (const theme of ['light', 'dark'] as const) {
       const live = pills.find((p) => p.tone === 'live')?.ink ?? [0, 0, 0]
       const danger = pills.find((p) => p.tone === 'danger')?.ink ?? [0, 0, 0]
       const apart = Math.min(Math.abs(hue(live) - hue(danger)), 360 - Math.abs(hue(live) - hue(danger)))
+      const lightness = ratio(live, danger)
       return {
         ink4: Math.min(...grounds.map((g) => ratio(ink4, g))),
         tier: ratio(ink3, ink4),
         edge: Math.min(...grounds.map((g) => ratio(edge, g))),
         pills: pills.map((p) => ({ tone: p.tone, worst: p.worst })),
         apart,
+        lightness,
       }
     })
     expect(r.ink4, 'ink-4, a graphic, on every ground').toBeGreaterThanOrEqual(3)
     expect(r.tier, 'ink-4 is a visible step below ink-3').toBeGreaterThanOrEqual(1.25)
     expect(r.edge, 'a field edge on every ground').toBeGreaterThanOrEqual(3)
     for (const pill of r.pills) expect(pill.worst, `the ${pill.tone} pill's word on its tint`).toBeGreaterThanOrEqual(4.5)
-    if (theme === 'light') expect(r.apart, 'the live and danger pills are two hues').toBeGreaterThanOrEqual(15)
+    expect(r.apart, 'the live and danger pills are two hues').toBeGreaterThanOrEqual(15)
+    if (theme === 'dark') expect(r.lightness, 'the live and danger pills are two lightnesses').toBeGreaterThanOrEqual(1.2)
     const field = page.locator('[data-kit-section="fields"] .bn-input').first()
     await expect(field).toHaveCSS('border-top-color', await tokenColor(page, '--bn-field-edge'))
     const okPill = page.locator('[data-kit-section="pills"] .bn-pill-ok').first()
@@ -783,19 +793,33 @@ test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is l
       await page.setViewportSize({ width, height: 900 })
       await setTheme(page, theme)
       await page.addScriptTag({ path: axePath })
-      const violations = await page.evaluate(async () => {
-        const w = window as unknown as {
-          axe: { run: (ctx: Element, opts: object) => Promise<{ violations: { id: string; nodes: { target: string[] }[] }[] }> }
+      /* two states: the page at rest, and the page with a layer open over it (a layer is
+         portalled to <body>, so it is audited with the page, landmarks and all) */
+      for (const state of ['rest', 'layer'] as const) {
+        const opener = page.locator('[data-kit-open="sheet"]')
+        if (state === 'layer') {
+          await opener.scrollIntoViewIfNeeded()
+          await opener.click()
+          await expect(page.locator('[data-bn-overlay="sheet"]')).toBeVisible()
+          await page.waitForTimeout(400)
         }
-        const main = document.querySelector('main[data-bn-page]')
-        if (main === null) return []
-        const r = await w.axe.run(main, { resultTypes: ['violations'] })
-        return r.violations.flatMap((v) => v.nodes.map((n) => ({ rule: v.id, target: n.target.join(' ') })))
-      })
-      for (const v of violations) {
-        const at = AXE_KNOWN.findIndex((k) => k.rule === v.rule && v.target.includes(k.selector))
-        if (at >= 0) seen.add(at)
-        else unlisted.push(`${theme} ${width}: ${v.rule} ${v.target}`)
+        const violations = await page.evaluate(async () => {
+          const w = window as unknown as {
+            axe: { run: (ctx: object, opts: object) => Promise<{ violations: { id: string; nodes: { target: string[] }[] }[] }> }
+          }
+          const include = [['main[data-bn-page]'], ...(document.querySelector('[data-bn-overlay]') === null ? [] : [['[data-bn-overlay]']])]
+          const r = await w.axe.run({ include }, { resultTypes: ['violations'] })
+          return r.violations.flatMap((v) => v.nodes.map((n) => ({ rule: v.id, target: n.target.join(' ') })))
+        })
+        for (const v of violations) {
+          const at = AXE_KNOWN.findIndex((k) => k.rule === v.rule && v.target.includes(k.selector))
+          if (at >= 0) seen.add(at)
+          else unlisted.push(`${theme} ${width} ${state}: ${v.rule} ${v.target}`)
+        }
+        if (state === 'layer') {
+          await page.keyboard.press('Escape')
+          await expect(page.locator('[data-bn-overlay="sheet"]')).toHaveCount(0)
+        }
       }
     }
   }

@@ -8,7 +8,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
   Button, Chip, ConfirmSheet, EmptyState, Icon, Kbd, Loading, Lockup, Logo, Modal, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
-  KeyHint, Section, Segmented, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
+  KeyHint, Section, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
 import { MARKS } from './kit/markPalettes'
@@ -341,6 +341,22 @@ const LONG_ANSWER =
   'capture screen first, then press here once more. Every card already in it stays exactly ' +
   'where it is, and nothing about its sections changes until you open it.'
 
+/* THE KIT'S SELECT, never the operating system's menu: the owner's own gripe. */
+function SelectSpecimen() {
+  const [from, setFrom] = useState<'market' | 'low'>('market')
+  return (
+    <Select
+      label="Price from"
+      value={from}
+      onChange={setFrom}
+      options={[
+        { value: 'market', label: 'Market price' },
+        { value: 'low', label: 'Lowest listing' },
+      ]}
+    />
+  )
+}
+
 function ScaffoldSpecimens() {
   const [said, setSaid] = useState<'none' | 'short' | 'long'>('none')
   const [sort, setSort] = useState<'new' | 'old'>('new')
@@ -380,7 +396,7 @@ function ScaffoldSpecimens() {
         <StatusSlot>
           {said === 'short' ? (
             <Refusal title="This box is closed." code="box_closed" detail="POST /boxes/3/sections">
-              Open it on the capture screen.
+              Open it first.
             </Refusal>
           ) : said === 'long' ? (
             <Refusal title="This box is closed." code="box_closed" detail="POST /boxes/3/sections refused: the box is closed">
@@ -975,13 +991,7 @@ export function Gallery() {
                 </span>
               </Spec>
               <Spec label="select · textarea">
-                <label className="bn-field">
-                  <span className="bn-field-label">Price from</span>
-                  <select className="bn-select" defaultValue="market">
-                    <option value="market">Market price</option>
-                    <option value="low">Lowest listing</option>
-                  </select>
-                </label>
+                <SelectSpecimen />
                 <label className="bn-field">
                   <span className="bn-field-label">Note</span>
                   <textarea className="bn-textarea" defaultValue="Held back: bullish above $5." />

@@ -891,24 +891,47 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   overflow-wrap: anywhere;
 }
 
-/* THE DISCLOSURE OPENS OVER THE PAGE (D118). In a compact notice, and in any notice inside
-   `StatusSlot`, "What the server said" sits on the sentence's line and its panel opens over what
-   is below, the full width of the notice, so it stays inside the page's gutter at every width.
-   THE SENTENCE IS NEVER CLIPPED: it wraps. A notice appearing is a change of state, not a press
-   moving the page, so the slot may grow to hold it (the orchestrator's reading of D118,
-   2026-09-23). What the slot guarantees is its minimum: a one-line answer moves nothing. */
+/* A ONE-LINE ANSWER DRAWS EXACTLY THE SLOT'S MINIMUM, AT EVERY WIDTH (D118). A compact notice, and
+   any notice inside `StatusSlot`, is a grid whose rows have known heights: the sentence runs at a
+   20px line, and "What the server said" and an action sit in a row one `--bn-control-h-sm` tall,
+   which the thumb floor raises to 40 on a phone and a coarse pointer. So the slot's minimum is
+   written from the same numbers, and a one-line answer fills it without moving anything below.
+     1024 and up, fine pointer: one row: icon, sentence, "What the server said", action.
+     below 1024, or a coarse pointer: the sentence on the first row; the disclosure and the action
+     on a second row beneath it.
+   A longer answer wraps and grows the slot: a notice appearing is a change of state, and the
+   sentence is never cut. The disclosure's panel opens OVER the page, the full width of the
+   notice, inside the gutter. */
 .bn-notice-compact,
-.bn-status-slot > .bn-notice { position: relative; flex-wrap: wrap; align-items: center; row-gap: var(--bn-1); }
+.bn-status-slot > .bn-notice {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--bn-3);
+  row-gap: var(--bn-1);
+  padding-block: var(--bn-3);
+}
 .bn-notice-compact > .bn-icon,
-.bn-status-slot > .bn-notice > .bn-icon { margin-top: 0; }
+.bn-status-slot > .bn-notice > .bn-icon { margin-top: 0; grid-column: 1; grid-row: 1; }
 .bn-notice-compact .bn-notice-text,
-.bn-status-slot > .bn-notice .bn-notice-text { display: block; flex: 1 1 12rem; }
+.bn-status-slot > .bn-notice .bn-notice-text {
+  display: block;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  line-height: var(--bn-5);
+  min-height: var(--bn-control-h-sm);
+  padding-block: calc((var(--bn-control-h-sm) - var(--bn-5)) / 2);
+}
 .bn-notice-compact .bn-notice-title,
 .bn-status-slot > .bn-notice .bn-notice-title { display: inline; margin-right: var(--bn-2); }
 .bn-notice-compact .bn-notice-body,
 .bn-status-slot > .bn-notice .bn-notice-body { display: inline; }
 .bn-notice-compact .bn-notice-said,
-.bn-status-slot > .bn-notice .bn-notice-said { position: static; flex: none; order: 0; padding-left: 0; }
+.bn-status-slot > .bn-notice .bn-notice-said { position: static; grid-column: 3; grid-row: 1; order: 0; padding-left: 0; }
+.bn-notice-compact .bn-notice-action,
+.bn-status-slot > .bn-notice .bn-notice-action { grid-column: 4; grid-row: 1; }
 .bn-notice-compact .bn-notice-said-body,
 .bn-status-slot > .bn-notice .bn-notice-said-body {
   position: absolute;
@@ -921,14 +944,25 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 }
 
 /* ---- the status slot (Page) ---------------------------------------------------------------
-   AT LEAST one notice high whether or not a notice is in it (D118): a one-line answer arrives
-   without moving anything below it. A longer answer grows the slot rather than being cut. The
-   height is the control height plus a margin, so it follows the thumb floor on a phone the way
-   every control does. */
+   AT LEAST one notice high whether or not a notice is in it (D118), and that height is exactly
+   what the one-line notice above draws at this tier. */
 .bn-status-slot {
   position: relative;
-  min-height: calc(var(--bn-control-h) + var(--bn-3));
+  min-height: calc(2 * var(--bn-3) + var(--bn-control-h-sm));
   margin-bottom: var(--bn-4);
+}
+@media (max-width: 1023px), (hover: none) and (pointer: coarse) {
+  .bn-notice-compact,
+  .bn-status-slot > .bn-notice { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .bn-notice-compact .bn-notice-text,
+  .bn-status-slot > .bn-notice .bn-notice-text { grid-column: 2 / -1; min-height: 0; padding-block: 0; }
+  .bn-notice-compact .bn-notice-said,
+  .bn-status-slot > .bn-notice .bn-notice-said { grid-column: 2; grid-row: 2; justify-self: start; }
+  .bn-notice-compact .bn-notice-said > summary,
+  .bn-status-slot > .bn-notice .bn-notice-said > summary { min-height: var(--bn-control-h-sm); }
+  .bn-notice-compact .bn-notice-action,
+  .bn-status-slot > .bn-notice .bn-notice-action { grid-column: 3; grid-row: 2; }
+  .bn-status-slot { min-height: calc(2 * var(--bn-3) + var(--bn-5) + var(--bn-1) + var(--bn-control-h-sm)); }
 }
 
 /* ---- receipt (undo toast, inline) ------------------------------------------------------ */

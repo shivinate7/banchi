@@ -78,12 +78,12 @@ SEMANTIC                        (the kit paints these as TEXT — pills, buttons
 --bn-danger / --bn-danger-tint  #b91c1c 6.5:1             #ff5c5c
 --bn-money                      = ink in both themes: money is not a color, it is a weight
 PILL INKS                       a tone's word on that tone's tint, at 4.5:1 over --bn-bg,
-                                --bn-surface and --bn-surface-2 in light (UX-047). Dark reads
-                                the tone ink itself, which already clears 5:1 on its tint.
+                                --bn-surface and --bn-surface-2 (UX-047). Dark reads the tone
+                                ink itself for ok and warn, which clear 5:1 on their tints.
 --bn-pill-ink-ok                #11733a
 --bn-pill-ink-warn              #a14b09
---bn-pill-ink-live              #a53f12      vermilion, toward orange
---bn-pill-ink-danger            #b3123e      crimson, so live and danger read apart
+--bn-pill-ink-live              #a53f12      #ffab70     vermilion toward orange; light in dark
+--bn-pill-ink-danger            #b3123e      #f7608a     crimson, so live and danger read apart
 --bn-pill-ink-accent            = --bn-accent-hover in both themes: darker in light, lighter in dark
 
 ELEVATION                       (three steps, each a hairline ring plus a shadow, so a panel

@@ -278,7 +278,8 @@ function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose
           if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault()
         }}
       >
-        <header className="bn-overlay-head">
+        {/* a `div`, not a `header`: portalled to <body>, a header is a second banner */}
+        <div className="bn-overlay-head">
           {icon ? (
             <span className="bn-overlay-icon">
               <Icon name={icon} size={18} />
@@ -290,11 +291,11 @@ function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose
           <Button variant="ghost" iconOnly icon="x" onClick={onClose} disabled={!dismissible} className="bn-overlay-close">
             Close
           </Button>
-        </header>
+        </div>
         <OverlayContext.Provider value>
           <div className="bn-overlay-body">{children}</div>
         </OverlayContext.Provider>
-        {footer ? <footer className="bn-overlay-foot">{footer}</footer> : null}
+        {footer ? <div className="bn-overlay-foot">{footer}</div> : null}
       </div>
     </>,
     document.body,

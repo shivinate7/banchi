@@ -353,8 +353,10 @@
   --bn-pill-ink-accent: var(--bn-accent-hover);  /* a pill on an accent-tinted row is two tints deep */
   --bn-pill-ink-ok: var(--bn-ok);
   --bn-pill-ink-warn: var(--bn-warn);
-  --bn-pill-ink-danger: var(--bn-danger);
-  --bn-pill-ink-live: var(--bn-live);
+  /* live is a light orange-vermilion and danger a deeper crimson-rose: apart in hue and in
+     lightness, each over 4.5:1 on its tint on every dark ground */
+  --bn-pill-ink-danger: #f7608a;
+  --bn-pill-ink-live: #ffab70;
 
   --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),

@@ -47,7 +47,7 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .kit-index-link:hover { background: var(--bn-hover); color: var(--bn-ink); }
-.kit-index-link[aria-current='true'] { background: var(--bn-accent-tint); color: var(--bn-accent); font-weight: 600; }
+.kit-index-link[aria-current='true'] { background: var(--bn-accent-tint); color: var(--bn-pill-ink-accent); font-weight: 600; }
 .kit-index-link[aria-current='true']::before {
   content: '';
   position: absolute;
