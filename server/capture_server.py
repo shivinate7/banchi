@@ -7067,6 +7067,9 @@ def do_review_stand_down(box: int, index: int, payload: dict) -> dict:
     key = master.position_key(box, index)
 
     with Store().write() as snapshot:
+        # THE PLACE A REFUSAL NAMES, NEVER THE STORE KEY (D-a-box-is-shown-by-its-name).
+        # `key` stays the queue lookup; every MESSAGE below speaks through `where`.
+        where = join.said_place(snapshot.inventory, box, index)
         holders = [
             (queue, queue.entries[key])
             for queue in (snapshot.review, snapshot.parked)
@@ -7076,14 +7079,14 @@ def do_review_stand_down(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.NOT_FOUND,
                 "not_in_queue",
-                f"{key} is in no queue file, so there is no question to stand down from.",
+                f"{where} is in no queue file, so there is no question to stand down from.",
             )
         open_holders = [(q, e) for q, e in holders if not e.cleared_by_human]
         if not open_holders:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "already_cleared",
-                f"{key} has already been settled — answered or stood down. Nothing was "
+                f"{where} has already been settled — answered or stood down. Nothing was "
                 f"written. Reload to see the queue as it stands.",
             )
 
@@ -7146,6 +7149,10 @@ def _reverse_stand_down(box: int, index: int) -> dict:
     store = Store()
 
     with store.write() as snapshot:
+        # THE PLACE A REFUSAL NAMES, NEVER THE STORE KEY (D-a-box-is-shown-by-its-name).
+        # `key` stays the queue and history lookup; every MESSAGE below speaks through
+        # `where`.
+        where = join.said_place(snapshot.inventory, box, index)
         holders = [
             (queue, queue.entries[key])
             for queue in (snapshot.review, snapshot.parked)
@@ -7155,14 +7162,14 @@ def _reverse_stand_down(box: int, index: int) -> dict:
             raise BadRequest(
                 HTTPStatus.NOT_FOUND,
                 "not_in_queue",
-                f"{key} is in no queue file, so there is nothing to put back.",
+                f"{where} is in no queue file, so there is nothing to put back.",
             )
         cleared = [(q, e) for q, e in holders if e.cleared_by_human]
         if not cleared:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "not_stood_down",
-                f"{key} is already waiting in its queue — nothing is standing to reverse.",
+                f"{where} is already waiting in its queue — nothing is standing to reverse.",
             )
 
         # INSIDE THE LOCK, for `_answer_origin`'s reason unchanged: a history read taken
@@ -7178,14 +7185,14 @@ def _reverse_stand_down(box: int, index: int) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "stand_down_origin_unknown",
-                f"the log cannot say what closed {key}'s question, so nothing here will "
+                f"the log cannot say what closed {where}'s question, so nothing here will "
                 f"guess. Answer the card instead, or reopen it with a fresh join.",
             )
         if event.get("event") != STOOD_DOWN:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "not_stood_down",
-                f"{key} was closed by an ANSWER, not a stand-down. Take that back on "
+                f"{where} was closed by an ANSWER, not a stand-down. Take that back on "
                 f"POST /review/{box}/{index}/answer with {{\"undo\": true}} — reversing it "
                 f"here would drop a real identification through the wrong control.",
             )
@@ -11729,12 +11736,17 @@ def _prepare_targets(
     refused: List[Tuple[str, BadRequest]] = []
     for target in parsed:
         position = master.position_key(target["box"], target["index"])
+        # THE PLACE A REFUSAL NAMES, NEVER THE STORE POSITION (D-a-box-is-shown-by-its-name).
+        # `position` stays the internal key — `seen`, the card lookup, `_sell` — but every
+        # MESSAGE below speaks through `where`, the box's name and, once a card is found,
+        # its section and card in the section.
+        where = join.said_place(snapshot.inventory, target["box"], target["index"])
         try:
             if position in seen:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "duplicate_target",
-                    f"{position} is in this pull twice. One physical card is pulled "
+                    f"{where} is in this pull twice. One physical card is pulled "
                     f"once; a repeated position would record a second sale of it and "
                     f"compute the wrong state to restore.",
                 )
@@ -11745,13 +11757,13 @@ def _prepare_targets(
                 raise BadRequest(
                     HTTPStatus.NOT_FOUND,
                     "card_not_found",
-                    f"No card at box {target['box']}, index {target['index']}.",
+                    f"No card at that place in {where}.",
                 )
             if not card.capture_id:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "copy_not_identifiable",
-                    f"The card at {position} carries no capture_id, so this pull "
+                    f"The card at {where} carries no capture_id, so this pull "
                     f"cannot be made idempotent and is refused rather than counted "
                     f"blind. Every record written by this server has one; this is a "
                     f"record that predates it.",
@@ -11760,7 +11772,7 @@ def _prepare_targets(
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "capture_id_mismatch",
-                    f"The card at {position} is not the card the screen drew: it "
+                    f"The card at {where} is not the card the screen drew: it "
                     f"carries capture_id {card.capture_id!r} and the request aimed at "
                     f"{target['capture_id']!r}. A mid-box delete, a capture undo "
                     f"releasing an index, or a re-shoot all change a slot's occupant. "
@@ -11770,7 +11782,7 @@ def _prepare_targets(
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "sku_mismatch",
-                    f"The card at {position} carries SKU "
+                    f"The card at {where} carries SKU "
                     f"{str(card.sku or '') or 'nothing'}, and this pull is for {sku}. "
                     f"A copy fills a line by carrying its SKU; nothing here recategorises "
                     f"a card to make it fit.",
@@ -11778,7 +11790,7 @@ def _prepare_targets(
             # COMPUTED BEFORE ANY WRITE — see `do_order_pull`'s docstring, phase one.
             place = places.of(target["box"], target["index"])
         except BadRequest as exc:
-            refused.append((position, exc))
+            refused.append((where, exc))
             continue
         prepared.append(
             {
@@ -11967,7 +11979,7 @@ def do_order_pull(payload: dict) -> dict:
         # ---------------------------------------------------------------- phase one
         prepared, refused = _prepare_targets(snapshot, places, parsed, sku, undo, set())
         if refused:
-            named = "; ".join(f"{position}: {exc.code} — {exc}" for position, exc in refused)
+            named = "; ".join(f"{where}: {exc.code} — {exc}" for where, exc in refused)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "pull_entry_refused",

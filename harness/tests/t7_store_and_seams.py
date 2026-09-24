@@ -12983,11 +12983,21 @@ def check_review_stand_down(checks: Checks) -> None:
             "field_not_settable",
             "a reversal carrying a reason refuses rather than obeying with the reason ignored",
         )
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 4, {"reason": "not_listing"}),
-            "not_in_queue",
-            "a card in no queue has no question to stand down from",
+        not_in_queue_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 4, {"reason": "not_listing"})
+        )
+        checks.ok(
+            not_in_queue_text is not None
+            and not_in_queue_text[0] == "not_in_queue"
+            and not_in_queue_text[1].startswith(
+                "Box 1, Section 1, Card 4 is in no queue file"
+            )
+            and "3/4" not in not_in_queue_text[1]
+            and "box 3" not in not_in_queue_text[1].lower(),
+            "a card in no queue has no question to stand down from, and the refusal NAMES "
+            "THE PLACE — Section n, Card m — never the store key `3/4` "
+            "(D-a-box-is-shown-by-its-name)",
+            f"got {not_in_queue_text!r}",
         )
 
         # --- the write itself, on the card that cannot be answered --------------------
@@ -13032,11 +13042,19 @@ def check_review_stand_down(checks: Checks) -> None:
             "name here: a state would make months of these parse as card states",
         )
 
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 2, {"reason": "not_listing"}),
-            "already_cleared",
-            "a second stand-down refuses rather than re-writing a settled question",
+        already_cleared_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 2, {"reason": "not_listing"})
+        )
+        checks.ok(
+            already_cleared_text is not None
+            and already_cleared_text[0] == "already_cleared"
+            and already_cleared_text[1].startswith(
+                "Box 1, Section 1, Card 2 has already been"
+            )
+            and "3/2" not in already_cleared_text[1],
+            "a second stand-down refuses rather than re-writing a settled question, and "
+            "the refusal names the place, never `3/2` (D-a-box-is-shown-by-its-name)",
+            f"got {already_cleared_text!r}",
         )
 
         # --- both queues, one press ---------------------------------------------------
@@ -13056,12 +13074,20 @@ def check_review_stand_down(checks: Checks) -> None:
             not Store().read().review.entries["3/2"].cleared_by_human,
             "and the entry is waiting again",
         )
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 2, {"undo": True}),
-            "not_stood_down",
+        second_reversal_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 2, {"undo": True})
+        )
+        checks.ok(
+            second_reversal_text is not None
+            and second_reversal_text[0] == "not_stood_down"
+            and second_reversal_text[1].startswith(
+                "Box 1, Section 1, Card 2 is already waiting in its queue"
+            )
+            and "3/2" not in second_reversal_text[1],
             "a second reversal refuses — the first reopened the entry, so nothing has to "
-            "remember that a reversal happened",
+            "remember that a reversal happened — and the refusal names the place, never "
+            "`3/2` (D-a-box-is-shown-by-its-name)",
+            f"got {second_reversal_text!r}",
         )
 
         # --- THE GUARD THAT MATTERS MOST -----------------------------------------------
@@ -13069,12 +13095,21 @@ def check_review_stand_down(checks: Checks) -> None:
         # against a draft whose reversal only checked `cleared_by_human`.
         answered = {"sku": CANDIDATES[1]["sku"], "condition": CANDIDATES[1]["condition"]}
         capture_server.do_review_answer(3, 1, answered)
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 1, {"undo": True}),
-            "not_stood_down",
+        answer_guard_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 1, {"undo": True})
+        )
+        checks.ok(
+            answer_guard_text is not None
+            and answer_guard_text[0] == "not_stood_down"
+            and answer_guard_text[1].startswith(
+                "Box 1, Section 1, Card 1 was closed by an ANSWER"
+            )
+            and "3/1 is" not in answer_guard_text[1],
             "a card closed by an ANSWER refuses this reversal — taking back a real "
-            "identification through the un-dismiss control is the one thing it must not do",
+            "identification through the un-dismiss control is the one thing it must not "
+            "do — and the refusal names the place, never the store key "
+            "(D-a-box-is-shown-by-its-name)",
+            f"got {answer_guard_text!r}",
         )
         still = Store().read().inventory.cards["3/1"]
         checks.equal(
@@ -27507,6 +27542,9 @@ def check_order_screen(checks: Checks) -> None:
             "and the ledger still reads one, so the refusal cost the line nothing",
         )
 
+        # THE PLACE THIS REFUSAL NAMES, computed the same way `capture_id_mismatch`'s own
+        # message computes it — before the call, since the target is not sold by a refusal.
+        where_3_2 = join.said_place(Store().read().inventory, 3, 2)
         refused_aim = _refusal_text(
             lambda: capture_server.do_order_pull(
                 {
@@ -27524,6 +27562,15 @@ def check_order_screen(checks: Checks) -> None:
             "mid-box delete, a capture undo releasing an index or a re-shoot all change a "
             "slot's occupant, so a screen drawn a minute ago may aim at a different card",
             f"got {refused_aim!r}",
+        )
+        checks.ok(
+            refused_aim is not None
+            and f"The card at {where_3_2} is not the card the screen drew" in refused_aim[1]
+            and "3/2" not in refused_aim[1]
+            and "box 3" not in refused_aim[1].lower(),
+            "and the message NAMES THE PLACE, not the store position — the section and "
+            "card within it, never `3/2` or the box number (D-a-box-is-shown-by-its-name)",
+            f"where: {where_3_2!r}; got: {refused_aim!r}",
         )
         checks.equal(
             (Store().read().inventory.cards["3/2"].state,
@@ -27698,6 +27745,9 @@ def check_order_screen(checks: Checks) -> None:
 
         # THE AGGREGATE. Two good targets and one stale one, so the case can distinguish
         # 'the whole pull refused' from 'every target was bad anyway'.
+        before_agg = Store().read().inventory
+        where_3_3 = join.said_place(before_agg, 3, 3)
+        where_3_4 = join.said_place(before_agg, 3, 4)
         aggregate = _refusal_text(
             lambda: capture_server.do_order_pull(
                 {
@@ -27710,10 +27760,12 @@ def check_order_screen(checks: Checks) -> None:
         checks.ok(
             aggregate is not None
             and aggregate[0] == "pull_entry_refused"
-            and "3/3: capture_id_mismatch" in aggregate[1]
-            and "3/4: copy_not_identifiable" in aggregate[1],
-            "THREE TARGETS, TWO REFUSALS, AND EACH POSITION IS NAMED WITH ITS OWN CODE. A "
-            "per-position refusal is collected rather than raised and the whole set is "
+            and f"{where_3_3}: capture_id_mismatch" in aggregate[1]
+            and f"{where_3_4}: copy_not_identifiable" in aggregate[1]
+            and "3/3:" not in aggregate[1] and "3/4:" not in aggregate[1],
+            "THREE TARGETS, TWO REFUSALS, AND EACH IS NAMED BY ITS PLACE, WITH ITS OWN "
+            "CODE — never the store position `3/3` or `3/4` (D-a-box-is-shown-by-its-name). "
+            "A per-position refusal is collected rather than raised and the whole set is "
             "answered at once — `group_entry_refused`'s shape — because a pull half-refused "
             "is an operator holding cards with no record of which ones went",
             f"got {aggregate!r}",
