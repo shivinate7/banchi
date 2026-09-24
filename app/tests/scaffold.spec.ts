@@ -19,8 +19,9 @@ import { sealEveryTest } from './shell'
  *   width    the page's max-width is `--bn-page-w`
  *   top      the h1 sits `--bn-page-top` below the page's top
  *   scroll   nothing scrolls sideways
- *   title    `document.title` is "<title> — Banchi" (owner routes only: the Fulfiller's tab
- *            names his task and carries no brand, D5)
+ *   title    `document.title` is one FIXED title, "番地 " and the screen name in lowercase
+ *            ("番地 pricing", "番地 home"). No alternation, no "— Banchi". The owner's ruling,
+ *            2026-09-23.
  *   palette  the command palette's "Go to" group lists the route
  *   keys     the keyboard sheet, every screen shown, has an entry that names the route
  *
@@ -35,6 +36,10 @@ import { sealEveryTest } from './shell'
  * too (stale), so the list only shrinks. `palette`, `keys` and `title` are the shell lane's to
  * build, and their entries name lane `shell`: the list shrinks when the shell lands. Nothing
  * here is skipped.
+ *
+ * ONE NAMED EXEMPTION, AND IT IS NOT AN ALLOW-LIST ENTRY: `EXEMPT` below. An allow entry is a
+ * debt a lane owes and must pay. An exemption is a ruling that the assertion does not apply,
+ * with its reason beside it. The allow list may not name an exempt assertion.
  *
  * WRITES NOTHING. Run by `make design-check`. */
 
@@ -72,8 +77,22 @@ const WIDTHS: readonly (readonly [number, number])[] = [
 ]
 
 const titleOf = (route: RouteRow): string => route.title ?? route.label
-/** An assertion this route is not held to at all, as distinct from one it owes. */
-const applies = (route: RouteRow, assertion: string): boolean => !(assertion === 'title' && route.persona === 'fulfiller')
+/** The owner's ruling, 2026-09-23: one fixed tab title, "番地 " and the screen name in lowercase. */
+const tabTitleOf = (route: RouteRow): string => `番地 ${titleOf(route).toLowerCase()}`
+
+/* THE NAMED EXEMPTIONS: an assertion a persona is NOT held to, with the ruling that says so.
+ * Never a debt, so never on the allow list, and the allow list may not name one. */
+const EXEMPT: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  fulfiller: {
+    width: 'D5 (two personas) and docs/DESIGN.md\'s Fulfillment floors: the Fulfiller\'s screen has no shell and sizes its own column.',
+    top: 'D5 and docs/DESIGN.md\'s Fulfillment floors: no shell, so no shared top gap to sit under.',
+    title: 'D5: the Fulfiller\'s tab names the task and carries no brand.',
+  },
+}
+
+/** Is this route held to this assertion at all? `false` only for a named exemption. */
+const applies = (route: RouteRow, assertion: string): boolean =>
+  route.persona === null || EXEMPT[route.persona]?.[assertion] === undefined
 
 /** Compare what failed against what the list excuses. Returns every disagreement, both ways. */
 function reconcile(route: RouteRow, failures: ReadonlyMap<string, readonly string[]>, measured: readonly string[]): string[] {
@@ -122,7 +141,7 @@ test('the runtime allow list names only real routes, real assertions and a lane'
     }
     for (const [assertion, lane] of Object.entries(entries)) {
       if (!ASSERTIONS.includes(assertion)) bad.push(`${path} -> ${assertion} is not one of ${ASSERTIONS.join(', ')}`)
-      else if (!applies(route, assertion)) bad.push(`${path} -> ${assertion} does not apply to this route, so it can never be owed`)
+      else if (!applies(route, assertion)) bad.push(`${path} -> ${assertion} is a named exemption (EXEMPT), never a debt: delete the entry`)
       if (typeof lane !== 'string' || lane.trim() === '') bad.push(`${path} -> ${assertion} names no lane`)
     }
   }
@@ -170,10 +189,10 @@ for (const route of ROUTE_TABLE) {
       const at = `${width}px`
       if (m.pages !== 1) fail('page', `${at}: ${m.pages} [data-bn-page]`)
       if (m.h1s.length !== 1 || m.h1s[0] !== want) fail('h1', `${at}: h1 ${JSON.stringify(m.h1s)}, want ["${want}"]`)
-      if (m.maxWidth === null || Math.abs(m.maxWidth - m.pageW) > 0.5) fail('width', `${at}: max-width ${m.maxWidth}, want ${m.pageW}`)
-      if (m.gap === null || Math.abs(m.gap - m.pageTop) > 1) fail('top', `${at}: h1 gap ${m.gap === null ? 'none' : m.gap.toFixed(1)}, want ${m.pageTop}`)
+      if (applies(route, 'width') && (m.maxWidth === null || Math.abs(m.maxWidth - m.pageW) > 0.5)) fail('width', `${at}: max-width ${m.maxWidth}, want ${m.pageW}`)
+      if (applies(route, 'top') && (m.gap === null || Math.abs(m.gap - m.pageTop) > 1)) fail('top', `${at}: h1 gap ${m.gap === null ? 'none' : m.gap.toFixed(1)}, want ${m.pageTop}`)
       if (m.sideways > 0) fail('scroll', `${at}: scrolls sideways by ${m.sideways}px`)
-      if (applies(route, 'title') && m.docTitle !== `${want} — Banchi`) fail('title', `${at}: "${m.docTitle}", want "${want} — Banchi"`)
+      if (applies(route, 'title') && m.docTitle !== tabTitleOf(route)) fail('title', `${at}: "${m.docTitle}", want "${tabTitleOf(route)}"`)
     }
     const measured = PER_ROUTE.filter((a) => applies(route, a))
     expect(reconcile(route, failures, measured)).toEqual([])
