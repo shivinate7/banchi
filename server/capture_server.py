@@ -1248,6 +1248,12 @@ SKU_BOUND = "sku_bound"
 SKU_UNBOUND = "sku_unbound"
 IDENTITY_CONFIRMED = "identity_confirmed"
 IDENTITY_CONFIRM_UNDONE = "identity_confirm_undone"
+# `Inventory.restore_identity`'s OWN default-shaped event name — `bind_sku`'s `sku_bound`,
+# mirrored for the reversal direction: `_reverse_answer` and `_reverse_correction` each
+# call `restore_identity` with this generic name, then write their OWN richer event
+# (`unanswered`/`sku_correction_undone`, carrying `withdrew`/`restored`/`queues` or
+# `reclaimed`) separately, the same two-line shape a forward bind already writes.
+IDENTITY_RESTORED = "identity_restored"
 
 # D20's five, and they differ from the route-written names above in WHO APPENDS THEM. Those are
 # written here, by `_history`, because the store has no opinion about them. These five are
@@ -1316,6 +1322,7 @@ SERVER_EVENTS = (
     SKU_UNBOUND,
     IDENTITY_CONFIRMED,
     IDENTITY_CONFIRM_UNDONE,
+    IDENTITY_RESTORED,
     RESECTIONED,
     BOX_CREATED,
     BOX_RENAMED,
@@ -5924,37 +5931,82 @@ def _candidate_with_sku(candidates: Sequence[dict], sku: str) -> Optional[dict]:
     return None
 
 
-def _answer_before(events: Sequence[dict], key: str) -> Optional[dict]:
-    """The `{sku, condition}` the card carried before the newest answer here. None if unknown.
+# identity-follows-sku.md §8, lane 3a review round: D28's "undo must be exact" over every
+# field `Inventory.bind_sku`/`unbind_sku` can touch — ten optional strings and one bool,
+# `master.Inventory.IDENTITY_SNAPSHOT_FIELDS` verbatim. Split by type so a reversal
+# validates a hand-editable log line field by field rather than trusting it whole.
+_IDENTITY_STRING_FIELDS = (
+    "sku", "condition", "name", "number", "printed_total", "set_name", "rarity",
+    "identity_source", "bound_by", "bound_at",
+)
 
-    THE PRIOR PAIR IS NOT ON THE CARD, because the answer overwrote it — that is what an answer
-    IS. So the reversal reads it back out of `history.jsonl`, exactly as `_state_before_sale`
-    reads the state a sale replaced, and for the identical reason: the log already records
-    every change either route makes, and a `previous_sku` field on `Card` would be a second
-    piece of state to keep true through every join, emit and reconcile in the pipeline for the
-    sake of one twenty-second window on one screen.
+
+def _valid_identity_restore(raw) -> Optional[Dict[str, object]]:
+    """A `restores_to` mapping off a history line, checked field by field and handed back
+    AS-IS — never widened, never narrowed — for `Inventory.restore_identity`, or `None` for
+    anything that will not parse.
+
+    A KEY ABSENT FROM `raw` STAYS ABSENT IN THE RESULT, because `restore_identity` reads
+    that as "leave this field alone" (its own docstring) — the rule `_answer_before` applied
+    to `sku`/`condition`/`set_name`/`rarity` alone before this review round (D252's own
+    "a missing key is not a null claim"), generalised to every field `bind_sku`/`unbind_sku`
+    can touch. A line written by a server that predates this method — the three real
+    `sku_corrected` lines on the owner's store, and every fixture built to look like one —
+    restores exactly what it recorded and touches nothing else.
+
+    A LINE THAT IS NOT A MAPPING IS NO SNAPSHOT EITHER. This log is hand-editable and the
+    file is the one thing standing between a request and a real card's identity; `str()` on
+    whatever was there would write `{'sku': None}` onto a card as a catalog id. Each string
+    field is checked against `None`-or-`str` (`master.Card`'s own typing); `read_disputes`
+    against `None`-or-`bool` — a value of the wrong shape anywhere fails the WHOLE snapshot
+    rather than landing on the card half-formed.
+    """
+    if not isinstance(raw, dict):
+        return None
+    result: Dict[str, object] = {}
+    for field in _IDENTITY_STRING_FIELDS:
+        if field not in raw:
+            continue
+        value = raw[field]
+        if value is not None and not isinstance(value, str):
+            return None
+        result[field] = value
+    if "read_disputes" in raw:
+        value = raw["read_disputes"]
+        if not isinstance(value, bool):
+            return None
+        result["read_disputes"] = value
+    return result
+
+
+def _answer_before(events: Sequence[dict], key: str) -> Optional[dict]:
+    """The full identity snapshot the card carried before the newest answer here (D28: undo
+    must be exact). None if unknown.
+
+    THE PRIOR SNAPSHOT IS NOT ON THE CARD, because the answer overwrote it — that is what an
+    answer IS. So the reversal reads it back out of `history.jsonl`, exactly as
+    `_state_before_sale` reads the state a sale replaced, and for the identical reason: the
+    log already records every change either route makes, and a second copy of the card's own
+    prior fields would be state to keep true through every join, emit and reconcile in the
+    pipeline for the sake of one twenty-second window on one screen.
 
     IT WAS ALSO THE BLOCKER. `_history(ANSWERED, ...)` logged the sku and condition the route
     WROTE and not the ones it OVERWROTE, so until 2026-08-23 nothing anywhere could say what an
     undo should put back — the answer was unreversible not by policy but by bookkeeping. The
-    `answered` line now carries `restores_to`, and this is its only reader.
+    `answered` line now carries `restores_to`, widened on review from four fields to the full
+    eleven `Inventory.identity_snapshot` reads (identity-follows-sku.md §8), and this is its
+    only reader.
 
     THE NEWEST `answered` LINE WINS AND THE SCAN STOPS THERE, which is `_state_before_sale`'s
-    rule and not an optimisation. An older line's pair is the state of the card two answers ago;
-    restoring that would put back a SKU the operator replaced deliberately, which is worse than
-    refusing. So a newest line carrying no pair — an answer written by a server that predates
-    this field — returns None here rather than falling through to one that does.
-
-    A LINE THAT IS NOT A MAPPING IS NO PAIR EITHER. This log is hand-editable and the file is
-    the one thing standing between a request and a real card's SKU; `str()` on whatever was
-    there would write `{'sku': None}` onto a card as a catalog id. Both members are read as
-    optional strings because `master.Card` declares them that way — a card queued for review
-    has usually never carried a SKU at all, and None is that fact rather than a missing value.
+    rule and not an optimisation. An older line's snapshot is the state of the card two answers
+    ago; restoring that would put back a SKU the operator replaced deliberately, which is worse
+    than refusing. So a newest line carrying no snapshot — an answer written by a server that
+    predates this field — returns None here rather than falling through to one that does.
 
     A `renumbered` LINE THIS POSITION SITS ABOVE IS A HARD STOP (D10, ruling 1). The mid-box
     delete slides a DIFFERENT physical card into every index above the deleted one, so an
     `answered` line older than the shift belongs to the position's previous occupant, and
-    restoring its pair would write one card's history onto another. The two state scans
+    restoring its snapshot would write one card's history onto another. The two state scans
     survive a shift because the re-key logs each mover's own state at its new position;
     an answer has no equivalent line to refresh, so the honest reading here is None — the
     reversal refuses, and the queue entry is re-answered instead. An `answered` line
@@ -5977,20 +6029,7 @@ def _answer_before(events: Sequence[dict], key: str) -> Optional[dict]:
             continue
         if event.get("event") != ANSWERED:
             continue
-        previous = event.get("restores_to")
-        if not isinstance(previous, dict):
-            return None
-        pair = {}
-        # `set_name`/`rarity` ARE ABSENT ON EVERY `answered` LINE WRITTEN BEFORE
-        # D213 — `.get()` reads that as
-        # None, which is exactly right: an answer that predates the pair could not have
-        # overwritten it, so there is nothing for an undo of THAT answer to put back.
-        for field in ("sku", "condition", "set_name", "rarity"):
-            value = previous.get(field)
-            if value is not None and not isinstance(value, str):
-                return None
-            pair[field] = value
-        return pair
+        return _valid_identity_restore(event.get("restores_to"))
     return None
 
 
@@ -6021,13 +6060,16 @@ def _answer_origin(store: Store, key: str) -> Tuple[Optional[dict], Optional[str
     return previous, None
 
 
-def _catalog_answer(card, sku: str) -> Tuple[dict, str]:
-    """The catalog row `sku` names, in this card's own export, or a refusal (D46) — and the
-    GAME that export was read as, the same one `_catalog_for_card` resolved (`card.game or
-    games.DEFAULT_GAME`). Widened from a bare `dict` to carry the game too, so a caller that
-    needs to know which join-key STRATEGY produced this row — `do_correct_answer`, deciding
-    how to store the row's `Number` cell — does not re-open and re-parse the export a second
-    time to learn it.
+def _raw_catalog_row(card, sku: str) -> Tuple[dict, str, dict, Optional[Path]]:
+    """The catalog row `sku` names, in this card's own export, or a refusal (D46) — BOTH
+    shapes at once: the normalized `chosen` dict the screen has always drawn (`_catalog_row`,
+    `sku`/`name`/`set`/`number`/`condition`/`market`/optional `rarity`) and the RAW row
+    (`tcgcsv.Row`, real TCGplayer column names — `Product Line`, `Set Name`, ...) plus the
+    file it came from. The raw shape is what identity-follows-sku.md §3.2's fold
+    (`pipeline/skus.py:apply_rows`) needs to upsert this row into the `skus` table through
+    the SAME fold a fetch or `pkmnscan skus adopt` uses — never a row rebuilt by hand from
+    the normalized shape, which carries no `Product Line` cell at all (review round,
+    identity-follows-sku.md §4.2: "no partial upsert into skus").
 
     THE SERVER RE-READS THE ROW; IT NEVER TAKES THE CLIENT'S WORD FOR ONE. The request
     carries a SKU and nothing else that matters — the name, the number, the condition and
@@ -6054,7 +6096,16 @@ def _catalog_answer(card, sku: str) -> Tuple[dict, str]:
             f"be what this card is. Search the catalog on the review screen and choose a "
             f"row from it.",
         )
-    return _catalog_row(row), game
+    return _catalog_row(row), game, row, catalog.export.source
+
+
+def _catalog_answer(card, sku: str) -> Tuple[dict, str]:
+    """`_raw_catalog_row`'s normalized half alone, GAME included — the shape
+    `_answer_target`'s own `from_catalog` branch (D46) draws for the screen, which never
+    needs the raw row `do_correct_answer` folds into the `skus` table.
+    """
+    chosen, game, _row, _source = _raw_catalog_row(card, sku)
+    return chosen, game
 
 
 def _answer_target(
@@ -6610,50 +6661,68 @@ def _game_lookup(card) -> Tuple[str, dict]:
     return catalog_game, games.get(catalog_game)
 
 
-def _upsert_chosen_sku(snapshot, sku: str, chosen: dict, *, product_line: str, source: str) -> None:
-    """Upsert one already-chosen candidate row into the store's `skus` table
-    (identity-follows-sku.md §3.2), through `pipeline/skus.py:apply_rows` — the SAME fold a
-    fetch or a CLI writer folds through — so `bind_sku` immediately below always finds the
-    row it is about to bind, in the same transaction that is about to bind it (§4.2's own
-    words: "upsert the chosen row, then bind_sku").
+def _row_for_bind(snapshot, sku: str) -> "SkuRow":  # noqa: F821 - store.skus.SkuRow, duck-typed
+    """The `skus` table's own row for `sku`, or the refusal identity-follows-sku.md §3.2's
+    review round names for a SKU the table does not (yet) hold.
 
-    `chosen` IS THE NORMALIZED CANDIDATE SHAPE, NEVER A RAW EXPORT ROW — `_catalog_row`'s own
-    fields (`sku`, `name`, `set`, `number`, `condition`, `market`, optional `rarity`), the
-    shape every review-queue candidate already carries on disk (`cli/resolve.py:
-    _candidate_rows`) and the shape `_catalog_answer`'s `from_catalog` branch builds too. It
-    carries no `Product Line` cell — neither shape ever has — so `product_line` is supplied
-    by the caller, off the card's own game registry entry (D21), never guessed from the row.
-
-    A CANDIDATE-BUILT ROW IS SHALLOWER THAN A FETCH'S, and that is accepted rather than
-    worked around: `Skus.fold`'s own no-delete, newest-wins rule means a later real export
-    fetch (D64/D166) upserts the FULL row over this one, `UNCHANGED` if the six facts still
-    agree and `CHANGED` (logged) if they do not — this function never has to be the last
-    word on a SKU's facts, only an honest one.
+    NEVER INVENTS A ROW. A review answer, a group answer and a confirm all bind to a SKU
+    the table ALREADY holds — the fetch routes (`do_pipeline_export`, `do_live_export`) and
+    `pkmnscan skus adopt` are what fill it, and §3.2 measures it covering 916 of 916 card
+    SKUs and 54 of 54 listing-only ones. Building a partial row here from whatever fields a
+    queue candidate happens to carry — no `Product Line` cell, ever — would write a
+    second-hand fact into a table meant to be TCGplayer's own record, and could silently
+    overwrite a fuller row already there depending on `Skus.fold`'s own stamp rule (review
+    finding, identity-follows-sku.md §4.2: "no partial upsert into skus"). `do_correct_
+    answer` is the one writer that still fills the table, because it already re-reads the
+    REAL export row (D46) and folds it whole through `_fold_export_row` below — never this
+    function.
     """
-    raw = {
-        tcgcsv.SKU_COLUMN: str(sku),
-        tcgcsv.PRODUCT_LINE_COLUMN: str(product_line or ""),
-        tcgcsv.SET_COLUMN: str(chosen.get("set") or ""),
-        tcgcsv.NAME_COLUMN: str(chosen.get("name") or ""),
-        tcgcsv.NUMBER_COLUMN: str(chosen.get("number") or ""),
-        tcgcsv.RARITY_COLUMN: str(chosen.get("rarity") or ""),
-        tcgcsv.CONDITION_COLUMN: str(chosen.get("condition") or ""),
-    }
-    sku_fill.apply_rows(
-        [raw], at=int(time.time()), source=source, skus=snapshot.skus,
-        events=snapshot.inventory.events,
-    )
+    row = snapshot.skus.entries.get(str(sku))
+    if row is None:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "sku_unknown",
+            f"{sku} is not in the SKU table yet (identity-follows-sku.md §3.2). Fetch this "
+            f"game's export (or the live export), or run `pkmnscan skus adopt`, then try "
+            f"again.",
+        )
+    return row
 
 
-def _read_disputes_for(card, chosen: dict) -> bool:
+def _disputes_for_row(card, row) -> bool:
     """`bind_sku`'s own `read_disputes` argument (identity-follows-sku.md §3.1/§4.1):
     `pipeline/join.name_disputes` run by THIS caller, because `store/` may not import
-    `pipeline/` (D63) — over the card's `read_name` against the one row being bound. Built
-    as a one-row list in `name_disputes`'s own raw-column shape rather than `chosen`'s
-    normalized one, because that function reads `row.get(tcgcsv.NAME_COLUMN)`.
+    `pipeline/` (D63) — over the card's `read_name` against the one row being bound. `row`
+    is either a `store.skus.SkuRow` (`.product_name`) or a raw `tcgcsv.Row`
+    (`row[tcgcsv.NAME_COLUMN]`) — `name_disputes` only ever reads a mapping's
+    `tcgcsv.NAME_COLUMN` key, so both shapes are folded into that one key here rather than
+    asking two call sites to remember which shape they are holding.
     """
-    return join.name_disputes(
-        getattr(card, "read_name", None), [{tcgcsv.NAME_COLUMN: chosen.get("name")}]
+    name = row.product_name if hasattr(row, "product_name") else row.get(tcgcsv.NAME_COLUMN)
+    return join.name_disputes(getattr(card, "read_name", None), [{tcgcsv.NAME_COLUMN: name}])
+
+
+def _fold_export_row(snapshot, row: dict, source: Optional[Path]) -> None:
+    """Fold ONE real export row into the store's `skus` table
+    (identity-follows-sku.md §3.2), through `pipeline/skus.py:apply_rows` — the SAME fold a
+    fetch (`do_pipeline_export`, `do_live_export`) or `pkmnscan skus adopt` folds through —
+    so `bind_sku` immediately below always finds the row it is about to bind, in the same
+    transaction that is about to bind it (§4.2's own words: "upsert the chosen row, then
+    bind_sku").
+
+    `row` IS A RAW EXPORT ROW (`tcgcsv.Row`, real column names), NEVER THE NORMALIZED
+    `chosen` SHAPE `_catalog_row` draws for the screen — review round, §4.2: "no partial
+    upsert into skus". `do_correct_answer` is this function's one caller, because it is the
+    one writer left that re-reads a fresh row off disk (D46) rather than binding to a row
+    the table already holds.
+    """
+    name = source.name if source is not None else ""
+    stamp = sku_fill.stamp_of(name) if name else None
+    if stamp is None:
+        stamp = int(time.time())
+    sku_fill.apply_rows(
+        [row], at=stamp, source=name or "unknown", skus=snapshot.skus,
+        events=snapshot.inventory.events,
     )
 
 
@@ -6672,6 +6741,12 @@ def _bind_identity(
     translated into this server's own named-refusal vocabulary rather than left as a bare
     `ValueError` — every other failure path in this file is a `BadRequest` with a code and a
     remedy, and a write this deep in a request has no business being the one exception.
+
+    `SkuUnknown` IS A BACKSTOP HERE, NOT THE FIRST LINE — every caller checks `_row_for_bind`
+    (or, for `do_correct_answer`, folds a fresh row through `_fold_export_row`) before this
+    point, so the row is already in `skus` by construction and this branch should be
+    unreachable. Kept anyway: a write this deep in a request has no business trusting an
+    invariant it did not itself just check.
     """
     try:
         bound = snapshot.inventory.bind_sku(
@@ -6680,7 +6755,13 @@ def _bind_identity(
             read_disputes=read_disputes, event=event,
         )
     except master.SkuUnknown as exc:
-        raise BadRequest(HTTPStatus.CONFLICT, "sku_unknown", str(exc)) from exc
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "sku_unknown",
+            f"{sku} is not in the SKU table yet (identity-follows-sku.md §3.2). Fetch this "
+            f"game's export (or the live export), or run `pkmnscan skus adopt`, then try "
+            f"again.",
+        ) from exc
     except master.GameMismatch as exc:
         raise BadRequest(HTTPStatus.CONFLICT, "game_mismatch", str(exc)) from exc
     if bound is None:
@@ -6794,9 +6875,15 @@ def _apply_correction(
     caller's `_history(SKU_CORRECTED, ...)` line — the one `_reverse_correction` reads —
     lands after it, so it stays `last_event`'s answer exactly as it always has.
 
-    Returns `{"previous_sku", "released", "restores_to"}`, which `restores_to` a caller
-    threads straight into its OWN `_history` call and its OWN response body.
+    Returns `{"previous_sku", "released", "restores_to", "full_snapshot"}`. `restores_to`
+    (seven fields) is the shape both callers' own response bodies have always carried,
+    unchanged. `full_snapshot` — `Inventory.identity_snapshot(key)`, read before anything
+    below touches the card — is what a caller threads into its OWN `_history` call's
+    `restores_to` instead (identity-follows-sku.md §8, lane 3a review round: D28's "undo
+    must be exact" over every field `bind_sku` can touch, not only the seven this route has
+    always shown on screen).
     """
+    full_snapshot = snapshot.inventory.identity_snapshot(key)
     previous = {
         "sku": card.sku,
         "condition": card.condition,
@@ -6824,8 +6911,11 @@ def _apply_correction(
     # PARAMETER is kept and passed through to the caller's own `_history` call below rather
     # than re-read a second time, so the two callers' history lines say exactly what their
     # own validation already proved.
-    return {"previous_sku": old_sku, "released": released, "restores_to": previous,
-            "condition": new_condition, "stamps_before": stamps_before}
+    return {
+        "previous_sku": old_sku, "released": released, "restores_to": previous,
+        "full_snapshot": full_snapshot, "condition": new_condition,
+        "stamps_before": stamps_before,
+    }
 
 
 def _answer_listing_disputed(
@@ -6865,10 +6955,18 @@ def _answer_listing_disputed(
         cleared[queue.name] = True
 
     if str(sku) == str(card.sku or ""):
+        full_snapshot = snapshot.inventory.identity_snapshot(key)
         _bind_identity(
             snapshot, key, sku, bound_by="confirm", number_strategy=number_strategy,
             expected_product_line=expected_product_line, read_disputes=read_disputes,
-            event=IDENTITY_CONFIRMED,
+        )
+        # THE ROUTE'S OWN EVENT, AFTER `_bind_identity`'S GENERIC `sku_bound` LINE — the
+        # same shape `do_confirm_identity` writes, carrying the FULL snapshot (identity-
+        # follows-sku.md §8, lane 3a review round: D28's "undo must be exact") rather than
+        # the two fields `bind_sku` logs on its own.
+        _history(
+            snapshot.inventory, IDENTITY_CONFIRMED, key, sku=sku,
+            restores_to=full_snapshot,
         )
         held = _listing_hold(snapshot.inventory, card)
         return {
@@ -6902,7 +7000,7 @@ def _answer_listing_disputed(
         name=card.name,
         number=card.number,
         printed_total=card.printed_total,
-        restores_to=result["restores_to"],
+        restores_to=result["full_snapshot"],
         released=result["released"] or None,
         old_sku=result["previous_sku"],
         stamps=result["stamps_before"],
@@ -7077,23 +7175,25 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         # whole so the group route can run the identical checks — card before queue, one
         # governing entry, the pair checked against the offered row. Nothing is written
         # until it returns.
-        card, holders, offering, governing, chosen, offered_condition = _answer_target(
+        # `chosen` (the candidate's normalized dict, D46's own shape) is unpacked and
+        # unused below — the row this route needs now comes straight off the `skus` table
+        # (`_row_for_bind`, review round: "no partial upsert into skus"), never off this
+        # abbreviated shape, which carries no `Product Line` cell to trust in the first
+        # place.
+        card, holders, offering, governing, _chosen, offered_condition = _answer_target(
             snapshot, box, index, sku, condition, from_catalog=from_catalog
         )
 
-        # identity-follows-sku.md §4.2/§4.1: the row about to be bound is upserted into the
-        # `skus` table FIRST, in this same transaction, so `bind_sku` below always finds it
-        # (`SkuUnknown` otherwise). `chosen` is the candidate's own normalized shape either
-        # way — the queue's own row for an ordinary D4 answer, `_catalog_row`'s for a D46
-        # `from_catalog` one — so this needs no branch on which path got here.
+        # identity-follows-sku.md §4.2/§4.1, review round: THE ROW MUST ALREADY BE IN THE
+        # `skus` TABLE — a review answer never invents a partial one from `chosen`'s
+        # abbreviated shape (§4.2: "no partial upsert into skus"; the table already holds
+        # 916 of 916 card SKUs, filled by the fetch routes and `pkmnscan skus adopt`).
+        # `_row_for_bind` refuses `sku_unknown` with a remedy rather than guessing.
         catalog_game, game_entry = _game_lookup(card)
         number_strategy = game_entry["join_key"]
         expected_product_line = game_entry.get("product_line")
-        _upsert_chosen_sku(
-            snapshot, sku, chosen, product_line=expected_product_line,
-            source="do_review_answer",
-        )
-        disputes = _read_disputes_for(card, chosen)
+        row = _row_for_bind(snapshot, sku)
+        disputes = _disputes_for_row(card, row)
 
         # §8.1: A `listing_disputed` ENTRY IS NOT AN ORDINARY D4 ANSWER. The card already
         # carries a SKU (it is HELD, `identity_source = read`, §3.1) — this entry is asking
@@ -7498,12 +7598,13 @@ def _reverse_stand_down(box: int, index: int) -> dict:
 def _reverse_answer(box: int, index: int) -> dict:
     """Take one review answer back. D28, and the server half of the twenty-second window.
 
-    IT UNDOES EXACTLY WHAT THE ANSWER DID AND NOTHING ELSE, which is a short list because the
-    answer's own list is short: `card.sku`, `card.condition`, and `cleared_by_human` on every
-    queue entry it cleared. `do_review_answer` writes no state, moves no listing count and does
-    not touch `store/cache.py` — it says so in its own docstring and each of those is argued
-    there — so there is nothing else here to put back. A reversal that reached further than the
-    write it reverses would be a second opinion about what an answer is.
+    IT UNDOES EXACTLY WHAT THE ANSWER DID AND NOTHING ELSE: every identity and binding
+    bookkeeping field `bind_sku` can touch, through `Inventory.restore_identity` (D28: undo
+    must be exact, review round — no field-by-field code left here), and `cleared_by_human`
+    on every queue entry the answer cleared. `do_review_answer` moves no listing count and
+    does not touch `store/cache.py` — it says so in its own docstring and each of those is
+    argued there — so there is nothing else here to put back. A reversal that reached
+    further than the write it reverses would be a second opinion about what an answer is.
 
     THE WINDOW IS THE SCREEN'S AND THERE IS NO CLOCK HERE. That is the owner's ruling, taken on
     the day: screen-held now, server-enforced only if it bites. It matches `do_mark_sold`
@@ -7630,15 +7731,14 @@ def _reverse_answer(box: int, index: int) -> dict:
                 f"than a missing one.",
             )
 
-        withdrawn = {"sku": card.sku, "condition": card.condition}
-        card.sku = previous["sku"]
-        card.condition = previous["condition"]
-        # `.get()`, NOT `previous[...]`: an `answered` line written before this pair existed
-        # has no such keys, and `_answer_before` already answers None for both in that case
-        # — putting the card back to carrying no catalogue set/rarity, which is the honest
-        # state an answer that predates the pair could have left it in.
-        card.set_name = previous.get("set_name")
-        card.rarity = previous.get("rarity")
+        # THE FULL SNAPSHOT, READ BEFORE `restore_identity` TOUCHES ANYTHING — the audit
+        # trail's own "what came off" (D28, review round: undo must be exact over every
+        # field `bind_sku` can touch, not only `sku`/`condition`). `restore_identity` logs
+        # its own generic `identity_restored` line; the route's own richer `unanswered`
+        # line, carrying `withdrew`/`restored`/`queues`, is written separately below —
+        # `bind_sku`'s own forward-write pattern, mirrored for the reversal.
+        withdrawn = snapshot.inventory.identity_snapshot(key)
+        snapshot.inventory.restore_identity(key, previous, event=IDENTITY_RESTORED)
 
         reopened = {queues.MAIN: False, queues.PARKED: False}
         for queue in cleared:
@@ -7900,7 +8000,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
         # GAME comes back too — `_catalog_for_card`'s own resolution, `card.game or
         # games.DEFAULT_GAME` — because it decides how the chosen row's `Number` cell is
         # stored, a few lines down.
-        chosen, catalog_game = _catalog_answer(card, sku)
+        chosen, catalog_game, raw_row, raw_source = _raw_catalog_row(card, sku)
         new_condition = str(chosen.get("condition") or "")
 
         if str(chosen.get("sku") or "") == str(card.sku or ""):
@@ -7914,19 +8014,17 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
         # identity-follows-sku.md §4.2: "upsert the chosen row, then bind_sku
         # (bound_by=correction), and the D34 release as today" — `_apply_correction` is that
         # release-then-bind, shared with `do_review_answer`'s own `listing_disputed` branch.
-        # `number`/`printed_total` ARE NO LONGER READ HERE, ON THE ORCHESTRATOR'S RULING
-        # (within D36, corrected on review): `bind_sku` derives them straight off the
-        # upserted row's own `Number` cell through `number_strategy`, never off `chosen` a
-        # second time — the same fact `catalog_game`/`chosen.get("number")` computed by hand
-        # before this change, now computed once, in the one writer.
+        # THE RAW ROW, NEVER THE NORMALIZED `chosen` SHAPE, folds into the `skus` table
+        # (review round, §4.2: "no partial upsert into skus") — `do_correct_answer` is the
+        # one writer left that still fills the table, because it already re-reads a real
+        # row off the export (D46). `number`/`printed_total` ARE NOT READ HERE EITHER, ON
+        # THE ORCHESTRATOR'S RULING (within D36, corrected on review): `bind_sku` derives
+        # them straight off the folded row's own `Number` cell through `number_strategy`.
         game_entry = games.get(catalog_game)
         number_strategy = game_entry["join_key"]
         expected_product_line = game_entry.get("product_line")
-        _upsert_chosen_sku(
-            snapshot, sku, chosen, product_line=expected_product_line,
-            source="do_correct_answer",
-        )
-        disputes = _read_disputes_for(card, chosen)
+        _fold_export_row(snapshot, raw_row, raw_source)
+        disputes = _disputes_for_row(card, raw_row)
         result = _apply_correction(
             snapshot, key, card, sku, new_condition,
             number_strategy=number_strategy, expected_product_line=expected_product_line,
@@ -7992,8 +8090,10 @@ def _reverse_correction(box: int, index: int) -> dict:
     fresh answer, changes those fields, and this reversal then correctly finds nothing of ITS
     OWN to put back rather than guessing which of two corrections was meant.
 
-    WHAT COMES BACK: the pair this correction overwrote, and the release it took off the old
-    SKU — handed back through `_give_back_listing`, D34's own writers run in reverse.
+    WHAT COMES BACK: the full identity and binding snapshot this correction overwrote,
+    through `Inventory.restore_identity` (D28: undo must be exact, review round — no
+    field-by-field code left here), and the release it took off the old SKU, handed back
+    through `_give_back_listing`, D34's own writers run in reverse.
     """
     key = master.position_key(box, index)
     store = Store()
@@ -8035,48 +8135,23 @@ def _reverse_correction(box: int, index: int) -> dict:
                 f"is also wrong.",
             )
 
-        previous = event.get("restores_to")
-        if not isinstance(previous, dict):
+        # `_valid_identity_restore` IS THE SAME FIELD-BY-FIELD VALIDATOR `_answer_before`
+        # USES (review round, identity-follows-sku.md §8): a KEY ABSENT FROM THE LINE
+        # STAYS ABSENT IN `pair`, which `Inventory.restore_identity` reads as "leave this
+        # field alone" — the exact rule this route hand-rolled for `number`/`printed_total`
+        # alone before the review round (a pre-fix line "ALWAYS overwrote the card's
+        # number... the line just did not yet record what it replaced" — reading that gap
+        # as `None` would ERASE a real number the correction is not responsible for
+        # losing), now the SAME rule for all eleven fields rather than two by hand.
+        pair = _valid_identity_restore(event.get("restores_to"))
+        if pair is None:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "not_corrected",
                 f"Box {box}, card {index}'s correction record carries nothing to put back, "
-                f"so there is nothing here to guess. Correct the card by hand.",
+                f"or is malformed, so there is nothing here to guess. Correct the card by "
+                f"hand.",
             )
-        pair: Dict[str, Optional[str]] = {}
-        for field in (
-            "sku",
-            "condition",
-            "set_name",
-            "rarity",
-            "name",
-            "number",
-            "printed_total",
-        ):
-            value = previous.get(field)
-            if value is not None and not isinstance(value, str):
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "not_corrected",
-                    f"Box {box}, card {index}'s correction record is malformed, so there is "
-                    f"nothing here to guess. Correct the card by hand.",
-                )
-            pair[field] = value
-        # `number`/`printed_total` ON AN OLD-SHAPE LINE — WRITTEN BEFORE THIS FIX — CARRY
-        # NEITHER KEY AT ALL, and a MISSING key is not the same claim as a PRESENT `null`
-        # one. The three real corrections on the owner's live store predate this fix and are
-        # exactly this case. `_answer_before`'s own precedent (a few hundred lines up) reads
-        # a missing `set_name`/`rarity` as "nothing to put back" and restores `None` — right
-        # for `do_review_answer`, whose OLD route never touched those fields at write time
-        # either, so there truly was nothing there to have overwritten. THIS route's old
-        # shape is different: `do_correct_answer` ALWAYS overwrote the card's number, from
-        # its very first version — the write happened, the line just did not yet record what
-        # it replaced. Reading that gap as `None` would ERASE a real number the correction
-        # itself is not responsible for losing, on the one route built to stop exactly that
-        # kind of loss. So a missing key here means LEAVE THE FIELD AS IT STANDS, checked
-        # before the loop above ever turns "absent" and "null" into the same `None`.
-        number_recorded = "number" in previous
-        printed_total_recorded = "printed_total" in previous
 
         held = _listing_hold(snapshot.inventory, card)
         if held:
@@ -8090,7 +8165,9 @@ def _reverse_correction(box: int, index: int) -> dict:
                 f"longer claims. Pull the listing first, or correct the card again by hand.",
             )
 
-        withdrawn = {"sku": card.sku, "condition": card.condition}
+        # THE FULL SNAPSHOT, READ BEFORE `restore_identity` TOUCHES ANYTHING (D28, review
+        # round: undo must be exact over every field `bind_sku` can touch).
+        withdrawn = snapshot.inventory.identity_snapshot(key)
         released = event.get("released")
         old_sku = pair.get("sku")
         stamps = event.get("stamps")
@@ -8103,25 +8180,13 @@ def _reverse_correction(box: int, index: int) -> dict:
                 stamps=stamps if isinstance(stamps, dict) else None,
             )
 
-        card.sku = pair.get("sku")
-        card.condition = pair.get("condition")
-        card.set_name = pair.get("set_name")
-        card.rarity = pair.get("rarity")
-        if pair.get("name") is not None:
-            card.name = pair.get("name")
-        # RESTORED VERBATIM WHEN THE LINE RECORDS THEM, LIKE `sku`/`condition`/`set_name`/
-        # `rarity` ABOVE — a card can legitimately have carried no number before the
-        # correction this undoes (the position's very first identification, or the tail of
-        # an earlier undo), and putting `None` back is putting the card back to exactly that
-        # state. BUT LEFT ALONE WHEN THE LINE DOES NOT — `number_recorded`/
-        # `printed_total_recorded`, computed above before the loop folded "absent" and
-        # "null" into the same `None`. A pre-fix `sku_corrected` line still overwrote the
-        # card's number; it just never wrote down what it replaced, so `None` here would be
-        # a guess this route exists to refuse making, not a fact recovered from the log.
-        if number_recorded:
-            card.number = pair.get("number")
-        if printed_total_recorded:
-            card.printed_total = pair.get("printed_total")
+        # `restore_identity` IS THE FIELD-BY-FIELD RESTORE ITSELF — `pair`'s missing keys
+        # (an old-shape line's own `number`/`printed_total`, and now potentially any of
+        # the other identity/bookkeeping fields) stay untouched on the card, `_valid_
+        # identity_restore`'s own rule generalised from this route's original hand-rolled
+        # one. Its own generic `identity_restored` line logs first; the route's richer
+        # `sku_correction_undone`, carrying `withdrew`/`restored`/`reclaimed`, lands after.
+        snapshot.inventory.restore_identity(key, pair, event=IDENTITY_RESTORED)
 
         _history(
             snapshot.inventory,
@@ -8227,22 +8292,20 @@ def do_confirm_identity(box: int, index: int, payload: dict) -> dict:
         catalog_game, game_entry = _game_lookup(card)
         number_strategy = game_entry["join_key"]
         expected_product_line = game_entry.get("product_line")
-        row = snapshot.skus.entries.get(str(sku))
-        if row is None:
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "sku_unknown",
-                f"{sku} is not in the SKU table yet (identity-follows-sku.md §3.2), so "
-                f"there is no row here to confirm against. Fetch this game's export or run "
-                f"`pkmnscan skus adopt` first.",
-            )
-        disputes = join.name_disputes(
-            getattr(card, "read_name", None), [{tcgcsv.NAME_COLUMN: row.product_name}]
-        )
+        row = _row_for_bind(snapshot, sku)
+        disputes = _disputes_for_row(card, row)
+
+        # D28, review round: the FULL snapshot, read before the bind touches anything, so
+        # this press's own reversal has everything `Inventory.restore_identity` needs —
+        # never the two fields `bind_sku`'s own default event logs.
+        full_snapshot = snapshot.inventory.identity_snapshot(key)
         _bind_identity(
             snapshot, key, sku, bound_by="confirm", number_strategy=number_strategy,
             expected_product_line=expected_product_line, read_disputes=disputes,
-            event=IDENTITY_CONFIRMED,
+        )
+        _history(
+            snapshot.inventory, IDENTITY_CONFIRMED, key, sku=sku,
+            restores_to=full_snapshot,
         )
 
         body = {
@@ -8259,35 +8322,54 @@ def do_confirm_identity(box: int, index: int, payload: dict) -> dict:
     return body
 
 
+def _confirm_event(events: Sequence[dict], key: str) -> Optional[dict]:
+    """The newest `identity_confirmed` line at this position, or None. §8.1,
+    `_correction_event`'s twin and same shape: the ground truth for WHETHER a confirm
+    stands is the card's own `bound_by` (checked by the caller before this is called);
+    this scan finds the line that recorded what to put back if it does.
+    """
+    try:
+        at_box, at_index = (int(part) for part in str(key).split("/"))
+    except (TypeError, ValueError):
+        at_box = at_index = None
+    for event in reversed(list(events)):
+        if (
+            at_box is not None
+            and event.get("event") == RENUMBERED
+            and event.get("box") == at_box
+            and isinstance(event.get("from"), int)
+            and at_index >= event["from"]
+        ):
+            return None
+        if event.get("position") != key:
+            continue
+        if event.get("event") == IDENTITY_CONFIRMED:
+            return event
+    return None
+
+
 def _reverse_confirm(box: int, index: int) -> dict:
     """Take one confirm press back. identity-follows-sku.md §8.1: "`{"undo": true}` returns
     the card to `identity_source = read`" — the SKU itself never moved, so there is nothing
     for this reversal to release either; it only ever flips the card's identity fields back
-    to what its own reading said.
+    to what its own reading said, through `Inventory.restore_identity` (D28: undo must be
+    exact, review round) — no field-by-field code left here.
 
-    THE GROUND TRUTH IS THE CARD ITSELF, `_reverse_correction`'s own rule: `bound_by ==
-    "confirm"` is what says this card has a live confirm standing to reverse, never a flag
-    on a queue entry — a confirm clears no queue entry of its own kind to reopen.
+    THE GROUND TRUTH FOR "IS THERE SOMETHING TO REVERSE" IS THE CARD ITSELF,
+    `_reverse_correction`'s own rule: `bound_by == "confirm"` is what says this card has a
+    live confirm standing to reverse, never a flag on a queue entry — a confirm clears no
+    queue entry of its own kind to reopen. `_confirm_event` then finds the LINE that
+    recorded what to put back, `_correction_event`'s own shape.
 
-    TWO REFUSALS. `card_not_found`. `not_confirmed` — the card's own `bound_by` is not
-    `"confirm"`, so either nothing here was ever confirmed or something newer (a fresh
-    answer, a correction, a second confirm elsewhere) already stands and this reversal
-    would be undoing the wrong act.
-
-    KNOWN GAP, NAMED RATHER THAN HIDDEN: `Inventory.unbind_sku`'s two branches are "clear to
-    no SKU at all" (`sku` falsy) and "bind a DIFFERENT prior SKU" (`sku` truthy, which also
-    demands a valid `bound_by` for THAT prior act) — neither expresses "the same SKU,
-    un-confirmed back to a held read", because a held card's `bound_by` before its own
-    confirm is typically `None` (never formally bound — the migration's own T4s/T5 shape,
-    §7.3). So this reversal does not call `unbind_sku` at all; it restores the read fields
-    directly, the way `Inventory.unbind_sku`'s own falsy branch does everywhere EXCEPT
-    `card.sku`, which stays exactly where it was — the one field a confirm never moved. This
-    is reported as a gap rather than quietly worked around: `unbind_sku`'s contract has no
-    clean way to say "known SKU, no formal binder", and widening it is Lane 1's call, not
-    this route's to make unasked.
+    THREE REFUSALS. `card_not_found`. `not_confirmed` — the card's own `bound_by` is not
+    `"confirm"` (so either nothing here was ever confirmed, or something newer already
+    stands and this reversal would be undoing the wrong act), or the newest
+    `identity_confirmed` line's own `restores_to` will not validate. `confirm_origin_unknown`
+    — the log will not read at all, `_correction_event`'s own twin refusal.
     """
     key = master.position_key(box, index)
-    with Store().write() as snapshot:
+    store = Store()
+    with store.write() as snapshot:
         card = snapshot.inventory.cards.get(key)
         if card is None:
             raise BadRequest(
@@ -8304,14 +8386,27 @@ def _reverse_confirm(box: int, index: int) -> dict:
                 f"there is nothing here to take back.",
             )
 
-        card.name = card.read_name
-        card.number = card.read_number
-        card.printed_total = card.read_printed_total
-        card.identity_source = master.IDENTITY_READ
-        card.bound_by = None
-        card.bound_at = master.now()
-        card.read_disputes = False
-        _history(snapshot.inventory, IDENTITY_CONFIRM_UNDONE, key, sku=card.sku)
+        try:
+            event = _confirm_event(store.history_at(key), key)
+        except (files.StoreError, OSError, ValueError) as exc:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "confirm_origin_unknown",
+                f"the store's history could not be read ({type(exc).__name__}: {exc}), so "
+                f"nothing here will guess. Fix the card by hand instead.",
+            ) from exc
+        restores_to = _valid_identity_restore(event.get("restores_to")) if event else None
+        if restores_to is None:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "not_confirmed",
+                f"Box {box}, card {index}'s confirm record carries nothing to put back, so "
+                f"there is nothing here to guess. Fix the card by hand.",
+            )
+
+        snapshot.inventory.restore_identity(
+            key, restores_to, event=IDENTITY_CONFIRM_UNDONE,
+        )
 
         body = {
             "position": key,
@@ -8535,6 +8630,11 @@ def do_review_group_answer(payload: dict) -> dict:
                 card, holders, offering, governing, chosen, offered = _answer_target(
                     snapshot, box, index, sku, condition
                 )
+                # identity-follows-sku.md §4.2's review round: THE ROW MUST ALREADY BE IN
+                # THE `skus` TABLE — checked here, in PHASE ONE, so a missing one is one
+                # more per-position failure `group_entry_refused` reports by name, and
+                # never a partial write PHASE TWO would otherwise have to roll back.
+                row = _row_for_bind(snapshot, sku)
             except BadRequest as exc:
                 refused.append((key, exc))
                 continue
@@ -8553,11 +8653,12 @@ def do_review_group_answer(payload: dict) -> dict:
                     # candidate row the single answer route carries, one per card here.
                     "set_name": str(chosen.get("set") or "").strip() or None,
                     "rarity": str(chosen.get("rarity") or "").strip() or None,
-                    # identity-follows-sku.md §4.2 — captured here, written nowhere yet, for
-                    # PHASE TWO's own upsert+bind_sku per card. Nothing above this line
-                    # writes to `snapshot`, so a group refused on uniformity below still
-                    # leaves the transaction with nothing to roll back.
-                    "chosen": chosen,
+                    # identity-follows-sku.md §4.2, review round: the table's own row for
+                    # this sku, read here so PHASE TWO's own bind per card needs no second
+                    # lookup. Nothing above this line writes to `snapshot`, so a group
+                    # refused on uniformity below still leaves the transaction with
+                    # nothing to roll back.
+                    "row": row,
                 }
             )
 
@@ -8569,6 +8670,27 @@ def do_review_group_answer(payload: dict) -> dict:
                 f"{len(refused)} of {len(parsed)} cards refused, so the whole group is "
                 f"refused and nothing was written. Reload the queue and filter again — "
                 f"the store has moved past the screen that drew this group. {named}",
+            )
+
+        # §8.1, review round: A `listing_disputed` ENTRY IS NEVER A GROUP MEMBER. The
+        # SAME sku answered on two such entries can mean "confirm" on one and "correct"
+        # on another — do_review_answer decides that PER CARD, by comparing the chosen
+        # sku against THAT card's own current one, and a group write has no way to make
+        # that same decision without silently binding every member `bound_by=group_answer`
+        # regardless of which press the operator actually meant. So this refuses by name
+        # rather than guessing, and sends every one of them back to `#/review`, one card
+        # and one photograph at a time — D4's own rule, exactly what D29 narrowly reopened
+        # it for.
+        disputed = [t["key"] for t in targets if t["governing"].reason == routing.LISTING_DISPUTED]
+        if disputed:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "group_listing_disputed",
+                f"{len(disputed)} of {len(parsed)} cards are `listing_disputed` entries: "
+                f"{', '.join(disputed)}. Those ask whether an existing listing is right, "
+                f"not what a card is, and the answer can differ per card even under the "
+                f"same sku — answer them on the review screen one at a time, each beside "
+                f"its own photograph. Nothing was written.",
             )
 
         # ELIGIBILITY — the ruling's two conditions, checked here and not only on the
@@ -8614,21 +8736,23 @@ def do_review_group_answer(payload: dict) -> dict:
                 "set_name": card.set_name,
                 "rarity": card.rarity,
             }
-            # identity-follows-sku.md §4.2: "upsert, then bind_sku(bound_by=group_answer)
-            # per card". `_bind_identity` sets `sku`/`condition`/`set_name`/`rarity` — this
-            # route's own four fields above — AND `name`/`number`/`printed_total`/
-            # `bound_by`/`bound_at`/`identity_source` beside them.
+            # D28, review round: the FULL snapshot, for the event's own restores_to —
+            # `restores_to` right above stays the route's own four-field wire shape,
+            # UNCHANGED, for `body["results"][i]["restores_to"]`.
+            full_snapshot = snapshot.inventory.identity_snapshot(target["key"])
+            # identity-follows-sku.md §4.2: "bind_sku(bound_by=group_answer) per card",
+            # against the row PHASE ONE already found in the table — no upsert (review
+            # round: "no partial upsert into skus"). `_bind_identity` sets `sku`/
+            # `condition`/`set_name`/`rarity` — this route's own four fields above — AND
+            # `name`/`number`/`printed_total`/`bound_by`/`bound_at`/`identity_source`
+            # beside them.
             catalog_game, game_entry = _game_lookup(card)
             number_strategy = game_entry["join_key"]
             expected_product_line = game_entry.get("product_line")
-            _upsert_chosen_sku(
-                snapshot, target["sku"], target["chosen"],
-                product_line=expected_product_line, source="do_review_group_answer",
-            )
             _bind_identity(
                 snapshot, target["key"], target["sku"], bound_by="group_answer",
                 number_strategy=number_strategy, expected_product_line=expected_product_line,
-                read_disputes=_read_disputes_for(card, target["chosen"]),
+                read_disputes=_disputes_for_row(card, target["row"]),
             )
 
             cleared = {queues.MAIN: False, queues.PARKED: False}
@@ -8644,7 +8768,7 @@ def do_review_group_answer(payload: dict) -> dict:
                 condition=target["offered"],
                 queue=target["offering"].name,
                 reason=target["governing"].reason,
-                restores_to=restores_to,
+                restores_to=full_snapshot,
                 group=len(targets),
             )
 

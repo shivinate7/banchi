@@ -69,7 +69,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from typing import (
-    TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Tuple, Union,
+    TYPE_CHECKING, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union,
 )
 
 # `Skus` (`store/skus.py`) IS A TYPE-CHECKING-ONLY IMPORT, NEVER A RUNTIME ONE.
@@ -2221,6 +2221,84 @@ class Inventory:
             card.read_disputes = False
         card.bound_at = now()
         self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run)
+        return card
+
+    # identity-follows-sku.md §8, lane 3a review round: UNDO MUST BE EXACT (D28,
+    # docs/specs/undo.md). `bind_sku`/`unbind_sku` above are the two writers that CHOOSE an
+    # identity; this pair is what a reversal restores one back TO, and it is the third and
+    # last writer of these eleven fields — every server-side reversal of a `bind_sku` write
+    # (`_reverse_answer`, `_reverse_correction`, `_reverse_confirm`) calls `restore_identity`
+    # and sets none of them itself.
+    IDENTITY_SNAPSHOT_FIELDS = (
+        "sku", "condition", "name", "number", "printed_total", "set_name", "rarity",
+        "identity_source", "bound_by", "bound_at", "read_disputes",
+    )
+
+    def identity_snapshot(self, key: str) -> Optional[Dict[str, object]]:
+        """Every field `restore_identity` below can put back, read off `key`'s card RIGHT
+        NOW — the pair with that method, and the one a caller takes BEFORE a forward write
+        overwrites the card, so `restores_to` on the write's own history line is a full,
+        exact "how to undo this" rather than the four or seven fields the pre-lane-3a-review
+        routes used to remember by hand. `None` for a position with no card, `bind_sku`'s
+        own convention.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            return None
+        return {field: getattr(card, field) for field in self.IDENTITY_SNAPSHOT_FIELDS}
+
+    def restore_identity(
+        self, key: str, snapshot: Mapping[str, object], *, event: str, **extra
+    ) -> Optional[Card]:
+        """Put a card's identity AND its binding bookkeeping back exactly as one earlier
+        `identity_snapshot()` recorded it — D28's standing rule, "undo must be exact",
+        applied to every field `bind_sku`/`unbind_sku` can touch: `sku`, `condition`,
+        `name`, `number`, `printed_total`, `set_name`, `rarity`, and now `identity_source`,
+        `bound_by`, `bound_at`, `read_disputes` too, none of which any reversal restored
+        before this review round — an undo that put the right SKU back while leaving
+        `bound_by` naming the write it had just undone was not exact, it only looked it.
+
+        A KEY ABSENT FROM `snapshot` MEANS "LEAVE THAT FIELD AS IT IS", NEVER A NULL CLAIM —
+        `do_correct_answer`'s own precedent (§4.2's amendment on review, "a missing key is
+        not a null claim"), generalised from `number`/`printed_total` alone to all eleven
+        fields: an event line written by a server that predates this method (the three real
+        `sku_corrected` lines on the owner's store, and every fixture built to look like
+        one) carries only the handful of fields ITS OWN route touched, and restoring the
+        rest to `None` would erase values that write was never responsible for losing. A
+        caller that means to CLEAR a field puts an explicit `None` in `snapshot` for it,
+        which this reads exactly like any other present value.
+
+        NO SKU LOOKUP AND NO REFUSAL, unlike `bind_sku` — the value going back onto the
+        card is a fact this card held a moment ago, not a fresh choice being validated
+        against `skus`. `event`/`**extra` are the SAME shape `Inventory._log` has always
+        taken, so the one route-specific history line each reversal needs (`unanswered`,
+        `sku_correction_undone`, `identity_confirm_undone`, carrying whatever extra fields
+        that reversal's own contract promises — `withdrew`, `restored`, `reclaimed`,
+        `queues`) is written HERE, in the one place all three fields it undoes are also
+        written, rather than the route logging a second time.
+
+        `bound_at` IS THE ONE FIELD NEVER RESTORED VERBATIM, whatever `snapshot` says —
+        `unbind_sku`'s own established rule, restated rather than a second one invented:
+        "a restore is itself an act happening now, not a trip back to the moment the
+        original bind wrote." It is always re-stamped `now()`. A caller proving an exact
+        round trip therefore compares every OTHER field; `bound_at` is expected to differ,
+        and later.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            return None
+        for field in self.IDENTITY_SNAPSHOT_FIELDS:
+            if field == "bound_at":
+                # `bound_at` IS THE ONE EXCEPTION, and it is `unbind_sku`'s own precedent
+                # (that method's docstring, verbatim): "a restore is itself an act
+                # happening now, not a trip back to the moment the original bind wrote".
+                # Skipped in the verbatim-copy loop and re-stamped unconditionally below,
+                # whether or not `snapshot` even carries the key.
+                continue
+            if field in snapshot:
+                setattr(card, field, snapshot[field])
+        card.bound_at = now()
+        self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run, **extra)
         return card
 
     def retire(self, key: str, reason: str) -> bool:
