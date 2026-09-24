@@ -3238,9 +3238,24 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "renumber_blocked", "renumber_blocked")
             checks.ok(
-                "card 4 is retired: damaged" in str(caught),
-                "and the refusal NAMES the blocker with its reason",
+                "Section 1, Card 4 is retired: damaged" in str(caught)
+                and "card 4 is retired" not in str(caught),
+                "and the refusal NAMES the blocker with its reason, in the SAME SHAPE a "
+                "card row reads — Section n, Card m, never the bare store index "
+                "(D-a-box-is-shown-by-its-name)",
                 f"message was: {caught}",
+            )
+            # THE LISTED CARD'S TEXT MATCHES ITS OWN LABEL. Box 3 got no typed name, so it
+            # carries the stored default — `said_place` (a second code path through
+            # `join.box_view`) answers the same "Section 1, Card 4" for this departed card,
+            # cross-checking `place_within_box`, the one the list actually calls.
+            expected_label = join.said_place(Store().read().inventory, 3, 4)
+            checks.ok(
+                expected_label.endswith("Section 1, Card 4")
+                and "Section 1, Card 4" in str(caught),
+                "the list's own text for card 4 matches `said_place`'s label for the same "
+                "index, minus the box name already said once in the sentence",
+                f"said_place: {expected_label!r}; message: {caught}",
             )
         refusal(
             checks,
@@ -3263,8 +3278,11 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "renumber_blocked", "renumber_blocked")
             checks.ok(
-                "8608859" in str(caught) and "1 pushed" in str(caught),
-                "naming the SKU and the stage that holds it",
+                "Section 1, Card 3 is one copy of SKU 8608859" in str(caught)
+                and "1 pushed" in str(caught)
+                and "card 3 is one copy" not in str(caught),
+                "naming the SKU and the stage that holds it, against the card's Section n, "
+                "Card m label — never the bare store index",
                 f"message was: {caught}",
             )
         with Store().write() as snapshot:
@@ -3449,12 +3467,21 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                 "in its own code",
             )
             checks.ok(
-                "8608859" in str(caught) and "1 pushed" in str(caught)
+                "Section 1, Card 1 is one copy of SKU 8608859" in str(caught)
+                and "1 pushed" in str(caught)
+                and "card 1 is one copy" not in str(caught)
                 and "is sold" not in str(caught) and "is retired" not in str(caught)
                 and "was moved" not in str(caught),
-                "and the refusal names only the listed copy — the sold, retired and "
-                "moved records no longer stand in the way (D134)",
+                "and the refusal names only the listed copy, in the SAME SHAPE a card "
+                "row reads — Section n, Card m, never the bare store index "
+                "(D-a-box-is-shown-by-its-name) — the sold, retired and moved records "
+                "no longer stand in the way (D134)",
                 f"message was: {caught}",
+            )
+            checks.equal(
+                join.said_place(Store().read().inventory, 3, 1),
+                "Box 1, Section 1, Card 1",
+                "cross-checked against `said_place` for the same index",
             )
         checks.equal(
             len(Store().read().inventory.cards), 5,
@@ -8892,9 +8919,18 @@ def check_box_claims(checks: Checks) -> None:
                 getattr(caught, "code", None), "claim_not_stocked_by_game", "in its own code"
             )
             checks.ok(
-                "card 3" in str(caught),
-                "naming the card whose game rejected it",
+                "Section 1, Card 3" in str(caught) and "card 3:" not in str(caught),
+                "naming the card whose game rejected it, in the SAME SHAPE a card row "
+                "reads — Section n, Card m, never the bare store index "
+                "(D-a-box-is-shown-by-its-name)",
                 f"message was: {caught}",
+            )
+            # THE LISTED CARD MATCHES ITS OWN LABEL — a second code path, `said_place`,
+            # answers the same numbers for the same index.
+            checks.equal(
+                join.said_place(Store().read().inventory, 6, 3),
+                "Box 1, Section 1, Card 3",
+                "cross-checked against `said_place` for the same index",
             )
         checks.ok(
             all(

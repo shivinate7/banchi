@@ -413,55 +413,52 @@ class Position:
 # every label here share one fallback.
 
 
+def place_within_section(section: int, card: int) -> str:
+    """`Section 2, Card 17`: the section and the card's number within it, with NO box name.
+
+    For a list of many cards from ONE box (`renumber_blocked`, `claim_not_stocked_by_game`,
+    `box_not_empty_of_commitments`), where the box's name is already said once in the
+    sentence the list sits inside — repeating it on every line would be the box number's
+    own defect one word over. `place_within_box` is the caller that reaches this per card.
+    """
+    return f"Section {int(section)}, Card {int(card)}"
+
+
 def place_label(box_name: str, section: int, card: int) -> str:
     """The one place label formula (D58, D-a-box-is-shown-by-its-name): name, section, card."""
-    return f"{box_name}, Section {int(section)}, Card {int(card)}"
+    return f"{box_name}, {place_within_section(section, card)}"
 
 
-def said_place(inventory, box, index=None) -> str:
-    """Where a refusal says a box or a card is: the box's NAME, and for a card its section
-    and its card number within the section. THE ONE HELPER every server refusal speaks
-    through (the orchestrator's call on the locating review, 2026-09-24).
+def box_view(inventory, box) -> Tuple[str, "BoxView"]:
+    """The box's title and its `BoxView` — on-hand indices, departed indices and declared
+    sections, scanned ONCE. `said_place` and `place_within_box` both build a `Position`
+    through the `BoxView` this returns, so every place a refusal names — the box alone, one
+    card, or a whole list of a box's cards — comes from the one scan and the one formula.
 
-    THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name): the box number and the
-    store index stay inside the store. A refusal reaches a screen as a toast, so a message
-    that prints `Box 3, card 17` shows the owner both numbers the ruling hides. This builds
-    the same `Position` the screens draw, through `BoxView.at`, so the refusal and the card
-    row spell one place.
-
-    `index=None` answers the box alone: its name. So does an index that holds no record,
-    because a place with no card has no section and no card number to say.
-
-    IT NEVER RAISES. A refusal is already the error path; a store too broken to place the
-    card (an unreadable index, a layout that will not validate) degrades to the box's name,
-    never to a second exception that hides the first.
+    NEVER RAISES. An unreadable index, a layout that will not validate, or a box the
+    registry has never seen all degrade to the box's title over an empty `BoxView` — the
+    same fallback a caller with nothing to build from gets, never a second exception that
+    hides the first (a refusal is already the error path).
     """
     try:
         number = int(box)
     except (TypeError, ValueError):
-        return str(box)
+        return str(box), BoxView()
     try:
         entry = inventory.box(number)
     except Exception:  # noqa: BLE001 — a refusal must not raise a second error
         entry = None
     title = box_title(entry.name if entry is not None else None, number)
-    if index is None:
-        return title
     try:
-        at = int(index)
         on_hand: List[int] = []
         gone: List[int] = []
-        found = False
         for _key, (raw_index, raw_game, state) in inventory.cards.select(
             ("idx", "game", "state"), box=number
         ):
-            position = int(raw_index)
             if not is_located(str(raw_game or games.DEFAULT_GAME)):
                 continue
-            found = found or position == at
+            position = int(raw_index)
             (gone if state in master.TERMINAL_STATES else on_hand).append(position)
-        if not found:
-            return title
         try:
             sections = tuple(inventory.sections_for(number))
         except Exception:  # noqa: BLE001 — an unreadable layout reads as one section
@@ -472,9 +469,68 @@ def said_place(inventory, box, index=None) -> str:
             departed=tuple(sorted(gone)),
             name=title,
         )
+    except Exception:  # noqa: BLE001 — a refusal must not raise a second error
+        view = BoxView(name=title)
+    return title, view
+
+
+def said_place(inventory, box, index=None) -> str:
+    """Where a refusal says a box or a card is: the box's NAME, and for a card its section
+    and its card number within the section. THE ONE HELPER every server refusal speaks
+    through (the orchestrator's call on the locating review, 2026-09-24).
+
+    THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name): the box number and the
+    store index stay inside the store. A refusal reaches a screen as a toast, so a message
+    that prints `Box 3, card 17` shows the owner both numbers the ruling hides. This builds
+    the same `Position` the screens draw, through `box_view`, so the refusal and the card
+    row spell one place.
+
+    `index=None` answers the box alone: its name. So does an index that holds no record,
+    because a place with no card has no section and no card number to say.
+
+    IT NEVER RAISES. A refusal is already the error path; a store too broken to place the
+    card (an unreadable index, a layout that will not validate) degrades to the box's name,
+    never to a second exception that hides the first.
+    """
+    title, view = box_view(inventory, box)
+    if index is None:
+        return title
+    try:
+        number = int(box)
+        at = int(index)
+    except (TypeError, ValueError):
+        return title
+    if at not in (view.occupied or ()) and at not in (view.departed or ()):
+        return title
+    try:
         return view.at(number, at).label
     except Exception:  # noqa: BLE001 — a refusal must not raise a second error
         return title
+
+
+def place_within_box(view: "BoxView", box, index) -> str:
+    """`Section 2, Card 17`: the same numbers `said_place` would give this card, with no box
+    name — for a caller labelling MANY cards from one already-scanned `box_view`.
+
+    Falls back to `card <index>`, the pre-ruling shape, only where a `Position` cannot be
+    built for it — the index is not one `box_view` found, or the layout will not resolve. A
+    refusal is already the error path and must not raise a second one over a label.
+    """
+    try:
+        number = int(box)
+        at = int(index)
+    except (TypeError, ValueError):
+        return f"card {index}"
+    if at not in (view.occupied or ()) and at not in (view.departed or ()):
+        return f"card {index}"
+    try:
+        position = view.at(number, at)
+    except Exception:  # noqa: BLE001 — a refusal must not raise a second error
+        return f"card {index}"
+    card = position.card
+    if card is None:
+        card = position.was_card or 1
+    return place_within_section(position.section, card)
 
 
 # --------------------------------------------------------------- pooled, not located

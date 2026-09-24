@@ -3922,7 +3922,14 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 except BadRequest as refused:
                     rejected.append((at, str(refused)))
             if rejected:
-                named = "; ".join(f"card {at}: {text}" for at, text in rejected[:8])
+                # ONE SCAN OF THE BOX, never one per rejected card (`join.box_view`). Each
+                # listed card reads "Section n, Card m", never the store index — the box
+                # name is already said once above (D-a-box-is-shown-by-its-name).
+                _, _view = join.box_view(inventory, box)
+                named = "; ".join(
+                    f"{join.place_within_box(_view, box, at)}: {text}"
+                    for at, text in rejected[:8]
+                )
                 more = f"; and {len(rejected) - 8} more" if len(rejected) > 8 else ""
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
@@ -4577,17 +4584,23 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         # the allocator, against a printed label.
         movers: List[Tuple[int, str, master.Card]] = []
         blockers: List[Tuple[int, str]] = []
+        # ONE SCAN OF THE BOX FOR EVERY BLOCKER'S LABEL, never one scan per blocker
+        # (`join.box_view`). Each listed card reads "Section n, Card m", never the store
+        # index — the box name is already said once, in the sentence this list sits inside
+        # (D-a-box-is-shown-by-its-name).
+        _, _view = join.box_view(inventory, box)
         for at, other_key, other in inventory.records_in(box):
             if at <= int(index):
                 continue
             movers.append((at, other_key, other))
+            where = join.place_within_box(_view, box, at)
             if other.state in master.TERMINAL_STATES:
                 gone = (
                     f"retired: {other.retire_reason}"
                     if other.state == master.RETIRED
                     else "sold"
                 )
-                blockers.append((at, f"card {at} is {gone}"))
+                blockers.append((at, f"{where} is {gone}"))
             else:
                 other_held = _listing_hold(inventory, other)
                 if other_held:
@@ -4595,7 +4608,7 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
                         f"{count} {stage}" for stage, count in other_held
                     )
                     blockers.append(
-                        (at, f"card {at} is one copy of SKU {other.sku} ({other_summary})")
+                        (at, f"{where} is one copy of SKU {other.sku} ({other_summary})")
                     )
         if blockers:
             blockers.sort()
@@ -5488,6 +5501,11 @@ def do_delete_box(box: int) -> dict:
 
         holds: List[Tuple[int, str, master.Card]] = []
         blockers: List[Tuple[int, str]] = []
+        # ONE SCAN OF THE BOX FOR EVERY BLOCKER'S LABEL, never one scan per blocker
+        # (`join.box_view`). Each listed card reads "Section n, Card m", never the store
+        # index — the box name is already said once, in the sentence this list sits inside
+        # (D-a-box-is-shown-by-its-name).
+        _, _view = join.box_view(inventory, box)
         for at, card_key, card in inventory.records_in(box):
             holds.append((at, card_key, card))
             if card.state not in master.TERMINAL_STATES:
@@ -5496,8 +5514,9 @@ def do_delete_box(box: int) -> dict:
                 held = _listing_hold(inventory, card)
                 if held:
                     summary = ", ".join(f"{count} {stage}" for stage, count in held)
+                    where = join.place_within_box(_view, box, at)
                     blockers.append(
-                        (at, f"card {at} is one copy of SKU {card.sku} ({summary})")
+                        (at, f"{where} is one copy of SKU {card.sku} ({summary})")
                     )
 
         if registered is None and not holds:
