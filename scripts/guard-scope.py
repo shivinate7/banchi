@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DOES THIS CHANGE REACH WHAT ONE OF THE FIFTEEN GUARD SELF-TESTS PROVES?
+"""DOES THIS CHANGE REACH WHAT ONE OF THE ROSTER'S GUARD SELF-TESTS PROVES?
 
 Measured on this Mac, 2026-09-20: `make check` is 163.85s. Fifteen guard self-tests —
 `reap-selftest`, `claim-selftest`, `guard-shell-selftest`, `sync-selftest`, `audit-self-test`,
@@ -14,13 +14,13 @@ is the argument; `docs/specs/verification-cost.md` §11 is the measurement.
 THE OWNER RULED A SECOND PATH-GATED TARGET IN, 2026-09-20, on that measurement.
 `scripts/serve-scope.py`'s own header says a request for a second entry is "evidence the
 policy is spreading and needs the owner's word again" — that word was given, and this file
-is what was built on it. Fifteen entries, not one: unlike `serve-selftest`'s single
+is what was built on it. Many entries, not one: unlike `serve-selftest`'s single
 unbreakable-by-any-`app/`-change case, most of `make check`'s guard self-tests each prove
-one guard script, so one classifier serving fifteen is the shape that avoids fifteen
-near-identical copies of `serve-scope.py`.
+one guard script, so one classifier serving the roster below is the shape that avoids a
+near-identical copy of `serve-scope.py` per entry.
 
 THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S OWN SOURCE, NEVER TYPED BESIDE IT.
-`ROSTER` below names which fifteen targets are gated — that selection is a product decision,
+`ROSTER` below names which targets are gated — that selection is a product decision,
 on `serve-scope.py`'s own precedent (it names `serve-selftest` the same way). What each
 target's SUBJECT is — the files that decide whether it can possibly go red — is computed by
 `derive_subjects()` by reading the test's own source on every call: every `from store import
@@ -41,8 +41,8 @@ out loud. Only an explicit skip skips, and `PKMNSCAN_GUARD_SCOPE=off` turns the 
 off for every target and is printed every time any of them skips.
 
     scripts/guard-scope.py classify --target <name> [--base REV] [--head REV]
-        Prints the reasoning and exits 0 to RUN, 3 to SKIP. Each of the fifteen Makefile
-        recipes calls this with its own name.
+        Prints the reasoning and exits 0 to RUN, 3 to SKIP. Each roster entry's own
+        Makefile recipe calls this with its own name.
     scripts/guard-scope.py list [--target <name>]
     scripts/guard-scope.py selftest
 
@@ -68,9 +68,14 @@ HATCH = "PKMNSCAN_GUARD_SCOPE"
 # codes/ cli/)". A local-package import is resolved against this list, never a guess.
 LOCAL_PACKAGES = ("store", "cli", "pipeline", "identify", "geometry", "codes", "server")
 
-# THE FIFTEEN — the owner's list, 2026-09-20. Which targets are gated is declared here, on
-# `serve-scope.py`'s own precedent (it declares its one target the same way). What each one
-# READS is never declared beside it; see `derive_subjects()`.
+# THE ROSTER — the owner's list, grown twice: fifteen entries on 2026-09-20, a sixteenth
+# (`pricearchive-selftest`) on 2026-09-23, and six more the same day once that sixteenth's
+# own wiring showed each of their "not wired — pricearchive-selftest.py's own precedent"
+# notes had gone stale too (D247's own text: "This entry is a placement change, not a
+# pruning" — the same word covers every later addition on the same ground). Which targets
+# are gated is declared here, on `serve-scope.py`'s own precedent (it declares its one
+# target the same way). What each one READS is never declared beside it; see
+# `derive_subjects()`. Count it with `len(ROSTER)`, never by re-typing a number in prose.
 ROSTER = (
     {"target": "reap-selftest", "test": "scripts/reap-selftest.sh"},
     {"target": "claim-selftest", "test": "scripts/claim-selftest.py"},
@@ -87,6 +92,14 @@ ROSTER = (
     {"target": "submission-selftest", "test": "scripts/submission-selftest.py"},
     {"target": "screen-freshness-selftest", "test": "scripts/screen-freshness.mjs"},
     {"target": "cid-selftest", "test": "scripts/cid-selftest.py"},
+    {"target": "pricearchive-selftest", "test": "scripts/pricearchive-selftest.py"},
+    {"target": "archive-review-selftest", "test": "scripts/archive-review-selftest.py"},
+    {"target": "holdings-selftest", "test": "scripts/holdings-selftest.py"},
+    {"target": "identity-checks-selftest", "test": "scripts/identity-checks-selftest.py"},
+    {"target": "price-postings-selftest", "test": "scripts/price-postings-selftest.py"},
+    {"target": "product-history-selftest", "test": "scripts/product-history-selftest.py"},
+    {"target": "sku-number-contradictions-selftest",
+     "test": "scripts/sku-number-contradictions-selftest.py"},
 )
 
 TARGETS = {entry["target"] for entry in ROSTER}
@@ -130,14 +143,38 @@ def _flatten_div(node: ast.AST) -> Optional[List[str]]:
     return None
 
 
+def _dotted_to_subject(dotted: str) -> Optional[str]:
+    """`"store.db"` -> `"store/db.py"` when the top-level package is local, else `None`.
+
+    A bare package name with no submodule (`"store"` alone) names no single file — that
+    shape is `visit_ImportFrom`'s own `from store import x` branch to resolve, which reads
+    `node.names` for the part this function is never given.
+    """
+    parts = dotted.split(".")
+    if len(parts) > 1 and parts[0] in LOCAL_PACKAGES:
+        return "/".join(parts) + ".py"
+    return None
+
+
 class _PathCollector(ast.NodeVisitor):
-    """Every local-package import and every `Path`-chain in a module, wherever it sits.
+    """Every local-package import, every `Path`-chain and every dynamic `import_module`
+    string, wherever any of them sits in a module.
 
     `ast.walk` would also re-visit every inner `BinOp` of a chain as if it were its own
     top-level one (`ROOT / "scripts"` inside `ROOT / "scripts" / "x.py"`), which would add
     the bare directory `scripts` as a "subject" and defeat the whole point — a change
     anywhere under `scripts/` would then re-arm every target. Overriding `visit_BinOp` and
     skipping `generic_visit` once a chain resolves keeps only the outermost, full chain.
+
+    `visit_Call` reads `importlib.import_module("store.db")` (or a bare `import_module(...)`
+    reached through `from importlib import import_module`) the same way `visit_ImportFrom`
+    reads a static import — the argument is a STRING LITERAL, fully visible to the AST, not
+    the runtime-built string D247's own "WHAT THIS DOES NOT COVER" section describes (a
+    name assembled from an f-string, a variable, or an environment lookup stays invisible,
+    on purpose — this reads only what the source spells out literally). This is why
+    `scripts/price-postings-selftest.py` needs no decoy import beside its real, dynamic
+    `importlib.import_module("store.db")` / `("store.session")` calls: this visitor now
+    resolves those two calls' own literal arguments directly.
     """
 
     def __init__(self) -> None:
@@ -155,11 +192,25 @@ class _PathCollector(ast.NodeVisitor):
         if node.module:
             parts = node.module.split(".")
             if parts[0] in LOCAL_PACKAGES:
-                if len(parts) > 1:
-                    self.hits.add("/".join(parts) + ".py")
+                subject = _dotted_to_subject(node.module)
+                if subject:
+                    self.hits.add(subject)
                 else:
                     for alias in node.names:
                         self.hits.add(f"{parts[0]}/{alias.name}.py")
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        is_import_module = (
+            (isinstance(node.func, ast.Attribute) and node.func.attr == "import_module")
+            or (isinstance(node.func, ast.Name) and node.func.id == "import_module")
+        )
+        if is_import_module and node.args:
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                subject = _dotted_to_subject(first.value)
+                if subject:
+                    self.hits.add(subject)
         self.generic_visit(node)
 
 
@@ -359,6 +410,70 @@ def selftest() -> int:
         got3 = derive_subjects(fixture)
         check("only the full chain is kept, never the bare directory prefix",
               "scripts" in got3, False)
+
+    # ---- MUTATION ARM: `importlib.import_module("<literal>")` resolution is real, proved
+    # by removing it. `scripts/price-postings-selftest.py` needs this exactly — its real
+    # subjects (`store/postings.py`, `store/session.py`) are reached only by loading
+    # `store.session` by NAME, never by a static `from store import ...`. A `.bak`-shaped
+    # copy of THIS file has `visit_Call` deleted by one literal string replacement (the
+    # same technique `price-postings-selftest.py`'s own `_mutate_to_upsert` uses on
+    # `store/db.py`) and is imported under a throwaway module name, its `ROOT` repointed at
+    # the real repo root so the mutant's own file-existence filter still resolves; against a
+    # fixture calling `importlib.import_module("store.db")`, the mutant's `derive_subjects`
+    # MUST miss the subject the real one catches, or this resolution is not being tested at
+    # all.
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "fixture_import_module.py"
+        fixture.write_text(
+            'import importlib\n'
+            'db_module = importlib.import_module("store.db")\n'
+        )
+        got4 = derive_subjects(fixture)
+        check('importlib.import_module("store.db") resolves to store/db.py',
+              "store/db.py" in got4, True)
+
+        own_src = Path(__file__).read_text()
+        anchor = (
+            '    def visit_Call(self, node: ast.Call) -> None:\n'
+            '        is_import_module = (\n'
+            '            (isinstance(node.func, ast.Attribute) and node.func.attr == '
+            '"import_module")\n'
+            '            or (isinstance(node.func, ast.Name) and node.func.id == '
+            '"import_module")\n'
+            '        )\n'
+            '        if is_import_module and node.args:\n'
+            '            first = node.args[0]\n'
+            '            if isinstance(first, ast.Constant) and isinstance(first.value, '
+            'str):\n'
+            '                subject = _dotted_to_subject(first.value)\n'
+            '                if subject:\n'
+            '                    self.hits.add(subject)\n'
+            '        self.generic_visit(node)\n'
+        )
+        if own_src.count(anchor) != 1:
+            check(
+                "MUTATION ANCHOR NOT FOUND EXACTLY ONCE — visit_Call moved, this arm proves "
+                "nothing until the anchor is updated to match it",
+                False, True,
+            )
+        else:
+            mutant_path = Path(tmp) / "guard_scope_mutant.py"
+            mutant_path.write_text(own_src.replace(anchor, ""))
+            spec = importlib.util.spec_from_file_location(
+                "_guard_scope_mutant", mutant_path)
+            mutant = importlib.util.module_from_spec(spec)
+            sys.modules["_guard_scope_mutant"] = mutant
+            try:
+                spec.loader.exec_module(mutant)
+                mutant.ROOT = ROOT  # the mutant's own `__file__` sits under `tmp`, not here
+                got5 = mutant.derive_subjects(fixture)
+                check(
+                    "MUTATION: without visit_Call, the same import_module call is "
+                    "invisible — store/db.py must NOT be found",
+                    "store/db.py" in got5, False,
+                )
+            finally:
+                del sys.modules["_guard_scope_mutant"]
 
     # ---- fail-open, exercised for real against this repository's own git history.
     check("an unscoped target runs",

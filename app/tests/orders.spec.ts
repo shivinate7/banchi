@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '@playwright/test'
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { settleMotion } from './motionSettled'
@@ -1039,8 +1039,11 @@ test('the receipt names where the card just was, never the departed label the sa
      about: it is still composed at the moment of the press, it still has to name the place the
      operator just walked to, and the way back still has to be on it. */
   const receipt = page.locator('.bn-toast-receipt')
-  await expect(receipt).toContainText('Box 3 · Section 2 · Card 17')
+  /* D218: the toast body is plain text, so `place` reads through `sayPlace` (`Orders.tsx`'s
+     `onPull`) before it lands here — the server's own `' · '` never reaches this sentence. */
+  await expect(receipt).toContainText('Box 3, Section 2, Card 17')
   await expect(receipt).not.toContainText('departed')
+  expect(await receipt.innerText()).not.toMatch(/[·•]/)
 
   /* THE WAY BACK IS ON THE RECEIPT AND NOT IN THE ROW, and that is forced rather than chosen: a
      successful pull marks the copy sold, the resolver stops offering it, and an Undo drawn
@@ -3209,6 +3212,78 @@ test('Mark sold records the copy against the owing order, and the order panel up
 
   const stats = page.locator('.boxops-identity .card-locations-stats .bn-stat')
   await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('1')
+})
+
+/* ------------------------------------------------------------ a stop's title, one ruler */
+
+test('a stop\'s title states the section\'s own count, never the box-wide span', async ({ page }) => {
+  /* The rows under a stop read `#${place.card}`, the number WITHIN the section. The title used
+     to draw the stop's `span`, `#12–#30`, counted across the whole BOX: two rulers on one
+     screen, the defect `#/inventory`'s own section header had. This stop's section runs from
+     box card 12 to 30 of a box of 133, closed, so it holds 19 cards, and its one row reads #7.
+     Verified red first: on the old `stopTitle`, the title ends in the box-wide
+     `#12–#30`. */
+  await open(page, {
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        section_name: 'Rares',
+        span: { start: 12, end: 30 },
+        takes: [walkPlanTake({ copies: [walkPlanCopy({ card: 7, place: { section_name: 'Rares', section_start: 12, section_end: 30 } })] })],
+      }),
+    ]),
+  })
+  await startWalk(page)
+
+  const title = page.locator('.browse-list .browse-secttitle').first()
+  await expect(title).toHaveText('RB Epics, Section 2: Rares, 19 cards')
+  await expect(page.locator('.browse-list .browse-row-slot').first()).toHaveText('#7')
+})
+
+/** WHERE A SECTION TITLE'S COUNT IS DRAWN, against the title's own box — the box that clips it.
+ *  Measured off the TEXT with a Range, not off a count element, so the same probe reads a title
+ *  drawn as one span (the old shape, where the ellipsis cut the count) and as two. `overflow` is
+ *  how far the whole sentence runs past the box: above 0 means the name really was cut, so a
+ *  green count is not a title that simply fit. */
+async function sectionTitleFit(title: Locator, count: string): Promise<{ countInside: boolean; overflow: number; text: string }> {
+  return title.evaluate((el, needle) => {
+    const box = el.getBoundingClientRect()
+    const all = document.createRange()
+    all.selectNodeContents(el)
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    let countInside = false
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const at = (node.textContent ?? '').indexOf(needle)
+      if (at < 0) continue
+      const range = document.createRange()
+      range.setStart(node, at)
+      range.setEnd(node, at + needle.length)
+      const r = range.getBoundingClientRect()
+      countInside = r.width > 0 && r.left >= box.left - 0.5 && r.right <= box.right + 0.5
+    }
+    return { countInside, overflow: all.getBoundingClientRect().width - box.width, text: el.textContent ?? '' }
+  }, count)
+}
+
+test('a long section name is cut before the count is, at 820', async ({ page }) => {
+  /* THE COUNT IS THE FACT A HAND CHECKS THE ROWS AGAINST, so a narrow rail cuts the NAME and
+     keeps `19 cards` whole (`SectionTitle.tsx`). Verified red first: on the one-span title the
+     ellipsis cut the END of the sentence, which is the count. */
+  await page.setViewportSize({ width: 820, height: 1180 })
+  await open(page, {
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        section_name: 'Holographic promos from the vintage binder',
+        takes: [walkPlanTake({ copies: [walkPlanCopy({ card: 7, place: { section_name: 'Holographic promos from the vintage binder', section_start: 12, section_end: 30 } })] })],
+      }),
+    ]),
+  })
+  await startWalk(page)
+
+  const title = page.locator('.browse-list .browse-secttitle').first()
+  await expect(title).toHaveText('RB Epics, Section 2: Holographic promos from the vintage binder, 19 cards')
+  const fit = await sectionTitleFit(title, '19 cards')
+  expect(fit.overflow).toBeGreaterThan(0)
+  expect(fit.countInside).toBe(true)
 })
 
 /* ------------------------------------------------------------------- the trap: no re-sort */

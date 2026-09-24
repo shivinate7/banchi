@@ -165,6 +165,22 @@ export function sentenceOf(place: Place, persona: Persona = 'owner'): string {
   return detail === null ? main : `${main} · ${detail}`
 }
 
+/** D218: a typed middle dot is a defect wherever it is typed, and `Position.label`'s own
+ *  ` · ' is exactly that — server-composed and real, but never fit to retype as a screen's
+ *  visible or spoken text. Every screen that DRAWS a position splits it and lets CSS join the
+ *  parts (`PositionLabel.tsx`); a toast body, a sentence built around the label (`Walk to
+ *  ${label}`, `The card at ${label}`), and any other plain-text or accessible-name use carry
+ *  the label as a SENTENCE FRAGMENT, where there is no CSS to draw a separator with — this
+ *  reads it as a sentence instead, the same `', '` `Home.tsx`'s box line takes for its own
+ *  `title` attribute. THE SERVER STRING ITSELF IS NEVER EDITED (other screens split on it);
+ *  this is a read, not a rewrite. `PositionLabel.tsx`'s own internal `aria-label` is the one
+ *  caller D41 lets keep the raw dot, because it carries `Position.label` whole as its OWN
+ *  accessible name rather than splicing it into a bigger sentence — that caller does not
+ *  reach this function. */
+export function sayPlace(label: string): string {
+  return label.replace(/ · /g, ', ')
+}
+
 /** The second scale: how far into its own SECTION a card sits. Null when there is no honest
  *  answer — a pooled card, a degraded block, a box the server cannot size. */
 export type SectionDepth = {
@@ -228,6 +244,55 @@ export function sectionBlankSentence(place: Place, persona: Persona = 'owner'): 
     : 'which part of the box this sits in is not known yet'
 }
 
+/** The section's bounds, with no one card in mind — the arithmetic `sectionDepthOf` and
+ *  `sectionCountOf` both stand on. `start`/`of`/`growing` are D58's units throughout: a card
+ *  COUNT, never a stored index. Null where neither caller can go on: no section, or a box the
+ *  server could not size. */
+function sectionSpan(place: Place): { start: number; of: number; growing: boolean } | null {
+  const { section, section_start: start, section_end: end, box_total: total } = place
+  if (section === null) return null
+  if (!Number.isFinite(total) || total <= 0) return null
+  if (!Number.isFinite(start) || start < 1) return null
+
+  const growing = !place.box_closed && (end === null || end >= total)
+  const of = (growing ? total : (end ?? total)) - start + 1
+  if (!Number.isFinite(of) || of <= 0) return null
+  return { start, of, growing }
+}
+
+/** The section's own card count (D58's units), with no one card's position in mind — what a
+ *  section HEADER states, on `#/inventory`'s walk and everywhere else a section is named
+ *  without naming a card inside it. Null where `sectionDepthOf` would also refuse: a pooled
+ *  block (D24) or a box the server could not size.
+ *
+ *  THE ONE NUMBER STATED IS THIS SECTION'S OWN COUNT, NEVER THE BOX-WIDE SPAN `section_start`/
+ *  `section_end` carry. A header built from those two box-wide numbers reads in a different
+ *  scale than a row's own `card` (the count WITHIN the section, D58) — `#54–#93` over a row
+ *  reading `#37` is not out of range, it is two rulers on one screen, the bug D092 already
+ *  named for the position bar and this repeats one scale up. */
+export type SectionCount = { of: number; growing: boolean }
+export function sectionCountOf(place: Place): SectionCount | null {
+  if (place.located === false) return null
+  const span = sectionSpan(place)
+  return span === null ? null : { of: span.of, growing: span.growing }
+}
+
+/** A section title in its two parts: `head` names the section (and, on `#/orders`, the box), and
+ *  `count` is `sectionCountOf`'s answer in words, or null where it has none. Two parts because
+ *  a narrow column may cut the name but never the count (`SectionTitle.tsx` draws them). */
+export type SectionTitleParts = { readonly head: string; readonly count: string | null }
+
+/** `19 cards`, `1 card`. The words every section title states its count in. */
+export function sectionCountWords(count: SectionCount | null): string | null {
+  return count === null ? null : `${count.of} card${count.of === 1 ? '' : 's'}`
+}
+
+/** The whole title as one sentence: what a screen reader hears, what a fold groups by, and
+ *  exactly the text `SectionTitle` draws. */
+export function sectionTitleText(parts: SectionTitleParts): string {
+  return parts.count === null ? parts.head : `${parts.head}, ${parts.count}`
+}
+
 /**
  * A section is `growing` when the box is open AND its declared end reaches or passes what the
  * box currently holds — the last section, the one the next capture lands in. A growing section
@@ -237,7 +302,7 @@ export function sectionBlankSentence(place: Place, persona: Persona = 'owner'): 
 export function sectionDepthOf(place: Place): SectionDepth | null {
   if (place.located === false) return null
 
-  const { card: slot, section, section_start: start, section_end: end, box_total: total } = place
+  const { card: slot, section, section_start: start, box_total: total } = place
   const gone = isDeparted(place)
   if (section === null) return null
   /* THE SECTION'S NAME IS SAID WITH ITS NUMBER (D132) — `Section 6`, `Rares`, `card 54 of 153`.
@@ -251,12 +316,10 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
      the card. The section it was in is still a real run of slots and is still worth drawing;
      what is not true any more is that this copy is at a number inside it. */
   if (!gone && (slot === null || !Number.isFinite(slot) || slot < 1)) return null
-  if (!Number.isFinite(total) || total <= 0) return null
-  if (!Number.isFinite(start) || start < 1) return null
 
-  const growing = !place.box_closed && (end === null || end >= total)
-  const of = (growing ? total : (end ?? total)) - start + 1
-  if (!Number.isFinite(of) || of <= 0) return null
+  const span = sectionSpan(place)
+  if (span === null) return null
+  const { of, growing } = span
 
   /* The same convention the server's own `fraction` uses — `(index - 1) / total` — so a card at
      the front of both tracks sits at the front of both. */
@@ -269,9 +332,17 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   const lastCard = firstCard + of - 1
 
   if (gone || slot === null) {
-    const tail: readonly string[] = growing
-      ? [`${of} cards`, 'this copy is not among them']
-      : [`${of} slots`, 'this copy is not in one']
+    /* A SHORT TAIL THAT DOES NOT FIGHT THE RULER UNDER IT. The old two facts (`40 slots`,
+       `this copy is not in one`) forced the head — the section's own name — to be the part
+       that ellipsized (`PositionBar.css` had it backwards: the head shrank, the tail never
+       did), so a named section read as `Secti… · 40 slots · this copy is not in one`, cut
+       mid-word beside a ruler still drawing the section whole. `sectionDepthOf` gets only a
+       `Place`, which carries no sold/retired distinction — a caller that reads the copy's own
+       `state` could say `sold from here` or `retired from here`, but every caller of this
+       function today is fed through `PositionBar`, which does not thread that word in either.
+       One neutral phrase, shorter than what it replaces, says exactly what is known and no
+       more (D194 — the count only ever goes down). */
+    const tail: readonly string[] = [growing ? `${of} cards` : `${of} slots`, 'left this section']
     return {
       slot: null,
       of,

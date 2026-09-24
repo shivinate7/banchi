@@ -1,6 +1,6 @@
 """`pkmnscan cards` — the card's stable name: preview it, audit it, move the photographs.
 
-FIVE SUBCOMMANDS AND THREE OF THEM WRITE NOTHING EVER.
+SIX SUBCOMMANDS AND FOUR OF THEM WRITE NOTHING EVER.
 
   cards name            what the naming would do, or has done — the source census, every
                         card that would land `nophoto:`, every duplicate photograph, and
@@ -14,6 +14,10 @@ FIVE SUBCOMMANDS AND THREE OF THEM WRITE NOTHING EVER.
   cards contradictions  two copies of one SKU disagreeing about the card's number
                         (D242). Read-only preview, opens no socket
                         unless `--resolve` is given.
+  cards sku-names       one SKU, two stored names — a card's own stored name disagrees
+                        with its SKU's product name in the newest cached export
+                        (D242's sibling). Read-only, no network ever. THREE verdicts,
+                        `audit`'s own shape.
   cards photos          move the corpus off the legacy `(box, index)` address onto the
                         card's own name. Previews by default; `--write` performs it
   cards variants        backfill `set` and `rarity` from whatever export a card's game
@@ -21,7 +25,7 @@ FIVE SUBCOMMANDS AND THREE OF THEM WRITE NOTHING EVER.
                         Previews by default; `--write` performs it. Never guesses: a SKU
                         that resolves to nothing keeps a null set.
 
-`name`, `audit`, `checks` AND `contradictions` OPEN THE STORE READ-ONLY AND MUST NEVER CALL
+`name`, `audit`, `checks`, `contradictions` AND `sku-names` OPEN THE STORE READ-ONLY AND MUST NEVER CALL
 `db.connect`. That function is the single entry to the store and it always calls
 `_ensure_schema`, so a preview routed through it would PERFORM the migration it claims to
 be previewing. It is a hard property with a harness arm behind it, and it is why `name` and
@@ -51,7 +55,7 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from cli import cmd_sku_contradictions
+from cli import cmd_sku_contradictions, cmd_sku_name_contradictions
 from pipeline import identity_checks
 from store import Store, db, files, master, photos
 
@@ -683,6 +687,7 @@ _SUBCOMMANDS = {
     "audit": _audit,
     "checks": _checks,
     "contradictions": cmd_sku_contradictions.run,
+    "sku-names": cmd_sku_name_contradictions.run,
     "photos": _photos,
     "variants": _variants,
 }
@@ -692,6 +697,6 @@ def run(args, say) -> int:
     action = getattr(args, "cards_action", None)
     handler = _SUBCOMMANDS.get(action)
     if handler is None:
-        say("pkmnscan cards <name|audit|checks|contradictions|photos|variants>")
+        say("pkmnscan cards <name|audit|checks|contradictions|sku-names|photos|variants>")
         return 2
     return handler(args, say)

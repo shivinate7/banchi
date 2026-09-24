@@ -16,7 +16,12 @@ THE THREE ARMS THIS FILE PROVES, EACH BY BREAKING WHAT IT GUARDS:
      `source: "live"` — proved the opposite way, by NOT seeding the archive and confirming
      the fake market's `reading_for_row` was in fact reached.
 
-Written, not wired into `make check` — `scripts/pricearchive-selftest.py`'s own precedent.
+PATH GATED, THE TWENTY-FIRST (D247, owner's word 2026-09-23, on the same ground as
+`pricearchive-selftest`'s sixteenth entry): `make product-history-selftest`, wired into
+`make check` and `make ci-check` through `scripts/guard-scope.py`. This file is no longer
+the exception it was when written — `do_product_history` is `#/product`'s own route
+(`app/src/App.tsx`'s off-nav `#/product` screen, D226), a real, live, screen-reachable
+caller. Once it's done, it only needs to be tested when touched.
 """
 
 from __future__ import annotations

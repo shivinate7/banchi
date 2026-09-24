@@ -395,15 +395,21 @@ const TAG_TITLES: Readonly<Record<Evidence, string>> = {
 
 /* WHICH SIGNAL ARGUED FOR THIS ROW, drawn only where the list holds more than one answer.
  *
- * `found_by` is on the wire for `name_disputed` alone (`cli/resolve.py:_candidate_rows`), so
- * this returns the provenance tag for exactly the entry whose rows come from two different
- * readings of one photograph and nothing else. Reading the FIELD rather than the reason code
- * is deliberate: the reason is the server's word for the question, and the provenance is a
- * property of the row — a later rung that offers two readings gets the tags for free, and a
- * queue entry written before the field existed draws none rather than drawing a wrong one.
+ * `found_by` is on the wire wherever `cli/resolve.py:_candidate_rows` was handed a
+ * non-empty `name_matched`, which was `name_disputed` alone until D253
+ * (2026-09-23): a card already queued for a reason of its own — `ambiguous_no_signal`,
+ * `rarity_claim_mismatch`, `set_ambiguous` — can now carry both readings too, under its
+ * OWN reason. Reading the FIELD rather than the reason code is deliberate and is what
+ * makes that extension free: the reason is the server's word for the question, and the
+ * provenance is a property of the row — a later rung that offers two readings gets the
+ * tags for free, and a queue entry written before the field existed draws none rather
+ * than drawing a wrong one.
  *
- * The two families cannot collide: `FINISH_REASONS` and `name_disputed` are disjoint, so a
- * row never carries a finish tag and a provenance tag at once. */
+ * THE TWO FAMILIES NEVER COLLIDE ON ONE ROW, but not because their reason codes are
+ * disjoint any more — `rarity_claim_mismatch` is in `FINISH_REASONS` and can now carry
+ * `found_by` too. The early return below is what keeps them apart: a row stamped
+ * `found_by` never falls through to the sorted/photo finish check, whatever its entry's
+ * reason is. */
 function tagsFor(entry: QueueEntryWire, claims: Claims, candidate: CandidateRow): Evidence[] {
   if (candidate.found_by !== undefined) return [candidate.found_by]
   if (!FINISH_REASONS.has(entry.reason)) return []
@@ -2019,7 +2025,11 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
   return <div className="review-claims">{chips}</div>
 }
 
-function CandidateButton({
+/** Exported for `CardHero.tsx`'s listing-correction control, which reuses this row rather
+ *  than forking one (D252, on this file's own header: "if reusing the
+ *  pane needs a component lifted out... do that — that is added to inventory... not a
+ *  fork"). No behavior here changed to make that reuse possible. */
+export function CandidateButton({
   candidate,
   at,
   shared,
@@ -2161,7 +2171,7 @@ function ClosePanel({ onChoice, onClose, disabled }: { onChoice: (choice: CloseC
 
 // --------------------------------------------------------------------------- the catalog
 
-type CatalogPanelProps = {
+export type CatalogPanelProps = {
   lookup: CatalogLookup | null
   failed: string | null
   typed: string
@@ -2173,8 +2183,14 @@ type CatalogPanelProps = {
 }
 
 /* D46 — rows out of the export, drawn through the same row and answered on the same digits.
- * The search heads the list; the mode line says whose rows these are. */
-function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoose, overruling, busy }: CatalogPanelProps): ReactNode {
+ * The search heads the list; the mode line says whose rows these are.
+ *
+ * EXPORTED FOR `CardHero.tsx`'s LISTING-CORRECTION CONTROL, this file's own header rule:
+ * "added to inventory and both screens get it, not a fork." `overruling` reads oddly for
+ * that caller — there is no candidate list to have looked away from — so it always passes
+ * `true`, which draws the plain "Rows from the export, matched by name" copy. That caller
+ * binds `Escape` on its own panel, so "Esc goes back" is true there too. */
+export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoose, overruling, busy }: CatalogPanelProps): ReactNode {
   const rows = lookup?.rows ?? []
   return (
     <div className="review-catalog">

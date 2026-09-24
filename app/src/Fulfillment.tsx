@@ -29,6 +29,7 @@ import { PullConfirm } from './PullConfirm'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
+import { sayPlace } from './position'
 import { Icon, Logo } from './kit'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
@@ -913,7 +914,7 @@ export function Fulfillment() {
           <button
             className="ff-step"
             type="button"
-            aria-label={`Pull ${copy.place.label ?? group.names.join(' / ')}`}
+            aria-label={`Pull ${copy.place.label === null ? group.names.join(' / ') : sayPlace(copy.place.label)}`}
             onClick={() => {
               setPulledKey(copy.key)
               setTrouble(null)

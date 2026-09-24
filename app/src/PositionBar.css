@@ -268,14 +268,19 @@
   color: var(--bn-ink-2);
   line-height: var(--pb-cap-sect);
 }
+/* THE TAIL ELLIPSIZES, NEVER THE SECTION'S OWN NAME. This was backwards until the defect the
+   owner found on box WB1 R2: the head shrank first, so a named section cut mid-word — `Secti…`
+   — while the qualifier after it (`40 slots`, `this copy is not in one`) stayed whole beside a
+   ruler still drawing the section by its real name. The name is the fact a reader orients by;
+   the tail is the one word or two that can afford to go missing behind a `…`. */
 .position-bar-cap-head {
+  flex: none;
+}
+.position-bar-cap-tail {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.position-bar-cap-tail {
-  flex: none;
 }
 /* THE DOT IS DRAWN, NEVER TYPED (D218). `depth.head` and `depth.tail` are each a list of facts
    — a section number, its name, a count — and every fact after the first in either list gets a

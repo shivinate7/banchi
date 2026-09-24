@@ -31,6 +31,8 @@ import { CardDetailsSection, CardHeroHead, marketTable, PhotoPanel, type MarketR
 import { CardLocations } from './CardLocations'
 import { Overlay } from './InventoryOverlay'
 import { Button, Icon, Pill } from './kit'
+import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { SectionTitle } from './SectionTitle'
 import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -128,21 +130,26 @@ function rowsOf(plan: WalkPlan | null): WalkRow[] {
 }
 
 /** `BoxBrowse.tsx`'s own `sectionTitleOf`, restated for a stop rather than a `Row` — a pooled
- *  stop reads `Pooled · <game>`, same as `#/inventory`'s pooled shelf; a physical one leads
+ *  stop reads `Pooled: <game>`, same as `#/inventory`'s pooled shelf; a physical one leads
  *  with the box (the walk crosses boxes, which a single box's own section list never has to
- *  say) and then the section, exactly as `#/inventory` composes it. */
-function stopTitle(stop: WalkPlanStop): string {
-  if (stop.pooled) return `Pooled · ${stop.game_display ?? 'cards'}`
+ *  say) and then the section, exactly as `#/inventory` composes it. D218: the separators are
+ *  punctuation in a real sentence, never a typed middle dot.
+ *
+ *  THE TITLE STATES THE SECTION'S OWN COUNT, NEVER THE STOP'S BOX-WIDE `span`. The rows under
+ *  it read `#${place.card}`, the number WITHIN THE SECTION (`pipeline/join.py:Position.card`);
+ *  `span` is `section_start`/`section_end`, counted across the whole box. `#54–#93` over a row
+ *  reading `#37` is two rulers on one screen, the defect `sectionCountOf` already fixed on
+ *  `#/inventory`. `place` is the section's first row's copy — a `here` copy, so it stands in
+ *  this stop's box and section and carries the `box_closed` the stop itself does not. */
+function stopTitle(stop: WalkPlanStop, place: Place): SectionTitleParts {
+  if (stop.pooled) return { head: `Pooled: ${stop.game_display ?? 'cards'}`, count: null }
   const box = stop.box_name ?? (stop.box === null ? 'Box' : `Box ${stop.box}`)
-  if (stop.section === null) return box
-  const named = stop.section_name ? `Section ${stop.section} · ${stop.section_name}` : `Section ${stop.section}`
-  const span = stop.span
-  const withSpan =
-    span === null ? named : span.end === null ? `${named} · #${span.start} onward` : `${named} · #${span.start}–#${span.end}`
-  return `${box} · ${withSpan}`
+  if (stop.section === null) return { head: box, count: null }
+  const named = stop.section_name ? `Section ${stop.section}: ${stop.section_name}` : `Section ${stop.section}`
+  return { head: `${box}, ${named}`, count: sectionCountWords(sectionCountOf(place)) }
 }
 
-export type WalkSection = { readonly key: string; readonly title: string; readonly rows: readonly WalkRow[] }
+export type WalkSection = { readonly key: string; readonly title: string; readonly parts: SectionTitleParts; readonly rows: readonly WalkRow[] }
 
 /** Run-length over the flat rows, the same trick `BoxBrowse.tsx:sectionsOf` uses, keyed by the
  *  stop rather than by a title string so a re-plan cannot merge two stops that only happen to
@@ -158,7 +165,8 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
       continue
     }
     const stop = stopByKey.get(row.stopKey)
-    out.push({ key: row.stopKey, title: stop === undefined ? row.stopKey : stopTitle(stop), rows: [row] })
+    const parts: SectionTitleParts = stop === undefined ? { head: row.stopKey, count: null } : stopTitle(stop, row.copy.place)
+    out.push({ key: row.stopKey, title: sectionTitleText(parts), parts, rows: [row] })
   }
   return out
 }
@@ -400,7 +408,17 @@ export function useOrderWalk({
     setBusyCopy(copy.key)
     void (async () => {
       const refresh = staleAfter(target.box, copy.key)
-      const outcome = await onPull({ order, sku: take.sku, name: take.name ?? take.sku, target, place: copy.place.label, refresh })
+      const outcome = await onPull({
+        order,
+        sku: take.sku,
+        name: take.name ?? take.sku,
+        target,
+        /* D218: `place` reaches a toast body as plain text (`onWalkPull`'s own receipt),
+           never a component that splits it — sent through `sayPlace` here rather than left
+           for the caller, since this is the one place the pre-write label crosses into text. */
+        place: copy.place.label === null ? null : sayPlace(copy.place.label),
+        refresh,
+      })
       if (!live.current) return
       if (outcome.ok) {
         absorb(outcome.refreshed)
@@ -533,7 +551,7 @@ export function WalkList({
             <div className="browse-secthead">
               <span className="browse-sectfold" aria-hidden="true">
                 <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} size={14} className="browse-sectmark" />
-                <span className="browse-secttitle">{section.title}</span>
+                <SectionTitle parts={section.parts} />
                 <span className="browse-sectcount">{shown.length}</span>
               </span>
             </div>
@@ -780,11 +798,18 @@ export function WalkMainPane({
           market={row.card.run === null ? undefined : priced[row.card.run]}
           listings={listings}
           phone={phone}
+          // "Inventory only" — the owner's ruling on D252, now
+          // `correctable`'s OWN default: an allow-list of one screen, so this call site needs
+          // no flag at all. The walk here is a mode of inventory's own pane (§13), not
+          // inventory itself, and omitting the prop IS the "no control" answer.
         />
       )}
       {!zoomed || row === null ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
-          <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt={`The card at ${currentRow.copy.place.label ?? row.key}`} />
+          <img
+            src={photoUrl(row.card.box, row.card.index, row.card.cid)}
+            alt={`The card at ${currentRow.copy.place.label === null ? row.key : sayPlace(currentRow.copy.place.label)}`}
+          />
         </Overlay>
       )}
     </>

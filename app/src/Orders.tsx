@@ -8,6 +8,7 @@ import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilte
 import { hubState, setHub, touchHub, useHub, type PullFilter, type Stage } from './OrdersHubStore'
 import { isEditableTarget } from './keys'
 import { PositionLabel } from './PositionLabel'
+import { sayPlace } from './position'
 import { SearchField } from './SearchField'
 import { groupBuyers, groupForOrderKey, type BuyerGroup } from './orderBuyers'
 import {
@@ -1781,8 +1782,10 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         const done = await pullCopy({ source: order.source, number: order.number, sku: line.sku }, [target])
         if (!live.current) return
         /* `places[0]`, NEVER `sales[0].card.place.label` — see the header. The fallback is the
-           pre-press label rather than an invented one. */
-        const place = done.places[0]?.label ?? pick.place.label ?? `box ${target.box}, index ${target.index}`
+           pre-press label rather than an invented one. D218: the toast body below carries this
+           as plain text, so the raw label is read through `sayPlace` before it lands there. */
+        const rawPlace = done.places[0]?.label ?? pick.place.label ?? `box ${target.box}, index ${target.index}`
+        const place = sayPlace(rawPlace)
         const name = pick.card_name ?? line.line.name ?? line.sku
         toast({
           kind: 'receipt',
@@ -1825,7 +1828,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          still the PRE-write receipt and the two are never confused. */
       const done = await pullCopy({ source: order.source, number: order.number, sku }, [target], refresh)
       if (!live.current) return { ok: false, failure: { code: 'unmounted', message: '' } }
-      const resolvedPlace = done.places[0]?.label ?? place ?? `box ${target.box}, index ${target.index}`
+      /* D218: same read as `onPull` above — the toast body carries this as plain text. */
+      const resolvedPlace = sayPlace(done.places[0]?.label ?? place ?? `box ${target.box}, index ${target.index}`)
       /* D196: NO RAW ORDER KEY ON SCREEN. `order.number` is a machine string
          (`A2FFC195-0000F4-006AC`) — `TakeBlock`'s own `for <buyer>` line, five lines away,
          already refuses to say a nameless order's own key, and the receipt owes the same

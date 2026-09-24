@@ -69,7 +69,19 @@ make serve-scope    # what `make serve-selftest` reads, and whether this branch 
                     #   checkout with a STUB app/, so no screen change can reach it.
                     #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
 make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
-                    #   measurement). What each of fifteen guard self-tests reads.
+                    #   measurement). What each of twenty-two guard self-tests reads. A
+                    #   sixteenth, `pricearchive-selftest`, joined 2026-09-23 on the
+                    #   owner's word: "once it's done, it only needs to be tested when
+                    #   touched." Six more joined the same day, once that sixteenth's own
+                    #   wiring showed each of their own "not wired — pricearchive-selftest's
+                    #   own precedent" notes had gone stale too:
+                    #   `archive-review-selftest`, `holdings-selftest`,
+                    #   `identity-checks-selftest`, `price-postings-selftest`,
+                    #   `product-history-selftest` and
+                    #   `sku-number-contradictions-selftest` — each proves a module with a
+                    #   real caller today (`archive sweep --write`, `#/revenue`'s
+                    #   unsold-stock panel, `cards checks`, `emit`/`reprice apply`,
+                    #   `#/product`, `cards contradictions`).
                     #   ARGS=list [--target <name>], or
                     #   ARGS="classify --target <name> --base <rev>".
                     #   D247 is the argument. A guard
@@ -78,7 +90,7 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   fixture changing. THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S
                     #   OWN SOURCE, never typed beside it — `scripts/guard-scope.py:
                     #   derive_subjects` reads local-package imports and `Path`-style chains
-                    #   straight out of the test file. Only WHICH fifteen targets are gated
+                    #   straight out of the test file. Only WHICH targets are gated
                     #   is a hand-typed roster, on `serve-scope.py`'s own precedent. Fails
                     #   open exactly like `serve-scope`: no merge-base, an unreadable diff,
                     #   an EMPTY diff, an unscoped target, and any exception all run the
@@ -86,8 +98,9 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   regardless, printed in every skip. Reconciled BOTH WAYS by
                     #   `make docs-audit`'s `guard scope` row: every roster target is wired
                     #   into the Makefile and every wired recipe names a roster target.
-                    #   A THIRD gated target needs the owner's word again — no target here
-                    #   was found dead weight; this is a placement change, not a pruning.
+                    #   A THIRD GATE MECHANISM needs the owner's word again — a new roster
+                    #   entry under this same gate does not; no target here was found dead
+                    #   weight; this is a placement change, not a pruning.
 make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line span, which
                     #   component DRAWS it, and the expression that decides whether it is
                     #   drawn. A renderer — writes nothing, gates nothing, derived every run.
@@ -203,18 +216,25 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check +
-                    #   css-var-check + css-var-check-selftest + ignore-check +
+                    #   css-var-check + css-var-check-selftest + token-literal-check +
+                    #   ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
                     #   mutate-anchors +
                     #   githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + debts-selftest +
                     #   gates-selftest + submission-selftest +
-                    #   cid-selftest + readings-selftest + janitor-selftest +
+                    #   cid-selftest + pricearchive-selftest +
+                    #   archive-review-selftest + holdings-selftest +
+                    #   identity-checks-selftest + price-postings-selftest +
+                    #   product-history-selftest +
+                    #   sku-number-contradictions-selftest + readings-selftest +
+                    #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
-                    #   subagent-override-selftest + guard-scope-selftest,
+                    #   subagent-override-selftest + guard-scope-selftest +
+                    #   token-literal-check-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -225,6 +245,21 @@ make css-var-check  # a `var(--x)` with no fallback where `--x` is defined nowhe
                     #   `PKMNSCAN_CSS_VARS=off` skips it, printed in the refusal.
 make css-var-check-selftest  # that checker, on fixtures in both directions: a genuinely
                     #   undefined `var()`, one with a fallback, one defined only from TSX.
+make token-literal-check  # a CSS literal exactly equal to a design token's value, in its
+                    #   own property family (D256) — `font-size: 22px`
+                    #   where `--bn-fs-2xl: 22px` means the two can silently diverge. Reads
+                    #   tokens.css itself every run, matched by property family (spacing,
+                    #   radius, font-size, line-height, letter-spacing, duration), not value
+                    #   alone. RATCHETED PER FILE in scripts/token-literal-check.json —
+                    #   main already carries many, so the gate is a ceiling, never zero.
+                    #   `scripts/token-literal-allow.json` excuses a named one-off; a stale
+                    #   entry fails. `PKMNSCAN_TOKEN_LITERALS=off` skips it, printed in the
+                    #   refusal.
+make token-literal-check-selftest  # that checker, on fixtures in both directions: a literal
+                    #   equal to a token fails, the same value as var() or a var() fallback
+                    #   passes, the same value under a different family's property passes, a
+                    #   raised/lowered/unseen per-file count and a stale allow-list entry are
+                    #   each proved.
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
 make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
                     #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.
@@ -275,6 +310,14 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   refuse on mismatch, hard link, re-hash destination, THEN
                                    #   unlink source. The bytes exist under a name at every
                                    #   instant.
+./pkmnscan cards    sku-names [--verbose]
+                                   # one SKU, two stored names (D242's sibling).
+                                   #   A card's stored name disagrees with its SKU's
+                                   #   product name in the newest cached export.
+                                   #   Free, read-only, no network ever.
+                                   #   Three verdicts: pass, fail, not known.
+                                   #   Ranks the likely SKU by the card's own claims.
+                                   #   Never picks one.
 ./pkmnscan cards    variants [--write]
                                    # backfill `set`/`rarity` from whatever export a card's own
                                    #   game already has on disk. Governed by
@@ -406,7 +449,7 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-138<!-- derived:app_src_file_count --> files under `app/src`: none read the
+140<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
 295<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
@@ -1131,6 +1174,13 @@ D247 Fifteen guard self-tests are path-gated, and no target was found dead
 D248 The harness leaves turn end, and code cards fold into one rules file
 D249 Recognition by the complement, never by the expected pattern
 D250 Unsold stock reaches `#/revenue`, and D236's wire is spent exactly as written
+D251 The name tolerance stays at 0.80, and the answers cannot fit a number above it
+D252 A wrong answer gets a correct route, and the SKU it leaves is over-listed by exactly what it gave up
+D253 A card lists off name AND number agreeing, never off the number alone
+D254 A product is resolved from its SKU, never from a card's own read fields
+D255 One SKU, two stored names: the sibling check D242 cannot see
+D256 A literal that duplicates a token is caught by family, and the ratchet is pinned per file
+D257 a worktree's node_modules is provisioned, not reported
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
