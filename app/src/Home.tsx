@@ -24,6 +24,7 @@ import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { runBoxLabel } from './runScope'
 import { hubState } from './OrdersHubStore'
 import { useLiveCheck } from './liveCheck'
+import { matchWaiting } from './autoMatch'
 import './Home.css'
 
 /* BANCHI HOME — the one page where the product is drawn as a picture: the six-stage spine
@@ -35,7 +36,7 @@ import './Home.css'
 
 type Loaded<T> = { state: 'loading' } | { state: 'ready'; value: T } | { state: 'failed' }
 
-function useLoad<T>(load: () => Promise<T>): Loaded<T> {
+function useLoad<T>(load: () => Promise<T>, again = 0): Loaded<T> {
   const [result, setResult] = useState<Loaded<T>>({ state: 'loading' })
   useEffect(() => {
     let alive = true
@@ -49,8 +50,9 @@ function useLoad<T>(load: () => Promise<T>): Loaded<T> {
     return () => {
       alive = false
     }
+    // `again` is the one reason to read twice: a write this screen made (the automatic match).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [again])
   return result
 }
 
@@ -408,12 +410,22 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
 export function Home() {
   const status = useLoad<ServerStatus>(getStatus)
   const boxes = useLoad<BoxRecord[]>(async () => (await getBoxes()).boxes)
-  const runs = useLoad<RunSummary[]>(getRuns)
+  const [runsRead, setRunsRead] = useState(0)
+  const runs = useLoad<RunSummary[]>(getRuns, runsRead)
   const orders = useLoad<OrdersPayload>(getOrders)
   const pricing = useLoad<PricingWorklist>(() => getPricingWorklist())
   /* A VISIT TO HOME RUNS A DUE LIVE CHECK (the owner's Q3 ruling): a send whose wait ended
      while the app was closed is checked here, by itself. */
   const liveCheck = useLiveCheck()
+  /* AND A VISIT TO HOME MATCHES A FINISHED READING (the owner's Q4 ruling, on Q3's two halves):
+     a run whose reading ended while the app was closed is matched here, by itself. */
+  useEffect(() => {
+    if (runs.state !== 'ready') return
+    void matchWaiting(runs.value).then((asked) => {
+      /* THE RUN MOVED ON (or stopped on a problem), so the spine reads the runs again. */
+      if (asked) setRunsRead((n) => n + 1)
+    })
+  }, [runs])
   /* The hero's own newest-captured cards, off a lean top-K route rather than the whole card
      map (D192, item 2) — on its own load so no panel above waits on it, and `deckFromCards`
      below applies exactly the same filter/sort/slice it always has over the smaller result. */

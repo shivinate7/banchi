@@ -1,5 +1,6 @@
 import { test, expect, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { runRow } from './routeFixtures'
 
 import type { OrderRow, OrdersPayload, ResolvedLine, ResolvedOrder } from '../src/types'
 
@@ -162,3 +163,34 @@ test('no dot is typed on the box list or the hero deck (D218)', async ({ page })
   const typedDot = /[·•]/
   await expect(page.locator('.bn-view')).not.toContainText(typedDot)
 })
+
+/* THE OWNER'S Q4 RULING, ON A VISIT TO HOME: a reading that finished while the app was closed is
+ * matched here, by itself, and the spine reads the runs again once the match has answered. A
+ * run whose match already stopped is NOT asked again: only its own door does that. */
+test('a visit to Home matches a finished reading, and asks nothing over a match that stopped', async ({ page }) => {
+  const posted: unknown[] = []
+  let reads = 0
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/runs$/, (route) => {
+    reads += 1
+    return json(route, {
+      runs: [
+        runRow(),
+        runRow({
+          run: '2026-09-10-box9-01',
+          match_problem: { code: 'export_needs_set_hint', message: 'Every card has to name its set.', step: 'fetch' },
+        }),
+      ],
+    })
+  })
+  await page.route(/\/pipeline\/runs\/[^/]+\/match$/, (route) => {
+    posted.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    return json(route, { ran: true, ok: true, summary: runRow({ phase: 'emit' }) })
+  })
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  await expect.poll(() => posted.length).toBe(1)
+  expect(posted[0]).toEqual({ path: `/pipeline/runs/${runRow().run}/match`, body: {} })
+  await expect.poll(() => reads).toBeGreaterThan(1)
+})
+

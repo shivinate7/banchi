@@ -23,6 +23,7 @@ import { LogWell } from './RunsLog'
 import { COMMANDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
 import { boxOf, runBoxLabel } from './runScope'
 import { money, roundsToNothing } from './money'
+import { matchWaiting } from './autoMatch'
 import './RunPanel.css'
 
 export { runningFor }
@@ -312,10 +313,6 @@ type RunPanelProps = {
   readonly pageFailure: Failure | null
 }
 
-/** Runs this sitting has already asked to match (Q4). A module value, not state: it must outlive
- *  a remount of the screen so arriving twice does not ask twice. */
-const AUTO_MATCHED = new Set<string>()
-
 export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, pageFailure }: RunPanelProps) {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -378,26 +375,13 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   })
 
   /* THE MATCH RUNS BY ITSELF WHEN A READING FINISHES (flow interview, Q4). Every run this
-     screen sees waiting for a match — its reading done this minute, or done while the app was
-     closed — is matched once, with nobody pressing. A problem comes back recorded on the run
-     and is its next step; the server does not ask TCGplayer again over it until the door's own
-     press. `AUTO_MATCHED` is module-level so a remount does not ask twice in one sitting. */
+     screen sees waiting for a match is matched once, with nobody pressing (`autoMatch.ts`). A
+     problem comes back recorded on the run and is its next step. */
   useEffect(() => {
-    const waiting = runs.filter(
-      (row) => row.phase === 'join' && !row.live && row.match_problem == null && !AUTO_MATCHED.has(row.run),
-    )
-    if (waiting.length === 0) return
-    for (const row of waiting) AUTO_MATCHED.add(row.run)
     void (async () => {
-      for (const row of waiting) {
-        try {
-          await matchRun(row.run)
-        } catch {
-          /* THE ROW SAYS WHAT HAPPENED on the next read; a refused call is not retried here. */
-        }
-      }
+      if (!(await matchWaiting(runs))) return
       await loadRuns()
-      if (openRun !== null && waiting.some((row) => row.run === openRun)) setDetail(await getRun(openRun))
+      if (openRun !== null) setDetail(await getRun(openRun))
     })()
   }, [runs, loadRuns, openRun])
 

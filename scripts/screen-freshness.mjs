@@ -265,6 +265,7 @@ const RECORDED = {
                                                // undo_too_late boundary
     'sendCopies', 'sendMarkdown', 'takeBackSend', // D-one-press-sends-and-makes-live: the one
     'liveCheck',                                  // press, its way back, and the check after it
+    'matchRun',                                   // flow interview Q4: the match runs by itself
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.

@@ -36,8 +36,10 @@ const RETRYABLE = new Set(['live_check_failed', 'tcg_write_refused', 'tcg_write_
 
 /** The failures where the press's own answer never arrived. The server may still be sending,
  *  so the card reads the receipts before it offers anything (a dropped connection must not
- *  invite a second send while the first still runs). */
-const DROPPED = new Set(['unreachable', 'bad_response'])
+ *  invite a second send while the first still runs). `origin_blocked` is here because the
+ *  client names a failed fetch that way whenever `/status` still answers — which is also what
+ *  a connection dropped mid-send looks like from the page. */
+const DROPPED = new Set(['unreachable', 'bad_response', 'origin_blocked'])
 
 /** One sentence for why a press was refused, in owner words. The server's own text sits behind
  *  "What the server said" (D196, D-notice-detail). */

@@ -6995,6 +6995,14 @@ COMPONENTS = [
                                          "unattended. A failed automatic check waits for the "
                                          "next visit rather than retrying.",
                                  "governed_by": ["D106", "D-one-press-sends-and-makes-live"]},
+            "src/autoMatch.ts": {"does": "MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the "
+                                         "owner's Q4 ruling). `#/runs` and Home hand it the runs "
+                                         "they read; every run waiting for its match is asked "
+                                         "once per sitting (`matchRun`). A run whose match "
+                                         "stopped carries `match_problem` and is skipped: only "
+                                         "the door's own press asks again. No server job runs "
+                                         "unattended.",
+                                 "governed_by": ["D65", "D-one-press-sends-and-makes-live"]},
             "src/RunsDrop.tsx": {"does": "the file controls, as controls that look like the "
                                          "product: a native file input cannot be styled to sit "
                                          "beside a kit button, so the input is visually hidden "
