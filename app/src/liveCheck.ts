@@ -33,6 +33,8 @@ let autoFailed = false
 
 /** The longest delay `setTimeout` honours; a later moment is re-read when this one fires. */
 const MAX_DELAY_MS = 2_147_000_000
+/** How often a running press's receipt is read again while the card waits on it. */
+const SENDING_POLL_MS = 3_000
 
 function publish(next: Partial<LiveCheckState>): void {
   state = { ...state, ...next }
@@ -46,6 +48,17 @@ function schedule(status: SendsStatus): void {
   }
   if (status.due) {
     if (!autoFailed) void run(false)
+    return
+  }
+  /* A PRESS STILL RUNNING IS READ AGAIN UNTIL IT LANDS. This is the path a dropped connection
+     takes: the send's own request is gone, but its receipt says `sending`, and the card follows
+     the receipt rather than offering a second press. A read of the server's own file, never a
+     call to TCGplayer. */
+  if (status.sends.some((send) => send.state === 'sending')) {
+    timer = setTimeout(() => {
+      timer = null
+      void refresh()
+    }, SENDING_POLL_MS)
     return
   }
   if (status.check_at === null) return
@@ -88,6 +101,12 @@ export async function run(force: boolean): Promise<LiveCheckAnswer | null> {
   }
   await refresh()
   return answer
+}
+
+/** The newest state, read outside React: the send card's failure path reads it right after
+ *  `refresh` to learn whether a press is still running. */
+export function current(): LiveCheckState {
+  return state
 }
 
 function subscribe(listener: () => void): () => void {

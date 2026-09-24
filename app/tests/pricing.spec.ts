@@ -63,7 +63,12 @@ function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown
     trimmed: [],
     trimmed_copies: 0,
     accepted: 2,
+    turned_away: 0,
     failure: null,
+    unknown: null,
+    held: false,
+    takeable: 0,
+    take_back_after: null,
     files: ['import.csv'],
     taken_back_at: null,
     ...over,
@@ -1226,14 +1231,31 @@ test('a send with nothing left to add is a refusal, and offers no retry', async 
 test('Download the file instead writes the file, and its copies are named until they are found', async ({
   page,
 }) => {
-  const written = sendSummary({ kind: 'download', state: 'written', published_at: null, check_after: null, copies: 4 })
+  const written = sendSummary({
+    kind: 'download',
+    state: 'written',
+    published_at: null,
+    check_after: '2026-09-24T12:17:00+00:00',
+    take_back_after: '2026-09-24T12:17:00+00:00',
+    copies: 4,
+  })
+  /* PAST THE WAIT, THE CHECK FOUND NONE OF THEM: now, and only now, they can come back. */
+  const unfound = sendSummary({
+    ...written,
+    state: 'short',
+    take_back_after: null,
+    takeable: 4,
+    checked_at: '2026-09-24T12:18:00+00:00',
+    check: { export: 'live.csv', found: 0, expected: 4, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 4, found: 0 }] },
+  })
+  let checked = false
   const wire = await open(page, {
     send: (body) => ({ status: 200, body: { send: { ...written, files: body.split_threshold ? ['import-listed.csv', 'import-subthreshold.csv'] : ['import.csv'] }, console: '' } }),
     sends: (seen) =>
       seen.some((r) => r.path.endsWith('/take-back'))
         ? SENDS_NONE
         : sendPosts(seen).length > 0
-          ? { ...SENDS_NONE, sends: [written], unconfirmed: { copies: 4, stamps: [written.stamp] } }
+          ? { ...SENDS_NONE, sends: [checked ? unfound : written], unconfirmed: { copies: 4, stamps: [written.stamp] } }
           : SENDS_NONE,
   })
 
@@ -1250,12 +1272,87 @@ test('Download the file instead writes the file, and its copies are named until 
   await expect(file).toHaveAttribute('download', 'import.csv')
   expect(await file.getAttribute('href')).toContain('/pipeline/sends/20260924-120000/file?name=import.csv')
 
-  /* Q8: WRITTEN, NOT CONFIRMED, AND THE WAY BACK. */
+  /* Q8: WRITTEN, NOT CONFIRMED — AND NO WAY BACK UNTIL A CHECK HAS RUN PAST THE WAIT (the
+     owner's ruling, 2026-09-24). The card says when it will be safe instead. */
   const unconfirmed = page.locator('.send-unconfirmed')
   await expect(unconfirmed).toContainText('4 copies written, not confirmed at TCGplayer')
-  await unconfirmed.getByRole('button', { name: 'Take them back' }).click()
+  await expect(unconfirmed).toContainText('You can take them back after')
+  await expect(page.getByRole('button', { name: /^Take .* back$/ })).toHaveCount(0)
+
+  checked = true
+  await page.getByRole('button', { name: 'Check what is live' }).click()
+  const back = page.locator('.send-short-check')
+  await expect(back).toContainText('0 of 4 found at TCGplayer')
+  await back.getByRole('button', { name: 'Take 4 copies back' }).click()
   await expect.poll(() => wire.filter((r) => r.path.endsWith('/take-back')).length).toBe(1)
-  await expect(page.locator('.send-unconfirmed')).toHaveCount(0)
+  await expect(page.locator('.send-short-check')).toHaveCount(0)
+})
+
+test('a send TCGplayer did not confirm is held, names the upload waiting, and offers no second send', async ({
+  page,
+}) => {
+  const unknown = sendSummary({
+    state: 'unknown',
+    published_at: null,
+    held: true,
+    take_back_after: '2026-09-24T12:17:00+00:00',
+    check_after: '2026-09-24T12:17:00+00:00',
+    unknown: { stage: 'rollback', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' },
+  })
+  const wire = await open(page, {
+    send: () => ({ status: 409, code: 'send_unknown' }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [unknown] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('TCGplayer did not confirm this send. Do not send these copies again.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  const held = page.locator('.send-unknown')
+  await expect(held).toContainText('TCGplayer has not confirmed 3 copies.')
+  await expect(held).toContainText('may still wait in TCGplayer’s Staged list')
+  await expect(held).toContainText('stay out of every send')
+  await expect(page.getByRole('button', { name: /^Take .* back$/ })).toHaveCount(0)
+})
+
+test('a press over held cards is refused by name, with no retry', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'send_held' }) })
+  await sendPress(page).click()
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('Some of these cards wait on a send TCGplayer has not confirmed, so nothing was sent.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+})
+
+test('TCGplayer took fewer rows than were sent, and the card never says more went live', async ({ page }) => {
+  const partial = sendSummary({ accepted: 1, rows: 2, turned_away: 1 })
+  await open(page, {
+    send: () => ({ status: 200, body: { send: partial, console: '' } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [partial] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  const card = page.locator('.send-turned-away')
+  await expect(card).toContainText('TCGplayer took 1 of 2 cards.')
+  await expect(page.locator('.send-card')).not.toContainText('3 copies went live')
+})
+
+test('a dropped connection reads the receipt: a press still running shows, and no second press is offered', async ({
+  page,
+}) => {
+  const running = sendSummary({ state: 'sending', published_at: null, check_after: null, held: true })
+  const wire = await open(page, {
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [running] } : SENDS_NONE),
+  })
+  /* THE PRESS'S OWN ANSWER NEVER ARRIVES: the connection drops while the server still sends. */
+  await page.route(/\/pipeline\/send$/, async (route) => {
+    wire.push({ method: 'POST', path: '/pipeline/send', body: route.request().postDataJSON() })
+    await route.abort('connectionreset')
+  })
+  await sendPress(page).click()
+  await expect(page.locator('.send-sending')).toContainText('Sending 3 copies to TCGplayer.')
+  await expect(page.locator('.send-failure')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  await expect(page.locator('.send-press')).toBeDisabled()
+  expect(sendPosts(wire)).toHaveLength(1)
 })
 
 test('a check that is due runs on the visit, with no press', async ({ page }) => {

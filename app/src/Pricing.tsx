@@ -805,6 +805,22 @@ function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number
   )
 }
 
+/** One sentence for a mark-down send that did not land. Three answers are NOT "nothing changed":
+ *  an unconfirmed send may be live, and the other two say a send is running or held. None of the
+ *  three is a retry (the server answers them 409), so no press here can send the prices twice. */
+function shipTroubleTitle(code: string): string {
+  switch (code) {
+    case 'send_unknown':
+      return 'TCGplayer did not confirm these prices. Do not send them again; Banchi checks after the wait.'
+    case 'send_in_progress':
+      return 'A send to TCGplayer is already running, so nothing was sent again.'
+    case 'send_held':
+      return 'These prices wait on a send TCGplayer has not confirmed, so nothing was sent.'
+    default:
+      return 'Nothing was sent. The prices at TCGplayer did not change.'
+  }
+}
+
 export function Pricing() {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
   /** Which runs the worklist is over; EMPTY means "whatever still has work in it" (D86). */
@@ -3740,7 +3756,7 @@ export function Pricing() {
           )}
 
           {shipTrouble === null ? null : (
-            <FailureNotice failure={shipTrouble} title="Nothing was sent. The prices at TCGplayer did not change." onRetry={() => setPush('sending')} busy={push !== 'idle'} />
+            <FailureNotice failure={shipTrouble} title={shipTroubleTitle(shipTrouble.code)} onRetry={() => setPush('sending')} busy={push !== 'idle'} />
           )}
         </aside>
       )}

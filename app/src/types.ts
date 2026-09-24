@@ -2456,6 +2456,23 @@ export type RunSummary = {
     cost_usd?: number
     cost_backfilled?: boolean
   }
+  /** What stopped the automatic match, while the run still waits for one (flow interview, Q4).
+   *  Null when nothing did. Optional because an older server sends no key. */
+  match_problem?: RunMatchProblem | null
+}
+
+/** One reason the automatic match could not run. `step` says whether the catalogue fetch or the
+ *  match itself refused. `message` is the server's own sentence, drawn behind a disclosure. */
+export type RunMatchProblem = { code: string; message: string; step: 'fetch' | 'join' }
+
+/** `POST /pipeline/runs/<name>/match`. `ran` is false when the run was not waiting for a match,
+ *  a match was already running, or a problem stands and no retry was asked. */
+export type RunMatchAnswer = {
+  ran: boolean
+  ok?: boolean
+  reason?: 'not_waiting' | 'problem_stands' | 'running'
+  problem?: RunMatchProblem
+  summary: RunSummary
 }
 
 export type RunDetail = RunSummary & {
@@ -3993,8 +4010,10 @@ export type ValueTable = {
  * `server/send_routes.py`, `D-one-press-sends-and-makes-live`. One press reads what is live,
  * writes the listing file behind the double-send guard, sends it and makes it live. */
 
-/** Where one send stands. `server/send_routes.py:state_of` is the one rule. */
-export type SendState = 'written' | 'waiting' | 'checked' | 'short' | 'failed' | 'taken_back'
+/** Where one send stands. `server/send_routes.py:state_of` is the one rule. `sending` is a press
+ *  still running; `unknown` is one TCGplayer did not confirm, whose copies are held until the
+ *  live check past the wait. */
+export type SendState = 'sending' | 'unknown' | 'written' | 'waiting' | 'checked' | 'short' | 'failed' | 'taken_back'
 
 /** One card the double-send guard held back: TCGplayer already held `live` of `on_hand`. */
 export type SendTrim = {
@@ -4025,7 +4044,18 @@ export type SendSummary = {
   trimmed: SendTrim[]
   trimmed_copies: number
   accepted: number | null
+  /** Rows TCGplayer's own count turned away. The screen never says more went live than it took. */
+  turned_away: number
   failure: { code: string; message: string } | null
+  /** Why the outcome is not known. `staged` is true when the upload may still wait in
+   *  TCGplayer's Staged list, where a person could publish it by hand. */
+  unknown: { stage: string; upload_id: string | null; staged: boolean; file: string | null; at: string } | null
+  /** The send's cards are held out of every other send (a press running, or an unknown one). */
+  held: boolean
+  /** Copies "Take them back" would return now. 0 until a live check has run past the wait. */
+  takeable: number
+  /** When taking these back becomes possible, while a check past the wait has not run yet. */
+  take_back_after: string | null
   files: string[]
   taken_back_at: string | null
 }

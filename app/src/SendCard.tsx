@@ -10,7 +10,11 @@
  *  - "Download the file instead", the second door, with the split option behind it (the Send
  *    menu ruling: nothing sits beside Send);
  *  - copies written to a file and not yet found at TCGplayer, with "Take them back" (Q8);
- *  - the live check after the lag, and a manual "Check what is live" (Q3, Q7).
+ *  - the live check after the lag, and a manual "Check what is live" (Q3, Q7);
+ *  - a press still running, which a dropped connection reads instead of offering a second press;
+ *  - a send TCGplayer did not confirm, whose cards are held and which is never offered again;
+ *  - "Take them back" ONLY after a live check has run past the wait (the owner's ruling,
+ *    2026-09-24). Before that the card says when it will be safe.
  *
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
@@ -20,7 +24,7 @@ import { clockTime } from './dates'
 import { describeFailure, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { SendSummary, SendTrim } from './types'
-import { refresh as refreshLive, useLiveCheck } from './liveCheck'
+import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
 import './SendCard.css'
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
@@ -28,7 +32,12 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 /** The failures a second press can fix. Everything else is a refusal: pressing again gets the
  *  same answer, so the card offers no retry for it. */
-const RETRYABLE = new Set(['live_check_failed', 'tcg_write_refused', 'tcg_write_unreadable', 'tcg_session_expired', 'step_timed_out', 'unreachable'])
+const RETRYABLE = new Set(['live_check_failed', 'tcg_write_refused', 'tcg_write_unreadable', 'tcg_session_expired', 'tcg_unreachable', 'step_timed_out', 'unreachable'])
+
+/** The failures where the press's own answer never arrived. The server may still be sending,
+ *  so the card reads the receipts before it offers anything (a dropped connection must not
+ *  invite a second send while the first still runs). */
+const DROPPED = new Set(['unreachable', 'bad_response'])
 
 /** One sentence for why a press was refused, in owner words. The server's own text sits behind
  *  "What the server said" (D196, D-notice-detail). */
@@ -40,6 +49,14 @@ function refusalTitle(code: string): string {
       return 'Nothing to send. Every copy on this list is already at TCGplayer or held back.'
     case 'already_sent':
       return 'These copies were already sent, so nothing was sent again.'
+    case 'send_in_progress':
+      return 'A send to TCGplayer is already running, so nothing was sent again.'
+    case 'send_held':
+      return 'Some of these cards wait on a send TCGplayer has not confirmed, so nothing was sent.'
+    case 'send_unknown':
+      return 'TCGplayer did not confirm this send. Do not send these copies again.'
+    case 'take_back_not_yet':
+      return 'Not yet. Banchi checks TCGplayer first.'
     case 'write_refused':
       return 'The file could not be written, so nothing was sent.'
     case 'answers_not_saved':
@@ -69,39 +86,117 @@ function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
   )
 }
 
-/** Where the newest send stands, in one sentence and at most one list. */
-function SendStanding({ send }: { readonly send: SendSummary }) {
-  if (send.state === 'waiting') {
-    return (
-      <Notice tone="ok" compact className="send-standing" title={`${plural(send.copies, 'copy', 'copies')} went live at ${clockTime(send.published_at)}.`}>
-        Banchi checks TCGplayer again after {clockTime(send.check_after)}.
-      </Notice>
-    )
+function MissingList({ send }: { readonly send: SendSummary }) {
+  if (send.check === null || send.check.missing.length === 0) return null
+  return (
+    <ul className="send-names">
+      {send.check.missing.slice(0, 6).map((row) => (
+        <li key={row.sku}>
+          <span className="send-name">{row.name || row.sku}</span>
+          <span className="send-figure">
+            {row.found} of {row.sent} found
+          </span>
+        </li>
+      ))}
+      {send.check.missing.length > 6 ? <li className="send-more">and {send.check.missing.length - 6} more</li> : null}
+    </ul>
+  )
+}
+
+/** One receipt, in one sentence and at most one list. `takeBack` is drawn only when the server
+ *  says the copies are takeable, which it says only after a check past the wait. */
+function SendStanding({
+  send,
+  takeBack,
+  takingBack,
+}: {
+  readonly send: SendSummary
+  readonly takeBack: (stamp: string) => void
+  readonly takingBack: boolean
+}) {
+  const copies = plural(send.copies, 'copy', 'copies')
+  const safeAfter = send.take_back_after ? `You can take them back after ${clockTime(send.take_back_after)}, once Banchi has checked.` : null
+  const action =
+    send.takeable > 0 ? (
+      <Button size="sm" busy={takingBack} disabled={takingBack} onClick={() => takeBack(send.stamp)}>
+        {`Take ${plural(send.takeable, 'copy', 'copies')} back`}
+      </Button>
+    ) : undefined
+  switch (send.state) {
+    case 'sending':
+      return (
+        <Notice tone="info" compact className="send-standing send-sending" title={send.copies > 0 ? `Sending ${copies} to TCGplayer.` : 'Sending to TCGplayer.'}>
+          Started at {clockTime(send.at)}. The result shows here when TCGplayer answers.
+        </Notice>
+      )
+    case 'unknown':
+      return (
+        <Notice tone="warn" compact className="send-standing send-unknown" title={`TCGplayer has not confirmed ${copies}.`}>
+          {send.unknown?.staged
+            ? 'The upload may still wait in TCGplayer’s Staged list. Do not publish it there, and do not send these again.'
+            : 'They may be live. Do not send them again.'}{' '}
+          {send.held
+            ? `These cards stay out of every send until Banchi checks, after ${clockTime(send.check_after)}.`
+            : `Banchi checks after ${clockTime(send.check_after)}.`}{' '}
+          Any that are not there can come back to the list then.
+        </Notice>
+      )
+    case 'written':
+      return (
+        <Notice tone="warn" compact className="send-standing send-unconfirmed" title={`${copies} written, not confirmed at TCGplayer`} action={action}>
+          {safeAfter}
+        </Notice>
+      )
+    case 'waiting':
+      if (send.turned_away > 0 && send.accepted !== null) {
+        return (
+          <Notice tone="warn" compact className="send-standing send-turned-away" title={`TCGplayer took ${send.accepted} of ${plural(send.rows, 'card', 'cards')}.`}>
+            Banchi names the rest after {clockTime(send.check_after)}, and they can come back to the list then.
+          </Notice>
+        )
+      }
+      return (
+        <Notice tone="ok" compact className="send-standing" title={`${copies} went live at ${clockTime(send.published_at)}.`}>
+          Banchi checks TCGplayer again after {clockTime(send.check_after)}.
+        </Notice>
+      )
+    case 'checked':
+      if (send.check === null) return null
+      return (
+        <Notice tone="ok" compact className="send-standing" title={`Live and checked at ${clockTime(send.checked_at)}.`}>
+          {send.check.found} of {send.check.expected} found at TCGplayer.
+        </Notice>
+      )
+    case 'short':
+      if (send.check === null) return null
+      return (
+        <Notice
+          tone="warn"
+          compact
+          className="send-standing send-short-check"
+          title={`${send.check.found} of ${send.check.expected} found at TCGplayer at ${clockTime(send.checked_at)}.`}
+          action={action}
+        >
+          <MissingList send={send} />
+        </Notice>
+      )
+    default:
+      return null
   }
-  if (send.state === 'checked' && send.check !== null) {
-    return (
-      <Notice tone="ok" compact className="send-standing" title={`Live and checked at ${clockTime(send.checked_at)}.`}>
-        {send.check.found} of {send.check.expected} found at TCGplayer.
-      </Notice>
+}
+
+/** Receipts the owner still has to know about: a press running, one not confirmed, a file not
+ *  found, or copies a check says can come back. Newest first, at most three. */
+function openReceipts(sends: readonly SendSummary[]): SendSummary[] {
+  return sends
+    .filter(
+      (send) =>
+        send.state === 'sending' ||
+        send.state === 'unknown' ||
+        send.state === 'written' ||
+        (send.state === 'short' && send.takeable > 0),
     )
-  }
-  if (send.state === 'short' && send.check !== null) {
-    return (
-      <Notice tone="warn" compact className="send-standing" title={`${send.check.found} of ${send.check.expected} found at TCGplayer at ${clockTime(send.checked_at)}.`}>
-        <ul className="send-names">
-          {send.check.missing.slice(0, 6).map((row) => (
-            <li key={row.sku}>
-              <span className="send-name">{row.name || row.sku}</span>
-              <span className="send-figure">
-                {row.found} of {row.sent} found
-              </span>
-            </li>
-          ))}
-        </ul>
-      </Notice>
-    )
-  }
-  return null
+    .slice(0, 3)
 }
 
 export function SendCard({
@@ -154,7 +249,17 @@ export function SendCard({
         setFailure(null)
         onSent()
       } catch (err) {
-        setFailure(describeFailure(err))
+        const failed = describeFailure(err)
+        if (DROPPED.has(failed.code)) {
+          /* THE ANSWER NEVER ARRIVED. Read the receipts first: a press still running shows as
+             "Sending", and the card offers no second press over it. */
+          await refreshLive()
+          if (liveState().status?.sends.some((send) => send.state === 'sending')) {
+            setFailure(null)
+            return
+          }
+        }
+        setFailure(failed)
       } finally {
         setPhase('idle')
         void refreshLive()
@@ -174,29 +279,30 @@ export function SendCard({
   const newest = live.status?.sends[0] ?? null
   const latest = newest !== null && (sent === null || newest.stamp >= sent.stamp) ? newest : sent
   const settledAt = Date.parse(latest?.checked_at ?? latest?.published_at ?? '')
+  const open = openReceipts(live.status?.sends ?? [])
   const standing =
-    latest === null
+    latest === null || open.some((send) => send.stamp === latest.stamp)
       ? null
       : latest.state === 'waiting' || latest.state === 'short'
         ? latest
         : latest.state === 'checked' && Number.isFinite(settledAt) && Date.now() - settledAt < DAY_MS
           ? latest
           : null
-  const unconfirmed = live.status?.unconfirmed ?? { copies: 0, stamps: [] }
-  const busy = phase !== 'idle'
+  const running = open.some((send) => send.state === 'sending')
+  const busy = phase !== 'idle' || running
   const label =
     phase === 'waiting'
       ? 'Saving your prices…'
-      : phase === 'sending'
+      : phase === 'sending' || running
         ? 'Checking TCGplayer, then sending…'
         : copies !== null && copies > 0
           ? `Send ${plural(copies, 'copy', 'copies')} to TCGplayer`
           : 'Send to TCGplayer'
 
-  const takeBack = async () => {
+  const takeBack = async (stamp: string) => {
     setTakingBack(true)
     try {
-      for (const stamp of unconfirmed.stamps) await takeBackSend(stamp)
+      await takeBackSend(stamp)
       onSent()
     } catch (err) {
       setFailure(describeFailure(err))
@@ -214,7 +320,7 @@ export function SendCard({
           size="lg"
           icon="send"
           className="pricing-emit send-press"
-          busy={phase === 'sending' || phase === 'waiting'}
+          busy={phase === 'sending' || phase === 'waiting' || running}
           disabled={busy}
           onClick={() => press('send')}
         >
@@ -274,27 +380,17 @@ export function SendCard({
         <Refusal compact className="send-failure" title={refusalTitle(failure.code)} code={failure.code} detail={failure.message} />
       )}
 
+      {open.map((send) => (
+        <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+      ))}
+
       {standing === null ? null : (
         <>
-          <SendStanding send={standing} />
+          <SendStanding send={standing} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
           {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
               right after this visit's own send; a later visit does not carry it in the bar. */}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
         </>
-      )}
-
-      {unconfirmed.copies === 0 ? null : (
-        <Notice
-          tone="warn"
-          compact
-          className="send-unconfirmed"
-          title={`${plural(unconfirmed.copies, 'copy', 'copies')} written, not confirmed at TCGplayer`}
-          action={
-            <Button size="sm" busy={takingBack} disabled={takingBack} onClick={() => void takeBack()}>
-              Take them back
-            </Button>
-          }
-        />
       )}
 
       {live.failure === null ? null : (

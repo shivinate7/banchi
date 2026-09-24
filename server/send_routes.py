@@ -903,7 +903,7 @@ def _unknown(
         f"{first}{staged} Do not send them again: Banchi checks what is live after {wait} and "
         f"says what happened."
     )
-    raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, "send_unknown", message)
+    raise PipelineRefusal(HTTPStatus.CONFLICT, "send_unknown", message)
 
 
 def clock(moment: datetime) -> str:
@@ -1242,7 +1242,7 @@ def _markdown_hold(
     record["check_after"] = _iso(now + _lag())
     pipeline_routes._write_push(directory, record)
     raise PipelineRefusal(
-        HTTPStatus.BAD_GATEWAY,
+        HTTPStatus.CONFLICT,
         "send_unknown",
         f"TCGplayer did not say whether these prices went live. Do not send them again: Banchi "
         f"checks what is live after {clock(now + _lag())} and says what happened.",
