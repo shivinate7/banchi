@@ -296,7 +296,7 @@ from pipeline import routing  # noqa: E402
 from pipeline import skus as sku_fill  # noqa: E402
 from pipeline import walkplan  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
-from store import Store, db, files, master, photos, queues  # noqa: E402
+from store import Store, db, files, master, numbers, photos, queues  # noqa: E402
 from store import orders as order_store  # noqa: E402
 
 # The pipeline seam, in its own module because it is the one part of this server that can
@@ -2885,7 +2885,8 @@ def _flat_place(place: dict) -> dict:
 
 
 def _card_row(
-    inventory: master.Inventory, box: int, index: int, card: master.Card
+    inventory: master.Inventory, box: int, index: int, card: master.Card,
+    skus: Optional["Skus"] = None,  # noqa: F821 - store.skus.Skus, duck-typed
 ) -> dict:
     """One whole inventory record, decorated exactly as `GET /inventory` decorates its rows.
 
@@ -2914,6 +2915,12 @@ def _card_row(
     of a box's fill and its capacity, and `parse` would drop it on the next reload. What it
     must never become is a stored denominator — D20 puts that on the `Box`, and one is
     enough.
+
+    `skus` DECORATES `listing`/`listing_differs`/`reading_differs` (§5.4/§8.1,
+    `_listing_decoration`'s own docstring) WHEN THE CALLER HAS IT IN HAND — every route
+    below that answers a confirm, an answer or a correction already holds `snapshot.skus`
+    and passes it. `None` is the one safe default for a caller with no snapshot open, and
+    draws none of the three: `Optional[...]` on the wire, not a wrong answer.
     """
     place = _Places(inventory).of(box, index)
     row = asdict(card)
@@ -2928,6 +2935,8 @@ def _card_row(
     # number is a fact about the card rather than about where it is, so a pooled record and
     # one whose position will not coerce both still get theirs.
     row["number_display"] = _number_display(card)
+    if skus is not None:
+        row.update(_listing_decoration(card, skus))
     return row
 
 
@@ -3455,8 +3464,15 @@ def do_inventory_box(box: int) -> dict:
     cards carry: `BoxBrowse.tsx` reads `inventory.listings[sku]?.live_as_of` for exactly one
     card at a time (the one selected), and a screen holding one box's worth of SKUs already
     has every listing it can address.
+
+    `listing`/`listing_differs`/`reading_differs` RIDE ALONG TOO, ON EVERY CARD THAT CARRIES
+    A SKU (`_listing_decoration`'s own docstring, §5.4/§8.1) — the one route Details' initial
+    render reads (`BoxBrowse.tsx` -> `getInventoryBox`), so the two lines and the confirm
+    press already have their answer before any press, with no second fetch. The cost is one
+    `skus.entries` dict lookup per SKU-carrying card in this one box, never a table scan.
     """
-    inventory = Store().read().inventory
+    snapshot = Store().read()
+    inventory = snapshot.inventory
     rows = inventory.records_in(box)
     places = _Places(inventory)
     cards: dict = {}
@@ -3466,6 +3482,8 @@ def do_inventory_box(box: int) -> dict:
         record["number_display"] = join.display_number(
             record.get("number"), record.get("printed_total")
         )
+        if card.sku:
+            record.update(_listing_decoration(card, snapshot.skus))
         try:
             place = places.of(record["box"], record["index"])
         except (KeyError, TypeError, ValueError, master.BadSections):
@@ -4965,7 +4983,7 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
         result = _move_one(snapshot, inventory, key, box, index, to_box)
         result["card"] = _card_row(
             inventory, result["new_box"], result["new_index"],
-            inventory.cards[result["to"]],
+            inventory.cards[result["to"]], snapshot.skus,
         )
 
     return result
@@ -6702,6 +6720,109 @@ def _disputes_for_row(card, row) -> bool:
     return join.name_disputes(getattr(card, "read_name", None), [{tcgcsv.NAME_COLUMN: name}])
 
 
+# --------------------------------------- Details' two identity lines (§5.4/§8.1, review round)
+
+
+def _name_differs(name, against: Optional[str]) -> bool:
+    """`pipeline/join.name_disputes`, run with `against` on the catalog side — the ONE fold
+    every name comparison on this route runs, `_disputes_for_row`'s own fold reused rather
+    than a second copy: a blank `name` or a blank `against` disputes nothing (no evidence),
+    and a spelling-only near miss (D251's tolerance) never disputes either.
+    """
+    return join.name_disputes(name, [{tcgcsv.NAME_COLUMN: against}])
+
+
+def _number_compare_key(strategy: str, number, printed_total) -> Optional[str]:
+    """identity-follows-sku.md §6's per-game number rule, folded once, so EITHER side of a
+    comparison — a read pair, a bound identity pair, or a catalog cell already split the
+    way `bind_sku` splits one (`store/numbers.catalog_number_fields`) — lands on the same
+    key. `None` means "no evidence", `name_disputes`'s own rule for a blank name carried
+    over to the number: a half-read Pokemon pair or a blank cell never manufactures a
+    dispute.
+
+    Pokemon (`numbers.NUMBER_AND_PRINTED_TOTAL`): `numbers.join_key` composes the pair,
+    then `join.number_index_key` is the fold that decides whether two spellings are one
+    number (leading zeros, case). Every other game: `numbers.strip_set_code` first (D55/D67
+    — a model that glued a set code onto the front), then the same fold. Applying
+    `strip_set_code` to every side uniformly, not only a "read" side, is what keeps this
+    symmetric: a SHOWN number that happens to still carry a glued code (a held card, where
+    it equals the read verbatim) strips the same way the READ side does, so the two never
+    manufacture a dispute against each other.
+    """
+    if strategy == numbers.NUMBER_AND_PRINTED_TOTAL:
+        if not number or not printed_total:
+            return None
+        return join.number_index_key(numbers.join_key(number, printed_total))
+    if not number:
+        return None
+    return join.number_index_key(numbers.strip_set_code(number))
+
+
+def _listing_decoration(card, skus: "Skus") -> Dict[str, object]:  # noqa: F821 - store.skus.Skus, duck-typed
+    """identity-follows-sku.md §5.4/§8.1, the owner's ruling on Details' two identity lines
+    (2026-09-24, verbatim: "show listing name and/or hide when identical i dont think it's
+    an or situation") — BOTH rules, never an either/or:
+
+    `listing` is the card's current SKU, read from the `skus` table (§3.2) and composed
+    exactly the way `Inventory.bind_sku` composes one onto a card
+    (`store/numbers.strip_name_suffix`, `store/numbers.catalog_number_fields`) — never a
+    second copy of that fold. `None` when the card carries no SKU, or a SKU the table does
+    not (yet) hold (§3.2's escape hatch) — nothing here to compare against.
+
+    `listing_differs` compares that listing against the card's SHOWN name/number
+    (`card.name`/`card.number`) — "Listed as", so the photo's reading and the listing can
+    be read side by side right above the confirm press. On a card `identity_source = sku`
+    the two already agree by construction (`bind_sku` wrote `card.name`/`card.number` off
+    this same row), so this is False there except the rare case the row's own facts changed
+    since the bind (§9, risk 3: a TCGplayer rename).
+
+    `reading_differs` compares the MODEL'S READ (`card.read_name`/`card.read_number`)
+    against that same shown pair — "Read as". On a HELD card (`identity_source = read`) the
+    shown pair equals the read pair by construction
+    (`Inventory.record_identification`'s own rule: "on a card with no SKU the identity
+    follows the read"), so this is always False there — which is the fix: the line no
+    longer repeats "Card:"/"Number:" word for word on a held card. It draws only after a
+    confirm, or on a SKU-bound card whose reading disputes it.
+
+    NEITHER BOOLEAN IS THE STORED `card.read_disputes` FIELD. That field is the NAME half
+    only, answered once at the moment of a bind (§3.1), and is a different question
+    ("did the read dispute the row about to be bound") from either line drawn here. Both
+    booleans below are computed fresh, off the CARD'S CURRENT SHOWN FIELDS, every call — so
+    the screen holds no fold logic of its own (CLAUDE.md: "No pipeline logic in the
+    browser"), and a stale stored flag can never leave a line drawn (or hidden) wrong.
+    """
+    sku = getattr(card, "sku", None)
+    empty: Dict[str, object] = {
+        "listing": None, "listing_differs": False, "reading_differs": False,
+    }
+    if not sku:
+        return empty
+    row = skus.entries.get(str(sku))
+    if row is None:
+        return empty
+    _catalog_game, game_entry = _game_lookup(card)
+    strategy = game_entry["join_key"]
+
+    listing_name = numbers.strip_name_suffix(row.product_name)
+    listing_number, listing_printed_total = numbers.catalog_number_fields(strategy, row.number)
+    listing = {
+        "name": listing_name, "number": listing_number, "printed_total": listing_printed_total,
+    }
+
+    shown_key = _number_compare_key(strategy, card.number, card.printed_total)
+    listing_key = _number_compare_key(strategy, listing_number, listing_printed_total)
+    listing_differs = _name_differs(card.name, listing_name) or (
+        shown_key is not None and listing_key is not None and shown_key != listing_key
+    )
+
+    read_key = _number_compare_key(strategy, card.read_number, card.read_printed_total)
+    reading_differs = _name_differs(card.read_name, card.name) or (
+        read_key is not None and shown_key is not None and read_key != shown_key
+    )
+
+    return {"listing": listing, "listing_differs": listing_differs, "reading_differs": reading_differs}
+
+
 def _fold_export_row(snapshot, row: dict, source: Optional[Path]) -> None:
     """Fold ONE real export row into the store's `skus` table
     (identity-follows-sku.md §3.2), through `pipeline/skus.py:apply_rows` — the SAME fold a
@@ -6981,7 +7102,7 @@ def _answer_listing_disputed(
             "restores_to": None if held else {"sku": card.sku, "condition": card.condition},
             "review_cleared": cleared[queues.MAIN],
             "parked_cleared": cleared[queues.PARKED],
-            "card": _card_row(snapshot.inventory, box, index, card),
+            "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
     result = _apply_correction(
@@ -7020,7 +7141,7 @@ def _answer_listing_disputed(
         "restores_to": None if held else result["restores_to"],
         "review_cleared": cleared[queues.MAIN],
         "parked_cleared": cleared[queues.PARKED],
-        "card": _card_row(snapshot.inventory, box, index, card),
+        "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
     }
 
 
@@ -7338,7 +7459,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             # to tell "not cleared" from "the server did not say".
             "review_cleared": cleared[queues.MAIN],
             "parked_cleared": cleared[queues.PARKED],
-            "card": _card_row(snapshot.inventory, box, index, card),
+            "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
     return body
@@ -7793,7 +7914,7 @@ def _reverse_answer(box: int, index: int) -> dict:
             # never has to tell "not reopened" from "the server did not say".
             "review_reopened": reopened[queues.MAIN],
             "parked_reopened": reopened[queues.PARKED],
-            "card": _card_row(snapshot.inventory, box, index, card),
+            "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
     return body
@@ -8069,7 +8190,7 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
             "previous_sku": result["previous_sku"],
             "released": result["released"],
             "restores_to": None if held else result["restores_to"],
-            "card": _card_row(snapshot.inventory, box, index, card),
+            "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
     return body
@@ -8210,7 +8331,7 @@ def _reverse_correction(box: int, index: int) -> dict:
             "sku": card.sku,
             "condition": card.condition,
             "restores_to": None,
-            "card": _card_row(snapshot.inventory, box, index, card),
+            "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
     return body
@@ -8320,7 +8441,7 @@ def do_confirm_identity(box: int, index: int, payload: dict) -> dict:
             "undone": False,
             "sku": card.sku,
             "condition": card.condition,
-            "card": _card_row(snapshot.inventory, box, index, card),
+            "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
     return body
@@ -8420,7 +8541,7 @@ def _reverse_confirm(box: int, index: int) -> dict:
             "undone": True,
             "sku": card.sku,
             "condition": card.condition,
-            "card": _card_row(snapshot.inventory, box, index, card),
+            "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
     return body
@@ -9137,7 +9258,7 @@ def _sell(snapshot, box: int, index: int, undo: bool) -> dict:
         # the contract `app/src/Fulfillment.tsx` reads — every key it already reads,
         # including `restores_to`, is unmoved.
         "listing": asdict(listing) if listing is not None else None,
-        "card": _card_row(snapshot.inventory, box, index, card),
+        "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
     }
 
     return body
@@ -9425,7 +9546,7 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
             # null after a reversal. The history line is where a reversed retirement's
             # reason survives.
             "reason": card.retire_reason,
-            "card": _card_row(snapshot.inventory, box, index, card),
+            "card": _card_row(snapshot.inventory, box, index, card, snapshot.skus),
         }
 
     return body

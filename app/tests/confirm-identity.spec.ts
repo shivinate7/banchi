@@ -26,7 +26,16 @@ const VIEW_ROUTE = '/#/inventory'
 /** A HELD card: `sku` already set, `identity_source: 'read'` (§3.1 — "the card has no SKU, or
  *  it is a held card... or its SKU is absent from the table. In each case the identity fields
  *  equal the evidence fields"), so `name`/`number`/`printed_total` mirror `read_name`/
- *  `read_number`/`read_printed_total` exactly, and `read_disputes` is true. */
+ *  `read_number`/`read_printed_total` exactly, and `read_disputes` is true.
+ *
+ *  `listing`/`listing_differs`/`reading_differs` are the review-round fields (§5.4/§8.1, the
+ *  owner's ruling: "show listing name and/or hide when identical i dont think it's an or
+ *  situation"). `listing_differs: true` because the SKU's own catalog row ("Rell, Magnetic
+ *  024/221") disagrees with what `name`/`number` already show — "Listed as" draws.
+ *  `reading_differs: false` because `read_name`/`read_number` are byte-identical to
+ *  `name`/`number` on a held card by construction — "Read as" stays hidden, which is the fix
+ *  for the defect this fixture used to reproduce: the line repeating "Card:"/"Number:" word
+ *  for word. */
 const CARD = {
   box: 2,
   index: 1,
@@ -73,6 +82,9 @@ const CARD = {
   bound_by: 'answer',
   bound_at: '2026-09-20T12:35:00+00:00',
   read_disputes: true,
+  listing: { name: 'Rell, Magnetic', number: '024/221', printed_total: null },
+  listing_differs: true,
+  reading_differs: false,
   read_name: 'Rell, Noxus',
   read_number: '037',
   read_printed_total: '298',
@@ -112,7 +124,12 @@ const GAMES = {
  *  (`types.ts`), the shape `CardHero.tsx:ListingCorrection` reads. Confirming binds the
  *  card's OWN current SKU (§8.1: "the SKU does not move"): `identity_source` turns `'sku'`,
  *  `bound_by` turns `'confirm'`, and the identity fields become the catalog's own — the name
- *  changes even though the SKU does not, which is the whole point of this press. */
+ *  changes even though the SKU does not, which is the whole point of this press.
+ *
+ *  `listing_differs` drops to `false` — the shown name/number now equal the listing by
+ *  construction. `reading_differs` turns `true` — the camera's own read (`Rell, Noxus`) still
+ *  disagrees with the now-bound catalog name, which is exactly the case "Read as" exists for
+ *  (§5.4/§8.1). */
 function confirmedBody() {
   return {
     position: '2/1',
@@ -128,6 +145,11 @@ function confirmedBody() {
       bound_by: 'confirm',
       bound_at: '2026-09-24T09:00:00+00:00',
       name: 'Rell, Magnetic',
+      number: '024/221',
+      printed_total: null,
+      number_display: '024/221',
+      listing_differs: false,
+      reading_differs: true,
     },
   }
 }
@@ -145,7 +167,7 @@ function unconfirmedBody() {
   }
 }
 
-async function open(page: Page): Promise<void> {
+async function open(page: Page, card: Record<string, unknown> = CARD): Promise<void> {
   await page.route(/\/status$/, async (route) => {
     await route.fulfill({
       status: 200,
@@ -187,14 +209,14 @@ async function open(page: Page): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ version: 2, cards: { '2/1': CARD }, boxes: {}, listings: {} }),
+      body: JSON.stringify({ version: 2, cards: { '2/1': card }, boxes: {}, listings: {} }),
     })
   })
   await page.route(/\/inventory$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ version: 2, cards: { '2/1': CARD }, boxes: {}, listings: {} }),
+      body: JSON.stringify({ version: 2, cards: { '2/1': card }, boxes: {}, listings: {} }),
     })
   })
   await page.route(/\/pipeline\/runs\/[^/]+\/pricing$/, async (route) => {
@@ -220,7 +242,7 @@ async function open(page: Page): Promise<void> {
 
   await page.goto(VIEW_ROUTE)
   await settleFonts(page)
-  await expect(page.locator('.browse-hero-name')).toHaveText('Rell, Noxus')
+  await expect(page.locator('.browse-hero-name')).toHaveText(card.name as string)
 }
 
 sealEveryTest()
@@ -339,4 +361,78 @@ test('the confirm press moves nothing outside the panel it lands in', async ({ p
     'the page changed height on a press',
   ).toBe(height)
   expect(await page.evaluate(() => window.scrollY), 'the page scrolled under the press').toBe(at)
+})
+
+/* --------------------------------------- Details' two identity lines (§5.4/§8.1, review round)
+ *
+ * The owner's ruling, verbatim: "show listing name and/or hide when identical i dont think
+ * it's an or situation" — BOTH `listing_differs` ("Listed as") and `reading_differs`
+ * ("Read as") are independent gates, never a single either/or, so each gets its own shown
+ * case and its own hidden case below. The server computes both (`_listing_decoration`);
+ * these four cases prove `CardHero.tsx` draws exactly what the booleans say and nothing it
+ * infers on its own. */
+
+/** `dt`/`dd` locator for one fact row in the Identity group — `factGroupsOf`'s own shape. */
+function fact(page: Page, label: string) {
+  return page.locator('.browse-fact', { has: page.locator('dt', { hasText: label }) })
+}
+
+test('"Listed as" draws when the listing disputes the shown name/number', async ({ page }) => {
+  // CARD itself: held, `listing_differs: true` — the review round's own reproduction of the
+  // defect ("Read as Rell, Noxus 037/298" repeating Card:/Number: word for word) now fixed
+  // by drawing "Listed as" instead.
+  await open(page, CARD)
+
+  const listedAs = fact(page, 'Listed as')
+  await expect(listedAs).toBeVisible()
+  await expect(listedAs.locator('dd')).toHaveText('Rell, Magnetic 024/221')
+})
+
+test('"Listed as" hides once the listing agrees with the shown name/number', async ({ page }) => {
+  const bound = {
+    ...CARD,
+    identity_source: 'sku',
+    bound_by: 'confirm',
+    name: 'Rell, Magnetic',
+    number: '024/221',
+    printed_total: null,
+    number_display: '024/221',
+    // The listing equals what Card/Number now show — `listing_differs` is false, computed
+    // server-side off exactly this comparison (never a raw string compare on screen).
+    listing_differs: false,
+    reading_differs: true,
+  }
+  await open(page, bound)
+
+  await expect(fact(page, 'Listed as')).toHaveCount(0)
+})
+
+test('"Read as" stays hidden on a held card, even though its own read_disputes flag is set — the fix for the line repeating Card:/Number: word for word', async ({ page }) => {
+  // CARD: `read_disputes: true` (the stored, bind-time flag) but `reading_differs: false`
+  // (the fresh, shown-pair comparison) — the two answer different questions, and only the
+  // second one gates this line (§5.4/§8.1).
+  await open(page, CARD)
+
+  await expect(fact(page, 'Read as')).toHaveCount(0)
+})
+
+test('"Read as" draws when the camera\'s read disputes the shown name/number', async ({ page }) => {
+  const disputed = {
+    ...CARD,
+    identity_source: 'sku',
+    bound_by: 'confirm',
+    name: 'Rell, Magnetic',
+    number: '024/221',
+    printed_total: null,
+    number_display: '024/221',
+    listing_differs: false,
+    // The read ("Rell, Noxus" 037/298) still disagrees with the now-bound catalog name —
+    // exactly the case §8.1's own confirm press produces, and §5.4's worked example.
+    reading_differs: true,
+  }
+  await open(page, disputed)
+
+  const readAs = fact(page, 'Read as')
+  await expect(readAs).toBeVisible()
+  await expect(readAs.locator('dd')).toHaveText('Rell, Noxus 037/298')
 })

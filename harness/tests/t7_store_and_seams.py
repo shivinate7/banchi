@@ -12435,6 +12435,31 @@ def check_identity_binding(checks: Checks) -> None:
             "one, or it is `do_correct_answer`'s job",
         )
 
+        # identity-follows-sku.md §5.4/§8.1, review round: "Listed as"/"Read as" ride on
+        # `GET /inventory/<box>` too — the route Details' initial render reads, before any
+        # press. 63/1 is held: shown (`name`) equals the read by construction, so
+        # `listing_differs` is the only one of the two that should be true here.
+        before_box = capture_server.do_inventory_box(63)["cards"]["63/1"]
+        checks.equal(
+            before_box.get("listing"),
+            {"name": "Master Yi, Wuju Master", "number": "191/219", "printed_total": None},
+            "`_listing_decoration` reads the `skus` table off the card's own SKU and "
+            "composes it exactly as `bind_sku` would",
+        )
+        checks.equal(
+            before_box.get("listing_differs"),
+            True,
+            "and `listing_differs` is true — the listing's own name disputes the shown "
+            "name (\"Yi, Ionia\" against \"Master Yi, Wuju Master\")",
+        )
+        checks.equal(
+            before_box.get("reading_differs"),
+            False,
+            "while `reading_differs` is false — a held card's shown pair equals the read "
+            "pair by construction, which is the fix for \"Read as\" repeating "
+            "Card:/Number: word for word",
+        )
+
         before_confirm = Store().read().inventory.identity_snapshot("63/1")
         confirmed = answers(
             checks,
@@ -12443,6 +12468,21 @@ def check_identity_binding(checks: Checks) -> None:
         )
         if confirmed is not None:
             checks.equal(confirmed.get("confirmed"), True, "and it reports which direction")
+            confirmed_card = confirmed.get("card") or {}
+            checks.equal(
+                confirmed_card.get("listing_differs"),
+                False,
+                "§5.4/§8.1: the confirm's own response carries `listing_differs` too, and "
+                "it is now false — the identity equals the listing by construction "
+                "(`bind_sku` wrote it off this same row)",
+            )
+            checks.equal(
+                confirmed_card.get("reading_differs"),
+                True,
+                "while `reading_differs` turns true — the camera's read (\"Yi, Ionia\") "
+                "still disagrees with the now-bound catalog name, exactly the case "
+                "\"Read as\" exists for",
+            )
         card = Store().read().inventory.cards["63/1"]
         checks.equal(
             (card.sku, card.bound_by, card.identity_source),
@@ -12470,6 +12510,19 @@ def check_identity_binding(checks: Checks) -> None:
         )
         if undone is not None:
             checks.equal(undone.get("undone"), True, "and it reports which direction")
+            undone_card = undone.get("card") or {}
+            checks.equal(
+                undone_card.get("listing_differs"),
+                True,
+                "§5.4/§8.1: the undo's own response shows `listing_differs` back to true "
+                "— the card is held again and the listing disputes the shown name",
+            )
+            checks.equal(
+                undone_card.get("reading_differs"),
+                False,
+                "and `reading_differs` back to false — the shown pair equals the read "
+                "pair again",
+            )
         card = Store().read().inventory.cards["63/1"]
         checks.equal(
             (card.sku, card.identity_source, card.name),

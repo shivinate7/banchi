@@ -530,6 +530,39 @@ export type InventoryCard = {
    *  no recorded dispute rather than a third state. */
   read_disputes?: boolean
 
+  /** identity-follows-sku.md §5.4/§8.1, the owner's ruling on Details' two identity lines
+   *  (2026-09-24, verbatim: "show listing name and/or hide when identical i dont think it's
+   *  an or situation") — BOTH rules, never an either/or. Computed server-side, every
+   *  request, off the card's CURRENT shown `name`/`number`
+   *  (`server/capture_server.py:_listing_decoration`) — never off `read_disputes` above,
+   *  which answers a different question once, at bind time. The screen holds no fold logic
+   *  of its own (CLAUDE.md: "No pipeline logic in the browser").
+   *
+   *  `listing` is the card's current SKU, read off the `skus` table (§3.2) and composed the
+   *  same way `Inventory.bind_sku` composes one onto a card. `null` when the card carries no
+   *  SKU, or a SKU the table does not (yet) hold (§3.2's escape hatch) — nothing to compare.
+   *
+   *  `listing_differs` draws "Listed as": the listing's own name or number disagrees with
+   *  what `name`/`number` already show, so the photo's reading and the listing can be read
+   *  side by side right above the confirm press. False on a card `identity_source: "sku"`
+   *  except the rare case the row's own facts changed since the bind (§9, risk 3).
+   *
+   *  `reading_differs` draws "Read as": `read_name`/`read_number` disagree with the same
+   *  shown pair. Always false on a HELD card (`identity_source: "read"`) — there the shown
+   *  pair equals the read pair by construction, which is the fix: the line no longer
+   *  repeats "Card:"/"Number:" word for word. It draws only after a confirm, or on a
+   *  SKU-bound card whose reading disputes it.
+   *
+   *  Both folds are `pipeline/join.name_disputes` and §6's per-game number rule, never a
+   *  raw string compare — a spelling-only difference lights neither line.
+   *
+   *  Optional, `types.ts`'s own standing rule for a server decoration: a server that
+   *  predates this, or a route that omits it (`GET /inventory`, unscoped), sends no such
+   *  key — read as `null`/`false`, never a third state. */
+  listing?: { name: string; number: string | null; printed_total: string | null } | null
+  listing_differs?: boolean
+  reading_differs?: boolean
+
   state: string
   state_at: string | null
 

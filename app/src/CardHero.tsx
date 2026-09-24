@@ -159,18 +159,38 @@ function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
   }
 }
 
-/** identity-follows-sku.md §5.4: "`CardDetailsSection` draws one extra line, 'Read as
- *  {read_name} {read number}', only when `read_disputes` is true. A card whose read agrees
- *  draws nothing new." Composed from the raw `read_number`/`read_printed_total` pair rather
- *  than a folded `number_display` — this line is showing what the camera actually returned
- *  (D67 keeps the glued-set-code fold for the identity's own number, never for the read),
- *  the same choice `ReviewQueue.tsx`'s own read-facing rows make (`cardNumber.ts`'s header). */
+/** identity-follows-sku.md §5.4/§8.1, the owner's ruling on Details' two identity lines
+ *  (2026-09-24, verbatim: "show listing name and/or hide when identical i dont think it's
+ *  an or situation") — the second of the two, "Read as": what the camera actually returned,
+ *  drawn only when `reading_differs` says it disputes what Card/Number already show. Gated
+ *  on `reading_differs`, NOT `read_disputes` — that field answers a different question, once,
+ *  at bind time; `reading_differs` is computed fresh off the card's current shown fields
+ *  (`server/capture_server.py:_listing_decoration`), which is what keeps this line from
+ *  repeating "Card:"/"Number:" word for word on a held card (the review-round defect).
+ *  Composed from the raw `read_number`/`read_printed_total` pair rather than a folded
+ *  `number_display` — this line is showing what the camera actually returned (D67 keeps the
+ *  glued-set-code fold for the identity's own number, never for the read), the same choice
+ *  `ReviewQueue.tsx`'s own read-facing rows make (`cardNumber.ts`'s header). */
 function readAsFact(card: InventoryCard): Detail | null {
-  if (card.read_disputes !== true) return null
+  if (card.reading_differs !== true) return null
   const name = typeof card.read_name === 'string' && card.read_name.trim() !== '' ? card.read_name.trim() : null
   const number = collectorNumber({ number: card.read_number, printed_total: card.read_printed_total })
   const value = [name, number].filter((part): part is string => part !== null).join(' ')
   return value === '' ? null : { label: 'Read as', value }
+}
+
+/** The first of Details' two identity lines, "Listed as" (§5.4/§8.1, the same 2026-09-24
+ *  ruling): the SKU's own catalog name and number, drawn only when `listing_differs` says
+ *  they disagree with what Card/Number already show — so the photo's reading and the
+ *  listing can be read side by side, right above the confirm press below. `card.listing` is
+ *  absent on a card with no SKU or a SKU the `skus` table does not (yet) hold; this function
+ *  draws nothing then either, matching `listing_differs`'s own false in that case. */
+function listedAsFact(card: InventoryCard): Detail | null {
+  if (card.listing_differs !== true || card.listing == null) return null
+  const name = card.listing.name.trim() !== '' ? card.listing.name.trim() : null
+  const number = collectorNumber({ number: card.listing.number, printed_total: card.listing.printed_total })
+  const value = [name, number].filter((part): part is string => part !== null).join(' ')
+  return value === '' ? null : { label: 'Listed as', value }
 }
 
 function listingFact(card: InventoryCard, listings: Readonly<Record<string, Listing>>): Detail {
@@ -214,6 +234,7 @@ export function factGroupsOf(
   market: MarketRead | undefined,
   listings: Readonly<Record<string, Listing>>,
 ): FactGroup[] {
+  const listedAs = listedAsFact(card)
   const readAs = readAsFact(card)
   return [
     {
@@ -221,6 +242,7 @@ export function factGroupsOf(
       facts: [
         { label: 'Card', value: nameOf(card) ?? 'not identified yet' },
         { label: 'Number', value: numberCell(card), kind: 'mono' },
+        ...(listedAs !== null ? [listedAs] : []),
         ...(readAs !== null ? [readAs] : []),
         { label: 'Game', value: gameWord(card) ?? 'not recorded' },
         { label: 'Set hint', value: card.set_hint ?? 'none', kind: 'mono' },
