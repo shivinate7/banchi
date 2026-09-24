@@ -1325,25 +1325,25 @@
 .ff-keys-title { flex: 1 1 auto; }
 .ff-keys-close { flex: none; }
 .ff-keys-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-4); }
-/* ONE COLUMN FOR THE KEYS (grid, not flex): `max-content` sizes the first column to the
-   widest cap across every row ("Esc" against "?"), so every row's own sentence starts at
-   the same x regardless of which key it names. */
-.ff-keys-list li {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  align-items: center;
-  gap: var(--bn-4);
-}
+/* ONE COLUMN FOR THE KEYS. A `grid` PER `<li>` cannot do this — grid tracks size per
+   CONTAINER, so "Esc" (3 characters) and "?" (1) sized two DIFFERENT first columns and put
+   the two rows' own sentences about 18px apart. The fix is the cap, not the layout: a fixed
+   `width` (not `min-width`) makes every cap identically wide regardless of its own label, so
+   plain flex rows align without a shared grid at all. */
+.ff-keys-list li { display: flex; align-items: center; gap: var(--bn-4); }
 /* THE FLOOR TABLE REACHES THE KEY CAP TOO — `--ff-fs-base` is this screen's own 20px body
    floor, not the kit's `.bn-kbd` (10px, sized for a dense reference sheet nobody but the
-   owner reads). Boxed like `.ff-box-num`'s own chip, at the same corner radius family. */
+   owner reads). Boxed like `.ff-box-num`'s own chip, at the same corner radius family. Fixed
+   `width`, wide enough for the longest cap this screen names ("Esc"), so a shorter one ("?")
+   still occupies the same column. */
 .ff-keys-key {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
+  width: 64px;
   height: 44px;
-  padding: 0 var(--bn-3);
+  padding: 0 var(--bn-2);
   border-radius: var(--bn-r-sm);
   border: 1px solid var(--bn-line-strong);
   border-bottom-width: 3px;

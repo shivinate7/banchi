@@ -1855,6 +1855,70 @@ test('two owed cards delivered out of walk order are drawn IN walk order', async
   await expect(view(page).locator('.ff-owed-card h2')).toHaveText(['Aerodactyl', 'Xerneas'])
 })
 
+/* `compareNullable`'s own case: a box the server COULD NOT COUNT answers `section: null,
+ * card: null` on an on-hand copy (`Place`'s own type comment — null there means "the server
+ * could not count", not "departed", which is a different field entirely). Both copies sit in
+ * the same box, so the sort falls through to the section comparator, where the old
+ * `Infinity - Infinity` read as `NaN` — `0 || NaN || ...`, the LAST term in the chain
+ * returning `NaN` straight to `Array.sort`. This never throws either way; what it proves is
+ * the ORDER: the countable section sorts first, the uncounted one after it, not whatever a
+ * `NaN` comparator would have left standing. */
+const UNCOUNTED_SECTION_PLAN = {
+  cost: 'sections',
+  stops: [
+    {
+      key: 'box/6/section/degraded', box: 6, box_name: null, section: null, section_name: null,
+      pooled: false, game: null, game_display: null, order: 1,
+      span: null, box_total: 0,
+      takes: [{
+        sku: '9199020', name: 'Uncounted', number_display: null, set: null, rarity: null,
+        condition: null, wanted: 1,
+        for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+        copies: [{
+          key: '6/9', state: 'identified', has_photo: true, capture_id: 'cap-u', cid: null,
+          place: {
+            label: 'Box 6 · departed', located: true, box: 6, index: 9, slot: null,
+            section: null, card: null, box_name: null, section_start: 1, section_end: null,
+            box_total: 0, box_closed: false, fraction: null, neighbors: null, section_gaps: null,
+          },
+          here: true,
+        }],
+        listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null,
+      }],
+    },
+    {
+      key: 'box/6/section/1', box: 6, box_name: null, section: 1, section_name: null,
+      pooled: false, game: null, game_display: null, order: 2,
+      span: { start: 1, end: 10 }, box_total: 10,
+      takes: [{
+        sku: '9199021', name: 'Countable', number_display: null, set: null, rarity: null,
+        condition: null, wanted: 1,
+        for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+        copies: [{
+          key: '6/2', state: 'identified', has_photo: true, capture_id: 'cap-c', cid: null,
+          place: {
+            label: 'Box 6 · Section 1 · Card 2', located: true, box: 6, index: 2, slot: 2,
+            section: 1, card: 2, box_name: null, section_start: 1, section_end: 10,
+            box_total: 10, box_closed: true, fraction: 0.2, neighbors: null, section_gaps: 0,
+          },
+          here: true,
+        }],
+        listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null,
+      }],
+    },
+  ],
+  shortfall: [],
+  counts: { stops: 2, boxes: 1, copies: 2, sections_considered: 2, sections_candidate: 2, exact: true, solve_ms: 2 },
+}
+
+test('a copy whose section could not be counted sorts after a countable one in the same box, and never crashes the sort', async ({
+  page,
+}) => {
+  // Delivered uncounted-first on the wire, same as the walk-order case above.
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: UNCOUNTED_SECTION_PLAN })
+  await expect(view(page).locator('.ff-owed-card h2')).toHaveText(['Countable', 'Uncounted'])
+})
+
 /* A card the same order also claims, reached by browsing a box instead of through "Cards to
  * pick" -- the walk-in case (`claim`, `Fulfillment.tsx`): a copy an order is waiting for is
  * sold through the order however he reaches it. This is also where "No name" is asserted now:
@@ -1918,17 +1982,13 @@ test('the search placeholder ends in an honest ellipsis at 390px, never a raw mi
   await openList(page, [], { orders: MULTI_ORDER, plan: MULTI_PLAN })
   const input = page.getByPlaceholder(/^For example, /)
   await expect(input).toHaveAttribute('placeholder', 'For example, Promising Future')
-  const style = await input.evaluate((node) => {
-    const computed = window.getComputedStyle(node)
-    return { overflow: computed.overflow, textOverflow: computed.textOverflow }
-  })
-  // Chromium normalizes a text `<input>`'s COMPUTED `overflow` to `clip` regardless of the
-  // author's declared value — a browser quirk over form controls' own internal scrolling,
-  // not a sign the rule did not apply. `hidden` is what was written; `clip` is what a
-  // Chromium `getComputedStyle` answers for it here, and `text-overflow: ellipsis` still
-  // renders correctly under either (proved live: `scratchpad/lanes/fulfillment/ff-*.png`).
-  expect(['hidden', 'clip']).toContain(style.overflow)
-  expect(style.textOverflow).toBe('ellipsis')
+  // `overflow` ALONE IS NOT ASSERTED: Chromium normalizes a text `<input>`'s COMPUTED
+  // `overflow` to `clip` regardless of the author's declared value (a quirk over form
+  // controls' own internal scrolling), so a check against `hidden` can never go red —
+  // reverting the rule entirely still reads `clip`. `text-overflow` is the one property that
+  // actually reports whether the fix is in effect.
+  const textOverflow = await input.evaluate((node) => window.getComputedStyle(node).textOverflow)
+  expect(textOverflow).toBe('ellipsis')
 })
 
 /* UX-101: this screen has no shell (D5), so the owner's own `?` sheet (`App.tsx`) cannot open
@@ -1956,6 +2016,37 @@ test('"?" opens this screen\'s own keyboard reference, and closes it again', asy
   await expect(view(page).locator('.ff-keys')).toBeVisible()
   await view(page).getByRole('button', { name: 'Close' }).click()
   await expect(view(page).locator('.ff-keys')).toHaveCount(0)
+})
+
+/* ONE COLUMN FOR THE KEYS, MEASURED — a `display: grid` on each `<li>` looked right and was
+ * not: grid tracks size PER CONTAINER, so "Esc" (3 characters) and "?" (1) each sized their
+ * OWN first column, and the two rows' sentences landed about 18px apart (612 vs 594 at
+ * 1440px). `.ff-keys-key`'s fixed `width` is the fix; this is what proves it, at both a
+ * width where the dialog is centered (1440) and one where it is a full-bleed bottom sheet
+ * (390) — the two layouts this sheet actually draws. */
+async function keysSentenceXs(page: Page): Promise<number[]> {
+  await page.keyboard.press('?')
+  const rows = view(page).locator('.ff-keys-list li .fulfillment-say')
+  await expect(rows).toHaveCount(2)
+  return rows.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().x))
+}
+
+test('the keyboard sheet\'s two rows start their sentences at the same x — 1440px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await openList(page)
+  const xs = await keysSentenceXs(page)
+  expect(Math.abs(xs[1]! - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
+})
+
+test('the keyboard sheet\'s two rows start their sentences at the same x — 390px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openList(page)
+  const xs = await keysSentenceXs(page)
+  expect(Math.abs(xs[1]! - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
