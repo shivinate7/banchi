@@ -368,6 +368,23 @@ async function stubStore(page: Page): Promise<void> {
   await page.route(/\/photo\/\d+\/\d+/, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
   )
+  /* THE FREE COST CHECK, WHICH IS A POST AND STILL A READ (the crop window's reason, below).
+     The Identify sheet runs it the moment it opens (the owner's Q5 ruling), so a spec that only
+     opens the sheet reaches it. The answer is a small, believable quote; nothing here spends —
+     `POST /pipeline/identify` stays unstubbed, so the seal reports any spec that presses it. */
+  await page.route(/\/pipeline\/preflight$/, (route) =>
+    json(route, {
+      ok: true,
+      exit_code: 0,
+      selection: { state: 'captured' },
+      sentence: '14 cards waiting to be identified',
+      scope: null,
+      capture_dirs: [],
+      console: '',
+      claimed: null,
+      total: { photographs: 14, cache_hits: 3, to_send: 11, estimate_usd: 0.46, cards: 14 },
+    }),
+  )
 
   /* TWO BOXES, SO A PICKER HAS SOMETHING TO PICK BETWEEN. One named and one not — a name is
      optional and `runScope.ts` draws `Box 3` alone where there is none (D56), so a fixture

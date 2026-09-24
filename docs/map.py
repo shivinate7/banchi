@@ -6888,7 +6888,7 @@ COMPONENTS = [
                                           "identifying` and both were wrong together — which is "
                                           "the argument for one reader rather than a defence of "
                                           "it: there was one place to fix, and it was not here.",
-                                  "governed_by": ["D33", "D39", "D48", "D56", "D94"]},
+                                  "governed_by": ["D33", "D39", "D48", "D56", "D94", "D194"]},
             "src/RunsComposer.tsx": {"does": "THE IDENTIFY COMPOSER: the one press in this product "
                                              "that spends money, as a staged dialog — which "
                                              "boxes, how each is read, what it costs, and a "

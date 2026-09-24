@@ -44,7 +44,7 @@ export function stageOf(row: RunSummary): Stage {
     case 'ready':
       return { label: 'Not started', tone: 'default', filled: 0, live: false, step: 0 }
     case 'identify':
-      return { label: 'Not read yet', tone: 'warn', filled: 0, live: false, step: 0 }
+      return { label: 'Not read', tone: 'warn', filled: 0, live: false, step: 0 }
     case 'join':
       return { label: 'Needs matching', tone: 'warn', filled: 1, live: false, step: 1 }
     case 'emit': {
@@ -54,9 +54,10 @@ export function stageOf(row: RunSummary): Stage {
       }
       /* THE REAL NEXT STEP, NOT A GUESS ABOUT PRICES (UX-006). This row cannot see whether a
          price is owed — that is Pricing's worklist, too heavy for the polled list — so it names
-         the step itself, which is one screen and one press whatever the prices say. Home's line
-         reads the worklist and says which. */
-      return { label: 'Price and send', tone: 'accent', filled: 3, live: false, step: 2 }
+         the screen the step is on, which is one screen and one press whatever the prices say.
+         Two words, the same as the label it replaced: Inventory draws this pill too, and its
+         word ceiling holds (D194). Home's line reads the worklist and says which. */
+      return { label: 'Next: Pricing', tone: 'accent', filled: 3, live: false, step: 2 }
     }
     case 'reconcile':
       return { label: 'Written', tone: 'ok', filled: 5, live: false, step: 3 }
