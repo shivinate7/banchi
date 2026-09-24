@@ -23,6 +23,14 @@ BOTH as ordinary cases and as a mutation kill: a broken resolver that proposes M
 whenever a number merely EXISTS (the original, vacuous test) is shown wrong on a dense-set
 fixture where the real function correctly refuses. That second arm is the one protecting
 `CLAUDE.md`'s own rule against guessing an identification.
+
+PATH GATED, THE TWENTY-SECOND (D247, owner's word 2026-09-23, on the same ground as
+`pricearchive-selftest`'s sixteenth entry): `make sku-number-contradictions-selftest`, wired
+into `make check` and `make ci-check` through `scripts/guard-scope.py`. `docs/map.py` used to
+state this file's exemption as "`pricearchive-selftest.py`'s own precedent, one entry above" —
+that precedent is gone, and this module's real caller (`cli/cmd_sku_contradictions.py:run`,
+`./pkmnscan cards contradictions`, D242) was tested nowhere else. Once it's done, it only
+needs to be tested when touched.
 """
 
 from __future__ import annotations

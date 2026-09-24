@@ -14,10 +14,32 @@ two ways:
      the whole suite is run against it. The mutated run MUST fail: a suite that stays green
      under this mutation is not testing the property it claims to.
 
-NO NETWORK, NO SCREEN. This package has no caller a screen reaches yet (`store/postings.py`'s
-own docstring says why), so this is written the way `scripts/pricearchive-selftest.py` and
-`scripts/catalog-index-selftest.py` were: a fast, self-contained proof, not wired into
-`make check`.
+NO NETWORK. `emit` and `reprice apply` are `store/postings.py:Postings.record()`'s only two
+callers today, both real presses (`./pkmnscan emit`, `./pkmnscan reprice apply`) — the sentence
+that used to sit here ("no caller a screen reaches yet") described the table's READ side,
+never the write side this file proves, and had gone stale for the write side regardless.
+NOTHING READS `price_postings` BACK ONTO A SCREEN YET (D244 — "shelved until there is a
+history to draw"); that is a separate fact from whether a press writes it, and this file
+proves only the write.
+
+PATH GATED, THE TWENTIETH (D247, owner's word 2026-09-23, on the same ground as
+`pricearchive-selftest`'s sixteenth entry): `make price-postings-selftest`, wired into
+`make check` and `make ci-check` through `scripts/guard-scope.py`. This file is no longer
+the exception it was when written — the "own precedent" it used to cite was
+`pricearchive-selftest.py`'s OWN prior exemption, and that exemption is gone: once it's
+done, it only needs to be tested when touched.
+
+TWO STATIC IMPORTS BELOW EXIST ONLY SO THE GATE CAN SEE ITS OWN SUBJECT. The real proof
+loads `store.db` and `store.session` by NAME (`importlib.import_module`, further down),
+purging `sys.modules` first — the only way to swap in a mutated copy of `store/db.py` for
+the mutation arm without a stale, pre-mutation module staying bound. That string-shaped
+import is invisible to `scripts/guard-scope.py:derive_subjects`'s AST walk (D247's own text
+names this class of gap: "a subprocess call built from a runtime string... a self-test would
+then skip on a change that should have run it"). `store/postings.py` and `store/session.py`
+are the two real subjects this omission would have hidden — `store/db.py` alone surfaces
+only because `_mutate_to_upsert` reads its source off a literal `Path` chain. `_postings_subject`
+and `_session_subject` below are never called; they exist to put both modules in this file's
+own AST so the deriver's next call sees them, with nothing hand-typed beside it.
 """
 
 from __future__ import annotations
@@ -33,6 +55,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from store import files  # noqa: E402
+from store import postings as _postings_subject  # noqa: E402,F401 — see the header: never
+from store import session as _session_subject  # noqa: E402,F401 — called, read for subjects only.
 
 PASS = 0
 FAIL = 0

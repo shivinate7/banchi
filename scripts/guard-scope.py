@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DOES THIS CHANGE REACH WHAT ONE OF THE FIFTEEN GUARD SELF-TESTS PROVES?
+"""DOES THIS CHANGE REACH WHAT ONE OF THE ROSTER'S GUARD SELF-TESTS PROVES?
 
 Measured on this Mac, 2026-09-20: `make check` is 163.85s. Fifteen guard self-tests —
 `reap-selftest`, `claim-selftest`, `guard-shell-selftest`, `sync-selftest`, `audit-self-test`,
@@ -14,13 +14,13 @@ is the argument; `docs/specs/verification-cost.md` §11 is the measurement.
 THE OWNER RULED A SECOND PATH-GATED TARGET IN, 2026-09-20, on that measurement.
 `scripts/serve-scope.py`'s own header says a request for a second entry is "evidence the
 policy is spreading and needs the owner's word again" — that word was given, and this file
-is what was built on it. Fifteen entries, not one: unlike `serve-selftest`'s single
+is what was built on it. Many entries, not one: unlike `serve-selftest`'s single
 unbreakable-by-any-`app/`-change case, most of `make check`'s guard self-tests each prove
-one guard script, so one classifier serving fifteen is the shape that avoids fifteen
-near-identical copies of `serve-scope.py`.
+one guard script, so one classifier serving the roster below is the shape that avoids a
+near-identical copy of `serve-scope.py` per entry.
 
 THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S OWN SOURCE, NEVER TYPED BESIDE IT.
-`ROSTER` below names which fifteen targets are gated — that selection is a product decision,
+`ROSTER` below names which targets are gated — that selection is a product decision,
 on `serve-scope.py`'s own precedent (it names `serve-selftest` the same way). What each
 target's SUBJECT is — the files that decide whether it can possibly go red — is computed by
 `derive_subjects()` by reading the test's own source on every call: every `from store import
@@ -41,8 +41,8 @@ out loud. Only an explicit skip skips, and `PKMNSCAN_GUARD_SCOPE=off` turns the 
 off for every target and is printed every time any of them skips.
 
     scripts/guard-scope.py classify --target <name> [--base REV] [--head REV]
-        Prints the reasoning and exits 0 to RUN, 3 to SKIP. Each of the fifteen Makefile
-        recipes calls this with its own name.
+        Prints the reasoning and exits 0 to RUN, 3 to SKIP. Each roster entry's own
+        Makefile recipe calls this with its own name.
     scripts/guard-scope.py list [--target <name>]
     scripts/guard-scope.py selftest
 
@@ -68,9 +68,14 @@ HATCH = "PKMNSCAN_GUARD_SCOPE"
 # codes/ cli/)". A local-package import is resolved against this list, never a guess.
 LOCAL_PACKAGES = ("store", "cli", "pipeline", "identify", "geometry", "codes", "server")
 
-# THE FIFTEEN — the owner's list, 2026-09-20. Which targets are gated is declared here, on
-# `serve-scope.py`'s own precedent (it declares its one target the same way). What each one
-# READS is never declared beside it; see `derive_subjects()`.
+# THE ROSTER — the owner's list, grown twice: fifteen entries on 2026-09-20, a sixteenth
+# (`pricearchive-selftest`) on 2026-09-23, and six more the same day once that sixteenth's
+# own wiring showed each of their "not wired — pricearchive-selftest.py's own precedent"
+# notes had gone stale too (D247's own text: "This entry is a placement change, not a
+# pruning" — the same word covers every later addition on the same ground). Which targets
+# are gated is declared here, on `serve-scope.py`'s own precedent (it declares its one
+# target the same way). What each one READS is never declared beside it; see
+# `derive_subjects()`. Count it with `len(ROSTER)`, never by re-typing a number in prose.
 ROSTER = (
     {"target": "reap-selftest", "test": "scripts/reap-selftest.sh"},
     {"target": "claim-selftest", "test": "scripts/claim-selftest.py"},
@@ -88,6 +93,13 @@ ROSTER = (
     {"target": "screen-freshness-selftest", "test": "scripts/screen-freshness.mjs"},
     {"target": "cid-selftest", "test": "scripts/cid-selftest.py"},
     {"target": "pricearchive-selftest", "test": "scripts/pricearchive-selftest.py"},
+    {"target": "archive-review-selftest", "test": "scripts/archive-review-selftest.py"},
+    {"target": "holdings-selftest", "test": "scripts/holdings-selftest.py"},
+    {"target": "identity-checks-selftest", "test": "scripts/identity-checks-selftest.py"},
+    {"target": "price-postings-selftest", "test": "scripts/price-postings-selftest.py"},
+    {"target": "product-history-selftest", "test": "scripts/product-history-selftest.py"},
+    {"target": "sku-number-contradictions-selftest",
+     "test": "scripts/sku-number-contradictions-selftest.py"},
 )
 
 TARGETS = {entry["target"] for entry in ROSTER}

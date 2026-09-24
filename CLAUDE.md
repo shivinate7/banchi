@@ -69,10 +69,19 @@ make serve-scope    # what `make serve-selftest` reads, and whether this branch 
                     #   checkout with a STUB app/, so no screen change can reach it.
                     #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
 make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
-                    #   measurement). What each of sixteen guard self-tests reads. A
+                    #   measurement). What each of twenty-two guard self-tests reads. A
                     #   sixteenth, `pricearchive-selftest`, joined 2026-09-23 on the
                     #   owner's word: "once it's done, it only needs to be tested when
-                    #   touched."
+                    #   touched." Six more joined the same day, once that sixteenth's own
+                    #   wiring showed each of their own "not wired — pricearchive-selftest's
+                    #   own precedent" notes had gone stale too:
+                    #   `archive-review-selftest`, `holdings-selftest`,
+                    #   `identity-checks-selftest`, `price-postings-selftest`,
+                    #   `product-history-selftest` and
+                    #   `sku-number-contradictions-selftest` — each proves a module with a
+                    #   real caller today (`archive sweep --write`, `#/revenue`'s
+                    #   unsold-stock panel, `cards checks`, `emit`/`reprice apply`,
+                    #   `#/product`, `cards contradictions`).
                     #   ARGS=list [--target <name>], or
                     #   ARGS="classify --target <name> --base <rev>".
                     #   D247 is the argument. A guard
@@ -81,7 +90,7 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   fixture changing. THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S
                     #   OWN SOURCE, never typed beside it — `scripts/guard-scope.py:
                     #   derive_subjects` reads local-package imports and `Path`-style chains
-                    #   straight out of the test file. Only WHICH sixteen targets are gated
+                    #   straight out of the test file. Only WHICH targets are gated
                     #   is a hand-typed roster, on `serve-scope.py`'s own precedent. Fails
                     #   open exactly like `serve-scope`: no merge-base, an unreadable diff,
                     #   an EMPTY diff, an unscoped target, and any exception all run the
@@ -89,8 +98,9 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   regardless, printed in every skip. Reconciled BOTH WAYS by
                     #   `make docs-audit`'s `guard scope` row: every roster target is wired
                     #   into the Makefile and every wired recipe names a roster target.
-                    #   A THIRD gated target needs the owner's word again — no target here
-                    #   was found dead weight; this is a placement change, not a pruning.
+                    #   A THIRD GATE MECHANISM needs the owner's word again — a new roster
+                    #   entry under this same gate does not; no target here was found dead
+                    #   weight; this is a placement change, not a pruning.
 make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line span, which
                     #   component DRAWS it, and the expression that decides whether it is
                     #   drawn. A renderer — writes nothing, gates nothing, derived every run.
@@ -186,7 +196,11 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + debts-selftest +
                     #   gates-selftest + submission-selftest +
-                    #   cid-selftest + pricearchive-selftest + readings-selftest +
+                    #   cid-selftest + pricearchive-selftest +
+                    #   archive-review-selftest + holdings-selftest +
+                    #   identity-checks-selftest + price-postings-selftest +
+                    #   product-history-selftest +
+                    #   sku-number-contradictions-selftest + readings-selftest +
                     #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +

@@ -621,6 +621,154 @@ CHECKS = (
                         "D240", "D-pricehistory-resolves-by-sku"),
     },
     {
+        "target": "archive-review-selftest",
+        "runs": "python3 scripts/archive-review-selftest.py",
+        "asserts": "cli/archive_review.py against a throwaway store, no network: an "
+                   "identification refusal reaches the review queue with its photograph "
+                   "(under pipeline/variant.py:NO_CATALOG_ROW), a re-run over the same "
+                   "refusal adds nothing new and preserves first_seen, a card sharing the "
+                   "refused SKU but carrying a DIFFERENT stored number is never queued (the "
+                   "Exeggutor shape, D234), a card with no photograph is never queued, a "
+                   "network-shaped refusal is never queued, and an already-answered "
+                   "position is never re-queued (D167). Mutation-tested: an apply that "
+                   "writes the queue mapping directly, skipping Queue.upsert's own "
+                   "cleared-entry guard, is shown to silently reopen an answered entry and "
+                   "lose its first_seen.",
+        "needs": ("python3",),
+        "writes": "one sqlite store and one review queue per case, all under `mktemp -d`. "
+                  "`PKMNSCAN_HOME` is repointed for every case, so the operator's own store "
+                  "is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
+                               "pricearchive-selftest right above it.",
+        "gates": True,
+        "governed_by": ("D167", "D219", "D233", "D234", "D26", "D58", "D89", "D247"),
+    },
+    {
+        "target": "holdings-selftest",
+        "runs": "python3 scripts/holdings-selftest.py",
+        "asserts": "pipeline/holdings.py against fixtures built in the file (D236) — no "
+                   "store on disk, no network. On-hand quantity honors TERMINAL_STATES and "
+                   "never counts a SOLD copy; a name with an archived reading produces a "
+                   "correctly valued point; a name with no reading at all is counted in "
+                   "unmarked, never a zero; a genuine calendar gap between two archived "
+                   "buckets sets gap_before with no value interpolated into it; a "
+                   "priced-None bucket carries no value but no gap either side; a sealed "
+                   "ledger SKU absent from cards is counted rather than dropped. Two "
+                   "mutation arms: forcing _adjacent to always answer True (the gap "
+                   "interpolates) and forcing sealed_excluded_count to always answer 0 (the "
+                   "exclusion is dropped), each proven to turn its own assertion red.",
+        "needs": ("python3",),
+        "writes": "nothing — every fixture (`Inventory`, `PriceArchive`, `Ledger`) is built "
+                  "in memory, never a throwaway store on disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. Off the commit "
+                               "path because it is not on the hook's own roster: it is "
+                               "PATH GATED into `make check` alone (D247), the same "
+                               "placement as pricearchive-selftest right above it, and "
+                               "adding a new check to the hook is a separate decision this "
+                               "entry does not make.",
+        "gates": True,
+        "governed_by": ("D62", "D159", "D189", "D212", "D219", "D225", "D236", "D247",
+                        "D250"),
+    },
+    {
+        "target": "identity-checks-selftest",
+        "runs": "python3 scripts/identity-checks-selftest.py",
+        "asserts": "pipeline/identity_checks.py's four stored-data checks against literal "
+                   "CardRecord fixtures, no store, no network (D239). One positive and one "
+                   "negative arm per check, built from the exact subjects the cited "
+                   "decision entry measured (`102/166` in a 298-card Origins, `0934` in a "
+                   "132-card ME01, `Shadbow Temple` beside `Shadow Temple`, a "
+                   "152-character rules-text name). A mutation arm: a denominator check "
+                   "comparing against the first-seen value instead of the dominant one is "
+                   "shown to blame the wrong card before the real function is shown to "
+                   "survive the same fixture. This module's one caller "
+                   "(`cli/cmd_cards.py:checks`) is exercised nowhere else — "
+                   "harness/tests/t7_store_and_seams.py drives cli/cmd_cards.py through "
+                   "cards_action='variants' alone, never 'checks'.",
+        "needs": ("python3",),
+        "writes": "nothing — every fixture is a literal CardRecord, never a store on disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. Off the commit "
+                               "path for the same reason as holdings-selftest beside it: "
+                               "PATH GATED into `make check` alone (D247), never the hook.",
+        "gates": True,
+        "governed_by": ("D146", "D173", "D234", "D237", "D239", "D247"),
+    },
+    {
+        "target": "price-postings-selftest",
+        "runs": "python3 scripts/price-postings-selftest.py && "
+               "python3 scripts/price-postings-selftest.py --mutate-to-upsert",
+        "asserts": "store/postings.py's price_postings table against a throwaway store, no "
+                   "network (D243). Posting the SAME SKU twice lands TWO rows, both keep "
+                   "their own price. replaced is only set when the caller gives one. A "
+                   "session that never calls .record() posts nothing. A fresh connection "
+                   "reads back what an earlier session wrote. --mutate-to-upsert re-runs "
+                   "the whole suite against a copy of store/db.py whose append_postings has "
+                   "been rewritten into an upsert keyed on sku — the shape this table must "
+                   "never take — and the mutated run MUST fail, or the append-only property "
+                   "is not being tested at all. Both invocations are run here; the second "
+                   "must itself exit 0 by CATCHING the mutation, never by passing under it.",
+        "needs": ("python3",),
+        "writes": "one sqlite store per case under `mktemp -d`, plus (for the mutation arm "
+                  "only) one throwaway copy of the `store/` package tree with `db.py` "
+                  "rewritten in it. `PKMNSCAN_HOME` is repointed for every case, so the "
+                  "operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store and, for the mutation arm, a "
+                               "temp copy of store/. Same standing as archive-review-selftest "
+                               "above it.",
+        "gates": True,
+        "governed_by": ("D243", "D88", "D212", "D219", "D189", "D247"),
+    },
+    {
+        "target": "product-history-selftest",
+        "runs": "python3 scripts/product-history-selftest.py",
+        "asserts": "pipeline/productview.py and "
+                   "server/pipeline_routes.py:do_product_history against a throwaway "
+                   "store (D227). A SKU the store has never carried refuses sku_unknown. A "
+                   "SKU the store carries but the archive has swept answers straight off "
+                   "price_history, with source: archive and no live call — proved by "
+                   "pointing the route at an ExplodingMarket that raises if it is ever "
+                   "called at all. A SKU the archive has never swept falls through to the "
+                   "live reader and answers source: live — proved the opposite way, by "
+                   "confirming a FakeMarket was in fact reached. This is `#/product`'s own "
+                   "route (D226), a real, screen-reachable caller.",
+        "needs": ("python3",),
+        "writes": "one sqlite store and one price-history archive per case, all under "
+                  "`mktemp -d`. `PKMNSCAN_HOME` is repointed for every case, so the "
+                  "operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
+                               "price-postings-selftest above it.",
+        "gates": True,
+        "governed_by": ("D62", "D219", "D227", "D247", "D-pricehistory-resolves-by-sku"),
+    },
+    {
+        "target": "sku-number-contradictions-selftest",
+        "runs": "python3 scripts/sku-number-contradictions-selftest.py",
+        "asserts": "pipeline/sku_number_contradictions.py against literal NumberRecord "
+                   "fixtures and duck-typed Market fakes, no store, no network (D242). "
+                   "RaisingMarket fails the test if a denominator mismatch ever reaches it. "
+                   "FakeMarket exercises MISREAD, SHARED_SKU and UNRESOLVED. A mutation "
+                   "arm: a naive first-side-wins resolver picks a wrong, silent winner on "
+                   "the SHARED_SKU fixture; the real function reports both sides and picks "
+                   "none. This module's one caller "
+                   "(`cli/cmd_sku_contradictions.py:run`, `./pkmnscan cards "
+                   "contradictions`) is exercised nowhere else.",
+        "needs": ("python3",),
+        "writes": "nothing — every fixture is a literal NumberRecord, never a store on "
+                  "disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. Off the commit "
+                               "path for the same reason as holdings-selftest and "
+                               "identity-checks-selftest: PATH GATED into `make check` "
+                               "alone (D247), never the hook.",
+        "gates": True,
+        "governed_by": ("D146", "D167", "D173", "D234", "D242", "D247"),
+    },
+    {
         "target": "readings-selftest",
         "runs": "python3 scripts/readings-selftest.py",
         "asserts": "the cached market-reading table (store/readings.py) and the two-source "
