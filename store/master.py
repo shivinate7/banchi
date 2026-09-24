@@ -97,7 +97,9 @@ from store.rows import Rows, TableSpec, int_or_none
 # to, with no imports beyond the stdlib, and `pipeline/join.py` imports them back and
 # re-exports under the same names — so `_card_columns` reuses one fold (D55/D67) the same
 # as every other reader, without `store/` crossing the one edge it may not cross.
-from store.numbers import display_number, join_key, strip_name_suffix
+from store.numbers import (
+    catalog_number_fields, display_number, join_key, strip_name_suffix,
+)
 
 VERSION = 2
 
@@ -2044,8 +2046,7 @@ class Inventory:
         *,
         bound_by: str,
         skus: "Skus",
-        number: Optional[str],
-        printed_total: Optional[str],
+        number_strategy: str,
         expected_product_line: Optional[str] = None,
         read_disputes: bool = False,
         event: str = "sku_bound",
@@ -2065,16 +2066,22 @@ class Inventory:
         class holds, because `Inventory` and `Skus` are SIBLINGS on `Snapshot`
         (`store/session.py`), not parent and child.
 
-        `number`/`printed_total` ARE THE CALLER'S ANSWER, NOT DERIVED HERE — and so is
-        `read_disputes`, for the identical reason (§4.1: "the dispute test runs in the
-        caller, and bind_sku takes its answer"). §6 names
-        `pipeline/join.catalog_number_fields(game, row.number)` as "the identity number's
-        only source", and that function dispatches on `pipeline/games.py`'s per-game
-        `join_key` strategy — an import `store/` may not make (D63), the same reason
-        `expected_product_line` below is a parameter rather than a lookup this method
-        performs itself. The caller calls that ONE function — "write no second copy" — and
-        this method writes what it is handed, which is what makes it the one writer of the
-        FIELD without being a second copy of the RULE that fills it.
+        `number`/`printed_total` ARE DERIVED HERE, OFF `row.number` ALONE, THROUGH
+        `store/numbers.catalog_number_fields(number_strategy, row.number)` — NEVER FROM A
+        CALLER-SUPPLIED PAIR (review finding, identity-follows-sku.md lane 1, 2026-09-24: a
+        first pass took `number`/`printed_total` as parameters, and a caller could then
+        hand this method any pair at all, including one the SKU row itself disagreed with
+        — `bind_sku(..., number="999", printed_total="999")` on a row whose `Number` cell
+        is `024/132`, accepted, the one field "the SKU owns identity" most needed to
+        protect). `number_strategy` is the caller's answer instead — `games.get(game)
+        ["join_key"]`, resolved by `pipeline/games.py`, which `store/` may not import
+        (D63) — and this method is what turns THAT plus the row's own cell into the pair a
+        card stores; a caller can no longer make it write a number the row does not own,
+        because there is no longer a parameter through which to hand one in.
+        `read_disputes` stays a caller-supplied answer, for the same reason it always was
+        (§4.1: "the dispute test runs in the caller, and bind_sku takes its answer") —
+        `pipeline/join.name_disputes` needs `pipeline/games` too, and unlike the number it
+        has no row of its own to be derived FROM.
 
         `expected_product_line` IS THE CALLER'S RESOLUTION OF `games.get(card.game)
         ["product_line"]` (see `GameMismatch`'s own docstring for why `store/` cannot
@@ -2112,6 +2119,7 @@ class Inventory:
                 f"{sku!r} is a {row.product_line!r} SKU, and this card's game claims "
                 f"{expected_product_line!r}"
             )
+        number, printed_total = catalog_number_fields(number_strategy, row.number)
         restores_to = {"sku": card.sku, "bound_by": card.bound_by}
         card.sku = str(sku)
         card.name = strip_name_suffix(row.product_name)
@@ -2137,8 +2145,7 @@ class Inventory:
         skus: "Skus",
         sku: Optional[str],
         bound_by: Optional[str],
-        number: Optional[str] = None,
-        printed_total: Optional[str] = None,
+        number_strategy: Optional[str] = None,
         expected_product_line: Optional[str] = None,
         read_disputes: bool = False,
         event: str = "sku_unbound",
@@ -2172,6 +2179,11 @@ class Inventory:
         if card is None:
             return None
         if sku:
+            if number_strategy is None:
+                raise ValueError(
+                    "unbind_sku(sku=...) needs number_strategy to re-derive the number "
+                    "off the row's own cell — the same requirement bind_sku makes"
+                )
             check_bound_by(bound_by)
             row = skus.entries.get(str(sku))
             if row is None:
@@ -2185,6 +2197,7 @@ class Inventory:
                     f"{sku!r} is a {row.product_line!r} SKU, and this card's game claims "
                     f"{expected_product_line!r}"
                 )
+            number, printed_total = catalog_number_fields(number_strategy, row.number)
             card.sku = str(sku)
             card.name = strip_name_suffix(row.product_name)
             card.number = number

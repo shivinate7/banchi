@@ -14,17 +14,29 @@ touching the card, the events list, or the `skus` table. `record_identification`
 writes the identity too on a card that has never been bound — the read-side continuity §4.2
 requires.
 
+CASE 11 PROVES A REVIEW FINDING'S FIX (identity-follows-sku.md lane 1, 2026-09-24, HIGH).
+`bind_sku` used to take `number`/`printed_total` as caller-supplied parameters, and a caller
+could hand it ANY pair — `bind_sku(..., number="999", printed_total="999")` on a row whose
+`Number` cell was `024/132`, accepted whole, the one field "the SKU owns identity" most
+needed to protect. RED on the commit this fixed (`d1f48a36`): that call succeeded. GREEN
+after: `number`/`printed_total` are no longer parameters at all — `bind_sku` takes
+`number_strategy` instead and derives both itself, off `row.number`, through
+`store/numbers.catalog_number_fields` — so there is no longer a channel through which a
+caller can hand this method a number the row does not own. Proved two ways: the removed
+kwargs raise `TypeError` (the parameter is GONE, not merely ignored), and the derived number
+is shown to depend only on the row and the strategy, never on anything else a caller might
+wish it were.
+
 NO SQLITE ANYWHERE HERE. `bind_sku`/`unbind_sku`/`record_identification` are pure methods
 over `Inventory`'s in-memory mapping and a `Skus` table built the same way — `store/skus.py`'s
 own `Skus(entries=Rows(Skus.ENTRIES, objects={...}))`, no `Store`, no `mktemp`, no
 `PKMNSCAN_HOME`. This lane changes no data on disk (§11's own line: "no (code only; lane 2's
 press writes the data)"), so nothing here should either.
 
-`number`/`printed_total` come from `pipeline/join.catalog_number_fields`, called HERE and
-handed to `bind_sku` as a parameter — never re-derived inside `store/master.py`, which cannot
-import `pipeline/` at all (D63). This script is not `store/`, so it is free to import
-`pipeline.join` the way every real future caller (lane 2's press, lane 3a's routes, lane 3b's
-CLI writers) will.
+`number_strategy` is `games.get(game)["join_key"]`, resolved HERE and handed to `bind_sku`/
+`unbind_sku` as a parameter — `store/master.py` cannot import `pipeline/games` at all (D63).
+This script is not `store/`, so it is free to import `pipeline.games` the way every real
+future caller (lane 2's press, lane 3a's routes, lane 3b's CLI writers) will.
 
 Every arm is a MEASUREMENT or a REFUSAL, never a restatement of the code, `scripts/
 skus-selftest.py`'s own rule. In `make check` and never in the git hook: it writes nothing to
@@ -41,10 +53,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from pipeline import games  # noqa: E402
-from pipeline.join import catalog_number_fields  # noqa: E402
 from pipeline.skus import row_from_csv  # noqa: E402
 from store import master  # noqa: E402
 from store.master import Card, GameMismatch, Inventory, SkuUnknown  # noqa: E402
+from store.numbers import catalog_number_fields  # noqa: E402
 from store.skus import Skus  # noqa: E402
 
 PASS = 0
@@ -112,10 +124,10 @@ def skus_with(*rows) -> Skus:
     return table
 
 
-def number_fields(game: str, raw_number: str):
-    """`catalog_number_fields`, called here and handed to `bind_sku` — §4.1's own contract,
-    restated by this script's module docstring."""
-    return catalog_number_fields(game, raw_number)
+def strategy_of(game: str) -> str:
+    """`games.get(game)["join_key"]` — what `bind_sku`'s `number_strategy` parameter takes,
+    resolved here because `store/` cannot reach `pipeline/games.py` (D63)."""
+    return games.get(game)["join_key"]
 
 
 def product_line_of(game: str) -> Optional[str]:
@@ -147,10 +159,9 @@ def main() -> int:
     )
     skus = skus_with(pokemon_row)
     inv = new_card(1, game="pokemon")
-    number, printed_total = number_fields("pokemon", "024/132")
     card = inv.bind_sku(
         "1/1", "8001", bound_by="answer", skus=skus,
-        number=number, printed_total=printed_total,
+        number_strategy=strategy_of("pokemon"),
         expected_product_line=product_line_of("pokemon"),
     )
     ok(card is not None, "bind_sku returns the bound card (Pokemon)")
@@ -178,10 +189,9 @@ def main() -> int:
     )
     skus2 = skus_with(rift_row)
     inv2 = new_card(2, game="riftbound")
-    number2, printed_total2 = number_fields("riftbound", "001/166")
     card2 = inv2.bind_sku(
         "1/2", "9001", bound_by="join", skus=skus2,
-        number=number2, printed_total=printed_total2,
+        number_strategy=strategy_of("riftbound"),
         expected_product_line=product_line_of("riftbound"),
     )
     ok((card2.number, card2.printed_total) == ("001/166", None),
@@ -197,10 +207,9 @@ def main() -> int:
     )
     skus3 = skus_with(token_row)
     inv3 = new_card(3, game="riftbound")
-    number3, printed_total3 = number_fields("riftbound", "T02 // T03")
     card3 = inv3.bind_sku(
         "1/3", "9002", bound_by="group_answer", skus=skus3,
-        number=number3, printed_total=printed_total3,
+        number_strategy=strategy_of("riftbound"),
         expected_product_line=product_line_of("riftbound"),
     )
     ok((card3.number, card3.printed_total) == ("T02 // T03", None),
@@ -215,7 +224,7 @@ def main() -> int:
     try:
         inv4.bind_sku(
             "1/4", "no-such-sku", bound_by="answer", skus=skus,
-            number="1", printed_total="1",
+            number_strategy=strategy_of("pokemon"),
         )
     except SkuUnknown:
         threw = True
@@ -230,7 +239,7 @@ def main() -> int:
     try:
         inv5.bind_sku(
             "1/5", "9001", bound_by="answer", skus=skus2,
-            number="1", printed_total=None,
+            number_strategy=strategy_of("riftbound"),
             expected_product_line=product_line_of("pokemon"),
         )
     except GameMismatch:
@@ -243,7 +252,7 @@ def main() -> int:
     inv5b = new_card(50, game="misc")  # `misc`'s product_line is None — no claim to violate
     card5b = inv5b.bind_sku(
         "1/50", "9001", bound_by="answer", skus=skus2,
-        number=number2, printed_total=printed_total2,
+        number_strategy=strategy_of("riftbound"),
         expected_product_line=product_line_of("misc"),
     )
     ok(card5b is not None, "a falsy expected_product_line (misc) never refuses")
@@ -254,7 +263,7 @@ def main() -> int:
     try:
         inv6.bind_sku(
             "1/6", "8001", bound_by="typo_act", skus=skus,
-            number="1", printed_total="1",
+            number_strategy=strategy_of("pokemon"),
         )
     except master.UnknownBoundBy:
         threw6 = True
@@ -264,7 +273,7 @@ def main() -> int:
     inv7 = new_card(7, game="pokemon")
     first = inv7.bind_sku(
         "1/7", "8001", bound_by="answer", skus=skus,
-        number="024", printed_total="132", read_disputes=True,
+        number_strategy=strategy_of("pokemon"), read_disputes=True,
     )
     snapshot_after_first = {
         k: v for k, v in dict(first.__dict__).items() if k != "bound_at"
@@ -276,7 +285,7 @@ def main() -> int:
     skus7 = skus_with(pokemon_row, second_row)
     second = inv7.bind_sku(
         "1/7", "8002", bound_by="correction", skus=skus7,
-        number="025", printed_total="132", read_disputes=False,
+        number_strategy=strategy_of("pokemon"), read_disputes=False,
     )
     ok(second.sku == "8002" and second.name == "Pikachu",
        "the rebind overwrote the identity", (second.sku, second.name))
@@ -285,7 +294,7 @@ def main() -> int:
        "the rebind's own history line names the FIRST binding to restore to", restores_to)
     restored = inv7.unbind_sku(
         "1/7", skus=skus7, sku=restores_to["sku"], bound_by=restores_to["bound_by"],
-        number="024", printed_total="132", read_disputes=True,
+        number_strategy=strategy_of("pokemon"), read_disputes=True,
     )
     restored_fields = {
         k: v for k, v in dict(restored.__dict__).items() if k != "bound_at"
@@ -300,7 +309,7 @@ def main() -> int:
     inv8 = new_card(8, game="pokemon")
     inv8.bind_sku(
         "1/8", "8001", bound_by="answer", skus=skus,
-        number="024", printed_total="132",
+        number_strategy=strategy_of("pokemon"),
     )
     cleared = inv8.unbind_sku("1/8", skus=skus, sku=None, bound_by=None)
     ok(cleared.sku is None and cleared.identity_source == master.IDENTITY_READ,
@@ -328,7 +337,7 @@ def main() -> int:
     inv10 = new_card(10, game="pokemon")
     inv10.bind_sku(
         "1/10", "8001", bound_by="answer", skus=skus,
-        number="024", printed_total="132",
+        number_strategy=strategy_of("pokemon"),
     )
     bound_before = dict(inv10.cards["1/10"].__dict__)
     inv10.record_identification(
@@ -346,6 +355,41 @@ def main() -> int:
     ok(card10.sku == bound_before["sku"] and card10.identity_source == master.IDENTITY_SKU,
        "the binding itself is untouched")
     ok(card10.read_disputes is True, "read_disputes is the caller's own answer, written")
+
+    # ------- case 11: the review finding — a caller cannot make bind_sku write a wrong
+    # number (identity-follows-sku.md lane 1, 2026-09-24, HIGH). RED on d1f48a36, GREEN here.
+    inv11 = new_card(11, game="pokemon")
+    threw11 = False
+    try:
+        inv11.bind_sku(  # the pre-fix signature — this must not even construct a call
+            "1/11", "8001", bound_by="answer", skus=skus,
+            number="999", printed_total="999",  # type: ignore[call-arg]
+        )
+    except TypeError:
+        threw11 = True
+    ok(threw11,
+       "bind_sku no longer accepts number=/printed_total= at all — TypeError, not a "
+       "silent injection channel")
+    ok("1/11" not in inv11.cards or inv11.cards["1/11"].sku is None,
+       "and nothing was bound as a side effect of the attempted call")
+
+    # The one channel bind_sku still exposes is `number_strategy` — proved to only ever
+    # select AMONG the row's own two readings (split or verbatim), never to inject a third
+    # string. Handing the WRONG strategy for a game still derives from the row, never from
+    # thin air: the Pokemon row's cell under `printed_code` (Riftbound/One Piece's own
+    # strategy) comes back verbatim rather than split, but it is still `row.number`, byte
+    # for byte — there is no strategy value that reaches "999".
+    inv11b = new_card(112, game="pokemon")
+    wrong_strategy = inv11b.bind_sku(
+        "1/112", "8001", bound_by="answer", skus=skus, number_strategy="printed_code",
+    )
+    ok(wrong_strategy.number == "024/132" and wrong_strategy.printed_total is None,
+       "even the WRONG strategy only ever reads row.number — never an arbitrary string",
+       (wrong_strategy.number, wrong_strategy.printed_total))
+    ok(catalog_number_fields("printed_code", pokemon_row["Number"])
+       == (wrong_strategy.number, wrong_strategy.printed_total),
+       "and it matches store/numbers.catalog_number_fields's own answer for that strategy,"
+       " the ONE dispatch (no second copy)")
 
     print("\nidentity-store self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))

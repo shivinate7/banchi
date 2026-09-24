@@ -260,9 +260,11 @@ next fill plus `cards identity --write` binds it.
 
 - `name` holds the table's `product_name` verbatim. Screens draw it through one composer. The
   composer drops the trailing collector number TCGplayer embeds in some Pokemon names (`Stufful
-  - 111/132`). The rule exists as `pipeline/join._NAME_NUMBER_SUFFIX`. It moves to the leaf
-  module `store/numbers.py`, beside `join_key`, `display_number`, `strip_set_code` and
-  `split_catalog_number`. **Measured: 150 of the 3,502 SKU-bound cards carry such a name.** A
+  - 111/132`). The rule now lives at `store/numbers.strip_name_suffix`, over the pattern
+  `store/numbers.NAME_NUMBER_SUFFIX` — moved from the leaf module's own doorstep, beside
+  `join_key`, `display_number`, `strip_set_code` and `split_catalog_number`.
+  `pipeline/join.name_index_key` imports the same pattern rather than keeping a second copy.
+  **Measured: 150 of the 3,502 SKU-bound cards carry such a name.** A
   trailing qualifier such as `(Alternate Art)` stays on screen, because it names a different
   product (section 2). 91 SKU-bound cards carry one.
 - `number` and `printed_total` hold `pipeline/join.catalog_number_fields(game, number)`.
@@ -304,6 +306,22 @@ previous binding for an undo. `Inventory.set_state` loses its `sku`, `condition`
 checks this and reads 15 files, 0 imports. So the dispute test runs in the caller, and
 `bind_sku` takes its answer. A join caller refuses to bind a card whose read disputes the row.
 This never fires after D253, which queues such a card. It is counted and reported if it fires.
+
+**Lane 1 review correction, 2026-09-24.** The first pass took `number`/`printed_total` as
+caller-supplied parameters, on the reasoning above. `store/` cannot import
+`pipeline/games.py`, so it could not run the strategy dispatch itself. That let a caller hand
+`bind_sku` any pair. `bind_sku(..., number="999", printed_total="999")`, on a row whose
+`Number` cell was `024/132`, was accepted whole. The row disagreed and the write went
+through anyway. The dispatch moved to `store/numbers.py`. It is keyed on the STRATEGY NAME
+now, never the game. `pipeline/join.catalog_number_fields(game, raw)` is now a two-line
+delegator through `games.get(game)["join_key"]`. `bind_sku`/`unbind_sku` take
+`number_strategy` in place of `number`/`printed_total`. Both derive from `row.number`
+themselves. A caller can no longer make this method write a value the row does not own.
+There is no parameter left to hand one through. `read_disputes` keeps its original shape: it
+has no row of its own to derive from, so it stays the caller's answer.
+`scripts/identity-store-selftest.py`'s case 11 proves it two ways. The retired kwargs raise
+`TypeError`. The wrong `number_strategy` for a game still only ever reads `row.number`,
+never an arbitrary string.
 
 ### 4.2 Every writer that sets a SKU or fills the table, and what it does after
 
@@ -757,7 +775,7 @@ there. That is a schema step on open, or a press.
 | lane | files | depends on | store | screens | done when |
 |---|---|---|---|---|---|
 | 0. The SKU table | `store/db.py`, `store/skus.py`, `pipeline/skus.py`, `cli/cmd_skus.py`, `cli/__main__.py`, `CLAUDE.md` (the new command's line), `scripts/skus-selftest.py` | none | YES: schema 11 on open (the table, its views, `cards.identity_source`), and `skus adopt --write` | no | the self-test, over the four committed fixtures, proves: rows equal distinct ids; a second adopt changes nothing; an older file never overwrites newer facts; a changed fact writes one event and keeps the row; `store/skus.py` has no delete path. `skus adopt` on a copy of the store previews 12,052 SKUs, 916 of 916 card SKUs, 54 of 54 listing-only SKUs, and 0 conflicts. A version 10 copy opens to 11 with every card, listing and queue row unchanged. The fill of one Riftbound export is timed |
-| 1. The one writer | `store/master.py`, `store/numbers.py`, `scripts/identity-store-selftest.py` | 0 | no (code only; lane 2's press writes the data) | no | the self-test proves `bind_sku` writes identity equal to a table row for Pokemon, Riftbound and a token cell `T01 // T02`, and `unbind_sku` round-trips it. It refuses `sku_unknown` and `game_mismatch` and writes nothing. `record_identification` writes only `read_*` on a bound card. `set_state` takes no identity field. `make harness` is green |
+| 1. The one writer | `store/master.py`, `store/numbers.py`, `pipeline/join.py` (the review correction above: `catalog_number_fields`'s dispatch and `_NAME_NUMBER_SUFFIX` moved to `store/numbers.py`; `pipeline/join.py` keeps its public names, now delegating), `scripts/identity-store-selftest.py` | 0 | no (code only; lane 2's press writes the data) | no | the self-test proves `bind_sku` writes identity equal to a table row for Pokemon, Riftbound and a token cell `T01 // T02`, and `unbind_sku` round-trips it. It refuses `sku_unknown` and `game_mismatch` and writes nothing. `record_identification` writes only `read_*` on a bound card. `set_state` takes no identity field. A caller cannot make `bind_sku` write a number the SKU row does not own (case 11). `make harness` is green |
 | 2. The press, the merged report, the replay | `cli/cmd_cards.py`, `+pipeline/identity_binding.py`, `+scripts/identity-replay.py`, `pipeline/sku_name_contradictions.py`, `pipeline/sku_number_contradictions.py`, `cli/cmd_sku_name_contradictions.py`, `cli/cmd_sku_contradictions.py`, `scripts/sku-name-contradictions-selftest.py`, `scripts/sku-number-contradictions-selftest.py`, `pipeline/routing.py`, `app/src/ReviewQueue.tsx` (the new reason's label only) | 0, 1 | YES: `cards identity --write` is the data migration | YES: the one label on `#/review`, at 1440, 820 and 390, light and dark | the self-tests prove every class and its order, the human-bound exclusion, and both report halves. The replay on a copy prints section 7.2 and passes all six asserts. After `--write` on a second copy, the replay reads 52 residue and zero identity moves outside T3 and T4u. The FTS trigger cost of the write is timed. The `reason codes` and `reason emissions` rows of `make docs-audit` are green |
 | 3a. The server | `server/capture_server.py`, `server/pipeline_routes.py`, `harness/tests/t7_store_and_seams.py` | 0, 1, 2 | no (code only) | no | T7 proves: each server writer in 4.2 upserts, then leaves identity equal to its table row and `read_*` untouched. Both fetches fill the table. The confirm route and its undo work. A `listing_disputed` answer routes to confirm or to the correction. D252's checks still pass, with the four real history-line shapes as fixtures. `make harness` is green |
 | 3b. The CLI writers | `cli/cmd_emit.py`, `cli/cmd_identify.py`, `cli/cmd_join.py`, `cli/cmd_reconcile.py`, `codes/scan.py`, `+scripts/identity-cli-selftest.py` | 0, 1 | no (code only) | no | the self-test proves: an emit binds through `bind_sku` and upserts first; a re-identification writes only `read_*` on a bound card; `--export` and `reconcile --live` fill the table. `harness/tests/t3_join_coverage.py` stays green |
