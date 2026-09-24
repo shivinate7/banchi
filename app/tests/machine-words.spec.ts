@@ -86,9 +86,19 @@ async function sweep(
   }
 
   function report(route: string, term: string, sample: string): void {
-    const listed = allow[route]?.[term]
-    if (listed !== undefined) {
+    if (allow[route]?.[term] !== undefined) {
       used.add(key(route, term))
+      return
+    }
+    // A WILDCARD ENTRY, keyed `"*"`, for a hit whose ROUTE is seed-random rather than the
+    // hit itself: `sealEveryTest({ cards: 122 })`'s card data is not per-test-seeded, so
+    // which populated route a shared component (`CardLocations`'s Pushed/Staged pair)
+    // happens to render on can move between runs and between workers — measured, the same
+    // instability `money-face-allow.json`'s own header already argues for its route-only
+    // keys. A route-pinned entry for a term that actually moves would flake as "stale" on
+    // a run where it landed somewhere else; `"*"` says the term is allowed on ANY route.
+    if (allow['*']?.[term] !== undefined) {
+      used.add(key('*', term))
       return
     }
     problems.push(
@@ -143,7 +153,7 @@ test('no route draws a machine word or a request path where the owner reads it',
   const allRoutes = new Set([...wideRoutes, ...phoneRoutesList])
   for (const [route, terms] of Object.entries(ALLOW)) {
     for (const [term, lane] of Object.entries(terms)) {
-      if (!allRoutes.has(route)) {
+      if (route !== '*' && !allRoutes.has(route)) {
         problems.push(`${route} ${term}: pending for lane ${lane}, but that route no longer exists. Delete the entry.`)
         continue
       }
