@@ -5527,9 +5527,9 @@ COMPONENTS = [
                                             "`ConfirmSheet`, each with one header and one Close, "
                                             "focus kept inside and given back, Escape for the top "
                                             "one only, portalled to <body>. `SheetHost` draws the "
-                                            "sheet a registered kind opens, through "
-                                            "`sheetChannel`. Seeded from the local sheet on the "
-                                            "code-card screen.",
+                                            "sheet that `openSheet` opened, read through "
+                                            "`useOpenSheet` (kit/sheets.ts). Seeded from the local "
+                                            "sheet on the code-card screen.",
                                     "governed_by": ["D94", "D95", "D118"]},
             # ---- the shell ----
             "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens, then base, "
@@ -8228,7 +8228,8 @@ COMPONENTS = [
                         "found the specimens had never drawn the rule at all: `.kit-poslabel` set "
                         "`--pos-slot` without the `font-size` every real site pairs with it, so "
                         "the em-relative re-rank clamped to the same 11px a live path gets.",
-                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119"],
+                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119",
+                                "D-notice-detail", "D-one-page-width"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
                         "2026-09-05. DEBT5 recorded the departed row as "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "

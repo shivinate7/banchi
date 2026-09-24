@@ -350,7 +350,7 @@
   --bn-danger-tint: rgba(255, 92, 92, 0.14);
   --bn-money: #eef0f4;
 
-  --bn-pill-ink-accent: var(--bn-accent);
+  --bn-pill-ink-accent: var(--bn-accent-hover);  /* a pill on an accent-tinted row is two tints deep */
   --bn-pill-ink-ok: var(--bn-ok);
   --bn-pill-ink-warn: var(--bn-warn);
   --bn-pill-ink-danger: var(--bn-danger);

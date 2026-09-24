@@ -822,7 +822,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 
 /* "WHAT THE SERVER SAID" (D-notice-detail): the machine's own words, one press away and never in
    plain view. On its own line under the sentence, indented to the text's edge. */
-.bn-notice-said { flex: 1 0 100%; order: 3; padding-left: calc(var(--bn-4) + var(--bn-3)); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.bn-notice-said { flex: 1 0 100%; order: 3; padding-left: calc(var(--bn-4) + var(--bn-3)); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 .bn-notice-said > summary {
   display: inline-flex;
   align-items: center;
@@ -1363,6 +1363,15 @@ img.bn-crop[data-cropped='true'] {
      whether one import file is written or two. */
   .bn-check { min-height: var(--bn-control-h-sm); }
   .bn-toast-action { height: var(--bn-control-h-sm); }
+  /* "What the server said" is a control a thumb opens (D-notice-detail). */
+  .bn-notice-said > summary { min-height: var(--bn-control-h-sm); }
+  /* A name that opens a product or an order is pressed like any other control. The link is
+     kit-data's (kit/data.css); its floor is the kit's, here, with the others (D117). */
+  .bn-datalink { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
+  /* Two more of kit-data's controls, found by `phone.spec.ts` once `#/gallery` drew them: the
+     filtered count's Clear (18px) and the search field's Find (36px). */
+  .bn-filtercount-clear { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
+  .search-field-submit { min-height: var(--bn-control-h-sm); }
   .bn-toast-close { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); }
   /* an icon-only button is square off `--btn-h`, but `.bn-btn` can still be squeezed narrower by
      a flex parent — the drawer's and the palette's were 36px wide against a 42px height */

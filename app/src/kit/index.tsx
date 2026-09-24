@@ -657,14 +657,17 @@ export function applyTheme(theme: Theme): void {
    is how a new screen inherits every other screen's frame (D-one-page-width). */
 export { Page, PageRouteContext, usePageRoute, Verdict, Toolbar, StatusSlot, Loading, Section } from './Page'
 export type { PageProps, PageRoute } from './Page'
-export { Sheet, Modal, Popover, ConfirmSheet, SheetHost, sheetChannel, useFocusTrap, useReturnFocus } from './overlay'
-export type { HostedSheet } from './overlay'
+export { Sheet, Modal, Popover, ConfirmSheet, SheetHost, useFocusTrap, useReturnFocus } from './overlay'
 
-/* ---- kit-data's primitives -----------------------------------------------------------------
-   TODO(kit-data integration): the wave-0 contract puts these in `./data` and `./sheets`, built
-   in parallel on `ux/kit-data`. Neither file exists on this branch's base, so the re-exports
-   are written here and held commented out. The orchestrator enables them when the two branches
-   meet, and wires `openSheet` and `closeSheet` onto `sheetChannel` (kit/overlay.tsx).
-export { Money, Count, FilterCount, Select, FilterChips, SortControl, StatusBadge, STATUS_TONES, CardLine, CardThumb, BoxLabel, Sep, ProductLink, OrderLink, Location } from './data'
-export { registerSheet, openSheet, closeSheet } from './sheets'
-*/
+/* ---- the data primitives and the sheet registry (kit-data) ---------------------------------
+   Screens import these from here, never from `./data` or `./sheets` directly. */
+export {
+  Money, Count, FilterCount, Select, FilterChips, SortControl, StatusBadge, STATUS_TONES, CardLine, CardThumb, BoxLabel, Sep,
+  ProductLink, OrderLink, Location, boxesMostRecentFirst,
+} from './data'
+export type {
+  BoxRecency, StatusKind, StatusTone, CardThumbSize, PickOption, FilterFacet, FilterValue, SortOption, SortValue,
+} from './data'
+export { registerSheet, openSheet, closeSheet, useOpenSheet, sheetHref, hasSheet } from './sheets'
+export type { SheetProps, SheetKind, OpenSheet } from './sheets'
+export { matchQuery } from './match'

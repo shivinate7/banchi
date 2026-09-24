@@ -329,3 +329,234 @@ test('bn-truncate clips a name too long for its row (S13)', async ({ page }) => 
      item's automatic minimum size (kit.css's own note on this rule). */
   expect(scrollWidth).toBeGreaterThan(clientWidth)
 })
+
+/* ================================================================================================
+   THE KIT FRAME (the UX overhaul's wave 0, 2026-09-23). `#/gallery` is the first screen built on
+   `Page`, and the one page that draws every part of the frame, so the frame is asserted here:
+   one width, one top gap, one h1 (D-one-page-width), the notice disclosure (D-notice-detail), a
+   status slot that holds its space (D118), overlays that keep and give back focus, the contrast
+   floors, reduced motion, keycaps on a touch screen, and the toggle focus ring. Each case went
+   red on its own defect before it was kept (a `.bak` mutation per case, recorded in the PR).
+   ============================================================================================== */
+
+const WIDTHS: readonly (readonly [number, number])[] = [
+  [1440, 900],
+  [820, 1180],
+  [720, 900],
+  [390, 844],
+]
+
+/** A token's value as the browser resolves it, as a color. */
+async function tokenColor(page: import('@playwright/test').Page, token: string): Promise<string> {
+  return page.evaluate((t) => {
+    const el = document.createElement('span')
+    el.style.color = `var(${t})`
+    document.body.append(el)
+    const c = getComputedStyle(el).color
+    el.remove()
+    return c
+  }, token)
+}
+
+test('the kit is a Page: one h1, one width, one top gap, no sideways scroll, at every width', async ({ page }) => {
+  for (const [width, height] of WIDTHS) {
+    await page.setViewportSize({ width, height })
+    await page.waitForTimeout(100)
+    const m = await page.evaluate(() => {
+      const main = document.querySelector<HTMLElement>('main[data-bn-page]')
+      const h1 = main?.querySelector('h1')
+      const probe = document.createElement('div')
+      probe.style.height = 'var(--bn-page-top)'
+      document.body.append(probe)
+      const topPx = probe.getBoundingClientRect().height
+      probe.remove()
+      const pageW = document.createElement('div')
+      pageW.style.width = 'var(--bn-page-w)'
+      document.body.append(pageW)
+      const wPx = getComputedStyle(pageW).width
+      pageW.remove()
+      return {
+        pages: document.querySelectorAll('[data-bn-page]').length,
+        h1s: document.querySelectorAll('main h1').length,
+        h1: h1?.textContent?.trim() ?? null,
+        maxWidth: main ? getComputedStyle(main).maxWidth : null,
+        wPx,
+        gap: main && h1 ? Math.round(h1.getBoundingClientRect().top - main.getBoundingClientRect().top) : null,
+        topPx: Math.round(topPx),
+        sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }
+    })
+    expect(m.pages, `${width}: one page`).toBe(1)
+    expect(m.h1s, `${width}: one h1`).toBe(1)
+    expect(m.h1, `${width}: the h1 is the title`).toBe('Kit')
+    expect(m.maxWidth, `${width}: the page reads --bn-page-w`).toBe(m.wPx)
+    expect(m.gap, `${width}: the title sits --bn-page-top below the page's top`).toBe(m.topPx)
+    expect(m.sideways, `${width}: nothing scrolls sideways`).toBeLessThanOrEqual(0)
+  }
+})
+
+test('a notice keeps the machine\'s words behind "What the server said" (D-notice-detail)', async ({ page }) => {
+  const notice = page.locator('[data-specimen="notice-said"] .bn-notice')
+  const code = notice.locator('.bn-notice-code')
+  const said = notice.locator('details.bn-notice-said')
+  await expect(said).not.toHaveAttribute('open')
+  await expect(code).toBeHidden()
+  await expect(notice).not.toContainText('sku_not_a_candidate', { useInnerText: true })
+  await said.locator('summary').click()
+  await expect(code).toBeVisible()
+  await expect(code).toHaveText('sku_not_a_candidate')
+})
+
+test('the status slot holds its space: an answer moves nothing below it (D118)', async ({ page }) => {
+  const spec = page.locator('[data-specimen="status-slot"]')
+  const under = spec.locator('[data-kit-under-slot]')
+  await spec.scrollIntoViewIfNeeded()
+  const top = () => under.evaluate((el) => Math.round(el.getBoundingClientRect().top + window.scrollY))
+  const before = await top()
+  await spec.getByRole('button', { name: 'Press for an answer' }).click()
+  await expect(spec.locator('.bn-notice')).toBeVisible()
+  const answered = await top()
+  await spec.locator('summary').click()
+  await expect(spec.locator('.bn-notice-code')).toBeVisible()
+  const opened = await top()
+  expect(answered, 'the answer arriving moved the row under the slot').toBe(before)
+  expect(opened, 'opening "What the server said" moved the row under the slot').toBe(before)
+})
+
+for (const kind of ['sheet', 'modal', 'confirm'] as const) {
+  test(`a ${kind} keeps focus inside, closes on Escape, and gives focus back`, async ({ page }) => {
+    const opener = page.locator(`[data-kit-open="${kind}"]`)
+    await opener.scrollIntoViewIfNeeded()
+    await opener.focus()
+    await page.keyboard.press('Enter')
+    const dialog = page.locator(`[data-bn-overlay="${kind === 'sheet' ? 'sheet' : 'modal'}"]`)
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toHaveAttribute('aria-modal', 'true')
+    await expect(dialog.locator('h2')).toHaveCount(1)
+    await expect(dialog.getByRole('button', { name: 'Close' })).toHaveCount(1)
+    await expect.poll(() => dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab')
+      const inside = await dialog.evaluate((el) => el.contains(document.activeElement))
+      expect(inside, `Tab ${i + 1} left the ${kind}`).toBe(true)
+    }
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(opener).toBeFocused()
+  })
+}
+
+test('a confirm puts first focus on its verb, and a popover closes on Escape and gives focus back', async ({ page }) => {
+  const confirm = page.locator('[data-kit-open="confirm"]')
+  await confirm.scrollIntoViewIfNeeded()
+  await confirm.click()
+  await expect(page.locator('[data-bn-overlay="modal"]').getByRole('button', { name: 'Delete 3 cards' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-bn-overlay="modal"]')).toHaveCount(0)
+
+  const opener = page.locator('[data-kit-open="popover"]')
+  await opener.click()
+  const pop = page.locator('[data-bn-overlay="popover"]')
+  await expect(pop).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(pop).toHaveCount(0)
+  await expect(opener).toBeFocused()
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`the lightest ink, the pill inks and the field edge reach their floors (${theme})`, async ({ page }) => {
+    await page.evaluate((t) => {
+      if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
+      else document.documentElement.removeAttribute('data-theme')
+    }, theme)
+    const r = await page.evaluate(() => {
+      const parse = (c: string) => {
+        const p = (c.match(/[\d.]+/g) ?? []).map(Number)
+        return { rgb: p.slice(0, 3), a: p.length > 3 ? (p[3] ?? 1) : 1 }
+      }
+      const lum = (rgb: number[]) => {
+        const f = (v: number) => {
+          const x = v / 255
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+        }
+        return 0.2126 * f(rgb[0] ?? 0) + 0.7152 * f(rgb[1] ?? 0) + 0.0722 * f(rgb[2] ?? 0)
+      }
+      const ratio = (a: number[], b: number[]) => {
+        const x = lum(a)
+        const y = lum(b)
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+      }
+      const over = (top: { rgb: number[]; a: number }, bot: number[]) => top.rgb.map((v, i) => v * top.a + (bot[i] ?? 0) * (1 - top.a))
+      const probe = (css: string) => {
+        const el = document.createElement('span')
+        el.style.color = css
+        document.body.append(el)
+        const c = getComputedStyle(el).color
+        el.remove()
+        return parse(c)
+      }
+      const grounds = ['--bn-bg', '--bn-surface', '--bn-surface-2'].map((t) => probe(`var(${t})`).rgb)
+      const ink4 = probe('var(--bn-ink-4)').rgb
+      const edge = probe('var(--bn-field-edge)').rgb
+      const pills = ['accent', 'ok', 'warn', 'danger', 'live'].map((tone) => {
+        const ink = probe(`var(--bn-pill-ink-${tone})`).rgb
+        const tint = probe(`var(--bn-${tone}-tint)`)
+        return { tone, worst: Math.min(...grounds.map((g) => ratio(ink, over(tint, g)))) }
+      })
+      return {
+        ink4: Math.min(...grounds.slice(0, 2).map((g) => ratio(ink4, g))),
+        edge: Math.min(...grounds.slice(0, 2).map((g) => ratio(edge, g))),
+        pills,
+      }
+    })
+    expect(r.ink4, 'ink-4 on the page and the surface').toBeGreaterThanOrEqual(4.5)
+    expect(r.edge, 'a field edge on the page and the surface').toBeGreaterThanOrEqual(3)
+    for (const pill of r.pills) expect(pill.worst, `the ${pill.tone} pill's word on its tint`).toBeGreaterThanOrEqual(4.5)
+    /* and the kit reads them: a field's edge and a pill's word ARE the tokens, not a copy */
+    /* retried: a theme flip eases every border and ink over a beat (base.css) */
+    const field = page.locator('[data-kit-section="fields"] .bn-input').first()
+    await expect(field).toHaveCSS('border-top-color', await tokenColor(page, '--bn-field-edge'))
+    const okPill = page.locator('[data-kit-section="pills"] .bn-pill-ok').first()
+    await expect(okPill).toHaveCSS('color', await tokenColor(page, '--bn-pill-ink-ok'))
+  })
+}
+
+test.describe('under reduced motion', () => {
+  /* `emulateMedia` and not `test.use`, which this Playwright's fixture types do not accept for
+     `reducedMotion` (brand.spec.ts says the same, and there it used a context of its own). */
+  test('the shimmer and the live dot stop, and nothing moves faster (UX-125)', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const shimmer = await page.locator('.bn-skeleton').first().evaluate((el) => getComputedStyle(el, '::after').animationIterationCount)
+    const dot = await page.locator('.bn-dot-live').first().evaluate((el) => getComputedStyle(el).animationIterationCount)
+    expect(shimmer, 'the skeleton shimmer still loops').toBe('1')
+    expect(dot, 'the live dot still pulses').toBe('1')
+  })
+})
+
+test.describe('on a touch screen', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
+
+  test('every keycap hides, and the row keycap a finger lands on stays (UX-040)', async ({ page }) => {
+    const total = await page.locator('main .bn-kbd:not(.bn-kbd-lg)').count()
+    const shown = await page.evaluate(
+      () => Array.from(document.querySelectorAll<HTMLElement>('main .bn-kbd:not(.bn-kbd-lg)')).filter((el) => el.getClientRects().length > 0).length,
+    )
+    expect(total, 'the sheet draws keycaps to hide').toBeGreaterThan(0)
+    expect(shown, 'keycaps still drawn on a touch screen').toBe(0)
+  })
+})
+
+test('every toggle shows the focus ring, whatever outline it wears (UX-100)', async ({ page }) => {
+  const toolbar = page.locator('[data-specimen="toolbar"]')
+  await toolbar.scrollIntoViewIfNeeded()
+  /* the shape Shipping's dashed lane chip has: a one-class outline of its own, declared after
+     base.css, which outranked the ring by source order before the toggle floor existed */
+  await page.addStyleTag({ content: '.kit-test-dashed { outline: 1.5px dashed red; outline-offset: -1.5px; }' })
+  const chip = toolbar.locator('.bn-chip').first()
+  await chip.evaluate((el) => el.classList.add('kit-test-dashed'))
+  await toolbar.locator('input').focus()
+  await page.keyboard.press('Tab')
+  await expect(chip).toBeFocused()
+  await expect(chip).toHaveCSS('outline-style', 'solid')
+  await expect(chip).toHaveCSS('outline-width', '2px')
+})

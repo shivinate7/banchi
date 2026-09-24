@@ -8,11 +8,12 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
   Button, Chip, ConfirmSheet, EmptyState, Icon, Kbd, Loading, Lockup, Logo, Modal, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
-  Section as PageSection, Segmented, Sheet, SheetHost, Stat, StatusSlot, Toolbar, Verdict, sheetChannel, VARIANTS as LOGO_VARIANTS,
+  Section as PageSection, Segmented, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
 import { MARKS } from './kit/markPalettes'
 import { ICON_MEANINGS, ICON_NAMES } from './kit/Icon'
+import { DataSpecimens } from './kit/data.specimens'
 import './Gallery.css'
 
 /* THE KIT — every primitive Banchi is built from, on one page, so the tokens are looked at
@@ -234,6 +235,7 @@ const SECTIONS: readonly { id: string; label: string; group: string }[] = [
   { id: 'skeleton', label: 'Skeleton & progress', group: 'Primitives' },
   { id: 'data', label: 'Data', group: 'Primitives' },
   { id: 'surfaces', label: 'Surfaces & menu', group: 'Primitives' },
+  { id: 'data-kit', label: 'Money, filters & links', group: 'Primitives' },
   { id: 'pull-confirm', label: 'Pull-confirm', group: 'Screen pieces' },
   { id: 'position', label: 'Position bar', group: 'Screen pieces' },
   { id: 'position-label', label: 'Position label', group: 'Screen pieces' },
@@ -433,18 +435,9 @@ function OverlaySpecimens() {
   const [confirm, setConfirm] = useState(false)
   const [pop, setPop] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
-  const hosted = () =>
-    sheetChannel.show({
-      key: 'specimen',
-      render: () => (
-        <Sheet open onClose={() => sheetChannel.show(null)} title="A registered sheet" icon="layers">
-          <p className="bn-read">Drawn by the one sheet host the shell mounts.</p>
-        </Sheet>
-      ),
-    })
   return (
     <div className="kit-grid">
-      <Spec name="overlays" label="sheet, modal, confirm, popover, host" wide>
+      <Spec name="overlays" label="sheet, modal, confirm, popover" wide>
         <div className="kit-row kit-row-wrap">
           <Button onClick={() => setSheet(true)} data-kit-open="sheet">
             Open a sheet
@@ -457,9 +450,6 @@ function OverlaySpecimens() {
           </Button>
           <Button ref={anchor} iconRight="chevronDown" onClick={() => setPop((v) => !v)} aria-expanded={pop} data-kit-open="popover">
             Open a popover
-          </Button>
-          <Button onClick={hosted} data-kit-open="host">
-            Open through the host
           </Button>
         </div>
         <Sheet
@@ -501,9 +491,6 @@ function OverlaySpecimens() {
     </div>
   )
 }
-
-/* TODO(kit-data integration): kit-data's `data.specimens.tsx` mounts here, under its own
-   section, once `ux/kit-data` and this branch meet. Its file does not exist on this base. */
 
 function useActiveSection(): string | null {
   const [active, setActive] = useState<string | null>(null)
@@ -1284,6 +1271,10 @@ export function Gallery() {
             </div>
           </Section>
 
+          <Section id="data-kit" title="Money, filters & links" lede="The primitives every list is built from: money, counts, dates, filters, sort, and the links that open a product or an order.">
+            <DataSpecimens />
+          </Section>
+
           {/* ------------------------------------------------------------ screen pieces */}
           <Section id="pull-confirm" title="Pull-confirm" lede="The one solid fill the Fulfiller ever sees. Three states, and the owner-side key hint.">
             <div className="kit-stack kit-stack-narrow">
@@ -1408,7 +1399,6 @@ export function Gallery() {
           </Section>
         </div>
       </div>
-      <SheetHost />
     </Page>
   )
 }

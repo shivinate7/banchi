@@ -83,7 +83,7 @@ PILL INKS                       a tone's word on that tone's tint, at 4.5:1 over
 --bn-pill-ink-ok                #11733a
 --bn-pill-ink-warn              #a14b09
 --bn-pill-ink-live              #b33020
---bn-pill-ink-accent            = --bn-accent-hover light, = --bn-accent dark
+--bn-pill-ink-accent            = --bn-accent-hover in both themes: darker in light, lighter in dark
 --bn-pill-ink-danger            = --bn-danger in both themes
 
 ELEVATION                       (three steps, each a hairline ring plus a shadow, so a panel

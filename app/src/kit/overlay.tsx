@@ -1,8 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import type { ReactNode, RefObject } from 'react'
+import type { ComponentType, ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { Button, useLeave } from './index'
+import { closeSheet, useOpenSheet } from './sheets'
 
 /* ONE SHEET, ONE MODAL, ONE POPOVER (UX-057, UX-090, UX-091).
  *
@@ -18,7 +19,7 @@ import { Button, useLeave } from './index'
  *   - PORTALLED TO <body>: `main.bn-page` animates a transform, and a transformed ancestor is
  *     the containing block for a fixed box, so a sheet drawn inline hangs off the page column.
  *
- * `SheetHost` is the one place a registered sheet is drawn (kit-data's `openSheet`). */
+ * `SheetHost` is the one place a registered sheet is drawn (`openSheet`, kit/sheets.ts). */
 
 const FOCUSABLE =
   'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), iframe, summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'
@@ -385,36 +386,22 @@ export function Popover({
 }
 
 /* ---- the sheet host -----------------------------------------------------------------------
-   THE ONE PLACE A REGISTERED SHEET IS DRAWN. The shell mounts `<SheetHost/>` once. What to draw
-   arrives on `sheetChannel`, and kit-data's `openSheet(kind, props)` / `closeSheet()` are what
-   call it: `sheetChannel.show({ key: kind, render: () => <Registered {...props} /> })`, and
-   `sheetChannel.show(null)`. The host knows nothing about kinds or props, so the registry
-   (kit-data's `sheets.ts`) and the drawing (here) cannot drift apart. */
-export type HostedSheet = { readonly key: string; readonly render: () => ReactNode } | null
-
-type HostListener = (sheet: HostedSheet) => void
-const hostListeners = new Set<HostListener>()
-let hosted: HostedSheet = null
-
-export const sheetChannel = {
-  show(sheet: HostedSheet): void {
-    hosted = sheet
-    for (const listener of hostListeners) listener(hosted)
-  },
-  current(): HostedSheet {
-    return hosted
-  },
-  subscribe(listener: HostListener): () => void {
-    hostListeners.add(listener)
-    return () => {
-      hostListeners.delete(listener)
-    }
-  },
-}
-
+   THE ONE PLACE A REGISTERED SHEET IS DRAWN. The shell mounts `<SheetHost/>` once, and it draws
+   whatever `openSheet(kind, props)` opened (kit/sheets.ts), handing it `closeSheet` as its
+   `onClose`. The registry decides WHAT opens; this decides only WHERE it is drawn, so the two
+   cannot drift apart. A kind with no registered sheet never reaches here: `openSheet` sends it
+   to its own page instead. */
 export function SheetHost() {
-  const [sheet, setSheet] = useState<HostedSheet>(hosted)
-  useEffect(() => sheetChannel.subscribe(setSheet), [])
-  if (sheet === null) return null
-  return <div data-bn-sheet-host={sheet.key}>{sheet.render()}</div>
+  const open = useOpenSheet()
+  if (open === null) return null
+  const { Component, props, kind } = open as unknown as {
+    readonly kind: string
+    readonly props: object
+    readonly Component: ComponentType<{ readonly onClose: () => void }>
+  }
+  return (
+    <div data-bn-sheet-host={kind}>
+      <Component {...props} onClose={closeSheet} />
+    </div>
+  )
 }
