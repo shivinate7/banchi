@@ -41,7 +41,8 @@
  *        ignored. Typed with no zeros in front, it is the start of a word with its zeros
  *        dropped: `12` finds `00012` and `123`, never `112`. Typed with zeros in front, it is
  *        the start of the word as written, or equal once the zeros go: `0001` finds `00012`, so
- *        an order label narrows as it is typed, and `0002` never finds `26`.
+ *        an order label narrows as it is typed, and `0002` never finds `26`. A word of only
+ *        zeros (`0`, `00`) finds every word that starts with it.
  *     As a fallback, a token with a letter in it matches when its compact form is a substring
  *     of a field's compact form: `hooh` finds `Ho-Oh ex`, `porygonz` finds `Porygon-Z`.
  *     Text fields are what the row draws: a name, a set, a condition (`Damaged`), a buyer, a
@@ -179,6 +180,9 @@ function numberMatch(raw: string, row: Prepared): boolean {
 /** Rule 7's digits-only word: the start of a digits-only text word, as written or with the zeros
  *  in front of both dropped. */
 function digitWordMatch(word: string, row: Prepared): boolean {
+  /* Only zeros so far (`0`, `00`): the first keys of `09-03-26_…` or `00012`. Any word that
+   * starts with them matches, so the first key never empties the list. */
+  if (/^0+$/u.test(word)) return row.words.some((one) => one.raw.startsWith(word))
   const bare = dropLeadingZeros(word)
   /* A word typed WITH zeros in front is being typed as written, so it is the start of the word
    * as written (`0001` of `00012`), or equal once the zeros are dropped. A word typed without

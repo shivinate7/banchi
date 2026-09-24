@@ -16,12 +16,14 @@
   align-items: center;
   gap: var(--bn-2);
   background: var(--bn-surface);
-  border: 1px solid var(--bn-line-strong);
+  /* A field's edge reads 3:1 against the page (WCAG 1.4.11). `--bn-field-edge` is the kit's
+     token for it; until the kit defines it, the faint ink is the edge. */
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
   border-radius: var(--bn-r);
   cursor: text;
   transition: border-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-.search-field-box:hover { border-color: var(--bn-ink-4); }
+.search-field-box:hover { border-color: var(--bn-ink-3); }
 .search-field-box:focus-within {
   border-color: var(--bn-accent);
   box-shadow: 0 0 0 3px var(--bn-accent-tint-2);

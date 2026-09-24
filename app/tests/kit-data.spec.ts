@@ -114,6 +114,10 @@ test.describe('matchQuery', () => {
     expect(matchQuery('0001', inBox(3, ['09-03-26_00012']))).toBe(true)
     expect(matchQuery('12', inBox(3, ['Order 123']))).toBe(true)
     expect(matchQuery('09-03-26_1', inBox(3, ['09-03-26_00012']))).toBe(true)
+    /* The first key of an order label is a zero, and it must not empty the list. */
+    expect(matchQuery('0', inBox(3, ['09-03-26_00012']))).toBe(true)
+    expect(matchQuery('00', inBox(3, ['09-03-26_00012']))).toBe(true)
+    expect(matchQuery('0', inBox(3, ['Order 112']))).toBe(false)
     expect(matchQuery('09-03-26_0001', inBox(3, ['09-03-26_00012']))).toBe(true)
     expect(matchQuery('09-03-26_0002', inBox(3, ['09-03-26_00012']))).toBe(false)
     expect(matchQuery('09-03-27', inBox(3, ['09-03-26_00012']))).toBe(false)
@@ -569,6 +573,43 @@ async function contrastOf(page: Page, selector: string): Promise<number> {
 }
 
 for (const theme of ['light', 'dark'] as const) {
+  test(`every field edge reads 3:1 against the page in ${theme}`, async ({ page }) => {
+    await open(page, 1440, theme)
+    const edges = await page
+      .locator('[data-kit-data] .bn-pick:not([data-active]), [data-kit-data] .bn-sort-dir, [data-kit-data] .search-field-box')
+      .evaluateAll((els) => {
+        const parse = (v: string): number[] => {
+          const n = (v.match(/[\d.]+/g) ?? []).map(Number)
+          return [n[0] ?? 0, n[1] ?? 0, n[2] ?? 0, n[3] ?? 1]
+        }
+        const over = (t: number[], u: number[]): number[] =>
+          [0, 1, 2].map((i) => (t[i] ?? 0) * (t[3] ?? 1) + (u[i] ?? 0) * (1 - (t[3] ?? 1))).concat(1)
+        const lum = (c: number[]): number => {
+          const [r, g, b] = [0, 1, 2].map((i) => {
+            const v = (c[i] ?? 0) / 255
+            return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+          })
+          return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0)
+        }
+        return els.filter((el) => (el as HTMLElement).closest('.bn-fchip[data-active="true"]') === null).map((el) => {
+          /* The ground OUTSIDE the edge: the first painted ancestor above the field. */
+          const layers: number[][] = []
+          for (let node = el.parentElement; node !== null; node = node.parentElement) {
+            const bg = parse(getComputedStyle(node).backgroundColor)
+            if (getComputedStyle(node).backgroundColor !== 'rgba(0, 0, 0, 0)') layers.push(bg)
+            if ((bg[3] ?? 0) >= 1 && getComputedStyle(node).backgroundColor !== 'rgba(0, 0, 0, 0)') break
+          }
+          let ground = [255, 255, 255, 1]
+          for (const layer of layers.reverse()) ground = over(layer, ground)
+          const edge = over(parse(getComputedStyle(el).borderTopColor), ground)
+          const [hi, lo] = [lum(edge), lum(ground)].sort((x, y) => y - x)
+          return { name: el.className, ratio: ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05) }
+        })
+      })
+    expect(edges.length).toBeGreaterThanOrEqual(5)
+    for (const edge of edges) expect(edge.ratio, `${edge.name} edge ${edge.ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(3)
+  })
+
   test(`the words the primitives draw reach 4.5:1 in ${theme}`, async ({ page }) => {
     await open(page, 1440, theme)
     /* The active filter's label, on its tint over the page. */

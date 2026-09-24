@@ -157,7 +157,9 @@
   min-width: 96px;
   max-width: 280px;
   padding: 0 0 0 var(--bn-3);
-  border: 1px solid var(--bn-line-strong);
+  /* A field's edge reads 3:1 against the page (WCAG 1.4.11): the kit's `--bn-field-edge`, and
+     the faint ink until the kit defines it. */
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
   border-radius: var(--bn-r);
   background: var(--bn-surface);
   color: var(--bn-ink-2);
@@ -171,7 +173,7 @@
     color var(--bn-t-fast) var(--bn-ease),
     box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-.bn-pick:hover { border-color: var(--bn-ink-4); color: var(--bn-ink); }
+.bn-pick:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
 .bn-pick:focus-visible { outline: none; border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
 .bn-pick[aria-expanded='true'] { border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
 .bn-pick-icon { flex: none; color: var(--bn-ink-3); }
@@ -258,7 +260,7 @@
   gap: var(--bn-1);
   height: var(--bn-control-h);
   padding: 0 var(--bn-3);
-  border: 1px solid var(--bn-line-strong);
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
   border-radius: var(--bn-r);
   background: var(--bn-surface);
   font: inherit;
@@ -268,7 +270,7 @@
   white-space: nowrap;
   transition: border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
-.bn-sort-dir:hover { border-color: var(--bn-ink-4); color: var(--bn-ink); }
+.bn-sort-dir:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
 
 /* The panel: Capture's open-field body, floating. Above a sheet (61), below a toast (80). */
 .bn-pick-panel {
@@ -349,7 +351,7 @@
 }
 .bn-pick-mark .bn-icon { opacity: 0; transform: scale(0.4); transition: transform var(--bn-t-fast) var(--bn-ease-spring), opacity var(--bn-t-fast) var(--bn-ease); }
 .bn-pick-opt[data-multiple='true'] .bn-pick-mark {
-  border: 1.5px solid var(--bn-line-strong);
+  border: 1.5px solid var(--bn-field-edge, var(--bn-ink-4));
   background: var(--bn-surface);
   color: var(--bn-on-accent);
   transition: background-color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
