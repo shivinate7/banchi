@@ -77,7 +77,9 @@ export function PositionBar({
   const boxCaption =
     sectionDepth && place.section !== null
       ? sectionCount === null
-        ? `Section ${place.section}`
+        ? /* No count of the box's sections to state, and the section caption above already names
+             this one: the line keeps only back and front. */
+          ''
         : `Section ${place.section} of ${sectionCount}`
       : parts.main
   const boxDetail = sectionDepth ? null : parts.detail
