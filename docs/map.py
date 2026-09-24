@@ -8637,6 +8637,20 @@ COMPONENTS = [
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
                                 "D217", "D225"],
             },
+            "tests/demo-coverage.spec.ts": {
+                "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "
+                        "origin under its base path as a static host serves it, or read from a "
+                        "running preview when `DEMO_PREVIEW_URL` is set. Every recorded card has "
+                        "its photograph in the build; Inventory, Review, Pricing, Capture, Home "
+                        "and Cards to pull draw photographs that answer 200; Mark sold then Undo restores the box "
+                        "count; a Game pick draws counts; a typed search, the order walk, a "
+                        "review answer and its undo, the graveyard, product history, the value "
+                        "band and 'Value my stock' all draw without the demo refusal. Proved to "
+                        "fail: 13 of 17 cases go red on the previous `demoServer.ts` with no "
+                        "photographs. SKIPS BY NAME with no `dist-demo/` — `make demo-static` "
+                        "builds it, and `make design-check` does not.",
+                "governed_by": ["D52", "D126", "D183", "D213", "D227"],
+            },
             "tests/product-history.spec.ts": {
                 "does": "`#/product`'s own hard rule (D227): the market "
                         "series and the owner's own fills draw as two different SVG shapes, "
