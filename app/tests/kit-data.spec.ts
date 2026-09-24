@@ -503,6 +503,38 @@ for (const width of [1440, 390] as const) {
   })
 }
 
+for (const width of [390, 720] as const) {
+  test(`the count line's words stay put when its Clear comes and goes at ${width}`, async ({ page }) => {
+    await open(page, width, 'light')
+    const bar = page.locator('[data-specimen="Filters"]')
+    const count = page.locator('[data-specimen="Filtered count"] .bn-filtercount')
+    const words = () =>
+      count.locator('.bn-filtercount-text').evaluate((el) => {
+        const r = el.getBoundingClientRect()
+        return [Math.round((r.y + window.scrollY) * 10) / 10, Math.round(r.height * 10) / 10]
+      })
+    const line = () => count.evaluate((el) => Math.round(el.getBoundingClientRect().height * 10) / 10)
+
+    /* One filter on, so the Clear press is drawn. */
+    await expect(count.getByRole('button', { name: 'Clear' })).toBeVisible()
+    const one = await words()
+    const oneLine = await line()
+
+    /* One to zero: the press goes. */
+    await bar.getByRole('button', { name: 'Clear Game' }).click()
+    await expect(count.getByRole('button', { name: 'Clear' })).toHaveCount(0)
+    expect(await words(), 'the words moved when the Clear press went').toEqual(one)
+    expect(await line()).toBe(oneLine)
+
+    /* Zero to one: the press comes back. */
+    await bar.locator('.bn-pick', { hasText: 'Game' }).click()
+    await page.getByRole('listbox', { name: 'Game' }).getByRole('option', { name: /Riftbound/ }).click()
+    await expect(count.getByRole('button', { name: 'Clear' })).toBeVisible()
+    expect(await words(), 'the words moved when the Clear press came').toEqual(one)
+    expect(await line()).toBe(oneLine)
+  })
+}
+
 /* ============================================================================================
  * The thumb floor, and the contrast of the words the primitives draw.
  * ============================================================================================ */

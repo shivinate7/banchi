@@ -41,9 +41,12 @@
 .bn-count-strong { background: var(--bn-ink); color: var(--bn-bg); }
 
 /* ---- FilterCount: "12 of 40 cards, filtered by …" and a Clear press ---------------------------- */
+/* CENTERED IN A LINE HELD AT THE CONTROL FLOOR, never on the Clear press's baseline: on a phone
+   the press is 40px, and a baseline row put the words where the press put them, so they moved
+   when the last filter cleared and the press went (D118). */
 .bn-filtercount {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: nowrap;
   gap: 0 var(--bn-2);
   min-width: 0;
