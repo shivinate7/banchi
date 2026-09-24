@@ -3397,7 +3397,7 @@ COMPONENTS = [
                         "(D-ratchets-become-offender-lists). Hand-shrunk, never generated.",
                 "governed_by": ["D41", "D218", "D-ratchets-become-offender-lists"]},
             "ste/ste_lint.py": {
-                "does": "the STE ratchet's linter, VENDORED verbatim from $HOME/.claude/"
+                "does": "the STE prose check's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
                         "COPY, never a symlink (D47): a fresh clone, a CI runner and this "
                         "repo's own git history all lack $HOME/.claude, so a gate here cannot "
