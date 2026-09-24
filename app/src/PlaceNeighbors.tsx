@@ -20,14 +20,10 @@
  * declined: it adds a cue on top of the parse instead of deleting the parse, and having
  * landed on `Galio` the reader must still read the grammar to learn which side he is on.
  *
- * THE KEYS ARE `after` AND `before` — THE COMPOSER'S OWN WORDS, NOT A SECOND VOCABULARY.
- * `in front` / `behind` was built first, renders better as a physical pair, and is wrong in
- * a way a picture cannot show: it takes the NEIGHBOUR as its subject ("Galio is in front")
- * where `placeParts` takes THIS CARD ("this card is after Galio"). Both are true and they
- * are opposite framings, so a screen reader would have announced `before Conscription` over
- * a row reading `BEHIND Conscription`. Borrowing the composer's two words costs the physical
- * reading and buys an `aria-label` that says what the eye is looking at — the same argument
- * D22 makes against a friendly second spelling of a machine string.
+ * THE KEYS WERE `after` AND `before` UNTIL 2026-09-23, and LOC-07 found them read backwards: a
+ * bare `AFTER Piercing Light` beside a name reads as "the next card is Piercing Light". They are
+ * now `back` and `front`, a SIDE of this card in the owner's own orientation (card 1 at the far
+ * back), with this card drawn between them. See `PlaceNeighbors` below.
  *
  * ONE DELIBERATE DEPARTURE FROM D41: its payload got SIZE and this one gets POSITION. Two
  * thirty-character strings cannot take a 44px treatment, and D41's own amendment measured
@@ -104,35 +100,48 @@ function Skipped({ side }: { side: PlaceNeighbor }): ReactNode {
   )
 }
 
-/** The two rows, or nothing at all.
+/** The card and its two neighbours, drawn from the BACK of the box to the FRONT, or nothing.
  *
- * `placeParts` answers null — and this renders nothing, never a guess — for a pooled card
- * (D24: a count has no neighbours), an older server, a decoration the server degraded, and
- * the one card whose box holds nothing else.
+ * THE OWNER'S ORIENTATION, 2026-09-23 (D-a-card-is-counted-in-its-section): card 1 is at the far
+ * back and the highest number nearest the body. So the ladder is a picture of the box standing up:
+ * the neighbour toward the back (`prev`, the lower number) on the first row, this card on the
+ * middle row, and the neighbour toward the front (`next`) on the last. The keys name a SIDE of
+ * this card, `back` and `front`, which is what LOC-07 found `after`/`before` could not do: as a
+ * bare label beside a name, `AFTER Piercing Light` read as "the next card is Piercing Light".
  *
- * `flow` IS THE ONE CHOICE A SITE MAKES and it is about width, not taste: `ladder` puts the
- * key in a column beside the name and `stack` puts it on a line above, which costs ~72px less
- * of width and one more line of height. Nothing passes `stack` today; it is here because the
- * copies row's container query already cuts that row at 880px and a 231px place cell cannot
- * hold a key column beside a thirty-character name without breaking it. */
+ * A DEPARTED CARD SPEAKS IN THE PAST TENSE (LOC-09). Its middle row reads `was here`, and the
+ * accessible name says it was between them. It never says the card IS between them.
+ *
+ * `placeParts` answers null (and this renders nothing, never a guess) for a pooled card (D24), an
+ * older server, a decoration the server degraded, and the card whose box holds nothing else. */
 export function PlaceNeighbors({
   place,
   flow = 'ladder',
+  departed = false,
 }: {
   place: Place | undefined
   flow?: 'ladder' | 'stack'
+  /** The card has left its box. Callers read it off `isDeparted(place)`. */
+  departed?: boolean
 }): ReactNode {
   const parts = placeParts(place)
   if (parts === null) return null
 
+  const name = (side: PlaceNeighbor): string => side.name ?? 'an unread card'
+  const sides = [
+    parts.prev === null ? null : `${name(parts.prev)} toward the back`,
+    parts.next === null ? null : `${name(parts.next)} toward the front`,
+  ].filter((part): part is string => part !== null)
+  const said = `${departed ? 'Was between' : 'Between'} ${sides.join(' and ')}`
+  const here = place?.card ?? null
+
   return (
-    /* The composed sentence rides on `aria-label`, so a screen reader hears one sentence where
-       the eye is given two rows — and `role="group"` is what makes that name apply to the
-       block rather than being read past it. */
-    <div className="nb" data-flow={flow} role="group" aria-label={parts.said}>
+    /* The sentence rides on `aria-label`, so a screen reader hears one sentence where the eye is
+       given three rows, and `role="group"` is what makes that name apply to the block. */
+    <div className="nb" data-flow={flow} data-departed={departed ? 'true' : undefined} role="group" aria-label={said}>
       {parts.prev === null ? null : (
-        <p className="nb-row">
-          <span className="nb-key">after</span>
+        <p className="nb-row" data-side="back">
+          <span className="nb-key">back</span>
           <span className="nb-name">
             <span className="nb-name-line">
               <Name side={parts.prev} />
@@ -141,9 +150,17 @@ export function PlaceNeighbors({
           </span>
         </p>
       )}
+      <p className="nb-row nb-this" data-side="this">
+        <span className="nb-key">{departed ? 'was' : 'this'}</span>
+        <span className="nb-name">
+          <span className="nb-name-line">
+            {departed ? 'here' : here === null ? 'this card' : `card ${here}`}
+          </span>
+        </span>
+      </p>
       {parts.next === null ? null : (
-        <p className="nb-row">
-          <span className="nb-key">before</span>
+        <p className="nb-row" data-side="front">
+          <span className="nb-key">front</span>
           <span className="nb-name">
             <span className="nb-name-line">
               <Name side={parts.next} />

@@ -64,6 +64,14 @@
   white-space: nowrap;
 }
 
+/* THIS CARD, between its two neighbours (the owner's orientation: back on top, front below). It is
+   the row the eye lands on, so it carries the weight; a departed card's row is muted, because the
+   card is no longer there to find. */
+.nb-this .nb-name { font-weight: 700; }
+.nb-this .nb-key { color: var(--bn-ink-2); }
+.nb[data-departed='true'] .nb-this .nb-name,
+.nb[data-departed='true'] .nb-this .nb-key { color: var(--bn-ink-3); font-weight: 600; }
+
 /* The stack: the same rank on one axis. */
 .nb[data-flow='stack'] .nb-row { display: block; }
 .nb[data-flow='stack'] .nb-key { display: block; margin-bottom: 1px; }

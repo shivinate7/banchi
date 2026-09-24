@@ -6124,7 +6124,8 @@ COMPONENTS = [
                         "the whole treatment over it is what put the pre-D41 plain string back "
                         "on two screens for exactly the cards that had been sold.",
                 "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71",
-                                "D92", "D119", "D132", "D218"]},
+                                "D92", "D119", "D132", "D218", "D-a-box-is-shown-by-its-name",
+                                "D-a-card-is-counted-in-its-section"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
@@ -6175,7 +6176,8 @@ COMPONENTS = [
                         "can name, so the bare `#270` the owner read as a sold card leaking "
                         "into the ladder is gone \u2014 it never was one \u2014 and `Skipped` "
                         "draws what the walk cost on the rows where it cost anything.",
-                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116"]},
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116",
+                                "D-a-card-is-counted-in-its-section"]},
             "src/PlaceNeighbors.css": {
                 "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
                         "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
@@ -6244,7 +6246,7 @@ COMPONENTS = [
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218", "D252"]},
+                            "D192", "D213", "D218", "D252", "D-a-box-is-shown-by-its-name"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6303,8 +6305,8 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D137", "D162", "D167", "D172", "D194",
-                                "D253", "D252"],
+                                "D87", "D137", "D162", "D167", "D172", "D194", "D252", "D253",
+                                "D-a-box-is-shown-by-its-name"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -6582,7 +6584,8 @@ COMPONENTS = [
                                             "whether the depth resolved, so all four owner states are "
                                             "one DOM at one height (D118).",
                                     "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41",
-                                                    "D58", "D68", "D118", "D132", "D155", "D218"]},
+                                                    "D58", "D68", "D118", "D132", "D155", "D218",
+                                                    "D-a-card-is-counted-in-its-section"]},
             "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST, in two "
                                              "parts: `#/inventory`'s shelf and `#/orders`' walk both "
                                              "draw it. The section's name shrinks and ellipsizes; its "
@@ -6612,7 +6615,9 @@ COMPONENTS = [
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
-                                                "D68", "D118", "D132", "D155", "D194", "D218"]},
+                                                "D68", "D118", "D132", "D155", "D194", "D218",
+                                                "D-a-box-is-shown-by-its-name",
+                                                "D-a-card-is-counted-in-its-section"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -6709,9 +6714,9 @@ COMPONENTS = [
                                               "under a headroom promise nothing can keep.",
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24",
                                                       "D26", "D28", "D30", "D31", "D38", "D41",
-                                                      "D45", "D58", "D67", "D68", "D71",
-                                                      "D92", "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D218"]},
+                                                      "D45", "D58", "D67", "D68", "D71", "D92",
+                                                      "D115", "D118", "D119", "D132", "D172",
+                                                      "D181", "D218", "D-a-box-is-shown-by-its-name"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -6952,10 +6957,10 @@ COMPONENTS = [
                                            "shape of a figure. It WRITES NOTHING on the owner's "
                                            "ruling; every row is a link into #/inventory, where "
                                            "the store already learns a card has left.",
-                                   "governed_by": ["D9", "D10", "D27", "D31", "D41", "D49", "D56", "D58",
-                                                   "D71", "D86", "D94", "D95", "D103", "D105",
-                                                   "D109", "D110", "D118", "D132", "D147",
-                                                   "D159"],
+                                   "governed_by": ["D9", "D10", "D27", "D31", "D41", "D49", "D56",
+                                                   "D58", "D71", "D86", "D94", "D95", "D103",
+                                                   "D105", "D109", "D110", "D118", "D132", "D147",
+                                                   "D159", "D-a-box-is-shown-by-its-name"],
                                    # `app/tests/value-bands.spec.ts` is the check, and it runs
                                    # under `make design-check` rather than at turn end — named
                                    # here in prose for `Markdown.tsx`'s reason. Two arms were
@@ -8864,7 +8869,8 @@ COMPONENTS = [
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
                 "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
-                                "D118", "D125", "D136", "D193", "D212", "D218"],
+                                "D118", "D125", "D136", "D193", "D212", "D218",
+                                "D-a-box-is-shown-by-its-name"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

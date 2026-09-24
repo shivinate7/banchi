@@ -410,8 +410,8 @@ const PRICING = {
         presets: {},
         rule_price: '5.47',
         positions: [
-          { box: 2, index: 1, label: 'Box 2 · Section 1 · Card 1' },
-          { box: 2, index: 2, label: 'Box 2 · Section 1 · Card 2' },
+          { box: 2, index: 1, label: 'Box 2, Section 1, Card 1' },
+          { box: 2, index: 2, label: 'Box 2, Section 1, Card 2' },
         ],
         listing: null,
       },
@@ -432,7 +432,7 @@ const PRICING = {
         snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null },
         presets: {},
         rule_price: null,
-        positions: [{ box: 2, index: 4, label: 'Box 2 · Section 2 · Card 1' }],
+        positions: [{ box: 2, index: 4, label: 'Box 2, Section 2, Card 1' }],
         listing: null,
       },
     ],
@@ -1073,10 +1073,10 @@ async function open(
       body: JSON.stringify({
         review: [
           {
-            position: 'Box 2 · Section 1 · Card 1',
+            position: 'Box 2, Section 1, Card 1',
             box: 2,
             index: 1,
-            label: 'Box 2 · Section 1 · Card 1',
+            label: 'Box 2, Section 1, Card 1',
             photo: null,
             read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
             confidence: null,
@@ -1565,7 +1565,7 @@ function sellableStore(): {
 }
 
 /** The first card of the walked box, as `pipeline/join.py:Position.label` spells it. */
-const CARD_1 = 'Box 2 · Section 1 · Card 1'
+const CARD_1 = 'Box 2, Section 1, Card 1'
 
 /** THE WAY BACK THAT OUTLIVES THE WALK. A write now leaves two things: the slot in the copy
  *  row turns into a RECEIPT for the window — its sentence, its draining clock and its `Undo`,
@@ -1876,7 +1876,7 @@ test('the slot column is already as wide as the key the sale will write into it'
   const slot = row.locator('.browse-row-position')
   const name = row.locator('.browse-row-name')
 
-  const press = copyRow(page, 'Box 12 · Section 1 · Card 1').getByRole('button', { name: 'Mark sold' })
+  const press = copyRow(page, 'Box 12, Section 1, Card 1').getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
 
   const slotWas = (await slot.boundingBox())?.width ?? -1
@@ -1977,7 +1977,7 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
 })
 
 /* D218: A TYPED DOT IS A DEFECT WHEREVER IT IS TYPED. `Position.label` reaches this screen as
- * `Box 2 · Section 1 · Card 1` — real, server-composed, and never edited here — but the toast
+ * `Box 2, Section 1, Card 1` — real, server-composed, and never edited here — but the toast
  * body has no CSS to draw a separator with, so retyping the server's `' · '` into that plain
  * text would be exactly the defect D218 names. `Inventory.tsx:sayPlace` reads it as a sentence
  * instead. This is the ONE surface in this file a middle dot could still reach verbatim: every
@@ -2212,7 +2212,7 @@ const SPARES: Cards = Object.fromEntries(
 const ELSEWHERE: Cards = { ...CARDS, ...SPARES }
 
 /** Where the third copy sits — named once, because three assertions and a button label read it. */
-const FAR = 'Box 7 · Section 1 · Card 40'
+const FAR = 'Box 7, Section 1, Card 40'
 /* D218: `Walk to ${FAR}` is an aria-label — a sentence built AROUND the server's label — so it
    reads through `sayPlace` (`CardLocations.tsx`'s `OwnerRows`) the same way the sale toast
    does. `.position-parts`'s OWN aria-label stays raw (D41's one exception, verbatim), which is
@@ -2670,7 +2670,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
    * was not one of them. Nothing failed, because nothing here read it. */
   const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(lone).toHaveCount(1)
-  await expect(lone).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 2')
+  await expect(lone).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 2')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('2')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
 })
@@ -2803,7 +2803,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?card=cap-6$/)
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute(
     'aria-label',
-    'Box 2 · Section 2 · Card 1',
+    'Box 2, Section 2, Card 1',
   )
 
   /* A departed card's own panel says where the record belongs and that there is no slot —
@@ -4472,7 +4472,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
   await open(page, BOXES, store, () => PRICING, sale)
 
   /* Copy 5 counts from copy 3, which is about to be sold out from under it. */
-  const behind = copyRow(page, 'Box 2 · Section 1 · Card 3')
+  const behind = copyRow(page, 'Box 2, Section 1, Card 3')
   const ladder = page.locator('.card-locations-owner .nb').nth(2)
   await expect(ladder.locator('.nb-name b')).toHaveText(['Bashful Bloom'])
 
@@ -4773,7 +4773,7 @@ test('the address holds one line at both widths, including the longest label the
   /* THE DEFECT: 27 cells at Martian Mono's 0.70em advance is 453.6px in a 448.8px track, so the
      shipped label wrapped — and the comment that justified its size measured it against a 630px
      track a later layout change had already deleted. The worst label the formula can produce,
-     `Box 100 · Section 12 · Card 543`, is 520.8px: 16% over at 1440 and 35% over at 1280.
+     `Box 100, Section 12, Card 543`, is 520.8px: 16% over at 1440 and 35% over at 1280.
 
      FORCED RATHER THAN FIXTURED, because no box in the store is numbered 100. What is being
      checked is the RENDERING's tolerance, not the data — so the label is set to the worst case
@@ -5923,7 +5923,7 @@ test('D132 — the address leads with the name and the index is its note, on the
   const label = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1')
   /* The server's string is untouched: this is a rendering, not an edit (D41's invariant). */
-  await expect(label).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 1')
+  await expect(label).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 1')
 
   const rows = page.locator('.card-locations-row .position-path')
   await expect(rows.nth(0)).toHaveText('BOX ME01 commonsBox 2SECTION 1')
@@ -6249,7 +6249,7 @@ test('D132 — a search lands on a box with a LIVE copy, never on the sold one t
 
   await page.getByRole('searchbox').fill('Eiscue')
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 40')
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 40')
   /* And the copy the walk stands on is the live one, not the departed one. */
   await expect(page.locator('.card-locations-row.is-current')).not.toHaveClass(/is-gone/)
 })
@@ -6282,19 +6282,19 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   /* The copies list: box 7's three, then box 2 section 2's two, then the lone one. */
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
-  await expect(labels.nth(3)).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
-  await expect(labels.nth(5)).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 1')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await expect(labels.nth(3)).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
+  await expect(labels.nth(5)).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 1')
 
   /* A search: the rail leads with box 7 and the walk lands on the first of its three. */
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
 
   /* And pressing box 2 under the same search lands in ITS fullest section, section 2. */
   await page.locator('.browse-boxcell[aria-label^="Box 2"]').click()
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
 })
 
 /* ------------------------------------------------------- the order stops moving under a sale
@@ -6482,17 +6482,17 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
   const railBefore = await railOrder(page)
   const walkBefore = await walkOrder(page)
   expect(railBefore[0]).toMatch(/^Box 7/)
-  expect(before[0]).toBe('Box 7 · Section 1 · Card 38')
-  expect(before[3]).toBe('Box 2 · Section 2 · Card 1')
+  expect(before[0]).toBe('Box 7, Section 1, Card 38')
+  expect(before[3]).toBe('Box 2, Section 2, Card 1')
 
   /* Sell the row the list leads with. Its section drops from three to two and TIES box 2's
      pair, so a live re-rank would move box 2's two copies above the two box 7 has left. */
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.inventory-receipt')).toContainText('Undo')
 
   /* WAIT FOR THE RE-READ AND NOT FOR THE OPTIMISM. `.is-gone` lands off `soldKeys` before any
@@ -6538,10 +6538,10 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
 
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — see the case above. */
   await expect(
@@ -6570,12 +6570,12 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
      section 2, and a tie falls to the server's own order — so the two box 2 copies come first
      and the sold one sits with the section it is no longer counted in. */
   expect(after).toEqual([
-    'Box 2 · Section 2 · Card 1',
-    'Box 2 · Section 2 · Card 2',
+    'Box 2, Section 2, Card 1',
+    'Box 2, Section 2, Card 2',
     'Box 7 · departed · B7 #38',
-    'Box 7 · Section 1 · Card 39',
-    'Box 7 · Section 1 · Card 40',
-    'Box 2 · Section 1 · Card 1',
+    'Box 7, Section 1, Card 39',
+    'Box 7, Section 1, Card 40',
+    'Box 2, Section 1, Card 1',
   ])
 })
 
@@ -6602,10 +6602,10 @@ test('and the row is still there when its receipt has run out, which is the half
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
 
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
     page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
   ).toHaveCount(1)
@@ -6669,7 +6669,7 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
   const walkBefore = await walkOrder(page)
 
@@ -6679,7 +6679,7 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
      the walk lands) is kept whatever the freeze does. Card 39 is neither current nor optimistic.
      Measured: with the freeze deleted from `stays`, retiring 38 leaves the suite green and
      retiring 39 turns it red. */
-  await copyRow(page, 'Box 7 · Section 1 · Card 39').getByRole('button', { name: 'Retire' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Retire' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Damaged' }).click()
 
   await expect(
@@ -6710,8 +6710,8 @@ test('a new search takes a new order, so the staleness never carries across answ
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — the chip lands off the
      sale's own response and says nothing about whether the store has answered yet. */
@@ -6738,7 +6738,7 @@ test('a new search takes a new order, so the staleness never carries across answ
      answer lands and after it, so a count gates nothing. */
   await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute(
     'aria-label',
-    'Box 2 · Section 2 · Card 1',
+    'Box 2, Section 2, Card 1',
   )
   await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
   await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
@@ -6746,12 +6746,12 @@ test('a new search takes a new order, so the staleness never carries across answ
      ties box 2 section 2, so box 2's pair leads — the reshuffle that the freeze was holding off
      and that a new search is entitled to make. */
   expect(await copyOrder(page)).toEqual([
-    'Box 2 · Section 2 · Card 1',
-    'Box 2 · Section 2 · Card 2',
+    'Box 2, Section 2, Card 1',
+    'Box 2, Section 2, Card 2',
     'Box 7 · departed · B7 #38',
-    'Box 7 · Section 1 · Card 39',
-    'Box 7 · Section 1 · Card 40',
-    'Box 2 · Section 1 · Card 1',
+    'Box 7, Section 1, Card 39',
+    'Box 7, Section 1, Card 40',
+    'Box 2, Section 1, Card 1',
   ])
   await expectCopiesHeld(page)
 })
@@ -6825,8 +6825,8 @@ test.skip(
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
     page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
   ).toHaveCount(1)
@@ -6837,7 +6837,7 @@ test.skip(
   await page.getByRole('searchbox').fill('8937370')
   await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute(
     'aria-label',
-    'Box 2 · Section 2 · Card 1',
+    'Box 2, Section 2, Card 1',
   )
   /* THE WALK ITSELF IS WAITED FOR, not just the copies list. Box 2's rows are the last thing
      to land, and the watch has to cover the whole flight rather than stop at the answer that
@@ -7046,7 +7046,7 @@ test('a box whose last live match departs keeps the walk, rather than handing it
   await page.locator('.browse-boxcell[aria-label^="Box 2"]').click()
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
 
-  await copyRow(page, 'Box 2 · Section 1 · Card 1').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 2, Section 1, Card 1').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
     page.locator('.card-locations-row .position-parts[aria-label="Box 2 · departed · B2 #1"]'),
   ).toHaveCount(1)
@@ -7068,9 +7068,9 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
 
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
 
   /* NOTHING LEFT THE BOX AFTER ALL, so there is nothing for a re-rank to recompute — a
@@ -7178,7 +7178,7 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
   const before = await listTop()
   expect(before).toBeGreaterThan(0)
 
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
   const after = await listTop()
   expect(after).toBe(before)
@@ -7203,7 +7203,7 @@ test('the re-rank control clears the thumb floor on a phone', async ({ page }) =
     hideSold: true,
     settle: '.card-locations-owner',
   })
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   const chip = page.locator('.card-locations-rerank')
   await expect(chip).toBeVisible()
   const box = await chip.boundingBox()

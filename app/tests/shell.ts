@@ -484,10 +484,10 @@ async function stubStore(page: Page): Promise<void> {
     json(route, {
       review: [
         {
-          position: 'Box 2 · Section 1 · Card 1',
+          position: 'Box 2, Section 1, Card 1',
           box: 2,
           index: 1,
-          label: 'Box 2 · Section 1 · Card 1',
+          label: 'Box 2, Section 1, Card 1',
           photo: 'photos/2/1.jpg',
           read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
           confidence: null,

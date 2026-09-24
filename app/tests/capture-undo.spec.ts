@@ -252,7 +252,7 @@ async function open(
         body: JSON.stringify({
           error: {
             code: 'undo_not_newest',
-            message: 'Box 3 · Section 1 · Card 4 is the newest card in box 3.',
+            message: 'Box 3, Section 1, Card 4 is the newest card in box 3.',
           },
         }),
       })
@@ -532,10 +532,10 @@ test('the stack keeps this sitting’s cards when the drawer changes', async ({ 
   await expect(rows(page)).toHaveCount(5)
 
   // The order the hand took them, newest first, straight across the seam.
-  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 2$/)
-  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 1$/)
-  await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 3$/)
-  await expect(rows(page).nth(4)).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 1$/)
+  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /Box 4, Section 1, Card 2$/)
+  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /Box 4, Section 1, Card 1$/)
+  await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Box 3, Section 1, Card 3$/)
+  await expect(rows(page).nth(4)).toHaveAttribute('aria-label', /Box 3, Section 1, Card 1$/)
 
   /* AND EVERY ROW NAMES ITS DRAWER, including the ones in the drawer the Box field is on. A
      label on only the rows that differ would make the unlabelled ones read as "the current
@@ -559,7 +559,7 @@ test('a drawer already fed is not offered for undo when this sitting has shots',
 
   // Still this sitting's two cards, and the top of the stack is still box 3's newest.
   await expect(rows(page)).toHaveCount(2)
-  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 2$/)
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 2$/)
 
   /* NOTHING IN THE STRIP ADDRESSES BOX 4. Asserted as an absence over the whole list rather
      than as a property of the top row: an implementation that offered #543 second, or third,
@@ -585,10 +585,10 @@ test('the walk crosses the seam in order, and every delete is legal where it lan
 
   /* THE ORDER THE HAND TOOK THEM, WHICH HERE RUNS DOWNWARD THROUGH THE DRAWER NUMBERS. A sort
      by box would put B4 #2 on top; the hand put B3 #2 there. */
-  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 2$/)
-  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /Box 3 · Section 1 · Card 1$/)
-  await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 2$/)
-  await expect(rows(page).nth(3)).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 1$/)
+  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /Box 3, Section 1, Card 2$/)
+  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /Box 3, Section 1, Card 1$/)
+  await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Box 4, Section 1, Card 2$/)
+  await expect(rows(page).nth(3)).toHaveAttribute('aria-label', /Box 4, Section 1, Card 1$/)
 
   // Row 3 is box 4's card 2: pressing it undoes B3 #2, B3 #1 and B4 #2, in that order.
   await rows(page).nth(2).click()
@@ -609,7 +609,7 @@ test('the walk crosses the seam in order, and every delete is legal where it lan
      from a store that was perfectly consistent. */
   expect(wire.deletes).toEqual(['/inventory/3/2', '/inventory/3/1', '/inventory/4/2'])
 
-  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 4 · Section 1 · Card 1$/)
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 4, Section 1, Card 1$/)
 })
 
 test('the odometer counts the sitting and says which drawers it went to', async ({ page }) => {

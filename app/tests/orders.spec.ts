@@ -126,7 +126,7 @@ function walkPlanCopy(over: WalkPlanCopyInput = {}): WalkPlanCopy {
     index,
     slot: over.slot === undefined ? 17 : over.slot,
     card: over.card === undefined ? 17 : over.card,
-    label: over.label === undefined ? 'Box 3 · Section 2 · Card 17' : over.label,
+    label: over.label === undefined ? 'Box 3, Section 2, Card 17' : over.label,
     section: 2,
     box_name: 'RB Epics',
     section_start: 12,
@@ -163,7 +163,7 @@ function inventoryCard(over: Partial<InventoryCard> = {}): InventoryCard {
   const base: InventoryCard = {
     box: 3,
     index: 21,
-    label: 'Box 3 · Section 2 · Card 17',
+    label: 'Box 3, Section 2, Card 17',
     section: 2,
     card: 17,
     number_display: '025',
@@ -928,7 +928,7 @@ test('a copy another line already holds is drawn as spoken for, and is not offer
       pick({
         capture_id: 'cap-b',
         index: 22,
-        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3 · Section 2 · Card 18' }),
+        place: place({ index: 22, slot: 18, card: 18, label: 'Box 3, Section 2, Card 18' }),
         held_by: { order: OTHER_ORDER, sku: SKU },
       }),
     ],
@@ -979,7 +979,7 @@ test('the pull sends the capture_id of the row that was pressed, and its own pos
           walkPlanTake({
             copies: [
               walkPlanCopy({ capture_id: 'cap-a' }),
-              walkPlanCopy({ box: 5, index: 22, slot: 18, card: 18, label: 'Box 5 · Section 2 · Card 18', capture_id: 'cap-b' }),
+              walkPlanCopy({ box: 5, index: 22, slot: 18, card: 18, label: 'Box 5, Section 2, Card 18', capture_id: 'cap-b' }),
             ],
           }),
         ],
@@ -1781,7 +1781,7 @@ test('a buyer with two open orders walks both at once — one selection, one pla
             name: 'Sunrise',
             number_display: '030',
             for: [{ key: secondOrderKey, number: SECOND_ORDER, buyer: 'Ada Lovelace' }],
-            copies: [walkPlanCopy({ box: 5, index: 30, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5 · Section 1 · Card 1' })],
+            copies: [walkPlanCopy({ box: 5, index: 30, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
           }),
         ],
       }),
@@ -2557,7 +2557,7 @@ function secondBuyerPayload(): { payload: OrdersPayload; resolved: ResolvedOrder
     order_key: secondBuyerKey,
     sku: SECOND_SKU,
     line: { ...line().line, sku: SECOND_SKU, name: 'Sunrise' },
-    picks: [pick({ box: 5, index: 9, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030', place: place({ box: 5, box_name: 'Box Five', section: 1, label: 'Box 5 · Section 1 · Card 9' }) })],
+    picks: [pick({ box: 5, index: 9, capture_id: 'cap-second', card_name: 'Sunrise', card_number: '030', place: place({ box: 5, box_name: 'Box Five', section: 1, label: 'Box 5, Section 1, Card 9' }) })],
   })
   const row = order({ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second', lines: [theLine.line] })
   const resolved: ResolvedOrder = { key: secondBuyerKey, number: SECOND_BUYER_ORDER, complete: false, outstanding: 1, lines: [theLine] }
@@ -2590,7 +2590,7 @@ function sunrisePlan(): WalkPlan {
           name: 'Sunrise',
           number_display: '030',
           for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second' }],
-          copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5 · Section 1 · Card 1' })],
+          copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
         }),
       ],
     }),
@@ -2810,7 +2810,7 @@ const PARITY_MARKET = {
         snap: { market: '12.34', direct_low: null, low: '12.34', low_with_shipping: null, now: null },
         presets: {},
         rule_price: '12.34',
-        positions: [{ box: 3, index: 21, label: 'Box 3 · Section 2 · Card 17' }],
+        positions: [{ box: 3, index: 21, label: 'Box 3, Section 2, Card 17' }],
         listing: null,
       },
     ],
@@ -2892,7 +2892,7 @@ test('two copies on ONE run: the pricing route fires once', async ({ page }) => 
     ...PARITY_MARKET,
     pricing: {
       ...PARITY_MARKET.pricing,
-      skus: [{ ...PARITY_MARKET.pricing.skus[0]!, positions: [{ box: 3, index: 21, label: 'Box 3 · Section 2 · Card 17' }, { box: 3, index: 22, label: 'Box 3 · Section 2 · Card 18' }] }],
+      skus: [{ ...PARITY_MARKET.pricing.skus[0]!, positions: [{ box: 3, index: 21, label: 'Box 3, Section 2, Card 17' }, { box: 3, index: 22, label: 'Box 3, Section 2, Card 18' }] }],
     },
   }
   const wire = await open(page, {
@@ -2900,7 +2900,7 @@ test('two copies on ONE run: the pricing route fires once', async ({ page }) => 
     walkPlan: plan,
     inventoryCards: {
       '3/21': inventoryCard({ run: PARITY_RUN }),
-      '3/22': inventoryCard({ box: 3, index: 22, run: PARITY_RUN, label: 'Box 3 · Section 2 · Card 18', card: 18, name: 'Sunrise' }),
+      '3/22': inventoryCard({ box: 3, index: 22, run: PARITY_RUN, label: 'Box 3, Section 2, Card 18', card: 18, name: 'Sunrise' }),
     },
     pricing: SAME_RUN_MARKET,
   })
@@ -2935,7 +2935,7 @@ test('two copies on TWO runs: it fires twice', async ({ page }) => {
         {
           ...PARITY_MARKET.pricing.skus[0]!,
           snap: { market: '9.00', direct_low: null, low: '9.00', low_with_shipping: null, now: null },
-          positions: [{ box: 3, index: 22, label: 'Box 3 · Section 2 · Card 18' }],
+          positions: [{ box: 3, index: 22, label: 'Box 3, Section 2, Card 18' }],
         },
       ],
     },
@@ -2950,7 +2950,7 @@ test('two copies on TWO runs: it fires twice', async ({ page }) => {
     walkPlan: plan,
     inventoryCards: {
       '3/21': inventoryCard({ run: PARITY_RUN }),
-      '3/22': inventoryCard({ box: 3, index: 22, run: SECOND_RUN, label: 'Box 3 · Section 2 · Card 18', card: 18, name: 'Sunrise' }),
+      '3/22': inventoryCard({ box: 3, index: 22, run: SECOND_RUN, label: 'Box 3, Section 2, Card 18', card: 18, name: 'Sunrise' }),
     },
     pricing: (name: string) => (name === SECOND_RUN ? SECOND_MARKET : PARITY_MARKET),
   })
@@ -3311,7 +3311,7 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
           sku: SECOND_SKU,
           name: 'Sunrise',
           for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second' }],
-          copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5 · Section 1 · Card 1' })],
+          copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
         }),
       ],
     }),
@@ -3563,7 +3563,7 @@ test('#/inventory renders its own known shell unchanged by any of this', async (
   )
   /* ONE CARD, IN BOX 1 — `BoxBrowse.tsx` draws its own "No cards captured yet" empty state
      over zero cards, which is a real and different screen from the one this case checks. */
-  const oneCard = inventoryCard({ box: 1, index: 1, label: 'Box 1 · Section 1 · Card 1', section: 1, card: 1 })
+  const oneCard = inventoryCard({ box: 1, index: 1, label: 'Box 1, Section 1, Card 1', section: 1, card: 1 })
   await page.route(/\/inventory$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: { '1/1': oneCard } }) }),
   )

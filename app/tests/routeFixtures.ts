@@ -125,7 +125,7 @@ export async function seedPopulatedRuns(page: Page): Promise<void> {
 /** A position block with every field the server sends — `orders.spec.ts`'s own `place`. */
 export function place(over: Partial<Place> = {}): Place {
   const base: Place = {
-    label: 'Box 3 · Section 2 · Card 17',
+    label: 'Box 3, Section 2, Card 17',
     located: true,
     box: 3,
     index: 21,

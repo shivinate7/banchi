@@ -26,10 +26,10 @@
   width: 100%;
 }
 
-/* THE BOX IS THE MARGIN NOTE WHERE THE RULER EXISTS. 12px is the standalone bar's strip; 8px is
-   what it is demoted to once the section ruler is above it, which is the whole of the priority
-   the owner asked to flip. The demotion is paid only where the ruler is there to justify it. */
-.position-bar-owner[data-depth] { --pb-track: 8px; }
+/* THE STRIP UNDER THE RULER IS THE BOX'S SECTIONS, NUMBERED (the owner's ruling, 2026-09-23,
+   amending D155: the ruler shows the sections before and after). 14px holds a section number in
+   `--bn-fs-2xs`; a chip too narrow for its digits clips them and still marks its run. */
+.position-bar-owner[data-depth] { --pb-track: 14px; }
 
 /* ---- the box track ---- */
 .position-bar-track {
@@ -56,11 +56,30 @@
   transition: background-color var(--bn-t) var(--bn-ease), box-shadow var(--bn-t) var(--bn-ease);
 }
 
-/* The card's own section, painted. */
+/* The card's own section, painted and outlined in the accent, so it holds in dark as well as in
+   light (LOC-24: a tint-on-tint ring all but vanished on the dark ground). */
 .position-bar-here {
   background: var(--bn-accent-tint-2);
-  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+  box-shadow: inset 0 0 0 1px var(--bn-accent);
 }
+/* The other sections' chips take the strong line, for the same dark-ground reason. */
+.position-bar-owner[data-depth] .position-bar-segment:not(.position-bar-here) {
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+}
+/* A section's number on its own chip. */
+.position-bar-segment-num {
+  display: block;
+  overflow: hidden;
+  padding: 0 3px;
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  line-height: var(--pb-track);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--bn-ink-3);
+}
+.position-bar-here .position-bar-segment-num { color: var(--bn-ink-2); }
 
 /* A box the server could not size: one object rather than an empty row. */
 .position-bar-segment-blank { flex: 1; }
@@ -149,15 +168,18 @@
 }
 .position-bar-sectiontrack .position-bar-marker::after { display: none; }
 
-/* The cards counted past to reach this one. The pin is the boundary, so the left edge is hard
-   and the card's own cell is never filled. */
-.position-bar-fill {
+/* THE CARD'S OWN CELL, filled and outlined: the mark is on the card itself (LOC-05). `left` and
+   `width` are set inline from `sectionDepthOf`'s `cell`, one card of the section wide. */
+.position-bar-cell {
   position: absolute;
-  inset: 0 auto 0 0;
+  top: 0;
+  bottom: 0;
+  min-width: 4px;
   background: var(--bn-accent-tint-2);
-  border-radius: var(--bn-r-sm) 0 0 var(--bn-r-sm);
+  box-shadow: inset 0 0 0 1px var(--bn-accent);
+  border-radius: var(--bn-r-xs);
   transition:
-    width var(--bn-t-slow) var(--bn-ease),
+    left var(--bn-t-slow) var(--bn-ease),
     opacity var(--bn-t-slow) var(--bn-ease);
 }
 
@@ -187,9 +209,8 @@
     );
 }
 
-/* The section's own run, in BOX cards, written inside the ruler's two ends. This is the one
-   statement the deleted trapezoid was reaching for — how much of the box this slice is — said
-   as a number the reader checks against the box caption rather than as a shape they trust.
+/* The ruler's two ends, in SECTION numbers: card 1 at the back and the section's last card at the
+   front (LOC-04, the owner's ruling amending D155). The same count the caption above uses.
 
    THE PIN EATS THE NEAR LABEL WHEN THE CARD IS AT THE FRONT OR BACK OF ITS SECTION, and that
    is accepted rather than fixed. Measured at 390 in light, card 4 of an 80-card section on a
@@ -222,32 +243,25 @@
   border-radius: var(--bn-r-full);
 }
 
-/* WHAT REPLACES THE BRACKET, AND IT IS PLACED BY THE LAYOUT RATHER THAN BY ARITHMETIC. A
-   pseudo-element on the chip itself, so the gaps, the `min-width` clamps and the sub-pixel
-   rounding are accounted for by construction — which is the deleted SVG's third defect fixed
-   for free instead of modelled a second time. 8x4px, a fixed 45° per side, identical at 390 and
-   at 1440. It is `--bn-accent` and not the tint: a 32px² triangle at 18% alpha over
-   `--bn-surface-2` is invisible. On a 3px chip it overhangs 2.5px each side, which is the
-   point — it is the finder for a chip too small to see. */
+/* NO CARET ON THE CHIP ANY MORE (LOC-05): it sat at the chip's middle and pointed at the wrong
+   card. The chip is outlined instead, and the ruler above marks the card itself. */
 .position-bar-owner[data-depth] .position-bar-segment { position: relative; }
-.position-bar-owner[data-depth] .position-bar-here::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: 100%;
-  translate: -50% 0;
-  border: 4px solid transparent;
-  border-bottom-color: var(--bn-accent);
-  border-top: 0;
-  /* ABOVE THE BOX MARK, WHICH IT COLLIDES WITH WHENEVER THE CARD SITS AT ITS SECTION'S
-     MIDPOINT — the caret is centred on the chip and the mark is at the card's own fraction of
-     the box, so the two land on one x more often than the arithmetic suggests. Measured at 390
-     in dark on the divided-box fixture: the mark's 2px knockout ring ate the caret's right
-     half. They overlap by 2px vertically at most, so the caret winning costs the ring and
-     nothing else, and the caret is the object that says WHICH chip. */
-  z-index: 2;
-  transition: border-color var(--bn-t) var(--bn-ease);
+
+/* WHICH END IS CARD 1 (LOC-06). The owner's orientation: card 1 is at the far back, the highest
+   number nearest the body. Said once, under both scales, in the caption register. */
+.position-bar-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--bn-ink-3);
 }
+.position-bar.position-bar-owner[data-depth] > .position-bar-zoom > .position-bar-ends { order: 3; }
 
 /* ---- the owner's density ---- */
 .position-bar-owner .position-bar-text {

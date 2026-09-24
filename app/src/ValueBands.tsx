@@ -61,6 +61,7 @@ import { Button, Chip, EmptyState, Notice, PageHeader, Pill, Segmented, Stat } f
 import { PositionLabel } from './PositionLabel'
 import { getValueAggregates, getValuePage } from './server'
 import type { ValueAggregates } from './server'
+import { placePartsOf } from './position'
 import type { ValueBox, ValueCopy } from './types'
 import './ValueBands.css'
 
@@ -154,8 +155,10 @@ function pulls(rows: readonly ValueCopy[]): { reaches: number; boxes: number; se
     const seen = byBox.get(row.box)
     if (seen === undefined) byBox.set(row.box, [row.index])
     else seen.push(row.index)
-    const part = row.label?.split(' · ')[1]
-    if (part !== undefined) sections.add(`${row.box}/${part}`)
+    /* THE SECTION OFF THE ONE LABEL READER (`position.ts:placePartsOf`), since the server's label
+       names the box, the section and the card with commas (D-a-box-is-shown-by-its-name). */
+    const section = placePartsOf(row.label)?.section ?? null
+    if (section !== null) sections.add(`${row.box}/${section}`)
   }
   let reaches = 0
   for (const indices of byBox.values()) {

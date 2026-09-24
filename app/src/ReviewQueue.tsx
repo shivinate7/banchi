@@ -2359,7 +2359,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
 
   if (entry.photo === null) {
     return (
-      <AbsentPhoto title="No photograph was stored" detail="photo: null" label={entry.label} box={entry.box}>
+      <AbsentPhoto title="No photograph was stored" detail="photo: null" label={entry.label} box={entry.box} cid={entry.cid}>
         The record carries no photograph at all.
       </AbsentPhoto>
     )
@@ -2377,7 +2377,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
 
   if (absent) {
     return (
-      <AbsentPhoto title="The file is not on disk" detail={src} label={entry.label} box={entry.box}>
+      <AbsentPhoto title="The file is not on disk" detail={src} label={entry.label} box={entry.box} cid={entry.cid}>
         The entry has a photograph and nothing here can restore it. The card is still at its slot.
       </AbsentPhoto>
     )
@@ -2407,7 +2407,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
           aria-hidden="true"
         />
       )}
-      <PositionCaption label={entry.label} box={entry.box} />
+      <PositionCaption label={entry.label} box={entry.box} cid={entry.cid} />
       <span className="review-stage-hint" aria-hidden="true">
         <Icon name="scan" size={12} />
         1:1 under the pointer
@@ -2416,7 +2416,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
   )
 }
 
-function AbsentPhoto({ title, detail, label, box, children }: { title: string; detail: ReactNode; label: string; box?: number; children: ReactNode }) {
+function AbsentPhoto({ title, detail, label, box, cid, children }: { title: string; detail: ReactNode; label: string; box?: number; cid?: string | null; children: ReactNode }) {
   return (
     <div className="review-absent">
       <span className="review-absent-art">
@@ -2425,26 +2425,33 @@ function AbsentPhoto({ title, detail, label, box, children }: { title: string; d
       <p className="review-absent-title">{title}</p>
       <p className="review-absent-body">{children}</p>
       <p className="review-code review-absent-detail">{detail}</p>
-      <PositionCaption label={label} box={box} />
+      <PositionCaption label={label} box={box} cid={cid} />
     </div>
   )
 }
 
-/* The card's address, and the way back to it: Inventory links here, so this links to the
- * box the card sits in (`#/inventory?box=<n>`, the deep link the home screen uses). A card
- * with no box has no destination and draws the plain caption. */
-function PositionCaption({ label, box }: { label: string; box?: number }) {
+/* The card's address, and the way back to it: this opens THE CARD on Inventory
+ * (`#/inventory?box=<n>&card=<cid>`), not the box at its first card (LOC-12). The label names
+ * the box by its name (D-a-box-is-shown-by-its-name), and its accessible name is the place as a
+ * sentence (`Box 1, Section 3, Card 13`). A card with no box has no destination and draws the
+ * plain caption; a card the server sent no name for opens its box. */
+function PositionCaption({ label, box, cid }: { label: string; box?: number; cid?: string | null }) {
   const inner = (
     <>
-      <Icon name="pin" size={12} />
+      <Icon name="pin" size={14} />
       <PositionLabel label={label} flow="run" />
     </>
   )
   if (box === undefined || box < 1) return <span className="review-caption review-position">{inner}</span>
+  const card = cid === undefined || cid === null || cid === '' ? '' : `&card=${encodeURIComponent(cid)}`
   return (
-    <a className="review-caption review-position review-caption-link" href={`#/inventory?box=${box}`} title="Open this box on Inventory">
+    <a
+      className="review-caption review-position review-caption-link"
+      href={`#/inventory?box=${box}${card}`}
+      title={card === '' ? 'Open this box on Inventory' : 'Open this card on Inventory'}
+    >
       {inner}
-      <Icon name="arrowRight" size={12} className="review-caption-go" />
+      <Icon name="arrowRight" size={14} className="review-caption-go" />
     </a>
   )
 }

@@ -110,9 +110,9 @@ function sku(over: Partial<PricingSku> = {}): PricingSku {
     },
     rule_price: '22.03',
     positions: [
-      { box: 7, index: 1, label: 'Box 7 · Section 1 · Card 1' },
-      { box: 7, index: 2, label: 'Box 7 · Section 1 · Card 2' },
-      { box: 7, index: 3, label: 'Box 7 · Section 1 · Card 3' },
+      { box: 7, index: 1, label: 'Box 7, Section 1, Card 1' },
+      { box: 7, index: 2, label: 'Box 7, Section 1, Card 2' },
+      { box: 7, index: 3, label: 'Box 7, Section 1, Card 3' },
     ],
     listing: null,
   }
@@ -1277,7 +1277,7 @@ test('the photo is on demand, names which copy it is, and the same key closes it
      recorded misses are confident answers with the digits wrong — so the pick is the first in
      box-walk order, said out loud, and steppable. */
   await expect(page.locator('.pricing-photo')).toBeVisible()
-  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7 · Section 1 · Card 1')
+  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7, Section 1, Card 1')
   await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
 
   await page.getByRole('button', { name: 'Next copy' }).click()
@@ -1309,7 +1309,7 @@ test('the caption draws the label the server composed on THIS read, including wh
         positions: [
           { box: 7, index: 1, label: 'Box 7 · departed · B7 #1' },
           { box: 7, index: 2, label: null },
-          { box: 7, index: 3, label: 'Box 7 · Section 1 · Card 1' },
+          { box: 7, index: 3, label: 'Box 7, Section 1, Card 1' },
         ],
       }),
     ],
@@ -1337,7 +1337,7 @@ test('the caption draws the label the server composed on THIS read, including wh
   await expect(page.locator('.pricing-photo-caption')).toContainText('2 of 3')
 
   await page.getByRole('button', { name: 'Next copy' }).click()
-  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7 · Section 1 · Card 1')
+  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7, Section 1, Card 1')
 })
 
 // ------------------------------------------------------------ the design rules
@@ -2745,9 +2745,9 @@ const SPAN = {
         copies: 3,
         add_to_quantity: 3,
         positions: [
-          { box: 3, index: 4, label: 'Box 3 · Section 1 · Card 4' },
-          { box: 3, index: 9, label: 'Box 3 · Section 1 · Card 9' },
-          { box: 4, index: 2, label: 'Box 4 · Section 1 · Card 2' },
+          { box: 3, index: 4, label: 'Box 3, Section 1, Card 4' },
+          { box: 3, index: 9, label: 'Box 3, Section 1, Card 9' },
+          { box: 4, index: 2, label: 'Box 4, Section 1, Card 2' },
         ],
       }),
       in: [

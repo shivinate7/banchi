@@ -660,6 +660,12 @@ export type QueueEntryWire = {
    *  `first_seen` is missing or unparsable, because that helper refuses to guess. Optional on
    *  this side so an older server running on the Mac renders a gap rather than `undefined`. */
   age_days?: number | null
+
+  /** DECORATED BY THE ROUTE, the card's whole place block and its stable name (D172), so the
+   *  review screen draws the place the way Inventory does and links to THIS card
+   *  (`#/inventory?box=<n>&card=<cid>`). Optional: an older server sends neither. */
+  place?: Place
+  cid?: string | null
 }
 
 /** `GET /queues`. Both queues, each already in `store/queues.py:sort_key` order. */

@@ -5845,6 +5845,12 @@ def _queue_row(
             if place["located"]
             else join.pooled_label(str(place.get("game") or games.DEFAULT_GAME))
         )
+        # THE WHOLE PLACE AND THE CARD'S OWN NAME, so the review screen draws the same place
+        # block Inventory draws (LOC-26: the box's name and the neighbours) and its place link
+        # opens THIS card, `#/inventory?box=<n>&card=<cid>`, not the box's first (LOC-12).
+        row["place"] = place
+        card = places._inventory.cards.get(master.position_key(int(entry.box), int(entry.index)))
+        row["cid"] = getattr(card, "cid", None)
     return row
 
 
