@@ -8524,14 +8524,17 @@ COMPONENTS = [
                         "fires a browser shortcut at all.",
             },
             "tests/routeExclusions.ts": {
-                "does": "`EXCLUDED_FROM_SWEEP` (`#/fulfillment`, `#/gallery`) and "
-                        "`ROUTE_HASH_SHAPE`, as REGEXES rather than quoted `'#/…'` string "
-                        "literals, shared by `text-shape.spec.ts`, `machine-words.spec.ts` "
-                        "and `money-face.spec.ts`. `scripts/docs-audit.py`'s `route rosters` "
-                        "row reads three or more distinct quoted `#/…` literals in one spec "
-                        "as a hand-typed roster; these two deliberate exclusions are not one, "
-                        "and a regex avoids tripping the row over something it was not built "
-                        "to catch.",
+                "does": "`EXCLUDED_FROM_SWEEP` (`#/fulfillment`, `#/gallery`), a REGEX rather "
+                        "than a quoted `'#/…'` string literal, shared by `text-shape.spec.ts`, "
+                        "`machine-words.spec.ts` and `money-face.spec.ts`. "
+                        "`scripts/docs-audit.py`'s `route rosters` row reads three or more "
+                        "distinct quoted `#/…` literals in one spec as a hand-typed roster; "
+                        "these two deliberate exclusions are not one, and a regex avoids "
+                        "tripping the row over something it was not built to catch. ONLY safe "
+                        "in plain Node-context code — each spec's own `drawerRoutes` needs the "
+                        "identical `#/`-shape test INSIDE a `page.locator(...).evaluateAll` "
+                        "callback too, which Playwright serialises into the browser, so that "
+                        "one is written inline in each spec instead, never imported from here.",
                 "governed_by": ["D69", "D70"],
             },
             "tests/routeFixtures.ts": {

@@ -9,7 +9,7 @@ import { routesFromNav } from './routes'
 import { sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS, SHIPPING_EXPORT_CSV } from './routeFixtures'
 import { injectRepeatedSentence, measureTextShape } from './textShape'
-import { EXCLUDED_FROM_SWEEP, ROUTE_HASH_SHAPE } from './routeExclusions'
+import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 
 /* D194 IS SUPERSEDED BY `D-text-shape-checks`. The owner's ruling, 2026-09-23: "I think we
  * need to kill ceilings and instead just use a different way I don't like keeping a stagnant
@@ -64,7 +64,11 @@ async function drawerRoutes(page: Page): Promise<string[]> {
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
   const hrefs = await page.locator('.bn-drawer .bn-nav a.bn-nav-link').evaluateAll((els) =>
-    els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? '').filter((h) => ROUTE_HASH_SHAPE.test(h)))
+    // `/^#\//` INLINE, NOT `ROUTE_HASH_SHAPE`: this callback is serialised into the BROWSER
+    // by `evaluateAll` (`toString()`, the same rule `textShape.ts`'s header states for
+    // `page.evaluate`), so an imported module-level const is invisible to it — measured:
+    // `ROUTE_HASH_SHAPE is not defined` the first time this ran under `make design-check`.
+    els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? '').filter((h) => /^#\//.test(h)))
   await page.keyboard.press('Escape')
   await expect(page.locator('.bn-drawer')).toHaveCount(0)
   return hrefs.filter((route) => !EXCLUDED_FROM_SWEEP.test(route))

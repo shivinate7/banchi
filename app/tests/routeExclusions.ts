@@ -10,8 +10,13 @@
  * screen. A regex is not a quoted `#/…` literal, so it does not trip that row, and it is not
  * an evasion of it either: nothing here enumerates routes, so there is no roster to declare.
  */
+/* ONLY SAFE IN NODE CONTEXT. Each spec's `drawerRoutes` also needs a `#/`-shape test, but
+ * INSIDE a `page.locator(...).evaluateAll(...)` callback — a function Playwright serialises
+ * into the BROWSER by `toString()`, the same rule `textShape.ts`'s header states for
+ * `page.evaluate`. An imported module-level const is invisible there: `ROUTE_HASH_SHAPE is
+ * not defined` was the measured failure the one time this file exported one for that use. So
+ * that one test is written inline, `/^#\//.test(h)`, in each spec's own `evaluateAll`
+ * callback — never imported from here — and `EXCLUDED_FROM_SWEEP` below stays usable only in
+ * plain Node-context code: a `.filter()` chained on an array `evaluateAll` already returned,
+ * or the main test body's own route list. */
 export const EXCLUDED_FROM_SWEEP = /^#\/(fulfillment|gallery)$/
-
-/** A route hash, read off an `href` attribute — `startsWith('#/')` without the quoted
- *  literal that pattern would otherwise add to the same count. */
-export const ROUTE_HASH_SHAPE = /^#\//

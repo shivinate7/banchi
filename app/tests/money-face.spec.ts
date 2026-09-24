@@ -9,7 +9,7 @@ import { routesFromNav } from './routes'
 import { sealEveryTest } from './shell'
 import { POPULATED_ROUTE_SEEDS, SHIPPING_EXPORT_CSV } from './routeFixtures'
 import { scanMoneyFace } from './moneyFace'
-import { EXCLUDED_FROM_SWEEP, ROUTE_HASH_SHAPE } from './routeExclusions'
+import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 
 /* D221 — MONEY STAYS MONO, EVERYWHERE. Owned by the text-checks lane on the orchestrator's own
  * assignment: "the rendered-page money check" — this file already reads rendered text the
@@ -55,7 +55,9 @@ async function drawerRoutes(page: Page): Promise<string[]> {
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
   const hrefs = await page.locator('.bn-drawer .bn-nav a.bn-nav-link').evaluateAll((els) =>
-    els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? '').filter((h) => ROUTE_HASH_SHAPE.test(h)))
+    // `/^#\//` INLINE, NOT `ROUTE_HASH_SHAPE`: this callback is serialised into the BROWSER
+    // by `evaluateAll` (`toString()`), so an imported module-level const is invisible to it.
+    els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? '').filter((h) => /^#\//.test(h)))
   await page.keyboard.press('Escape')
   await expect(page.locator('.bn-drawer')).toHaveCount(0)
   return hrefs.filter((route) => !EXCLUDED_FROM_SWEEP.test(route))
