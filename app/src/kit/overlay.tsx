@@ -17,11 +17,12 @@ import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
  *     drawer), joins it through `useOverlayLayer`. ONLY THE TOP LAYER traps focus and takes
  *     Escape, so a layer opened over another closes first and gives focus back to the control
  *     inside the layer beneath it.
- *   - WHICHEVER OPENED LAST PAINTS ON TOP: `useOverlayLayer` sets each layer's own z-index from
- *     its position in the stack at the moment it joins, so a caller elsewhere in the tree — not
- *     a sibling of the portal, so not tied by DOM paint order the way two kit panels are — still
- *     stacks correctly against one it opens over or under (Fulfillment's own photo zoom, the
- *     first caller that is not a kit primitive).
+ *   - WHICHEVER OPENED LAST PAINTS ON TOP: `useOverlayLayer` sets each layer's own z-index — and
+ *     its own SCRIM's, one step below it — from its position in the stack at the moment it
+ *     joins, so a caller elsewhere in the tree (Fulfillment's own photo zoom, the first caller
+ *     that is not a kit primitive, and not a portal sibling either) still stacks correctly, and
+ *     a SECOND scrimmed layer's own scrim actually dims the first layer's panel rather than
+ *     sitting under it — which every scrim sharing one class-wide number cannot do.
  *   - FOCUS GOES BACK to the control that opened the layer. If that control has left the page,
  *     focus goes to the page's h1, never to body. If the person has moved focus somewhere else
  *     on purpose, it stays there.
@@ -50,9 +51,26 @@ function isTop(root: HTMLElement): boolean {
   return stack[stack.length - 1] === root
 }
 
-/** `.bn-dialog`/`.bn-sheet`'s own z-index (kit.css) — the floor a layer's inline z-index never
- *  goes below, and what a layer falls back to for the instant before this hook's first paint. */
-const BASE_LAYER_Z = 61
+/** `.bn-scrim`/`.bn-dialog`'s own z-index (kit.css) — the floor a layer's inline z-index never
+ *  goes below, and what a layer falls back to for the instant before this hook's first paint.
+ *  Each layer takes TWO numbers, its own scrim then its own panel, so a later layer's scrim
+ *  sits above every earlier layer's panel (actually dims it) and below its own. At depth 0 this
+ *  is exactly 60/61, the pair the static stylesheet already used for one layer. */
+const BASE_LAYER_Z = 60
+
+/** THE CEILING ON SIMULTANEOUS LAYERS THIS SCHEME CLIMBS FOR. The shell reserves 65 upward for
+ *  its own chrome above every kit overlay — `.bn-whichkey` at 65, `.bn-cmdk` at 70, `.bn-toasts`
+ *  at 80 (App.css) — so depth 2's pair (64/65) would already tie the first of those. Nothing
+ *  this product opens goes three layers deep at once (a confirm over a sheet, or two stacked
+ *  modals, are both two): a depth past this ceiling REUSES the ceiling's own pair rather than
+ *  climbing into the shell's range, which loses correct ordering only past a depth nothing here
+ *  reaches. */
+const MAX_LAYER_DEPTH = 2
+
+function layerZ(depth: number): { readonly scrim: number; readonly panel: number } {
+  const at = Math.min(depth, MAX_LAYER_DEPTH - 1)
+  return { scrim: BASE_LAYER_Z + 2 * at, panel: BASE_LAYER_Z + 2 * at + 1 }
+}
 
 /** True while an overlay layer is open. The shell asks this before it takes a key of its own. */
 export function overlayOpen(): boolean {
@@ -68,32 +86,44 @@ export type OverlayLayerOptions = {
   /** Tab and Shift-Tab stay inside it, and focus that leaves it is pulled back. A blocking layer
    *  traps; a popover does not. Default true. */
   readonly trap?: boolean
+  /** The layer's own scrim, if it has one — a `Popover` and Fulfillment's own photo zoom do
+   *  not. Given the SAME stack-position z-index treatment as the panel (`layerZ` above), one
+   *  step below it, so a SECOND scrimmed layer's scrim actually sits above the FIRST layer's
+   *  panel and dims it — which a shared static number across every scrim (kit.css) cannot do,
+   *  because two scrims never differ by which one opened later. */
+  readonly scrim?: RefObject<HTMLElement | null>
 }
 
 /** JOIN THE ONE STACK. Every layer that sits over the page calls this: the kit's `Sheet`,
  *  `Modal` and `Popover`, and the shell's own palette, keys sheet and drawer. Only the top layer
  *  traps focus and takes Escape, and nothing beneath it sees that Escape. */
-export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, onEscape, trap = true }: OverlayLayerOptions): void {
+export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, onEscape, trap = true, scrim }: OverlayLayerOptions): void {
   useLayoutEffect(() => {
     const root = ref.current
     if (!active || root === null) return
     stack.push(root)
-    /* WHICHEVER OPENED LAST PAINTS ON TOP. `.bn-dialog`/`.bn-sheet`/`.bn-popover`'s own static
-     * z-index (kit.css) ties two layers that are not siblings in DOM paint order — a portalled
-     * panel and a plain fixed-position overlay elsewhere in the tree (Fulfillment's own photo
-     * zoom, `useOverlayLayer`'d for exactly this) do not share a DOM-order tiebreak the way two
-     * portals of the same kind do. The inline style set here beats the stylesheet's number for
-     * this one element, and reads `stack`'s length AT THIS PUSH, so it only ever compares
-     * layers that are open AT THE SAME TIME — a layer that closed and reopened later still
-     * lands above whatever was already open, without the count ever growing unbounded across a
-     * long session. */
-    root.style.zIndex = String(BASE_LAYER_Z + stack.length - 1)
+    /* WHICHEVER OPENED LAST PAINTS ON TOP. `.bn-dialog`/`.bn-sheet`/`.bn-popover`/`.bn-scrim`'s
+     * own static z-index (kit.css) ties two layers that are not siblings in DOM paint order —
+     * a portalled panel and a plain fixed-position overlay elsewhere in the tree (Fulfillment's
+     * own photo zoom, `useOverlayLayer`'d for exactly this) do not share a DOM-order tiebreak
+     * the way two portals of the same kind do — and it ties a SECOND scrimmed layer's own scrim
+     * to the FIRST layer's panel, which needs the second to win, always, and a shared constant
+     * cannot express "always the second". The inline style set here beats the stylesheet's
+     * number for this one element, and reads `stack`'s length AT THIS PUSH, so it only ever
+     * compares layers that are open AT THE SAME TIME — a layer that closed and reopened later
+     * still lands above whatever was already open, without the count ever growing unbounded
+     * across a long session. */
+    const { scrim: scrimZ, panel: panelZ } = layerZ(stack.length - 1)
+    root.style.zIndex = String(panelZ)
+    const scrimEl = scrim?.current ?? null
+    if (scrimEl !== null) scrimEl.style.zIndex = String(scrimZ)
     return () => {
       const at = stack.lastIndexOf(root)
       if (at >= 0) stack.splice(at, 1)
       root.style.zIndex = ''
+      if (scrimEl !== null) scrimEl.style.zIndex = ''
     }
-  }, [ref, active])
+  }, [ref, active, scrim])
 
   const escape = useRef(onEscape)
   useEffect(() => {
@@ -272,17 +302,18 @@ type FrameProps = OverlayProps & {
 function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className }: FrameProps) {
   const { mounted, leaving } = useLeave(open)
   const panel = useRef<HTMLDivElement>(null)
+  const scrim = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const live = open && !leaving && mounted
   useReturnFocus(open)
-  useOverlayLayer(panel, { active: live, onEscape: dismissible ? onClose : undefined })
+  useOverlayLayer(panel, { active: live, onEscape: dismissible ? onClose : undefined, scrim })
   useScrollLock(mounted)
   useFirstFocus(panel, live)
   if (!mounted) return null
   const base = kind === 'sheet' ? 'bn-sheet bn-overlay' : 'bn-dialog bn-overlay'
   return createPortal(
     <>
-      <div className="bn-scrim" data-leaving={leaving ? 'true' : undefined} onClick={dismissible ? onClose : undefined} />
+      <div ref={scrim} className="bn-scrim" data-leaving={leaving ? 'true' : undefined} onClick={dismissible ? onClose : undefined} />
       <div
         ref={panel}
         className={[base, className].filter(Boolean).join(' ')}

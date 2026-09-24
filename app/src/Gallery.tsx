@@ -516,6 +516,15 @@ function OverlaySpecimens() {
               <input className="bn-input" defaultValue="ME01" data-autofocus="" />
             </label>
           </Section>
+          {/* A CONFIRM OPENED FROM INSIDE AN OPEN SHEET — the second scrimmed layer a static
+              per-class z-index cannot order against the first (a review finding, 2026-09-23):
+              its own scrim has to sit above THIS sheet's panel, not merely above THIS sheet's
+              own scrim. `gallery.spec.ts` asserts it. */}
+          <div className="kit-row">
+            <Button variant="danger" onClick={() => setConfirm(true)} data-kit-open="confirm-in-sheet">
+              Delete while editing
+            </Button>
+          </div>
         </Sheet>
         <Modal open={modal} onClose={() => setModal(false)} title="One decision" footer={<Button onClick={() => setModal(false)}>Done</Button>}>
           <p className="bn-read">A modal stops the page for one decision.</p>
@@ -523,6 +532,12 @@ function OverlaySpecimens() {
         <Modal open={layered} onClose={() => setLayered(false)} title="The first layer">
           <div className="bn-stack">
             <p className="bn-read">A second layer opens over this one. Escape closes the top one first.</p>
+            {/* A second paragraph, deliberately: both modals share the same fixed width (kit.css),
+                so nothing but content height tells them apart, and one line of body text each
+                left them the same height — no margin `gallery.spec.ts`'s own scrim-order test
+                could probe. This one is genuinely taller than the layer opened over it. Never
+                the words "second layer" here — `hasText` matches either modal on that phrase. */}
+            <p className="bn-read">It stays taller than what opens over it, on purpose, so there is a real strip of it that stays uncovered.</p>
             <div className="kit-row">
               <Button onClick={() => setSecond(true)} data-kit-open="second">
                 Open a second layer
