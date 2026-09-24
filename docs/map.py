@@ -7222,9 +7222,8 @@ COMPONENTS = [
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
                                                "never plotted.",
-                                       "governed_by": ["D227", "D62",
-                                                       "D219", "D212",
-                                                       "D196", "D50"],
+                                       "governed_by": ["D50", "D62", "D196", "D212", "D218", "D219",
+                                                       "D227", "D-product-view-hybrid"],
                                        "note": "No harness test -- a Playwright spec would be "
                                                "the honest coverage and none exists yet, named "
                                                "rather than silently absent."},
@@ -7235,8 +7234,8 @@ COMPONENTS = [
                                                "screen that is a fact rather than a reading, "
                                                "and never a color standing in for beat-or-miss "
                                                "(D62: direction is a sign and a word).",
-                                       "governed_by": ["D227", "D62", "D94",
-                                                       "D41", "D218"]},
+                                       "governed_by": ["D41", "D62", "D94", "D212", "D218", "D227",
+                                                       "D-product-view-hybrid"]},
             # D79 is the batched half of D62, and D62 is why this file is separate from
             # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
             # has and the strip draws a shape and a sign, which are two answers to two
@@ -8647,8 +8646,7 @@ COMPONENTS = [
                         "requests are intercepted (the product history and the orders "
                         "payload); no real request is made and no store is touched. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D227", "D62", "D212",
-                                 "D219"],
+                "governed_by": ["D62", "D212", "D219", "D227", "D-product-view-hybrid"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
