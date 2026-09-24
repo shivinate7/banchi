@@ -227,11 +227,17 @@ from pipeline import (  # noqa: E402
     pricing,
     readings,
     reprice,
+    routing,
     selection,
     shipping,
     tcgcsv,
     variant,
 )
+# `pipeline.skus`, aliased — this module's own `skus` name would collide with
+# `store.skus`'s `Skus`/`SkuRow` classes imported right below, and both are read in the
+# same checks (identity-follows-sku.md, lane 3a).
+from pipeline import skus as sku_pipeline  # noqa: E402
+from store.skus import SkuRow  # noqa: E402
 from server import (  # noqa: E402
     capture_server,
     order_transport,
@@ -12021,6 +12027,409 @@ def check_correct_answer_live_release(checks: Checks) -> None:
             checks.ok(True, "and the route itself answered")
 
 
+def check_identity_binding(checks: Checks) -> None:
+    """identity-follows-sku.md, lane 3a's own coverage. Every server writer that sets a SKU
+    binds through `Inventory.bind_sku` — never `set_state` with an identity kwarg — the new
+    confirm press and its undo, and how a `listing_disputed` answer routes on `#/review`.
+
+    D252's own three checks (`check_correct_answer`, `check_correct_answer_live_release`,
+    `check_catalog_set_rarity_match`, right beside this one) already prove
+    `do_correct_answer`'s field values are unchanged now that it writes them through
+    `bind_sku` — the point of THIS section is the bookkeeping those checks never looked at:
+    `bound_by`, `identity_source`, and the `skus` table row each writer upserts before it
+    binds.
+    """
+    checks.note("")
+    checks.note("IDENTITY BINDING — every SKU writer through bind_sku "
+                "(identity-follows-sku.md)")
+
+    # ------------------------------------------------------ do_review_answer: bound_by=answer
+    with isolated_home():
+        capture_server.do_capture(capture_payload(60))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("60/1", master.IDENTIFIED)
+            snapshot.review.upsert(entry(60, 1))  # default candidates: both of CANDIDATES
+
+        picked = CANDIDATES[0]
+        answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                60, 1, {"sku": picked["sku"], "condition": picked["condition"]}
+            ),
+            "an ordinary D4 answer succeeds",
+        )
+        card = Store().read().inventory.cards["60/1"]
+        checks.equal(
+            (card.sku, card.bound_by, card.identity_source),
+            (picked["sku"], "answer", master.IDENTITY_SKU),
+            "§4.1: the answer binds through `bind_sku`, and `bound_by`/`identity_source` "
+            "say so — two fields no version of this route wrote before lane 3a",
+        )
+        checks.equal(
+            card.name,
+            picked["name"],
+            "and the identity name follows the SKU rather than being left as the read "
+            "(§4.2: the OLD route 'leaves name and number as the read')",
+        )
+        checks.ok(
+            Store().read().skus.entries.get(picked["sku"]) is not None,
+            "the chosen row was upserted into the `skus` table in the same transaction "
+            "(§4.2: 'upsert the chosen row, then bind_sku')",
+        )
+        events = Store().history()
+        checks.ok(
+            any(
+                e.get("event") == "sku_bound" and e.get("position") == "60/1"
+                for e in events
+            ),
+            "bind_sku's own history line lands beside the route's",
+        )
+        checks.ok(
+            any(
+                e.get("event") == "answered" and e.get("position") == "60/1"
+                for e in events
+            ),
+            "and the route's own `answered` line is UNCHANGED — every existing D4 reader "
+            "still finds it",
+        )
+
+    # ------------------------------------------------ do_review_group_answer: group_answer
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(61))
+        cond = CANDIDATES[0]["condition"]
+        with Store().write() as snapshot:
+            for i in range(1, 4):
+                snapshot.inventory.set_state(f"61/{i}", master.IDENTIFIED)
+            for i, sku in ((1, "9201"), (2, "9202"), (3, "9203")):
+                snapshot.review.upsert(
+                    entry(61, i, candidates=[dict(CANDIDATES[0], sku=sku)])
+                )
+        answers(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {
+                    "answers": [
+                        {"box": 61, "index": 1, "sku": "9201", "condition": cond},
+                        {"box": 61, "index": 2, "sku": "9202", "condition": cond},
+                        {"box": 61, "index": 3, "sku": "9203", "condition": cond},
+                    ]
+                }
+            ),
+            "a homogeneous group answers",
+        )
+        for i, sku in ((1, "9201"), (2, "9202"), (3, "9203")):
+            card = Store().read().inventory.cards[f"61/{i}"]
+            checks.equal(
+                (card.sku, card.bound_by, card.identity_source),
+                (sku, "group_answer", master.IDENTITY_SKU),
+                f"§4.2: 61/{i} binds through `bind_sku(bound_by=group_answer)` too, one "
+                f"upsert and one bind per card",
+            )
+            checks.ok(
+                Store().read().skus.entries.get(sku) is not None,
+                f"and {sku}'s own row is in the table",
+            )
+
+    # ------------------------------------------------ do_correct_answer: bound_by=correction
+    with isolated_home() as home:
+        old_sku, new_sku = "8926937", "8925897"
+        run_dir = home / "runs" / "2026-09-24-box62-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-09-24T00:00:00+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+        capture_server.do_capture(capture_payload(62, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["62/1"].game = "riftbound"
+            snapshot.inventory.cards["62/1"].run = "2026-09-24-box62-01"
+            snapshot.inventory.set_state(
+                "62/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
+            )
+        answers(
+            checks,
+            lambda: capture_server.do_correct_answer(62, 1, {"sku": new_sku}),
+            "a correction succeeds",
+        )
+        card = Store().read().inventory.cards["62/1"]
+        checks.equal(
+            (card.bound_by, card.identity_source),
+            ("correction", master.IDENTITY_SKU),
+            "§4.2: `do_correct_answer` binds through `bind_sku(bound_by=correction)` too — "
+            "the D252 field values themselves are proved unchanged by "
+            "`check_correct_answer`, right beside this section",
+        )
+        checks.ok(
+            Store().read().skus.entries.get(new_sku) is not None,
+            "and the new row is upserted into the `skus` table before the bind",
+        )
+        last = last_event("62/1")
+        checks.equal(
+            last.get("event"),
+            "sku_corrected",
+            "and `sku_corrected` is STILL the last event — bind_sku's own `sku_bound` line "
+            "lands first, so `_reverse_correction`'s `last-event` reader is unaffected",
+        )
+
+        undone = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(62, 1, {"undo": True}),
+            "and its undo still works, unchanged (§4.2's own deviation: `_reverse_correction` "
+            "keeps its field-by-field restoration, argued in this lane's own report)",
+        )
+        if undone is not None:
+            checks.equal(undone["sku"], old_sku, "the old sku is restored")
+
+    # ---------------------------------------------------- POST .../confirm and its undo (§8.1)
+    with isolated_home():
+        held_sku = "7000001"
+        held_row = SkuRow(
+            product_line="Riftbound League of Legends Trading Card Game",
+            set_name="Origins",
+            product_name="Master Yi, Wuju Master",
+            number="191/219",
+            rarity="Rare",
+            condition="Near Mint",
+            grade="Near Mint",
+            printing=None,
+            first_seen=1_700_000_000,
+            last_seen=1_700_000_000,
+            source="t7-fixture",
+            raw={},
+        )
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(63))
+        with Store().write() as snapshot:
+            snapshot.skus.entries[held_sku] = held_row
+            # 63/1 — the held card: a SKU already on it, a read that disputes it, and
+            # `identity_source` left at its default (never bound) — §7.3's T5/T4s shape.
+            snapshot.inventory.set_state("63/1", master.IDENTIFIED, sku=held_sku)
+            snapshot.inventory.cards["63/1"].game = "riftbound"
+            snapshot.inventory.cards["63/1"].read_name = "Yi, Ionia"
+            snapshot.inventory.cards["63/1"].read_disputes = True
+            # 63/2 — never identified, for `not_identified`.
+            # 63/3 — sold, for `card_departed`.
+            snapshot.inventory.set_state(
+                "63/3", master.IDENTIFIED, sku=held_sku, condition="Near Mint"
+            )
+            snapshot.inventory.set_state("63/3", master.SOLD)
+            # 63/4 — a SKU with no row in the table, for `sku_unknown`.
+            snapshot.inventory.set_state(
+                "63/4", master.IDENTIFIED, sku="7000404", condition="Near Mint"
+            )
+            snapshot.inventory.cards["63/4"].game = "riftbound"
+
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(99, 99, {}),
+            "card_not_found",
+            "a confirm for a position with no record refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 3, {}),
+            "card_departed",
+            "a confirm on a sold card refuses — a departed card's identity is frozen (D134)",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 2, {}),
+            "not_identified",
+            "a confirm on a card with no SKU refuses — there is no listing to confirm",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 4, {}),
+            "sku_unknown",
+            "a confirm whose SKU is not in the `skus` table refuses rather than guessing",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {"sku": "anything"}),
+            "field_not_settable",
+            "confirm never takes a `sku` in the body — it confirms the card's own current "
+            "one, or it is `do_correct_answer`'s job",
+        )
+
+        confirmed = answers(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {}),
+            "confirming a held card succeeds",
+        )
+        if confirmed is not None:
+            checks.equal(confirmed.get("confirmed"), True, "and it reports which direction")
+        card = Store().read().inventory.cards["63/1"]
+        checks.equal(
+            (card.sku, card.bound_by, card.identity_source),
+            (held_sku, "confirm", master.IDENTITY_SKU),
+            "§8.1: `bind_sku(current sku, bound_by=confirm)` — the SKU never moves",
+        )
+        checks.equal(
+            (card.name, card.number),
+            ("Master Yi, Wuju Master", "191/219"),
+            "and the identity now follows the table row — Riftbound's `printed_code` "
+            "strategy stores the number verbatim",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {}),
+            "already_confirmed",
+            "confirming an already-SKU-bound card refuses — there is nothing left to do",
+        )
+
+        undone = answers(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {"undo": True}),
+            "the undo puts the confirm back",
+        )
+        if undone is not None:
+            checks.equal(undone.get("undone"), True, "and it reports which direction")
+        card = Store().read().inventory.cards["63/1"]
+        checks.equal(
+            (card.sku, card.identity_source, card.name),
+            (held_sku, master.IDENTITY_READ, "Yi, Ionia"),
+            "§8.1: the undo returns `identity_source` to `read` — the SKU stays exactly "
+            "where it was (a confirm never moves it, so nothing here releases anything), "
+            "and the name comes back off `read_name`",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {"undo": True}),
+            "not_confirmed",
+            "a second undo refuses — the ground truth is the card's own `bound_by`, not a "
+            "flag on an event",
+        )
+
+    # ------------------------------- a `listing_disputed` answer, routed inside do_review_answer
+    with isolated_home():
+        disputed_sku = "7100001"
+        other_sku = "7100002"
+        disputed_row = SkuRow(
+            product_line="Riftbound League of Legends Trading Card Game",
+            set_name="Origins", product_name="Jax, Icathia", number="1/14",
+            rarity="Epic", condition="Near Mint", grade="Near Mint", printing=None,
+            first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+        )
+        other_row = SkuRow(
+            product_line="Riftbound League of Legends Trading Card Game",
+            set_name="Origins", product_name="Jax, Unmatched", number="2/14",
+            rarity="Epic", condition="Near Mint", grade="Near Mint", printing=None,
+            first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+        )
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(64))
+        with Store().write() as snapshot:
+            snapshot.skus.entries[disputed_sku] = disputed_row
+            snapshot.skus.entries[other_sku] = other_row
+            for i in (1, 2):
+                snapshot.inventory.set_state(f"64/{i}", master.IDENTIFIED, sku=disputed_sku)
+                snapshot.inventory.cards[f"64/{i}"].game = "riftbound"
+                snapshot.inventory.cards[f"64/{i}"].read_name = "Jax, Icathia"
+            disputed_candidates = [
+                {
+                    "sku": disputed_sku, "name": "Jax, Icathia", "set": "Origins",
+                    "number": "1/14", "condition": "Near Mint", "market": "1.00",
+                    "rarity": "Epic",
+                },
+                {
+                    "sku": other_sku, "name": "Jax, Unmatched", "set": "Origins",
+                    "number": "2/14", "condition": "Near Mint", "market": "1.00",
+                    "rarity": "Epic",
+                },
+            ]
+            snapshot.review.upsert(
+                entry(
+                    64, 1, reason=routing.LISTING_DISPUTED, candidates=disputed_candidates,
+                )
+            )
+            snapshot.review.upsert(
+                entry(
+                    64, 2, reason=routing.LISTING_DISPUTED, candidates=disputed_candidates,
+                )
+            )
+
+        # --------------------------------------------------------- "the listing is right"
+        confirmed = answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                64, 1, {"sku": disputed_sku, "condition": "Near Mint"}
+            ),
+            "§8.1: answering a `listing_disputed` entry with the card's OWN current sku "
+            "confirms rather than re-answering",
+        )
+        if confirmed is not None:
+            checks.equal(
+                (confirmed.get("confirmed"), confirmed.get("corrected")),
+                (True, False),
+                "the response says which press this was",
+            )
+            checks.ok(
+                confirmed.get("review_cleared"),
+                "and the queue entry is cleared like any other answer",
+            )
+        card = Store().read().inventory.cards["64/1"]
+        checks.equal(
+            (card.bound_by, card.identity_source, card.name),
+            ("confirm", master.IDENTITY_SKU, "Jax, Icathia"),
+            "the same sku, bound through `bind_sku(bound_by=confirm)` — never `answer`",
+        )
+
+        # ------------------------------------------------- "the listing is the wrong card"
+        corrected = answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                64, 2, {"sku": other_sku, "condition": "Near Mint"}
+            ),
+            "§8.1: answering with any OTHER sku is the D252 correction, unchanged in "
+            "meaning",
+        )
+        if corrected is not None:
+            checks.equal(
+                (corrected.get("confirmed"), corrected.get("corrected")),
+                (False, True),
+                "the response says which press this was",
+            )
+            checks.equal(
+                corrected.get("previous_sku"), disputed_sku,
+                "and it reports the sku it replaced, `do_correct_answer`'s own field",
+            )
+            checks.ok(
+                corrected.get("review_cleared"),
+                "and the queue entry is cleared here too",
+            )
+        card = Store().read().inventory.cards["64/2"]
+        checks.equal(
+            (card.sku, card.bound_by, card.name),
+            (other_sku, "correction", "Jax, Unmatched"),
+            "the card now carries the OTHER row, bound through "
+            "`bind_sku(bound_by=correction)`",
+        )
+        last = last_event("64/2")
+        checks.equal(
+            last.get("event"),
+            "sku_corrected",
+            "and the same `sku_corrected` line `do_correct_answer` itself writes — the two "
+            "doors write one shape, exactly as §8.1 says: unchanged in meaning",
+        )
+        undone = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(64, 2, {"undo": True}),
+            "and the SAME reversal `do_correct_answer` uses on `#/inventory` takes it back, "
+            "because the two doors wrote the identical event shape",
+        )
+        if undone is not None:
+            checks.equal(undone["sku"], disputed_sku, "the disputed sku is restored")
+
+
 def check_catalog_number_fields_round_trip(checks: Checks) -> None:
     """`join.catalog_number_fields`, round-tripped over every distinct `Number` cell in the
     four committed exports — item 2 of the review on the D252 amendment. `store/numbers.py:
@@ -22781,6 +23190,25 @@ def check_export_fetch(checks: Checks) -> None:
                     "many SKUs came back, and which game the file answers for off its own "
                     "Product Line cells rather than off its name",
                 )
+                # identity-follows-sku.md §3.2, fill point 1: THE SAME FETCH ALSO FOLDS ITS
+                # ROWS INTO THE `skus` TABLE, in the same press that keeps the file — never a
+                # second request. All three of `write_export`'s own seam SKUs land, and the
+                # ordinary Pokemon SKU splits into a grade and a printing.
+                sku_table = Store().read().skus.entries
+                checks.ok(
+                    all(sku in sku_table for sku in SEAM_SKUS),
+                    "every SKU the fetch carried is in the table after the press, with no "
+                    "second call",
+                    f"table keys: {sorted(sku_table.keys())}",
+                )
+                if DUNSPARCE_SKU in sku_table:
+                    dunsparce_row = sku_table[DUNSPARCE_SKU]
+                    checks.equal(
+                        (dunsparce_row.product_line, dunsparce_row.grade),
+                        ("Pokemon", "Near Mint"),
+                        "and the row carries the game's own Product Line cell and the grade "
+                        "`store/skus.py:split_condition` reads off its own Condition cell",
+                    )
                 kept_now = fetched_files()
                 checks.equal(
                     len(kept_now), 1, "exactly one file is kept, it is the one just fetched"
@@ -23426,6 +23854,16 @@ def check_export_fetch(checks: Checks) -> None:
                 checks.ok(
                     (files.inventory_dir() / pipeline_routes.LIVE_DIR / answer["fetched"]).is_file(),
                     "and it is on disk under a name `_open_live_export` will accept",
+                )
+                # identity-follows-sku.md §3.2, fill point 2: the live export folds into the
+                # `skus` table in the SAME transaction as the readings replace above it, no
+                # second write.
+                live_sku_table = Store().read().skus.entries
+                checks.ok(
+                    all(sku in live_sku_table for sku in SEAM_SKUS),
+                    "the live export's own SKUs are in the table too, through the identical "
+                    "fold the Filtered Export used",
+                    f"table keys: {sorted(live_sku_table.keys())}",
                 )
 
                 # THE SILENT FAILURE, MADE LOUD. This endpoint answers a request it cannot
@@ -31933,6 +32371,7 @@ def run() -> Result:
     check_review_catalog(checks)
     check_correct_answer(checks)
     check_correct_answer_live_release(checks)
+    check_identity_binding(checks)
     check_catalog_number_fields_round_trip(checks)
     check_catalog_set_rarity_match(checks)
     check_run_realignment(checks)

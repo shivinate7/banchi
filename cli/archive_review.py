@@ -186,6 +186,16 @@ def queue_entries(
                 index=card.index,
                 label=join.place_text(game, position),
                 photo=card.photo,
+                # NOTE (identity-follows-sku.md, lane 3a, 2026-09-24): once a card is
+                # SKU-bound, `card.name`/`card.number` are the CATALOG's identity, not the
+                # model's read — this block's own name is `read`, so it should build from
+                # `card.read_name`/`card.read_number` (§3.1) once those are the read's own
+                # home, through Lane 4's `cli/resolve.py:card_reading` helper (§11, lane 4:
+                # `cli/resolve.py`). That helper is not on this branch yet (Lane 4 has not
+                # merged onto Lane 3a's base), so this line is left UNCHANGED rather than
+                # half-migrated — flagged here instead of quietly building a second,
+                # divergent reader. `cli/archive_review.py` is outside Lane 3a's own file
+                # fence; this is a note, not a functional edit.
                 read={
                     "name": card.name,
                     "number": card.number,
