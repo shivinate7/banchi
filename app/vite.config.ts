@@ -37,9 +37,9 @@ const demoBundleStub = fileURLToPath(new URL('./src/demoBundle.stub.ts', import.
 // opened by any name that reaches this Mac. The URL stays for callers that have no `location`
 // — `tsc`, the specs' module imports — where there is no address bar to follow.
 //
-// `server.host` so Vite answers on the LAN at all. The capture server has bound 0.0.0.0 since
-// it was written; Vite was the half still listening only on the loopback, so the app could not
-// be opened from the phone even though its server could be reached.
+// `server.host` so Vite answers on the LAN at all. The capture server has bound every
+// interface since it was written; Vite was the half still listening only on the loopback, so
+// the app could not be opened from the phone even though its server could be reached.
 export default defineConfig({
   // WHERE THE BUILD WILL BE SERVED FROM, and it is a build input because only the publisher
   // knows. GitHub Pages serves a project site under `/<repo>/`, not at the root, and a bundle
