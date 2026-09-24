@@ -448,6 +448,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="a live export (My Pricing, all printings) read just before this send: no row "
         "may leave TCGplayer holding more copies than are on hand. Trims are named",
     )
+    # THE PRESS'S OWN FILE AND ITS CLAIM (`D-one-press-sends-and-makes-live`, round 2). Given by
+    # `server/send_routes.py` only: the file goes into the press's own directory rather than
+    # the run's, so two presses can never read each other's file, and the SKUs it adds are
+    # claimed in the same store write that counts them sent (`store/sendclaims.py`).
+    emit.add_argument("--send-dir", metavar="DIR", help=argparse.SUPPRESS)
+    emit.add_argument("--send-claim", metavar="STAMP", help=argparse.SUPPRESS)
+    emit.add_argument("--claim-holder", type=int, metavar="PID", help=argparse.SUPPRESS)
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile

@@ -2920,7 +2920,7 @@ test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ p
   await page.getByRole('button', { name: 'Rebind' }).click()
 
   const sheet = page.locator('.rescue-sheet')
-  await expect(sheet).toContainText('already left the store')
+  await expect(sheet).toContainText('They have left the store')
   const text = (await sheet.innerText()).toLowerCase()
   expect(text).not.toContain('none_on_shelf')
   expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toHaveCount(0)

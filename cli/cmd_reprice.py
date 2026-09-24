@@ -127,7 +127,10 @@ def published_recently(now: Optional[datetime] = None, window_s: int = PUBLISH_L
             receipts += [(directory, directory / name) for directory in root.iterdir()]
     for directory, receipt in receipts:
         record = files.read_json(receipt, {}) or {}
-        stamp = record.get("published_at")
+        # A SEND WHOSE OUTCOME IS UNKNOWN MAY HAVE PUBLISHED (`server/send_routes.py:_unknown`),
+        # so its moment is read as a publish: the guard's whole job is a figure it cannot vouch
+        # for, and a publish TCGplayer answered 500 to is exactly that.
+        stamp = record.get("published_at") or (record.get("unknown") or {}).get("at")
         if not stamp:
             continue
         try:

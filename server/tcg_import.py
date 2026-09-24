@@ -51,7 +51,6 @@ names and rules out a JSON body. `_form` below reproduces that encoding.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import sys
@@ -110,6 +109,40 @@ COLUMNS: Sequence[Tuple[str, str]] = (
     ("ProOnlineStorePrice", "My Store Price"),
     ("Number", "Number"),
 )
+
+
+def unclear(refusal: FetchRefusal) -> bool:
+    """Might TCGplayer have done the work this refused write was asking for?
+
+    THE ONE READING OF A FAILED WRITE, and a send's whole safety turns on it
+    (`D-one-press-sends-and-makes-live`, round 2). A CLEAR refusal — a 4xx, a redirect to the
+    login page, a redirect anywhere else — is a request the portal turned away before acting.
+    An UNCLEAR one — no answer in time, a dropped connection, a 5xx, a 200 whose body is not
+    JSON — is a request the portal may have carried out and then failed to report. A caller
+    never takes copies back on an unclear answer; it holds them until a live read says.
+    """
+    if refusal.code in ("tcg_unreachable", "tcg_write_unreadable"):
+        return True
+    if refusal.code == "tcg_write_refused":
+        return refusal.status is None or int(refusal.status) >= 500
+    return False
+
+
+class PushFailed(FetchRefusal):
+    """A push that stopped part-way, and whether the upload it opened was rolled back.
+
+    `upload_id` is None when no upload was opened, so nothing can be waiting at TCGplayer.
+    `rolled_back` is True only when the portal ANSWERED the rollback; False means the upload
+    may still sit in the operator's Staged list, which a person can publish by hand. The
+    caller's rule (`server/send_routes.py`): copies go back on the list only on True or on no
+    upload at all.
+    """
+
+    def __init__(self, cause: FetchRefusal, upload_id, rolled_back):
+        super().__init__(cause.code, cause.message, getattr(cause, "status", None))
+        self.cause = cause
+        self.upload_id = upload_id
+        self.rolled_back = rolled_back
 
 
 class StagedUpload:
@@ -214,10 +247,14 @@ def _post(path: str, fields: Dict[str, object]) -> dict:
             f"follows a redirect on a write, so nothing was written.",
         )
     if status != 200:
+        # NOT "NOTHING WAS WRITTEN" ANY MORE, which this sentence said until the adversarial
+        # review of 2026-09-24. A 5xx is the portal failing AFTER it may have done the work —
+        # the stand-in's `published_then_5xx` mode is exactly that — so only a 4xx is a
+        # request turned away. `unclear` below is the one reading of the difference.
         raise FetchRefusal(
             "tcg_write_refused",
-            f"TCGplayer answered {status} to {path}. Nothing in this step was written; a "
-            f"push already in progress is rolled back.",
+            f"TCGplayer answered {status} to {path}.",
+            status=status,
         )
     try:
         return json.loads(body.decode("utf-8"))
@@ -330,13 +367,22 @@ def push_to_staged(
     """
     _check(rows, listing=listing)
 
-    opened = _post(INITIALIZE, {"filename": filename, "type": TYPE_PRICING})
+    try:
+        opened = _post(INITIALIZE, {"filename": filename, "type": TYPE_PRICING})
+    except FetchRefusal as refusal:
+        # NO UPLOAD ID, SO NOTHING TO ROLL BACK AND NO ROW SENT. Even an unclear answer here
+        # is safe: an upload the portal opened and never named holds no rows.
+        raise PushFailed(refusal, None, None) from None
     upload_id = opened.get("StagedPricingUploadId")
     if not upload_id:
-        raise FetchRefusal(
-            "tcg_import_not_opened",
-            "TCGplayer accepted the request to start an upload but named no upload id, so "
-            "there is nothing to add rows to and nothing to roll back. Nothing was written.",
+        raise PushFailed(
+            FetchRefusal(
+                "tcg_import_not_opened",
+                "TCGplayer accepted the request to start an upload but named no upload id, so "
+                "there is nothing to add rows to and nothing to roll back. Nothing was written.",
+            ),
+            None,
+            None,
         )
 
     accepted = 0
@@ -364,13 +410,18 @@ def push_to_staged(
                 "type": TYPE_PRICING,
             },
         )
-    except FetchRefusal:
-        # THE ROLLBACK IS BEST-EFFORT AND ITS FAILURE MUST NOT REPLACE THE REAL REFUSAL.
-        # What went wrong is the thing the operator has to read; "and the cleanup also
-        # failed" is a second sentence, not a substitute for the first.
-        with contextlib.suppress(FetchRefusal):
+    except FetchRefusal as refusal:
+        # THE ROLLBACK'S FAILURE DOES NOT REPLACE THE REAL REFUSAL, AND IT IS NO LONGER
+        # SWALLOWED EITHER. What went wrong is still the refusal the caller reads; whether the
+        # upload was cleared is the second fact, carried on `PushFailed`, because a caller that
+        # puts copies back on the list over an upload still waiting in Staged has set up the
+        # double send this module exists to prevent (the 2026-09-24 review, S1-b).
+        rolled = True
+        try:
             rollback(str(upload_id))
-        raise
+        except FetchRefusal:
+            rolled = False
+        raise PushFailed(refusal, str(upload_id), rolled) from None
 
     return StagedUpload(str(upload_id), len(rows), accepted, messages)
 

@@ -55,6 +55,7 @@ from store.postings import Postings
 from store.queues import MAIN, PARKED, Queue
 from store.readings import Readings
 from store.rows import Rows
+from store.sendclaims import SendClaims
 from store.submissions import Submissions
 
 
@@ -73,6 +74,10 @@ class Snapshot:
     # against it and the write of it have to be the SAME transaction as the cache consult that
     # decides what is being bought, and D88 is what makes that one transaction.
     submissions: Submissions
+    # THE SKUS A PRESS TO TCGPLAYER IS SENDING (`D-one-press-sends-and-makes-live`), in the
+    # snapshot for `submissions`' reason: `cli/cmd_emit.py` checks and writes it in the SAME
+    # transaction that counts the copies as sent, so two presses cannot both decide first.
+    send_claims: SendClaims
     # THE MARKET READING `pkmnscan readings adopt --write` LAST CACHED, PER SKU
     # (D189). Bound like every other table so a `Store.write()` from `readings
     # adopt` commits it atomically with everything else D88 already protects; every other
@@ -111,6 +116,7 @@ class Snapshot:
             self.ledger.orders,
             self.ledger.fulfilment,
             self.submissions.entries,
+            self.send_claims.entries,
             self.readings.entries,
             self.readings.sources,
             self.archive.entries,
@@ -158,6 +164,7 @@ class Store:
                 fulfilment=bound(Ledger.FULFILMENT, "fulfilment"),
             ),
             submissions=Submissions(entries=bound(Submissions.ENTRIES, "submissions")),
+            send_claims=SendClaims(entries=bound(SendClaims.ENTRIES, "send_claims")),
             readings=Readings(
                 entries=bound(Readings.ENTRIES, "readings"),
                 sources=bound(Readings.SOURCES, "readings_sources"),

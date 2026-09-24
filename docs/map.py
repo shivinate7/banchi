@@ -668,8 +668,8 @@ COMPONENTS = [
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58",
-                                            "D59", "D86", "D99", "D172", "D213", "D243",
-                                            "D253"], "tested_by": ["T7"]},
+                                            "D59", "D86", "D88", "D99", "D172", "D174", "D213",
+                                            "D243", "D253"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
@@ -1770,6 +1770,19 @@ COMPONENTS = [
             # `_run_box` answers None for one. The cache cannot stand in for either: an entry
             # is written AFTER collection, so two presses racing both see an empty cache and
             # both pay.
+            "sendclaims.py": {"does": "the `send_claims` table — D174's claim shape over a send "
+                                      "to TCGplayer. One row per press, holding the SKUs it "
+                                      "adds (0 for a price file). `cli/cmd_emit.py` checks every "
+                                      "live claim and writes its own INSIDE the store write that "
+                                      "counts the copies sent, so two presses cannot both decide "
+                                      "first, whatever process each came from. A claim is ALSO "
+                                      "THE HOLD: a send whose outcome is unknown keeps its row, "
+                                      "and every later send is refused over its SKUs until the "
+                                      "live check past the wait releases it. A dead holder is "
+                                      "reported, never acted on. Schema 11.",
+                              "governed_by": ["D174", "D88", "D192",
+                                              "D-one-press-sends-and-makes-live"],
+                              "tested_by": ["T7"]},
             "submissions.py": {"does": "the `submissions` table — one row per press, holding the "
                                        "position keys that press is about to pay to read. "
                                        "`claim_or_refuse` is the guard and it is ONE ACT: it "
@@ -1886,8 +1899,9 @@ COMPONENTS = [
                                    "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189", "D191", "D219", "D243"],
+                           "governed_by": ["D13", "D53", "D63", "D88", "D134", "D145", "D174",
+                                           "D189", "D191", "D219", "D243",
+                                           "D-one-press-sends-and-makes-live"],
                            "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
@@ -1903,8 +1917,9 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D166", "D172",
-                                      "D174", "D189", "D192", "D213", "D219", "D243"],
+                      "governed_by": ["D20", "D26", "D86", "D88", "D134", "D140", "D145", "D166",
+                                      "D172", "D174", "D189", "D192", "D213", "D219", "D243",
+                                      "D-one-press-sends-and-makes-live"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -4935,18 +4950,27 @@ COMPONENTS = [
                                                "D104", "D106", "D-one-press-sends-and-makes-live"],
                                "tested_by": ["T7"]},
             "send_routes.py": {"does": "THE ONE PRESS that sends listings to TCGplayer and makes "
-                                       "them live, and the checks around it. In order: fetch "
+                                       "them live, and the checks around it. One press at a "
+                                       "time in the server, refused by name. In order: fetch "
                                        "the live export (a failure refuses the whole press), "
-                                       "`reconcile --live --write`, `emit --live-guard`, push, "
-                                       "publish. A failed push or publish rolls the upload back "
-                                       "and puts the copies back on the list. Receipts live "
-                                       "under `inventory/sends/<stamp>/`. Also the live check "
-                                       "after the lag (runs only when a request asks; no timer "
-                                       "here), take-back for a downloaded file, and the "
-                                       "mark-down's one press. Never called against the real "
-                                       "portal: T7 proves every path on a loopback one.",
-                               "governed_by": ["D33", "D54", "D86", "D87", "D99", "D100",
-                                               "D104", "D105", "D106",
+                                       "`reconcile --live --write`, `emit --live-guard` into the "
+                                       "press's OWN directory with a store claim on its SKUs "
+                                       "(`store/sendclaims.py`), push, publish. Copies go back "
+                                       "on the list ONLY when no upload was opened or TCGplayer "
+                                       "answered the rollback; an unclear publish, a slow "
+                                       "answer or a refused rollback is UNKNOWN, holds its SKUs "
+                                       "and is resolved by the live check past the wait. Take "
+                                       "them back is offered only after that check, for the "
+                                       "copies it did not find. Receipts live under "
+                                       "`inventory/sends/<stamp>/`, written before the first "
+                                       "byte leaves. Also the live check (runs only when a "
+                                       "request asks; no timer here; one rise confirms one "
+                                       "receipt) and the mark-down's one press. Never called "
+                                       "against the real portal: T7 proves every path on a "
+                                       "loopback one with slow, partial, 5xx and "
+                                       "rollback-refused modes.",
+                               "governed_by": ["D33", "D54", "D86", "D87", "D99", "D100", "D104",
+                                               "D105", "D106", "D174",
                                                "D-one-press-sends-and-makes-live"],
                                "tested_by": ["T7"]},
             "tcg_export.py": {

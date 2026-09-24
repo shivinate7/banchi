@@ -17320,13 +17320,36 @@ def send_portal():
     `tcg_export.live_endpoint` both follow `PKMNSCAN_TCG_EXPORT_URL`, which is set to this
     socket, and `envfile` is made hermetic so a real `.env` cannot supply a real cookie.
 
-    `state["fail"]` names endpoints (the last path segment) that answer 500. `state["live"]`
-    is the export body; `state["signed_out"]` makes the GET redirect to the login page.
+    THE MODES, EACH A WAY THE REAL PORTAL CAN ANSWER THAT A SEND MUST SURVIVE:
+
+      `fail`      endpoints (the last path segment) that answer 500 — an UNCLEAR answer: the
+                  server may have done the work before it failed. `{"rollbackexportcsv"}` is
+                  the rollback-refused mode.
+      `refuse`    endpoints that answer 400 — a CLEAR refusal: the request was turned away.
+      `slow`      endpoint -> seconds to sleep before answering (`"GET"` for the live read).
+                  Past `tcg_export.TIMEOUT_S` this is the slow mode, and the work still lands.
+      `turn_away` how many rows of each upload chunk `SuccessfulProductCount` leaves out —
+                  the partial-accept mode.
+      `published_then_5xx`  `movetolive` publishes, then answers 500 — the portal did the
+                  work and said it failed.
+      `hold`      endpoint -> a `threading.Event` the handler waits on before answering, so a
+                  case can look at a press while it is still running.
+      `gate`      a `threading.Barrier` the live read waits on, so two presses overlap.
+
+    `state["live"]` is the export body; `state["signed_out"]` makes the GET redirect to the
+    login page. The server is THREADED, as the real one is: a rollback sent while a slow chunk
+    is still sleeping must be answered, not queued behind it.
     """
     state = {
         "live": _live_export_bytes({DUNSPARCE_SKU: 0}),
         "signed_out": False,
         "fail": set(),
+        "refuse": set(),
+        "slow": {},
+        "turn_away": 0,
+        "published_then_5xx": False,
+        "hold": {},
+        "gate": None,
         "calls": [],
         "rows": [],
         "moved": [],
@@ -17339,14 +17362,31 @@ def send_portal():
             pass
 
         def _answer(self, status, body, kind="application/json"):
-            self.send_response(status)
-            self.send_header("Content-Type", kind)
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(status)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except OSError:
+                # THE CLIENT GAVE UP (the slow mode's whole point). The work above stands.
+                pass
+
+        def _wait(self, name):
+            held = state["hold"].get(name)
+            if held is not None:
+                held.wait(20)
+            delay = state["slow"].get(name)
+            if delay:
+                time.sleep(delay)
 
         def do_GET(self):  # noqa: N802
             state["calls"].append(("GET", urllib.parse.urlparse(self.path).path))
+            gate = state["gate"]
+            if gate is not None:
+                with contextlib.suppress(threading.BrokenBarrierError):
+                    gate.wait(3)
+            self._wait("GET")
             if state["signed_out"]:
                 self.send_response(302)
                 self.send_header("Location", "https://store.tcgplayer.com/oauth/login")
@@ -17363,7 +17403,12 @@ def send_portal():
                 self.rfile.read(length).decode("utf-8"), keep_blank_values=True
             )
             state["calls"].append(("POST", name))
+            if name in state["refuse"]:
+                self._wait(name)
+                self._answer(400, b"{}")
+                return
             if name in state["fail"]:
+                self._wait(name)
                 self._answer(500, b"{}")
                 return
             answer: dict = {}
@@ -17376,13 +17421,20 @@ def send_portal():
                     found = re.match(r"^data\[(\d+)\]\[(\w+)\]$", key)
                     if found:
                         rows.setdefault(int(found.group(1)), {})[found.group(2)] = values[0]
-                state["rows"] += [rows[index] for index in sorted(rows)]
-                answer = {"SuccessfulProductCount": len(rows), "Messages": []}
+                kept = [rows[index] for index in sorted(rows)]
+                kept = kept[: max(0, len(kept) - int(state["turn_away"]))]
+                state["rows"] += kept
+                answer = {"SuccessfulProductCount": len(kept), "Messages": []}
             elif name == "movetolive":
                 state["moved"].append(form.get("stagedPricingUploadId", [""])[0])
+                if state["published_then_5xx"]:
+                    self._wait(name)
+                    self._answer(500, b"{}")
+                    return
                 answer = {"Success": True}
             elif name == "rollbackexportcsv":
                 state["rolled"].append(form.get("stagedPricingUploadId", [""])[0])
+            self._wait(name)
             self._answer(200, json.dumps(answer).encode("utf-8"))
 
     keys = (
@@ -17392,7 +17444,8 @@ def send_portal():
         envfile.FROM_FILE_ENV,
     )
     previous = {name: os.environ.get(name) for name in keys}
-    portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
+    portal = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Portal)
+    portal.daemon_threads = True
     thread = threading.Thread(target=portal.serve_forever, daemon=True)
     thread.start()
     os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
@@ -17652,11 +17705,14 @@ def check_send_press(checks: Checks) -> None:
         )
 
     # ------------------------------------------------ a failed push, then a failed publish
+    # A 500 ON THE OPENING CALL (nothing staged: no upload id, no row), then a CLEAR 400 on
+    # the publish, which is rolled back. An UNCLEAR publish is `check_send_hazards`' case: its
+    # copies are held, never put back (the 2026-09-24 review, S1-b).
     for failing, rolled in (("initializeexportcsv", []), ("movetolive", ["u-1"])):
         with send_portal() as portal, isolated_home():
             run_dir, _ = seam_run(checks, cards)
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
-            portal["fail"] = {failing}
+            portal["fail" if failing == "initializeexportcsv" else "refuse"] = {failing}
             code = _route_refusal(
                 lambda run_dir=run_dir: send_routes.do_send({"runs": [run_dir.name], "confirm": True})
             )
@@ -17695,6 +17751,28 @@ def check_send_press(checks: Checks) -> None:
             "no_such_file",
             "and a name the receipt does not list is refused, never joined onto a path",
         )
+        # THE OWNER'S RULING, 2026-09-24: Take them back only after a check past the wait.
+        checks.equal(
+            _route_refusal(
+                lambda: send_routes.do_take_back(answer["send"]["stamp"], {"confirm": True})
+            ),
+            "take_back_not_yet",
+            "TAKE THEM BACK WAITS for a live check past the wait: the file may be uploading now",
+        )
+        checks.ok(
+            bool(send_routes.do_sends()["sends"][0]["take_back_after"]),
+            "and the receipt says when it will be safe",
+        )
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        record["check_after"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        send_routes.do_live_check({})
+        checks.equal(
+            send_routes.do_sends()["sends"][0]["takeable"],
+            4,
+            "past the wait, a check that finds none of the file's copies offers all four back",
+        )
         taken = send_routes.do_take_back(answer["send"]["stamp"], {"confirm": True})
         checks.equal(taken["send"]["state"], "taken_back", "Take them back puts them back")
         checks.equal(pushed(ARTICUNO_SKU), 0, "and the next send offers them again")
@@ -17732,7 +17810,9 @@ def check_send_press(checks: Checks) -> None:
             tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
             if failing:
-                portal["fail"] = {failing}
+                # A CLEAR REFUSAL (400): rolled back, nothing left. The unclear 500 is
+                # `check_send_hazards`' case, where the receipt stays and the SKUs are held.
+                portal["refuse"] = {failing}
                 checks.equal(
                     _route_refusal(
                         lambda directory=directory: send_routes.do_markdown_send(directory.name, {"confirm": True})
@@ -17786,6 +17866,510 @@ def check_send_press(checks: Checks) -> None:
         "tcg_import_moves_quantity",
         "and a price file still refuses any quantity at all (D100)",
     )
+
+
+def _press_thread(fn, answers, index):
+    """Run one press on its own thread and keep what it answered, or the code it refused."""
+
+    def go():
+        try:
+            answers[index] = ("sent", fn())
+        except pipeline_routes.PipelineRefusal as caught:
+            answers[index] = ("refused", caught.code)
+        except Exception as caught:  # noqa: BLE001 — the case reports it, never swallows it
+            answers[index] = ("raised", f"{type(caught).__name__}: {caught}")
+
+    thread = threading.Thread(target=go, daemon=True)
+    thread.start()
+    return thread
+
+
+@contextmanager
+def _short_timeout(seconds: float):
+    """The transport's timeout, lowered for one case so the slow mode is past it quickly."""
+    before = tcg_export.TIMEOUT_S
+    tcg_export.TIMEOUT_S = seconds
+    try:
+        yield
+    finally:
+        tcg_export.TIMEOUT_S = before
+
+
+def _age_receipt(stamp: str) -> None:
+    """Move a receipt's wait into the past: the lag has passed for it."""
+    directory = send_routes.sends_dir() / stamp
+    record = send_routes._read(directory)
+    record["check_after"] = "2000-01-01T00:00:00+00:00"
+    send_routes._write(directory, record)
+
+
+def _posts(portal) -> List[str]:
+    return [name for kind, name in portal["calls"] if kind == "POST"]
+
+
+@contextmanager
+def _case(checks: Checks, label: str):
+    """One case of many: a case that raises is a FAIL naming it, and the next case still runs."""
+    try:
+        yield
+    except Exception:  # noqa: BLE001 — reported, never swallowed
+        import traceback
+
+        checks.ok(False, f"{label}: the case raised", traceback.format_exc()[-1500:])
+
+
+def check_send_hazards(checks: Checks) -> None:
+    """The adversarial review's failures, each against the stand-in portal's own mode.
+
+    EVERY CASE HERE WENT RED ON THE BUILD BEFORE IT. Two presses at once, a publish TCGplayer
+    answered 500 after doing it, a rollback it refused, a chunk that never answered, a partial
+    accept, one live rise read as two confirmations, a same-bytes rule that never forgot, an
+    export with no quantity column. What is asserted is what the portal RECEIVED and what the
+    store and the receipt say afterwards — never a message's wording.
+    """
+    checks.note("")
+    checks.note("SEND HAZARDS — two presses, unclear answers, slow answers, partial answers")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    empty = {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0}
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def newest():
+        return send_routes.do_sends()["sends"][0]
+
+    # ------------------------------------------------------- S1-a: two presses at once
+    with _case(checks, "S1-a: two presses at once"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["gate"] = threading.Barrier(2)
+        answers: Dict[int, tuple] = {}
+        threads = [
+            _press_thread(
+                lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True}),
+                answers,
+                index,
+            )
+            for index in (0, 1)
+        ]
+        for thread in threads:
+            thread.join(60)
+        kinds = sorted(kind for kind, _ in answers.values())
+        checks.equal(
+            kinds,
+            ["refused", "sent"],
+            f"TWO PRESSES AT ONCE: one sends and the other is refused, never both: {answers}",
+        )
+        checks.equal(
+            [code for kind, code in answers.values() if kind == "refused"],
+            ["send_in_progress"],
+            "and the refusal names the press that is already sending",
+        )
+        checks.equal(
+            _posts(portal).count("initializeexportcsv"),
+            1,
+            "ONE upload reached TCGplayer, not two",
+        )
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "3", DUNSPARCE_SKU: "1"},
+            "and it carried each copy once",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 3, "and the store counts three Articuno sent, not six")
+
+    # --------------------------------- S1-a: the store claim holds across processes too
+    with _case(checks, "S1-a: the store claim holds across processes too"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        with Store().write() as writable:
+            writable.send_claims.claim(
+                "20260924-120000-aaaaaa", "listing", {ARTICUNO_SKU: 3}, pid=os.getpid()
+            )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_in_progress",
+            "A LIVE STORE CLAIM ON A CARD refuses a press over it, whoever wrote the claim",
+        )
+        checks.equal(
+            [name for name in _posts(portal)],
+            [],
+            "and nothing reaches TCGplayer's write side",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 0, "and no copy is counted sent")
+
+    # ------------------------------------ S1-a: a stamp is unique within one second
+    with _case(checks, "S1-a: a stamp is unique within one second"), isolated_home():
+        first, second = send_routes._new_stamp(), send_routes._new_stamp()
+        checks.ok(
+            first != second
+            and (send_routes.sends_dir() / first).is_dir()
+            and (send_routes.sends_dir() / second).is_dir(),
+            f"two presses in one second get two directories of their own: {first}, {second}",
+        )
+
+    # ---------------- S1-a: a dropped connection sees the press still running, not a retry
+    with _case(checks, "S1-a: a dropped connection sees the press still running, not a retry"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        release = threading.Event()
+        portal["hold"] = {"movetolive": release}
+        answers = {}
+        thread = _press_thread(
+            lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True}), answers, 0
+        )
+        deadline = time.monotonic() + 20
+        while "movetolive" not in _posts(portal) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        running = newest()
+        checks.equal(
+            running["state"],
+            "sending",
+            "WHILE A PRESS RUNS, its receipt says so: a screen whose request dropped reads this",
+        )
+        gets = len([call for call in portal["calls"] if call[0] == "GET"])
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_in_progress",
+            "and a second press is refused while the first still runs",
+        )
+        checks.equal(
+            len([call for call in portal["calls"] if call[0] == "GET"]),
+            gets,
+            "before it asks TCGplayer anything",
+        )
+        release.set()
+        thread.join(30)
+        checks.equal(answers.get(0, ("", {}))[0], "sent", "and the first press still lands")
+        checks.equal(newest()["state"], "waiting", "and its receipt moves on to the wait")
+
+    # --------------------------------------------- S1-a: a holder that died is unknown
+    with _case(checks, "S1-a: a holder that died is unknown"), isolated_home():
+        gone = subprocess.Popen(["true"])
+        gone.wait()
+        stamp = "20260924-120000-bbbbbb"
+        send_routes._write(
+            send_routes.sends_dir() / stamp,
+            {
+                "stamp": stamp, "kind": "send", "at": "2026-09-24T12:00:00+00:00",
+                "phase": "publishing", "holder": {"pid": gone.pid, "proc_start": "gone"},
+                "copies": {ARTICUNO_SKU: 3}, "copies_total": 3,
+                "pushed": {"upload_id": "u-9", "rows": 1, "accepted": 1},
+                "publish_started_at": "2026-09-24T12:00:05+00:00",
+            },
+        )
+        checks.equal(
+            newest()["state"],
+            "unknown",
+            "A PRESS WHOSE SERVER DIED MID-PUBLISH is unknown, never failed and never live",
+        )
+
+    # --------------------- S1-b: TCGplayer published, then answered 500 (unclear publish)
+    with _case(checks, "S1-b: TCGplayer published, then answered 500 (unclear publish)"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["published_then_5xx"] = True
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_unknown",
+            "AN UNCLEAR PUBLISH is its own answer: TCGplayer did not say whether they went live",
+        )
+        checks.equal(
+            (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+            (3, 1),
+            "and THE COPIES ARE NOT TAKEN BACK: they may be live, and taking them back would "
+            "send them twice",
+        )
+        receipt = newest()
+        checks.ok(
+            receipt["state"] == "unknown" and receipt["held"],
+            f"the receipt says unknown and holds its cards: {receipt['state']}, {receipt['held']}",
+        )
+        checks.ok(
+            bool(receipt["take_back_after"]),
+            "and says when taking them back will be safe",
+        )
+        # A NEW COPY OF A HELD CARD IS NOT SENT WHILE THE OUTCOME IS UNKNOWN.
+        second, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)])
+        portal["calls"].clear()
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [second.name], "confirm": True})),
+            "send_held",
+            "A HELD CARD STAYS OUT OF EVERY SEND until a check past the wait resolves it",
+        )
+        checks.equal(_posts(portal), [], "and nothing is written to TCGplayer")
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_take_back(receipt["stamp"], {"confirm": True})),
+            "take_back_not_yet",
+            "TAKE THEM BACK IS REFUSED before a check has run past the wait",
+        )
+        # THE WAIT PASSES AND TCGPLAYER SHOWS THEM: the unknown send did go live.
+        _age_receipt(receipt["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 1})
+        send_routes.do_live_check({})
+        resolved = [s for s in send_routes.do_sends()["sends"] if s["stamp"] == receipt["stamp"]][0]
+        checks.ok(
+            resolved["state"] == "checked" and not resolved["held"],
+            f"a check past the wait resolves it: found live, the hold released: {resolved['state']}",
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 1})
+        portal["published_then_5xx"] = False
+        send_routes.do_send({"runs": [second.name], "confirm": True})
+        checks.equal(
+            portal["rows"][-1]["AddToQuantity"] if portal["rows"] else None,
+            "1",
+            "and the held card's new copy goes on the next press",
+        )
+
+    # --------------- S1-b / S1-c: a clear publish refusal whose rollback is ALSO refused
+    with _case(checks, "S1-b / S1-c: a clear publish refusal whose rollback is ALSO refused"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["refuse"] = {"movetolive"}
+        portal["fail"] = {"rollbackexportcsv"}
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_unknown",
+            "A REFUSED ROLLBACK leaves the upload waiting at TCGplayer: the answer is unknown",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 3, "and the copies are not taken back")
+        receipt = newest()
+        checks.equal(
+            (receipt["unknown"] or {}).get("upload_id"),
+            "u-1",
+            "the receipt names the upload that waits at TCGplayer",
+        )
+        _age_receipt(receipt["stamp"])
+        portal["live"] = _live_export_bytes(empty)
+        send_routes.do_live_check({})
+        after = [s for s in send_routes.do_sends()["sends"] if s["stamp"] == receipt["stamp"]][0]
+        checks.ok(
+            after["state"] == "short" and after["takeable"] == 4,
+            f"PAST THE WAIT, a check that finds none of them offers all four back: {after}",
+        )
+        taken = send_routes.do_take_back(receipt["stamp"], {"confirm": True})
+        checks.equal(taken["moved"], 4, "and Take them back returns them")
+        checks.equal(pushed(ARTICUNO_SKU), 0, "so the next send offers them again")
+
+    # ---------------------- a push chunk refused whose rollback is refused: unknown too
+    with _case(checks, "a push chunk refused whose rollback is refused: unknown too"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["fail"] = {"uploadexportcsv", "rollbackexportcsv"}
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_unknown",
+            "A FAILED CHUNK WHOSE ROLLBACK FAILED is unknown: rows may wait at TCGplayer",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 3, "and nothing is taken back on a guess")
+        checks.equal(_posts(portal).count("movetolive"), 0, "and nothing is published")
+
+    # ----------------------------------------------------------- S2: the slow modes
+    with _case(checks, "S2: the slow modes"), \
+            send_portal() as portal, isolated_home(), _short_timeout(0.4):
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["slow"] = {"GET": 1.2}
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "live_check_failed",
+            "A LIVE READ THAT NEVER ANSWERS is the named refusal, not a crash",
+        )
+        checks.equal(_posts(portal), [], "and nothing is written to TCGplayer")
+        checks.equal(pushed(ARTICUNO_SKU), 0, "and nothing is counted sent")
+        try:
+            tcg_export._open(tcg_export.live_endpoint(), cookie="a=b")
+            code = None
+        except tcg_export.FetchRefusal as refusal:
+            code = refusal.code
+        except Exception as caught:  # noqa: BLE001
+            code = type(caught).__name__
+        checks.equal(code, "tcg_unreachable", "every timeout on the transport is `tcg_unreachable`")
+
+        with send_portal() as portal, isolated_home(), _short_timeout(0.4):
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes(empty)
+            portal["slow"] = {"uploadexportcsv": 1.2}
+            code = _route_refusal(
+                lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+            )
+            receipt = newest() if send_routes.do_sends()["sends"] else {}
+            checks.ok(
+                code == "tcg_unreachable" and receipt.get("state") == "failed",
+                f"A SLOW CHUNK after the copies were counted leaves a receipt: {code}, "
+                f"{receipt.get('state')}",
+            )
+            checks.equal(portal["rolled"], ["u-1"], "and the upload is rolled back")
+            checks.equal(pushed(ARTICUNO_SKU), 0, "and, the rollback confirmed, the copies are back")
+
+        with send_portal() as portal, isolated_home(), _short_timeout(0.4):
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes(empty)
+            portal["slow"] = {"movetolive": 1.2}
+            checks.equal(
+                _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+                "send_unknown",
+                "A SLOW PUBLISH is unknown: TCGplayer may have done it",
+            )
+            checks.equal(pushed(ARTICUNO_SKU), 3, "and the copies are held, not taken back")
+
+    # ------------------------------------------------------- S2: the partial accept
+    with _case(checks, "S2: the partial accept"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["turn_away"] = 1
+        answer = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.ok(
+            answer["accepted"] == 1 and answer["rows"] == 2 and answer["turned_away"] == 1,
+            f"TCGPLAYER TOOK 1 OF 2 ROWS, and the receipt says so: {answer['accepted']} of "
+            f"{answer['rows']}, {answer['turned_away']} turned away",
+        )
+        _age_receipt(answer["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        send_routes.do_live_check({})
+        after = newest()
+        checks.equal(
+            ([row["sku"] for row in (after["check"] or {}).get("missing", [])], after["takeable"]),
+            ([DUNSPARCE_SKU], 1),
+            "the check names the copy turned away and offers exactly it back",
+        )
+        send_routes.do_take_back(answer["stamp"], {"confirm": True})
+        checks.equal(
+            (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+            (3, 0),
+            "and taking it back returns the turned-away copy and nothing that went live",
+        )
+
+    # ---------------------------------------------------- S3: the same bytes, windowed
+    with _case(checks, "S3: the same bytes, windowed"), isolated_home():
+        now = send_routes._now()
+        for stamp, age in (("20260924-110000-cccccc", 20 * 60), ("20260924-115900-dddddd", 60)):
+            send_routes._write(
+                send_routes.sends_dir() / stamp,
+                {
+                    "kind": "send", "digest": f"d{age}", "taken_back_at": None,
+                    "pushed": {"upload_id": "u", "pushed_at": send_routes._iso(now - timedelta(seconds=age))},
+                },
+            )
+        checks.equal(
+            send_routes._already_pushed(f"d{20 * 60}"),
+            None,
+            "THE SAME BYTES PAST THE UPLOAD WINDOW do not refuse: the live read sees them now",
+        )
+        checks.equal(
+            send_routes._already_pushed("d60"),
+            "20260924-115900-dddddd",
+            "and the same bytes inside the window still do",
+        )
+
+    # --------------------------------------- S3: an export with no quantity column refuses
+    with _case(checks, "S3: an export with no quantity column refuses"):
+        for missing in (tcgcsv.SKU_COLUMN, tcgcsv.LIVE_QUANTITY_COLUMN):
+            present = {tcgcsv.SKU_COLUMN: ARTICUNO_SKU, tcgcsv.LIVE_QUANTITY_COLUMN: "2"}
+            present.pop(missing)
+            try:
+                sendguard.live_by_sku([present])
+                refused = False
+            except ValueError:
+                refused = True
+            checks.ok(refused, f"AN EXPORT WITH NO `{missing}` COLUMN is refused, never read as zero")
+
+    # -------------------------------------- S3: one live rise confirms one receipt only
+    with _case(checks, "S3: one live rise confirms one receipt only"), \
+            send_portal() as portal, isolated_home():
+        base = {
+            "kind": "send", "copies": {ARTICUNO_SKU: 3}, "copies_total": 3,
+            "names": {ARTICUNO_SKU: "Articuno"}, "live_before": {ARTICUNO_SKU: 0},
+            "sold_before": {ARTICUNO_SKU: 0}, "pushed": {"upload_id": "u", "rows": 1, "accepted": 1},
+            "published_at": "2026-09-24T10:00:00+00:00", "check_after": "2000-01-01T00:00:00+00:00",
+            "phase": "done",
+        }
+        for stamp in ("20260924-100000-eeeeee", "20260924-100500-ffffff"):
+            send_routes._write(send_routes.sends_dir() / stamp, dict(base, stamp=stamp))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        states = {s["stamp"]: (s["state"], (s["check"] or {}).get("found")) for s in send_routes.do_sends()["sends"]}
+        checks.equal(
+            states,
+            {"20260924-100000-eeeeee": ("checked", 3), "20260924-100500-ffffff": ("short", 0)},
+            "ONE RISE OF THREE confirms the older send's three, and never both sends",
+        )
+
+    # ----------------------------------------- S3: the first check fires past the lag
+    with _case(checks, "S3: the first check fires past the lag"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        gap = send_routes._parse(sent["check_after"]) - send_routes._parse(sent["published_at"])
+        checks.ok(
+            gap.total_seconds() > cmd_reprice.PUBLISH_LAG_S,
+            f"THE FIRST CHECK IS DUE PAST THE LAG, not at it: {gap.total_seconds()}s after the publish",
+        )
+
+    # ------------------------------------------- the mark-down: two presses at once
+    with _case(checks, "the mark-down: two presses at once"):
+        def markdown(home):
+            directory = home / "inventory" / "markdowns" / "20260924-130000"
+            directory.mkdir(parents=True)
+            source = tcgcsv.read_export(FIXTURE_EXPORT)
+            row = dict(
+                source.by_sku()[ARTICUNO_SKU],
+                **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: "19.99"},
+            )
+            tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+            return directory
+
+        with send_portal() as portal, isolated_home() as home:
+            directory = markdown(home)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+            portal["gate"] = threading.Barrier(2)
+            answers = {}
+            threads = [
+                _press_thread(
+                    lambda: send_routes.do_markdown_send(directory.name, {"confirm": True}),
+                    answers,
+                    index,
+                )
+                for index in (0, 1)
+            ]
+            for thread in threads:
+                thread.join(60)
+            checks.equal(
+                sorted(
+                    kind if kind == "sent" else f"{kind} {answer}"
+                    for kind, answer in answers.values()
+                ),
+                ["refused send_in_progress", "sent"],
+                f"TWO MARK-DOWN PRESSES AT ONCE: one sends, the other is refused by name: {answers}",
+            )
+            checks.equal(
+                (_posts(portal).count("initializeexportcsv"), _posts(portal).count("movetolive")),
+                (1, 1),
+                "and the price file is pushed and published once",
+            )
+
+        with send_portal() as portal, isolated_home() as home:
+            directory = markdown(home)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+            portal["published_then_5xx"] = True
+            checks.equal(
+                _route_refusal(lambda: send_routes.do_markdown_send(directory.name, {"confirm": True})),
+                "send_unknown",
+                "A MARK-DOWN WHOSE PUBLISH IS UNCLEAR is unknown, not failed",
+            )
+            record = pipeline_routes._read_push(directory) or {}
+            checks.ok(
+                bool(record.get("unknown")) and not record.get("published_at"),
+                f"and its receipt stays, saying so, rather than being removed: {sorted(record)}",
+            )
 
 
 def _refusal_code_transport(rows, *, listing: bool) -> Optional[str]:
@@ -32382,6 +32966,7 @@ def run() -> Result:
     check_markdown_push(checks)
     check_send_guard(checks)
     check_send_press(checks)
+    check_send_hazards(checks)
     check_publish_lag(checks)
     check_withholding(checks)
     check_pricing_route(checks)

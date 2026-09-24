@@ -60,15 +60,33 @@ class Trim:
         }
 
 
-def live_by_sku(rows: Iterable[Mapping[str, str]]) -> Dict[str, int]:
+REQUIRED_COLUMNS = (tcgcsv.SKU_COLUMN, tcgcsv.LIVE_QUANTITY_COLUMN)
+
+
+def live_by_sku(
+    rows: Iterable[Mapping[str, str]], header: Optional[Sequence[str]] = None
+) -> Dict[str, int]:
     """SKU -> the copies TCGplayer holds live, off a live export's `Total Quantity`.
 
     A CELL THAT IS NOT A WHOLE NUMBER IS A REFUSAL, NOT A ZERO. A zero here opens room, and
     room is the one thing this guard may never invent. `ValueError` reaches the caller, which
     refuses the send by name.
+
+    A MISSING COLUMN IS THE SAME REFUSAL, AND IT WAS A SILENT ZERO UNTIL THE 2026-09-24 REVIEW.
+    `row.get(...) or ""` read an export with no `Total Quantity` column as every SKU at zero —
+    the guard's room wide open — and one with no `TCGplayer Id` as nothing live at all. So the
+    header is checked when the caller has it, and every row is checked either way: a row
+    without the key is a file that is not a live export.
     """
+    if header is not None:
+        absent = [column for column in REQUIRED_COLUMNS if column not in header]
+        if absent:
+            raise ValueError(f"the live export has no {', '.join(absent)} column")
     live: Dict[str, int] = {}
     for row in rows:
+        absent = [column for column in REQUIRED_COLUMNS if column not in row]
+        if absent:
+            raise ValueError(f"a live export row has no {', '.join(absent)} column")
         sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
         if not sku:
             continue
