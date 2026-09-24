@@ -18,33 +18,66 @@
  *   R1         Every `ROUTES` view in `app/src/App.tsx` renders `<Page>` imported from the kit
  *              (`./kit` or `./kit/Page`). The view may reach it through its own components: the
  *              reader follows a JSX tag into a local component, or into a component imported
- *              from another screen file, up to MAX_DEPTH levels. `Shipping` renders `OrdersHub`
- *              from `./Orders`, so if `OrdersHub` renders `<Page>`, both routes pass. It never
- *              follows a tag into the kit itself: a kit wrapper is not a screen's `<Page>`.
+ *              (named or default) from another screen file, AT ANY DEPTH. `Shipping` renders
+ *              `OrdersHub` from `./Orders`, so if `OrdersHub` renders `<Page>`, both routes pass.
+ *              It never follows a tag into the kit itself: a kit wrapper is not a screen's
+ *              `<Page>`. THERE IS NO DEPTH CAP. A cap plus one visited set made the answer
+ *              depend on JSX order: a component first met at the cap was marked visited and
+ *              cut, so a shorter path to it was never tried. The visited set alone ends a cycle,
+ *              and whether a path exists does not depend on the order the graph is walked.
  *   R2-*       Outside `app/src/kit/**`, no screen hand-rolls a kit primitive:
- *                R2-dialog   `role="dialog"` or `role="alertdialog"` (the kit has Sheet, Modal,
- *                            Popover and ConfirmSheet in `kit/overlay.tsx`)
+ *                R2-dialog   `role="dialog"` or `role="alertdialog"`, or a native `<dialog>`
+ *                            element (the kit has Sheet, Modal, Popover and ConfirmSheet in
+ *                            `kit/overlay.tsx`)
  *                R2-search   `<input type="search">` outside `app/src/SearchField.tsx`, which is
- *                            that primitive
+ *                            that primitive. ALSO, BY HEURISTIC: an `<input>` whose type is
+ *                            `text` or absent (a text input either way) and whose literal
+ *                            `placeholder` or `aria-label` matches SEARCHISH below (search, find,
+ *                            filter, look up). A search box labelled some other way is not seen.
  *                R2-select   a raw `<select>` (the kit's Select)
  *                R2-class    a kit-reserved class name in `className`, `.className =` or
  *                            `classList.add(...)`: RESERVED_EXACT and RESERVED_PREFIX below.
  *                            `app/src/Gallery.tsx` is exempt from this one rule: it is the kit's
  *                            specimen sheet and draws each kit class raw on purpose
  *                R2-date     `toLocaleDateString`, `toLocaleTimeString` or `Intl.DateTimeFormat`
- *                            outside `app/src/dates.ts`
- *                R2-money    a template literal with `$` immediately before a `${...}` that calls
- *                            `.toFixed(`, outside `app/src/money.ts`
+ *                            outside `app/src/dates.ts`. ALSO, BY HEURISTIC: `.toLocaleString(...)`
+ *                            with an object-literal argument that names a date or time option
+ *                            (DATE_OPTIONS below). A bare `d.toLocaleString()` on a Date is NOT
+ *                            seen: without the type checker a Date and a number read the same,
+ *                            and a number's `toLocaleString()` is a count, not a date.
+ *                R2-money    a hand-rolled dollar amount outside `app/src/money.ts`, in any of
+ *                            these shapes:
+ *                              - a template literal whose text before an interpolation ends in
+ *                                `$` or `$ ` (`$${x}`, `-$ ${n.toFixed(2)}`)
+ *                              - a `+` whose left side ends in a string literal that ends in `$`
+ *                                or `$ ` (`'$' + x.toFixed(2)`)
+ *                              - JSX text that ends in `$` (then optional white space) directly
+ *                                before a `{...}` child, or a `{'$'}` child directly before one
+ *                              - `Intl.NumberFormat(...)` or `.toLocaleString(...)` with an
+ *                                object-literal option `style: 'currency'` or a `currency` key
+ *                            HEURISTIC, said plainly: a `$` before an interpolation is read as a
+ *                            price, which it is in this product. An options object held in a
+ *                            variable is not seen.
  *
  * THE EXCEPTIONS ARE A SHRINKING OFFENDER LIST, NEVER A PINNED COUNT (the owner's ruling on Q3,
  * 2026-09-23). `scripts/kit-adoption-allow.json`'s `static` block is file -> rule -> lane: the
  * lane that owes the migration. It FAILS on a violation it does not list, and it FAILS on an
- * entry that no longer matches a violation (a stale entry), so the list can only shrink, and a
- * lane that migrates a screen must delete its own entries in the same commit. An entry covers
- * every occurrence of that rule in that file. It is a per-file debt, never a count.
+ * entry that no longer matches a violation (a stale entry), so a lane that migrates a screen
+ * deletes its own entries in the same commit. An entry covers every occurrence of that rule in
+ * that file. It is a per-file debt, never a count.
+ *
+ * ONLY SHRINKS, AND THAT IS CHECKED. The stale-entry rule stops an entry outliving its debt, but
+ * it cannot stop a branch ADDING an entry to excuse a new screen. So the check also reads the
+ * allow list as it stood at the merge-base with `origin/main` (`git merge-base HEAD origin/main`,
+ * then `git show <base>:scripts/kit-adoption-allow.json`: two plain reads, so D18 holds) and
+ * REFUSES every key the branch added: a new file -> rule pair in `static`, or a new route ->
+ * assertion pair in `runtime`. A removed key passes: that is the list shrinking. A new lane on a
+ * key that already existed is not growth. IT FAILS OPEN, AND PRINTS WHY: no git, no
+ * `origin/main`, no merge-base, or no allow list at the merge-base. The last is the branch that
+ * gives the list its birth, where every entry is new by definition.
  *
  * `runtime` in the same file belongs to `app/tests/scaffold.spec.ts`, which validates it. This
- * script only checks that the block is an object.
+ * script checks that the block is an object, and that it does not grow.
  *
  * WHAT IS NOT SEEN, said here so nobody reads green as more than it is:
  *   - a class name, role or type that reaches JSX through a variable (`const c = 'bn-money'`,
@@ -53,6 +86,7 @@
  *   - a view that renders `<Page>` on one branch and something else on another. R1 asks whether
  *     the view reaches `<Page>` at all. `scaffold.spec.ts` asserts what a browser actually drew.
  *   - a view assigned to a variable and rendered through it (`const V = a ? A : B; <V/>`).
+ *   - each HEURISTIC above, past the edge it states.
  *
  *     node scripts/kit-adoption.mjs              the check (exit 1 on any finding)
  *     node scripts/kit-adoption.mjs --self-test  the checker against in-memory fixtures
