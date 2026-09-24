@@ -41,6 +41,16 @@ import type {
 //   * NO FILE AT ALL means the run died before Playwright loaded its config, so no
 //     reporter was ever constructed. `make design-check` deletes the file before it
 //     invokes anything precisely so that case cannot show a previous run's `pass`.
+//   * A `--list` run writes NOTHING, at either moment, and prints no block. It runs no test,
+//     so it has no verdict to give. Until 2026-09-24 it overwrote the file with `pass` and
+//     0 passed. The signal is the `_mode` option Playwright hands every reporter's
+//     constructor — `'list'` exactly when `config.cliListOnly` — the same one its own html
+//     reporter reads. It is private, so a bump may move it. `make verdict-selftest`'s list
+//     case goes red if it does.
+//   * `"verdict": "empty"` means Playwright said `passed` and no test was counted — not
+//     passed, failed, flaky nor skipped. An empty shard is the real case. It is never a
+//     `pass`. A run where every test was skipped is still a `pass`, since its tests ran
+//     through the filter and were each counted.
 //
 // MEASURED, because the first draft of this comment guessed and guessed wrong. It claimed
 // a `webServer` that never came up would leave `running`; it does not — Playwright still
@@ -133,6 +143,11 @@ export default class DesignCheckVerdict implements Reporter {
   private failures: Failure[] = []
   private failureCount = 0
   private counts = { total: 0, passed: 0, failed: 0, flaky: 0, skipped: 0 }
+  private readonly listOnly: boolean
+
+  constructor(options: { _mode?: string } = {}) {
+    this.listOnly = options._mode === 'list'
+  }
 
   // Playwright suppresses a reporter's stdout unless it declares that it writes there. The
   // final block below is deliberate: a session that ran this in the foreground and got the
@@ -142,6 +157,7 @@ export default class DesignCheckVerdict implements Reporter {
   }
 
   onBegin(_config: FullConfig, suite: Suite): void {
+    if (this.listOnly) return
     this.startedAt = Date.now()
     this.counts.total = suite.allTests().length
     writeAtomically({
@@ -178,14 +194,17 @@ export default class DesignCheckVerdict implements Reporter {
   }
 
   onEnd(result: FullResult): void {
+    if (this.listOnly) return
     const finished = Date.now()
-    const verdict = result.status === 'passed' ? 'pass' : 'fail'
+    const { passed, failed, flaky, skipped } = this.counts
+    const ran = passed + failed + flaky + skipped
+    const verdict = result.status !== 'passed' ? 'fail' : ran === 0 ? 'empty' : 'pass'
     const omitted = Math.max(0, this.failureCount - this.failures.length)
     writeAtomically({
       target: 'design-check',
       verdict,
       // Playwright's own word: 'passed' | 'failed' | 'timedout' | 'interrupted'. Kept
-      // beside the two-way verdict because "the suite was interrupted" and "an assertion
+      // beside the verdict because "the suite was interrupted" and "an assertion
       // is false" are different things to do next about.
       status: result.status,
       startedAt: new Date(this.startedAt).toISOString(),
@@ -196,12 +215,13 @@ export default class DesignCheckVerdict implements Reporter {
       failuresOmitted: omitted,
     })
 
-    const { total, passed, failed, flaky, skipped } = this.counts
+    const { total } = this.counts
     const seconds = ((finished - this.startedAt) / 1000).toFixed(1)
     const lines = [
       '',
       `design-check ${verdict.toUpperCase()} (${result.status}) in ${seconds}s`,
       `  ${passed}/${total} passed, ${failed} failed, ${flaky} flaky, ${skipped} skipped`,
+      ...(verdict === 'empty' ? ['  no test ran, so this is not a pass'] : []),
       ...this.failures.map((f) => `  FAIL  ${f.location}  ${f.title}`),
       ...(omitted ? [`  ... and ${omitted} more`] : []),
       `  verdict: ${relative(REPO_ROOT, RESULT_FILE)}`,
