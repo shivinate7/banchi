@@ -61,6 +61,7 @@ its `B` sigil so that it reads apart from a count. Both put the box number on th
 
 - How a departed card from a box that was later deleted names its box. The record keeps the
   name it had. The composer must not read the name from a registry row that is gone.
+
 ### What is built
 
 NOT BUILT. The locating lane builds it: the server's place labels, `departed_label`, the

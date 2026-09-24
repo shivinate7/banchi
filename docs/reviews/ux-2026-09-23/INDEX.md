@@ -65,9 +65,10 @@ The copies here differ from the files the reviewers wrote, in six ways only.
    says "screenshot not kept". A path into the reviewers' scratch folder became the lens id and
    "not kept".
 2. **Every line that named a private live screenshot was removed.** The live screenshots held
-   real store data. The "PRIVATE" markers went with them.
-3. **Two live revenue totals were removed.** A sentence now says "two five-figure dollar
-   totals". Store counts, such as open orders and rows, stay.
+   real store data. The markers that flagged live data went with them.
+3. **Two live revenue totals and a real product string were removed.** A sentence now says
+   "two five-figure dollar totals". The words now say only what shape the live catalog string
+   had. Store counts, such as open orders and rows, stay, by an orchestrator call.
 4. **No real buyer name appears.** The held-orders pass gave its seeded orders invented names.
    Those names are the only buyer names here.
 5. **Line numbers were dropped from code citations.** A citation names a symbol, never a line.

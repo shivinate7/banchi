@@ -660,7 +660,7 @@ Order: severity, then the number of lenses that found it, then id. UX-001 is pin
 - Sources: VIS-02 (1 lens: visual)
 - Theme: Theme 9 Built on fixtures, broken at real density
 - Lane: sales
-- Defect: Live, every row reads like 'Riftbound League of Legends Trading Card Game - Vendetta: …'; the card name sits mid-string and the figures get the right 290 px.
+- Defect: Live, every row reads as the full catalog string (live string not kept); the card name sits mid-string and the figures get the right 290 px.
 - Direction: Lead each row with the card name; set, number and condition as quiet secondary text; the game once.
 - Decision: Caused by D214 (a gross-revenue retrospective, searchable by name): D214 measured 539 distinct names and still draws each verbatim. The live screenshots were not kept.
 

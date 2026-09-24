@@ -55,5 +55,5 @@ mechanism the owner does not act on.
 
 NOT BUILT. The kit-frame lane removes D102's notes. The library lane removes D134's and D70's
 lines. The sales lane builds D225's rule. D100's and D168's lines sit in Pricing sheets, so the
-pricing lane removes them after the Pricing re-interview. D86's line sits on the run page, so
-the runs lane removes it.
+pricing lane removes them. The Live tab replaces the Mark-down sheet in that lane. D86's line
+sits on the run page, so the runs lane removes it. The owner released both lanes.

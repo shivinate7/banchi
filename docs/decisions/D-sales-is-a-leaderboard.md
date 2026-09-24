@@ -33,7 +33,7 @@ reading, and the sparkline is `aria-hidden` by design. At real density that is 5
 empty string becomes 0. So a line with no price lands in the table at $0.00 and counts as a
 sale. The demo has six such lines. The live count is unmeasured.
 
-**D250 (unsold stock reaches Sales) waited behind a press.** "Value my stock" put the shelf
+**D250 (unsold stock reaches Sales) waited for a press.** "Value my stock" put the shelf
 value after the table. The ruling moves it above the table and loads it on arrival.
 
 ### What each decision protected, and what protects it now

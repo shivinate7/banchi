@@ -63,5 +63,5 @@ tree first.
 The round-two plan also names lane entries for rulings 1 and 2 (slugs `orders-sort-press` and
 `nothing-jumps`). One copy of each argument must go before either merges.
 
-A related call: a filter's state lives in the URL on every screen. A link, a bookmark and the
+A related ruling by the owner: a filter's state lives in the URL on every screen. A link, a bookmark and the
 back button then restore the view (FLT-11). The filtering lane records it.

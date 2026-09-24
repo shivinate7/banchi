@@ -39,8 +39,9 @@ one section, the caret sits at the middle for every card (LOC-05).
 
 ### What each decision protected, and what protects it now
 
-**D58** protects a number that a hand can count to, with no holes. That stays. A sale still
-makes the card behind it take its number, now within the section. The stored index never moves
+**D58** protects a number that a hand can count to, with no holes. That stays. Renumbering on
+departure still holds, within the section. When a card is sold, retired or moved, each later
+card in its section counts down by one. The stored index never moves
 (D10, the inventory model). D58's `Position` stays the one place that composes a label.
 
 **D92 (a bare `#` is the count, the key carries a sigil)** protects one rule: one `#` never
@@ -74,5 +75,5 @@ merges.
 
 ### One more word: slots
 
-The orchestrator called it in round two (HIR-05, LOC-22). "Slots" names the box's capacity, and
+The owner ruled it in the final interview (HIR-05, LOC-22). "Slots" names the box's capacity, and
 it appears only in Inventory's box header and strip. Every other place says "cards".

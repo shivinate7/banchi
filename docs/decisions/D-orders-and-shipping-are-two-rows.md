@@ -1,7 +1,6 @@
 ## D-orders-and-shipping-are-two-rows — Orders and Shipping are two sidebar rows with no tabs, and the walk gets the full height
 
-**The ruling, 2026-09-23, from the second round of the UX review.** The orchestrator stated it
-to the owner as a call on the round-two findings:
+**The owner's ruling, 2026-09-23, in the final interview on the round-two findings:**
 
 - Keep the walk model of D220 (Orders is inventory's screen with orders in the rail).
 - The walk gets the screen's full height.

@@ -1,8 +1,13 @@
 ## D-card-order-key — A card's place in its box is an order key apart from its stored index
 
 **The owner's ruling, 2026-09-23, in the box map interview.** A section drops before or after
-any section of another box. Sections reorder within a box. That needs a per-card order key, and
-the ruling said it is its own decision. This entry records what is decided and what is open.
+any section of another box. Sections reorder within a box. That is all the owner ruled on
+placement.
+
+**The order key is the orchestrator's inference and design, not the owner's ruling.** The
+orchestrator read the placement ruling as needing a per-card order key, and recorded that it
+needs its own decision. This entry records that inference, its design, and what is open. The
+owner has not seen the design.
 
 The spec is `docs/specs/box-map.md`. The section object is the entry with slug
 `a-section-is-an-object`.
@@ -26,7 +31,7 @@ them. None of that changed.
 
 **The stored index stays the identity that writes aim by. It never moves.**
 
-### The decision
+### The proposed design
 
 Each card gets an order key beside its index. The walk, the labels and the section bounds read
 the key. A move before or after a section changes keys only. The index, the photograph (filed
@@ -50,6 +55,6 @@ The shape of the key is not decided. The builder brings options to the owner wit
 
 ### What is built
 
-RECORDED, NOT BUILT. It comes before the box map's placement slice. It needs two harness cases.
+RECORDED as a proposal, NOT BUILT. The owner's word on the design comes before the build. It comes before the box map's placement slice. It needs two harness cases.
 A key migration changes no label. A placement between two sections renumbers only the cards it
 should.

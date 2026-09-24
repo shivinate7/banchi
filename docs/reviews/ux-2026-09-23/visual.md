@@ -42,7 +42,7 @@ Note on full-page shots: the sidebar ends at 900px and the Pricing ship bar floa
 - Screens: `#/revenue`
 - Where: 1440/light and dark, live app.
 - Repro: live app `#/revenue`, "By product" table. The demo's names are short card names and do not show it.
-- Seen: every row reads like `Riftbound League of Legends Trading Card Game - Vendetta: Hextech Disc - #087/166 - Near Mint Foil`. The same 50-character prefix repeats on hundreds of rows. The card name, which is the thing a person scans for, sits in the middle of the string. The Copies, Gross and Last-sold columns get only the right 290px.
+- Seen: every row reads as the full catalog string: game, set, card name, number and condition (live string not kept). The same 50-character prefix repeats on hundreds of rows. The card name, which is the thing a person scans for, sits in the middle of the string. The Copies, Gross and Last-sold columns get only the right 290px.
 - Shot: VIS-02, screenshot not kept.
 - Direction: lead each row with the card name. Show set, number and condition as quiet secondary text. Show the game once, not on every row.
 - Component: `app/src/Revenue.tsx`, the name cell of the `.revenue-products` table.

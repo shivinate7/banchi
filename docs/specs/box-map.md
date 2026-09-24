@@ -74,7 +74,7 @@ do not.
 | The screen control | `BoxOps.tsx`, "Move to box" | A whole box, or the ticked cards. A native select of destinations. |
 | Put a divider in | `POST /boxes/<box>/sections` | A divider at `next_index`. |
 | Declare dividers and names | `PUT /boxes/<box>` | Names keep only when the divider count stays the same. |
-| Create and delete a box | `POST /boxes`, `DELETE /boxes/<box>` | A new box gets the lowest free number and a `bid` that is never reused (D145). |
+| Create and delete a box | `POST /boxes`, `DELETE /boxes/<box>` | A new box gets the lowest free number and a `bid` that is never reused (D145, the box index nobody sees). |
 | The box row | `GET /boxes` | `on_hand`, `sold`, `moved`, `listed`, `sections_detail` and `bid`. No value. |
 | Claims being paid for | `Submissions.overlap` in `store/submissions.py` | Exists. The move does not call it. |
 
@@ -94,21 +94,25 @@ do not.
 
 - **A move can lose a paid answer.** A card with a live paid reading can move. The batch then
   writes onto the tombstone, and the moved card stays unidentified. Read in code, not run.
-- **A moved card falls off its run.** `realign` looks only in the run's own boxes. D165 records
+- **A moved card falls off its run.** `realign` looks only in the run's own boxes. D165 (a run binds to the box's true index) records
   99 cards that lost their pricing surface this way.
 
 Both close in slice 0, before any screen change.
 
 ## 4. The ordering key
 
-Placement before or after a section needs an order that is not the stored index. D10 (the
-inventory model) and D58 (a card's number counts the cards) keep the stored index fixed for
-good reasons. Queue entries, the cache, listing holds and every write's aim use it.
+The owner ruled placement before or after any section. The order key below is the
+orchestrator's inference and design, not the owner's ruling. The owner has not seen it.
 
-So each card gets an order key beside its index. The walk, the labels and the section bounds
-read the key. A placement changes keys only. The entry with slug `card-order-key` records the
-decision and lists what is open: the form of the key, how dividers are stored, and the
-migration. The first key for every card is its index, so the migration changes no label.
+The inference: placement needs an order that is not the stored index. D10 (the inventory model)
+and D58 (a card's number counts the cards) keep the stored index fixed for good reasons. Queue
+entries, the cache, listing holds and every write's aim use it.
+
+The proposed design: each card gets an order key beside its index. The walk, the labels and the
+section bounds read the key. A placement changes keys only. The entry with slug
+`card-order-key` records the proposal and lists what is open: the form of the key, how dividers
+are stored, and the migration. The first key for every card is its index, so the migration
+changes no label.
 
 ## 5. The screen
 
@@ -129,7 +133,7 @@ stand side by side.
 - **One block per section.** Its height follows its count, with a floor of 44px so a small
   section is still a target. It carries the section name (or "Section 2") and its count. Cards
   are drawn as a pattern in CSS, never one element per card.
-- **Departed cards are not holes** (D58). Sold and moved counts go in the box head.
+- **Departed cards are not holes** (D58, a card's number counts the cards). Sold and moved counts go in the box head.
 - **Badges, only when true:** "Being read" when a card in the section has a live paid reading.
   "3 owed" when open orders want copies from it.
 - **An empty section** (a divider with no card) is a thin dashed block, because the plastic is
@@ -138,7 +142,9 @@ stand side by side.
 - **A last column, "New box",** is a target that splits a section into a new box. A new box
   with no name gets its stored default name, "Box" and the count plus one.
 
-The owner's store holds about 7 boxes and 40 sections. That needs no canvas.
+The box map deliberation estimated about 7 boxes and 40 sections on the owner's store. It
+counted more than 700 cards, and one box of 543 cards in 5 or more sections. This spec did not
+measure it. At that size the map needs no canvas.
 
 ### 5.3 The move
 
@@ -156,7 +162,7 @@ section of one box, in order, to the far end or the near end of another.
 
 **While dragging:** the section lifts with an accent tint. Its old place shows a dashed outline.
 A sealed box dims and says "Sealed". A section with a live paid reading cannot lift. The cursor
-is `not-allowed` (D50, interactive feedback is the product's), and the block says why.
+is `not-allowed` (D50 (interactive feedback is the product's), interactive feedback is the product's), and the block says why.
 
 **Touch and small widths.** At 390 and 720, the primary path is tap to pick and tap to place.
 Tap a section to lift it. A bar says "Uncommons, 10 cards. Tap a gap to put them there.
@@ -193,7 +199,7 @@ The rules for the receipt:
   "on your side" or "on the far side".
 - **The deliberation's example text is wrong on this point.** It said "go to the back" for the
   store's append, and the store's back is the end nearest the owner.
-- **Landmarks are card names.** A card with no name is not a landmark (D116). Then the receipt
+- **Landmarks are card names.** A card with no name is not a landmark (D116, an unnamed card is not a landmark). Then the receipt
   counts cards.
 - **The renumber line.** A card's number counts within its section. So a section move changes
   no card number. It can change section numbers, and the receipt says which ones.
@@ -219,7 +225,7 @@ another write, the way back is a new move. This adds a move to the fast path in
 |---|---|
 | A card in the section has a live paid reading | Refuse before the drag starts, and again at the write. It names the reading. |
 | The section's cards belong to a run that is matched and not yet sent | Allow. The join follows the card (slug `a-moved-card-keeps-its-price`). |
-| Cards owed to open orders | Allow. Orders claim no copy (D212). The receipt says so. |
+| Cards owed to open orders | Allow. Orders claim no copy (D212 (no order claims a copy), no order claims a copy). The receipt says so. |
 | A stale walk or Cards to pull presses sold on a moved card | The server answers `card_moved`. The screen says where the card went, from the tombstone's `moved_to`, and refreshes. |
 | The destination is sealed | Not a target. |
 | Another device changed the section since the map loaded | The write carries an aim: the count and the first and last card names. A mismatch refuses, and the map reloads. |
@@ -266,7 +272,7 @@ largest, and a reviewer must see it.
 ### 7.2 Browser checks
 
 A spec over a seeded store at 1440, 720 and 390, in both themes. It drags, taps and uses the
-keyboard. It checks the sealed target, the receipt text and the orientation. It holds the D50,
+keyboard. It checks the sealed target, the receipt text and the orientation. It holds the D50 (interactive feedback is the product's),
 D117 (the thumb floor), D118 (a press moves nothing around it) and D195 (same-role buttons share
 a width) floors.
 
@@ -287,5 +293,6 @@ a width) floors.
 - The Manage box sheet's eyebrow draws two separators in a row. An element carries both
   `.bn-eyebrow` and `.bn-facts` in `app/src/kit.css`, and each draws one. Two sites:
   `BoxOps.tsx` and `BoxBrowse.tsx`.
-- D83 says a box emptied by a merge cannot be reclaimed. D134 (a departed record is buried, not
-  kept) made that stale. A merged-out box can be deleted now.
+- D83 (a moved card) says a box emptied by a merge cannot be reclaimed. The deliberation reads
+  D134 (a departed record is buried, not kept) as making that sentence stale, so that a
+  merged-out box can be deleted now. That reading is proposed, and it awaits the owner's word.

@@ -115,31 +115,34 @@
 - Q2 needs-you rows: no market price, OR worth $5+, OR typed price 25%+ away from today's market. Count these on the owner's store first.
 - Q3 Send with unpriced rows: send every ready copy; unpriced rows stay on the list.
 - Q4 slim bar: sticky at the top at 1440 and 720; on a phone, one line pinned above the tab bar.
-
-## Orchestrator calls (reversible, stated to the owner)
-- Search ignores accents (the "forgiving" ruling covers it).
-- BoxLabel keeps D132's name-first address ("Mixed Singles, Box 4").
-- Rendered-page money check (D221): owned by text-checks (it already reads rendered text).
-- "Card 1 at the far back" belongs to the locating lane (the ruler redesign), not to fulfillment.
 - Q5 rule and cut-off: one line above the list with "Change", which opens one sheet (the rule, the cut-off, a box's own cut-off).
 - Q6 mark-down: a "Live" tab on Pricing with the same rows. The separate sheet goes.
 - Q7 mark-down send: ONE PRESS, and NO "Put the old prices back" control.
 - Double-send guard (owner's words): "maybe before submitting prices there's a mandatory reconciliation that auto runs seeing my sales and live inventory". So every Send (new listings and mark-downs) first runs a live reconcile automatically (live export + sales). It sends only the copies TCGplayer does not already hold, and refuses or trims a send that would double a quantity. It shows what it trimmed.
-
-## Search-server lane note (from Photo issues analysis)
-- Reuse the number rules in store/numbers.py (strip_set_code, join_key, split_catalog_number on their branch) and pipeline/join.py:number_index_key. Keep it game-aware: Riftbound keeps its code verbatim, Pokemon composes zfill(3)/printedTotal. Fuzzy "54" to "054" is fine in SEARCH, and must never feed the join ("zfill is COMPOSITION only, never matching").
 - Live check cannot run (signed out, slow): Send REFUSES and says why, with "Try again".
 - Value list (What's worth pulling, D159 bands): becomes an Inventory "by value" sort via the shared SortControl. Leaves Pricing.
 - Suggest-a-rule: MEASURE the owner's typed prices first; if most follow one pattern, Pricing offers "Make this the rule" once.
 - Send menu: NOTHING beside Send. The caps (at most N per card, only above the cut-off) leave the Send press. "Split in two files" lives under "Download the file instead".
 
+## Orchestrator calls (reversible, stated to the owner)
+- Search ignores accents (the "forgiving" ruling covers it).
+- (SUPERSEDED by the owner's box-numbers ruling below) BoxLabel name-first with number.
+- Rendered-page money check (D221): owned by text-checks (it already reads rendered text).
+- "Card 1 at the far back" belongs to the locating lane (the ruler redesign), not to fulfillment.
+
+## Search-server lane note (from Photo issues analysis)
+- Reuse the number rules in store/numbers.py (strip_set_code, join_key, split_catalog_number on their branch) and pipeline/join.py:number_index_key. Keep it game-aware: Riftbound keeps its code verbatim, Pokemon composes zfill(3)/printedTotal. Fuzzy "54" to "054" is fine in SEARCH, and must never feed the join ("zfill is COMPOSITION only, never matching").
+
 ## Orchestrator calls on consolidation round 2 (stated to the owner)
 - The "cut everything" text ruling also applies to the HIR and HOR cut lists.
 - D196 (codes behind a disclosure) wins over the 2026-09-20 taste call for Review's Close dialog.
 - UX-013 stays S1: the Fulfiller was sent to pull a card that had left the box.
+
+## Final interview rulings (owner, 2026-09-23)
 - "Slots" (HIR-05, LOC-22): "slots" in Inventory's header and strip (the box's capacity), "cards" elsewhere.
 - Orders layout (D220): keep the walk model; the walk gets the screen's full height; Orders and Shipping become TWO SIDEBAR ROWS, no tabs. Amends D220's layout half and the one-screen-two-stages note in CLAUDE.md.
 - Filter memory (FLT-11): in the URL on every screen (link, bookmark and back restore the view). The CLAUDE.md storage-key roster changes in docs-sweep.
+- The shrinking allow list (LANES Q3) is the OWNER's ruling, not an orchestrator call.
 
 ## Box numbers are never shown (owner, 2026-09-23)
 - Owner's words: "I don't want to see "Box 4" part at all, those box numbers are arbitrary index values that you get to keep on the back end, having a count of boxes is great, having each box labeled with a number is not ok. If I choose to not name a box, it can default to count+1 Box as a default name".
@@ -149,3 +152,16 @@
 - Existing unnamed boxes: backfill the stored name "Box N" from today's number, so nothing visible changes and physical labels still match. Renamable after.
 - Departed card label: box NAME + section + card number within the section (the location stays). Sold/retired/moved is shown by a VISUAL differentiator (not the word "sold"/"departed"). Replaces D68's "Box 3 · departed · B3 #96" and the store key on screen.
 - Lane: the server-side label composition (place labels, departed_label, receipts), the default-name-on-create, and the backfill go to the LOCATING lane, upgraded to Opus (it touches store writes: the backfill and box creation). The kit-data BoxLabel shows the name only.
+- Orchestrator calls (kit-frame review): no copy-budget re-pin (text-checks merges first); ink-4 is non-text only, ink-4 text moves to ink-3; ConfirmSheet first focus = Cancel; phone top gap 16 px below 768.
+- Tooling defect noticed: `npx playwright test --list` overwrites .serve/design-check.json with a pass verdict of 0 tests. Needs a guard (verdict file must not be written by a list run).
+- b-pricing and b-runs are RELEASED (the Pricing re-interview and the flow interview are done). They run in sequence (both touch Pricing.tsx's write bar): b-runs first (send/live/reconcile plumbing), then b-pricing (the screen).
+
+
+## Tab title (owner, 2026-09-23)
+- One FIXED tab title: "番地 " then the screen name in lowercase (for example "番地 pricing"). No alternation, no "— Banchi".
+
+## Orchestrator calls (guards review)
+- PriceHistory.tsx belongs to the product lane.
+- #/fulfillment is exempt from the scaffold's width and top-gap rules (D5, DESIGN.md floors), but keeps page and h1.
+- Live-store COUNTS may appear in public docs; a real product string or buyer name may not.
+- The D100 transport check: the docs must not claim it is replaced; recorded as an open question derived from the send rulings.

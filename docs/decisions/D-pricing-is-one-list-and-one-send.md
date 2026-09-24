@@ -2,8 +2,9 @@
 
 **The owner's rulings, 2026-09-23, in the Pricing re-interview.** The first round of the UX
 review held Pricing back for its own interview. A deliberation walked the screen, drew a
-proposal and put ten questions (Q1 to Q10). The owner answered four. The orchestrator answered
-the rest as calls stated to the owner, which the owner can reverse.
+proposal and put ten questions (Q1 to Q10). The owner answered all ten. The owner also ruled
+the double-send guard and the refusal when the live check cannot run. The send entry records
+those two.
 
 The record is `docs/reviews/ux-2026-09-23/`, file `RULINGS.md`. The plan is
 `docs/specs/ux-overhaul-2026-09-23.md`. The send itself is the entry with slug
@@ -11,18 +12,18 @@ The record is `docs/reviews/ux-2026-09-23/`, file `RULINGS.md`. The plan is
 
 ### The answers
 
-| Q | Question | Answer | By |
-|---|---|---|---|
-| Q1 | What does Pricing show first? | Every row. The rows that need the owner go on top, then the rest by value. | owner |
-| Q2 | Which rows need the owner? | No market price, or worth $5 or more, or a typed price 25% or more away from today's market. Count these on the owner's store first. | owner |
-| Q3 | What does Send do when some rows have no price? | It sends every ready copy. The rows with no price stay on the list. | owner |
-| Q4 | Where does the slim bar sit? | At the top and sticky at 1440 and 720. On a phone, one line pinned above the tab bar. | owner |
-| Q5 | Where do the store rule and the cut-off live? | One line above the list, with "Change". Change opens one sheet: the rule, the cut-off, and a box's own cut-off. | orchestrator |
-| Q6 | How does the owner mark down live listings? | A "Live" tab on Pricing, with the same rows. The Mark-down sheet goes. | orchestrator |
-| Q7 | Does one press also send a mark-down? | Yes, one press. There is no "Put the old prices back" control. | orchestrator |
-| Q8 | Where does the value list go? | To Inventory, as a "by value" sort in the shared sort control. It leaves Pricing. | orchestrator |
-| Q9 | Does Pricing offer to make the owner's pattern the rule? | Measure the typed prices first. If most follow one pattern, Pricing offers "Make this the rule" once. | orchestrator |
-| Q10 | What sits beside Send? | Nothing. The caps leave the Send press. "Split in two files" moves under "Download the file instead". | orchestrator |
+| Q | Question | The owner's answer |
+|---|---|---|
+| Q1 | What does Pricing show first? | Every row. The rows that need the owner go on top, then the rest by value. |
+| Q2 | Which rows need the owner? | No market price, or worth $5 or more, or a typed price 25% or more away from today's market. Count these on the owner's store first. |
+| Q3 | What does Send do when some rows have no price? | It sends every ready copy. The rows with no price stay on the list. |
+| Q4 | Where does the slim bar sit? | At the top and sticky at 1440 and 720. On a phone, one line pinned above the tab bar. |
+| Q5 | Where do the store rule and the cut-off live? | One line above the list, with "Change". Change opens one sheet: the rule, the cut-off, and a box's own cut-off. |
+| Q6 | How does the owner mark down live listings? | A "Live" tab on Pricing, with the same rows. The Mark-down sheet goes. |
+| Q7 | Does one press also send a mark-down? | Yes, one press. There is no "Put the old prices back" control. |
+| Q8 | Where does the value list go? | To Inventory, as a "by value" sort in the shared sort control. It leaves Pricing. |
+| Q9 | Does Pricing offer to make the owner's pattern the rule? | Measure the typed prices first. If most follow one pattern, Pricing offers "Make this the rule" once. |
+| Q10 | What sits beside Send? | Nothing. The caps (at most N per card, only above the cut-off) are removed from beside Send. "Split in two files" moves under "Download the file instead". |
 
 ### The premises that no longer hold
 
@@ -37,7 +38,8 @@ most rows, and the screen draws every row at full weight. So the owner cannot se
 need a hand.
 
 **D98 (the cheap-card figure is the control).** D98 made the cut-off figure a large input on its
-own panel. The owner changes it rarely, and the panel costs the first screen.
+own panel. The panel costs the first screen. How often the owner changes the figure is
+unmeasured.
 
 **D159 (the band is copies, and the drawer is the first answer).** D159 put the value list on
 Pricing as a lens. It prices nothing. It finds cards to pull, and each row already links to
@@ -60,19 +62,21 @@ steps. The sheet opens with 92 words and a shell command (UX-017, UX-120).
 - **D49 and D86 (a missing price is unknown, not low).** A row with no price still cannot go.
   Q3 lets the other rows go without it.
 - **D156 (every unsent copy is one worklist).** Kept. The default is still everything unsent.
-  The run picker becomes a box filter.
-- **D7 (duplicates aggregate by SKU).** The per-send quantity and cap stay possible. They leave
-  the Send press and live on the row and in the download door.
+- **D7 (duplicates aggregate by SKU).** Its per-send cap is removed from beside Send. Where the
+  caps live now is not ruled.
 
 ### What is still open
 
 - The count of rows that need the owner on the real store (Q2). If it is short, the review
   proposed a one-card-at-a-time pass instead. The owner sees the count first.
 - The share of typed prices that follow one pattern (Q9).
+- Where the caps live, now that they are removed from beside Send (Q10). Ask the owner.
 - Whether a mark-down with no way back needs a guard of its own. Q7 removed the control, and
   the send guard in the send entry reads what is live before any send.
 
 ### What is built
 
-NOT BUILT. The pricing lane builds it. The lane plan still lists it as blocked. The
-re-interview has now run, so the orchestrator can release it. The runs lane follows it.
+NOT BUILT. The owner released the pricing and runs lanes once this re-interview and the flow
+interview were done. Both touch Pricing's write bar, so they run in sequence. The runs lane goes
+first, with the send, live and reconcile plumbing. The pricing lane follows, with this screen.
+The Pricing drawer folds into the one product view in the pricing lane.

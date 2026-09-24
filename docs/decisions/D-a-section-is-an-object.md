@@ -45,7 +45,8 @@ move.
 ### The premise that no longer holds
 
 D83 (a card leaves a box through a third door: moved) built the move as a card-level act. A
-card lands at the back of the destination. Its divider and its section name stay behind. D83
+card lands at the back of the destination. Its divider and its section name stay in the source
+box. D83
 says that `Box.section_names` has no write path on a move. `store/master.py:Box` has a comment
 that says the opposite. The code does what D83 says, so the comment is false.
 
@@ -53,8 +54,9 @@ The owner does not think of a move as many cards. The owner thinks of a section 
 Under D83 a moved section joins the destination's last section. An empty divider stays in the
 source box. So after one move the map and the plastic disagree.
 
-D83 also says a box emptied by a merge cannot be reclaimed. D134 (a departed record is buried,
-not kept) made that sentence stale. A merged-out box can be deleted now.
+D83 also says a box emptied by a merge cannot be reclaimed. The box map review read D134 (a
+departed record is buried, not kept) as making that sentence stale, so that a merged-out box
+can be deleted now. That reading is proposed, and it awaits the owner's word.
 
 ### What D83 protected, and what protects it now
 
@@ -64,8 +66,8 @@ card leaves a record of where it went. All three stay:
 - A section move is one `Store.write()`. It removes the source divider, opens a divider at the
   destination with the name, moves the cards and records one group event.
 - The stored index stays fixed (D10, the inventory model, and D58, a card's number counts the
-  cards). Placement before or after a section needs a card order that is not the index. A
-  separate entry records that decision: slug `card-order-key`.
+  cards). The orchestrator infers that placement before or after a section needs a card order
+  that is not the index. A separate entry records that proposal: slug `card-order-key`.
 - Every moved card keeps its tombstone with `moved_to`.
 
 New guards come with the section object:

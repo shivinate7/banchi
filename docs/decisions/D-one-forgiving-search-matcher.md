@@ -55,7 +55,7 @@ server and in a browser spec for the client.
 - **Typos and a near match.** FLT-05 asked for the closest name on a miss. Not ruled.
 - **Speed at the owner's scale.** Measure before and after on a store of 2,500 cards or more.
 
-Accents are settled. The orchestrator ruled that the matcher folds them, because the
+Accents are settled by an orchestrator call, not an owner ruling. The matcher folds them, because the
 "forgiving" ruling covers them. The owner can reverse that call.
 
 ### Search is not the join

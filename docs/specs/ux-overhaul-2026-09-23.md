@@ -87,7 +87,7 @@ those entries.
 |---|---|---|
 | Codes go behind a "What the server said" disclosure. The word list grows. A browser check reads rendered text. | D196 (no user-visible string names a decision, a path or a pipeline noun) | Kept. Its `Notice.code` exemption is amended by the kit-frame lane. |
 | The pinned word ceilings go. Three checks replace them: a repetition check, a sentence-shape check, and the text-density reviewer as a pass run on demand. No pinned counts. | D194 (the word count may only go down) | Superseded. The text-checks lane writes the entry. |
-| A decision's argument printed as copy is deleted: D100, D168, D134, D70, D102 and D86. | Those six | Amended, slug `reasoning-is-not-screen-copy`. |
+| A decision's argument printed as copy is deleted: D100 (nothing is deleted to lower a price), D168 (a typed price is cleared by a press), D134 (departed records are buried), D70 (the QR is the identification), D102 (the mark's spec) and D86 (one pricing file for the store). | Those six | Amended, slug `reasoning-is-not-screen-copy`. |
 | Sales' refund and cancel notes draw only when their count is above 0. | D225 (a sales truth) | Amended, same entry. |
 | "Box" everywhere on screen, and the count is read live from the store. | D180 (a press names its cards), D153 (the restore asks which box) | Kept. A copy fix only. |
 
@@ -97,7 +97,7 @@ those entries.
 |---|---|---|
 | Money is mono everywhere, inputs and chips included, and a check refuses any other face. The owner saw both options drawn first. | D221 (money stays mono) | Confirmed, premise fixed, slug `money-is-mono-everywhere`. |
 | One page width, 1600px, fluid at every narrower width. One top gap. | D197 (one left edge) | Amended by the kit-frame lane. |
-| The owner uses two Chrome tabs side by side, about 720px each at 1440. That view is designed as well as the phone. 720 joins every verification. At 720 the desktop rail shows. Its breakpoint moves to about 640. | D197, D120 (one brand at every width) | The kit-frame and shell lanes. |
+| The owner uses two Chrome tabs side by side, about 720px each at 1440. That view is designed as well as the phone. 720 joins every verification. At 720 the desktop rail shows. Its breakpoint moves to about 640. | D197 (one left edge), D120 (one brand at every width) | The kit-frame and shell lanes. |
 
 ### 4.4 The shell
 
@@ -105,6 +105,7 @@ those entries.
 |---|---|---|
 | The palette is labelled "Go to" and lists every screen. "More" lights up. The drawer and palette hold focus. Card search joins the palette now if the lift is low. | D95 (the shell is a rail, a palette and a reference sheet) | Amended by the shell lane. |
 | The drawer's foot items join the scrolling list. The foot goes. | D204 (the drawer scrolls above its foot) | Amended, slug `drawer-foot-joins-the-list`. |
+| The tab title is fixed: "番地 " and then the screen name in lowercase, for example "番地 pricing". It does not alternate, and it drops "— Banchi". | D94 (Banchi is the product's name) | Kept: the rename's reach already covers the document title. The scaffold check in the guards lane must assert this form. |
 
 ### 4.5 Screens
 
@@ -112,25 +113,26 @@ those entries.
 |---|---|---|
 | Home | The button stays as it is. "Behind that" lines that repeat a figure are cut. | D121 (the front page says what is owed). The home lane writes the amendment. |
 | Capture | A fresh device always asks for a box ("No box yet"). Home's tile says what it shows: the newest box. | D142 (the setup outlives the browser). The capture lane writes it. |
-| Box lists | Most recent first everywhere: the Inventory rail, the Capture picker, Home and Cards to pull. | D132, D142. Slug `a-press-reorders-and-nothing-else-moves`. |
+| Box lists | Most recent first everywhere: the Inventory rail, the Capture picker, Home and Cards to pull. | D132 (sold is folded away), D142 (the setup outlives the browser). Slug `a-press-reorders-and-nothing-else-moves`. |
 | Box names | A box is shown only by its name, everywhere. The number and the `bid` stay inside the store. A count of boxes may show. A box with no name gets a stored default name, "Box" and the count plus one. Today's unnamed boxes are backfilled with "Box" and their number, so nothing visible changes. A departed card's label reads box name, section and card, and a visual mark shows it has left. This overrides the earlier call on "Mixed Singles, Box 4". The locating lane builds it. | D145 (the number is a label), D68 (the departed label), D92 (the key's sigil), D20 (names are unique). Slug `a-box-is-shown-by-its-name`. |
-| Orders and Shipping | Two sidebar rows, no tabs. The walk keeps its model and gets the screen's full height (an orchestrator call, stated to the owner). | D220 (Orders is inventory's screen). Slug `orders-and-shipping-are-two-rows`. |
-| Inventory | "Slots" names the box's capacity, in Inventory's box header and strip only. Every other place says "cards" (an orchestrator call). | D58. Slug `a-card-is-counted-in-its-section`. |
+| Orders and Shipping | Two sidebar rows, no tabs. The walk keeps its model and gets the screen's full height. An owner ruling from the final interview. | D220 (Orders is inventory's screen). Slug `orders-and-shipping-are-two-rows`. |
+| Inventory | "Slots" names the box's capacity, in Inventory's box header and strip only. Every other place says "cards". An owner ruling from the final interview. | D58 (a card's number counts the cards). Slug `a-card-is-counted-in-its-section`. |
 | Sales | Rows lead with the card name. The table shows the top rows and "Show all". "On the shelf" moves above the table. | D214 (a gross-revenue retrospective), D250 (unsold stock on Sales). |
-| Sales | Printings of one name must be told apart. The code groups rows by name and keeps only the last SKU. The planner picked one row per printing. | D214, D217 (Sales becomes a tool). The sales lane's entry. |
-| Sales | Direction B: a summary band with month bars and the shelf value, the top three cards as photo tiles, a mix tile, places 4 to 10 as bar rows, then the table. "On the shelf" loads on arrival. A tile borrows another copy's photo by SKU. | D214, D217, D250. Slug `sales-is-a-leaderboard`. |
+| Sales | Printings of one name must be told apart. The code groups rows by name and keeps only the last SKU. The planner picked one row per printing. | D214 (a gross-revenue retrospective), D217 (Sales becomes a tool). The sales lane's entry. |
+| Sales | Direction B: a summary band with month bars and the shelf value, the top three cards as photo tiles, a mix tile, places 4 to 10 as bar rows, then the table. "On the shelf" loads on arrival. A tile borrows another copy's photo by SKU. | D214 (a gross-revenue retrospective), D217 (Sales as a tool), D250 (unsold stock on Sales). Slug `sales-is-a-leaderboard`. |
 | Sales | A line at $0.00 gets its real price from TCGplayer's own data. The owner: "TCGplayer has all the data of what items sold at what prices tho". | Same entry. |
 | Shipping | The lane order stays. Every lane collapses on a phone. Per-card repetition is still cut. | D61 (the shipping lane is three lanes). The shipping lane writes it. |
 | Product views | One product view. A sheet opens from every product name. `#/product?sku=` stays the deep link. The Pricing drawer folds in. First fix the trap that sends a person back to an empty `#/product`. | D227 (a route, not a lens), D62 (price history beside the hold). The product lane writes it. |
 | Cards to pull | "Pick 2 of X", and where every copy is. Never 2 copies the app chose. | D212 (no order claims a copy). Slug `pull-list-is-a-pick-count`. |
 | Cards to pull | Sold cards leave the list. The dead `/` row goes. `?` works. "Not a big rock." | D5 (two personas), D68 (a departed label). Kept. Same entry. |
-| Pricing | See section 4.7. | D208, D98, D159. Slug `pricing-is-one-list-and-one-send`. |
-| Runs | Name the real next step, for example "Ready to send". The whole Runs process is still unintuitive, and its shape is decided after the moves land. | D156 (one worklist). Slug `one-press-sends-and-makes-live`. |
+| Pricing | See section 4.7. | D208 (one Pricing verdict), D98 (the cheap-card figure), D159 (the value band). Slug `pricing-is-one-list-and-one-send`. |
+| Runs | Name the real next step, for example "Ready to write". The whole Runs process is still unintuitive, and its shape is decided after the moves land. | D156 (one worklist). Slug `one-press-sends-and-makes-live`. |
 
 ### 4.6 The flow from captured cards to live listings
 
-The owner asked an agent to review the whole flow, not a multiple-choice answer (D105, D99,
-D87). The review put eight questions. The rulings:
+The owner asked an agent to review the whole flow, not a multiple-choice answer. The flow
+touched D105 (the markdown lives on Pricing), D99 (one press writes one file) and D87 (the
+store-wide reconcile). The review put eight questions. The rulings:
 
 - **Q1.** Banchi sends the listing file itself. "Download the file instead" stays.
 - **Q2.** One press sends and makes live. This amends D106 (the push and the publish are two
@@ -151,16 +153,23 @@ maybe before submitting prices there's a mandatory reconciliation that auto runs
 sales and live inventory
 ```
 
-So every Send, for listings and for mark-downs, first runs a live reconcile by itself. It sends only
-the copies TCGplayer does not already hold. It refuses or trims a send that would double a
+So every Send, for listings and for mark-downs, first runs a live reconcile by itself. It sends
+only the copies TCGplayer does not already hold. It refuses or trims a send that would double a
 quantity, and it shows what it trimmed. When the live check cannot run, Send refuses, says why
-and offers "Try again". This amends D106 further and D87 (the reconcile is store-wide).
+and offers "Try again". This amends D106 (push and publish are two presses) further, and D87 (the store-wide reconcile)
+(the store-wide reconcile).
+
+**An open question, derived from the send rulings.** D100 (nothing is deleted to lower a price)
+makes the transport refuse a row whose Add to Quantity is not 0. A listing file cannot pass that
+check. The rulings do not say what happens to it. This document does not claim the guard
+replaces it. The owner decides.
 
 Slug `one-press-sends-and-makes-live` records all of it.
 
 ### 4.7 Pricing, after its re-interview
 
-The owner answered Q1 to Q4. The orchestrator answered Q5 to Q10 as calls stated to the owner.
+The owner answered all ten questions, Q1 to Q10. The owner also ruled the double-send guard and
+the refusal when the live check cannot run (section 4.6).
 
 - **Q1.** Every row shows. The rows that need the owner go on top, then the rest by value.
 - **Q2.** A row needs the owner in three cases: it has no market price, it is worth $5 or more,
@@ -178,11 +187,12 @@ The owner answered Q1 to Q4. The orchestrator answered Q5 to Q10 as calls stated
   shared sort control. This moves D159 (the band is copies).
 - **Q9.** Measure the owner's typed prices first. If most follow one pattern, Pricing offers
   "Make this the rule" once.
-- **Q10.** Nothing sits beside Send. The caps leave the Send press. "Split in two files" moves
-  under "Download the file instead".
+- **Q10.** Nothing sits beside Send. The caps (at most N per card, only above the cut-off) are
+  removed from beside Send. "Split in two files" moves under "Download the file instead". Where
+  the caps live now is not ruled.
 
 Slug `pricing-is-one-list-and-one-send` records the screen. It amends D208 (Pricing states its
-verdict once), D98 (the cheap-card figure is the control) and D159, and extends D105.
+verdict once), D98 (the cheap-card figure is the control) and D159 (the value band), and extends D105 (the markdown lives on Pricing).
 
 ### 4.8 Filtering
 
@@ -195,8 +205,8 @@ verdict once), D98 (the cheap-card figure is the control) and D159, and extends 
   accents (an orchestrator call). A fuzzy number match never feeds the join. Slug
   `one-forgiving-search-matcher`.
 - **Filter memory lives in the URL** on every screen (FLT-11), so a link, a bookmark and the
-  back button restore the view. The storage-key roster in CLAUDE.md changes in the docs-sweep
-  lane (an orchestrator call).
+  back button restore the view. An owner ruling from the final interview. The storage-key
+  roster in CLAUDE.md changes in the docs-sweep lane.
 - **The owner's gripes, all confirmed by the lens.** Inventory's filters lock to game, then set,
   then rarity, and a game change clears the others. Filters must work in any order and combine.
   The Orders buyer list is "atrociously ugly". The Orders filter bar mixes widths and opens the
@@ -208,8 +218,9 @@ Slug `a-press-reorders-and-nothing-else-moves` records the first two rulings.
 ### 4.9 Locating a card
 
 - **The card number counts within the section,** and it starts again at every divider. This
-  amends the display half of D58 (a card's number counts the cards in the box). A sale still
-  renumbers the cards behind it, within the section.
+  amends the display half of D58 (a card's number counts the cards in the box). Renumbering on
+  departure still holds, within the section. When a card is sold, retired or moved, each later
+  card in its section counts down by one.
 - **Card 1 is at the far back.** The highest number is nearest the owner. Every drawing of a
   position shows that orientation. The locating lane owns it (an orchestrator call).
 - **The ruler is redesigned.** It marks the exact card, uses section numbers throughout and
@@ -228,30 +239,42 @@ A new feature. The spec is `docs/specs/box-map.md`. The rulings:
   cards).
 - The map shows counts only.
 - Pricing follows a moved card. This amends D165 (a run is bound to the box's true index).
-- Placement needs a per-card order key, its own decision.
+- The orchestrator infers that placement needs a per-card order key, as its own decision. The
+  key and its design are the orchestrator's, not the owner's ruling.
 
 Slugs `a-section-is-an-object`, `card-order-key` and `a-moved-card-keeps-its-price` record them.
 
 ### 4.11 Calls the orchestrator made
 
-These are not the owner's rulings. The owner had no preference, or was not asked. Each was
-stated to the owner and can be reversed.
+These are not the owner's rulings. Each sits under an "Orchestrator calls" heading in
+`RULINGS.md`, or is marked there as an orchestrator default or call. Each was stated to the
+owner and can be reversed.
 
 - A box map drop saves at once, with a receipt and Undo on `U`.
 - A box map undo restores exactly while neither box has changed since.
 - UX-073 (the price field's focus ring) moves into the pricing-clip lane.
-- The Pricing drawer fold follows the product view.
-- The allow list for the new kit check is a list of offenders that only shrinks. Each entry
-  names a file, a rule and a lane. A stale entry fails. There is no pinned count.
+- The Pricing drawer fold waited for the Pricing re-interview. That interview is done, so the
+  drawer folds into the one product view in the pricing lane.
+- Search ignores accents.
 - The text-checks lane owns the rendered-page money check.
-- Pricing Q5 to Q10, section 4.7.
+- "Card 1 at the far back" belongs to the locating lane.
 - The "cut everything" text ruling also covers the cut lists of the two held-screen reviews.
-- D196's rule (codes behind a disclosure) wins over the 2026-09-20 taste call for Review's Close
-  dialog.
+- The disclosure rule of D196 (no machine words on screen) wins over the 2026-09-20 taste call
+  for Review's Close dialog.
 - UX-013 stays S1. The Fulfiller was sent to pull a card that had left the box.
-- The Orders layout, "slots", filter memory and accents, as above.
-- The box label call ("Mixed Singles, Box 4") was later overridden by the owner's own ruling:
-  a box is shown by its name only.
+- The kit-frame review: no word-count re-pin, because the text-checks lane merges first. The
+  fourth ink token is for non-text only, and text in it moves to the third ink. A ConfirmSheet
+  opens with focus on Cancel. The phone's top gap is 16px below 768.
+- The guards review: `app/src/PriceHistory.tsx` belongs to the product lane. `#/fulfillment` is
+  exempt from the scaffold's width and top-gap rules. D5 (two personas) and the Fulfillment
+  floors in `docs/DESIGN.md` are the reason. It keeps its page and its h1. Live-store counts may
+  appear in public docs, and a real product string or buyer name may not. The docs must not
+  claim that the transport check of D100 (nothing is deleted to lower a price) is replaced.
+- An earlier call put the box number after the name ("Mixed Singles, Box 4"). The owner's own
+  ruling overrides it: a box is shown by its name only.
+
+The shrinking allow list for the new kit check is the owner's ruling, not a call. Each entry
+names a file, a rule and a lane. A stale entry fails. There is no pinned count.
 
 ### 4.12 Coordination
 
@@ -265,21 +288,21 @@ stated to the owner and can be reversed.
 
 | Slug | Keeps or amends |
 |---|---|
-| `pull-list-is-a-pick-count` | Amends D212's screen. Keeps D5 and D68. |
-| `money-is-mono-everywhere` | Confirms D221 and fixes its premise. |
-| `one-press-sends-and-makes-live` | Amends D106 and D87. Replaces D100's check for a listing file. Touches D33, D105 and D156. |
-| `pricing-is-one-list-and-one-send` | Amends D208, D98 and D159. Extends D105. |
-| `sales-is-a-leaderboard` | Amends D214 and D217. Moves D250's figure up. |
-| `orders-and-shipping-are-two-rows` | Amends D220's layout half. |
-| `a-moved-card-keeps-its-price` | Amends D165. |
-| `a-card-is-counted-in-its-section` | Amends D58's display, D92 and D155. |
-| `a-press-reorders-and-nothing-else-moves` | Amends D209 and D132's timing. Extends D142. |
+| `pull-list-is-a-pick-count` | Amends the screen of D212 (no order claims a copy). Keeps D5 (two personas) and D68 (the departed label). |
+| `money-is-mono-everywhere` | Confirms D221 (money stays mono) and fixes its premise. |
+| `one-press-sends-and-makes-live` | Amends D106 (push and publish are two presses) and D87 (the store-wide reconcile). Records the check of D100 (nothing is deleted to lower a price) as an open question. Touches D33 (one route can spend), D105 (the markdown lives on Pricing) and D156 (one worklist). |
+| `pricing-is-one-list-and-one-send` | Amends D208 (one Pricing verdict), D98 (the cheap-card figure) and D159 (the value band). Extends D105 (the markdown lives on Pricing). |
+| `sales-is-a-leaderboard` | Amends D214 (a gross-revenue retrospective) and D217 (Sales as a tool). Moves the figure of D250 (unsold stock on Sales) up. |
+| `orders-and-shipping-are-two-rows` | Amends the layout half of D220 (Orders is inventory's screen). |
+| `a-moved-card-keeps-its-price` | Amends D165 (a run binds to the box's true index). |
+| `a-card-is-counted-in-its-section` | Amends the display of D58 (a card's number counts the cards), D92 (a bare # is the count) and D155 (the section ruler). |
+| `a-press-reorders-and-nothing-else-moves` | Amends D209 (a re-sort is a press) and the timing of D132 (sold is folded away). Extends D142 (the setup outlives the browser). |
 | `one-forgiving-search-matcher` | Sets the first app-wide rule for search. |
-| `a-section-is-an-object` | Amends D83. Keeps D31. |
-| `card-order-key` | Keeps D10 and D58's fixed index. Adds an order key. |
-| `reasoning-is-not-screen-copy` | Amends D100, D168, D134, D70, D102, D86 and D225. |
-| `drawer-foot-joins-the-list` | Amends D204. |
-| `a-box-is-shown-by-its-name` | Amends D145, D68 and D92's sigil on screen. Keeps D20. |
+| `a-section-is-an-object` | Amends D83 (a moved card). Keeps D31 (one owner-side view of stored cards). |
+| `card-order-key` | Keeps the fixed index of D10 (the inventory model) and D58 (a card's number counts the cards). Proposes an order key, the orchestrator's inference. |
+| `reasoning-is-not-screen-copy` | Amends D100 (nothing is deleted to lower a price), D168 (a typed price is cleared by a press), D134 (departed records are buried), D70 (the QR is the identification), D102 (the mark's spec), D86 (one pricing file for the store) and D225 (a sales truth). |
+| `drawer-foot-joins-the-list` | Amends D204 (the drawer scrolls above its foot). |
+| `a-box-is-shown-by-its-name` | Amends D145 (the box index nobody sees), D68 (the departed label) and the on-screen sigil of D92 (a bare # is the count). Keeps D20 (a box is an object). |
 
 The round-one lanes write ten more: `one-page-width`, `notice-detail`, `page-scaffold`,
 `palette-go-to`, `text-shape-checks`, `product-view-hybrid`, `home-owed-line`,
@@ -315,7 +338,7 @@ larger model tier.
 | 1 | shell, text-checks, product, demo, filtering, locating | 37 | The route table, the palette and drawer, the three text checks, the one product view, the demo's missing recordings, the one filter control and matcher, and the one place vocabulary. |
 | 2, the screens | home, capture, sales, shipping, library, inventory, orders, review, search-server | 139 | Each screen moves onto the scaffold and the shared parts. Search-server makes the server matcher pass the shared case table. |
 | 3 | docs-sweep | 0 | CLAUDE.md, README.md and DESIGN.md. |
-| blocked | pricing, runs | 47 | Section 6. |
+| released | runs, then pricing | 47 | Section 6. |
 | handed off | the token sweep after the UX PR | 1 | UX-157. |
 | records | specs (this lane) | 0 | This document, the box map spec, the review record and the decision entries. |
 
@@ -335,12 +358,13 @@ What moved in round two:
 Wave 0 merges in this order: kit-data, then kit-frame, then guards. Every screen is checked at
 1440, 820, 720 and 390, in both themes.
 
-## 6. What is blocked, and why
+## 6. What was blocked, and what still waits
 
-- **Pricing** (the pricing lane, 22 findings). The re-interview ran (section 4.7). The lane plan
-  still marks the lane blocked. The orchestrator releases it.
-- **Runs** (the runs lane, 25 findings). It needs Pricing's bar, so it runs after the pricing
-  lane. The Runs screen's final shape (Q6) is decided after the send and live presses move to
+- **Runs and Pricing are released.** The owner released both once the Pricing re-interview and
+  the flow interview were done. Both touch Pricing's write bar, so they run in sequence. The
+  runs lane goes first (25 findings), with the send, live and reconcile plumbing. The pricing
+  lane follows (22 findings), with the screen.
+- **The Runs screen's final shape** (Q6) is decided after the send and live presses move to
   Pricing. Then the owner sees what is left and rules.
 - **The box map.** Nothing is in a lane yet. Slice 0 of `docs/specs/box-map.md` is a safety fix
   that can ship first.
@@ -348,23 +372,26 @@ Wave 0 merges in this order: kit-data, then kit-frame, then guards. Every screen
 ## 7. What is not decided yet
 
 Six items are settled since the first version of this document. They are the Pricing
-re-interview, the Sales direction, the double-send mechanism, the mark-down press, accents in
+re-interview, the Sales direction, the double-send guard, the mark-down press, accents in
 search, and the owner of the money check. Still open:
 
-1. The Runs screen's shape, after the moves land.
-2. Where a $0.00 sale finds its real price: the order detail, the shipping export or another
+1. The transport check of D100 (nothing is deleted to lower a price). A listing file cannot pass
+   it. The send rulings do not say what happens to it. The question goes to the owner.
+2. Where the Send caps live, now that they are removed from beside Send.
+3. The Runs screen's shape, after the moves land.
+4. Where a $0.00 sale finds its real price: the order detail, the shipping export or another
    export. Measure first.
-3. Three counts on the real store before Pricing is built: the rows that need the owner (Q2),
+5. Three counts on the real store before Pricing is built: the rows that need the owner (Q2),
    the typed prices that follow one pattern (Q9), and the rows with no market price.
-4. Which clock "most recent" reads for Home and Cards to pull.
-5. Whether a search miss offers the closest name.
-6. The form of the card order key.
-7. The two box map defaults (section 4.11), shown to the owner.
-8. The exact Orders layout once the walk takes the full height. The orders lane shows the owner
+6. Which clock "most recent" reads for Home and Cards to pull.
+7. Whether a search miss offers the closest name.
+8. The form of the card order key.
+9. The two box map defaults (section 4.11), shown to the owner.
+10. The exact Orders layout once the walk takes the full height. The orders lane shows the owner
    first.
-9. Five measurements the flow review listed before any send is built. The first touches the
+11. Five measurements the flow review listed before any send is built. The first touches the
    real TCGplayer account and needs the owner's word.
-10. The duplicate entries in section 4.13.
+12. The duplicate entries in section 4.13.
 
 ### 7.1 An incident, and two findings, now in lanes
 
@@ -379,6 +406,9 @@ search, and the owner of the money check. Still open:
   carries the fix.
 - **HOR-07.** Undo on a pull fails with `sold_origin_unknown` on a seeded store. The owner was
   asked to test it once on the real store.
+- **A tooling defect.** `npx playwright test --list` writes `.serve/design-check.json` with a
+  pass of 0 tests. A list run must not write the verdict file. It needs a guard, and no lane
+  names it yet.
 
 ## 8. The second consolidation
 
