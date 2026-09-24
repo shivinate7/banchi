@@ -39,6 +39,18 @@ export type SearchFieldProps = {
 
   /** Off by default — see the header. */
   debounceMs?: number
+
+  /** A search that runs on a PRESS rather than on every keystroke. When given, Enter in the
+   *  field calls it, and so does the button `submitLabel` names. A press on an empty field
+   *  calls nothing and says what to type instead (`emptyHint`): a press that does nothing and
+   *  says nothing reads as broken (UX review, 2026-09-23). */
+  onSubmit?: (text: string) => void
+
+  /** The button beside the field, when `onSubmit` is given. No label, no button: Enter only. */
+  submitLabel?: string
+
+  /** What an empty press says. Defaults to the placeholder's own words. */
+  emptyHint?: string
 }
 
 export function SearchField({
@@ -49,8 +61,16 @@ export function SearchField({
   placeholder = 'Card name, number or SKU',
   label,
   debounceMs = 0,
+  onSubmit,
+  submitLabel,
+  emptyHint,
 }: SearchFieldProps) {
   const id = useId()
+  const hintId = useId()
+
+  /* True from an empty press until the next keystroke. The hint is a reply to a press, so
+   * typing is what takes it away. */
+  const [askedEmpty, setAskedEmpty] = useState(false)
   const input = useRef<HTMLInputElement | null>(null)
   const timer = useRef<number | null>(null)
 
@@ -114,8 +134,30 @@ export function SearchField({
     if (autoFocus) input.current?.focus()
   }, [autoFocus])
 
+  const submit = () => {
+    if (onSubmit === undefined) return
+    const text = draft.trim()
+    if (text === '') {
+      setAskedEmpty(true)
+      input.current?.focus()
+      return
+    }
+    setAskedEmpty(false)
+    /* A press is the moment the parent must hold what is in the box, debounce or not. */
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current)
+      timer.current = null
+    }
+    if (sent.current !== draft) {
+      sent.current = draft
+      latest.current(draft)
+    }
+    onSubmit(text)
+  }
+
   const handle = (next: string) => {
     setDraft(next)
+    if (askedEmpty && next.trim() !== '') setAskedEmpty(false)
     if (timer.current !== null) window.clearTimeout(timer.current)
 
     if (debounceMs <= 0) {
@@ -149,10 +191,16 @@ export function SearchField({
           /* ESC hands focus back and the query survives: an input does not blur itself on
              Escape, and on a `type="search"` input Chrome's native Escape clears the text. */
           onKeyDown={(event) => {
+            if (event.key === 'Enter' && onSubmit !== undefined) {
+              event.preventDefault()
+              submit()
+              return
+            }
             if (event.key !== 'Escape') return
             event.preventDefault()
             event.currentTarget.blur()
           }}
+          aria-describedby={askedEmpty ? hintId : undefined}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
@@ -179,7 +227,21 @@ export function SearchField({
         {/* Owner-side only, and absent rather than hidden on his: his screens are touch and
             show no keys. */}
         {persona === 'owner' ? <kbd className="search-field-key">{HOTKEY}</kbd> : null}
+
+        {onSubmit !== undefined && submitLabel !== undefined ? (
+          <button type="button" className="search-field-submit" onClick={submit}>
+            {submitLabel}
+          </button>
+        ) : null}
       </div>
+
+      {/* Mounted always and filled only on an empty press, so the line it takes is reserved
+          from the first paint and a press never moves what is below the field (D118). */}
+      {onSubmit === undefined ? null : (
+        <p className="search-field-hint" id={hintId} role="status" aria-live="polite">
+          {askedEmpty ? (emptyHint ?? `Type a ${placeholder.charAt(0).toLowerCase()}${placeholder.slice(1)} first.`) : ''}
+        </p>
+      )}
     </div>
   )
 }

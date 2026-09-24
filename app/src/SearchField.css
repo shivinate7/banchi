@@ -54,6 +54,34 @@
 }
 .search-field-clear:hover { background: var(--bn-surface-2); color: var(--bn-ink); }
 
+/* A search that runs on a press: the button sits inside the box, at its right end, so the
+   field and its press read as one control. Quiet ink until hovered, so it never competes with
+   a screen's primary action. */
+.search-field-submit {
+  flex: none;
+  align-self: stretch;
+  margin: var(--bn-1) calc(var(--bn-1) * -1) var(--bn-1) 0;
+  padding: 0 var(--bn-3);
+  border-radius: var(--bn-r-sm);
+  font: inherit;
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-accent);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.search-field-submit:hover { background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
+
+/* What an empty press says. The line is always there and empty at rest, so the reply lands
+   without moving anything under the field (D118). */
+.search-field-hint {
+  min-height: calc(var(--bn-fs-sm) * 1.5);
+  margin-top: var(--bn-1);
+  font-size: var(--bn-fs-sm);
+  line-height: 1.5;
+  color: var(--bn-warn);
+}
+.search-field-fulfiller .search-field-hint { font-size: 20px; min-height: 30px; }
+
 /* ---- the owner: dense, and a key to get here with ---- */
 .search-field-owner .search-field-label {
   position: absolute;

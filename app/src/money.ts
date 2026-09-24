@@ -34,6 +34,15 @@ export function moneyGrouped(value: number | null | undefined): string {
   return `$${Number(whole).toLocaleString()}.${cents}`
 }
 
+/** `+$1.20`, `−$0.35`, `$0.00`, or `—` — a CHANGE in money, grouped like `moneyGrouped`. The
+ *  minus is U+2212, the sign a figure column lines up on, never a hyphen. */
+export function moneySigned(value: number | null | undefined): string {
+  if (typeof value !== 'number') return '—'
+  const size = moneyGrouped(Math.abs(value))
+  if (Math.abs(value) < 0.005) return size
+  return value > 0 ? `+${size}` : `−${size}`
+}
+
 /** True where a figure is REAL MONEY and still rounds to `$0.00`.
  *
  *  IT IS A FACT ABOUT `toFixed(2)` AND THAT IS WHY IT LIVES HERE RATHER THAN IN PYTHON. A run
