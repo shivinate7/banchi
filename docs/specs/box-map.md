@@ -162,7 +162,7 @@ section of one box, in order, to the far end or the near end of another.
 
 **While dragging:** the section lifts with an accent tint. Its old place shows a dashed outline.
 A sealed box dims and says "Sealed". A section with a live paid reading cannot lift. The cursor
-is `not-allowed` (D50 (interactive feedback is the product's), interactive feedback is the product's), and the block says why.
+is `not-allowed` (D50, interactive feedback is the product's), and the block says why.
 
 **Touch and small widths.** At 390 and 720, the primary path is tap to pick and tap to place.
 Tap a section to lift it. A bar says "Uncommons, 10 cards. Tap a gap to put them there.
@@ -225,7 +225,7 @@ another write, the way back is a new move. This adds a move to the fast path in
 |---|---|
 | A card in the section has a live paid reading | Refuse before the drag starts, and again at the write. It names the reading. |
 | The section's cards belong to a run that is matched and not yet sent | Allow. The join follows the card (slug `a-moved-card-keeps-its-price`). |
-| Cards owed to open orders | Allow. Orders claim no copy (D212 (no order claims a copy), no order claims a copy). The receipt says so. |
+| Cards owed to open orders | Allow. Orders claim no copy (D212, no order claims a copy). The receipt says so. |
 | A stale walk or Cards to pull presses sold on a moved card | The server answers `card_moved`. The screen says where the card went, from the tombstone's `moved_to`, and refreshes. |
 | The destination is sealed | Not a target. |
 | Another device changed the section since the map loaded | The write carries an aim: the count and the first and last card names. A mismatch refuses, and the map reloads. |

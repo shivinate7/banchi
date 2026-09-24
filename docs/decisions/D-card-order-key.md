@@ -35,7 +35,7 @@ them. None of that changed.
 
 Each card gets an order key beside its index. The walk, the labels and the section bounds read
 the key. A move before or after a section changes keys only. The index, the photograph (filed
-by `cid` since D183), the queue and the holds stay as they are.
+by `cid` since D183, the photograph is stored under the card's name), the queue and the holds stay as they are.
 
 What it protects: the outcome D10 and D58 protect, a key that never changes under anything that
 addresses it. It adds the freedom the owner asked for.

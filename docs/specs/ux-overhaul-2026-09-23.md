@@ -156,7 +156,7 @@ sales and live inventory
 So every Send, for listings and for mark-downs, first runs a live reconcile by itself. It sends
 only the copies TCGplayer does not already hold. It refuses or trims a send that would double a
 quantity, and it shows what it trimmed. When the live check cannot run, Send refuses, says why
-and offers "Try again". This amends D106 (push and publish are two presses) further, and D87 (the store-wide reconcile)
+and offers "Try again". This amends D106 (push and publish are two presses) further, and D87
 (the store-wide reconcile).
 
 **An open question, derived from the send rulings.** D100 (nothing is deleted to lower a price)
@@ -407,8 +407,8 @@ search, and the owner of the money check. Still open:
 - **HOR-07.** Undo on a pull fails with `sold_origin_unknown` on a seeded store. The owner was
   asked to test it once on the real store.
 - **A tooling defect.** `npx playwright test --list` writes `.serve/design-check.json` with a
-  pass of 0 tests. A list run must not write the verdict file. It needs a guard, and no lane
-  names it yet.
+  pass of 0 tests. A list run must not write the verdict file. It needs a guard, as a
+  separate task.
 
 ## 8. The second consolidation
 
