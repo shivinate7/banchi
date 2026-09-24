@@ -336,7 +336,8 @@ CHECKS = (
                    "rule -> lane: an unlisted violation fails, a stale entry fails, and a "
                    "key the list at the merge-base with origin/main does not hold fails, "
                    "unless its rule is not defined at the merge-base (a rule born on the "
-                   "branch; printed with its reason). Read-only git; fails open, printed, "
+                   "branch; printed with its reason) and no rule the merge-base defines is "
+                   "missing at HEAD. Read-only git; fails open, printed, "
                    "with no merge-base or no list there. Never a pinned count.",
         "needs": ("node", "app deps"),
         "writes": "",

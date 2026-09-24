@@ -267,8 +267,9 @@ make kit-adoption   # every ROUTES view renders <Page> from the kit, and no scre
                     #   file -> rule -> lane: an unlisted violation fails, a stale entry fails,
                     #   and a key that the list at the merge-base with origin/main does not
                     #   hold fails, unless its rule is not defined at the merge-base (a rule
-                    #   born on the branch). The output names each such rule and why. With
-                    #   no merge-base it fails open and says so.
+                    #   born on the branch). The output names each such rule and why. A
+                    #   removed or renamed rule refuses all growth. With no merge-base it
+                    #   fails open and says so.
 make kit-adoption-selftest  # that checker, on in-memory fixtures in both directions. Writes
                     #   nothing (D18).
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
@@ -445,7 +446,9 @@ browser, per route, at 1440, 820, 720 and 390. The exceptions are one shrinking 
 on a stale entry. It also fails on a key that the list at the merge-base with `origin/main` does
 not hold. So every rule that exists at the merge-base only shrinks. The one exception is a rule
 that the merge-base does not define, which is a rule born on the branch. Its first offenders may
-be listed, and the check prints which rule allowed them and why. A lane that moves a screen onto
+be listed, and the check prints which rule allowed them and why. The exception holds only while
+every rule that the merge-base defines still exists. If a branch removes or renames a rule, the
+check refuses all growth and names that rule. A lane that moves a screen onto
 `Page` deletes that screen's entries in the same commit.
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a

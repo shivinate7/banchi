@@ -48,10 +48,10 @@
  *                R2-money    a hand-rolled dollar amount outside `app/src/money.ts`, in any of
  *                            these shapes:
  *                              - a template literal whose text before an interpolation ends in
- *                                `$` or `$ ` (`$${x}`, `-$ ${n.toFixed(2)}`)
- *                              - a `+` whose left side ends in a string literal that ends in `$`
- *                                or `$ ` (`'$' + x.toFixed(2)`)
- *                              - JSX text that ends in `$` (then optional white space) directly
+ *                                `$`, then any white space (`$${x}`, `-$ ${n.toFixed(2)}`)
+ *                              - a `+` whose left side ends in a string literal that ends in `$`,
+ *                                then any white space (`'$' + x.toFixed(2)`)
+ *                              - JSX text that ends in `$` (then any white space) directly
  *                                before a `{...}` child, or a `{'$'}` child directly before one
  *                              - `Intl.NumberFormat(...)` or `.toLocaleString(...)` with an
  *                                object-literal option `style: 'currency'` or a `currency` key
@@ -79,8 +79,12 @@
  * assumed: the keys of `RULES` in this file for `static`, and the members of `PER_ROUTE` and
  * `SHELL_WIDE` in `app/tests/scaffold.spec.ts` for `runtime`, each by `git show <base>:<file>`.
  * Each allowed key is PRINTED with the rule that allowed it and why. A definition that cannot be
- * read at the merge-base allows nothing. Once the branch merges, its new rule exists at every
- * later merge-base, so from then on that rule only shrinks too. IT FAILS OPEN, AND PRINTS WHY: no git, no
+ * read, at the merge-base or at HEAD, allows nothing. AND ONLY WHILE NO RULE WAS REMOVED (the
+ * orchestrator's option a, 2026-09-23): if any rule the merge-base defines, in either block, is
+ * missing at HEAD, ALL growth is refused, and the message names the missing rule. Otherwise a
+ * rename (R2-money -> R2-cash) would pass as a born rule and bring every old debt back under
+ * the new name. Once the branch merges, its new rule exists at every later merge-base, so from
+ * then on that rule only shrinks too. IT FAILS OPEN, AND PRINTS WHY: no git, no
  * `origin/main`, no merge-base, or no allow list at the merge-base. The last is the branch that
  * gives the list its birth, where every entry is new by definition.
  *
@@ -94,7 +98,18 @@
  *   - a view that renders `<Page>` on one branch and something else on another. R1 asks whether
  *     the view reaches `<Page>` at all. `scaffold.spec.ts` asserts what a browser actually drew.
  *   - a view assigned to a variable and rendered through it (`const V = a ? A : B; <V/>`).
- *   - each HEURISTIC above, past the edge it states.
+ *   - each HEURISTIC above, past the edge it states. Named, because each is a real shape:
+ *       - a `$` inside its own element before a value (`<b>$</b>{x}`): the `$` is not the text
+ *         directly before the `{...}`.
+ *       - `'$'.concat(x)`, and any other join that is not `+`, a template or JSX.
+ *       - `Intl` reached by destructuring (`const { NumberFormat } = Intl`), through
+ *         `globalThis.Intl` or `window.Intl`, or by a bracket (`Intl['NumberFormat']`).
+ *       - `Intl.RelativeTimeFormat`, and every other `Intl` formatter than DateTimeFormat and
+ *         NumberFormat: a relative date ("3 days ago") is a date format R2-date does not see.
+ *       - a date method called by a bracket (`d['toLocaleDateString']()`).
+ *       - `role="searchbox"` (or `role="search"`) on an element: only `<input>` is read.
+ *       - a role or an input type given by a spread (`<div {...props}>`, `<input {...p}>`):
+ *         only a named attribute is read.
  *
  *     node scripts/kit-adoption.mjs              the check (exit 1 on any finding)
  *     node scripts/kit-adoption.mjs --self-test  the checker against in-memory fixtures
@@ -421,8 +436,7 @@ export const SEARCHISH = /\b(search|find|filter|look ?up)/i
 /** R2-date's heuristic: an options object with any of these keys is asking for a date or a time. */
 export const DATE_OPTIONS = ['dateStyle', 'timeStyle', 'year', 'month', 'day', 'weekday', 'hour', 'minute', 'second', 'era', 'timeZoneName', 'hour12', 'hourCycle', 'dayPeriod']
 /** R2-money: text that ends in a dollar sign, then at most white space, right before a value. */
-const DOLLAR_END = /\$\s?$/
-const DOLLAR_END_JSX = /\$\s*$/
+const DOLLAR_END = /\$\s*$/
 
 /** The object literals among a call's arguments, as a map of key -> initializer. */
 function optionObjects(args) {
@@ -445,7 +459,7 @@ const asksCurrency = (args) =>
   optionObjects(args).some((o) => o.has('currency') || (o.get('style') !== undefined && o.get('style') !== null && literalsOf(o.get('style')).includes('currency')))
 const asksDate = (args) => optionObjects(args).some((o) => DATE_OPTIONS.some((k) => o.has(k)))
 
-/** Does this expression END in a string literal that ends in `$` (then one optional space)?
+/** Does this expression END in a string literal that ends in `$` (then any white space)?
  *  `'$'`, `'Total: $'`, and `a + '$'` (the right end of a `+` chain) do. */
 function endsInDollar(expr) {
   const e = unwrap(expr)
@@ -505,7 +519,7 @@ function scanFile(rel, sf) {
         const k = kids[i]
         const next = kids[i + 1]
         if (!ts.isJsxExpression(next) || !next.expression) continue
-        const dollar = ts.isJsxText(k) ? DOLLAR_END_JSX.test(k.text) : ts.isJsxExpression(k) && k.expression !== undefined && endsInDollar(k.expression)
+        const dollar = ts.isJsxText(k) ? DOLLAR_END.test(k.text) : ts.isJsxExpression(k) && k.expression !== undefined && endsInDollar(k.expression)
         if (dollar) add('R2-money', next, 'a `$` in JSX before `{...}`')
       }
     } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken && endsInDollar(n.left)) {
@@ -608,11 +622,28 @@ function pairs(block) {
  *  rule finds offenders nobody could have listed before it existed. `baseRules` is
  *  `{ static, runtime }`, each the Set of rule ids defined at the merge-base (RULES in this file;
  *  PER_ROUTE and SHELL_WIDE in scaffold.spec.ts), or null when that definition could not be read.
- *  A null set allows nothing: an unread definition never excuses growth. `base` null means there
- *  was nothing to compare against: the caller fails open and prints why.
+ *  AND ONLY WHILE NO RULE WAS REMOVED (the orchestrator's option a, 2026-09-23): `headRules` is
+ *  the same shape, read at HEAD. If any rule the merge-base defines, in either block, is missing
+ *  at HEAD, ALL growth is refused and the message names the missing rule. Otherwise a rename
+ *  (R2-money -> R2-cash) would pass as a born rule, and every old debt could come back under
+ *  the new name. A null set, at either end, allows nothing: an unread definition never excuses
+ *  growth. `base` null means there was nothing to compare against: the caller fails open and
+ *  prints why.
  *  Returns `{ refused, allowed }`, each a list of `{ block, key, rule, why }`, or null. */
-export function growth(base, head, baseRules = { static: null, runtime: null }) {
+export function growth(base, head, baseRules = { static: null, runtime: null }, headRules = { static: null, runtime: null }) {
   if (base === null) return null
+  const missing = []
+  let unread = null
+  for (const block of ['static', 'runtime']) {
+    const before = baseRules?.[block] ?? null
+    const now = headRules?.[block] ?? null
+    if (before === null) unread = unread ?? `the merge-base's ${block} rule definitions could not be read`
+    else if (now === null) unread = unread ?? `HEAD's ${block} rule definitions could not be read`
+    else for (const rule of before) if (!now.has(rule)) missing.push(rule)
+  }
+  const blocked = missing.length > 0
+    ? `${missing.map((r) => `"${r}"`).join(', ')}, defined at the merge-base, ${missing.length > 1 ? 'are' : 'is'} missing at HEAD (removed or renamed), so no growth is allowed`
+    : unread === null ? null : `${unread}, so no rule can be shown to be new`
   const refused = []
   const allowed = []
   for (const block of ['static', 'runtime']) {
@@ -620,17 +651,27 @@ export function growth(base, head, baseRules = { static: null, runtime: null }) 
     const known = baseRules?.[block] ?? null
     for (const [key, rule] of pairs(head?.[block])) {
       if (before.has(key)) continue
-      if (known !== null && !known.has(rule)) {
+      if (blocked !== null) refused.push({ block, key, rule, why: blocked })
+      else if (!known.has(rule)) {
         allowed.push({ block, key, rule, why: `rule "${rule}" is not defined at the merge-base, so it was born on this branch and its first offenders may be listed` })
       } else {
-        const why = known === null
-          ? `the merge-base's ${block} rule definitions could not be read, so "${rule}" cannot be shown to be new`
-          : `rule "${rule}" exists at the merge-base, and a rule that exists only shrinks`
-        refused.push({ block, key, rule, why })
+        refused.push({ block, key, rule, why: `rule "${rule}" exists at the merge-base, and a rule that exists only shrinks` })
       }
     }
   }
   return { refused, allowed }
+}
+
+/** The rule ids defined at HEAD: RULES in this file, and the spec's PER_ROUTE and SHELL_WIDE as
+ *  they stand in the working tree. A spec that cannot be read gives null, which allows nothing. */
+function rulesAtHead() {
+  let spec = null
+  try {
+    spec = definedIds(fs.readFileSync(path.join(ROOT, SPEC_FILE), 'utf8'), { arrayNames: ['PER_ROUTE', 'SHELL_WIDE'] })
+  } catch {
+    spec = null
+  }
+  return { static: new Set(Object.keys(RULES)), runtime: spec }
 }
 
 /** The ids a source defines: the keys of an object literal named `objectName`, or the string
@@ -747,7 +788,7 @@ function run() {
     )
   }
   const atBase = allowAtBase()
-  const grown = growth(atBase.allow, allow, atBase.rules)
+  const grown = growth(atBase.allow, allow, atBase.rules, rulesAtHead())
   if (grown === null) {
     console.log(`kit-adoption: only-shrinks not compared: ${atBase.reason}. Failing open.`)
   } else {
@@ -970,9 +1011,11 @@ function selfTest() {
     rule("export const s = (x) => 'Total: $' + x\n", 'R2-money') === 1 &&
     rule("export const s = (a, x) => a + '$ ' + x\n", 'R2-money') === 1 &&
     rule("export const r = (x) => new RegExp('^' + x + '$')\n", 'R2-money') === 0)
-  add('a template `$` or `$ ` before any interpolation is R2-money, with or without toFixed; `${n}%` is not', () =>
+  add('a template `$`, then any white space, before any interpolation is R2-money, with or without toFixed; `${n}%` is not', () =>
     rule('export const s = (x) => `$${x}`\n', 'R2-money') === 1 &&
     rule('export const s = (x) => `Over $ ${x} each`\n', 'R2-money') === 1 &&
+    rule('export const s = (x) => `Over $  ${x} each`\n', 'R2-money') === 1 &&
+    rule("export const s = (x) => 'Total: $  ' + x\n", 'R2-money') === 1 &&
     rule('export const s = (n) => `${n}% and ${n} items`\n', 'R2-money') === 0)
   add("a `$` in JSX text, or a {'$'} child, before {...} is R2-money; `{n} items` is not", () =>
     rule('export const S = ({ p }) => <span>${p}</span>\n', 'R2-money') === 1 &&
@@ -988,42 +1031,64 @@ function selfTest() {
      stands for a rule born on the branch. */
   const baseRules = { static: new Set(Object.keys(RULES)), runtime: new Set(['page', 'h1', 'width', 'top', 'scroll', 'title', 'palette', 'keys']) }
   const clone = (o) => JSON.parse(JSON.stringify(o))
-  const refusedOnly = (g, block, key) => g.refused.length === 1 && g.allowed.length === 0 && g.refused[0].block === block && g.refused[0].key === key
+  const refusedOnly = (g, block, key) => g.refused.length === 1 && g.allowed.length === 0 && g.refused[0].block === block && g.refused[0].key === key && /exists at the merge-base/.test(g.refused[0].why)
   add('a new static key (a new file) for an existing rule is refused, so red', () => {
     const head = clone(base)
     head.static['app/src/B.tsx'] = { R1: 'x' }
-    return refusedOnly(growth(base, head, baseRules), 'static', 'app/src/B.tsx -> R1')
+    return refusedOnly(growth(base, head, baseRules, baseRules), 'static', 'app/src/B.tsx -> R1')
   })
   add('a new key for an existing rule under a file the list already names is refused, so red', () => {
     const head = clone(base)
     head.static['app/src/A.tsx']['R2-date'] = 'home'
-    return refusedOnly(growth(base, head, baseRules), 'static', 'app/src/A.tsx -> R2-date')
+    return refusedOnly(growth(base, head, baseRules, baseRules), 'static', 'app/src/A.tsx -> R2-date')
   })
   add('a new runtime key for an existing assertion is refused, so red', () => {
     const head = clone(base)
     head.runtime['/']['width'] = 'home'
-    return refusedOnly(growth(base, head, baseRules), 'runtime', '/ -> width')
+    return refusedOnly(growth(base, head, baseRules, baseRules), 'runtime', '/ -> width')
   })
   add('a new key for a rule born on this branch (not defined at the merge-base) is allowed, so green, and says why', () => {
     const head = clone(base)
     head.static['app/src/B.tsx'] = { 'R2-new': 'x' }
     head.runtime['/']['focus'] = 'shell'
-    const g = growth(base, head, baseRules)
+    const g = growth(base, head, baseRules, { static: new Set([...baseRules.static, 'R2-new']), runtime: new Set([...baseRules.runtime, 'focus']) })
     return g.refused.length === 0 && g.allowed.length === 2 &&
       g.allowed.some((a) => a.rule === 'R2-new' && /born on this branch/.test(a.why)) && g.allowed.some((a) => a.rule === 'focus')
   })
-  add('a rule definition the merge-base read could not parse excuses nothing: growth is refused', () => {
+  add('renaming a rule (R2-money -> R2-cash) refuses all growth, and names the missing rule', () => {
+    /* The branch renames R2-money to R2-cash. R2-cash is not defined at the merge-base, so under
+       option (b) alone it would pass as "born on the branch", and every old R2-money debt could
+       come back under the new name as growth. */
+    const b = clone(base)
+    b.static['app/src/A.tsx']['R2-money'] = 'home'
+    const head = clone(b)
+    delete head.static['app/src/A.tsx']['R2-money']
+    head.static['app/src/A.tsx']['R2-cash'] = 'home'
+    head.static['app/src/C.tsx'] = { 'R2-cash': 'x' }
+    const headRules = { static: new Set([...baseRules.static].filter((r) => r !== 'R2-money').concat('R2-cash')), runtime: baseRules.runtime }
+    const g = growth(b, head, baseRules, headRules)
+    return g.allowed.length === 0 && g.refused.length === 2 && g.refused.every((r) => /R2-money/.test(r.why) && /missing at HEAD/.test(r.why))
+  })
+  add('removing a runtime assertion (keys) refuses growth for a born static rule too', () => {
     const head = clone(base)
     head.static['app/src/B.tsx'] = { 'R2-new': 'x' }
-    const g = growth(base, head, { static: null, runtime: null })
-    return g.refused.length === 1 && /could not be read/.test(g.refused[0].why)
+    const headRules = { static: new Set([...baseRules.static, 'R2-new']), runtime: new Set([...baseRules.runtime].filter((a) => a !== 'keys')) }
+    const g = growth(base, head, baseRules, headRules)
+    return g.allowed.length === 0 && g.refused.length === 1 && /"keys"/.test(g.refused[0].why)
+  })
+  add('a rule definition the merge-base or HEAD read could not parse excuses nothing: growth is refused', () => {
+    const head = clone(base)
+    head.static['app/src/B.tsx'] = { 'R2-new': 'x' }
+    const g = growth(base, head, { static: null, runtime: null }, baseRules)
+    const h = growth(base, head, baseRules, { static: baseRules.static, runtime: null })
+    return g.refused.length === 1 && /could not be read/.test(g.refused[0].why) && h.refused.length === 1 && /HEAD's runtime/.test(h.refused[0].why)
   })
   add('a removed key is the list shrinking, so green; a changed lane is not growth', () => {
     const head = clone(base)
     delete head.static['app/src/A.tsx']['R2-class']
     delete head.runtime['/']
     head.static['app/src/A.tsx'].R1 = 'capture'
-    const g = growth(base, head, baseRules)
+    const g = growth(base, head, baseRules, baseRules)
     return g.refused.length === 0 && g.allowed.length === 0
   })
   add('no allow list at the merge-base fails open (null), never a silent pass', () => growth(null, base) === null)
@@ -1032,10 +1097,11 @@ function selfTest() {
     if (at.allow === null) throw new Error(`nothing to read: ${at.reason}`)
     const head = clone(at.allow)
     head.static['app/src/NotARealScreen.tsx'] = { R1: 'x' }
-    const same = growth(at.allow, at.allow, at.rules)
-    const more = growth(at.allow, head, at.rules)
+    const same = growth(at.allow, at.allow, at.rules, rulesAtHead())
+    const more = growth(at.allow, head, at.rules, rulesAtHead())
     return at.rules.static !== null && Object.keys(RULES).every((r) => at.rules.static.has(r)) &&
       at.rules.runtime !== null && ['page', 'title', 'palette', 'keys'].every((a) => at.rules.runtime.has(a)) &&
+      rulesAtHead().runtime !== null && ['page', 'title', 'keys'].every((a) => rulesAtHead().runtime.has(a)) &&
       same.refused.length === 0 && same.allowed.length === 0 && more.refused.length === 1
   })
 
