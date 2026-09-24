@@ -497,6 +497,52 @@ for (const kind of ['sheet', 'modal'] as const) {
   })
 }
 
+/* `[TABINDEX="-1"]` IS NEVER A TAB STOP, WHATEVER TAG IT IS ON (kit-frame-2, 2026-09-24 — the
+ * shell lane's own finding: focus escaped the palette). `focusables()` (kit/overlay.tsx)
+ * selected by TAG for the elements that are focusable by default — `button:not([disabled])`
+ * and its siblings — and `tabindex="-1"` on one of THOSE never disqualified it, only on an
+ * element whose sole claim to being focusable WAS its `tabindex`. A control marked
+ * `tabindex="-1"` on purpose (a row a screen reader announces but a keyboard should skip past,
+ * the shape the palette's own selected row takes) was therefore still counted in `items`.
+ * A REAL BROWSER'S OWN TAB KEY ALREADY SKIPS `tabindex="-1"` — that half of the trap was never
+ * broken, and a blind press-Tab-N-times loop never observes this defect, because native Tab
+ * traversal ignores `focusables()` entirely except at the trap's own edges. The actual escape is
+ * in the WRAP: `onKey`'s `first?.focus()` / `last?.focus()` call `.focus()` PROGRAMMATICALLY,
+ * which — unlike a real Tab press — works on a `tabindex="-1"` element without complaint. So the
+ * marker is placed FIRST in the panel (making it `items[0]` under the buggy selector), and the
+ * probe is Tab pressed from the panel's true LAST control: the trap sees `at === last` and calls
+ * `first.focus()`, landing on the marker if the selector still counts it.
+ * A RAW ELEMENT, INJECTED, RATHER THAN A NEW SPECIMEN: `Gallery.tsx` is not this lane's file,
+ * and the defect is in `focusables()`'s own selector, not in anything a specimen draws — so the
+ * fixture is built the same way `tokenColor()` above builds its own, prepended straight into an
+ * already-open, already-trapped panel, ahead of even its own header.
+ * OBSERVED RED BEFORE IT WAS KEPT. Mutation: `.bak` `kit/overlay.tsx` and put back
+ * `[tabindex]:not([tabindex="-1"])` as the ONLY clause carrying that exclusion. Tab from Cancel
+ * wraps onto the marker instead of Close, and both assertions below fail. */
+test('a tabindex="-1" control is never landed on when focus wraps inside a trapped layer', async ({ page }) => {
+  const opener = page.locator('[data-kit-open="sheet"]')
+  await opener.scrollIntoViewIfNeeded()
+  await opener.click()
+  const sheet = page.locator('[data-bn-overlay="sheet"]')
+  await expect(sheet).toBeVisible()
+  await sheet.evaluate((panel) => {
+    const marker = document.createElement('button')
+    marker.type = 'button'
+    marker.tabIndex = -1
+    marker.id = 'kf2-not-a-tab-stop'
+    marker.textContent = 'a row a screen reader hears and a keyboard skips'
+    panel.prepend(marker)
+  })
+  // Cancel is the panel's own true last focusable control (its footer's last button).
+  await sheet.getByRole('button', { name: 'Cancel' }).focus()
+  await page.keyboard.press('Tab')
+  const id = await page.evaluate(() => document.activeElement?.id ?? null)
+  expect(id, 'Tab wrapped from the last real control onto the tabindex="-1" marker').not.toBe('kf2-not-a-tab-stop')
+  await expect(sheet.getByRole('button', { name: 'Close' }), 'Tab from the last control should wrap to the panel\'s true first, Close').toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+})
+
 test('a confirm is an alertdialog, its first focus is Cancel, and a held Enter confirms nothing', async ({ page }) => {
   const opener = page.locator('[data-kit-open="confirm"]')
   await opener.scrollIntoViewIfNeeded()
@@ -664,14 +710,15 @@ test('a second modal over the first dims it with its own scrim, not the first mo
   await expect(first).toBeVisible()
 })
 
-/* A THIRD SCRIMMED LAYER IS REFUSED, NOT DRAWN BROKEN (kit-frame-2, 2026-09-24). `layerZ`
- * (kit/overlay.tsx) clamps at `MAX_LAYER_DEPTH` (2): past it, a scrimmed layer's own scrim
- * would reuse the SECOND layer's pair and land BELOW its panel — undimmed, the same defect
- * `assertUpperScrimDims` above exists to catch, reappearing one layer deeper where nothing here
- * was checking. Nothing this product opens goes three scrimmed layers deep (the file's own
- * argument), so `useOverlayLayer` throws rather than joining the stack, and the nearest route's
- * own error boundary (App.tsx's `RouteBoundary`) is where that lands — the same door a real
- * defect uses, never a silent wrong dim.
+/* A THIRD SCRIMMED LAYER IS A DEVELOPMENT-TIME CRASH, AND A PRODUCTION-TIME LOG (coordinator
+ * review, 2026-09-24, amending kit-frame-2's first cut of this). `layerZ` (kit/overlay.tsx)
+ * clamps at `MAX_LAYER_DEPTH` (2): past it, a scrimmed layer's own scrim would reuse the SECOND
+ * layer's pair and land BELOW its panel — undimmed, the same defect `assertUpperScrimDims`
+ * above exists to catch, reappearing one layer deeper where nothing here was checking. Nothing
+ * this product opens goes three scrimmed layers deep (the file's own argument). In DEVELOPMENT
+ * `useOverlayLayer` throws rather than joining the stack, and the nearest route's own error
+ * boundary (App.tsx's `RouteBoundary`) is where that lands — the same door a real defect uses.
+ * This case proves that half. The next one proves PRODUCTION never crashes over the same thing.
  * NO NEW SPECIMEN NEEDED: the existing "Open a modal" trigger (`data-kit-open="modal"`) still
  * sits in the DOM under the two open layers, so calling its own `.click()` reaches its
  * independent `Modal` — exactly a third concurrent scrimmed layer. A `page.locator(...).click()`
@@ -681,7 +728,7 @@ test('a second modal over the first dims it with its own scrim, not the first mo
  * OBSERVED RED BEFORE IT WAS KEPT. Mutation: `.bak` `kit/overlay.tsx` and drop the `throw` (keep
  * the two `push`es). The third layer opens, `.no-such-view` never appears, and the assertion
  * below reports 0 where it wants 1 — silently wrong, exactly the failure mode this guards. */
-test('a third scrimmed layer is refused loudly rather than drawn with a broken dim', async ({ page }) => {
+test('in development, a third scrimmed layer crashes loudly rather than drawing a broken dim', async ({ page }) => {
   const opener = page.locator('[data-kit-open="layered"]')
   await opener.scrollIntoViewIfNeeded()
   await opener.click()
@@ -704,6 +751,45 @@ test('a third scrimmed layer is refused loudly rather than drawn with a broken d
   await page.getByRole('button', { name: 'Reload this screen' }).click()
   await expect(page.locator('.no-such-view')).toHaveCount(0)
   await expect(page.locator('h1')).toHaveText('Kit')
+})
+
+/* THE PRODUCTION HALF. `make design-check`'s webServer is always `vite dev` (devPort.ts's own
+ * header), so `import.meta.env.DEV` is `true` in every browser this suite ever drives — a real
+ * production bundle (`vite build`) is a different command this suite never runs, and Vite
+ * inlines that constant at build time, so no page script can flip it after the fact either.
+ * `window.__overlaySetDevModeForTest` (kit/overlay.tsx, registered only while `import.meta.env.
+ * DEV` is true, which a real build never is) is the STUB the coordinator's review asked for:
+ * it overrides the internal check `useOverlayLayer` actually reads, so this drives the exact
+ * branch a production bundle would take without needing a second webServer or a built dist/.
+ * OBSERVED RED BEFORE IT WAS KEPT. Mutation: `.bak` `kit/overlay.tsx` and drop the
+ * `overlayIsDevMode()` branch, always throwing. The third layer never opens and the
+ * `toBeVisible()` below times out. */
+test('in production, a third scrimmed layer opens (clamped) and logs once, never crashing', async ({ page }) => {
+  await page.evaluate(() => (window as unknown as { __overlaySetDevModeForTest: (v: boolean) => void }).__overlaySetDevModeForTest(false))
+  const errors: string[] = []
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
+
+  const opener = page.locator('[data-kit-open="layered"]')
+  await opener.scrollIntoViewIfNeeded()
+  await opener.click()
+  const first = page.locator('[data-bn-overlay="modal"]').filter({ hasText: 'The first layer' })
+  await expect(first).toBeVisible()
+
+  await first.locator('[data-kit-open="second"]').click()
+  const second = page.locator('[data-bn-overlay="modal"]').filter({ hasText: 'The second layer' })
+  await expect(second).toBeVisible()
+
+  await page.locator('[data-kit-open="modal"]').evaluate((el) => (el as HTMLElement).click())
+  const third = page.locator('[data-bn-overlay="modal"]').filter({ hasText: 'One decision' })
+  await expect(third, 'the third layer opened instead of being dropped').toBeVisible()
+  await expect(page.locator('.no-such-view'), 'production crashed the whole screen').toHaveCount(0)
+  await expect
+    .poll(() => errors.some((e) => e.includes('a third scrimmed layer opened')), 'a console.error named the degraded stacking')
+    .toBe(true)
+
+  await page.evaluate(() => (window as unknown as { __overlaySetDevModeForTest: (v: boolean | null) => void }).__overlaySetDevModeForTest(null))
 })
 
 test('a popover closes on Escape, and on Tab past its last item, and gives focus back to its trigger', async ({ page }) => {
@@ -889,6 +975,65 @@ test.describe('on a touch screen at 1440', () => {
     expect(saidTop, 'the disclosure sits on a second row, under the sentence').toBeGreaterThan(iconTop + 4)
   })
 })
+
+/* THE PHONE CHROME'S OWN SEAM MOVED TO 640, NOT 768 (owner ruling, the shell lane: 720 gets the
+ * DESKTOP rail, docs/DESIGN.md's "640 the phone/tablet seam"). Two of the kit's own rules
+ * answered to the shell's OLD seam (767) rather than to `.bn-tabbar`'s actual presence: the
+ * sheet/dialog bottom-rise (kit.css, "on a phone every sheet and dialog rises from the bottom")
+ * and the toast stack's 64px lift for the tab bar it clears. At 720 — a width that now draws the
+ * desktop rail and NO tab bar — either rule still answering to 767 would rise a sheet from the
+ * bottom of a desktop page, or lift a toast for a bar that is not there.
+ * A REAL `Sheet` FOR THE FIRST HALF: the "sheet" specimen, edge-to-edge and pinned to the bottom
+ * only below the seam.
+ * A RAW `.bn-toasts` ELEMENT FOR THE SECOND: the kit's `Toaster` (kit/toast.tsx, not this lane's
+ * file) only mounts one when a real toast is pushed, and nothing here can reach its module-scoped
+ * `toast()` from outside React — so, exactly as `tokenColor()` above probes a token with a
+ * disposable element, this probes kit.css's OWN rule the same way: append the one class the rule
+ * matches, read where the box lands, remove it. Nothing about `Toaster`'s own behaviour is
+ * under test here, only the stylesheet rule this lane changed.
+ * OBSERVED RED BEFORE IT WAS KEPT. Mutation: `.bak` kit.css and put both media queries back at
+ * `max-width: 767px`. At 720 the sheet rises from the bottom and the toast reports a 64px lift,
+ * and both assertions below fail. */
+for (const width of [639, 720] as const) {
+  const phone = width < 640
+  test(`at ${width}, ${phone ? 'a sheet rises from the bottom and the toast clears the tab bar' : 'a sheet stays on its own edge and the toast sits at the page corner'} (kit-frame-2)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+
+    const opener = page.locator('[data-kit-open="sheet"]')
+    await opener.scrollIntoViewIfNeeded()
+    await opener.click()
+    const sheet = page.locator('[data-bn-overlay="sheet"]')
+    await expect(sheet).toBeVisible()
+    const sheetBox = await sheet.evaluate((el) => {
+      const r = el.getBoundingClientRect()
+      return { left: Math.round(r.left), bottom: Math.round(r.bottom) }
+    })
+    if (phone) {
+      expect(sheetBox.left, `${width}: the sheet spans edge to edge`).toBe(0)
+      expect(sheetBox.bottom, `${width}: the sheet rises from the bottom of the viewport`).toBeGreaterThanOrEqual(899)
+    } else {
+      expect(sheetBox.left, `${width}: the sheet keeps its own width, not edge to edge`).toBeGreaterThan(0)
+    }
+    await page.keyboard.press('Escape')
+    await expect(sheet).toHaveCount(0)
+
+    const toastLift = await page.evaluate(() => {
+      const el = document.createElement('div')
+      el.className = 'bn-toasts'
+      document.body.append(el)
+      const lift = window.innerHeight - el.getBoundingClientRect().bottom
+      el.remove()
+      return Math.round(lift)
+    })
+    if (phone) {
+      expect(toastLift, `${width}: the toast clears a 64px tab bar`).toBeGreaterThanOrEqual(60)
+    } else {
+      expect(toastLift, `${width}: the toast sits at the page's own corner gap, not lifted for a bar`).toBeLessThan(30)
+    }
+  })
+}
 
 test('every toggle shows the focus ring, whatever outline it wears (UX-100)', async ({ page }) => {
   const toolbar = page.locator('[data-specimen="toolbar"]')

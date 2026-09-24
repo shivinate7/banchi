@@ -1135,8 +1135,12 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 @keyframes bn-sheet-down { from { transform: none; opacity: 1; } to { transform: translateY(24px); opacity: 0; } }
 
 /* On a phone every sheet and dialog rises from the bottom — once, here, rather than a copy
-   per screen. The drawer is the one sheet that stays on its edge. */
-@media (max-width: 767px) {
+   per screen. The drawer is the one sheet that stays on its edge.
+   639 (the 640 ladder step, DESIGN.md: "the phone/tablet seam") since kit-frame-2, 2026-09-24:
+   the shell's phone chrome (top bar, bottom tab bar) now ends there, not at 768 (owner ruling,
+   720 gets the desktop rail) — an overlay that still rose bottom-first at 720 would be reaching
+   for a tab bar that is no longer drawn. */
+@media (max-width: 639px) {
   .bn-sheet:not(.bn-drawer) {
     top: auto;
     left: 0;
@@ -1171,7 +1175,8 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-dialog[data-leaving] { animation: bn-dialog-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
 .bn-menu[data-leaving] { animation: bn-pop-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
 @keyframes bn-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
-@media (max-width: 767px) {
+/* The leave half of the bottom-rise above — same 639 (kit-frame-2, 2026-09-24), same reason. */
+@media (max-width: 639px) {
   .bn-sheet:not(.bn-drawer)[data-leaving] { animation-name: bn-sheet-down; }
   .bn-dialog[data-leaving] { animation: bn-sheet-down var(--bn-t-fast) var(--bn-ease) forwards; }
 }
@@ -1294,7 +1299,10 @@ img.bn-crop[data-cropped='true'] {
   width: min(380px, calc(100vw - 32px));
   pointer-events: none;
 }
-@media (max-width: 767px) {
+/* 639 (kit-frame-2, 2026-09-24), not 767: the 64px it clears here is the phone tab bar's own
+   height, and that bar stops being drawn at the same seam the sheet/dialog rise above now
+   answers to — a toast lifted for a bar that is not on screen would float over dead space. */
+@media (max-width: 639px) {
   .bn-toasts { right: var(--bn-3); left: var(--bn-3); width: auto; bottom: calc(64px + env(safe-area-inset-bottom)); }
 }
 .bn-toast {

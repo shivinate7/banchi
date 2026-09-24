@@ -31,8 +31,17 @@ import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
  *
  * `SheetHost` is the one place a registered sheet is drawn (`openSheet`, kit/sheets.ts). */
 
+/* `[tabindex="-1"]` IS EXCLUDED FROM EVERY CLAUSE, NOT ONLY ITS OWN (kit-frame-2, 2026-09-24,
+ * the shell lane's finding: focus escaped the palette). `button:not([disabled])` and its
+ * siblings below match an element by TAG, and a tag that is naturally focusable stays a match
+ * even when `tabindex="-1"` has explicitly pulled it out of the tab order — the old selector's
+ * own `[tabindex]:not([tabindex="-1"])` clause only ever governed an element focusable BECAUSE
+ * of its `tabindex`, never one focusable for some other reason that also carries `tabindex="-1"`
+ * to opt out. A programmatically-focusable-but-not-tabbable control (the shell's palette marks
+ * its own selected row this way) was therefore still offered as a Tab stop inside a trapped
+ * layer. */
 const FOCUSABLE =
-  'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), iframe, summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'
+  'a[href]:not([tabindex="-1"]), area[href]:not([tabindex="-1"]), button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), iframe:not([tabindex="-1"]), summary:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]:not([tabindex="-1"])'
 
 function focusables(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => {
@@ -83,6 +92,24 @@ function layerZ(depth: number): { readonly scrim: number; readonly panel: number
  *  `OverlayLayerOptions`). Its length is what `MAX_LAYER_DEPTH` actually bounds. */
 const scrimmedStack: HTMLElement[] = []
 
+/** TEST-ONLY OVERRIDE for whether a third scrimmed layer throws (below) — `null` (the default)
+ *  reads `import.meta.env.DEV`, Vite's own build-time constant. That constant is inlined at
+ *  build time, so no page script can flip it at runtime to drive the production branch from a
+ *  test running against a dev server (`make design-check` always is one). Set only by
+ *  `gallery.spec.ts` through `window.__overlaySetDevModeForTest`, registered below ONLY while
+ *  `import.meta.env.DEV` is true — which a real production bundle never is, so this whole block
+ *  is dead code a bundler drops there, and nothing about it ships to a real build regardless of
+ *  who calls the setter. */
+let devOverride: boolean | null = null
+if (import.meta.env.DEV) {
+  ;(window as unknown as { __overlaySetDevModeForTest?: (v: boolean | null) => void }).__overlaySetDevModeForTest = (v) => {
+    devOverride = v
+  }
+}
+function overlayIsDevMode(): boolean {
+  return devOverride ?? import.meta.env.DEV
+}
+
 /** True while an overlay layer is open. The shell asks this before it takes a key of its own. */
 export function overlayOpen(): boolean {
   return stack.length > 0
@@ -113,16 +140,27 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
     const root = ref.current
     if (!active || root === null) return
     const scrimEl = scrim?.current ?? null
-    /* A THIRD SCRIMMED LAYER IS REFUSED, LOUDLY, RATHER THAN DRAWN WRONG. `layerZ` clamps at
-     * `MAX_LAYER_DEPTH`, so a scrimmed layer past it would reuse the ceiling pair — its own
-     * scrim landing BELOW the panel it is meant to dim, the exact defect the stack-position
-     * scheme exists to prevent, quietly this time because nothing else would notice. Nothing
-     * this product opens goes three scrimmed layers deep (this file's own argument, above), so a
-     * build that tries is a mistake in that screen, not a live condition to draw around — the
-     * nearest route's own error boundary (App.tsx) is where it is caught, the same door a real
-     * crash uses. */
+    /* A THIRD SCRIMMED LAYER IS A MISTAKE IN THAT SCREEN, NEVER A LIVE CONDITION TO CRASH ON
+     * (coordinator review, 2026-09-24, amending kit-frame-2's first cut of this). `layerZ` clamps
+     * at `MAX_LAYER_DEPTH`, so a scrimmed layer past it reuses the ceiling pair — its own scrim
+     * landing BELOW the panel it is meant to dim, the exact defect the stack-position scheme
+     * exists to prevent, quietly this time because nothing else would notice. Nothing this
+     * product opens goes three scrimmed layers deep (this file's own argument, above).
+     *   IN DEVELOPMENT this throws, loud, caught by the nearest route's own error boundary
+     *   (App.tsx) — the same door a real crash uses — because a developer building a new screen
+     *   should see the mistake the moment they make it, not a subtle dim.
+     *   IN PRODUCTION a crash is worse than the dim it is refusing: `RouteBoundary` unmounts the
+     *   WHOLE screen, discarding whatever the person had not yet saved, over a defect that only
+     *   ever misorders which layer a scrim shades. So it logs once and lets the layer open —
+     *   the SAME clamp `layerZ` already computes for it — rather than crashing a real session
+     *   over a stacking glitch nobody but this file's own review has ever produced. */
     if (scrimEl !== null && scrimmedStack.length >= MAX_LAYER_DEPTH) {
-      throw new Error('Too many things tried to open on this screen at once.')
+      if (overlayIsDevMode()) {
+        throw new Error('Too many things tried to open on this screen at once.')
+      }
+      console.error(
+        'kit/overlay.tsx: a third scrimmed layer opened. layerZ has no pair left for it and is reusing the ceiling pair — dimming may land on the wrong layer.',
+      )
     }
     stack.push(root)
     if (scrimEl !== null) scrimmedStack.push(root)
