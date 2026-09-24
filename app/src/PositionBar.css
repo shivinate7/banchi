@@ -152,7 +152,7 @@
 }
 .position-bar.position-bar-owner[data-depth] > .position-bar-zoom { order: 0; }
 .position-bar.position-bar-owner[data-depth] > .position-bar-track { order: 1; }
-.position-bar.position-bar-owner[data-depth] .position-bar-text-box {
+.position-bar.position-bar-owner[data-depth] > .position-bar-text-box {
   order: 2;
   align-self: flex-end;
 }
