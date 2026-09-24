@@ -11376,6 +11376,7 @@ def check_review_catalog(checks: Checks) -> None:
 
         before = Store().read().inventory.cards["1/1"].sku
         checks.ok(before is None, "and neither refusal wrote anything")
+        before_catalog_answer = Store().read().inventory.identity_snapshot("1/1")
 
         answered = answers(
             checks,
@@ -11423,11 +11424,11 @@ def check_review_catalog(checks: Checks) -> None:
         )
         if undone is not None:
             checks.equal(undone.get("undone"), True, "and it reports which direction it went")
-        checks.equal(
-            Store().read().inventory.cards["1/1"].rarity,
-            None,
-            "and rarity comes back too — this card never carried one before the answer, "
-            "and `restores_to` says so",
+        _assert_identity_round_trip(
+            checks,
+            before_catalog_answer,
+            Store().read().inventory.identity_snapshot("1/1"),
+            "the D46 from_catalog answer's own undo",
         )
         line = [
             event
