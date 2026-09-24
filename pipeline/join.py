@@ -85,7 +85,9 @@ from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 # zfill/set-code-strip rules a third time. Every existing caller of `join.join_key` /
 # `join.display_number` / `join.strip_set_code` is unaffected — the names still resolve on
 # this module, they just live one file over.
+from store import master
 from store.numbers import (  # noqa: F401
+    box_title,
     display_number,
     join_key,
     split_catalog_number,
@@ -407,23 +409,72 @@ class Position:
         return place_label(self.box_title, self.section, at)
 
 
-def box_title(name: Optional[str], number: int) -> str:
-    """A box's name for a label: the stored name, or `Box <number>` when there is none.
-
-    THE FALLBACK IS THE DEFAULT NAME THE STORE WRITES, NOT A SECOND VOCABULARY. The owner's
-    ruling, 2026-09-23: an unnamed box gets the stored name `Box <count+1>` at creation, and
-    every box that had no name was backfilled `Box <number>` (`store/master.py:
-    default_box_name`, `Inventory.backfill_box_names`). So after the backfill no registered
-    box reaches this fallback. A caller with no registry to ask (T3, T4 and T5 build a bare
-    `Position(box, index)`) still gets the string the backfill stored for that box.
-    """
-    text = (name or "").strip()
-    return text if text else f"Box {int(number)}"
+# `box_title` lives in `store/numbers.py` (imported above), so the store's own refusals and
+# every label here share one fallback.
 
 
 def place_label(box_name: str, section: int, card: int) -> str:
     """The one place label formula (D58, D-a-box-is-shown-by-its-name): name, section, card."""
     return f"{box_name}, Section {int(section)}, Card {int(card)}"
+
+
+def said_place(inventory, box, index=None) -> str:
+    """Where a refusal says a box or a card is: the box's NAME, and for a card its section
+    and its card number within the section. THE ONE HELPER every server refusal speaks
+    through (the orchestrator's call on the locating review, 2026-09-24).
+
+    THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name): the box number and the
+    store index stay inside the store. A refusal reaches a screen as a toast, so a message
+    that prints `Box 3, card 17` shows the owner both numbers the ruling hides. This builds
+    the same `Position` the screens draw, through `BoxView.at`, so the refusal and the card
+    row spell one place.
+
+    `index=None` answers the box alone: its name. So does an index that holds no record,
+    because a place with no card has no section and no card number to say.
+
+    IT NEVER RAISES. A refusal is already the error path; a store too broken to place the
+    card (an unreadable index, a layout that will not validate) degrades to the box's name,
+    never to a second exception that hides the first.
+    """
+    try:
+        number = int(box)
+    except (TypeError, ValueError):
+        return str(box)
+    try:
+        entry = inventory.box(number)
+    except Exception:  # noqa: BLE001 — a refusal must not raise a second error
+        entry = None
+    title = box_title(entry.name if entry is not None else None, number)
+    if index is None:
+        return title
+    try:
+        at = int(index)
+        on_hand: List[int] = []
+        gone: List[int] = []
+        found = False
+        for _key, (raw_index, raw_game, state) in inventory.cards.select(
+            ("idx", "game", "state"), box=number
+        ):
+            position = int(raw_index)
+            if not is_located(str(raw_game or games.DEFAULT_GAME)):
+                continue
+            found = found or position == at
+            (gone if state in master.TERMINAL_STATES else on_hand).append(position)
+        if not found:
+            return title
+        try:
+            sections = tuple(inventory.sections_for(number))
+        except Exception:  # noqa: BLE001 — an unreadable layout reads as one section
+            sections = ()
+        view = BoxView(
+            sections=sections,
+            occupied=tuple(sorted(on_hand)),
+            departed=tuple(sorted(gone)),
+            name=title,
+        )
+        return view.at(number, at).label
+    except Exception:  # noqa: BLE001 — a refusal must not raise a second error
+        return title
 
 
 # --------------------------------------------------------------- pooled, not located

@@ -2076,11 +2076,13 @@ def check_undo(checks: Checks) -> None:
                 "undo_not_newest",
                 "and it refuses in its own code, not card_not_found",
             )
+            undoable = capture_server.do_inventory()["cards"]["3/3"].get("label")
             checks.ok(
-                "box 3, card 3" in str(caught),
+                bool(undoable) and str(undoable) in str(caught),
                 "and the refusal NAMES the position that is undoable — otherwise the app "
-                "has to ask again to find out",
-                f"message was: {caught}",
+                "has to ask again to find out. It names it the way the card row does: the "
+                "box's name, the section and the card in the section, never the number",
+                f"message was: {caught}; label: {undoable}",
             )
         checks.ok(
             Store().read().inventory.get("3/1") is not None,
@@ -9655,6 +9657,54 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
             [(2, "Box 3")],
             "WHEN `Box <number>` IS ANOTHER BOX'S NAME, the backfill plans the next free one: "
             "names stay unique (D20), and no box is renamed to make room",
+        )
+
+    with isolated_home():
+        # --- a refusal names the place the way a card row does -----------------------------
+        # The orchestrator's call on the locating review, 2026-09-24: a server refusal that
+        # names a card says the box's NAME, the section and the card within the section,
+        # through the one helper (`join.said_place`), and never the box number or the store
+        # index. A refusal reaches a screen as a toast. The error code does not change.
+        capture_server.do_create_box({"box": 7, "name": "Rares", "sections": [1, 3]})
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(7))
+        capture_server.do_mark_sold(7, 4, {})
+        try:
+            capture_server.do_mark_sold(7, 4, {})
+            said_sold = None
+        except capture_server.BadRequest as caught:
+            said_sold = caught
+        checks.ok(
+            said_sold is not None
+            and said_sold.code == "already_sold"
+            and str(said_sold).startswith("Rares, Section 2, Card 2 is already sold")
+            and "7/" not in str(said_sold) and "Box 7" not in str(said_sold)
+            and "card 4" not in str(said_sold),
+            "A REFUSAL ABOUT A CARD SAYS THE BOX'S NAME, SECTION AND CARD IN THE SECTION. Index "
+            "4 is the second card behind the divider at index 3: `Rares, Section 2, Card 2`. "
+            "The code stays `already_sold`, and neither the box number nor the index is said",
+            f"refusal: {getattr(said_sold, 'code', None)}: {said_sold}",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.close_box(7)
+        try:
+            capture_server.do_capture(capture_payload(7))
+            said_sealed = ""
+        except Exception as caught:  # noqa: BLE001 — the message is what is read here
+            said_sealed = str(caught)
+        checks.ok(
+            said_sealed.startswith("Rares is sealed") and "box 7" not in said_sealed.casefold(),
+            "and a store refusal about a box says its name: `Rares is sealed`, never `box 7`",
+            said_sealed,
+        )
+        checks.equal(
+            (
+                join.said_place(Store().read().inventory, 7),
+                join.said_place(Store().read().inventory, 7, 99),
+            ),
+            ("Rares", "Rares"),
+            "the helper says the box alone for no index, and for an index that holds no card "
+            "(a place with no card has no section or card number to say)",
         )
 
     with isolated_home():

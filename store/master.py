@@ -85,7 +85,7 @@ from store.rows import Rows, TableSpec, int_or_none
 # to, with no imports beyond the stdlib, and `pipeline/join.py` imports them back and
 # re-exports under the same names — so `_card_columns` reuses one fold (D55/D67) the same
 # as every other reader, without `store/` crossing the one edge it may not cross.
-from store.numbers import display_number, join_key
+from store.numbers import box_title, display_number, join_key
 
 VERSION = 2
 
@@ -1698,7 +1698,7 @@ class Inventory:
         registered = self.boxes.get(str(box))
         if registered is not None and registered.closed:
             raise BoxClosed(
-                f"box {box} is sealed at {registered.capacity} cards. "
+                f"{self.box_title(box)} is sealed at {registered.capacity} cards. "
                 "Re-open it on the Boxes screen, or capture into another box."
             )
         self.ensure_box(box)
@@ -1992,7 +1992,7 @@ class Inventory:
         registered = self.boxes.get(str(to_box))
         if registered is not None and registered.closed:
             raise BoxClosed(
-                f"box {to_box} is sealed at {registered.capacity} cards. "
+                f"{self.box_title(to_box)} is sealed at {registered.capacity} cards. "
                 "Re-open it on the Boxes screen, or move into another box."
             )
         self.ensure_box(to_box)
@@ -2060,6 +2060,21 @@ class Inventory:
         self.events.append(record)
 
     # -------------------------------------------------------------- boxes and listings
+
+    def box_title(self, number) -> str:
+        """What a refusal calls this box: its stored name, or `Box <number>` without one.
+
+        The box number stays inside the store (D-a-box-is-shown-by-its-name), and a refusal
+        reaches a screen as a toast, so every message here names the box this way.
+        `store/numbers.py:box_title` is the one fallback, shared with the place labels in
+        `pipeline/join.py`. A card's whole place is `pipeline/join.py:said_place`, which the
+        server's refusals use and which the store cannot import (D63).
+        """
+        try:
+            entry = self.box(number)
+        except (TypeError, ValueError, BadPosition):
+            entry = None
+        return box_title(entry.name if entry is not None else None, number)
 
     def box(self, number) -> Optional[Box]:
         """The registry entry for this box, or None. Never invents one."""
@@ -2308,7 +2323,7 @@ class Inventory:
             if entry.box == number or entry.name is None:
                 continue
             if entry.name.strip().casefold() == wanted:
-                raise BoxNameTaken(f"box {entry.box} is already called {entry.name!r}")
+                raise BoxNameTaken(f"another box is already called {entry.name!r}")
 
     def set_name(self, number, name: Optional[str]) -> Box:
         """Name a box, rename it, or clear the name. Logs both names; refuses a duplicate.
@@ -2470,7 +2485,7 @@ class Inventory:
                 raise BadSections(f"section {ordinal!r} is not a number") from None
             if at < 1 or at > len(layout):
                 raise BadSections(
-                    f"section {at} does not exist: box {entry.box} has "
+                    f"section {at} does not exist: {self.box_title(entry.box)} has "
                     f"{len(layout)} section{'s' if len(layout) != 1 else ''}"
                 )
             key = str(int(layout[at - 1]))
@@ -2523,7 +2538,7 @@ class Inventory:
         entry = self.ensure_box(number)
         if entry.closed:
             raise BoxClosed(
-                f"box {entry.box} is sealed, so it takes no more cards — and a section with "
+                f"{self.box_title(entry.box)} is sealed, so it takes no more cards — and a section with "
                 f"no cards to come is a divider in front of nothing. Re-open the box first."
             )
         at = self.next_index(entry.box)
@@ -2531,13 +2546,13 @@ class Inventory:
         last = layout[-1]
         if last == at:
             raise SectionEmpty(
-                f"section {len(layout)} of box {entry.box} already starts at card {at} and "
-                f"holds nothing yet. Capture a card into it before starting another."
+                f"section {len(layout)} of {self.box_title(entry.box)} holds nothing yet. "
+                f"Capture a card into it before starting another."
             )
         if last > at:
             raise SectionAhead(
-                f"box {entry.box} already declares a section starting at card {last}, which "
-                f"is past the next card ({at}). Edit the dividers instead."
+                f"{self.box_title(entry.box)} already has a divider past the next card. "
+                f"Edit the dividers instead."
             )
         return self.set_sections(entry.box, layout + [at])
 
@@ -2551,7 +2566,7 @@ class Inventory:
         """
         entry = self.ensure_box(number)
         if entry.closed:
-            raise BoxClosed(f"box {entry.box} is already sealed")
+            raise BoxClosed(f"{self.box_title(entry.box)} is already sealed")
         entry.capacity = self.box_fill(entry.box)
         entry.state = BOX_CLOSED
         entry.closed_at = now()
