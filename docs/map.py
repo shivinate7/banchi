@@ -3353,27 +3353,47 @@ COMPONENTS = [
                                 "governed_by": ["D18", "D94", "D102"]},
             "build-lockup.mjs": {"does": "generates the LOCKUP — app/src/kit/lockupGeometry.ts — by reading docs/specs/logo.md section 13's settled table and running docs/specs/logo/sheets/lockup-core.js in a real browser. It reads the table rather than re-declaring it, unlike build-mark.mjs, because the lockup's eleven parameters ARE in a machine-readable table and the mark's are not; a third copy would be a third thing to drift. It needs a browser where build-mark.mjs needs only `new Function`, because `frame()` solves the roman's tracking with document.createRange() and that solve is what gets baked. IT OUTLINES THE TYPE: 番地 in IBM Plex Sans JP 400 and BANCHI in Manrope 700, both OFL and both devDependencies read at build time and never committed, so no font ships and a blocked CDN cannot draw a fallback CJK face at letter-spacing solved for Plex. Asserts what build-mark.mjs cannot: it renders the generated outlines against the live text they replace and refuses to write when more than 8% of inked pixels differ — the measured residual is 6.2%, which is hinting. D18: run by hand, never on the commit path.",
                                  "governed_by": ["D18", "D102"]},
-            "copy-budget.mjs": {"does": "`node scripts/copy-budget.mjs --pin` re-measures the "
-                                        "visible word count `app/tests/copy-budget.spec.ts` "
-                                        "asserts on every owner route and rewrites "
-                                        "`app/tests/copy-budget.json`. CONTAINS NO COUNTING "
-                                        "LOGIC OF ITS OWN — it sets `COPY_BUDGET_PIN=1` and "
-                                        "runs that one spec through Playwright directly (not "
-                                        "`make design-check`: it is a generator, D18, and does "
-                                        "not take the suite lock), so the pin path and the "
-                                        "assert path are one file exercising one measurement "
-                                        "and cannot drift apart. Written exactly, no slack — "
-                                        "slack is how a ratchet leaks.",
-                                "governed_by": ["D18", "D194"]},
+            "machine-words.json": {
+                "does": "D196's word list, `NO_MECHANISM_WORDS`, moved out of "
+                        "`docs-audit.py` on 2026-09-23 (`D-text-shape-checks`) once a "
+                        "second reader — `app/tests/machine-words.spec.ts`, the rendered-"
+                        "text browser check — needed it too. Also holds `repoTopDirs`, the "
+                        "one list both the Python path check and the browser path check "
+                        "build their regex from. Read, never written; growing the list is "
+                        "a hand edit.",
+                "governed_by": ["D1", "D2", "D9", "D11", "D24", "D58", "D63", "D86", "D87",
+                                "D99", "D106", "D174", "D181", "D196",
+                                "D-a-card-is-counted-in-its-section", "D-text-shape-checks"]},
+            "machine-words-allow.json": {
+                "does": "the shrinking offender list for `no mechanism on screen` (D196), "
+                        "file -> word -> lane, on `kit-adoption-allow.json`'s own shape. "
+                        "Exists because growing `machine-words.json`'s word list put ten new "
+                        "hits in front of screens no wave-2 lane had reached yet. Read by "
+                        "`scripts/docs-audit.py:check_no_mechanism_on_screen`, which fails "
+                        "on an unlisted hit and on a listed entry that matches nothing.",
+                "governed_by": ["D196", "D-text-shape-checks"]},
+            "text-density/density.mjs": {
+                "does": "`make text-density` (`node --experimental-strip-types scripts/text-"
+                        "density/density.mjs`) — the third piece of `D-text-shape-checks`, "
+                        "a REPEATABLE, ON-DEMAND word-density review over THIS checkout's own "
+                        "dev server, never a gate (D18: it writes one report to `.serve/text-"
+                        "density.json`, gitignored). Its port comes from `app/devPort.ts`, "
+                        "imported directly via `--experimental-strip-types` "
+                        "(`scripts/port-agreement.py`'s own technique for the same file) — "
+                        "never a hardcoded port, never the published demo, and it refuses "
+                        "outright rather than falling back if that port answers nothing. Its "
+                        "route roster comes from `node scripts/kit-adoption.mjs --routes`, "
+                        "discovered rather than typed. A 'prose block' is "
+                        "`app/tests/textShape.ts`'s own ruler: six or more visible words.",
+                "governed_by": ["D18", "D194", "D-text-shape-checks"]},
             "typed-interpunct-pin.mjs": {
                 "does": "`node scripts/typed-interpunct-pin.mjs --pin` re-measures the "
                         "typed-dot count `scripts/docs-audit.py`'s `typed interpunct` row "
-                        "asserts and rewrites `scripts/typed-interpunct.json`. Mirrors "
-                        "copy-budget.mjs's own discipline: shells out to "
+                        "asserts and rewrites `scripts/typed-interpunct.json`. Shells out to "
                         "`scripts/user-strings.mjs --join-literals --include-code-attr`, "
                         "the same extraction the row itself reads, so the pin path and the "
                         "assert path cannot drift apart. Written exactly, no slack.",
-                "governed_by": ["D18", "D194", "D196", "D218"]},
+                "governed_by": ["D18", "D196", "D218", "D-text-shape-checks"]},
             "typed-interpunct.json": {
                 "does": "the ratchet's pinned ceiling, one field, `count`. Written only by "
                         "`typed-interpunct-pin.mjs --pin`; `scripts/docs-audit.py`'s `typed "
@@ -3413,9 +3433,10 @@ COMPONENTS = [
                         "row itself calls — and rewrites `scripts/ste-ratchet.json`. Contains "
                         "no counting logic of its own. D18: a generator may write, on no "
                         "`make` target and no hook; `git diff scripts/ste-ratchet.json` is "
-                        "the receipt, mirroring `copy-budget.mjs` and "
-                        "`typed-interpunct-pin.mjs`'s own discipline exactly.",
-                "governed_by": ["D18", "D194", "D218", "D226"]},
+                        "the receipt, mirroring `typed-interpunct-pin.mjs`'s own discipline. "
+                        "D194's own ratchet, `copy-budget.mjs`, is retired — superseded by "
+                        "`D-text-shape-checks`, 2026-09-23.",
+                "governed_by": ["D18", "D194", "D218", "D226", "D-text-shape-checks"]},
             "ste-ratchet.json": {
                 "does": "the ratchet's pinned ceiling: `total`, `by_code` (the four "
                         "ERROR-severity rule counts, post-exemption), and "
@@ -3537,7 +3558,8 @@ COMPONENTS = [
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226", "D229", "D247"],
+                                "D213", "D215", "D218", "D226", "D229", "D247",
+                                "D-text-shape-checks"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3717,7 +3739,8 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D218"],
+                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D194", "D218",
+                                "D-text-shape-checks"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -8151,32 +8174,90 @@ COMPONENTS = [
                         "1920, because Home also centers a narrower cap. `margin: 0` on "
                         "`.bn-page` turned it green.",
             },
-            "tests/copy-budget.spec.ts": {
-                "does": "the visible word count on every owner screen may only go down "
-                        "(`D194`), blind to WHICH words a screen uses and asserting "
-                        "only their volume — the complement to `no mechanism on screen`'s "
-                        "content check rather than a second pass over it. Discovers its routes "
-                        "off `routesFromNav`, excludes `#/fulfillment`, renders each at 1440 in "
-                        "the small store `wide.spec.ts`/`phone.spec.ts` already use, waits for "
-                        "`.bn-view`'s own text to stop changing (two reads 150ms apart "
-                        "agreeing) rather than trusting the instant `<main>` appears, counts "
-                        "words (splits on whitespace, drops a token with no letter), and "
-                        "asserts each route's count against `copy-budget.json`'s pinned "
-                        "ceiling — no slack, since the only way a ceiling rises is "
-                        "`scripts/copy-budget.mjs --pin`, run by a person on purpose. "
-                        "`COPY_BUDGET_MUTATE=<hash>` injects a 30-plus-word sentence into one "
-                        "route via `page.evaluate` for the mutation proof, never by editing "
-                        "`app/src`. Run by `make design-check`.",
-                "governed_by": ["D194", "D196",
-                                "D195"],
-                "note": "THE FIRST BUILD MEASURED `#/inventory` AT EITHER 156 OR 158 WORDS "
-                        "ACROSS RUNS, because `await expect(main).toBeVisible()` passes the "
-                        "instant the shell paints \"Reading the inventory…\" — a real `<main>`, "
-                        "well before the mocked store read resolves. The stabilized-text wait "
-                        "fixed it: 8 of 8 runs agreed at 158 afterward. Mutation-tested: "
-                        "`COPY_BUDGET_MUTATE='#/pricing'` failed naming exactly that route (91 "
-                        "words against a ceiling of 46) with every other route still under its "
-                        "own ceiling; unset, the suite passed clean again.",
+            "tests/textShape.ts": {
+                "does": "`measureTextShape`, the one measurement `text-shape.spec.ts` runs "
+                        "through `page.evaluate` — a self-contained function (Playwright "
+                        "serialises it by `toString()`, so it closes over nothing outside "
+                        "itself). Four signals: a repeated sentence of 4+ words on 3+ "
+                        "elements sharing one class; a number-plus-noun fact stated twice "
+                        "across prose blocks; a sentence over 25 words; a caption repeating "
+                        "60%+ of a multi-token heading's own words. `injectRepeatedSentence` "
+                        "is the mutation hook. D194's own D-text-shape-checks amendment.",
+                "governed_by": ["D194", "D-notice-detail", "D-text-shape-checks"],
+            },
+            "tests/text-shape.spec.ts": {
+                "does": "D194's word-ceiling ratchet is superseded (`D-text-shape-checks`, "
+                        "2026-09-23): a repetition check and a sentence-shape check, over "
+                        "`textShape.ts:measureTextShape`, replace it — no count is pinned. "
+                        "Sweeps every populated route (`POPULATED_ROUTE_SEEDS`) at 1440 via "
+                        "`routesFromNav` and at 390 via a local phone-drawer harvest "
+                        "(`routesFromNav` cannot run under 768px). `#/gallery` is excluded — "
+                        "the kit sheet's own repeated specimens are not a product defect. "
+                        "`text-shape-allow.json` is the shrinking pending list, route -> "
+                        "assertion -> lane; fails on an unlisted hit and on a stale entry. "
+                        "`TEXT_SHAPE_MUTATE=<hash>` is the mutation proof. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D194", "D-text-shape-checks"],
+            },
+            "tests/text-shape-allow.json": {
+                "does": "the shrinking pending list `text-shape.spec.ts` reads, on "
+                        "`kit-adoption-allow.json`'s own shape.",
+                "governed_by": ["D194", "D-text-shape-checks"],
+            },
+            "tests/machineWords.ts": {
+                "does": "`scanMachineWords`, the one measurement `machine-words.spec.ts` "
+                        "runs, self-contained the same way `measureTextShape` is. Takes the "
+                        "word list and `repoTopDirs` as its argument (read once from "
+                        "`scripts/machine-words.json` by the spec) rather than closing over "
+                        "them. Matches a bare word with `\\b` on both sides and a phrase or "
+                        "path-shaped entry as a plain literal, `docs-audit.py:_word_pattern`'s "
+                        "own rule.",
+                "governed_by": ["D196", "D-notice-detail", "D-text-shape-checks"],
+            },
+            "tests/machine-words.spec.ts": {
+                "does": "D196's own gap: `no mechanism on screen` reads JSX literals only, "
+                        "so a server response, demo text or a composed string passes it "
+                        "clean. This reads `.bn-view`'s rendered `innerText` instead, over "
+                        "every populated route at 1440 and 390. A closed `<details>` "
+                        "(`D-notice-detail`) contributes nothing to `innerText`, unlike "
+                        "`textContent`, with no special-casing needed. `#/gallery` is "
+                        "excluded — the kit sheet illustrates pipeline vocabulary on "
+                        "purpose. `machine-words-allow.json` is the shrinking pending list, "
+                        "keyed by route rather than file. Run by `make design-check`.",
+                "governed_by": ["D196", "D-notice-detail"],
+            },
+            "tests/machine-words-allow.json": {
+                "does": "the shrinking pending list `machine-words.spec.ts` reads, route -> "
+                        "word/path -> lane. A separate list from `scripts/machine-words-"
+                        "allow.json` on purpose: rendered text carries no source file.",
+                "governed_by": ["D196", "D-text-shape-checks"],
+            },
+            "tests/moneyFace.ts": {
+                "does": "`scanMoneyFace`, the one measurement `money-face.spec.ts` runs, "
+                        "self-contained. Matches a `$1.23`/`$66,334.71`/`+$1.20`/`−$0.35` "
+                        "shape in `.bn-view`'s text nodes and in every visible "
+                        "`<input>`/`<textarea>`'s value, and checks each match's ancestor's "
+                        "RESOLVED `font-family` (via `getComputedStyle`) for JetBrains Mono, "
+                        "rather than checking for the `.bn-money` class name — the "
+                        "requirement is visual, and an inheriting descendant still satisfies "
+                        "it.",
+                "governed_by": ["D221"],
+            },
+            "tests/money-face.spec.ts": {
+                "does": "D221 (money stays mono, confirmed 2026-09-23: inputs and chips "
+                        "included) over `moneyFace.ts:scanMoneyFace`, sweeping every "
+                        "populated route at 1440 and 390. `money-face-allow.json` is the "
+                        "shrinking pending list, keyed by ROUTE ALONE (not by amount): the "
+                        "fixture's seeded card weights and prices are random, so keying on "
+                        "the figure itself would flake with the fixture. "
+                        "`MONEY_FACE_MUTATE=<hash>` is the mutation proof. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D221"],
+            },
+            "tests/money-face-allow.json": {
+                "does": "the shrinking pending list `money-face.spec.ts` reads, route -> "
+                        "lane, one level deep.",
+                "governed_by": ["D221"],
             },
             "tests/cursor.spec.ts": {
                 "does": "what every control says to the pointer, in two cases that cover "
@@ -8442,6 +8523,17 @@ COMPONENTS = [
                         "Playwright presses keys through the debugging protocol, which never "
                         "fires a browser shortcut at all.",
             },
+            "tests/routeExclusions.ts": {
+                "does": "`EXCLUDED_FROM_SWEEP` (`#/fulfillment`, `#/gallery`) and "
+                        "`ROUTE_HASH_SHAPE`, as REGEXES rather than quoted `'#/…'` string "
+                        "literals, shared by `text-shape.spec.ts`, `machine-words.spec.ts` "
+                        "and `money-face.spec.ts`. `scripts/docs-audit.py`'s `route rosters` "
+                        "row reads three or more distinct quoted `#/…` literals in one spec "
+                        "as a hand-typed roster; these two deliberate exclusions are not one, "
+                        "and a regex avoids tripping the row over something it was not built "
+                        "to catch.",
+                "governed_by": ["D69", "D70"],
+            },
             "tests/routeFixtures.ts": {
                 "does": "the fixture BUILDERS `run-panel.spec.ts`, `orders.spec.ts` and "
                         "`shipping.spec.ts` already wrote — `runRow`, `place`/`pick`/`line`/"
@@ -8451,28 +8543,24 @@ COMPONENTS = [
                         "`#/codes` and `#/graveyard`, which no existing spec seeded at all. The "
                         "three specs above now import from here rather than defining their own "
                         "(unchanged behaviour — all 112 of their cases still pass). Also exports "
-                        "one `seedPopulated*` function per one of D194's five under-fixtured "
+                        "one `seedPopulated*` function per one of five under-fixtured "
                         "routes (`#/runs`, `#/orders`, `#/shipping`, `#/codes`, `#/graveyard`): "
                         "each registers a `page.route` stub with several real-shaped rows, "
                         "registered AFTER `shell.ts:stubStore`'s own empty answer for the same "
                         "path so the richer one wins (Playwright matches newest-first). Read "
-                        "only by `copy-budget.spec.ts`, which is where the gap these seeds close "
-                        "is argued at length.",
-                "governed_by": ["D20", "D83", "D134", "D194"],
-                "note": "CLOSES D194'S OWN NAMED GAP: its ceilings on the five routes above were "
-                        "pinned against `stubStore`'s empty-ish answer — no run, no order, no "
-                        "export, no code, no departed record — so a sentence added to any of the "
-                        "five could grow in its POPULATED state without the ratchet ever seeing "
-                        "it. `#/runs`'s ceiling fell (68 to 63: a populated list is real rows, "
-                        "not empty-state prose) while the other four rose (`#/orders` 82 to 84, "
-                        "`#/shipping` 80 to 135, `#/codes` 35 to 139, `#/graveyard` 21 to 66) — "
-                        "every rise is a real screen drawing real content, not copy creep, and "
-                        "`git log` on `app/tests/copy-budget.json` is the receipt. The owner's "
-                        "own alternative — pin against the live `:8000` store instead of a "
-                        "checked-in fixture — was rejected: order numbers, buyer names and run "
-                        "ids change daily on a real store, so a live-pinned ceiling would not "
-                        "reproduce in CI and a later `--pin` would silently ratchet to whatever "
-                        "that day's store happened to hold, which is the opposite of a ratchet.",
+                        "by `text-shape.spec.ts` and `machine-words.spec.ts`, which is where "
+                        "the gap these seeds close is argued at length — `copy-budget.spec.ts` "
+                        "read them first, before D194 was superseded.",
+                "governed_by": ["D20", "D83", "D134", "D194", "D-text-shape-checks"],
+                "note": "CLOSED D194'S OWN NAMED GAP, and the argument still holds for its "
+                        "successors. Its ceilings on the five routes above were pinned "
+                        "against `stubStore`'s empty-ish answer — no run, no order, no "
+                        "export, no code, no departed record — so a sentence added to any of "
+                        "the five could grow in its POPULATED state without a check reading "
+                        "only the empty one ever seeing it. The owner's own alternative — pin "
+                        "against the live `:8000` store instead of a checked-in fixture — was "
+                        "rejected: order numbers, buyer names and run ids change daily on a "
+                        "real store, so nothing pinned against it would reproduce in CI.",
             },
             "tests/orders.spec.ts": {"does": "the order screen in a browser: that the six-way "
                                              "counts render including the zeros, that a pick "

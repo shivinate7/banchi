@@ -114,3 +114,25 @@ lanes), `#/codes` 35 to 139 (a tier table with real codes and one delivered lane
 four is copy creep — nothing under `app/src` changed — and `COPY_BUDGET_MUTATE='#/pricing'`
 still fails naming exactly that route (91 words against a ceiling of 46) with every other
 route, populated or not, staying under its own ceiling.
+
+### Superseded 2026-09-23 — `D-text-shape-checks`
+
+**This entry's whole mechanism is deleted.** The owner's ruling, 2026-09-23: kill the pinned
+ceilings. His own words for why: *"I think we need to kill ceilings and instead just use a
+different way."* A stagnant static pin was not what he wanted kept.
+`app/tests/copy-budget.spec.ts`, `app/tests/copy-budget.json` and `scripts/copy-budget.mjs`
+are gone.
+`app/tests/routeFixtures.ts`'s populated-seed fixtures — the part of this entry that survives —
+are now read by `text-shape.spec.ts` and `machine-words.spec.ts` instead.
+
+**What is kept: the reasons a naive replacement would have been worse.** A blind word count
+still cannot tell whether an addition was worth its words (see "Not mechanized" above). A
+CHECKED-IN fixture is still the only reproducible thing to measure against. Both arguments
+carry over unchanged into `D-text-shape-checks`.
+
+**What is not kept: bounding VOLUME.** The replacement is three things, none of them a pinned
+number: a repetition check (the same sentence on three or more repeating cards or rows, or one
+number-plus-noun fact stated twice), a sentence-shape check (a sentence over 25 words, or a
+caption repeating 60%+ of its own heading's words), and the text-density reviewer
+(`scripts/text-density/`). That third piece stays a repeatable ON-DEMAND pass rather than a
+gate (D18: it writes). See `D-text-shape-checks` for the full argument and the mechanism.

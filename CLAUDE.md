@@ -202,6 +202,14 @@ make suite-lock-selftest # the lock, proved by violating it, including a holder 
                     #   In `check`.
 make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
                     #   real tree (D215). In `check`.
+make text-density   # the owner's third D194 replacement (`D-text-shape-checks`): a
+                    #   REPEATABLE, ON-DEMAND word-density review, never a gate (D18: it
+                    #   writes). `scripts/text-density/density.mjs` against THIS checkout's
+                    #   own dev server, its port derived through `app/devPort.ts` — never a
+                    #   hardcoded URL, never the published demo. Prints a per-route cut table.
+                    #   NOT in `make check` or `make design-check`. The skill
+                    #   `.claude/skills/text-density/SKILL.md` carries the how-to for a
+                    #   session with no memory of the 2026-09-23 density review.
 make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
                     #   is not a fork, what is real and what is invented, why VITE_DEMO is
@@ -403,7 +411,7 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 **The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
 Three routes are off-nav (the `aside` group — Kit, Cards to pull, and the per-product view
-D226 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
+D227 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
 `ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
 below).
 
@@ -433,7 +441,7 @@ below).
 #/fulfillment  Cards to pull  the Fulfiller's whole product. NO shell (D5)
 #/gallery      Kit            the component sheet, rendered by the build
 #/product      Product history one product's market history and the owner's own sales on
-                              it, by SKU. Off-nav, deep-linked (D226)
+                              it, by SKU. Off-nav, deep-linked (D227)
 ```
 
 **A new screen is one `ROUTES` entry plus a view that returns `<Page>`** (D-page-scaffold).
@@ -459,7 +467,7 @@ stages, not two unrelated views.
 not routes. Box operations live in its Manage box sheet.
 
 **Three routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
-kit, and `#/product`, the per-product view (D226). It is a deep link reached
+kit, and `#/product`, the per-product view (D227). It is a deep link reached
 by SKU, never a destination anyone browses to cold. All three stay registered routes,
 reachable from elsewhere.
 
@@ -502,10 +510,17 @@ are a real sentence and one action. **No user-visible string may name a decision
 path, or a pipeline-internal noun** (D196). Mechanized by `make docs-audit`'s
 `no mechanism on screen` row over `scripts/user-strings.mjs`.
 
-**The visible word count on every owner screen may only go down** (D194). Blind to which words
-a screen uses — a rewording that says the same thing in fewer words is exactly what this
-rewards. `app/tests/copy-budget.spec.ts` asserts against `app/tests/copy-budget.json`'s pinned
-ceiling. Only `node scripts/copy-budget.mjs --pin` raises it, run by `make design-check`.
+**D194's pinned word ceiling is retired** (superseded by `D-text-shape-checks`, 2026-09-23, the
+owner's ruling). Three checks replace it, none of them a count.
+`app/tests/text-shape.spec.ts` catches four shapes. A repeated sentence on three-plus
+repeating cards or rows. A number-plus-noun fact stated twice. A sentence over 25 words. A
+caption repeating 60%+ of its heading. `app/tests/machine-words.spec.ts` closes D196's own
+gap. It reads rendered `innerText`, not just JSX literals. `app/tests/money-face.spec.ts`
+reads D221: every dollar figure must sit in the mono face. Each reads a shrinking pending list
+(`text-shape-allow.json`, `machine-words-allow.json`, `money-face-allow.json`), route ->
+assertion -> lane, that fails on an unlisted hit and on a stale entry.
+`make text-density` (`scripts/text-density/`) is the third piece of the owner's ruling, a
+repeatable on-demand reviewer, never a gate (D18: it writes).
 
 **The mark is generated** (D102). `Logo` renders `docs/specs/logo.md`'s locked set, six
 variants, `bluesteel` default. `scripts/build-mark.mjs` writes its geometry and

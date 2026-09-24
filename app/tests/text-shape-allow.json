@@ -1,0 +1,4 @@
+{
+  "_about": "THE SHRINKING PENDING LIST for `text-shape.spec.ts` (D-text-shape-checks, supersedes D194). route -> assertion -> the lane that owes the fix. `text-shape.spec.ts` fails on a hit not listed here AND on a listed entry that no longer matches any hit (stale — delete it). Never a count: an entry names one finding on one route, not a number to keep under. A lane that fixes its screen deletes its own entries in the same commit. Assertions: `repeated-sentence` (D194's own TXT-01 shape — the same four-plus-word sentence on three or more repeating cards/rows), `repeated-fact` (a number-plus-noun fact stated twice, TXT-25's shape), `long-sentence` (over 25 words), `caption-heading` (a caption repeating 60%+ of its heading's words, TXT-10's shape). Measured on the populated fixture at 1440 and 390, 2026-09-23: one real hit, at 390 only.",
+  "#/": { "repeated-fact": "home" }
+}

@@ -1,0 +1,6 @@
+{
+  "_about": "THE SHRINKING PENDING LIST for `machine-words.spec.ts` (D196, amended 2026-09-23 by `D-text-shape-checks`: 'a new browser check reads the rendered text of every route'). route -> word or path (lower-cased) -> the lane that owes the fix. A different list from `scripts/machine-words-allow.json` on purpose: that one keys by FILE, for the AST walk over JSX literals; this one keys by ROUTE, for rendered `innerText`, which carries no source file. `machine-words.spec.ts` fails on a hit not listed here AND on a listed entry that no longer matches anything (stale — delete it). Measured repeatably (5 runs) on the populated fixture at 1440 and 390, 2026-09-23: five real hits.",
+  "#/capture": { "index": "capture", "span": "capture", "manual:c": "capture" },
+  "#/runs": { "emit": "b-runs" },
+  "#/orders": { "pushed": "orders" }
+}

@@ -1,0 +1,26 @@
+{
+  "_about": "THE ONE PLACE THIS WORD LIST LIVES (D196, amended by D-text-shape-checks 2026-09-23: 'the word list grows'). `scripts/docs-audit.py`'s `no mechanism on screen` row (the AST walk over app/src's own JSX literals) and `app/tests/machine-words.spec.ts` (the rendered-text browser check over every route's actual `innerText`, catching server- and demo-composed strings the AST walk cannot reach) both read this file rather than keeping two dictionaries a session could edit out of step. Every entry is machinery this repo is BUILT FROM; every 'why' says why it is not something an operator reaches for. `run`, `box`, `export`, `listing` and `TCGplayer` are deliberately absent — they are the operator's own words, the ones docs/DESIGN.md's Register section and CLAUDE.md's screen table are written in.",
+  "words": {
+    "the pipeline": "D1's two-phase batch process, end to end — an implementation the operator never chose and the outcome (a price, a queue entry) is what they read instead",
+    "the resolver": "pipeline/join.py's per-order picker (D174, D181) — an internal component name; the operator sees which copies fill an order, never which module chose them",
+    "the model": "the vision call identify/ makes (D2) — naming the model is naming a vendor and a technique, not a fact about a card",
+    "the server sent": "server.ts's own phrase for relaying a response — the operator reads a fact about their store, never about an HTTP exchange with it",
+    "the join": "pipeline/join.py's join step (D11) — a pipeline stage; the operator sees a listed card or a reason it queued, never the step that produced either",
+    "the corpus": "pipeline/corpus.py's one-file pricing store (D86) — a storage detail; the operator thinks in prices and holds, never in which file holds them",
+    "the ledger": "the code-card and order ledgers (D24, D63) as STORAGE — codes and orders are the operator's own words; that either is kept in one file called a ledger is not",
+    "emit": "the CLI/pipeline verb that writes import.csv (D99) — the operator presses \"Write\" or \"Send\"; the step's own internal name is not a fact about their store",
+    "sub-threshold": "D9's internal name for a card priced under the cut-off — the operator reads \"under the cut-off\" or the figure itself, never the pipeline's own bucket name for it",
+    "index": "D58's stored slot index — a filing detail the store keeps so a departed card's address stays stable; the operator reads a card's number within its section (D-a-card-is-counted-in-its-section), never the index behind it",
+    "span": "a range's internal bookkeeping name (a run's box span, a section's card span) — the operator reads the boxes or cards themselves, never the word for the range that holds them",
+    "parked": "the join's own bucket for a card it set aside pending a question (pipeline/join.py) — the operator reads what question is waiting, never the pipeline's name for the holding state",
+    "Pushed": "D106's internal name for a listing file sent to TCGplayer but not yet made live — the operator reads whether it is live, never the pipeline's own stage name for the file in flight",
+    "Staged": "TCGplayer's own Import-to-Staged terminology (D87) — a fact about that other product's workflow, not this store; the operator reads what changed in their own store",
+    "make demo": "a shell invocation for seeding the public demo (docs/specs/demo.md) — a command this repository's own tooling runs, never something an operator at the rig types",
+    "/pipeline/": "a request path under pipeline/'s own routes — a URL fact about this codebase's wiring, never a sentence about a card, a box or an order",
+    "manual:c": "a run's own reason code for a card started from a terminal rather than a capture (see Notice's disclosure) — the operator reads what happened to their card, never the code that logs it"
+  },
+  "repoTopDirs": [
+    "inventory", "runs", "captures", "harness", "docs", "app",
+    "server", "pipeline", "store", "identify", "geometry", "codes", "cli", "scripts"
+  ]
+}

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -64,6 +64,8 @@ help:
 	@echo "                    THE ONE GENERATOR: it writes and gates nothing (D18)."
 	@echo "                    Previews. ARGS=--write applies. ARGS=--selftest proves it."
 	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
+	@echo "  make text-density  on-demand word-density review over THIS checkout's own dev"
+	@echo "                    server (D-text-shape-checks). Never a gate. Needs make dev/up."
 	@echo "  make orient       which component renders the thing, and what selects it."
 	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
 	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
@@ -518,6 +520,18 @@ map-fix:
 
 map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
+
+# THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D194): a
+# REPEATABLE, ON-DEMAND text-density review, never a gate (D18: it writes — one report to
+# `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never wired to a
+# hook, `map-fix`'s own standing. Targets THIS checkout's own dev server, port derived through
+# `app/devPort.ts` exactly the way every other tool here derives it — never a hardcoded port,
+# never the published demo (the HAZARD `make worktree-setup` and `CLAUDE.md` both name: a
+# build with no `.git` falls back to :8000, the owner's LIVE server). `make dev` or `make up`
+# must already be running; this refuses rather than guessing a fallback. ARGS reaches the
+# script raw, e.g. `ARGS="--route /pricing --theme dark"`.
+text-density:
+	@node --experimental-strip-types scripts/text-density/density.mjs $(ARGS)
 
 # WHICH COMPONENT RENDERS THE THING, AND WHAT SELECTS IT. A RENDERER — it writes nothing and
 # gates nothing, so D18 does not reach it, the same standing `make map` has.

@@ -1,0 +1,4 @@
+{
+  "_about": "THE SHRINKING PENDING LIST for `money-face.spec.ts` (D221, confirmed 2026-09-23: mono everywhere, inputs and chips included, plus a check). route -> the lane that owes the fix, ONE LEVEL (not route -> amount -> lane, unlike the other two lists in this directory): the fixture's own card weights and prices are seeded-random, so the SPECIFIC figure a route draws can change run to run — measured once against `#/revenue`. Keying on the route alone is what the orchestrator's 'shrinking allow list by file -> lane' names. `money-face.spec.ts` fails on a route with an unlisted hit AND on a listed route with no hit this run (stale — delete it). A lane migrating a screen's money onto `.bn-money`/`Money` deletes its own entry in the same commit. Measured repeatably (5 runs) on the populated fixture, 2026-09-23: `#/shipping`'s Envelope/Parcel cards draw their per-item weight-derived dollar value in Inter.",
+  "#/shipping": "shipping"
+}

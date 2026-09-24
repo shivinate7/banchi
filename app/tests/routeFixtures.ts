@@ -16,24 +16,25 @@ import type {
 } from '../src/types'
 
 /* THE BUILDER FUNCTIONS `run-panel.spec.ts`, `orders.spec.ts` AND `shipping.spec.ts` ALREADY
- * WROTE, MOVED HERE SO A FOURTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING SHAPE
- * (`D194`'s own gap, closed in the same PR that names it).
+ * WROTE, MOVED HERE SO A FOURTH AND FIFTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING
+ * SHAPE (a gap D194 closed in the PR that named it; D194 is superseded by
+ * `D-text-shape-checks`, and this module's job did not go with it).
  *
- * `app/tests/copy-budget.spec.ts` renders `#/runs`, `#/orders`, `#/shipping`, `#/codes` and
- * `#/graveyard` off `sealEveryTest({ store: true, cards: 122 })` alone, which draws no run, no
- * order, no export, no code and no departed record for any of the five — so their pinned
- * word ceilings bound an EMPTY-ISH state rather than the busiest one a real store draws, and a
- * session could add a sentence to any of the five without the ratchet ever seeing it in its
- * populated form. This module is what those five routes' POPULATED fixtures are built from:
- * the same shapes `run-panel.spec.ts`'s `runRow`, `orders.spec.ts`'s `place`/`pick`/`line`/
- * `order`/`payloadOf` and `shipping.spec.ts`'s `row`/`batchOf` already prove render correctly,
- * plus two new ones — `codeEntry`/`codeLedgerOf` and `departedCard` — for the two screens no
- * existing spec seeds at all.
+ * `app/tests/text-shape.spec.ts` and `app/tests/machine-words.spec.ts` render `#/runs`,
+ * `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` off `sealEveryTest({ store: true,
+ * cards: 122 })` alone, which draws no run, no order, no export, no code and no departed
+ * record for any of the five — so a check run only against that state never sees the busiest
+ * screen a real store draws, and a repeated sentence or a machine word landing in a populated
+ * list could pass unseen. This module is what those five routes' POPULATED fixtures are built
+ * from: the same shapes `run-panel.spec.ts`'s `runRow`, `orders.spec.ts`'s `place`/`pick`/
+ * `line`/`order`/`payloadOf` and `shipping.spec.ts`'s `row`/`batchOf` already prove render
+ * correctly, plus two new ones — `codeEntry`/`codeLedgerOf` and `departedCard` — for the two
+ * screens no existing spec seeds at all.
  *
- * THE THREE SPECS IMPORT FROM HERE NOW INSTEAD OF DEFINING THEIR OWN COPY. A second copy of
- * `runRow` in `copy-budget.spec.ts` is exactly the drift this repo's own rule against a second
- * implementation warns about — see `pipeline/join.py:number_index_key` in `CLAUDE.md`, the
- * same argument one register down.
+ * EVERY SPEC THAT NEEDS ONE OF THESE SHAPES IMPORTS FROM HERE INSTEAD OF DEFINING ITS OWN
+ * COPY. A second copy of `runRow` anywhere else is exactly the drift this repo's own rule
+ * against a second implementation warns about — see `pipeline/join.py:number_index_key` in
+ * `CLAUDE.md`, the same argument one register down.
  */
 
 /* ---------------------------------------------------------------------------- the runs */
@@ -734,7 +735,8 @@ export async function seedPopulatedGraveyard(page: Page): Promise<void> {
 /* ------------------------------------------------------------------------- the roster */
 
 /** The five routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
- *  populates it — `copy-budget.spec.ts`'s own use, kept here rather than in that file.
+ *  populates it — `text-shape.spec.ts` and `machine-words.spec.ts`'s own use, kept here
+ *  rather than duplicated in either.
  *
  *  DELIBERATELY NOT IN A `*.spec.ts` FILE. `scripts/docs-audit.py`'s `route rosters` row
  *  reconciles a hand-typed list of THREE OR MORE route hashes found in a spec against
