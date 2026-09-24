@@ -31,6 +31,19 @@
 
 .search-field-icon { flex: none; color: var(--bn-ink-4); pointer-events: none; }
 .search-field-box:focus-within .search-field-icon { color: var(--bn-accent); }
+/* `busy`: the search mark's own 16px square turns, so the field keeps its size (D118). A
+   turning ring carries meaning (the answer is on its way), so it keeps turning under reduced
+   motion, the same as the kit's busy button. */
+.search-field-spin {
+  flex: none;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--bn-r-full);
+  border: 2px solid var(--bn-ink-3);
+  border-right-color: transparent;
+  animation: bn-spin var(--bn-t-spin) linear infinite;
+}
 
 .search-field-input {
   flex: 1 1 auto;

@@ -60,6 +60,11 @@ export type SearchFieldProps = {
    *  raised to 42px (`tokens.css`), so the 40px thumb floor still holds at any width narrower
    *  than that, `FilterBar`'s own 639px phone stack included. */
   controlHeight?: 'lg' | 'bar'
+
+  /** True while what is on screen is not yet the answer to what is in the box (`useSearch`'s
+   *  `loading`). The search mark turns into a spinner, in the same place, so the field keeps
+   *  its size (D118). */
+  busy?: boolean
 }
 
 export function SearchField({
@@ -74,6 +79,7 @@ export function SearchField({
   submitLabel,
   emptyHint,
   controlHeight = 'lg',
+  busy = false,
 }: SearchFieldProps) {
   const id = useId()
   const hintId = useId()
@@ -191,8 +197,12 @@ export function SearchField({
         {label ?? LABEL[persona]}
       </label>
 
-      <div className="search-field-box">
-        {persona === 'owner' ? <Icon name="search" size={16} className="search-field-icon" /> : null}
+      <div className="search-field-box" aria-busy={busy ? true : undefined} data-busy={busy ? 'true' : undefined}>
+        {persona !== 'owner' ? null : busy ? (
+          <span className="search-field-spin" aria-hidden="true" />
+        ) : (
+          <Icon name="search" size={16} className="search-field-icon" />
+        )}
         <input
           className="search-field-input"
           id={id}

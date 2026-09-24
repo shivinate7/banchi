@@ -26,21 +26,39 @@ It never opens the OS menu. It carries every facet a screen needs, in any order.
 
 - a count per option, under the other active filters, with a zero drawn rather than hidden,
 - a single-choice facet and a multi-choice facet marked differently,
-- a clear per facet, and one "Clear all",
+- a clear per facet, and ONE clear-all: the count line's. `FilterChips`' own "Clear all" is
+  not drawn inside a bar, so two never sit side by side,
 - no order lock, and no facet that wipes another's choice,
 - one control height across the whole bar,
+- ONE WIDTH for every facet trigger in one bar: the widest any of them needs, in one shared
+  grid track. A pick never changes it (D118). This is the orchestrator's call on the owner's
+  gripe, which named the width difference itself,
 - "N of M" drawn by construction. The bar's own `FilterCount` line is not something a screen
-  can leave out,
-- a popover on the desk, and one bottom sheet on the phone. Both sit behind a single "Filters"
-  trigger. A phone is never asked to lay five controls of different widths into one row.
+  can leave out. It names every narrowing: each pick, the search's words, and the hide toggle
+  while it hides a row,
+- a popover in a wide bar, and one sheet behind a single "Filters" trigger in a narrow one.
+  The bar measures ITS OWN width (a container query), not the window's. So Inventory's
+  268-300px rail gets the compact trigger on a desk. The trigger's badge counts only what
+  differs from the screen at rest. A Hide sold that is on by default (D132) is not counted,
+- a slot beside the search for one control of the screen's own (the rail's collapse press),
+  and the search's busy and failure states from `useSearch`.
 
-One quiet `HideToggle` replaces three shapes with one. It is a `Chip`, with a pressed state
-and a count on the pill. It replaces "Hide sold"'s black pill, "Hide never-seen SKUs"' bare
-checkbox, and "Holding"'s dimming chip.
+The counts come from one helper, `kit/facets.ts:countFacets`. Each option counts the rows the
+list would show under the OTHER active facets. The screen's own search and hide toggle apply
+too. `withCounts` takes the same answer from the server.
 
-One `SortHeaderButton` marks the active table column in two channels. The label goes to full
-ink weight. The one chevron that is ever drawn belongs to it too. The old pattern drew a
-chevron on every header, and only `aria-sort` said which one was real.
+One quiet `HideToggle` replaces three shapes with one. It is a field-edged control of the
+bar's own height. Its check mark fills with the accent when on, and a count sits beside its
+words. It replaces "Hide sold"'s black pill, "Hide never-seen SKUs"' bare checkbox, and
+"Holding"'s dimming chip. A pressed `Chip` was tried first, and the review refused it. It
+filled black in light and white in dark: the heaviest object in the bar, for a state that is
+on by default.
+
+One `SortHeader` marks the active table column in two channels. The label goes to full ink
+weight. The one chevron that is ever drawn belongs to it too. The old pattern drew a chevron on
+every header, and only `aria-sort` said which one was real. `SortHeader` is the `<th>` itself,
+and `aria-sort` sits on it, never on the button inside. Each column has its own first
+direction: a name starts A to Z.
 
 The record of the review is `docs/reviews/ux-2026-09-23/`, lens `filtering.md`.
 

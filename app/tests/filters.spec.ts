@@ -1,45 +1,152 @@
+import { createRequire } from 'node:module'
+
 import { test, expect, type Page } from '@playwright/test'
 
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { matchSpans } from '../src/kit/highlight'
+import { countFacets, filterRows, withCounts } from '../src/kit/facets'
+import { parseViewQuery, readFacets, readFlag, readSort, writeFlag } from '../src/kit/viewState'
+import type { FilterFacet } from '../src/kit/data'
 
 /* THE FILTER BAR, THE HIDE TOGGLE, THE SORTABLE TABLE HEADER AND THE MATCH HIGHLIGHT
- * (`kit/filters.tsx`, `kit/highlight.tsx`), drawn on `tests/filters/index.html` — a page with
- * no router, no store and no server, the same shape `kit-data.spec.ts` already draws its own
- * specimens on. `match.spec.ts` covers `kit/match.ts` itself; this file covers what is built on
- * top of it: the URL view state (`kit/viewState.ts`) and the composed controls.
+ * (`kit/filters.tsx`, `kit/highlight.tsx`, `kit/facets.ts`), drawn on `tests/filters/index.html`
+ * — a page with no router, no store and no server, the same shape `kit-data.spec.ts` already
+ * draws its own specimens on. `match.spec.ts` covers `kit/match.ts` itself; this file covers
+ * what is built on top of it: the URL view state (`kit/viewState.ts`), the facet counts, and the
+ * composed controls.
  *
- * `match.cases.json`'s `54/132` and `heimerdinger-inventor` and `flabebe` cases are exercised
- * again here, through `Highlight`, so a caller of the highlight gets the same three examples
- * the addendum's own "Done" line names — the matcher and its highlight, proven on the same
- * words rather than two different ones that could quietly drift apart.
- */
+ * Each guard below went red on its own defect before the fix (the filtering review, round 2). */
 
 sealEveryTest()
 
-/* `matchSpans` runs no browser: it is a pure function, asserted here the way `kit-data.spec.ts`
- * asserts `matchQuery` — a case the case table in `match.cases.json` does not carry, since that
- * table is `matchQuery`'s own, not the highlight's narrower "found as a direct or compact
- * substring" rule (`kit/highlight.tsx`'s own file header). */
-test('matchSpans marks a direct hit, and the compact fallback a hyphen or comma cannot break', () => {
-  expect(matchSpans('Hextech', 'hextech')).toEqual([[0, 7]])
-  expect(matchSpans('Heimerdinger, Inventor', 'heimerdinger-inventor')).toEqual([[0, 22]])
-  expect(matchSpans('Ho-Oh ex', 'zzzz')).toEqual([])
+/* ============================================================================================
+ * Pure functions: no browser.
+ * ============================================================================================ */
+
+test.describe('the URL is read as untrusted', () => {
+  test('a flag whose default is on can be turned off, and stays off (Hide sold, D132)', () => {
+    expect(writeFlag(false, true)).toBe('0')
+    expect(readFlag(writeFlag(false, true), true)).toBe(false)
+    expect(writeFlag(true, true)).toBeNull()
+    expect(writeFlag(true, false)).toBe('1')
+    expect(writeFlag(false, false)).toBeNull()
+    expect(readFlag('yes', true)).toBe(true)
+    expect(readFlag(null, false)).toBe(false)
+  })
+
+  test('a malformed escape is ignored, and the pairs around it are kept', () => {
+    const query = parseViewQuery('q=%E0%A4%A&game=pokemon&set=sv%201')
+    expect(query.get('q')).toBeNull()
+    expect(query.get('game')).toBe('pokemon')
+    expect(query.get('set')).toBe('sv 1')
+  })
+
+  test('a facet keeps only known values, once each, and a single-choice facet keeps one', () => {
+    const facets: FilterFacet[] = [
+      { key: 'game', label: 'Game', options: [{ value: 'pokemon', label: 'Pokémon' }, { value: 'riftbound', label: 'Riftbound' }] },
+      { key: 'set', label: 'Set', multiple: false, options: [{ value: 'sv1', label: 'One' }, { value: 'sv3', label: 'Three' }] },
+    ]
+    const value = readFacets(parseViewQuery('game=pokemon&game=bogus&game=pokemon&game=riftbound&set=nope&set=sv3&set=sv1&other=x'), facets)
+    expect(value).toEqual({ game: ['pokemon', 'riftbound'], set: ['sv3'] })
+  })
+
+  test('a sort key no option has falls back to the default, and a bad direction to the key\'s own first', () => {
+    const options = [
+      { key: 'name', label: 'Name', first: 'asc' as const },
+      { key: 'price', label: 'Price' },
+    ]
+    const rest = { key: 'price' as const, dir: 'desc' as const }
+    expect(readSort('nope', 'asc', rest, options)).toEqual(rest)
+    expect(readSort('name', 'sideways', rest, options)).toEqual({ key: 'name', dir: 'asc' })
+    expect(readSort('name', 'desc', rest, options)).toEqual({ key: 'name', dir: 'desc' })
+    expect(readSort(null, null, rest, options)).toEqual(rest)
+  })
 })
+
+test.describe('facet counts', () => {
+  const rows = [
+    { game: 'pokemon', rarity: 'rare' },
+    { game: 'pokemon', rarity: 'common' },
+    { game: 'pokemon', rarity: 'common' },
+    { game: 'riftbound', rarity: 'rare' },
+    { game: 'riftbound', rarity: 'common' },
+  ]
+  const facets: FilterFacet[] = [
+    { key: 'game', label: 'Game', options: [{ value: 'pokemon', label: 'Pokémon' }, { value: 'riftbound', label: 'Riftbound' }, { value: 'onepiece', label: 'One Piece' }] },
+    { key: 'rarity', label: 'Rarity', options: [{ value: 'common', label: 'Common' }, { value: 'rare', label: 'Rare' }] },
+  ]
+  const valueOf = (row: (typeof rows)[number], key: string) => (key === 'game' ? row.game : key === 'rarity' ? row.rarity : null)
+  const countsOf = (facet: FilterFacet | undefined) => Object.fromEntries((facet?.options ?? []).map((one) => [one.value, one.count]))
+
+  test('an option counts under the OTHER active filters: a change in one facet changes another\'s counts, never its own', () => {
+    const open = countFacets(rows, facets, {}, valueOf)
+    expect(countsOf(open[1])).toEqual({ common: 3, rare: 2 })
+
+    const picked = countFacets(rows, facets, { game: ['riftbound'] }, valueOf)
+    expect(countsOf(picked[1])).toEqual({ common: 1, rare: 1 })
+    /* Game's own counts do not move when Game is picked: each says what picking it would show. */
+    expect(countsOf(picked[0])).toEqual({ pokemon: 3, riftbound: 2, onepiece: 0 })
+
+    const both = countFacets(rows, facets, { game: ['riftbound'], rarity: ['rare'] }, valueOf)
+    expect(countsOf(both[0])).toEqual({ pokemon: 1, riftbound: 1, onepiece: 0 })
+    expect(filterRows(rows, facets, { game: ['riftbound'], rarity: ['rare'] }, valueOf)).toHaveLength(1)
+  })
+
+  test('several picks in one facet are OR, and a screen\'s own `keep` narrows every count', () => {
+    expect(filterRows(rows, facets, { game: ['pokemon', 'riftbound'] }, valueOf)).toHaveLength(5)
+    const kept = countFacets(rows, facets, {}, valueOf, (row) => row.rarity === 'common')
+    expect(countsOf(kept[0])).toEqual({ pokemon: 2, riftbound: 1, onepiece: 0 })
+  })
+
+  test('server counts copy onto the options, and an option the server did not name is zero', () => {
+    const out = withCounts(facets, { game: { pokemon: 40 } })
+    expect(countsOf(out[0])).toEqual({ pokemon: 40, riftbound: 0, onepiece: 0 })
+  })
+})
+
+test.describe('matchSpans', () => {
+  test('marks a direct hit, and the compact fallback a hyphen or comma cannot break', () => {
+    expect(matchSpans('Hextech', 'hextech')).toEqual([[0, 7]])
+    expect(matchSpans('Heimerdinger, Inventor', 'heimerdinger-inventor')).toEqual([[0, 22]])
+    expect(matchSpans('Ho-Oh ex', 'zzzz')).toEqual([])
+  })
+
+  test('marks nothing on a row the matcher refuses, even where one word is in the text', () => {
+    expect(matchSpans('Pikachu ex', 'pika zzzz')).toEqual([])
+    /* The same word, on a row whose OTHER field carries the second token, is marked. */
+    expect(matchSpans('Pikachu ex', 'pika 8607', { row: { text: ['Pikachu ex'], skus: ['8607411'] } })).toEqual([[0, 4]])
+    expect(matchSpans('Pikachu ex', 'pika 9999', { row: { text: ['Pikachu ex'], skus: ['8607411'] } })).toEqual([])
+  })
+
+  test('marks a card number by its canonical form, never as a substring', () => {
+    expect(matchSpans('054/132', '54/132', { kind: 'number' })).toEqual([[0, 7]])
+    expect(matchSpans('054/132', '54', { kind: 'number' })).toEqual([[0, 3]])
+    expect(matchSpans('054/132', '/132', { kind: 'number' })).toEqual([[4, 7]])
+    expect(matchSpans('054/132', '54 132', { kind: 'number' })).toEqual([[0, 7]])
+    expect(matchSpans('054/132', '054-132', { kind: 'number' })).toEqual([[0, 7]])
+    expect(matchSpans('154/200', '54', { kind: 'number' })).toEqual([])
+  })
+})
+
+/* ============================================================================================
+ * The page.
+ * ============================================================================================ */
 
 const PAGE = '/tests/filters/index.html'
 const WIDTHS = [1440, 820, 720, 390] as const
 const HEIGHT: Record<(typeof WIDTHS)[number], number> = { 1440: 900, 820: 1180, 720: 1000, 390: 900 }
 
-const SPECIMENS = ['FilterBar', 'HideToggle', 'SortHeader', 'Highlight'] as const
+const SPECIMENS = ['FilterBar', 'Rail', 'HideToggle', 'SortHeader', 'Highlight'] as const
 
-async function open(page: Page, width: (typeof WIDTHS)[number], theme: 'light' | 'dark' = 'light'): Promise<void> {
+async function open(page: Page, width: (typeof WIDTHS)[number], theme: 'light' | 'dark' = 'light', hash = ''): Promise<void> {
   await page.setViewportSize({ width, height: HEIGHT[width] })
-  await page.goto(theme === 'dark' ? `${PAGE}?theme=dark` : PAGE)
+  await page.goto(`${theme === 'dark' ? `${PAGE}?theme=dark` : PAGE}${hash}`)
   await expect(page.locator('[data-kit-filters]')).toBeVisible()
   await settleFonts(page)
 }
+
+const BAR = '[data-specimen="FilterBar"]'
 
 for (const theme of ['light', 'dark'] as const) {
   for (const width of WIDTHS) {
@@ -62,52 +169,99 @@ for (const theme of ['light', 'dark'] as const) {
  * ============================================================================================ */
 
 test.describe('FilterBar', () => {
-  /* THE WIDE ROW ONLY: 1440, 820 and 720 (above the 639px stack). The search field is IN this
-   *  row too (gripe 3: "the filters aren't even the same widths"), so it carries the SAME
-   *  height as every other control here — not its own standalone `--bn-control-h-lg`. */
+  /* THE WIDE ROW ONLY: 1440, 820 and 720. The search field and the hide toggle are IN this row
+   *  (gripe 3: "the filters aren't even the same widths"), so they carry the SAME height as every
+   *  other control here. */
   for (const width of [1440, 820, 720] as const) {
-    test(`every control in the wide row, search field included, is one height at ${width} (FLT-24)`, async ({ page }) => {
+    test(`every control in the wide row, the search and the hide toggle included, is one height at ${width} (FLT-24)`, async ({ page }) => {
       await open(page, width)
       const heights = await page
         .locator(
-          '[data-specimen="FilterBar"] .bn-filterbar-row .bn-pick, ' +
-            '[data-specimen="FilterBar"] .bn-filterbar-row .bn-sort-dir, ' +
-            '[data-specimen="FilterBar"] .bn-filterbar-search .search-field-box',
+          `${BAR} .bn-filterbar-row .bn-pick, ${BAR} .bn-filterbar-row .bn-sort-dir, ` +
+            `${BAR} .bn-filterbar-row .bn-hidetoggle, ${BAR} .bn-filterbar-search .search-field-box`,
         )
         .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
-      expect(heights.length).toBeGreaterThanOrEqual(6)
+      expect(heights.length).toBeGreaterThanOrEqual(7)
       expect(new Set(heights).size, `heights ${heights.join(', ')}`).toBe(1)
+      /* `--bn-control-h`: 34px on a desk, raised to 42px below 768px for a thumb (tokens.css). */
+      expect(heights[0]).toBe(width >= 768 ? 34 : 42)
+    })
+
+    test(`every facet trigger in one bar is ONE width at ${width}, and a pick changes none (the owner's gripe, D118)`, async ({ page }) => {
+      await open(page, width)
+      const triggers = page.locator(`${BAR} .bn-filterbar-row .bn-fchip > .bn-pick`)
+      const widths = () => triggers.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)))
+      const before = await widths()
+      expect(before).toHaveLength(3)
+      expect(new Set(before).size, `widths ${before.join(', ')}`).toBe(1)
+
+      /* Pick a set (single-choice): its value takes the slot, and no width moves. */
+      await triggers.nth(1).click()
+      await page.locator('.bn-pick-opt', { hasText: 'Obsidian Flames' }).click()
+      await expect(triggers.nth(1)).toContainText('Obsidian Flames')
+      expect(await widths()).toEqual(before)
     })
   }
 
-  test('"N of M" is drawn by construction, and changes as a facet narrows (FLT-13)', async ({ page }) => {
+  test('"N of M" is drawn by construction, names what narrows, and one Clear resets the facets (FLT-13)', async ({ page }) => {
     await open(page, 1440)
-    const count = page.locator('[data-specimen="FilterBar"] .bn-filtercount')
-    await expect(count).toContainText('37 of 122')
+    const count = page.locator(`${BAR} .bn-filtercount`)
+    /* Twelve Pokémon cards, three of them sold and hidden by default. */
+    await expect(count).toContainText('9 of 24 cards')
     await expect(count).toContainText('Pokémon')
+    await expect(count).toContainText('Hide sold')
 
-    /* Clear the one active facet: the count goes back to an unnarrowed total. */
-    await page.locator('[data-specimen="FilterBar"] .bn-filtercount-clear').click()
-    await expect(count).toContainText('122 cards')
-    await expect(count).not.toContainText('filtered by')
+    /* THE SEARCH IS NAMED TOO, in the words typed. */
+    await page.locator(`${BAR} .search-field-input`).fill('ex')
+    await expect(count).toContainText('“ex”')
+
+    /* ONE clear-all in the bar: the count line's. FilterChips' own would show once two facets
+     * are on, so pick a second one first. */
+    await page.locator(`${BAR} .bn-filterbar-row .bn-fchip > .bn-pick`).nth(2).click()
+    await page.locator('.bn-pick-opt', { hasText: /^Rare/ }).click()
+    await page.keyboard.press('Escape')
+    await expect(count).toContainText('Rare')
+    await expect(page.locator(`${BAR} .bn-filterchips-clear`)).toBeHidden()
+    await expect(page.locator(`${BAR} .bn-filtercount-clear`)).toHaveCount(1)
+    await page.locator(`${BAR} .bn-filtercount-clear`).click()
+    await expect(page.locator(`${BAR} .search-field-input`)).toHaveValue('')
+    /* Hide sold is at its default, so Clear leaves it on: 24 cards, 6 sold. */
+    await expect(count).toContainText('18 of 24 cards')
+    await expect(count).not.toContainText('Pokémon')
   })
 
   test('a facet option carries a count under the other active filters, and a zero is drawn, not hidden (FLT-10)', async ({ page }) => {
     await open(page, 1440)
-    /* `PickPanel` is portalled to `document.body`, so its options are not descendants of
-     *  `[data-specimen="FilterBar"]` in the DOM — this locator is deliberately page-wide. */
-    await page.locator('[data-specimen="FilterBar"] .bn-filterbar-row .bn-pick').first().click()
+    /* `PickPanel` is portalled to `document.body`: this locator is deliberately page-wide. Under
+     * Game = Pokémon, the two sets from other games count zero and are still offered. */
+    await page.locator(`${BAR} .bn-filterbar-row .bn-pick`).nth(1).click()
     const zero = page.locator('.bn-pick-opt[data-zero="true"]')
-    await expect(zero).toBeVisible()
-    await expect(zero).toContainText('0')
+    await expect(zero).toHaveCount(2)
+    await expect(zero.first()).toContainText('0')
     await page.keyboard.press('Escape')
   })
 
-  test('no facet is disabled: every one opens in any order (the owner\'s ruling against Inventory\'s game-then-set-then-rarity lock)', async ({
-    page,
-  }) => {
+  test('a pick in one facet changes the counts in ANOTHER (the counts helper, FLT-10)', async ({ page }) => {
     await open(page, 1440)
-    const triggers = page.locator('[data-specimen="FilterBar"] .bn-filterbar-row .bn-fchip .bn-pick')
+    const rarity = page.locator(`${BAR} .bn-filterbar-row .bn-fchip > .bn-pick`).nth(2)
+    const commonCount = page.locator('.bn-pick-opt', { hasText: 'Common' }).locator('.bn-pick-count')
+
+    await rarity.click()
+    const underPokemon = await commonCount.textContent()
+    await page.keyboard.press('Escape')
+
+    /* Clear Game: Rarity's Common count now counts every game. */
+    await page.locator(`${BAR} .bn-filterbar-row .bn-fchip-clear`).first().click()
+    await rarity.click()
+    await expect(commonCount).not.toHaveText(underPokemon ?? '')
+    expect(underPokemon).toBe('4')
+    await expect(commonCount).toHaveText('7')
+    await page.keyboard.press('Escape')
+  })
+
+  test("no facet is disabled: every one opens in any order (the owner's ruling against Inventory's game-then-set-then-rarity lock)", async ({ page }) => {
+    await open(page, 1440)
+    const triggers = page.locator(`${BAR} .bn-filterbar-row .bn-fchip .bn-pick`)
     const count = await triggers.count()
     expect(count).toBe(3)
     for (let at = 0; at < count; at++) {
@@ -116,34 +270,120 @@ test.describe('FilterBar', () => {
     }
   })
 
-  test('a single-choice facet marks its options differently from a multi-choice one (gripe 5: "one selection rule, drawn honestly")', async ({
-    page,
-  }) => {
+  test('a single-choice facet marks its options differently from a multi-choice one (gripe 5: "one selection rule, drawn honestly")', async ({ page }) => {
     await open(page, 1440)
-    const facets = page.locator('[data-specimen="FilterBar"] .bn-filterbar-row .bn-fchip .bn-pick')
-    /* Game: multi-select — every option is a checkbox mark. */
+    const facets = page.locator(`${BAR} .bn-filterbar-row .bn-fchip .bn-pick`)
     await facets.nth(0).click()
     await expect(page.locator('.bn-pick-opt').first()).toHaveAttribute('data-multiple', 'true')
     await page.keyboard.press('Escape')
-    /* Set: single-select — no option carries the checkbox mark. */
     await facets.nth(1).click()
     await expect(page.locator('.bn-pick-opt').first()).not.toHaveAttribute('data-multiple', 'true')
     await page.keyboard.press('Escape')
   })
 
-  test('at 390, the compact trigger opens a sheet, and nothing outside it moves (D118)', async ({ page }) => {
+  test('at 390, the compact trigger opens a sheet, nothing outside it moves (D118), and no blank band sits in it', async ({ page }) => {
     await open(page, 390)
     const before = await page.locator('[data-specimen="HideToggle"]').boundingBox()
-    await expect(page.locator('[data-specimen="FilterBar"] .bn-filterbar-row')).toBeHidden()
-    const trigger = page.locator('[data-specimen="FilterBar"] .bn-filterbar-trigger')
+    await expect(page.locator(`${BAR} .bn-filterbar-row`)).toBeHidden()
+    const trigger = page.locator(`${BAR} .bn-filterbar-trigger`)
     await expect(trigger).toBeVisible()
     await trigger.click()
-    await expect(page.locator('[data-bn-overlay="sheet"]')).toBeVisible()
-    await expect(page.locator('[data-bn-overlay="sheet"] .bn-filterchips')).toBeVisible()
+    const sheet = page.locator('[data-bn-overlay="sheet"]')
+    await expect(sheet).toBeVisible()
+    await expect(sheet.locator('.bn-filterchips')).toBeVisible()
     const after = await page.locator('[data-specimen="HideToggle"]').boundingBox()
     expect(after?.y).toBe(before?.y)
+
+    /* THE BLANK BAND: FilterChips' reserved Clear-all slot took a 42px row under the last facet.
+     * The gap from the last facet to the sort is the sheet's own gap, nothing more. */
+    const gap = await sheet.evaluate((root) => {
+      const facets = root.querySelectorAll('.bn-fchip')
+      const last = facets[facets.length - 1]?.getBoundingClientRect()
+      const sort = root.querySelector('.bn-sort')?.getBoundingClientRect()
+      return last === undefined || sort === undefined ? -1 : Math.round(sort.top - last.bottom)
+    })
+    expect(gap).toBeGreaterThanOrEqual(0)
+    expect(gap).toBeLessThanOrEqual(16)
+
+    /* The thumb floor in the sheet: every control is 40px or taller. */
+    const heights = await sheet
+      .locator('.bn-pick, .bn-sort-dir, .bn-hidetoggle')
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
+    expect(Math.min(...heights), `heights ${heights.join(', ')}`).toBeGreaterThanOrEqual(40)
+
     await page.keyboard.press('Escape')
-    await expect(page.locator('[data-bn-overlay="sheet"]')).toBeHidden()
+    await expect(sheet).toBeHidden()
+  })
+
+  test('at 390, a pick list inside the sheet works by keyboard: the arrows move, and Escape closes the list only', async ({ page }) => {
+    await open(page, 390)
+    await page.locator(`${BAR} .bn-filterbar-trigger`).click()
+    const sheet = page.locator('[data-bn-overlay="sheet"]')
+    await expect(sheet).toBeVisible()
+
+    const game = sheet.locator('.bn-fchip > .bn-pick').first()
+    await game.focus()
+    await page.keyboard.press('ArrowDown')
+    const panel = page.locator('[data-bn-pick-panel]')
+    await expect(panel).toBeVisible()
+    /* FOCUS STAYS IN THE LIST. Before the list joined the overlay stack, the sheet's trap pulled
+     * it straight back into the sheet. */
+    await expect.poll(() => page.evaluate(() => document.activeElement?.closest('[data-bn-pick-panel]') !== null)).toBe(true)
+
+    const active = () => panel.locator('.bn-pick-opt[data-active="true"]').textContent()
+    const first = await active()
+    await page.keyboard.press('ArrowDown')
+    await expect.poll(active).not.toBe(first)
+    await page.keyboard.press('Space')
+    await expect(panel.locator('.bn-pick-opt[aria-selected="true"]')).toHaveCount(2)
+
+    /* Escape closes the LIST, and the sheet stays, with focus back on the trigger. */
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
+    await expect(sheet).toBeVisible()
+    await expect(game).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(sheet).toBeHidden()
+  })
+
+  test('at 390, the "Filters" badge counts what differs from rest: a Hide sold on by default is not counted', async ({ page }) => {
+    await open(page, 390)
+    const badge = page.locator(`${BAR} .bn-filterbar-trigger-count`)
+    /* Game = Pokémon is one. Hide sold is on, and on is its default. */
+    await expect(badge).toHaveText('1')
+    await page.locator(`${BAR} .bn-filterbar-trigger`).click()
+    await page.locator('[data-bn-overlay="sheet"] .bn-hidetoggle').click()
+    await page.keyboard.press('Escape')
+    await expect(badge).toHaveText('2')
+  })
+
+  test('a bar in a 280px rail is compact by ITS OWN width at 1440, with a screen control beside a busy search', async ({ page }) => {
+    await open(page, 1440)
+    const rail = page.locator('[data-specimen-rail]')
+    await expect(rail.locator('.bn-filterbar-row')).toBeHidden()
+    await expect(rail.locator('.bn-filterbar-trigger')).toBeVisible()
+    /* And the full-width bar above it, at the same window width, is the wide row. */
+    await expect(page.locator(`${BAR} .bn-filterbar-row`)).toBeVisible()
+
+    const search = await rail.locator('.search-field-box').boundingBox()
+    const beside = await rail.locator('.bn-filterbar-beside .bn-btn').boundingBox()
+    expect(search).not.toBeNull()
+    expect(beside).not.toBeNull()
+    /* One line: the control sits to the right of the search, vertically centred on it. */
+    expect(beside!.x).toBeGreaterThan(search!.x + search!.width - 1)
+    expect(Math.abs(beside!.y + beside!.height / 2 - (search!.y + search!.height / 2))).toBeLessThanOrEqual(1)
+    await expect(rail.locator('.search-field-box')).toHaveAttribute('aria-busy', 'true')
+    await expect(rail.locator('.search-field-spin')).toBeVisible()
+  })
+
+  test("a search failure is drawn in the kit's one failure shape, and its retry press asks again", async ({ page }) => {
+    await open(page, 1440)
+    const demo = page.locator('[data-failure-demo]')
+    await expect(demo.locator('.bn-notice, [role="alert"]').first()).toBeVisible()
+    await expect(demo).toContainText('The search did not answer.')
+    await demo.getByRole('button', { name: 'Try again' }).click()
+    await expect(demo.locator('[data-retries]')).toHaveText('1')
   })
 })
 
@@ -152,42 +392,80 @@ test.describe('FilterBar', () => {
  * ============================================================================================ */
 
 test.describe('HideToggle', () => {
-  test('one control shape, with a count on the pill (FLT-16)', async ({ page }) => {
+  test('quiet: on is the check mark, never a black or white fill (FLT-16)', async ({ page }) => {
+    for (const theme of ['light', 'dark'] as const) {
+      await open(page, 1440, theme)
+      const toggles = page.locator('[data-specimen="HideToggle"] .bn-hidetoggle')
+      await expect(toggles).toHaveCount(2)
+      await expect(toggles.nth(0)).toHaveAttribute('aria-pressed', 'true')
+      await expect(toggles.nth(1)).toHaveAttribute('aria-pressed', 'false')
+      const fills = await toggles.evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor))
+      expect(fills[0], `${theme}: the pressed toggle fills differently from the unpressed one`).toBe(fills[1])
+      const markOn = await toggles.nth(0).locator('.bn-hidetoggle-mark').evaluate((el) => getComputedStyle(el).backgroundColor)
+      const markOff = await toggles.nth(1).locator('.bn-hidetoggle-mark').evaluate((el) => getComputedStyle(el).backgroundColor)
+      expect(markOn).not.toBe(markOff)
+    }
+  })
+
+  test('its name keeps the count and says no state twice; a zero count is drawn', async ({ page }) => {
     await open(page, 1440)
     const toggles = page.locator('[data-specimen="HideToggle"] .bn-hidetoggle')
-    await expect(toggles).toHaveCount(2)
-    await expect(toggles.nth(0)).toHaveAttribute('aria-pressed', 'true')
-    await expect(toggles.nth(0).locator('.bn-chip-count')).toHaveText('8')
-    /* A count of zero is still DRAWN, never omitted — the same "a zero shows" rule the facet
-     *  counts carry (FLT-10), so "Hide never-seen SKUs" stops being the one control on the row
-     *  with no count at all. */
-    await expect(toggles.nth(1).locator('.bn-chip-count')).toHaveText('0')
+    await expect(toggles.nth(0)).toHaveAccessibleName('Hide sold 3')
+    await expect(toggles.nth(1)).toHaveAccessibleName('Hide never-seen SKUs 0')
+    await expect(toggles.nth(1).locator('.bn-hidetoggle-count')).toHaveText('0')
+  })
+
+  test('one bar height: 34px on a desk, 40px or more at 390', async ({ page }) => {
+    await open(page, 1440)
+    const toggle = page.locator('[data-specimen="HideToggle"] .bn-hidetoggle').first()
+    expect(Math.round((await toggle.boundingBox())!.height)).toBe(34)
+    await open(page, 390)
+    expect(Math.round((await toggle.boundingBox())!.height)).toBeGreaterThanOrEqual(40)
   })
 })
 
 /* ============================================================================================
- * SortHeaderButton
+ * SortHeader
  * ============================================================================================ */
 
-test.describe('SortHeaderButton', () => {
-  test('the active column is marked in two channels, not only the chevron (FLT-19)', async ({ page }) => {
+test.describe('SortHeader', () => {
+  test('aria-sort sits on the active <th>, never on the button; the active column is marked in two channels (FLT-19)', async ({ page }) => {
     await open(page, 1440)
-    const name = page.locator('[data-specimen="SortHeader"] .bn-sortth').first()
-    const sku = page.locator('[data-specimen="SortHeader"] .bn-sortth').nth(1)
-    await expect(name).toHaveAttribute('data-active', 'true')
+    const heads = page.locator('[data-specimen="SortHeader"] th')
+    const name = heads.nth(0)
+    const price = heads.nth(1)
+    await expect(price).toHaveAttribute('aria-sort', 'descending')
+    await expect(name).not.toHaveAttribute('aria-sort', /.*/)
+    await expect(page.locator('[data-specimen="SortHeader"] button[aria-sort]')).toHaveCount(0)
+    await expect(price.locator('.bn-sortth')).toHaveAttribute('data-active', 'true')
+
+    /* NAME STARTS A TO Z on its first press; a price starts at the highest. */
+    await name.locator('button').click()
     await expect(name).toHaveAttribute('aria-sort', 'ascending')
-    await expect(sku).not.toHaveAttribute('data-active', 'true')
-    await expect(sku).toHaveAttribute('aria-sort', 'none')
+    await expect(page.locator('[data-specimen="SortHeader"] tbody tr').first()).toContainText('Flabébé')
+    await expect(price).not.toHaveAttribute('aria-sort', /.*/)
 
-    /* A press re-sorts AT ONCE (FLT-01): no second confirming press, no "re-sort" chip. */
-    await sku.click()
-    await expect(sku).toHaveAttribute('data-active', 'true')
-    await expect(sku).toHaveAttribute('aria-sort', 'descending')
-    await expect(name).not.toHaveAttribute('data-active', 'true')
+    /* Pressed again, the SAME column flips. */
+    await name.locator('button').click()
+    await expect(name).toHaveAttribute('aria-sort', 'descending')
+    await price.locator('button').click()
+    await expect(price).toHaveAttribute('aria-sort', 'descending')
+  })
 
-    /* Pressed again, the SAME column flips direction rather than resetting. */
-    await sku.click()
-    await expect(sku).toHaveAttribute('aria-sort', 'ascending')
+  test('axe finds nothing on the sort headers, in both themes', async ({ page }) => {
+    const axePath = createRequire(import.meta.url).resolve('axe-core/axe.min.js')
+    for (const theme of ['light', 'dark'] as const) {
+      await open(page, 1440, theme)
+      await page.addScriptTag({ path: axePath })
+      const violations = await page.evaluate(async () => {
+        const w = window as unknown as {
+          axe: { run: (ctx: object, opts: object) => Promise<{ violations: { id: string; nodes: { target: string[] }[] }[] }> }
+        }
+        const r = await w.axe.run({ include: [['[data-specimen="SortHeader"]']] }, { resultTypes: ['violations'] })
+        return r.violations.flatMap((v) => v.nodes.map((n) => `${v.id} ${n.target.join(' ')}`))
+      })
+      expect(violations, theme).toEqual([])
+    }
   })
 })
 
@@ -196,22 +474,23 @@ test.describe('SortHeaderButton', () => {
  * ============================================================================================ */
 
 test.describe('Highlight', () => {
-  test('marks the matched words, folded the same way the matcher folds them (FLT-08)', async ({ page }) => {
+  test('marks the matched words and numbers, and nothing on a row the matcher refuses (FLT-08)', async ({ page }) => {
     await open(page, 1440)
     const rows = page.locator('[data-specimen="Highlight"] .bn-row > span')
     await expect(rows.nth(0).locator('mark.bn-highlight')).toHaveText('Heimerdinger, Inventor')
     await expect(rows.nth(1).locator('mark.bn-highlight')).toHaveText('Flabébé')
-    /* A query with nothing to find draws no mark, and the text is untouched. */
-    await expect(page.locator('[data-specimen-nomatch] mark')).toHaveCount(0)
-    await expect(page.locator('[data-specimen-nomatch]')).toHaveText('Ho-Oh ex')
+    await expect(page.locator('[data-specimen-number] mark.bn-highlight')).toHaveText('054/197')
+    await expect(page.locator('[data-specimen-refused] mark')).toHaveCount(0)
+    await expect(page.locator('[data-specimen-refused]')).toHaveText('Ho-Oh ex')
   })
 })
 
 /* ============================================================================================
  * The URL view state (`kit/viewState.ts`) — FLT-11: "what a screen remembers is different on
- * every screen." One mechanism, read back here through the hooks themselves rather than a
- * screen, since no screen lane has adopted it yet.
+ * every screen." One mechanism, read back through a real FilterBar bound to the hooks.
  * ============================================================================================ */
+
+const DEMO = '[data-view-state-demo]'
 
 test.describe('view state in the URL', () => {
   test('a press writes the value into the URL, and a value at its default writes no key', async ({ page }) => {
@@ -223,6 +502,55 @@ test.describe('view state in the URL', () => {
     await page.locator('[data-clear-q]').click()
     await expect(page.locator('[data-q]')).toHaveText('')
     expect(new URL(page.url()).hash).not.toContain('q=')
+  })
+
+  test('the search typed into the bar lives in the URL, and the count line names it', async ({ page }) => {
+    await open(page, 1440)
+    await page.locator(`${DEMO} .search-field-input`).fill('char')
+    await expect(page.locator('[data-q]')).toHaveText('char')
+    expect(new URL(page.url()).hash).toContain('q=char')
+    await expect(page.locator(`${DEMO} .bn-filtercount`)).toContainText('“char”')
+  })
+
+  test('Hide sold, on by default, turns off and STAYS off across a reload (D132)', async ({ page }) => {
+    await open(page, 1440)
+    await expect(page.locator('[data-hide]')).toHaveText('true')
+    expect(new URL(page.url()).hash).not.toContain('hidesold')
+
+    await page.locator(`${DEMO} .bn-filterbar-row .bn-hidetoggle`).click()
+    await expect(page.locator('[data-hide]')).toHaveText('false')
+    expect(new URL(page.url()).hash).toContain('hidesold=0')
+
+    await page.reload()
+    await expect(page.locator('[data-hide]')).toHaveText('false')
+    await expect(page.locator(`${DEMO} .bn-filterbar-row .bn-hidetoggle`)).toHaveAttribute('aria-pressed', 'false')
+
+    /* Back on: the default again, so no key. */
+    await page.locator(`${DEMO} .bn-filterbar-row .bn-hidetoggle`).click()
+    await expect(page.locator('[data-hide]')).toHaveText('true')
+    expect(new URL(page.url()).hash).not.toContain('hidesold')
+  })
+
+  test('a hand-edited URL: unknown values dropped, one value for a single-choice facet, no duplicates, a bad escape ignored, the sort at rest', async ({ page }) => {
+    await open(page, 1440, 'light', '#/demo?game=pokemon&game=bogus&game=pokemon&set=sv1&set=sv3&sort=nope&dir=sideways&q=%E0%A4%A&hidesold=yes')
+    await expect(page.locator('[data-game]')).toHaveText('pokemon')
+    await expect(page.locator('[data-set]')).toHaveText('sv1')
+    await expect(page.locator('[data-sort]')).toHaveText('name:asc')
+    await expect(page.locator('[data-q]')).toHaveText('')
+    await expect(page.locator('[data-hide]')).toHaveText('true')
+    /* THE COUNT LINE NEVER SHOWS A BOGUS WORD. */
+    const line = page.locator(`${DEMO} .bn-filtercount`)
+    await expect(line).toContainText('Pokémon')
+    await expect(line).toContainText('Scarlet & Violet')
+    await expect(line).not.toContainText('bogus')
+    await expect(line).not.toContainText('Obsidian Flames')
+    await expect(line).not.toContainText('�')
+
+    /* And the bar itself, handed an unknown pick with no URL reader in front of it, never names
+     * it either. */
+    const raw = page.locator('[data-raw-demo] .bn-filtercount')
+    await expect(raw).toContainText('Pokémon')
+    await expect(raw).not.toContainText('bogus')
   })
 
   test('a facet writes one repeated key per value, never a joined string', async ({ page }) => {
@@ -246,7 +574,7 @@ test.describe('view state in the URL', () => {
 
     await page.reload()
     await expect(page.locator('[data-q]')).toHaveText('pikachu')
-    await expect(page.locator('[data-hide]')).toHaveText('true')
+    await expect(page.locator('[data-hide]')).toHaveText('false')
     await expect(page.locator('[data-game]')).toHaveText('pokemon,riftbound')
     await expect(page.locator('[data-sort]')).toHaveText('price:desc')
   })
@@ -268,7 +596,7 @@ test.describe('view state in the URL', () => {
     await page.waitForFunction(() => window.location.hash.includes('q=raboot'))
     await page.locator('[data-toggle-hide]').click()
     expect(new URL(page.url()).hash).toContain('q=raboot')
-    expect(new URL(page.url()).hash).toContain('hide=1')
+    expect(new URL(page.url()).hash).toContain('hidesold=0')
 
     await page.goBack()
     await page.waitForFunction(() => window.location.hash.includes('q=abra'))

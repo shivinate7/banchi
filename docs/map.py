@@ -5586,33 +5586,41 @@ COMPONENTS = [
                                             "four-width strip): `FilterBar` composes `Select`, "
                                             "`FilterChips`, `FilterCount`, `SortControl` and "
                                             "`SearchField` into one toolbar. It draws \"N of M\" by "
-                                            "construction, and opens a popover on the desk, one "
-                                            "bottom sheet behind a single trigger on the phone. Also "
-                                            "`HideToggle` (one shape for \"Hide sold\" / \"Hide "
-                                            "never-seen\" / \"Holding\", FLT-16) and "
-                                            "`SortHeaderButton` (a table column that marks itself "
-                                            "active, FLT-19, and re-sorts at once, FLT-01).",
-                                    "governed_by": ["D118", "D209", "D-one-filter-control"]},
-            "src/kit/filters.css": {"does": "the filter bar's styles. Below 639px (`data.css`'s own "
-                                            "phone stack) the wide row hides and the compact trigger "
-                                            "and its sheet take over — both trees are always mounted, "
-                                            "CSS alone decides which is visible.",
+                                            "construction and names every narrowing in it (the "
+                                            "picks, the search, the hide toggle), with the one "
+                                            "clear-all. Every facet trigger in one bar is one width. "
+                                            "It opens a popover in a wide bar and one sheet behind a "
+                                            "single trigger in a narrow one, by the bar's own width. "
+                                            "A slot beside the search takes a screen's own control, "
+                                            "and the search takes `useSearch`'s busy and failure "
+                                            "states. Also the quiet `HideToggle` (one shape for "
+                                            "\"Hide sold\" / \"Hide never-seen\" / \"Holding\", "
+                                            "FLT-16) and `SortHeader` (the `<th>` that carries "
+                                            "`aria-sort` and marks itself active, FLT-19, with a "
+                                            "per-column first direction, re-sorting at once, "
+                                            "FLT-01).",
+                                    "governed_by": ["D118", "D132", "D209", "D-one-filter-control"]},
+            "src/kit/filters.css": {"does": "the filter bar's styles. A container query on the "
+                                            "bar's own width: below 480px of bar (a phone column, "
+                                            "Inventory's rail) the wide row hides and the compact "
+                                            "trigger and its sheet take over — both trees are always "
+                                            "mounted, CSS alone decides which is visible. The facet "
+                                            "triggers share one grid track width.",
                                     "governed_by": ["D50", "D118", "D195", "D-one-filter-control"]},
-            "src/kit/filters.specimens.tsx": {"does": "`FilterBar`, `HideToggle`, `SortHeaderButton` "
-                                                       "and `Highlight`, in every state a screen puts "
-                                                       "them in, on invented data. The kit page mounts "
+            "src/kit/filters.specimens.tsx": {"does": "`FilterBar` (full width, and in a 280px "
+                                                       "rail), `HideToggle`, `SortHeader` and "
+                                                       "`Highlight`, on invented rows whose counts "
+                                                       "come from `kit/facets.ts`. The kit page mounts "
                                                        "`FilterSpecimens`; `tests/filters/` mounts it "
                                                        "too.",
                                                "governed_by": ["D5", "D-one-filter-control"]},
             "src/kit/highlight.tsx": {"does": "THE MATCH HIGHLIGHT (FLT-08: \"no search result shows "
-                                              "what matched\"). `Highlight` marks the substring of a "
-                                              "row's text that a query's words found, folded the same "
-                                              "way `kit/match.ts` folds case, accents and apostrophes, "
-                                              "with the same compact fallback for a hyphen or a "
-                                              "comma. BEST EFFORT, BY DESIGN: it does not reverse "
-                                              "match.ts's card-number or SKU-prefix arithmetic, so a "
-                                              "row that matched only on those draws no mark — never a "
-                                              "wrong one.",
+                                              "what matched\"). `Highlight` marks only a row "
+                                              "`kit/match.ts:matchQuery` accepts. Text is marked where "
+                                              "a query's words are found, folded the same way the "
+                                              "matcher folds, with its compact fallback. A card number "
+                                              "is marked by its canonical form, so `54/132` marks "
+                                              "`054/132`. A SKU-only hit draws no mark.",
                                       "governed_by": ["D5"]},
             "src/kit/viewState.ts": {"does": "THE ONE URL VIEW STATE (D-view-state-in-url, the "
                                              "owner's ruling: filter memory lives in the URL on every "
@@ -5621,8 +5629,20 @@ COMPONENTS = [
                                              "`history.replaceState`, read back through "
                                              "`useSyncExternalStore`; `useViewParam`, `useViewFlag`, "
                                              "`useFacetParams` and `useSortParam` are the typed hooks "
-                                             "over it. A value at its own default writes no key.",
-                                     "governed_by": ["D217", "D-view-state-in-url"]},
+                                             "over it. A value at its own default writes no key; a "
+                                             "flag away from it writes `1` or `0`. The URL is read as "
+                                             "untrusted: a malformed escape is ignored, a facet keeps "
+                                             "only its known values once each (one for a single-choice "
+                                             "facet), and an unknown sort key falls back to the "
+                                             "default.",
+                                     "governed_by": ["D132", "D217", "D-view-state-in-url"]},
+            "src/kit/facets.ts": {"does": "THE FACET COUNTS, one way: given the rows, the facets and "
+                                          "the picks, each option's count under the OTHER active "
+                                          "filters and the screen's own `keep` (its search, its "
+                                          "Hide sold). `filterRows` gives the rows shown; "
+                                          "`withCounts` copies a server's counts onto the options. "
+                                          "Pure, no React.",
+                                  "governed_by": ["D-one-filter-control"]},
             # ---- the shell ----
             "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens, then base, "
                                      "then the kit — every later sheet resolves against tokens, and "
@@ -8392,8 +8412,9 @@ COMPONENTS = [
                 "governed_by": ["D5"],
             },
             "tests/filters.spec.ts": {
-                "does": "`FilterBar`, `HideToggle`, `SortHeaderButton`, `Highlight`, and "
-                        "`kit/viewState.ts`'s hooks. Every specimen at 1440, 820, 720 and 390 in "
+                "does": "`FilterBar`, `HideToggle`, `SortHeader`, `Highlight`, `kit/facets.ts` "
+                        "and `kit/viewState.ts`'s hooks, each guard shown red on its own defect. "
+                        "Every specimen at 1440, 820, 720 and 390 in "
                         "both themes with no sideways scroll; one control height across the wide "
                         "row; \"N of M\" drawn by construction and changing as a facet narrows; a "
                         "zero count drawn, not hidden; no facet disabled; single vs multi marked "
@@ -8401,8 +8422,12 @@ COMPONENTS = [
                         "outside it moving (D118); the active sort column marked and re-sorting at "
                         "once; the match highlight; and the URL view state — a press writes the "
                         "URL, a default writes no key, a reload restores every value, and a path "
-                        "change leaves a place for Back. Run by `make design-check`.",
-                "governed_by": ["D118", "D-one-filter-control", "D-view-state-in-url"],
+                        "change leaves a place for Back. Also: equal facet widths, the counts under "
+                        "the other filters, the pick list working by keyboard inside the phone "
+                        "sheet, `aria-sort` on the `<th>` with axe clean, a quiet one-height hide "
+                        "toggle, compact mode by the bar's own width, and a hand-edited URL read "
+                        "safely. Run by `make design-check`.",
+                "governed_by": ["D118", "D132", "D-one-filter-control", "D-view-state-in-url"],
             },
             "tests/filters/index.html": {
                 "does": "a test page the dev server serves and the build never ships: it mounts "
@@ -8412,10 +8437,11 @@ COMPONENTS = [
             },
             "tests/filters/harness.tsx": {
                 "does": "the test page's entry: the tokens, the kit styles, `FilterSpecimens`, and "
-                        "`ViewStateDemo` — one small component that binds every `viewState.ts` hook "
-                        "to a few buttons and reads back what each thinks the URL says. "
+                        "`ViewStateDemo` — a real `FilterBar` bound to every `viewState.ts` hook, "
+                        "with a few presses and a readout of what each hook thinks the URL says — "
+                        "plus a bar with a failed search and a bar handed an unknown pick. "
                         "`?theme=dark` draws the dark theme.",
-                "governed_by": ["D5"],
+                "governed_by": ["D5", "D132"],
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "

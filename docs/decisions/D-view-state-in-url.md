@@ -54,6 +54,12 @@ both untouched.
 - `useViewParam`, `useViewFlag`, `useFacetParams`, `useSortParam`. Typed hooks over the above,
   for a plain string, a boolean flag, a `FilterBar`'s `FilterValue`, and a `SortControl`'s
   `SortValue`. A value at its own default writes no key, so a screen at rest keeps a clean URL.
+  A flag away from its default writes `1` or `0`: a flag that is on by default (Hide sold,
+  D132) must write `0` when turned off, or the next read turns it back on.
+- The URL is read as untrusted, because a person can edit it. A malformed `%` escape is
+  ignored. A facet keeps only the values its options carry, each once, and a single-choice
+  facet keeps one. A sort key no option has falls back to the default. A reader never writes
+  its correction back: only a press changes the URL.
 
 ### What is still open
 
