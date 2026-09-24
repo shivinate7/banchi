@@ -326,13 +326,17 @@ CHECKS = (
         "runs": "node scripts/kit-adoption.mjs",
         "asserts": "Every screen inherits the page scaffold (D-page-scaffold). R1: every "
                    "`ROUTES` view in app/src/App.tsx renders `<Page>` from the kit, directly "
-                   "or through a screen component it renders. R2: outside app/src/kit/, no "
-                   "`role=\"dialog\"`, no `<input type=\"search\">` outside SearchField.tsx, "
-                   "no raw `<select>`, no kit-reserved class name, no hand-rolled date format "
-                   "outside dates.ts, no `$${x.toFixed()}` outside money.ts. Read from the "
-                   "TypeScript AST. scripts/kit-adoption-allow.json is a SHRINKING offender "
-                   "list, file -> rule -> lane: an unlisted violation fails, and so does a "
-                   "stale entry. Never a pinned count.",
+                   "or through a screen component it renders, at any depth. R2: outside "
+                   "app/src/kit/, no dialog role or native `<dialog>`, no search input "
+                   "outside SearchField.tsx, no raw `<select>`, no kit-reserved class name, "
+                   "no hand-rolled date format outside dates.ts, no hand-rolled dollar "
+                   "amount outside money.ts. Read from the TypeScript AST, with each "
+                   "heuristic's edge stated in the script's header. "
+                   "scripts/kit-adoption-allow.json is a SHRINKING offender list, file -> "
+                   "rule -> lane: an unlisted violation fails, a stale entry fails, and a "
+                   "key the list at the merge-base with origin/main does not hold fails "
+                   "(read-only git; fails open, printed, with no merge-base or no list "
+                   "there). Never a pinned count.",
         "needs": ("node", "app deps"),
         "writes": "",
         "commit_path": False,
@@ -1185,9 +1189,12 @@ CHECKS = (
                    "fails, `<Page>` reached through a local or an imported screen component "
                    "passes, `role=\"dialog\"` in a screen fails and inside app/src/kit/ "
                    "passes, a stale allow entry fails, an unlisted violation fails, each R2 "
-                   "rule fails and its home file passes, an unknown rule or an empty lane is "
-                   "refused, and an unreadable or empty ROUTES table is a loud failure. The "
-                   "fixtures are in-memory maps, never files.",
+                   "shape fails and its home file passes, an unknown rule or an empty lane is "
+                   "refused, and an unreadable or empty ROUTES table is a loud failure. R1's "
+                   "answer does not depend on JSX order, follows any depth and ends a cycle, "
+                   "and a default-import view resolves. A new allow key fails against the "
+                   "base list, a removed one passes, and the git read sees the committed list "
+                   "at HEAD. The fixtures are in-memory maps, never files.",
         "needs": ("node", "app deps"),
         "writes": "",
         "commit_path": False,

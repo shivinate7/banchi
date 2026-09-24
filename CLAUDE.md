@@ -264,7 +264,9 @@ make kit-adoption   # every ROUTES view renders <Page> from the kit, and no scre
                     #   a kit primitive: a dialog role, a search input, a <select>, a kit
                     #   class, a date format, a money format (D-page-scaffold). TypeScript
                     #   AST. `scripts/kit-adoption-allow.json` is a SHRINKING offender list,
-                    #   file -> rule -> lane: an unlisted violation fails, a stale entry fails.
+                    #   file -> rule -> lane: an unlisted violation fails, a stale entry fails,
+                    #   and a key that the list at the merge-base with origin/main does not
+                    #   hold fails. With no merge-base it fails open and says so.
 make kit-adoption-selftest  # that checker, on in-memory fixtures in both directions. Writes
                     #   nothing (D18).
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
@@ -438,8 +440,9 @@ status slot and the loading shape. `make kit-adoption` fails a route view that d
 it, and a screen that hand-rolls a primitive that the kit owns. `app/tests/scaffold.spec.ts` asserts the frame in a
 browser, per route, at 1440, 820, 720 and 390. The exceptions are one shrinking offender list,
 `scripts/kit-adoption-allow.json` (file -> rule -> lane). It fails on an unlisted violation and
-on a stale entry. A lane that moves a screen onto `Page` deletes that screen's entries in the
-same commit.
+on a stale entry. It also fails on a key that the list at the merge-base with `origin/main` does
+not hold, so the list only gets shorter. A lane that moves a screen onto `Page` deletes that
+screen's entries in the same commit.
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
 stage strip, joined client-side on order number. Not D31's defect returning: one sale, two

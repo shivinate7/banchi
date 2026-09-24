@@ -766,8 +766,9 @@ token-literal-check-selftest:
 # <Page> from the kit. R2: outside app/src/kit/, no screen hand-rolls a dialog, a search input,
 # a <select>, a kit class, a date format or a money format. Read from the TypeScript AST, like
 # scripts/user-strings.mjs. The exceptions are scripts/kit-adoption-allow.json, a SHRINKING
-# offender list (file -> rule -> lane): an unlisted violation fails, and so does a stale entry.
-# Never a pinned count. Writes nothing. Needs app/node_modules for typescript, so it is in
+# offender list (file -> rule -> lane): an unlisted violation fails, and so does a stale entry,
+# and so does a key the list at the merge-base with origin/main does not hold (read-only git;
+# fails open, printed, with no merge-base). Never a pinned count. Writes nothing. Needs app/node_modules for typescript, so it is in
 # `make check` and not the git hook: a fresh clone has no node_modules until `npm ci`.
 kit-adoption:
 	$(NPM_GUARD)
@@ -775,7 +776,8 @@ kit-adoption:
 
 # THE GUARD IS NOT TRUSTED UNTIL IT HAS GONE RED ON THE DEFECT IT GUARDS: a route view without
 # <Page>, a component named Page that is not the kit's, role="dialog" in a screen (and green
-# inside app/src/kit/), a stale allow entry, an unlisted violation, and each R2 rule both ways.
+# inside app/src/kit/), a stale allow entry, an unlisted violation, each R2 shape both ways,
+# R1's order, depth and cycles, a default-import view, and a new allow key against the base.
 # The fixtures are in-memory maps of path -> source, so it writes nothing (D18). Wired last among
 # the guard self-tests, `make check`'s own D161 order.
 kit-adoption-selftest:

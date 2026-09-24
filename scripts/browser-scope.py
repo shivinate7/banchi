@@ -125,6 +125,18 @@ SCOPE = (
         "why": "The classifier. Same argument as the workflow: a change to the gate's own "
                "reasoning is proven only by the run it decides about.",
     },
+    {
+        "path": "scripts/kit-adoption.mjs",
+        "why": "Read by `app/tests/scaffold.spec.ts`, which runs it with `--routes` to get "
+               "the route table it sweeps (D-page-scaffold). A change to how it reads "
+               "`ROUTES` changes which routes the browser measures.",
+    },
+    {
+        "path": "scripts/kit-adoption-allow.json",
+        "why": "Read by `app/tests/scaffold.spec.ts`: its `runtime` block is the shrinking "
+               "offender list the spec reconciles against (D-page-scaffold). Deleting an "
+               "entry is a claim that a screen now passes, and only the browser proves it.",
+    },
 )
 
 

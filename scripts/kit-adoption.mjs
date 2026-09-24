@@ -92,8 +92,9 @@
  *     node scripts/kit-adoption.mjs --self-test  the checker against in-memory fixtures
  *     node scripts/kit-adoption.mjs --routes     ROUTES as JSON, for scaffold.spec.ts
  *
- * NEVER WRITES (D18). The self-test builds its fixtures as in-memory maps of path -> source and
- * touches no disk.
+ * NEVER WRITES (D18). The self-test builds its fixtures as in-memory maps of path -> source. Its
+ * one read of the disk is the only-shrinks case that reads the committed list at HEAD with
+ * `git merge-base` and `git show`, which write nothing.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -131,7 +132,6 @@ export const HOME = {
  *  exempt from R2-class only. R1 and every other R2 rule still apply to it. */
 export const SPECIMEN_FILES = ['app/src/Gallery.tsx']
 const ALLOW_FILE = 'scripts/kit-adoption-allow.json'
-const MAX_DEPTH = 4
 
 /** Every rule id the allow list may name. An entry naming anything else is refused. */
 export const RULES = {

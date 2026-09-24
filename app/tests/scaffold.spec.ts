@@ -21,7 +21,14 @@ import { sealEveryTest } from './shell'
  *   scroll   nothing scrolls sideways
  *   title    `document.title` is one FIXED title, "番地 " and the screen name in lowercase
  *            ("番地 pricing", "番地 home"). No alternation, no "— Banchi". The owner's ruling,
- *            2026-09-23.
+ *            2026-09-23. READ OVER TIME AND UNDER BOTH MOTION SETTINGS, never once: with normal
+ *            motion the shell used to alternate the title on a timer, and with reduced motion it
+ *            showed a second, joined form, so a single read under `reducedMotion: 'reduce'`
+ *            never saw the alternation at all. On a fake clock (`page.clock`), the title is read
+ *            every TITLE_STEP ms for TITLE_WINDOW ms, well past App.tsx's TITLE_DWELL
+ *            (6000 + 4000), once per motion setting. Every read must be the one fixed title. The
+ *            window is this file's own number, never read from App.tsx: a test that reads the
+ *            value it checks passes when that value is wrong (brand.spec.ts says the same).
  *   palette  the command palette's "Go to" group lists the route
  *   keys     the keyboard sheet, every screen shown, has an entry that names the route
  *
@@ -58,12 +65,12 @@ type RouteRow = {
 }
 
 const ROUTE_TABLE: readonly RouteRow[] = JSON.parse(
-  execFileSync(process.execPath, [resolve(ROOT, 'scripts', 'kit-adoption.mjs'), '--routes'], { encoding: 'utf8' }),
+  execFileSync(process.execPath, [resolve(ROOT, 'scripts/kit-adoption.mjs'), '--routes'], { encoding: 'utf8' }),
 ) as RouteRow[]
 
 type Allow = Record<string, Record<string, string>>
 const ALLOW: Allow =
-  (JSON.parse(readFileSync(resolve(ROOT, 'scripts', 'kit-adoption-allow.json'), 'utf8')) as { runtime?: Allow }).runtime ?? {}
+  (JSON.parse(readFileSync(resolve(ROOT, 'scripts/kit-adoption-allow.json'), 'utf8')) as { runtime?: Allow }).runtime ?? {}
 
 const PER_ROUTE = ['page', 'h1', 'width', 'top', 'scroll', 'title'] as const
 const SHELL_WIDE = ['palette', 'keys'] as const
@@ -77,8 +84,42 @@ const WIDTHS: readonly (readonly [number, number])[] = [
 ]
 
 const titleOf = (route: RouteRow): string => route.title ?? route.label
-/** The owner's ruling, 2026-09-23: one fixed tab title, "番地 " and the screen name in lowercase. */
+/** The owner's ruling, 2026-09-23: one fixed tab title, "番地 " and the screen name in lowercase.
+ *  Home's reads "番地 home" (the orchestrator's call, 2026-09-23). */
 const tabTitleOf = (route: RouteRow): string => `番地 ${titleOf(route).toLowerCase()}`
+
+/** How often, and for how long, the tab title is read on the fake clock. 30s covers the old
+ *  6s + 4s alternation three times over. */
+const TITLE_STEP = 500
+const TITLE_WINDOW = 30_000
+
+/** The width assertion's verdict on one measurement: null when it holds. A `max-width` that is
+ *  not a finite length (`none`, or no page at all) FAILS: `parseFloat('none')` is NaN, and every
+ *  comparison with NaN is false, so a `> 0.5` test would have passed it. */
+function widthFailure(maxWidth: string | null, pageW: number): string | null {
+  const px = maxWidth === null ? Number.NaN : parseFloat(maxWidth)
+  if (!Number.isFinite(px)) return `max-width ${maxWidth === null ? 'absent (no single page)' : `"${maxWidth}"`}, want ${pageW}px`
+  if (Math.abs(px - pageW) > 0.5) return `max-width ${px}px, want ${pageW}px`
+  return null
+}
+
+/** The title assertion's verdict on every read over the window: null when each read is `want`. */
+function titleFailure(reads: readonly string[], want: string): string | null {
+  const distinct = [...new Set(reads)]
+  if (reads.length === 0) return 'the title was never read'
+  if (distinct.length === 1 && distinct[0] === want) return null
+  return `read ${JSON.stringify(distinct)} over ${TITLE_WINDOW / 1000}s, want only "${want}"`
+}
+
+/** Every value `document.title` takes over TITLE_WINDOW, on the page's fake clock. */
+async function readTitles(page: Page): Promise<string[]> {
+  const reads: string[] = []
+  for (let t = 0; t <= TITLE_WINDOW; t += TITLE_STEP) {
+    reads.push(await page.title())
+    await page.clock.runFor(TITLE_STEP)
+  }
+  return reads
+}
 
 /* THE NAMED EXEMPTIONS: an assertion a persona is NOT held to, with the ruling that says so.
  * Never a debt, so never on the allow list, and the allow list may not name one. */
@@ -178,26 +219,78 @@ for (const route of ROUTE_TABLE) {
         return {
           pages: pages.length,
           h1s: h1s.map((h) => (h.textContent ?? '').trim()),
-          maxWidth: main ? parseFloat(getComputedStyle(main).maxWidth) : null,
+          maxWidth: main ? getComputedStyle(main).maxWidth : null,
           pageW: probe('width', 'var(--bn-page-w)'),
           gap: main && h1 && main.contains(h1) ? h1.getBoundingClientRect().top - main.getBoundingClientRect().top : null,
           pageTop: probe('height', 'var(--bn-page-top)'),
           sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          docTitle: document.title,
         }
       })
       const at = `${width}px`
       if (m.pages !== 1) fail('page', `${at}: ${m.pages} [data-bn-page]`)
       if (m.h1s.length !== 1 || m.h1s[0] !== want) fail('h1', `${at}: h1 ${JSON.stringify(m.h1s)}, want ["${want}"]`)
-      if (applies(route, 'width') && (m.maxWidth === null || Math.abs(m.maxWidth - m.pageW) > 0.5)) fail('width', `${at}: max-width ${m.maxWidth}, want ${m.pageW}`)
+      const wide = applies(route, 'width') ? widthFailure(m.maxWidth, m.pageW) : null
+      if (wide !== null) fail('width', `${at}: ${wide}`)
       if (applies(route, 'top') && (m.gap === null || Math.abs(m.gap - m.pageTop) > 1)) fail('top', `${at}: h1 gap ${m.gap === null ? 'none' : m.gap.toFixed(1)}, want ${m.pageTop}`)
       if (m.sideways > 0) fail('scroll', `${at}: scrolls sideways by ${m.sideways}px`)
-      if (applies(route, 'title') && m.docTitle !== tabTitleOf(route)) fail('title', `${at}: "${m.docTitle}", want "${tabTitleOf(route)}"`)
     }
-    const measured = PER_ROUTE.filter((a) => applies(route, a))
+    const measured = PER_ROUTE.filter((a) => a !== 'title' && applies(route, a))
     expect(reconcile(route, failures, measured)).toEqual([])
   })
+
+  /* THE TAB TITLE, over time, under both motion settings. Its own test because it runs on a fake
+     clock, and the geometry above must not: a faked requestAnimationFrame would stall `settle`. */
+  if (applies(route, 'title')) {
+    test(`${route.path} holds one fixed tab title, with and without reduced motion`, async ({ page }) => {
+      await page.clock.install()
+      const failures = new Map<string, string[]>()
+      for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+        await page.emulateMedia({ reducedMotion })
+        await page.goto(`/#${route.path}`)
+        await expect(page.locator('main').first(), 'the route drew no <main>').toBeVisible()
+        const wrong = titleFailure(await readTitles(page), tabTitleOf(route))
+        if (wrong !== null) failures.set('title', [...(failures.get('title') ?? []), `reduced motion ${reducedMotion}: ${wrong}`])
+      }
+      expect(reconcile(route, failures, ['title'])).toEqual([])
+    })
+  }
 }
+
+/* THE TWO ASSERTIONS THAT ONCE PASSED ON NOTHING, proved to fail on their defect.
+   F1 of the review: `max-width: none` read as NaN, and a NaN comparison passed. `#/gallery` holds
+   the width assertion (no allow entry), so it is measured as it stands and then with the page's
+   cap removed. The judges are the same functions the route tests call. */
+test('a page whose max-width is none fails the width check (fixture)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/#/gallery')
+  await settle(page)
+  const read = () =>
+    page.evaluate(() => {
+      const main = document.querySelector<HTMLElement>('[data-bn-page]')
+      const el = document.createElement('div')
+      el.style.position = 'absolute'
+      el.style.width = 'var(--bn-page-w)'
+      document.body.append(el)
+      const pageW = el.getBoundingClientRect().width
+      el.remove()
+      return { maxWidth: main ? getComputedStyle(main).maxWidth : null, pageW }
+    })
+  const before = await read()
+  expect(widthFailure(before.maxWidth, before.pageW), 'the Kit page holds the width assertion as it stands').toBeNull()
+  await page.addStyleTag({ content: '.bn-page { max-width: none !important; }' })
+  const after = await read()
+  expect(after.maxWidth, 'the fixture did not take').toBe('none')
+  expect(widthFailure(after.maxWidth, after.pageW), 'max-width: none must fail the width check').toContain('"none"')
+})
+
+/* F2 of the review: the title was read once, under reduced motion, so an alternation never ran.
+   The judge must refuse a set of reads that starts on the right title and later changes. */
+test('the title judge refuses a title that changes over the window, and an empty read', () => {
+  expect(titleFailure(['番地 kit', '番地 kit'], '番地 kit')).toBeNull()
+  expect(titleFailure(['番地 kit', '番地 kit', '番地 banchi', '番地 kit'], '番地 kit')).toContain('番地 banchi')
+  expect(titleFailure(['kit · 番地 banchi'], '番地 kit')).not.toBeNull()
+  expect(titleFailure([], '番地 kit')).not.toBeNull()
+})
 
 test('the palette and the keyboard sheet name every route', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
