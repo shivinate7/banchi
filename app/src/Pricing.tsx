@@ -1334,6 +1334,9 @@ export function Pricing() {
         setShipTrouble(null)
         if (sending && result.wrote) {
           await sendMarkdown(stamp)
+          /* THE LIVE PRICES MOVED, so the lens reads the store again: the rows it draws are the
+             answers the send just made live, never the ones it held before the press. */
+          void load(picked, stamp)
           toast({
             kind: 'ok',
             title: `${pushable.length} ${pushable.length === 1 ? 'price is' : 'prices are'} live`,
@@ -1348,7 +1351,7 @@ export function Pricing() {
         setPush('idle')
       }
     })()
-  }, [push, stamp, pushable, dirty, saving, book])
+  }, [push, stamp, pushable, dirty, saving, book, load, picked])
 
   /* A NEW CHECK IS OWED THE MOMENT A PRICE MOVES. The write press only exists while a check
      stands, and a check that described a different set of edits is worse than none — it would
