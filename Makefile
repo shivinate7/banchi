@@ -153,6 +153,12 @@ help:
 	@echo "                    against a COPY of a real store, asserting the six checks"
 	@echo "                    §7.4 names. Never \`check\`-gated — it needs a store copy the"
 	@echo "                    owner supplies, not a fixture."
+	@echo "  make identity-readers-selftest  the evidence readers (identity-follows-sku.md"
+	@echo "                    lane 4): requeue.identified and resolve.store_payload both"
+	@echo "                    carry a bound card's DISPUTED read name, never its bound"
+	@echo "                    SKU's own catalog row, and both refuse loudly on a bound"
+	@echo "                    card with no recorded evidence rather than echo the catalog."
+	@echo "                    No store, no disk write at all. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -236,6 +242,7 @@ help:
 	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
 	@echo "                    skus-selftest + identity-store-selftest +"
 	@echo "                    identity-binding-selftest +"
+	@echo "                    identity-readers-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -608,6 +615,7 @@ check:
 	@$(MAKE) --no-print-directory skus-selftest
 	@$(MAKE) --no-print-directory identity-store-selftest
 	@$(MAKE) --no-print-directory identity-binding-selftest
+	@$(MAKE) --no-print-directory identity-readers-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -668,6 +676,7 @@ ci-check:
 	@$(MAKE) --no-print-directory skus-selftest
 	@$(MAKE) --no-print-directory identity-store-selftest
 	@$(MAKE) --no-print-directory identity-binding-selftest
+	@$(MAKE) --no-print-directory identity-readers-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -1312,7 +1321,27 @@ identity-binding-selftest:
 identity-replay:
 	@$(PYTHON) scripts/identity-replay.py $(ARGS)
 
-.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest identity-binding-selftest identity-replay
+.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest identity-binding-selftest identity-replay identity-readers-selftest
+
+# THE EVIDENCE READERS, PROVED IN MEMORY (identity-follows-sku.md §5.1, lane 4 — added on
+# a review finding, HIGH, 2026-09-24). `cli/requeue.py:identified` and
+# `cli/resolve.py:store_payload` both carry a bound card's DISPUTED read name, never its
+# bound SKU's own catalog row (D253's own subject), and both refuse loudly — never a
+# silent catalog echo — on a bound card whose evidence was never recorded. THREE SEPARATE
+# PROCESSES, `price-postings-selftest`'s own two-process shape extended to three: each
+# `--mutate-*` run mutates `cli/resolve.py:card_reading`'s own body through a `.bak` copy,
+# restored in its own `finally` before that process exits either way, and must turn at
+# least one assertion red or the run itself fails (a mutation that survives means the case
+# it names is not actually being tested).
+#
+# IN `check`, NEVER IN THE GIT HOOK — a hook context that could be interrupted mid-mutation
+# is not where writing (transiently) to a real tracked file belongs.
+identity-readers-selftest:
+	@$(PYTHON) scripts/identity-readers-selftest.py && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-identity-fields && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-no-fallback && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-no-refusal
+
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null

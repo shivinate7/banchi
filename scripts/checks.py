@@ -625,9 +625,10 @@ CHECKS = (
         "asserts": "D254's whole rebuild: resolve_by_sku's three "
                    "tiers (an archive-verified productId, the SKU's own row in a cached "
                    "Filtered Export, the card's own stored fields as the last resort), "
-                   "merged_export_rows_by_sku against real cached-export files on disk and "
-                   "against no `.exports` directory at all, pipeline/productview.py:"
-                   "row_for_sku preferring the export row over a misread stored name, and "
+                   "merged_export_rows_by_sku against the store's own `skus` table "
+                   "(identity-follows-sku.md lane 4) and against an empty one, "
+                   "pipeline/productview.py:"
+                   "row_for_sku preferring the skus-table row over a misread stored name, and "
                    "two end-to-end sweep() proofs — a misread card row still resolving "
                    "through its own export row, and an archive-verified id resolving "
                    "through a market that refuses every row it is actually asked to "
@@ -913,6 +914,42 @@ CHECKS = (
                                "alone, never the hook.",
         "gates": True,
         "governed_by": ("D63", "D162", "D172", "D242", "D253", "D255"),
+    },
+    {
+        "target": "identity-readers-selftest",
+        "runs": "python3 scripts/identity-readers-selftest.py && "
+                "python3 scripts/identity-readers-selftest.py --mutate-identity-fields && "
+                "python3 scripts/identity-readers-selftest.py --mutate-no-fallback && "
+                "python3 scripts/identity-readers-selftest.py --mutate-no-refusal",
+        "asserts": "the evidence readers (identity-follows-sku.md §5.1, lane 4), added on "
+                   "a review finding, HIGH, 2026-09-24: reading read_name/read_number/"
+                   "read_printed_total unconditionally left cli/requeue.py:identified "
+                   "answering None for every open entry and cli/resolve.py:store_payload "
+                   "filing a blank identification for a plainly-identified card, on every "
+                   "real card measured on a copy of the owner's store. Both builders now "
+                   "call cli/resolve.py:card_reading, proved over three in-memory "
+                   "fixtures: an old, unbound card whose identity fields ARE its only "
+                   "recorded reading; a bound card whose read name DISPUTES its own "
+                   "catalog row (D253's own subject), both builders carrying the read, "
+                   "never the catalog's; a bound card with no recorded evidence, both "
+                   "builders refusing loudly (NoEvidenceRecorded; identification: None) "
+                   "rather than echoing the catalog. Three .bak-protected mutations on "
+                   "card_reading's own body, each red on exactly the case(s) it breaks: "
+                   "reverted to the identity fields outright, the read_* fallback removed "
+                   "(lane 4's own first, broken draft), and the refusal line alone "
+                   "removed.",
+        "needs": ("python3",),
+        "writes": "cli/resolve.py itself, three times, mutated and restored through a "
+                  "`.bak` copy each time (never `git checkout`) — an in-memory Inventory "
+                  "otherwise, never a store on disk.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes (transiently, restored before it returns) "
+                               "to a real tracked file rather than a throwaway one; a hook "
+                               "context that could be interrupted mid-mutation is not "
+                               "where that risk belongs. PATH GATED into `make check` "
+                               "alone, identity-store-selftest's own precedent.",
+        "gates": True,
+        "governed_by": ("D63", "D172", "D213", "D253"),
     },
     {
         "target": "janitor-selftest",

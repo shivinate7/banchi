@@ -708,7 +708,7 @@ COMPONENTS = [
                                    "verdicts and 81 of 81 reasons and candidate rows — held "
                                    "unchanged across D162 landing in main mid-branch, which is "
                                    "the claim demonstrated rather than asserted.",
-                           "governed_by": ["D3", "D4", "D9", "D25", "D26", "D28", "D35", "D36", "D37", "D83", "D87", "D137"],
+                           "governed_by": ["D3", "D4", "D9", "D25", "D26", "D28", "D35", "D36", "D37", "D83", "D87", "D137", "D253"],
                            "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
                                    "`paperwork_for` is the other direction and lives here for the "
@@ -1311,7 +1311,7 @@ COMPONENTS = [
                                         "and IN `make check` as of D247's sixteenth entry "
                                         "(owner's word, 2026-09-23) — no network call. A "
                                         "FakeMarket and a RecordingMarket stand in for the "
-                                        "network; 105 assertions, including the D62 "
+                                        "network; 106 assertions, including the D62 "
                                         "collision arm run both ways, an interrupted "
                                         "one-shot sweep proven to lose everything BEFORE the "
                                         "chunked fix is proven to keep what it already "
@@ -2880,6 +2880,28 @@ COMPONENTS = [
                         "the owner's, made with `sqlite3 ... .backup`.",
                 "governed_by": ["D63", "D162", "D172", "D242", "D253", "D255"],
             },
+            "identity-readers-selftest.py": {
+                "does": "proves the evidence readers (identity-follows-sku.md §5.1, lane "
+                        "4), added on a review finding, HIGH, 2026-09-24: reading "
+                        "read_name/read_number/read_printed_total unconditionally left "
+                        "cli/requeue.py:identified answering None for every open entry "
+                        "and cli/resolve.py:store_payload filing {'name': None, "
+                        "'number': None} for a plainly-identified card, on every real "
+                        "card measured. cli/resolve.py:card_reading is the one shared "
+                        "helper both call: an unbound card's read_* where set, else its "
+                        "identity fields (the only reading an old, pre-lane-1 "
+                        "identification ever wrote); a bound card's read_* only, and a "
+                        "loud refusal — never the catalog identity — where read_* was "
+                        "never recorded. Three fixtures, over an in-memory Inventory, no "
+                        "store: an old unbound card, a bound card whose read name "
+                        "disputes its own catalog row (D253's own subject), and a bound "
+                        "card with no recorded evidence. Three .bak-protected mutations "
+                        "on card_reading's body, each red on exactly the case(s) it "
+                        "breaks: reverted to the identity fields outright, the read_* "
+                        "fallback removed (lane 4's own first, broken draft), and the "
+                        "refusal line alone removed.",
+                "governed_by": ["D63", "D172", "D213", "D253"],
+            },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
                         "throwaway store, no network (D219). A "
@@ -2925,10 +2947,11 @@ COMPONENTS = [
                         "mutation-tested by removing the fallback. Proves format_refusals "
                         "never truncates, grouped by reason. Proves "
                         "D254's three tiers, "
-                        "`merged_export_rows_by_sku` against real cached-export files, and "
-                        "`pipeline/productview.py:row_for_sku` preferring the export row "
+                        "`merged_export_rows_by_sku` against the store's own `skus` table "
+                        "(identity-follows-sku.md lane 4, moved off a disk walk), and "
+                        "`pipeline/productview.py:row_for_sku` preferring the skus-table row "
                         "over a misread stored name, each with its own mutation guard. "
-                        "105 assertions.",
+                        "106 assertions.",
                 "governed_by": ["D18", "D21", "D35", "D62", "D219", "D222", "D223", "D224", "D230",
                                 "D231", "D233", "D234", "D247", "D254"],
             },

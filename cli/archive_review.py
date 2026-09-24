@@ -47,6 +47,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, List, Mapping
 
+from cli import resolve as run_resolve
 from pipeline import games, join, tcgcsv, variant
 from store import master, queues
 
@@ -176,6 +177,24 @@ def queue_entries(
         key = (card.box, card.index)
         if key in seen or not card.photo:
             continue
+        # THE MODEL'S OWN READING, NEVER THE CATALOG IDENTITY — `cli/resolve.py:
+        # card_reading` (identity-follows-sku.md §5.1, lane 4), the one place both rules
+        # live: an unbound card's `read_*`, or its identity fields where `read_*` was
+        # never written (an old reading, not a catalog echo); on a BOUND card, `read_*`
+        # only. Once a card is SKU-bound, `card.name`/`card.number` are the bound SKU's
+        # own catalog row (§3.1) — building this block from them unconditionally would
+        # show the operator the listing's own name back as though it were evidence.
+        #
+        # `READING_UNAVAILABLE` (a bound card whose evidence was never recorded) IS
+        # SKIPPED, NEVER QUEUED WITH A GUESS — this function's own established rule for a
+        # card with no photograph, extended: a queued entry this module builds must carry
+        # a real reading to show a human beside the photo, not the thing the refusal is
+        # about. `make check`'s `archive-review-selftest` fixtures are all old-shape,
+        # unbound cards, so this branch is unreached there; it is a real, reachable path
+        # once a bound card's own archive refusal ever reaches this module.
+        reading = run_resolve.card_reading(card)
+        if reading.outcome == run_resolve.READING_UNAVAILABLE:
+            continue
         seen.add(key)
         game = card.game or games.DEFAULT_GAME
         position = box_views.get(int(card.box), join.BoxView()).at(card.box, card.index)
@@ -186,19 +205,9 @@ def queue_entries(
                 index=card.index,
                 label=join.place_text(game, position),
                 photo=card.photo,
-                # NOTE (identity-follows-sku.md, lane 3a, 2026-09-24): once a card is
-                # SKU-bound, `card.name`/`card.number` are the CATALOG's identity, not the
-                # model's read — this block's own name is `read`, so it should build from
-                # `card.read_name`/`card.read_number` (§3.1) once those are the read's own
-                # home, through Lane 4's `cli/resolve.py:card_reading` helper (§11, lane 4:
-                # `cli/resolve.py`). That helper is not on this branch yet (Lane 4 has not
-                # merged onto Lane 3a's base), so this line is left UNCHANGED rather than
-                # half-migrated — flagged here instead of quietly building a second,
-                # divergent reader. `cli/archive_review.py` is outside Lane 3a's own file
-                # fence; this is a note, not a functional edit.
                 read={
-                    "name": card.name,
-                    "number": card.number,
+                    "name": reading.name,
+                    "number": reading.number,
                     "set_hint": card.set_hint,
                 },
                 reason=match.reason,
