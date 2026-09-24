@@ -71,7 +71,7 @@
 .pricehistory-listed-note { grid-column: 1 / -1; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .pricehistory-listed-note .pricehistory-machine { margin-left: 6px; }
 /* the export figure is a reading, and a reading is dated — never drawn as a fact about today */
-.pricehistory-listed-age { margin-left: 5px; color: var(--bn-ink-4); }
+.pricehistory-listed-age { margin-left: 5px; color: var(--bn-ink-3); }
 .pricehistory-listed-age::before { content: '·'; margin-right: 4px; }
 
 .pricehistory-ranges { display: flex; flex-direction: column; gap: var(--bn-3); }

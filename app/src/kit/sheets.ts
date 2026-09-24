@@ -36,12 +36,17 @@ export interface SheetProps {
 
 export type SheetKind = keyof SheetProps
 
+/** What the shell's sheet host hands every registered sheet besides its own props. `open` goes
+ *  false for one leave beat before the host unmounts it, so the sheet's own leave animation runs:
+ *  pass it straight to the kit's `Sheet`. Optional, so a sheet that ignores it still types. */
+export type SheetHostProps = { readonly onClose: () => void; readonly open?: boolean }
+
 /** The sheet that is open now, as the host draws it. */
 export type OpenSheet = {
   readonly [K in SheetKind]: {
     readonly kind: K
     readonly props: SheetProps[K]
-    readonly Component: ComponentType<SheetProps[K] & { readonly onClose: () => void }>
+    readonly Component: ComponentType<SheetProps[K] & SheetHostProps>
   }
 }[SheetKind]
 
@@ -72,7 +77,7 @@ export function sheetHref<K extends SheetKind>(kind: K, props: SheetProps[K]): s
  *  module that registers in an effect can clean up after itself. */
 export function registerSheet<K extends SheetKind>(
   kind: K,
-  Component: ComponentType<SheetProps[K] & { readonly onClose: () => void }>,
+  Component: ComponentType<SheetProps[K] & SheetHostProps>,
 ): () => void {
   registry.set(kind, Component as AnySheet)
   return () => {

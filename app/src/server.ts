@@ -253,7 +253,23 @@ export class ServerError extends Error {
 
 /** A refusal in the shape an owner-side screen draws it: the sentence it shows, and the code
  *  it prints small beneath — docs/DESIGN.md's human-label-large, machine-string-small rule. */
-export type Failure = { code: string; message: string }
+export type Failure = {
+  code: string
+  message: string
+  /** Which of the kit's two shapes draws it (UX-041). `retry` may pass on a second press: the
+   *  server was not reached, it failed inside, or it was busy. `refusal` is a "no" that the
+   *  same press will get again. Optional, so a failure a screen builds by hand still types. */
+  kind?: 'refusal' | 'retry'
+}
+
+/** The codes a second press can clear: nothing answered, or the store was mid-write. */
+const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
+
+function failureKind(code: string, status: number): 'refusal' | 'retry' {
+  if (RETRY_CODES.has(code)) return 'retry'
+  if (status >= 500 || status === 429 || status === 423) return 'retry'
+  return 'refusal'
+}
 
 /**
  * Any thrown thing, as an owner-side screen shows it.
@@ -283,9 +299,10 @@ export type Failure = { code: string; message: string }
  * "finish the job" by wiring this into it.
  */
 export function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message }
+  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status) }
   const detail = err instanceof Error ? err.message : String(err)
   return {
+    kind: 'refusal',
     code: 'client_bug',
     message:
       `The app failed before the capture server could answer: ${detail}. That is a bug in ` +

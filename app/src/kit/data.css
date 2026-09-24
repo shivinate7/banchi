@@ -119,7 +119,7 @@
   overflow: hidden;
   border-radius: var(--bn-r-sm);
   background: var(--bn-surface-2);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .bn-thumb-sm { width: 40px; border-radius: var(--bn-r-xs); }
 .bn-thumb-md { width: 64px; }
@@ -295,7 +295,7 @@
   flex: none;
   padding: 0 var(--bn-3);
   border-bottom: 1px solid var(--bn-line);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .bn-pick-entry-input {
   flex: 1 1 auto;
@@ -308,7 +308,7 @@
   font-size: var(--bn-fs-md);
 }
 .bn-pick-entry-input:focus { outline: none; }
-.bn-pick-entry-input::placeholder { color: var(--bn-ink-4); }
+.bn-pick-entry-input::placeholder { color: var(--bn-ink-3); }
 .bn-pick-list {
   display: flex;
   flex-direction: column;

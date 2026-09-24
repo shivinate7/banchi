@@ -250,7 +250,7 @@
    layout the reservation above exists to hold still. */
 .orders-start-slot:empty { border-bottom-color: transparent; }
 .orders-start { width: 100%; }
-.orders-index-hint { display: flex; align-items: center; gap: 4px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+.orders-index-hint { display: flex; align-items: center; gap: 4px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .orders-index-hint .bn-kbd { margin-right: 2px; }
 
 .orders-index-row {
@@ -1078,7 +1078,7 @@
   font-variant-numeric: tabular-nums;
   color: var(--bn-ink);
 }
-.orders-count-zero .orders-count-figure { color: var(--bn-ink-4); }
+.orders-count-zero .orders-count-figure { color: var(--bn-ink-3); }
 .orders-count-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .orders-count-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.35; }
 .orders-count-machine { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }

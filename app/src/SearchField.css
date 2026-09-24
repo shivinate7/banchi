@@ -41,7 +41,7 @@
   border: 0;
 }
 .search-field-input:focus { outline: none; }
-.search-field-input::placeholder { color: var(--bn-ink-4); }
+.search-field-input::placeholder { color: var(--bn-ink-3); }
 .search-field-input::-webkit-search-cancel-button { appearance: none; }
 
 .search-field-clear {

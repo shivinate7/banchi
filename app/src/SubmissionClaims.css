@@ -93,7 +93,7 @@
 .claims-sample {
   font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -110,7 +110,7 @@
   margin: 0;
   font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   overflow-wrap: anywhere;
 }
 
