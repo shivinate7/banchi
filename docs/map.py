@@ -2778,7 +2778,7 @@ COMPONENTS = [
                         "fix instead: set `rarity`/`number`/`printed_total` alone, through "
                         "`Store().write()`, with no listing touched. `--home` has no "
                         "default, on purpose. NOT RUN by the session that wrote it.",
-                "governed_by": ["D36", "D183", "D213", "D252"],
+                "governed_by": ["D36", "D43", "D183", "D213", "D252"],
             },
             "sku-number-contradictions-selftest.py": {
                 "does": "proves pipeline/sku_number_contradictions.py against literal "

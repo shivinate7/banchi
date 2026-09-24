@@ -5985,8 +5985,13 @@ def _answer_origin(store: Store, key: str) -> Tuple[Optional[dict], Optional[str
     return previous, None
 
 
-def _catalog_answer(card, sku: str) -> dict:
-    """The catalog row `sku` names, in this card's own export, or a refusal (D46).
+def _catalog_answer(card, sku: str) -> Tuple[dict, str]:
+    """The catalog row `sku` names, in this card's own export, or a refusal (D46) — and the
+    GAME that export was read as, the same one `_catalog_for_card` resolved (`card.game or
+    games.DEFAULT_GAME`). Widened from a bare `dict` to carry the game too, so a caller that
+    needs to know which join-key STRATEGY produced this row — `do_correct_answer`, deciding
+    how to store the row's `Number` cell — does not re-open and re-parse the export a second
+    time to learn it.
 
     THE SERVER RE-READS THE ROW; IT NEVER TAKES THE CLIENT'S WORD FOR ONE. The request
     carries a SKU and nothing else that matters — the name, the number, the condition and
@@ -6003,7 +6008,7 @@ def _catalog_answer(card, sku: str) -> dict:
     means "not one of the rows offered" and prints the ones that were, which for a card with
     no candidates is an empty list and a confusing message.
     """
-    catalog, _game = _catalog_for_card(card)
+    catalog, game = _catalog_for_card(card)
     row = catalog.row_for_sku(sku)
     if row is None:
         raise BadRequest(
@@ -6013,7 +6018,7 @@ def _catalog_answer(card, sku: str) -> dict:
             f"be what this card is. Search the catalog on the review screen and choose a "
             f"row from it.",
         )
-    return _catalog_row(row)
+    return _catalog_row(row), game
 
 
 def _answer_target(
@@ -6150,7 +6155,7 @@ def _answer_target(
         # become a listing on its own — which is the property the refusal was protecting, and
         # it is unchanged. What changed is that a human may now point at a row the pipeline
         # failed to find, instead of only being able to walk away from it.
-        chosen = _catalog_answer(card, sku)
+        chosen, _game = _catalog_answer(card, sku)
         offered_condition = str(chosen.get("condition") or "")
         return card, holders, offering, governing, chosen, offered_condition
     if not candidates:
@@ -7508,12 +7513,18 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     neither). A correction is a human choosing a catalog row off the photograph, the same act
     that already rewrites `set_name`/`rarity`/`name` above — a chosen row's number is exactly
     as much "what this card is" as its name. `card.number`/`card.printed_total` are set from
-    `chosen["number"]` through `join.split_catalog_number`, which reverses `join_key`'s own
-    composition; `number_key`/`number_display` are never set directly, because
-    `store/master.py:_card_columns` derives both from those two fields on every write. THE
-    MODEL'S OWN READING IS UNTOUCHED: `identifications.json` still carries it, and
-    `restores_to` below carries the pair being overwritten, so nothing the model saw is lost
-    — only the one field the store now shows a human corrected.
+    `chosen["number"]` through `join.catalog_number_fields`, GAME-AWARE through
+    `games.get(catalog_game)["join_key"]` — never a hand-typed game list. A `number_and_
+    printed_total` game (Pokemon) splits the composed cell, reversing `join_key`. Every
+    other strategy — `printed_code` (Riftbound, One Piece), which never composes a key from
+    two halves at all — stores the cell VERBATIM, exactly as every other writer for that
+    game already does; splitting it would corrupt `_key_printed_code`'s own match target and
+    wrongly populate `number_key`, which `pipeline/pricearchive.py` documents as empty by
+    design for a game with no denominator. `number_key`/`number_display` are never set
+    directly either way, because `store/master.py:_card_columns` derives both from those two
+    fields on every write. THE MODEL'S OWN READING IS UNTOUCHED: `identifications.json`
+    still carries it, and `restores_to` below carries the pair being overwritten, so nothing
+    the model saw is lost — only the one field the store now shows a human corrected.
 
     REFUSALS, IN ORDER: `card_not_found` (no record at that position — this route corrects a
     card that exists and never creates one), `card_departed` (the card has left inventory —
@@ -7569,8 +7580,11 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
             )
 
         # D46's OWN LOOKUP AND ITS OWN REFUSAL, REUSED VERBATIM: the row is re-read from
-        # THIS CARD'S export, inside the lock, and never taken on the client's word.
-        chosen = _catalog_answer(card, sku)
+        # THIS CARD'S export, inside the lock, and never taken on the client's word. The
+        # GAME comes back too — `_catalog_for_card`'s own resolution, `card.game or
+        # games.DEFAULT_GAME` — because it decides how the chosen row's `Number` cell is
+        # stored, a few lines down.
+        chosen, catalog_game = _catalog_answer(card, sku)
         new_condition = str(chosen.get("condition") or "")
 
         if str(chosen.get("sku") or "") == str(card.sku or ""):
@@ -7622,15 +7636,19 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
         chosen_name = str(chosen.get("name") or "").strip()
         if chosen_name:
             card.name = chosen_name
-        # THE CHOSEN ROW'S NUMBER, SPLIT BACK INTO THE PAIR THE STORE KEEPS (the
-        # orchestrator's ruling). `chosen["number"]` is `_catalog_row`'s whole composed
-        # cell — `join.split_catalog_number`'s own docstring is the reasoning for reversing
-        # `join_key` rather than storing the composed string whole. `number_key` and
-        # `number_display` are never set directly: `store/master.py:_card_columns` derives
-        # both from `card.number`/`card.printed_total` on the very next write this
-        # transaction makes, the same chokepoint every other card write already passes
-        # through, so there is no second copy of that fold here.
-        card.number, card.printed_total = join.split_catalog_number(chosen.get("number"))
+        # THE CHOSEN ROW'S NUMBER, STORED THE WAY THIS CARD'S OWN GAME ALREADY STORES ONE
+        # (the orchestrator's ruling, corrected on review). `join.catalog_number_fields`
+        # dispatches on `catalog_game`'s own join-key strategy — never a hand-typed game
+        # list — so a Pokemon row's composed `"074/219"` splits into the pair `join_key`
+        # built it from, and a Riftbound or One Piece row's `printed_code` identifier is
+        # stored WHOLE and verbatim, exactly as `_key_printed_code` matches it and exactly
+        # as every other writer for that game already does. `number_key`/`number_display`
+        # are never set directly either way: `store/master.py:_card_columns` derives both
+        # from `card.number`/`card.printed_total` on the very next write this transaction
+        # makes, the same chokepoint every other card write already passes through.
+        card.number, card.printed_total = join.catalog_number_fields(
+            catalog_game, chosen.get("number")
+        )
 
         _history(
             snapshot.inventory,
@@ -7761,6 +7779,21 @@ def _reverse_correction(box: int, index: int) -> dict:
                     f"nothing here to guess. Correct the card by hand.",
                 )
             pair[field] = value
+        # `number`/`printed_total` ON AN OLD-SHAPE LINE — WRITTEN BEFORE THIS FIX — CARRY
+        # NEITHER KEY AT ALL, and a MISSING key is not the same claim as a PRESENT `null`
+        # one. The three real corrections on the owner's live store predate this fix and are
+        # exactly this case. `_answer_before`'s own precedent (a few hundred lines up) reads
+        # a missing `set_name`/`rarity` as "nothing to put back" and restores `None` — right
+        # for `do_review_answer`, whose OLD route never touched those fields at write time
+        # either, so there truly was nothing there to have overwritten. THIS route's old
+        # shape is different: `do_correct_answer` ALWAYS overwrote the card's number, from
+        # its very first version — the write happened, the line just did not yet record what
+        # it replaced. Reading that gap as `None` would ERASE a real number the correction
+        # itself is not responsible for losing, on the one route built to stop exactly that
+        # kind of loss. So a missing key here means LEAVE THE FIELD AS IT STANDS, checked
+        # before the loop above ever turns "absent" and "null" into the same `None`.
+        number_recorded = "number" in previous
+        printed_total_recorded = "printed_total" in previous
 
         held = _listing_hold(snapshot.inventory, card)
         if held:
@@ -7793,14 +7826,19 @@ def _reverse_correction(box: int, index: int) -> dict:
         card.rarity = pair.get("rarity")
         if pair.get("name") is not None:
             card.name = pair.get("name")
-        # RESTORED VERBATIM, LIKE `sku`/`condition`/`set_name`/`rarity` ABOVE, AND NEVER
-        # GUARDED THE WAY `name` IS: a card can legitimately have carried no number before
-        # the correction this undoes (the position's very first identification, or the tail
-        # of an earlier undo), and putting `None` back is putting the card back to exactly
-        # that state — `_give_back_listing`'s own docstring states the same rule for a stamp
-        # that was never set.
-        card.number = pair.get("number")
-        card.printed_total = pair.get("printed_total")
+        # RESTORED VERBATIM WHEN THE LINE RECORDS THEM, LIKE `sku`/`condition`/`set_name`/
+        # `rarity` ABOVE — a card can legitimately have carried no number before the
+        # correction this undoes (the position's very first identification, or the tail of
+        # an earlier undo), and putting `None` back is putting the card back to exactly that
+        # state. BUT LEFT ALONE WHEN THE LINE DOES NOT — `number_recorded`/
+        # `printed_total_recorded`, computed above before the loop folded "absent" and
+        # "null" into the same `None`. A pre-fix `sku_corrected` line still overwrote the
+        # card's number; it just never wrote down what it replaced, so `None` here would be
+        # a guess this route exists to refuse making, not a fact recovered from the log.
+        if number_recorded:
+            card.number = pair.get("number")
+        if printed_total_recorded:
+            card.printed_total = pair.get("printed_total")
 
         _history(
             snapshot.inventory,

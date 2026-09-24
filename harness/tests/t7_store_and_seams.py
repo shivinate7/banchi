@@ -11288,9 +11288,31 @@ def check_review_catalog(checks: Checks) -> None:
             ("9192027", "Near Mint Foil"),
             "the pair lands on the card, which is what a later join reads back as D3 rung 0",
         )
+        checks.equal(
+            card.rarity,
+            "Rare",
+            "and rarity lands too, off the same catalog row — `_catalog_row` was missing "
+            "the key `_candidate_rows` has carried since D213, so a `from_catalog` answer "
+            "used to land `rarity = NULL` here exactly as an uncorrected `do_correct_answer` "
+            "did (D252's amendment fixed both at their one shared root)",
+        )
         checks.ok(
             stored.review.entries["1/1"].cleared_by_human,
             "and the queue entry is cleared, so the question stops being asked",
+        )
+
+        undone = answers(
+            checks,
+            lambda: capture_server.do_review_answer(1, 1, {"undo": True}),
+            "the undo puts the from_catalog answer back",
+        )
+        if undone is not None:
+            checks.equal(undone.get("undone"), True, "and it reports which direction it went")
+        checks.equal(
+            Store().read().inventory.cards["1/1"].rarity,
+            None,
+            "and rarity comes back too — this card never carried one before the answer, "
+            "and `restores_to` says so",
         )
         line = [
             event
@@ -11518,33 +11540,66 @@ def check_correct_answer(checks: Checks) -> None:
             "the key `_candidate_rows` has carried since D213, so every correction used to "
             "land `rarity = NULL` whatever the chosen row's own Rarity cell said",
         )
+        # STORED VERBATIM, NEVER SPLIT — RIFTBOUND IS A `printed_code` GAME. The reviewer
+        # caught the first version of this fix treating every game as Pokemon's
+        # `number_and_printed_total` shape: it split `056/298` into `("056", "298")`, which
+        # broke the very thing `_key_printed_code` matches against (that function reads
+        # `card.number` WHOLE and never consults `printed_total` at all) and wrongly
+        # populated `number_key`, which `pipeline/pricearchive.py`'s own comment documents
+        # as EMPTY BY DESIGN for a game with no denominator. All three real cards this
+        # amendment was written for are Riftbound.
         checks.equal(
             (card.number, card.printed_total),
-            ("056", "298"),
+            ("056/298", None),
             "and the STORED NUMBER FOLLOWS THE CATALOG (the orchestrator's ruling, within "
-            "D36) — the chosen row's own `056/298`, split back into the pair the store "
-            "keeps, not the misread `179/298` left on the card by the wrong answer",
+            "D36, corrected on review) — the chosen row's own `056/298` cell, stored WHOLE "
+            "because Riftbound's join key is `printed_code`, not composed from two halves — "
+            "not the misread `179/298` left on the card by the wrong answer",
         )
         checks.equal(
             capture_server._card_number_key(card),
-            "056/298",
-            "and `number_key` — `store/master.py:_card_columns` derives it from "
-            "`number`/`printed_total` on the very write this transaction makes, so there "
-            "is no second place this route has to set it",
+            "",
+            "and `number_key` stays EMPTY — the documented shape for a `printed_code` game, "
+            "never filled by a correction on one",
         )
         checks.equal(
             capture_server._number_display(card),
             "056/298",
-            "and `number_display`, the same derivation, the same write",
+            "and `number_display` still reads right — `join.display_number` falls back to "
+            "the whole cell when `printed_total` is absent",
         )
         conn = db.connect(files.inventory_dir())
         checks.equal(
             conn.execute(
                 "SELECT number_key, number_display FROM cards WHERE key = '4/1'"
             ).fetchone(),
-            ("056/298", "056/298"),
+            ("", "056/298"),
             "and the PERSISTED columns agree — `_card_columns` runs on every card write, "
             "this route's own included, so the derivation is not only correct in memory",
+        )
+
+        # THE RE-JOIN PROOF (item 3): a corrected Riftbound card's stored number still
+        # matches its own export row through the REAL join-key function, `_key_printed_code`
+        # — never re-derived here, called straight off `pipeline/join.py`, over the actual
+        # export this run holds. This is what "the row this card now carries would survive a
+        # fresh join" means, proved rather than asserted by shape alone.
+        rejoin_catalog = join.Catalog.from_export(
+            tcgcsv.read_export(run_dir / "export.csv"), "riftbound"
+        )
+        rejoin_key = join._key_printed_code(
+            join.IdentifiedCard(
+                position=None, name=card.name, number=card.number,
+                printed_total=card.printed_total,
+            )
+        )
+        rejoin_rows = rejoin_catalog.rows_for_key(rejoin_key) if rejoin_key else []
+        checks.ok(
+            any(str(row[tcgcsv.SKU_COLUMN]) == new_sku for row in rejoin_rows),
+            "a fresh join over this run's own export, keyed off the corrected card's stored "
+            "number through the real `_key_printed_code`, finds the same row the correction "
+            "chose — the number this route wrote is not merely display-shaped right, it is "
+            "JOIN-shaped right",
+            f"rejoin_key={rejoin_key!r} rows={[row[tcgcsv.SKU_COLUMN] for row in rejoin_rows]}",
         )
 
         after_release = Store().read().inventory.listings[old_sku]
@@ -11637,10 +11692,11 @@ def check_correct_answer(checks: Checks) -> None:
         corrected_card = Store().read().inventory.cards["4/1"]
         checks.equal(
             (corrected_card.rarity, corrected_card.number, corrected_card.printed_total),
-            ("Uncommon", "056", "298"),
+            ("Uncommon", "056/298", None),
             "before the undo: this card never carried a number or a rarity at all — "
             "answered wrong, never corrected before — and the correction still writes "
-            "both from the chosen row, exactly as the identified-then-wrong card above did",
+            "both from the chosen row, exactly as the identified-then-wrong card above did "
+            "— stored WHOLE, Riftbound being `printed_code`",
         )
 
         undone = answers(
@@ -11706,6 +11762,160 @@ def check_correct_answer(checks: Checks) -> None:
                 "correction_origin_unknown",
                 "in its own code",
             )
+
+    # ------------------------------------------------- a Pokemon correction, split correctly
+    #
+    # Item 3's second half. Riftbound above proves the verbatim branch; this proves the
+    # OTHER branch — `number_and_printed_total` — still splits, over the committed SV09
+    # export, a real row.
+    with isolated_home() as home:
+        pokemon_sku, pokemon_name, pokemon_number = "8607459", "Accelgor", "013/159"
+        wrong_sku = "8607749"  # Alolan Geodude, same export — a real row, just the wrong one
+        run_dir = home / "runs" / "2026-09-23-box7-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(FIXTURE_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-09-23T00:00:00+00:00",
+                    "joined": True,
+                    "exports": {"pokemon": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+        capture_server.do_capture(capture_payload(7, game="pokemon"))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["7/1"].game = "pokemon"
+            snapshot.inventory.cards["7/1"].run = "2026-09-23-box7-01"
+            snapshot.inventory.set_state(
+                "7/1", master.IDENTIFIED, sku=wrong_sku, condition="Near Mint"
+            )
+            snapshot.inventory.cards["7/1"].name = "Alolan Geodude"
+            snapshot.inventory.cards["7/1"].number = "044"
+            snapshot.inventory.cards["7/1"].printed_total = "159"
+
+        pokemon_body = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(7, 1, {"sku": pokemon_sku}),
+            "a Pokemon correction succeeds",
+        )
+        if pokemon_body is not None:
+            checks.equal(pokemon_body["sku"], pokemon_sku, "and reports the new sku")
+        pokemon_card = Store().read().inventory.cards["7/1"]
+        checks.equal(
+            (pokemon_card.name, pokemon_card.number, pokemon_card.printed_total),
+            (pokemon_name, "013", "159"),
+            "a `number_and_printed_total` game DOES split the composed cell — `013/159` "
+            "becomes the pair `join_key` built it from, the branch Riftbound above must "
+            "never take",
+        )
+        checks.equal(
+            capture_server._card_number_key(pokemon_card),
+            pokemon_number,
+            "and `number_key` is populated here, unlike the Riftbound case — this is the "
+            "game the field was designed for",
+        )
+        pokemon_catalog = join.Catalog.from_export(
+            tcgcsv.read_export(run_dir / "export.csv"), "pokemon"
+        )
+        pokemon_rejoin_key = join._key_number_and_printed_total(
+            join.IdentifiedCard(
+                position=None, name=pokemon_card.name, number=pokemon_card.number,
+                printed_total=pokemon_card.printed_total,
+            )
+        )
+        pokemon_rejoin_rows = (
+            pokemon_catalog.rows_for_key(pokemon_rejoin_key) if pokemon_rejoin_key else []
+        )
+        checks.ok(
+            any(str(row[tcgcsv.SKU_COLUMN]) == pokemon_sku for row in pokemon_rejoin_rows),
+            "and a fresh join over the corrected pair, through the real "
+            "`_key_number_and_printed_total`, finds the same row",
+        )
+
+    # --------------------------------------------- item 4: a MISSING key is not a null claim
+    #
+    # The three real `sku_corrected` events on the owner's live store predate this fix and
+    # carry no `number`/`printed_total` in `restores_to` at all — that route never touched
+    # those fields until now. An undo reading a missing key as `None` would ERASE a real
+    # number the old line was never responsible for losing. `append_history` hand-writes
+    # exactly that pre-fix shape; no route on this branch can produce it any more.
+    with isolated_home() as home:
+        run_dir = home / "runs" / "2026-09-23-box4-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-09-23T00:00:00+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+        capture_server.do_capture(capture_payload(4, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/1"].game = "riftbound"
+            snapshot.inventory.cards["4/1"].run = "2026-09-23-box4-01"
+            snapshot.inventory.set_state(
+                "4/1", master.IDENTIFIED, sku=new_sku, condition="Near Mint"
+            )
+            snapshot.inventory.cards["4/1"].name = new_name
+            # WHATEVER THE CARD CARRIES NOW — this run wrote it after the hand-crafted
+            # correction below, exactly as a real one-time repair or a later re-identify
+            # would. The undo must leave it exactly here.
+            snapshot.inventory.cards["4/1"].number = "999/999"
+
+        append_history(
+            [
+                {
+                    "at": master.now(),
+                    "event": "sku_corrected",
+                    "position": "4/1",
+                    "sku": new_sku,
+                    "condition": "Near Mint",
+                    "set_name": None,
+                    "rarity": None,
+                    "name": new_name,
+                    "restores_to": {
+                        "sku": old_sku,
+                        "condition": "Near Mint",
+                        "set_name": None,
+                        "rarity": None,
+                        "name": old_name,
+                        # NO "number" KEY. NO "printed_total" KEY. The pre-fix shape,
+                        # verbatim — the three real lines on the owner's store look exactly
+                        # like this.
+                    },
+                    "released": None,
+                    "old_sku": old_sku,
+                    "stamps": None,
+                }
+            ]
+        )
+
+        old_shape_undone = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 1, {"undo": True}),
+            "an old-shape correction line (no number/printed_total in restores_to) still "
+            "undoes",
+        )
+        if old_shape_undone is not None:
+            checks.equal(
+                old_shape_undone["sku"], old_sku, "the fields the old line DID record come back"
+            )
+        restored = Store().read().inventory.cards["4/1"]
+        checks.equal(
+            (restored.sku, restored.name),
+            (old_sku, old_name),
+            "sku and name restore normally — both were recorded on the old-shape line",
+        )
+        checks.equal(
+            restored.number,
+            "999/999",
+            "but NUMBER IS UNTOUCHED — the old line never recorded what it replaced, and a "
+            "MISSING key means leave the field exactly where it stands, never guess `None`",
+        )
 
 
 def check_correct_answer_live_release(checks: Checks) -> None:
@@ -11809,6 +12019,90 @@ def check_correct_answer_live_release(checks: Checks) -> None:
         )
         if undone is not None:
             checks.ok(True, "and the route itself answered")
+
+
+def check_catalog_number_fields_round_trip(checks: Checks) -> None:
+    """`join.catalog_number_fields`, round-tripped over every distinct `Number` cell in the
+    four committed exports — item 2 of the review on the D252 amendment. `store/numbers.py:
+    split_catalog_number` splitting every game's cell on the last `/` was the CRITICAL defect
+    the review caught: Riftbound's 13 double-sided token cells (`T01 // T02`) would come out
+    mangled, and every ordinary `printed_code` cell would wrongly fill `number_key`.
+
+    NOT `inventory/.exports/*/…csv` — the owner's real cached exports, which this checkout
+    does not carry and which the fence this task carries forbids reading from a live rig.
+    The four committed fixtures are the portable, CI-safe stand-in the same fence permits:
+    ground truth, never modified, present in every checkout. `docs/map.py`'s `fixtures/`
+    entry says so.
+    """
+    checks.note("")
+    checks.note("CATALOG NUMBER FIELDS — round-tripped, game-aware, over every committed "
+                "export")
+
+    wide_export = (
+        Path(__file__).resolve().parents[2] / "fixtures" / "pokemon_wide_export_untouched.csv"
+    )
+    cases = (
+        ("pokemon", FIXTURE_EXPORT),
+        ("pokemon", wide_export),
+        ("riftbound", RIFTBOUND_EXPORT),
+        ("one_piece", ONE_PIECE_EXPORT),
+    )
+    total_checked = 0
+    mangled = 0
+    double_sided_seen = False
+    for game, path in cases:
+        export = tcgcsv.read_export(path)
+        strategy = games.get(game)["join_key"]
+        cells = {
+            str(row.get(tcgcsv.NUMBER_COLUMN) or "").strip() for row in export.rows
+        }
+        cells.discard("")
+        for cell in sorted(cells):
+            if "//" in cell:
+                double_sided_seen = True
+            number, printed_total = join.catalog_number_fields(game, cell)
+            total_checked += 1
+            if strategy == "number_and_printed_total":
+                # THE MATCH FOLD, `number_index_key`, NOT RAW STRING EQUALITY. The wide
+                # Pokemon export itself carries 99 unpadded cells (`6/236`, SM Cosmic
+                # Eclipse) — `number_index_key`'s own docstring measured them, on this
+                # exact file, before this test existed. `join_key` always zero-pads, so
+                # composing the split pair back reproduces the CANONICAL padded form,
+                # `006/236`, never the raw cell for one of those 99 — and that is `join_key`
+                # working as designed, not a round-trip failure. `number_index_key` is the
+                # fold both sides of a real join already pass through, so it is the
+                # correct equivalence here too.
+                if join.number_index_key(
+                    join.join_key(number, printed_total)
+                ) != join.number_index_key(cell):
+                    mangled += 1
+                    checks.ok(
+                        False,
+                        f"{game} {cell!r} round-trips through join_key (via number_index_key)",
+                        f"got number={number!r} printed_total={printed_total!r}",
+                    )
+            else:
+                if (number, printed_total) != (cell, None):
+                    mangled += 1
+                    checks.ok(
+                        False,
+                        f"{game} {cell!r} stored verbatim, never split",
+                        f"got number={number!r} printed_total={printed_total!r} — a "
+                        f"`printed_code` game's cell must reach `card.number` exactly as "
+                        f"the export wrote it",
+                    )
+    checks.equal(
+        mangled,
+        0,
+        f"{total_checked} distinct Number cells across {len(cases)} committed exports, "
+        f"0 mangled",
+    )
+    checks.ok(
+        double_sided_seen,
+        "including at least one double-sided token cell (Riftbound's `T02 // T03`) — the "
+        "shape the review named by name",
+    )
+    checks.note(f"{total_checked} cells checked, {mangled} mangled")
 
 
 def check_catalog_set_rarity_match(checks: Checks) -> None:
@@ -31632,6 +31926,7 @@ def run() -> Result:
     check_review_catalog(checks)
     check_correct_answer(checks)
     check_correct_answer_live_release(checks)
+    check_catalog_number_fields_round_trip(checks)
     check_catalog_set_rarity_match(checks)
     check_run_realignment(checks)
     check_reused_box_refusal(checks)

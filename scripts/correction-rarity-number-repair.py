@@ -22,17 +22,21 @@ route:
     4/442   ->  9191942   (Pyke, Returned (Alternate Art), 145a/219, Showcase)
     6/563   ->  9189327   (Frigid Jewel, 074/219, Uncommon)
 
-WHY NOT undo-then-redo, THE ROUTE'S OWN MECHANISM. `{"undo": true}` then a second
-`{"sku": <same sku>}` would run the now-fixed `do_correct_answer` and set rarity/number
-correctly. It cannot work: the second call is choosing the SKU the card already carries,
-and `do_correct_answer` refuses that outright as `sku_unchanged` — "this one was answered
-correctly the first time". Undo-then-redo could only ever apply here by correcting to a
-placeholder SKU and back, which moves a listing count TWICE for a card whose sku is
-already right, for a field the route never needed a SKU change to fix. This script checks
-whether that detour would even be ALLOWED to start — this asks the SAME `undo_too_late`
-question `_reverse_correction`'s own guard asks, so the report below states it — and finds
-it is worse than unneeded: it risks a real listing-count edit for zero benefit, on the
-live server, over a bug that has nothing to do with listing counts.
+WHY NOT undo-then-redo, THE ROUTE'S OWN MECHANISM — CORRECTED ON REVIEW. `{"undo": true}`
+puts the card back on the OLD, wrong SKU; a second `{"sku": <the same correct SKU as
+before}` would then run the now-fixed `do_correct_answer` and set rarity/number correctly.
+`sku_unchanged` is NOT what blocks this — an earlier draft of this docstring said it was,
+and that was wrong: after the undo the card's CURRENT sku is the OLD one again, so
+re-correcting to the NEW sku is a real change, not a no-op. THE REAL BLOCKER IS
+`undo_too_late`, `_reverse_correction`'s own guard: the FIRST step, the undo, refuses
+outright the moment the card's CURRENT (corrected) sku already carries a pushed, staged or
+live copy — checked on the owner's live store, 2026-09-23: `4/442`'s corrected SKU 9191942
+reads `pushed=3, live=3`, so undo-then-redo cannot even begin on that card, whatever the
+other two turn out to hold. This script reports `hold_on_current_sku` per card so the
+orchestrator sees this directly rather than discovering it mid-route, and it is used as ONE
+mechanism for all three cards rather than a route for two and a script for one — a repair
+that works differently depending on which card it is run on is the harder thing to reason
+about, not the safer one.
 
 THE SMALLEST CORRECT MECHANISM: read each card's OWN catalog row for the SKU it already
 carries (the same lookup `_catalog_answer` runs, over the same run and export the original
@@ -158,6 +162,14 @@ def _catalog_row_for(home: Path, run_name: str, game: str, sku: str) -> dict:
     if not export_entry or not export_entry.get("path"):
         return {"error": f"no_export_for_game: {game}"}
     export_path = Path(export_entry["path"])
+    # A RELATIVE PATH RESOLVES AGAINST `home`, MATCHING WHAT THE REAL SERVER DOES BY
+    # CONVENTION. `cli/runs.py:Run.exports_by_game` and
+    # `server/capture_server.py:_catalog_for_card` both construct a bare `Path(...)` with no
+    # join against the checkout root — correct only because the server's own process cwd IS
+    # the checkout root (D43). This script's cwd is whatever invoked it, so it resolves the
+    # same relative manifest path against the `--home` it was given instead.
+    if not export_path.is_absolute():
+        export_path = home / export_path
     if not export_path.is_file():
         return {"error": f"export_missing: {export_path}"}
     try:
@@ -211,13 +223,20 @@ def preview(home: Path) -> list:
             report["verdict"] = "no_run_recorded"
             reports.append(report)
             continue
-        row = _catalog_row_for(home, card["run"], str(card.get("game") or ""), card["sku"])
+        card_game = str(card.get("game") or "")
+        row = _catalog_row_for(home, card["run"], card_game, card["sku"])
         if "error" in row:
             report["verdict"] = "catalog_lookup_failed"
             report["note"] = row["error"]
             reports.append(report)
             continue
-        new_number, new_printed_total = join.split_catalog_number(row["raw_number"])
+        # GAME-AWARE, THE SAME RULE `do_correct_answer` NOW USES (the review's item 1
+        # fix) — never `split_catalog_number` unconditionally. All three real cards are
+        # Riftbound, a `printed_code` game: its cell is stored VERBATIM, and splitting it
+        # would corrupt the very identifier `pipeline/join.py:_key_printed_code` matches.
+        new_number, new_printed_total = join.catalog_number_fields(
+            card_game, row["raw_number"]
+        )
         new_number_key = (
             join.join_key(new_number, new_printed_total)
             if (new_number and new_printed_total)
