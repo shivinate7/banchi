@@ -27,3 +27,7 @@ docs/decisions/D218.md  # DEBT31 names this path in order to say it does not res
 app/tests/copy-budget.spec.ts  # Deleted 2026-09-23, superseded by D-text-shape-checks (owner's ruling: kill the pinned word ceiling). docs/decisions/D194-copy-ratchet.md's "Superseded" note and D-text-shape-checks itself both name this path in order to say what replaced it — kept as that record. Delete this line if the file is ever rebuilt here.
 app/tests/copy-budget.json  # Deleted 2026-09-23 with the file above. Same reason, same record.
 scripts/copy-budget.mjs  # Deleted 2026-09-23 with the file above. Same reason, same record.
+scripts/typed-interpunct.json  # Deleted 2026-09-24, superseded by D-ratchets-become-offender-lists (owner's ruling: no pinned count survives). D218's own text and its "Superseded" note, and D-ratchets-become-offender-lists itself, name this path in order to say what replaced it. Kept as that record. Delete this line if the file is ever rebuilt here.
+scripts/typed-interpunct-pin.mjs  # Deleted 2026-09-24 with the file above. Same reason, same record.
+scripts/ste-ratchet.json  # Deleted 2026-09-24 with the file above. D226, D229 and D248 name it as history. Same reason, same record.
+scripts/ste-ratchet-pin.py  # Deleted 2026-09-24 with the file above. Same reason, same record.

@@ -889,10 +889,10 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   removed the dot-joined address string and moved the separator into CSS
   (`::before { content: '·' }`) — a screen may SHOW a separator, never TYPE one into a
   string. Mechanized by `make docs-audit`'s `typed interpunct` row over
-  `scripts/user-strings.mjs`'s extraction, RATCHETED against `scripts/typed-interpunct.json`'s
-  pinned count (D194's own discipline, mirrored). It fails only when the count RISES. A lower
-  count is accepted silently and printed. `node scripts/typed-interpunct-pin.mjs --pin`
-  re-pins it, run by a person, never quietly. See D218.
+  `scripts/user-strings.mjs`'s extraction. It fails on every typed dot that
+  `scripts/typed-interpunct-allow.json` does not list, by file and by string. It also fails on
+  a stale entry, and on an entry the list at the merge-base did not hold. No count is pinned.
+  See D218 and D-ratchets-become-offender-lists.
 
 ## Working agreement
 

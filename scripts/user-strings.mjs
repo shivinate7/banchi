@@ -43,7 +43,7 @@
  * `no mechanism on screen` row, which reads this script with no flags and whose fixtures
  * assert both stay unreached without one — widening the default would retroactively change
  * a row this file did not touch. `typed interpunct` (D218) opts
- * into both, because it counts a different thing (a typed separator character) over a wider
+ * into both, because it reads a different thing (a typed separator character) over a wider
  * notion of "visible" than D196's mechanism-naming policy needs:
  *
  *   - `--include-code-attr` adds `code` to the tracked attribute set for this run only —

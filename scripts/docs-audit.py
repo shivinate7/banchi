@@ -1514,11 +1514,11 @@ def check_line_anchors(report: Report, docs: List[Path], allowed: Dict[str, str]
 # citation that goes from resolving to dangling is still a line anchor someone wrote, and
 # Clause A/B already have their own findings for the dangling case.
 #
-# READS THE WHOLE TRACKED MARKDOWN TREE, staged or not — `check_ste_ratchet`'s own reasoning:
+# READS THE WHOLE TRACKED MARKDOWN TREE, staged or not — the retired STE ratchet's reasoning (D229):
 # a backlog ratchet's subject is the corpus, not the files one commit happens to touch.
 #
 # ONE RULE DOES NOT MIRROR D226: A FILE THE PIN HAS NEVER SEEN IS HELD TO ZERO, NEVER
-# ACCEPTED AT ITS OWN RATE. `_ste_ratchet_verdict` treats an unseen file as free because its
+# ACCEPTED AT ITS OWN RATE. The retired STE ratchet treated an unseen file as free because its
 # subject is a RATIO over prose that already exists. This ratchet counts an ABSOLUTE NUMBER
 # of a thing the owner ruled should only fall, and a new markdown file is exactly where a
 # new line anchor is written — accepting it unseen would leave the inflow this clause exists
@@ -1530,7 +1530,7 @@ def _line_anchor_counts(docs: Sequence[Path]) -> Dict[str, int]:
     """path -> RAW line-anchor count in that document's own prose — every candidate
     `line_anchor_candidates` extracts, whether or not it resolves to a real file today.
     Files with zero anchors are omitted, the same "only what it counts" discipline
-    `_ste_ratchet_verdict`'s own `files` map keeps."""
+    the retired STE ratchet's `files` map kept."""
     counts: Dict[str, int] = {}
     for doc in docs:
         total = 0
@@ -1544,7 +1544,7 @@ def _line_anchor_counts(docs: Sequence[Path]) -> Dict[str, int]:
 def _read_line_anchor_pin(path: Optional[Path] = None) -> Optional[Dict[str, object]]:
     """The ratchet's pinned per-file ceiling, or `None` when it cannot be read, is not
     JSON, or does not carry this ratchet's own shape (a `files` map of path -> int).
-    Mirrors `_read_ste_ratchet_pin`'s `None`/real-value split exactly: `0` is a real,
+    Mirrors the retired STE pin reader's `None`/real-value split exactly: `0` is a real,
     achievable ceiling for a file and a missing or malformed pin is a different answer
     this row must refuse rather than silently treat as "nothing pinned yet, so nothing is
     a violation".
@@ -1573,7 +1573,7 @@ def _line_anchor_ratchet_verdict(
     """`("unpinned" | "rose" | "ok", risen)` — one comparison per file, against that
     file's OWN pin.
 
-    DELIBERATELY NOT `_ste_ratchet_verdict`'s OWN RULE FOR AN UNSEEN FILE, and the reason
+    DELIBERATELY NOT THE RETIRED STE RATCHET'S RULE FOR AN UNSEEN FILE, and the reason
     is the coordinator's own catch: that ratchet accepts a file the pin has never seen at
     its OWN natural rate, because its subject is a RATIO over prose that already exists —
     a new file starting at its own rate is reasonable there. This ratchet counts an
@@ -1586,7 +1586,7 @@ def _line_anchor_ratchet_verdict(
     never a scalar taken from somebody else's file.
 
     A pin whose file dropped to zero anchors (or was deleted) is still a fall to nothing,
-    never a failure — that half of `_ste_ratchet_verdict`'s reasoning DOES transfer,
+    never a failure — that half of the retired STE ratchet's reasoning DOES transfer,
     because a fall is a fall under either ratchet's own rule. `ok` covers strictly lower
     and exactly equal, for a file the pin already knows.
     """
@@ -1611,7 +1611,7 @@ def _line_anchor_ratchet_verdict(
 
 def check_line_anchor_ratchet(report: Report) -> None:
     """Clause C. See the section header above for the whole argument; this docstring is
-    the row's own mechanics, one ruler over from `check_ste_ratchet` and DELIBERATELY
+    the row's own mechanics, one ruler over from the retired STE ratchet (D229) and DELIBERATELY
     NOT ITS TWIN on the unseen-file rule — see `_line_anchor_ratchet_verdict`'s own
     docstring for why.
 
@@ -6352,21 +6352,11 @@ BINARY_SUFFIXES = frozenset({
 })
 
 
-# A GENERATED INDEX WHOSE KEYS ARE PATHS CITES NOTHING, and this is the same argument
-# `BINARY_SUFFIXES` above makes one shape along. `scripts/ste-ratchet.json` carries one entry
-# per tracked markdown file since D226 was amended, so its keys now include every entry file
-# in `docs/decisions/`, each one named after the id it holds. A number spelled in a comment is
-# a CITATION in this repo, so this one is not spelled: the example above is the shape, and
-# writing a real id here would make this very comment the defect it describes. Every one of
-# those keys is a FILENAME a generator wrote, not a citation a person chose. Reading them as
-# citations demands a
-# `governed_by` naming every decision in the repo — which is the remedy this row prints, and
-# which nobody would choose.
-#
-# NAMED ONE FILE AT A TIME, NEVER BY SUFFIX. "Generated" is not readable from a path, and a
-# blanket `.json` skip would silence real citations in the hand-written config this repo also
-# keeps. A file earns its place here by being written only by a generator AND keyed by paths.
-PATH_INDEX_FILES = frozenset({"scripts/ste-ratchet.json"})
+# A PATH INDEX CITED NOTHING, AND THE ONE THERE WAS IS GONE. `PATH_INDEX_FILES` skipped the
+# retired per-file prose pin, whose keys were decision FILENAMES. Its replacement,
+# `scripts/ste-offenders.json`, keys a decision entry by its tail and folds every decision id in
+# a label (`scripts/ste_measure.py:list_key`, `fold`), so it holds no id to skip, and the skip
+# was deleted with its only member (D-ratchets-become-offender-lists).
 
 
 def cited_decisions(path: Path) -> Set[str]:
@@ -6390,8 +6380,6 @@ def cited_decisions(path: Path) -> Set[str]:
     with no text to read has written none.
     """
     if path.suffix.lower() in BINARY_SUFFIXES:
-        return set()
-    if rel(path) in PATH_INDEX_FILES:
         return set()
     lines = (without_noqa(line) for line in read(path).splitlines())
     return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
@@ -6522,8 +6510,7 @@ _SUBAGENT_OVERRIDE_MAX_LOOKAHEAD = timedelta(hours=24)
 # The two filenames Claude Code actually writes under `.claude/`. Not a bare `settings*.json`
 # glob: D178's own lesson about a broken path applies in reverse here — a loose glob would
 # also match a future `settings.local.json.bak` or an editor swap file and report a stranger's
-# JSON as this repo's problem. Named one at a time, the same discipline `PATH_INDEX_FILES`
-# above already keeps.
+# JSON as this repo's problem. Named one at a time, never by a glob.
 _SUBAGENT_SETTINGS_NAMES = ("settings.json", "settings.local.json")
 
 
@@ -13039,17 +13026,197 @@ def check_no_mechanism_on_screen(report: Report) -> None:
     )
 
 
+# ------------------------------------------ shrinking offender lists (D-ratchets-become-offender-lists)
+#
+# THE OWNER'S RULING, 2026-09-24: no pinned count survives. D194's word ceiling went first
+# (D-text-shape-checks). D218's typed-dot count and D229's per-file prose ratio follow it
+# here. Each is replaced by a RULE check and a SHRINKING OFFENDER LIST in the shape
+# `scripts/kit-adoption-allow.json` set: file -> rule -> entries, with the lane that owes the
+# fix. Three things fail, and a count is none of them:
+#
+#   1. an offender the list does not name (a NEW offender, in a listed file or not);
+#   2. a listed entry that matches nothing (STALE: the fix landed, so delete the entry);
+#   3. an entry the list at the merge-base with `origin/main` did not hold (GROWTH), unless
+#      its rule is not defined at the merge-base (a rule born on this branch).
+#
+# AN ENTRY IS AN IDENTITY, NEVER A NUMBER. The typed-dot list holds the offending string
+# itself. The prose list holds a hash of the offending sentence (`scripts/ste_measure.py:
+# offender_identity`) and a label for the person who fixes it. A string or sentence that
+# occurs twice in one file is listed twice, so a copy of a listed offender is never hidden
+# behind the first.
+#
+# GROWTH IS COUNTED ACROSS THE WHOLE LIST, NOT PER FILE. An identity may sit under a different
+# file at HEAD than at the merge-base, so a `git mv` moves its entries with it and adds
+# nothing. A copy of a listed sentence into a second file is still growth: the identity now
+# occurs once more than the merge-base allowed. And a BRAND-NEW FILE may not be listed at all
+# unless its entries moved out of another file in the same branch: a new document or a new
+# component starts clean, because its author is writing it now.
+#
+# D18: both rows only READ. The merge-base read is `git merge-base` and `git show`, two plain
+# reads, exactly as `scripts/kit-adoption.mjs:allowAtBase` does. IT FAILS OPEN, AND PRINTS WHY:
+# no git, no `origin/main`, no merge-base, or no list at the merge-base (the branch that gives
+# the list its birth).
+
+_MERGE_BASE_REFERENCE = "origin/main"
+
+
+def _offender_list_shape(data: object, rules: Optional[Set[str]] = None) -> Tuple[Dict[str, Dict[str, List[str]]], Dict[str, str], List[str]]:
+    """`(files, lanes, errors)` from a list document's `files` block.
+
+    `files` is file -> rule -> entries, `lanes` is file -> lane. A file entry must carry a
+    non-empty `lane` and at least one rule. When `rules` is given, every rule key must be one
+    of them, so an entry under a misspelt rule is refused rather than read as covering
+    nothing."""
+    errors: List[str] = []
+    files: Dict[str, Dict[str, List[str]]] = {}
+    lanes: Dict[str, str] = {}
+    block = data.get("files") if isinstance(data, dict) else None
+    if not isinstance(block, dict):
+        return files, lanes, ["has no `files` object"]
+    for file, entry in sorted(block.items()):
+        if not isinstance(entry, dict):
+            errors.append(f"{file}: is not an object")
+            continue
+        lane = entry.get("lane")
+        if not isinstance(lane, str) or not lane.strip():
+            errors.append(f"{file}: names no `lane` (the lane that owes the fix)")
+        else:
+            lanes[file] = lane
+        per_rule: Dict[str, List[str]] = {}
+        for rule, entries in entry.items():
+            if rule == "lane":
+                continue
+            if rules is not None and rule not in rules:
+                errors.append(f"{file}: `{rule}` is not a rule this row checks ({', '.join(sorted(rules))})")
+                continue
+            if not isinstance(entries, list) or not entries or not all(isinstance(e, str) for e in entries):
+                errors.append(f"{file}: `{rule}` must be a non-empty list of strings")
+                continue
+            per_rule[rule] = list(entries)
+        if not per_rule:
+            errors.append(f"{file}: lists no offender. Delete the file's entry")
+            continue
+        files[file] = per_rule
+    return files, lanes, errors
+
+
+def _offender_diff(
+    found: Dict[str, Dict[str, List[str]]],
+    listed: Dict[str, Dict[str, List[str]]],
+    key=lambda entry: entry,
+) -> Tuple[List[Tuple[str, str, str]], List[Tuple[str, str, str]]]:
+    """`(unlisted, stale)`, each a list of `(file, rule, entry)`.
+
+    Compared per (file, rule) as a MULTISET of keys: an offender that occurs twice needs two
+    entries, and the second occurrence of a listed offender is unlisted. Never a count per
+    file: a new offender in a file that also lost an old one is still unlisted, and the old
+    entry is still stale."""
+    from collections import Counter
+
+    unlisted: List[Tuple[str, str, str]] = []
+    stale: List[Tuple[str, str, str]] = []
+    for file in sorted(set(found) | set(listed)):
+        for rule in sorted(set(found.get(file, {})) | set(listed.get(file, {}))):
+            have = found.get(file, {}).get(rule, [])
+            allowed = Counter(key(e) for e in listed.get(file, {}).get(rule, []))
+            left = Counter(allowed)
+            for entry in have:
+                k = key(entry)
+                if left[k] > 0:
+                    left[k] -= 1
+                else:
+                    unlisted.append((file, rule, entry))
+            spare = Counter(k for k, n in left.items() for _ in range(n))
+            for entry in listed.get(file, {}).get(rule, []):
+                k = key(entry)
+                if spare[k] > 0:
+                    spare[k] -= 1
+                    stale.append((file, rule, entry))
+    return unlisted, stale
+
+
+def _offender_growth(
+    base: Dict[str, Dict[str, List[str]]],
+    head: Dict[str, Dict[str, List[str]]],
+    base_rules: Optional[Set[str]],
+    head_rules: Optional[Set[str]],
+    key=lambda entry: entry,
+) -> Tuple[List[str], List[str]]:
+    """`(refused, allowed)`: every (rule, identity) that occurs more often in the list at HEAD
+    than in the list at the merge-base, across ALL files.
+
+    A rule the merge-base does not define was born on this branch: its first offenders may be
+    listed, and each one is returned in `allowed` with that reason. A rule definition that
+    cannot be read allows nothing. And if any rule the merge-base defines is gone at HEAD, all
+    growth is refused: a renamed rule would otherwise bring every old offender back as new."""
+    from collections import Counter
+
+    def census(files: Dict[str, Dict[str, List[str]]]) -> "Counter[Tuple[str, str]]":
+        return Counter((rule, key(e)) for per in files.values() for rule, es in per.items() for e in es)
+
+    before, after = census(base), census(head)
+    removed = sorted(base_rules - head_rules) if base_rules is not None and head_rules is not None else []
+    refused: List[str] = []
+    allowed: List[str] = []
+    for (rule, k), n in sorted(after.items()):
+        extra = n - before.get((rule, k), 0)
+        if extra <= 0:
+            continue
+        what = f"{rule} {k!r} (+{extra})"
+        if base_rules is None or head_rules is None:
+            refused.append(f"{what}: the rules at the merge-base or at HEAD could not be read, so no growth is allowed")
+        elif removed:
+            refused.append(f"{what}: {', '.join(removed)}, defined at the merge-base, is gone at HEAD, so no growth is allowed")
+        elif rule in base_rules:
+            refused.append(f"{what}: rule {rule} exists at the merge-base, and a rule that exists only shrinks")
+        else:
+            allowed.append(f"{what}: rule {rule} is not defined at the merge-base, so it was born on this branch")
+    return refused, allowed
+
+
+def _offender_list_at_merge_base(relpath: str) -> Tuple[Optional[object], str]:
+    """`(document, where)`: the list as it stood at the merge-base with `origin/main`, and a
+    short merge-base id. `(None, reason)` when there is none, and the reason says why."""
+    def run(*args: str) -> Optional[str]:
+        try:
+            done = subprocess.run(["git", *args], cwd=str(ROOT), stdout=subprocess.PIPE,
+                                  stderr=subprocess.DEVNULL, check=False)
+        except OSError:
+            return None
+        return done.stdout.decode("utf-8", errors="replace") if done.returncode == 0 else None
+
+    base = (run("merge-base", "HEAD", _MERGE_BASE_REFERENCE) or "").strip()
+    if not base:
+        return None, (f"no merge-base between HEAD and {_MERGE_BASE_REFERENCE} (no git, no "
+                      f"{_MERGE_BASE_REFERENCE}, or no shared history)")
+    text = run("show", f"{base}:{relpath}")
+    if text is None:
+        return None, (f"{relpath} does not exist at the merge-base {base[:8]}, so this branch "
+                      "gives it its birth and every entry is new")
+    try:
+        return json.loads(text), base[:8]
+    except (json.JSONDecodeError, ValueError) as exc:
+        return None, f"{relpath} at the merge-base {base[:8]} is not JSON ({exc})"
+
+
+def _read_offender_list(path: Path) -> Tuple[Optional[object], Optional[str]]:
+    """`(document, None)`, or `(None, why)` when the file is missing or is not JSON."""
+    if not exists(path):
+        return None, "does not exist"
+    try:
+        return json.loads(read(path)), None
+    except (json.JSONDecodeError, ValueError) as exc:
+        return None, f"is not JSON ({exc})"
+
+
 # ------------------------------------------------------------- typed interpunct (D218)
 #
 # The owner's ruling, 2026-09-19: "this typed dot needs to be removed everywhere it exists."
 # D41 deleted the dot-joined address string from the screen on 2026-08-29 and moved the
 # separator into CSS (`.boxops-identity-part::before { content: '·' }` and its siblings) —
-# the separator is a STYLE now, drawn beside a fact, never typed INTO one. A survey the same
-# day found roughly 200 typed middle dots still reaching the screen across every route, and
-# two mechanisms that re-type the position address specifically at the root: `whole()` in
-# `app/src/PositionLabel.tsx` and the `about` field built in `app/src/Fulfillment.tsx`'s
-# `sellable()`/`pickSellable()`. See docs/decisions/D218.md for the
-# full argument; this row is that entry's mechanism.
+# the separator is a STYLE now, drawn beside a fact, never typed INTO one. D218 is the full
+# argument. Its pinned count is retired (D-ratchets-become-offender-lists): the row now fails
+# on every typed dot that `scripts/typed-interpunct-allow.json` does not name.
 
 # U+00B7 MIDDLE DOT and U+2022 BULLET — the two characters the survey named. Kept as a fixed
 # two-code-point class rather than a longer punctuation list on purpose: this row polices ONE
@@ -13066,16 +13233,19 @@ _INTERPUNCT_NAME = {"·": "middle dot (U+00B7)", "•": "bullet (U+2022)"}
 # creep D196's own exemption comment (`Notice`'s `code` prop, kept OFF by default) warns against.
 TYPED_INTERPUNCT_EXTRACT_ARGS: Tuple[str, ...] = ("--join-literals", "--include-code-attr")
 
-TYPED_INTERPUNCT_PIN = ROOT / "scripts" / "typed-interpunct.json"
+# THE ONE RULE THIS LIST CARRIES. A typed dot has no sub-rules, so the list's only rule key is
+# this constant, and the row refuses any other key.
+TYPED_INTERPUNCT_RULE = "interpunct"
+TYPED_INTERPUNCT_ALLOW = ROOT / "scripts" / "typed-interpunct-allow.json"
 
 
 def _typed_interpunct_hits(strings: List[Dict[str, object]]) -> List[Finding]:
     """One Finding per visible string carrying a typed middle dot or bullet.
 
-    Returned regardless of the ratchet — `check_typed_interpunct` below decides whether they
-    block, by comparing `len(...)` against the pinned ceiling. Kept as a separate function
-    (rather than inlined) so the row's own `--self-test` fixtures can call it directly, the
-    same split `_no_mechanism_findings` uses one section up.
+    Every one, listed or not — `_typed_interpunct_found` groups them by file for the list
+    comparison, and the row reports only the ones the list does not name. Kept as a separate
+    function so the row's own `--self-test` fixtures can call it directly, the same split
+    `_no_mechanism_findings` uses one section up.
     """
     hits: List[Finding] = []
     for item in strings:
@@ -13097,74 +13267,36 @@ def _typed_interpunct_hits(strings: List[Dict[str, object]]) -> List[Finding]:
     return hits
 
 
-def _read_typed_interpunct_pin() -> Optional[int]:
-    """The ratchet's pinned ceiling, or None when it cannot be read at all.
-
-    `None` and `0` are different answers on purpose: `0` is a real, achievable pin (the sweep
-    finished), `None` means the file is missing or unreadable — a state this row must refuse
-    rather than silently treat as "nothing is pinned yet, so nothing is a violation".
-    """
-    if not exists(TYPED_INTERPUNCT_PIN):
-        return None
-    try:
-        data = json.loads(read(TYPED_INTERPUNCT_PIN))
-    except (json.JSONDecodeError, ValueError):
-        return None
-    count = data.get("count") if isinstance(data, dict) else None
-    return count if isinstance(count, int) and count >= 0 else None
-
-
-def _typed_interpunct_verdict(count: int, pin: Optional[int]) -> str:
-    """`"unpinned"` | `"rose"` | `"ok"` — the ratchet's own three-way arithmetic, isolated
-    from I/O and from message text so `--self-test` can drive it with plain integers rather
-    than a real pin file and a real extraction. `"ok"` covers count == pin AND count < pin —
-    a lower count is accepted exactly as silently as an equal one, per the ratchet's own rule.
-    """
-    if pin is None:
-        return "unpinned"
-    if count > pin:
-        return "rose"
-    return "ok"
+def _typed_interpunct_found(strings: List[Dict[str, object]]) -> Dict[str, Dict[str, List[str]]]:
+    """file -> {TYPED_INTERPUNCT_RULE: [every offending string, once per occurrence]}."""
+    found: Dict[str, Dict[str, List[str]]] = {}
+    for item in strings:
+        text = str(item["text"])
+        if _INTERPUNCT_RE.search(text):
+            found.setdefault(str(item["file"]), {}).setdefault(TYPED_INTERPUNCT_RULE, []).append(text)
+    return {file: {rule: sorted(texts) for rule, texts in per.items()} for file, per in found.items()}
 
 
 def check_typed_interpunct(report: Report) -> None:
     """No user-visible string may TYPE a middle dot or bullet as a separator (D41's own
-    ruling, generalised repo-wide 2026-09-19). See D218.
+    ruling, generalised repo-wide 2026-09-19). See D218, and D-ratchets-become-offender-lists
+    for the list that replaced its pinned count.
 
     THE EXTRACTION IS THE SAME AST WALK `no mechanism on screen` USES, `scripts/user-
     strings.mjs`, run with `TYPED_INTERPUNCT_EXTRACT_ARGS` — two widenings that row's own
-    fixtures prove stay OFF by default, so this row's broader notion of "visible" never
-    reaches D196's citation policy: `--include-code-attr` (`Notice`'s own `code` prop, which
-    DOES render, on hover and in the run log) and `--join-literals` (the literal separator
-    argument of any `<expr>.join(<literal>)` call, wherever the call's return value ends up —
-    a local helper's parameter, an object field read back elsewhere — which is exactly how
-    `PositionLabel.tsx`'s `whole()` and `Fulfillment.tsx`'s `sellable()`/`pickSellable()`
-    re-type the position address today; see `scripts/user-strings.mjs`'s header for the full
-    argument and why this is scoped to `.join()` rather than every call expression in the tree).
+    fixtures prove stay OFF by default: `--include-code-attr` (`Notice`'s own `code` prop,
+    which DOES render) and `--join-literals` (the literal separator argument of any
+    `<expr>.join(<literal>)` call, wherever the call's return value ends up).
 
     WHAT THIS STILL CANNOT SEE, and it is a real gap, not a filtered one: a helper that builds
-    a separator WITHOUT `.join` — a `const` assembled by string concatenation or a template
-    literal, returned by a named function, and interpolated elsewhere by reference
-    (`{formatThing(x)}`) — is the same data-flow gap `no mechanism on screen`'s own docstring
-    names, one call shape narrower. CSS `content:` properties are never read at all — this
-    walks `.tsx` only — so `ReviewQueue.css:772`'s `content: 'Parked · under the threshold'`
-    (a whole SENTENCE typed into CSS, not a bare separator) is invisible here and recorded
-    instead in the decision entry's scoreboard for the sweep to find by hand. Four server-side
-    strings in `pipeline/join.py` (`Position.label`, `pooled_label`, `departed_label`,
-    `place_text`) are Python, a different language this walk never reaches at all — D41 keeps
-    them as the accessible name a screen reader announces; the rule is that a CLIENT stops
-    rendering them verbatim, which is a front-end fact this row can and does check.
+    a separator WITHOUT `.join` and is interpolated by reference (`{formatThing(x)}`); CSS
+    `content:` properties (this walks `.tsx` only); and server-side Python strings. D218 names
+    each.
 
-    A RATCHET, NOT A CLIFF. Today's count is real and the sweep that would zero it is a
-    separate task (per the owner's ruling) that has not run yet, so this row would be
-    permanently red on day one without one. `scripts/typed-interpunct.json` pins the count
-    `node scripts/typed-interpunct-pin.mjs --pin` last measured: this row only READS the pin
-    (D18: it may never write, being on the commit path), a lower count is accepted SILENTLY
-    (printed in the summary, never a finding), and only a RISE past the pin is a failure —
-    because a ratchet padded "for safety" is headroom a later session spends without being
-    asked. No pin file at all is ALSO a failure: an unpinned budget could not otherwise be
-    told apart from "nothing to pin yet", which is the same non-vacuity argument
-    `HARD_RULE_FLOOR` makes for `rule enforcement`.
+    A RULE, AND A SHRINKING LIST, NEVER A COUNT. Every typed dot is a finding unless
+    `scripts/typed-interpunct-allow.json` names that exact string in that file, once per
+    occurrence. A listed entry that matches nothing is a finding too (stale: delete it). An
+    entry the list at the merge-base did not hold is refused (growth). See the section header.
     """
     strings = _run_user_strings(list(TYPED_INTERPUNCT_EXTRACT_ARGS))
     if strings is None:
@@ -13183,235 +13315,114 @@ def check_typed_interpunct(report: Report) -> None:
         return
 
     hits = _typed_interpunct_hits(strings)
-    count = len(hits)
-    pin = _read_typed_interpunct_pin()
-    verdict = _typed_interpunct_verdict(count, pin)
-
-    if verdict == "unpinned":
+    found = _typed_interpunct_found(strings)
+    allow_rel = rel(TYPED_INTERPUNCT_ALLOW)
+    document, unreadable = _read_offender_list(TYPED_INTERPUNCT_ALLOW)
+    if document is None:
         report.add(
             "typed interpunct", MECHANICAL,
-            [
-                Finding(
-                    rel(TYPED_INTERPUNCT_PIN),
-                    f"no ceiling pinned — {count} typed interpunct hits found. Run "
-                    "`node scripts/typed-interpunct-pin.mjs --pin` first, on purpose, once — "
-                    "never quietly.",
-                )
-            ],
-            "no pin — cannot tell a rise from a fall", scanned=len(strings),
+            [Finding(allow_rel, f"{unreadable}, so no typed dot can be told listed from new "
+                                f"({len(hits)} typed dots found). Restore the list from git.")],
+            "no offender list", scanned=len(strings),
         )
         return
+    rules = {TYPED_INTERPUNCT_RULE}
+    listed, lanes, shape_errors = _offender_list_shape(document, rules)
+    findings = [Finding(allow_rel, error) for error in shape_errors]
 
-    if verdict == "rose":
-        findings = [
-            Finding(
-                rel(TYPED_INTERPUNCT_PIN),
-                f"typed interpunct count ROSE: {pin} pinned, {count} found now "
-                f"(+{count - pin}). A rise is never quiet — fix the new hit(s) named below, "
-                "or, if the addition is deliberately accepted, run "
-                "`node scripts/typed-interpunct-pin.mjs --pin` and say why in the commit.",
-            )
-        ] + hits
-        report.add(
-            "typed interpunct", MECHANICAL, findings,
-            f"{count} of {pin} pinned — rose by {count - pin}", scanned=len(strings),
-        )
-        return
+    unlisted, stale = _offender_diff(found, listed)
+    for file, _rule, text in unlisted:
+        lines = sorted({str(item["line"]) for item in strings
+                        if str(item["file"]) == file and str(item["text"]) == text}, key=int)
+        findings.append(Finding(
+            f"{file}:{lines[0]}" if len(lines) == 1 else file,
+            f"types a dot where a person reads it, and {allow_rel} does not list it: {text!r}"
+            + (f" (lines {', '.join(lines)})" if len(lines) > 1 else "")
+            + "\n  Build the parts as elements and let CSS draw the separator (D41). Never add "
+            "an entry to excuse a new dot."))
+    for file, _rule, text in stale:
+        findings.append(Finding(
+            f"{allow_rel}: {file}",
+            f"lists {text!r} for lane {lanes.get(file, '?')!r}, and {file} no longer types it. "
+            "Delete the entry: the list only shrinks."))
 
+    base_doc, where = _offender_list_at_merge_base(allow_rel)
+    growth_note = ""
+    if base_doc is None:
+        growth_note = f" Only-shrinks not compared: {where}. Failing open."
+    else:
+        base_listed, _, _ = _offender_list_shape(base_doc, rules)
+        refused, allowed = _offender_growth(base_listed, listed, rules, rules)
+        for line in refused:
+            findings.append(Finding(
+                allow_rel, f"gained {line} over the merge-base {where}. Fix the string instead "
+                           "of excusing it."))
+        growth_note = f" Only-shrinks compared against the merge-base {where}."
+
+    listed_count = sum(len(es) for per in listed.values() for es in per.values())
+    by_lane: Dict[str, int] = {}
+    for file, per in listed.items():
+        by_lane[lanes.get(file, "?")] = by_lane.get(lanes.get(file, "?"), 0) + sum(len(es) for es in per.values())
     report.add(
-        "typed interpunct", MECHANICAL, [],
-        (
-            f"{count} typed interpunct hits (ratchet pinned at {pin}"
-            + (f", {pin - count} below it" if count < pin else "")
-            + ")"
-        ),
+        "typed interpunct", MECHANICAL, findings,
+        (f"{len(hits)} typed dots; {listed_count} listed over {len(listed)} files ("
+         + ", ".join(f"{lane} {n}" for lane, n in sorted(by_lane.items()))
+         + f"); {len(unlisted)} unlisted, {len(stale)} stale.{growth_note}"),
         scanned=len(strings),
     )
 
 
-# --------------------------------------------------------------- ste ratchet (D226)
+# ------------------------------------------------------------- ste offenders (D226)
 #
 # THE OWNER BELIEVED THIS REPO ALREADY MECHANIZED PROSE CONCISION. It did not: `make vale`
-# carries two style rules and gates nothing (D18, D74 — D74 widened its FILE SCOPE to every
-# tracked `.md`; the "must not gate" argument is D18's, plus the plain fact that Vale is a
-# third-party Go binary the bare-`python3` pre-commit hook cannot depend on being present —
-# see the correction in `check_check_registry`'s own docstring), and `entry budget` counts
-# CHARACTERS of an entry, which is a size proxy, not a prose-tightness one (measured
-# correlation between entry size and this row's own ratio: r = 0.898 for total-errors-per-
-# entry against r = 0.0020 for errors-per-1,000-words — the byte ruler tracks how LONG an
-# entry is, this ruler tracks how TIGHT its prose is, and those are different measurements).
+# carries two style rules and gates nothing (D18, D74), and `entry budget` counts CHARACTERS
+# of an entry, which is a size proxy, not a prose-tightness one. D226 added this row over the
+# vendored `scripts/ste/ste_lint.py` (MIT, pure standard-library Python, so the bare-`python3`
+# pre-commit hook can run it with nothing new installed).
 #
-# THE LINTER IS VENDORED, NOT REFERENCED. `scripts/ste/ste_lint.py` is a byte-for-byte copy of
-# $HOME/.claude/lint/ste_lint.py (MIT, LICENSE-ste_lint beside it, notice retained), copied
-# rather than symlinked (D47: a tracked symlink bakes a path into the tree, and this repo's own
-# clone, every CI runner, and a fresh checkout all lack $HOME/.claude — a gate here cannot
-# depend on a file outside this repo's own tree). Unlike Vale, it is pure standard-library
-# Python — the same interpreter the bare pre-commit hook already runs with nothing else
-# installed — so the toolchain argument against gating (D18's, not D74's) does not transfer:
-# nothing new has to be present on a machine that can already run this hook at all.
+# THE PINNED RATIO IS RETIRED (D-ratchets-become-offender-lists, superseding D229's ratchet).
+# A per-file ratio let a new bad sentence pass wherever an old one was fixed in the same file,
+# and it had to be re-pinned by hand. The row now names every OFFENDER — one sentence that
+# breaks one of the four ERROR-severity rules, after D226's four exemption classes — and fails
+# on any the list `scripts/ste-offenders.json` does not name. See the section header above
+# `_offender_list_shape` for the three failures and the growth rule.
 #
-# A RATCHET, NEVER A CLIFF, on the SAME three arguments D218 already settled: a hard
-# gate over an 11,361-finding backlog blocks every commit on day one; the number may only fall,
-# silently, printed; and a rise is never quiet, however small. `scripts/ste-ratchet.json` pins
-# the total, the four ERROR-severity rules' own counts, and the ruler below, written only by
-# `scripts/ste-ratchet-pin.py --pin` (D18 — this row never writes). `scripts/ste_measure.py` is
-# the one shared measurer both the row and the pin script call, so the two paths cannot drift
-# the way D218's own Python/JS pair had to accept for one regex — there is no language boundary
-# here to force that duplication.
-#
-# THE RULER IS ERRORS PER THOUSAND WORDS, PER BUCKET AND REPO-WIDE, NOT A FLAT COUNT AND NOT
-# BYTES — the owner has ruled a flat byte cap impermissible, and this reads the PROSE rather
-# than the DOCUMENT'S SIZE. See `scripts/ste_measure.py`'s own docstring for exactly which word
-# count (plain, matching `wc -w`) and why it is not `ste_lint.py`'s own STE-adjusted count.
-#
-# EXEMPTIONS ARE A NAMED, MECHANICAL, PROVEN CLASS OR THEY DO NOT EXIST. Four are built —
-# table row, the `(D<n>; …)` citation shorthand, the literal "VS Code", and `via` — three
-# measured against a hand-classified sample in `docs/specs/ste-false-positives.md` before
-# being written, `via` exempt by the OWNER'S ARGUMENT instead (D226, ruling
-# three): STE007's own stated reason for the rule — different readers read a Latin
-# abbreviation differently, and machine translation handles it badly — does not hold for an
-# ordinary English preposition every reader reads the same way. `vs`/`vs.` IS a real
-# abbreviation, of "versus", and stays a finding. Each class is testable alone in
-# `--self-test`.
-#
-# A FIFTH, VERBATIM QUOTATION, WAS BUILT AND REMOVED ON THE OWNER'S RULING (ruling two): the
-# owner chose to rewrite around a quotation that trips a rule, not to exempt it. Most of the
-# cost lands on STE008 (contraction), whose sample was 93.3% this shape — the decision entry
-# names the count before and after.
-#
-# A SIXTH, "an enumeration collapsed into one paragraph", is named in `scripts/ste_measure.py`
-# and left UNBUILT: the sample's own classification rule calls it a proxy ("3 or more
-# semicolons... very likely an enumeration"), not a recognition, and a class this row cannot
-# tell apart from ordinary prose without guessing does not get to exempt anything.
+# A NEW FILE STARTS CLEAN. It is not in the list at the merge-base, so any entry for it is
+# growth — unless the same sentences left another file in the same branch (a move). D229
+# accepted a new file at its own rate because refusing it forced a re-pin. There is no pin
+# now, so that cost is gone, and the author of a new document is the one person who can fix
+# its prose at no extra cost.
 
-
-# THE SURVEY'S OWN FLOOR (`docs/specs/ste-false-positives.md`), PRINTED BESIDE EVERY COUNT
+# THE SURVEY'S OWN FLOOR (`docs/specs/ste-false-positives.md`), PRINTED BESIDE EVERY VERDICT
 # THIS ROW REPORTS — never gated on, because it is an estimate, not a measurement this file
-# can re-derive. Without it, a bare count reads as work nobody did; a reader who does not
-# also see the floor cannot tell the closeable backlog from the residue no rewrite reaches.
-#
-# The survey judged every STE001/006/007/008 finding it sampled GENUINE, ARTIFACT or
-# BORDERLINE, then extrapolated each code's artifact-plus-borderline share onto its full
-# population (STE007's sample WAS its population, so that share is exact, not extrapolated).
-# Judging every borderline case against the writer — the most conservative, highest floor
-# the survey computed — gives roughly 2.714 errors per 1,000 words, combined across the four
-# rules, over the survey's own narrower scope (docs/decisions, docs/specs, CLAUDE.md and
-# README.md — 610,723 words by plain `wc -w`, not this row's full repo-wide corpus). This
-# ratchet's own built exemptions do not chase that number — see the section header above —
-# so this row's repo-wide ratio sits above it, and both are printed together on purpose.
-STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS = 2.714
+# can re-derive. Judging every borderline case against the writer, the survey's floor is
+# roughly 2.714 errors per 1,000 plain words, over docs/decisions, docs/specs, CLAUDE.md and
+# README.md. Some residue under it is artifact no rewrite reaches; the list names it all the
+# same, because an artifact the exemptions cannot tell apart is still a sentence a person can
+# rewrite or a lane can own.
+STE_SURVEY_FLOOR_PER_1K_WORDS = 2.714
 
-STE_RATCHET_PIN = ROOT / "scripts" / "ste-ratchet.json"
+STE_OFFENDERS_JSON = ROOT / "scripts" / "ste-offenders.json"
 
 
-def _read_ste_ratchet_pin(path: Optional[Path] = None) -> Optional[Dict[str, object]]:
-    """The ratchet's pinned ceiling, or None when it cannot be read, is not JSON, or does not
-    carry this ratchet's own shape (`total`, `by_code`, `ratio_per_1k_words`). Mirrors `_read_
-    typed_interpunct_pin`'s None/real-value split: a `0` pin is a real, achievable ceiling and
-    a missing or malformed file is a different answer this row must refuse rather than treat
-    as "nothing is pinned yet, so nothing is a violation".
-
-    `path` defaults to `STE_RATCHET_PIN`; `--self-test` passes a throwaway file so it can
-    exercise every malformed shape without touching the real pin.
-    """
-    path = STE_RATCHET_PIN if path is None else path
-    if not exists(path):
-        return None
-    try:
-        data = json.loads(read(path))
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    # THE SHAPE IS `files`, AND THE OLD REPO-WIDE SHAPE IS NOT ACCEPTED (D226, amended). A
-    # pin carrying `total`/`by_code`/`ratio_per_1k_words` is the scalar this amendment
-    # removed, and reading it would silently gate on the thing that made every branch a
-    # party to every other branch's merge. It lands in `unpinned`, which says to re-pin once.
-    files = data.get("files")
-    if not isinstance(files, dict):
-        return None
-    for figures in files.values():
-        if not isinstance(figures, dict) or not isinstance(
-                figures.get("ratio_per_1k_words"), (int, float)):
-            return None
-    return data
-
-
-def _ste_ratchet_verdict(
-    measured: Dict[str, object], pin: Optional[Dict[str, object]]
-) -> Tuple[str, List[str], List[str]]:
-    """`("unpinned" | "rose" | "ok", risen, unpinned_files)`.
-
-    ONE COMPARISON PER FILE, AGAINST THAT FILE'S OWN PIN (D226, amended). `risen` names every
-    FILE whose ratio moved up, so a failure reads as the path a person can open. The old
-    verdict compared a repo total, four per-code counts and six bucket ratios, and every one
-    of those moved when any branch anywhere merged markdown.
-
-    A FILE THE PIN HAS NEVER SEEN IS ACCEPTED AND NAMED, WHICH IS THE ONE PLACE THIS IS
-    DELIBERATELY LOOSER THAN THE OLD SHAPE. A ratchet says a number may only go down, and a
-    file that did not exist has no number to go down from. Refusing it would force a re-pin
-    on every branch that adds a document, which is the cost this amendment exists to remove.
-    It is returned separately so the row prints it rather than swallowing it.
-
-    A PIN WHOSE FILE IS GONE IS NOT A FAILURE EITHER. The branch deleted the file, which is
-    a fall to nothing. `--pin` prunes the entry the next time somebody runs it, and until
-    then a stale key gates nothing and forces no re-pin.
-
-    `ok` COVERS STRICTLY LOWER AND EXACTLY EQUAL, on every file at once, mirroring
-    `_typed_interpunct_verdict`'s own rule that a fall is accepted exactly as silently as a
-    tie.
-    """
-    if pin is None:
-        return "unpinned", [], []
-    pinned = pin.get("files", {}) if isinstance(pin.get("files"), dict) else {}
-    measured_files = measured.get("files", {}) if isinstance(measured.get("files"), dict) else {}
-
-    risen: List[str] = []
-    fresh: List[str] = []
-    for path in sorted(measured_files):
-        now = measured_files[path]
-        was = pinned.get(path)
-        if not isinstance(was, dict):
-            fresh.append(path)
-            continue
-        value = now.get("ratio_per_1k_words", 0.0)
-        ceiling = was.get("ratio_per_1k_words", 0.0)
-        if value > ceiling:
-            risen.append(
-                f"{path}: {ceiling}/1,000 words pinned, {value} now "
-                f"(+{round(value - ceiling, 3)}; {was.get('errors')} errors pinned, "
-                f"{now.get('errors')} now)"
-            )
-
-    return ("rose" if risen else "ok"), risen, fresh
-
-
-def check_ste_ratchet(report: Report) -> None:
-    """No user-visible prose regression on the STE floor, ratcheted (D226). See
-    the section header above this function for the whole argument; this docstring is the
-    row's own mechanics.
+def check_ste_offenders(report: Report) -> None:
+    """No markdown sentence may break one of the four ERROR-severity STE rules unless
+    `scripts/ste-offenders.json` names it (D226; D-ratchets-become-offender-lists).
 
     READS THE WHOLE TRACKED MARKDOWN TREE EVERY RUN, staged or not — `markdown_files()`
-    already resolves to the committed INDEX under `--staged` (see its own docstring), so this
-    is the tree the commit will carry, not a partial diff of it. A prose ratchet's subject is
-    the corpus, not the files one commit happens to touch — the same choice `check_typed_
-    interpunct` and `check_entry_budget` already made for their own repo-wide subjects.
+    already resolves to the committed INDEX under `--staged`, so this is the tree the commit
+    will carry. The list's subject is the corpus, not the files one commit touches: a stale
+    entry in a file the commit did not touch is still stale.
 
-    THREE STATES, mirroring `_typed_interpunct_verdict` exactly: `unpinned` (no readable pin,
-    or one that does not carry this ratchet's own shape) is its own MECHANICAL failure, never
-    a silent pass over an empty comparison; `rose` names every FILE whose ratio moved, so a
-    reader is told which document to open rather than merely that something moved; `ok`
-    covers a fall or an exact match, printed and never a finding.
-
-    THE REPO-WIDE FIGURES ARE STILL READ AND ARE NO LONGER GATED (D226, amended). The total,
-    the four per-code counts and the six bucket ratios are printed on every run, because a
-    reader wants them. They pin nothing, because a scalar every branch has to write is a
-    scalar every merge takes from somebody.
+    THE LIST'S `rules` MUST BE THE LINTER'S OWN ERROR CODES (`ste_measure.error_codes`), read
+    from the constant the code emits, never a copy. A code the vendored linter adds at error
+    severity is therefore refused until it joins `rules`, where it is a rule born on the
+    branch and may list its first offenders.
     """
     ste_measure = _sibling("ste_measure.py")
     if ste_measure is None:
         report.add(
-            "ste ratchet", MECHANICAL,
+            "ste offenders", MECHANICAL,
             [
                 Finding(
                     "scripts/ste_measure.py",
@@ -13427,71 +13438,84 @@ def check_ste_ratchet(report: Report) -> None:
     docs = markdown_files()
     paths = [(rel(p), read(p)) for p in docs]
     measurement = ste_measure.measure(paths)
-    measured = measurement.to_pin()
-    pin = _read_ste_ratchet_pin()
-    verdict, risen, fresh = _ste_ratchet_verdict(measured, pin)
-    # NAMED, NEVER SWALLOWED. A file with no pin of its own passes, so the one thing this
-    # row may not do is stay quiet about which files those were.
-    fresh_note = (
-        " {0} file(s) carry no pin of their own yet and were accepted: {1}{2}.".format(
-            len(fresh), ", ".join(fresh[:3]), " and more" if len(fresh) > 3 else "")
-        if fresh else "")
-
-    # PRINTED BESIDE EVERY VERDICT — the survey's own floor beside today's repo-wide ratio,
-    # so a reader never sees the count without also seeing how much of it is not this
-    # ratchet's backlog to close. See STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS's own comment.
-    # FROM THE MEASUREMENT, NEVER FROM THE PIN'S OWN SHAPE (D226, amended). `to_pin()` now
-    # carries files and nothing else, so a reader that went through it would print `None`
-    # here and read as a row that had stopped measuring. The repo-wide ratio is still
-    # measured on every run. It is simply not something any branch has to write down.
+    head_rules = set(ste_measure.error_codes(ste_measure.load_ste_lint()))
+    list_rel = rel(STE_OFFENDERS_JSON)
     repo_ratio = measurement.ratio_per_1k_words.get("repo")
     floor_note = (
-        f"repo ratio {repo_ratio}/1,000 words against the survey's own floor of "
-        f"~{STE_RATCHET_SURVEY_FLOOR_PER_1K_WORDS}/1,000 words "
-        "(docs/specs/ste-false-positives.md) — the residue below that floor is not this "
-        "ratchet's backlog to close."
+        f"Repo ratio {repo_ratio}/1,000 words, against the survey's floor of "
+        f"~{STE_SURVEY_FLOOR_PER_1K_WORDS}/1,000 words (docs/specs/ste-false-positives.md). "
+        "Printed, never gated."
     )
+    found_count = sum(len(es) for per in measurement.offenders.values() for es in per.values())
 
-    if verdict == "unpinned":
+    document, unreadable = _read_offender_list(STE_OFFENDERS_JSON)
+    if document is None:
         report.add(
-            "ste ratchet", MECHANICAL,
-            [
-                Finding(
-                    rel(STE_RATCHET_PIN),
-                    f"no ceiling pinned, or the pin file does not carry this ratchet's "
-                    f"per-file shape (D226, amended: a `files` map, never the repo-wide "
-                    f"`total`/`by_code`/`ratio_per_1k_words` this replaced) "
-                    f"— {measurement.total} error-severity STE findings found just now "
-                    f"({measurement.exempted_total} exempted: {measurement.exempted_by_class}). "
-                    f"{floor_note} "
-                    "Run `python3 scripts/ste-ratchet-pin.py --pin` first, on purpose, once — "
-                    "never quietly.",
-                )
-            ],
-            f"no pin — cannot tell a rise from a fall. {floor_note}", scanned=len(paths),
+            "ste offenders", MECHANICAL,
+            [Finding(list_rel, f"{unreadable}, so no offender can be told listed from new "
+                               f"({found_count} offenders found). Restore the list from git.")],
+            f"no offender list. {floor_note}", scanned=len(paths),
         )
         return
 
-    if verdict == "rose":
-        findings = [Finding(rel(STE_RATCHET_PIN), line) for line in risen]
-        report.add(
-            "ste ratchet", MECHANICAL, findings,
-            f"{measurement.total} error-severity findings over {len(paths)} files — "
-            f"{len(risen)} file(s) got looser. A rise is never quiet: tighten the prose in "
-            "the file(s) named, or, if the addition is deliberately accepted, run "
-            "`python3 scripts/ste-ratchet-pin.py --pin` and say why in the commit. Only the "
-            f"file(s) you changed move.{fresh_note} {floor_note}",
-            scanned=len(paths),
-        )
-        return
+    findings: List[Finding] = []
+    listed_rules = document.get("rules") if isinstance(document, dict) else None
+    if not isinstance(listed_rules, list) or set(listed_rules) != head_rules:
+        findings.append(Finding(
+            list_rel,
+            f"`rules` is {listed_rules!r}, and the linter's ERROR-severity codes are "
+            f"{sorted(head_rules)}. Make `rules` match them exactly: a rule the list does not "
+            "name cannot be listed, and a rule it names that the linter lost would excuse "
+            "nothing."))
+    listed, lanes, shape_errors = _offender_list_shape(document, head_rules)
+    findings.extend(Finding(list_rel, error) for error in shape_errors)
 
-    pinned_files = pin.get("files", {}) if isinstance(pin.get("files"), dict) else {}
+    unlisted, stale = _offender_diff(measurement.offenders, listed, key=ste_measure.entry_key)
+    new_files = sorted({file for file, _, _ in unlisted if file not in listed})
+    for file, code, entry in unlisted:
+        findings.append(Finding(
+            file,
+            f"{code}: a sentence {list_rel} does not list: {entry}\n"
+            f"  Rewrite the sentence (`python3 scripts/ste/ste_lint.py {file if '*' not in file else '<file>'}` "
+            "names the rule). Never add an entry to excuse new prose."))
+    for file, code, entry in stale:
+        findings.append(Finding(
+            f"{list_rel}: {file}",
+            f"lists {code} {entry} for lane {lanes.get(file, '?')!r}, and no sentence in "
+            f"{file} matches it now. Delete the entry: the list only shrinks."))
+
+    base_doc, where = _offender_list_at_merge_base(list_rel)
+    growth_note = ""
+    if base_doc is None:
+        growth_note = f" Only-shrinks not compared: {where}. Failing open."
+    else:
+        base_rules_raw = base_doc.get("rules") if isinstance(base_doc, dict) else None
+        base_rules = set(base_rules_raw) if isinstance(base_rules_raw, list) else None
+        base_listed, _, _ = _offender_list_shape(base_doc)
+        refused, allowed = _offender_growth(base_listed, listed, base_rules, head_rules,
+                                            key=ste_measure.entry_key)
+        for line in refused:
+            findings.append(Finding(
+                list_rel, f"gained {line} over the merge-base {where}. Rewrite the sentence "
+                          "instead of excusing it."))
+        growth_note = (f" Only-shrinks compared against the merge-base {where}"
+                       + (f"; {len(allowed)} entr{'y' if len(allowed) == 1 else 'ies'} of a "
+                          "rule born on this branch allowed." if allowed else "."))
+
+    listed_count = sum(len(es) for per in listed.values() for es in per.values())
+    by_lane: Dict[str, int] = {}
+    for file, per in listed.items():
+        by_lane[lanes.get(file, "?")] = by_lane.get(lanes.get(file, "?"), 0) + sum(len(es) for es in per.values())
     report.add(
-        "ste ratchet", MECHANICAL, [],
-        f"{measurement.total} error-severity STE findings ({measurement.exempted_total} "
-        f"exempted: {measurement.exempted_by_class}) over {len(paths)} files, every one at "
-        f"or under its own pinned ratio ({len(pinned_files)} pinned)."
-        f"{fresh_note} {floor_note}",
+        "ste offenders", MECHANICAL, findings,
+        (f"{found_count} offending sentences ({measurement.total} findings; "
+         f"{measurement.exempted_total} exempted: {measurement.exempted_by_class}) over "
+         f"{len(paths)} files; {listed_count} listed over {len(listed)} files ("
+         + ", ".join(f"{lane} {n}" for lane, n in sorted(by_lane.items()))
+         + f"); {len(unlisted)} unlisted"
+         + (f" (new files, which start clean: {', '.join(new_files[:3])}"
+            f"{' and more' if len(new_files) > 3 else ''})" if new_files else "")
+         + f", {len(stale)} stale.{growth_note} {floor_note}"),
         scanned=len(paths),
     )
 
@@ -18462,7 +18486,7 @@ def self_test() -> int:
     ok(verdict == "rose" and len(risen) == 1 and "a.md" in risen[0],
        "a raised per-file count is a rise, and names the file", f"{verdict} {risen}")
     # THE COORDINATOR'S OWN CATCH: an unseen file is HELD TO ZERO, unlike
-    # `_ste_ratchet_verdict`'s own rule — new anchors in a brand-new file must be a rise,
+    # the retired STE ratchet's rule — new anchors in a brand-new file must be a rise,
     # never an accepted freebie, or the ratchet is open on exactly the inflow it exists
     # to stop.
     verdict, risen = _line_anchor_ratchet_verdict(
@@ -20518,160 +20542,92 @@ def self_test() -> int:
                "carries no interpunct character, so it is not a HIT — the widening reads every "
                "`.join(<literal>)` separator, and the character test is what decides a finding")
 
-    # THE RATCHET'S OWN ARITHMETIC, isolated from the extraction and the pin file: three
-    # cases, driven with plain integers. A rewrite that starts blocking an equal count, or
-    # that stops blocking a real rise, fails here before it ever reaches the real pin.
-    ok(_typed_interpunct_verdict(200, 200) == "ok",
-       "count == pin is accepted — the ratchet's floor, not its trigger")
-    ok(_typed_interpunct_verdict(199, 200) == "ok",
-       "count < pin is accepted SILENTLY — a fall is never a question")
-    ok(_typed_interpunct_verdict(201, 200) == "rose",
-       "count > pin is a `rose` verdict — never quiet, one hit over the line is enough")
-    ok(_typed_interpunct_verdict(5, None) == "unpinned",
-       "no pin at all is `unpinned`, not `ok` over zero — the same non-vacuity argument "
-       "`HARD_RULE_FLOOR` makes for `rule enforcement`")
+    # THE SHRINKING LIST'S OWN ARITHMETIC (D-ratchets-become-offender-lists), in memory: plain
+    # dicts in, findings out, no file read and none written (D18). Each arm below is one of the
+    # three failures the list exists for, or one of the two things it must let through.
+    print("\ntyped interpunct: the shrinking list, in memory")
+    R = TYPED_INTERPUNCT_RULE
+    LISTED = {"app/src/A.tsx": {R: ["Box 2 · Section 1", "Box 2 · Section 1", "a · b"]}}
 
-    # ------------------------------------------------------------------- ste ratchet
-    #
-    # THE RATCHET'S OWN ARITHMETIC, isolated from the linter and from disk, mirroring the
-    # typed-interpunct cases just above: plain dicts in, a verdict and the risen dimensions
-    # out.
-    print("\nste ratchet: the verdict arithmetic, isolated from the linter and the pin file")
+    ok(_offender_diff(LISTED, LISTED) == ([], []),
+       "the tree and the list agree — nothing unlisted, nothing stale")
 
-    def _pin(**files):
-        """A pin in the shipped shape: one entry per file, each with its own three figures."""
-        return {"files": {path: {"errors": errors, "words": words,
-                                 "ratio_per_1k_words": round(errors / words * 1000.0, 3)}
-                          for path, (errors, words) in files.items()}}
+    grew_in_file = {"app/src/A.tsx": {R: ["Box 2 · Section 1", "Box 2 · Section 1", "a · b",
+                                          "c · d"]}}
+    unlisted, stale = _offender_diff(grew_in_file, LISTED)
+    ok(unlisted == [("app/src/A.tsx", R, "c · d")] and not stale,
+       "RED: a NEW typed dot in a file the list already names is unlisted — the file being "
+       "listed excuses only the strings it lists, never a count of them",
+       f"{unlisted} {stale}")
 
-    STEADY = _pin(**{"docs/decisions/Da.md": (12, 1000), "docs/specs/one.md": (5, 1000)})
+    swapped = {"app/src/A.tsx": {R: ["Box 2 · Section 1", "Box 2 · Section 1", "c · d"]}}
+    unlisted, stale = _offender_diff(swapped, LISTED)
+    ok(unlisted == [("app/src/A.tsx", R, "c · d")] and stale == [("app/src/A.tsx", R, "a · b")],
+       "RED both ways: one dot fixed and a new one typed in the same file is still a new "
+       "offender AND a stale entry. The pinned count this replaced read that as no change",
+       f"{unlisted} {stale}")
 
-    ok(_ste_ratchet_verdict(STEADY, STEADY) == ("ok", [], []),
-       "measured == pin on every file is `ok`, with nothing risen and nothing unpinned")
+    one_fixed = {"app/src/A.tsx": {R: ["Box 2 · Section 1", "a · b"]}}
+    unlisted, stale = _offender_diff(one_fixed, LISTED)
+    ok(not unlisted and stale == [("app/src/A.tsx", R, "Box 2 · Section 1")],
+       "RED: a listed entry that matches nothing now is stale — one copy of a string listed "
+       "twice was fixed, so one of its two entries must go", f"{unlisted} {stale}")
 
-    fell = _pin(**{"docs/decisions/Da.md": (9, 1000), "docs/specs/one.md": (5, 1000)})
-    ok(_ste_ratchet_verdict(fell, STEADY) == ("ok", [], []),
-       "one file got tighter and nothing else moved — accepted silently, the ratchet's "
-       "whole point")
+    copied = {"app/src/A.tsx": {R: ["Box 2 · Section 1"] * 3 + ["a · b"]}}
+    unlisted, _ = _offender_diff(copied, LISTED)
+    ok(unlisted == [("app/src/A.tsx", R, "Box 2 · Section 1")],
+       "RED: a THIRD copy of a string listed twice is unlisted — an identity is listed once per "
+       "occurrence, so a copy never hides behind the first", f"{unlisted}")
 
-    # THE RULER IS THE RATIO AND NOT THE COUNT, and this arm is the one that can tell the
-    # two apart. The file grew from 1,000 words to 3,000 and its errors rose from 12 to 20,
-    # so a raw-count ratchet fails it. Its ratio fell from 12.0 to 6.667, so this one is
-    # silent. D226 measured why: a count tracks how LONG a document is (r = 0.898 against
-    # entry size) rather than how tight its prose is (r = 0.0020). This amendment changes
-    # the ratchet's SCOPE and leaves its ruler exactly where that entry put it.
-    grew = _pin(**{"docs/decisions/Da.md": (20, 3000), "docs/specs/one.md": (5, 1000)})
-    ok(_ste_ratchet_verdict(grew, STEADY) == ("ok", [], []),
-       "a file grew by two thirds and gained 8 errors, and its RATIO fell — accepted in "
-       "silence. A raw-count ratchet fails this exact case, which is the difference "
-       "between D226's ruler and the size proxy it rejected",
-       f"got: {_ste_ratchet_verdict(grew, STEADY)}")
+    new_file = {**LISTED, "app/src/B.tsx": {R: ["x · y"]}}
+    unlisted, _ = _offender_diff(new_file, LISTED)
+    ok(unlisted == [("app/src/B.tsx", R, "x · y")],
+       "RED: a typed dot in a file the list does not name at all is unlisted", f"{unlisted}")
 
-    # AND THE REVERSE, so the arm above cannot be read as "growth is always forgiven".
-    tighter_looking = _pin(**{"docs/decisions/Da.md": (13, 1000),
-                              "docs/specs/one.md": (5, 1000)})
-    ok(_ste_ratchet_verdict(tighter_looking, STEADY)[0] == "rose",
-       "the same file at the same length with one more error is a rise — the ratio is a "
-       "ruler, never an excuse")
+    rules = {R}
+    refused, allowed = _offender_growth(LISTED, grew_in_file, rules, rules)
+    ok(len(refused) == 1 and "c · d" in refused[0] and not allowed,
+       "RED: an entry the merge-base list did not hold is GROWTH, and the rule exists at the "
+       "merge-base, so it is refused", f"{refused} {allowed}")
+    ok(_offender_growth(LISTED, one_fixed, rules, rules) == ([], []),
+       "a list that only lost entries is not growth")
+    moved = {"app/src/Renamed.tsx": LISTED["app/src/A.tsx"]}
+    ok(_offender_growth(LISTED, moved, rules, rules) == ([], []),
+       "a file renamed with its entries is not growth — growth is counted across the whole "
+       "list, so a `git mv` moves its debt and adds none")
+    copied_across = {**LISTED, "app/src/B.tsx": {R: ["a · b"]}}
+    refused, _ = _offender_growth(LISTED, copied_across, rules, rules)
+    ok(len(refused) == 1 and "a · b" in refused[0],
+       "RED: a listed string copied into a SECOND file is growth — the identity now occurs "
+       "once more than the merge-base allowed", f"{refused}")
 
-    rose = _pin(**{"docs/decisions/Da.md": (13, 1000), "docs/specs/one.md": (5, 1000)})
-    verdict, risen, fresh = _ste_ratchet_verdict(rose, STEADY)
-    ok(verdict == "rose" and len(risen) == 1
-       and risen[0].startswith("docs/decisions/Da.md:") and not fresh,
-       "one file got looser — `rose`, and the finding names the PATH a person can open "
-       "rather than a bucket or a repo total",
-       f"got: {(verdict, risen, fresh)}")
+    _, _, errors = _offender_list_shape({"files": {"app/src/A.tsx": {R: ["a · b"]}}}, rules)
+    ok(any("lane" in e for e in errors),
+       "an entry with no lane is refused: every offender names the lane that owes the fix",
+       f"{errors}")
+    _, _, errors = _offender_list_shape(
+        {"files": {"app/src/A.tsx": {"lane": "x", "dots": ["a · b"]}}}, rules)
+    ok(any("dots" in e for e in errors),
+       "a misspelt rule key is refused rather than read as covering nothing", f"{errors}")
+    ok(_offender_list_shape(
+           {"files": {"app/src/A.tsx": {"lane": "kit", R: ["a · b"]}}}, rules)[2] == [],
+       "and a well-formed entry reads back with no error, so the refusals above are about the "
+       "shape and not a broken reader")
 
-    # THE PROPERTY THIS AMENDMENT EXISTS FOR, asserted rather than argued. Another branch
-    # merges and its own file gets looser. Under the repo-wide pin that moved `total`,
-    # `by_code` and two bucket ratios, and every branch in flight had to re-pin. Here it
-    # moves one key this branch never writes.
-    elsewhere = _pin(**{"docs/decisions/Da.md": (12, 1000), "docs/specs/one.md": (99, 1000)})
-    verdict, risen, _ = _ste_ratchet_verdict(elsewhere, STEADY)
-    ok(verdict == "rose" and len(risen) == 1 and "docs/specs/one.md" in risen[0]
-       and not any("docs/decisions/Da.md" in line for line in risen),
-       "a rise in an UNRELATED file names that file alone and says nothing about this "
-       "branch's own — under the repo-wide pin the same change moved the total, two "
-       "per-code counts and two bucket ratios, and every branch in flight had to re-pin",
-       f"got: {(verdict, risen)}")
-
-    # EACH FILE IS JUDGED AGAINST ITS OWN PIN, NOT AGAINST THE LOOSEST ONE. Da.md is pinned
-    # at 12.0 and one.md at 5.0. A tight file drifting to 9.0 is a rise even though a looser
-    # file in the same repo sits above it. Without this arm, a verdict that compared every
-    # file against one shared ceiling would pass every case above — which is the shared
-    # scalar this whole amendment removes, rebuilt one level down.
-    drifted = _pin(**{"docs/decisions/Da.md": (12, 1000), "docs/specs/one.md": (9, 1000)})
-    verdict, risen, _ = _ste_ratchet_verdict(drifted, STEADY)
-    ok(verdict == "rose" and len(risen) == 1 and "docs/specs/one.md" in risen[0],
-       "a file pinned TIGHTER than another is held to its own number — 9.0 against its own "
-       "5.0 is a rise, even though the repo's other file is pinned at 12.0",
-       f"got: {(verdict, risen)}")
-
-    added = _pin(**{"docs/decisions/Da.md": (12, 1000), "docs/specs/one.md": (5, 1000),
-                    "docs/specs/brand-new.md": (40, 1000)})
-    verdict, risen, fresh = _ste_ratchet_verdict(added, STEADY)
-    ok(verdict == "ok" and not risen and fresh == ["docs/specs/brand-new.md"],
-       "a file the pin has never seen is ACCEPTED and NAMED — a ratchet says a number may "
-       "only go down, and a file that did not exist has no number to go down from. "
-       "Refusing it would force a re-pin on every branch that adds a document",
-       f"got: {(verdict, risen, fresh)}")
-
-    removed = _pin(**{"docs/decisions/Da.md": (12, 1000)})
-    ok(_ste_ratchet_verdict(removed, STEADY) == ("ok", [], []),
-       "a pin whose file is GONE is not a failure and forces no re-pin — the branch "
-       "deleted it, which is a fall to nothing, and `--pin` prunes the key next time")
-
-    ok(_ste_ratchet_verdict(STEADY, None) == ("unpinned", [], []),
-       "no pin at all is `unpinned`, not `ok` over an empty comparison")
-
-    # THE PIN FILE IS A PATH INDEX AND CITES NOTHING. Its keys are every tracked markdown
-    # file, which includes every entry in `docs/decisions/`, each named after the id it
-    # holds. Without the exclusion `repo map` reads those filenames as citations and demands
-    # a `governed_by` naming every decision in the repo — measured, on the first run after
-    # the pin went per-file.
-    ok(rel(STE_RATCHET_PIN) in PATH_INDEX_FILES,
-       "the ratchet's own pin file is named as a path index, so its filenames are not read "
-       "as citations")
-    ok(cited_decisions(STE_RATCHET_PIN) == set(),
-       "and the reader really returns nothing for it, over the REAL pin file on this tree",
-       f"got: {sorted(cited_decisions(STE_RATCHET_PIN))[:6]}")
-    ok(cited_decisions(ROOT / "scripts" / "ste_measure.py") != set()
-       or not exists(ROOT / "scripts" / "ste_measure.py"),
-       "while an ordinary source file beside it still reports its own citations — the "
-       "exclusion is one named file, never a suffix or a directory")
-
-    # THE OLD REPO-WIDE SHAPE IS NOT SILENTLY HONOURED. A pin carrying `total`/`by_code`/
-    # `ratio_per_1k_words` is the scalar this amendment removed, and accepting it would gate
-    # on the thing that made every branch a party to every other branch's merge.
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
-        handle.write(json.dumps({"total": 100, "by_code": {"STE001": 60},
-                                 "ratio_per_1k_words": {"repo": 10.0}}))
-        legacy_pin = Path(handle.name)
-    ok(_read_ste_ratchet_pin(legacy_pin) is None,
-       "the OLD repo-wide pin shape reads as no pin at all, so the row refuses and says "
-       "to re-pin once, rather than quietly gating on the scalar this replaced")
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
-        handle.write(json.dumps(STEADY))
-        good_pin = Path(handle.name)
-    ok(_read_ste_ratchet_pin(good_pin) is not None,
-       "and the per-file shape reads back, so the refusal above is about the SHAPE and not "
-       "about the reader being broken")
-    legacy_pin.unlink(missing_ok=True)
-    good_pin.unlink(missing_ok=True)
-
+    # ------------------------------------------------------------------- ste offenders
     ste_measure = _sibling("ste_measure.py")
     ok(ste_measure is not None,
        "scripts/ste_measure.py loads",
        "scripts/ste/ste_lint.py must be vendored beside it for this to succeed")
     if ste_measure is not None:
-        print("\nste ratchet: the vendored linter loads and its error codes are what this "
-              "ratchet expects")
+        print("\nste offenders: the vendored linter loads and its error codes are what the "
+              "list's `rules` must equal")
         ste_lint = ste_measure.load_ste_lint()
         ok(ste_measure.error_codes(ste_lint) == ("STE001", "STE006", "STE007", "STE008"),
            "exactly the four ERROR-severity rules, read from the linter's own RULES table",
            f"got: {ste_measure.error_codes(ste_lint)}")
 
-        print("\nste ratchet: each built exemption class on one line it must catch and one "
+        print("\nste offenders: each built exemption class on one line it must catch and one "
               "it must not")
 
         def _finding(code, line, col, excerpt=None):
@@ -20718,7 +20674,99 @@ def self_test() -> int:
         ok(not ste_measure._via(_finding("STE001", 1, 1, excerpt="via"), []),
            "the class is scoped to STE007 only, the same guard `VS Code` uses")
 
-        print("\nste ratchet: measure() end to end over a tiny synthetic corpus")
+        print("\nste offenders: a sentence's identity survives what is not an edit to its prose")
+
+        def _only(text):
+            """The offender entries measure() names for one synthetic file, as a flat list."""
+            found = ste_measure.measure([("docs/specs/x.md", text)]).offenders
+            return sorted(e for per in found.values() for es in per.values() for e in es)
+
+        def _keys(text):
+            return sorted(ste_measure.entry_key(e) for e in _only(text))
+
+        base_text = "The press writes one file; the row reads it back.\n"
+        ok(len(_only(base_text)) == 1, "one semicolon, one offender", f"{_only(base_text)}")
+        ok(_keys("The press writes one\nfile; the row reads it back.\n") == _keys(base_text),
+           "a reflow (the same sentence wrapped over two lines) keeps its identity")
+        ok(_keys("The press writes `a` file; the row reads it back.\n")
+           == _keys("The press writes `another` file; the row reads it back.\n"),
+           "an edit inside a code span keeps its identity — the prose is the subject")
+        # BUILT FROM PARTS, never spelled: a citation-shaped token in this file is read as a
+        # citation by `repo map` and `decision index`, and these two name no real entry.
+        slug, number = "D" + "-a-slug", "D" + "257"
+        ok(_keys(f"See {slug}; the row reads it back.\n")
+           == _keys(f"See {number}; the row reads it back.\n"),
+           "a claim that turns a slug into a number keeps the identity (D140 rewrites every "
+           "citation in the commit that merges it)")
+        ok(_keys("The press writes two files; the row reads it back.\n") != _keys(base_text),
+           "a reworded sentence is a NEW identity — a sentence cannot be edited and stay "
+           "excused")
+        ok(len(_only("One; two; three.\n")) == 1,
+           "two semicolons in one sentence are ONE offender: the sentence is the unit")
+        twice = _only("Same words; same words.\n\nSame words; same words.\n")
+        ok(len(twice) == 2 and twice[0] == twice[1],
+           "the same sentence twice in one file is TWO entries, identical, so a copy needs "
+           "its own entry", f"{twice}")
+
+        print("\nste offenders: a decision entry is keyed by its tail, so a claim moves nothing")
+        ok(ste_measure.list_key(f"docs/decisions/{slug}.md")
+           == ste_measure.list_key(f"docs/decisions/{number}-a-slug.md")
+           == "docs/decisions/*-a-slug.md",
+           "a slug entry's file and the file the claim renames it to share one key")
+        ok(ste_measure.list_key("docs/specs/x.md") == "docs/specs/x.md",
+           "every other path is its own key")
+        ok(not _DECISION_RE.search(ste_measure.list_key(f"docs/decisions/{number}-a-thing.md")),
+           "the key holds no decision id, so the claim's rewrite never touches the list")
+
+        print("\nste offenders: the list comparison, in memory")
+        key = ste_measure.entry_key
+        STE = {"docs/specs/x.md": {"STE006": ["aaaaaaaaaa One; two.", "bbbbbbbbbb Three; four."]}}
+        ok(_offender_diff(STE, STE, key=key) == ([], []),
+           "the tree and the list agree")
+        ok(_offender_diff(STE, {"docs/specs/x.md": {"STE006": [
+               "aaaaaaaaaa a label the claim rewrote", "bbbbbbbbbb Three; four."]}}, key=key)
+           == ([], []),
+           "only the hash is compared — a label rewritten by a claim changes nothing")
+        new_in_listed = {"docs/specs/x.md": {"STE006": STE["docs/specs/x.md"]["STE006"]
+                                              + ["cccccccccc Five; six."]}}
+        unlisted, stale = _offender_diff(new_in_listed, STE, key=key)
+        ok(len(unlisted) == 1 and unlisted[0][2].startswith("cccccccccc") and not stale,
+           "RED: a new offending sentence in a file the list already names is unlisted",
+           f"{unlisted} {stale}")
+        fixed = {"docs/specs/x.md": {"STE006": ["aaaaaaaaaa One; two."]}}
+        unlisted, stale = _offender_diff(fixed, STE, key=key)
+        ok(not unlisted and len(stale) == 1 and stale[0][2].startswith("bbbbbbbbbb"),
+           "RED: a listed sentence that was rewritten is stale — delete its entry",
+           f"{unlisted} {stale}")
+
+        codes = {"STE001", "STE006", "STE007", "STE008"}
+        refused, allowed = _offender_growth(STE, new_in_listed, codes, codes, key=key)
+        ok(len(refused) == 1 and "cccccccccc" in refused[0] and not allowed,
+           "RED: an entry added under an EXISTING rule is growth, refused", f"{refused}")
+        brand_new = {**STE, "docs/specs/new.md": {"STE001": ["dddddddddd A long one."]}}
+        refused, _ = _offender_growth(STE, brand_new, codes, codes, key=key)
+        ok(len(refused) == 1 and "dddddddddd" in refused[0],
+           "RED: a BRAND-NEW file may not be listed — its entries are growth, so a new "
+           "document starts clean", f"{refused}")
+        moved = {"docs/specs/renamed.md": STE["docs/specs/x.md"]}
+        ok(_offender_growth(STE, moved, codes, codes, key=key) == ([], []),
+           "a file moved with its entries is not growth: its sentences left the old file")
+        born = {**STE, "docs/specs/x.md": {**STE["docs/specs/x.md"],
+                                           "STE099": ["eeeeeeeeee Born here."]}}
+        refused, allowed = _offender_growth(STE, born, codes, codes | {"STE099"}, key=key)
+        ok(not refused and len(allowed) == 1 and "STE099" in allowed[0],
+           "an entry of a rule the merge-base does not define is allowed, and says why — a "
+           "rule born on this branch finds offenders nobody could list before it existed",
+           f"{refused} {allowed}")
+        refused, _ = _offender_growth(STE, born, codes, (codes - {"STE008"}) | {"STE099"}, key=key)
+        ok(len(refused) == 1 and "STE008" in refused[0],
+           "RED: while a rule the merge-base defines is gone at HEAD, NO growth is allowed — "
+           "a renamed rule would bring every old offender back as new", f"{refused}")
+        refused, _ = _offender_growth(STE, born, None, codes | {"STE099"}, key=key)
+        ok(len(refused) == 1,
+           "RED: rules at the merge-base that cannot be read allow nothing", f"{refused}")
+
+        print("\nste offenders: measure() end to end over a tiny synthetic corpus")
         synthetic = [
             ("docs/decisions/Dx.md", "A short sentence here; and another one, plainly put.\n"),
             ("other/readme.md", "| vs | table |\nOrdinary prose with a semicolon; right there.\n"),
@@ -20732,55 +20780,15 @@ def self_test() -> int:
            "as STE007 — the linter's own STE001/005/014/015/016 skip does not reach this "
            "word-level rule, which is exactly the gap `table row` closes",
            f"by_code: {result.by_code}, exempted_by_class: {result.exempted_by_class}")
+        ok(set(result.offenders) == {"docs/decisions/Dx.md", "other/readme.md"}
+           and all(set(per) == {"STE006"} for per in result.offenders.values()),
+           "each file's offenders are keyed by file and rule, and an exempted finding names "
+           "no offender", f"offenders: {result.offenders}")
         ok("docs/decisions" in result.ratio_per_1k_words and "other" in result.ratio_per_1k_words,
-           "both buckets appear in the ratio table, keyed by the same names `bucket_for` uses",
+           "both buckets still appear in the printed ratio table, keyed by `bucket_for`'s names",
            f"ratio_per_1k_words: {result.ratio_per_1k_words}")
-        ok(set(result.to_pin()["files"]) == {"docs/decisions/Dx.md", "other/readme.md"},
-           "and the PIN carries one entry per file and nothing repo-wide — the buckets and "
-           "the total above are still measured, and are printed rather than pinned",
-           f"to_pin: {result.to_pin()}")
-        ok(result.to_pin()["files"]["docs/decisions/Dx.md"]["errors"] == 1,
-           "each entry carries that file's own error count as a receipt beside its ratio",
-           f"to_pin: {result.to_pin()}")
-        empty = ste_measure.measure([("docs/empty.md", "")])
-        ok(empty.to_pin()["files"]["docs/empty.md"]["ratio_per_1k_words"] == 0.0,
-           "a file with no words is pinned at 0.0 rather than dividing by its word count",
-           f"to_pin: {empty.to_pin()}")
-        ok(result.words_by_bucket.get("repo") == (
-               ste_measure.plain_word_count(synthetic[0][1])
-               + ste_measure.plain_word_count(synthetic[1][1])),
-           "the `repo` bucket sums every file's plain word count",
-           f"words_by_bucket: {result.words_by_bucket}")
-
-        print("\nste ratchet: the pin reader refuses a malformed or missing file rather "
-              "than reading it as zero")
-        ok(_read_ste_ratchet_pin() is not None or not exists(STE_RATCHET_PIN),
-           "a real pin file on this tree parses (or truly is not there yet)")
-        with tempfile.TemporaryDirectory() as tmp:
-            fixture_pin = Path(tmp) / "ste-ratchet.json"
-            ok(_read_ste_ratchet_pin(fixture_pin) is None,
-               "a missing pin file reads as None, not as a zero-count pass")
-            fixture_pin.write_text("not json at all")
-            ok(_read_ste_ratchet_pin(fixture_pin) is None,
-               "a pin file that is not JSON reads as None")
-            fixture_pin.write_text(json.dumps({"total": 100}))
-            ok(_read_ste_ratchet_pin(fixture_pin) is None,
-               "a pin file with no `files` map reads as None — the shape is checked, not "
-               "only that the file parses")
-            fixture_pin.write_text(json.dumps({"files": {"a.md": {"errors": 1}}}))
-            ok(_read_ste_ratchet_pin(fixture_pin) is None,
-               "and an entry with no `ratio_per_1k_words` of its own reads as None too — "
-               "the ruler is what this row gates on, so an entry missing it is a pin that "
-               "cannot answer the question")
-            zeroed = {"files": {"a.md": {"errors": 0, "words": 40,
-                                         "ratio_per_1k_words": 0.0}}}
-            fixture_pin.write_text(json.dumps(zeroed))
-            ok(_read_ste_ratchet_pin(fixture_pin) == zeroed,
-               "a real, achievable `0` pin is read as itself, never confused with "
-               "'unreadable'")
-            ok(_ste_ratchet_verdict(zeroed, zeroed) == ("ok", [], []),
-               "and a file pinned at 0.0 stays `ok` at 0.0 — the ratchet's floor is "
-               "reachable rather than a number nothing can sit on")
+        ok(ste_measure.measure([("docs/empty.md", "")]).offenders == {},
+           "a file with no words names no offender and has no key")
 
     # ------------------------------------------------------- code-side agreements
     #
@@ -21293,7 +21301,7 @@ def audit(staged_only: bool) -> Report:
     check_check_census(report)
     check_no_mechanism_on_screen(report)
     check_typed_interpunct(report)
-    check_ste_ratchet(report)
+    check_ste_offenders(report)
     check_suite_lock(report)
     check_browser_scope(report)
     check_spec_map(report)

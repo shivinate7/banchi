@@ -3387,20 +3387,15 @@ COMPONENTS = [
                     "25 words and the captions that repeat their heading."),
                 "governed_by": ["D18", "D43", "D194", "D-text-shape-checks"],
             },
-            "typed-interpunct-pin.mjs": {
-                "does": "`node scripts/typed-interpunct-pin.mjs --pin` re-measures the "
-                        "typed-dot count `scripts/docs-audit.py`'s `typed interpunct` row "
-                        "asserts and rewrites `scripts/typed-interpunct.json`. Shells out to "
-                        "`scripts/user-strings.mjs --join-literals --include-code-attr`, "
-                        "the same extraction the row itself reads, so the pin path and the "
-                        "assert path cannot drift apart. Written exactly, no slack.",
-                "governed_by": ["D18", "D196", "D218", "D-text-shape-checks"]},
-            "typed-interpunct.json": {
-                "does": "the ratchet's pinned ceiling, one field, `count`. Written only by "
-                        "`typed-interpunct-pin.mjs --pin`; `scripts/docs-audit.py`'s `typed "
-                        "interpunct` row only reads it, since that row sits on the commit "
-                        "path (D18).",
-                "governed_by": ["D18", "D194", "D218"]},
+            "typed-interpunct-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `typed "
+                        "interpunct` row (D218): file -> lane and `interpunct` -> every "
+                        "user-visible string in that file that types a middle dot or bullet, "
+                        "once per occurrence. The row fails on a typed dot the list does not "
+                        "name, on a stale entry, and on an entry the list at the merge-base "
+                        "with origin/main did not hold. Replaced a pinned count "
+                        "(D-ratchets-become-offender-lists). Hand-shrunk, never generated.",
+                "governed_by": ["D41", "D218", "D-ratchets-become-offender-lists"]},
             "ste/ste_lint.py": {
                 "does": "the STE ratchet's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
@@ -3416,35 +3411,28 @@ COMPONENTS = [
                         "beside it — the license's one condition for reuse.",
                 "governed_by": ["D226"]},
             "ste_measure.py": {
-                "does": "the STE ratchet's ONE measurer, called by both "
-                        "`scripts/docs-audit.py`'s `ste ratchet` row (read-only) and "
-                        "`scripts/ste-ratchet-pin.py --pin` (the writer, D18) — no counting "
-                        "logic is duplicated between them. Runs the vendored linter's four "
-                        "ERROR-severity rules over caller-supplied (path, text) pairs, drops "
-                        "findings a named `EXEMPTIONS` recognizer proves are an artifact of "
-                        "the text's shape (a table cell, a verbatim quotation, a decision "
-                        "citation, the literal \"VS Code\") rather than its prose, and reports "
-                        "the total, the per-code counts, and errors-per-1,000-PLAIN-words "
-                        "(matching `wc -w`, not `ste_lint.py`'s own STE-adjusted count) per "
-                        "directory bucket and repo-wide. Never touches disk itself.",
-                "governed_by": ["D18", "D218", "D226"]},
-            "ste-ratchet-pin.py": {
-                "does": "`python3 scripts/ste-ratchet-pin.py --pin` re-measures every tracked "
-                        "markdown file via `ste_measure.py:measure()` — the same function the "
-                        "row itself calls — and rewrites `scripts/ste-ratchet.json`. Contains "
-                        "no counting logic of its own. D18: a generator may write, on no "
-                        "`make` target and no hook; `git diff scripts/ste-ratchet.json` is "
-                        "the receipt, mirroring `typed-interpunct-pin.mjs`'s own discipline. "
-                        "D194's own ratchet, `copy-budget.mjs`, is retired — superseded by "
-                        "`D-text-shape-checks`, 2026-09-23.",
-                "governed_by": ["D18", "D194", "D218", "D226", "D-text-shape-checks"]},
-            "ste-ratchet.json": {
-                "does": "the ratchet's pinned ceiling: `total`, `by_code` (the four "
-                        "ERROR-severity rule counts, post-exemption), and "
-                        "`ratio_per_1k_words` (per bucket and repo-wide). Written only by "
-                        "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
-                        "row only reads it, since that row sits on the commit path (D18).",
-                "governed_by": ["D18", "D226"]},
+                "does": "the STE prose check's ONE measurer, read by `scripts/docs-audit.py`'s "
+                        "`ste offenders` row. Runs the vendored linter's four ERROR-severity "
+                        "rules over caller-supplied (path, text) pairs, drops findings a named "
+                        "`EXEMPTIONS` recognizer proves are an artifact of the text's shape (a "
+                        "table cell, a decision citation, the literal \"VS Code\", `via`), and "
+                        "names each remaining one as an OFFENDER: one sentence per rule, keyed "
+                        "by a hash of its folded text (`offender_identity`), so a reflow, a "
+                        "code-span edit or a claim moves nothing. Also reports the per-code "
+                        "counts and errors-per-1,000-plain-words per bucket, printed and never "
+                        "gated. Never touches disk itself.",
+                "governed_by": ["D18", "D140", "D218", "D226", "D229",
+                                "D-ratchets-become-offender-lists"]},
+            "ste-offenders.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `ste offenders` "
+                        "row (D226): `rules` (the vendored linter's ERROR-severity codes) and "
+                        "file -> lane and rule -> `<hash> <label>` entries, one per offending "
+                        "sentence, only the hash compared. A decision entry is keyed by its "
+                        "file tail, so a claim moves nothing. The row fails on an unlisted "
+                        "sentence, a stale entry, and growth over the merge-base, so a new "
+                        "file starts clean. Replaced D229's per-file pinned ratio "
+                        "(D-ratchets-become-offender-lists). Hand-shrunk, never generated.",
+                "governed_by": ["D226", "D229", "D-ratchets-become-offender-lists"]},
             "line-anchors-pin.py": {
                 "does": "`python3 scripts/line-anchors-pin.py --pin` re-measures every "
                         "tracked markdown file's RAW `path:N`/`path:N-M` line-anchor count "
@@ -3452,8 +3440,7 @@ COMPONENTS = [
                         "function the `line anchor ratchet` row calls — and rewrites "
                         "`scripts/line-anchors.json`. Contains no counting logic of its "
                         "own. D18: a generator may write, on no `make` target and no hook; "
-                        "`git diff scripts/line-anchors.json` is the receipt, mirroring "
-                        "`ste-ratchet-pin.py`'s own discipline exactly, one ruler over.",
+                        "`git diff scripts/line-anchors.json` is the receipt.",
                 "governed_by": ["D18", "D218", "D226", "D229"]},
             "line-anchors.json": {
                 "does": "the line-anchor ratchet's pinned ceiling: one `path -> count` "
@@ -3481,8 +3468,7 @@ COMPONENTS = [
                         "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)` — "
                         "the same call the row itself makes. Contains no counting logic of "
                         "its own. D18: a generator may write, on no `make` target and no "
-                        "hook; `git diff` is the receipt, mirroring `ste-ratchet-pin.py`'s "
-                        "own discipline exactly.",
+                        "hook; `git diff` is the receipt.",
                 "governed_by": ["D18"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
@@ -3560,7 +3546,7 @@ COMPONENTS = [
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
                                 "D213", "D215", "D218", "D226", "D229", "D247",
-                                "D-text-shape-checks"],
+                                "D-ratchets-become-offender-lists", "D-text-shape-checks"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3740,8 +3726,8 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D194", "D218",
-                                "D-text-shape-checks"],
+                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D194", "D218", "D226", "D229",
+                                "D248", "D-ratchets-become-offender-lists", "D-text-shape-checks"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
