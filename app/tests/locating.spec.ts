@@ -346,10 +346,20 @@ for (const size of SIZES) {
       const order = pill.locator('.review-caption-order')
       await expect(order).toBeVisible()
       const parts = await order.locator(':scope > span').evaluateAll((els) =>
-        els.map((el) => ({ text: (el.textContent ?? '').trim(), x: el.getBoundingClientRect().x })),
+        els.map((el) => {
+          const box = el.getBoundingClientRect()
+          return { text: (el.textContent ?? '').trim(), x: box.x, y: box.y + box.height / 2 }
+        }),
       )
       expect(parts.map((part) => part.text)).toEqual(['back', 'Punch First', 'this card', 'Hextech Anomaly', 'front'])
-      expect(parts.every((part, at) => at === 0 || part.x > (parts[at - 1]?.x ?? 0)), 'drawn back to front').toBe(true)
+      /* In READING order, by each part's vertical centre: each part is right of the one before on
+         its line, or on a later line (the line wraps between its parts, never inside one). */
+      const inReadingOrder = parts.every((part, at) => {
+        const before = parts[at - 1]
+        if (before === undefined) return true
+        return part.y > before.y + 4 || (Math.abs(part.y - before.y) <= 4 && part.x > before.x)
+      })
+      expect(inReadingOrder, 'drawn back to front').toBe(true)
       await expect(pill.locator('.bn-sr')).toHaveText('It sits in front of Punch First and behind Hextech Anomaly.')
       /* The pill stays inside the page at every width: no sideways scroll at 390. */
       const box = await pill.boundingBox()
