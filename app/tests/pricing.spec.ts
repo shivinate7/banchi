@@ -3878,3 +3878,129 @@ test('the clear is refused while the screen has an unsaved answer', async ({ pag
   await expect(page.locator('.clearprices-foot .bn-btn-danger-solid')).toBeDisabled()
   await expect(page.locator('.clearprices')).toContainText('Save first')
 })
+
+/* ============================================================================================
+   UX-002 (S1) + UX-073: THE "LISTS AT" FIELD, AT DESK WIDTH.
+ *
+ * THE DEFECT, MEASURED: `.pricing-row` and `.pricing-caption` are one flat grid
+ * (`.pricing-facts { display: contents }` in `Pricing.css`), and `--pricing-cols` reserves a
+ * FIXED track count for the SNAPS ref columns Compare draws (one off, up to four on). With
+ * Compare off — the screen's own default — only the Market column renders, so grid
+ * auto-placement filled the price and actions tracks with the SPARE 68px tracks meant for a
+ * Low/+Ship column nobody drew, and the real 132px track sat empty at the end. Verified
+ * directly against `origin/main`'s CSS on this checkout's own dev server before this file
+ * changed: `.pricing-input` measured 8.53px wide and 13.11 read as "$1" — the finding's own
+ * repro, to the pixel. `Pricing.css` now anchors `.pricing-price` and `.pricing-actions` (and
+ * the caption's matching cells) to the grid's LAST TWO LINES, so the child count stops
+ * mattering.
+ *
+ * "LEGIBLE" IS MEASURED, NOT SCREENSHOTTED: `scrollWidth > clientWidth` is a real input
+ * element clipping its own value — the same fact a person reads as "$1" instead of "$13.11".
+ * `toHaveValue` alone would not have caught the original defect: the DOM value was always the
+ * full string, typed or committed: only the box around it was too narrow to show it.
+ *
+ * THE GRID VARIANTS: data-trends and data-direct only vary `--pricing-cols`' track COUNT at
+ * the table tier (>= roughly 940px of the row's own container, which this checkout's shell
+ * measures at a 1440px viewport with the sidebar open — see the container-width figures this
+ * case's own comments below were measured against). Below that the compact and card tiers
+ * (`Pricing.css`'s own "TIERS" block) replace the grid with a fixed, explicit layout that does
+ * not read `--pricing-cols` at all, which is why the finding itself reports 820 and 390 as
+ * already correct. `data-copies='none'` is the fourth variant named in the lane's own brief;
+ * it belongs to `pricing-markdown.spec.ts` and not here — that file's own header states "its
+ * own file, and pricing.spec.ts is not touched" as the property that keeps the run-source path
+ * byte-identical, and `data-copies` never varies within a run-sourced screen. The markdown-lens
+ * width case lives beside it.
+ * ============================================================================================ */
+
+const LONG_PRICE = '1234.56'
+
+/** No horizontal clipping: the content a real typed value needs (`scrollWidth`) fits inside
+ *  what the box actually shows (`clientWidth`). This is what "$1" for "13.11" measures as —
+ *  `toHaveValue` reads the same full string either way, so it cannot see this on its own. */
+async function legible(input: Locator): Promise<void> {
+  const clipped = await input.evaluate((el: HTMLInputElement) => el.scrollWidth > el.clientWidth + 1)
+  expect(clipped).toBe(false)
+}
+
+/** Types a long price into the first row's field and reads it back in full at three moments:
+ *  the row's OWN typed answer on arrival (before any edit), mid-edit while still focused
+ *  (during), and once more after the blur commits it — a field that only grows on focus would
+ *  pass the middle check and fail the first or the last. */
+async function typeAndCheck(page: Page): Promise<void> {
+  const input = field(page).first()
+  await expect(input).toBeVisible()
+  await legible(input) // before: whatever answer the row already carries
+  await input.fill(LONG_PRICE)
+  await expect(input).toHaveValue(LONG_PRICE)
+  await legible(input) // during: focused, freshly typed, not yet committed
+  await input.blur()
+  await expect(input).toHaveValue(LONG_PRICE)
+  await legible(input) // after: committed
+}
+
+/* ONE `open()` PER TEST, NOT TWO. A second `open()` against the same `#/pricing?run=…` hash
+   is a same-document navigation — the SPA never remounts, `picked`/`stamp` do not change, and
+   the effect that re-fetches never re-fires, so the second fixture is dead on arrival and the
+   first render is asserted twice under a different name. Caught by this file's own DEBUG
+   check before it shipped: a single `open()` with the direct-carrying fixture drew
+   `data-direct='some'` correctly; the double-open version of the same case drew 'none' every
+   time. Two variants, two tests. */
+test('the "Lists at" field reads a long price in full at 1440, data-direct=none', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  /* No row in this fixture carries a Direct figure — the default shape `sku()` already
+     builds. An existing typed answer seeds the "before" state. */
+  await open(page, {
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+  })
+  await expect(page.locator('.pricing-caption')).toBeVisible() // table tier, or this case proves nothing
+  await expect(page.locator(".pricing-section[data-direct='none']")).toHaveCount(1)
+  await expect(page.locator(".pricing-body[data-trends='off']")).toHaveCount(1)
+  await typeAndCheck(page)
+
+  await loadTrends(page).click()
+  await expect(page.locator(".pricing-body[data-trends='on']")).toHaveCount(1)
+  await typeAndCheck(page)
+})
+
+test('the "Lists at" field reads a long price in full at 1440, data-direct=some', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  /* One row carries a Direct figure, which only widens `--pricing-cols` by one more spare
+     track at this width (the `@container pricing (min-width: 1040px)` rule) — the anchor
+     still has to hold. */
+  await open(page, {
+    skus: [
+      sku({
+        snap: { market: '22.03', direct_low: '21.50', low: '21.98', low_with_shipping: '22.98', now: null },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+  })
+  await expect(page.locator('.pricing-caption')).toBeVisible()
+  await expect(page.locator(".pricing-section[data-direct='some']")).toHaveCount(1)
+  await expect(page.locator(".pricing-body[data-trends='off']")).toHaveCount(1)
+  await typeAndCheck(page)
+
+  await loadTrends(page).click()
+  await expect(page.locator(".pricing-body[data-trends='on']")).toHaveCount(1)
+  await typeAndCheck(page)
+})
+
+/* THE VIEWPORT IS SET BEFORE `open()`, NOT AFTER, and each width is its OWN test rather than
+   one test resizing a single page five times in a row. The sidebar's rail state is read once
+   at mount and then only from a live `matchMedia` listener (`App.tsx`) — resizing a page that
+   already loaded wide can leave it open a beat longer than a fresh load at the same width
+   would, which measured as a FALSE PASS at 820 during this case's own development: the stale
+   open sidebar left the row more room than the width will actually give a person who arrives
+   there. A fresh `open()` per width is what this file's own `open()` already assumes — see
+   its own comment on why two navigations to the same hash do not even re-fetch. */
+for (const width of [1024, 820, 720, 390, 360]) {
+  test(`the "Lists at" field reads a long price in full at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await open(page, {
+      decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+    })
+    await typeAndCheck(page)
+  })
+}
