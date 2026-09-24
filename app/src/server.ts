@@ -143,8 +143,8 @@ import type {
  * OPENED FROM ANOTHER DEVICE. `VITE_CAPTURE_DEFAULT` is a whole URL and its host is
  * `localhost`, which is correct at the desk and catastrophic anywhere else: on a phone,
  * `localhost` IS THE PHONE, so every request goes to a server that is not there. The capture
- * server has bound `0.0.0.0` since it was written and was reachable the whole time — the
- * client was the half that could not be told.
+ * server has bound every interface since it was written and was reachable the whole time —
+ * the client was the half that could not be told.
  *
  * So the derived default is composed here from `location` plus the checkout's port. It keeps
  * every property the injected URL had — the port still comes from the same slot as the Vite

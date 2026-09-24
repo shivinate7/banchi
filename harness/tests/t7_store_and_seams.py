@@ -171,6 +171,7 @@ import base64
 import codecs
 import contextlib
 import csv
+import errno
 import io
 import json
 import hashlib
@@ -10575,6 +10576,63 @@ def check_app_serve(checks: Checks) -> None:
                 httpd.shutdown()
                 httpd.server_close()
     capture_server.APP_DIST = original
+
+
+def check_dual_stack_bind(checks: Checks) -> None:
+    """The 2026-09-23 incident, proved and closed (D43).
+
+    MEASURED ON THE OWNER'S MAC: an IPv4 `0.0.0.0` bind and a LATER IPv6 `::` bind (with
+    `IPV6_V6ONLY` cleared) both succeed on the same port — two unrelated processes, one per
+    family. A stray `python3 -m http.server 8000` took the IPv6 half while the capture
+    server already held the IPv4 half, and macOS resolves `localhost` to `::1` first, so
+    `http://localhost:8000` silently 404'd every route while `127.0.0.1:8000` still worked.
+
+    `capture_server._capture_server()` closes this by binding `::` itself, dual-stack, so
+    ONE socket answers both families and there is no second family left for a stray process
+    to take. This proves the closed door rather than the open one: after this server binds,
+    both a later `::` dual-stack bind AND a later plain `0.0.0.0` bind on the same port must
+    be refused. Bind IPv4-only here (revert `_capture_server` to the old
+    `CaptureServer((host, port), ...)` with no `::` branch) and the `0.0.0.0`-refusal
+    assertion goes red — the IPv6 half is free again and the split is back.
+    """
+    checks.note("")
+    checks.note("dual-stack bind — the port split behind the 2026-09-23 incident (D43)")
+
+    httpd, host = capture_server._capture_server("::", 0)
+    try:
+        checks.equal(host, "::", "binds IPv6 dual-stack by default")
+
+        reached = False
+        with contextlib.suppress(OSError), \
+                socket.create_connection(("127.0.0.1", httpd.server_address[1]), timeout=1):
+            reached = True
+        checks.ok(reached, "an IPv4 client (127.0.0.1) reaches the same socket")
+
+        port = httpd.server_address[1]
+        refused_v6 = False
+        try:
+            second = capture_server._DualStackCaptureServer(("::", port), capture_server.CaptureHandler)
+            second.server_close()
+        except OSError as exc:
+            refused_v6 = exc.errno == errno.EADDRINUSE
+        checks.ok(
+            refused_v6,
+            "a SECOND `::` dual-stack bind on the same port is refused, not merely slow",
+        )
+
+        refused_v4 = False
+        try:
+            third = capture_server.CaptureServer(("0.0.0.0", port), capture_server.CaptureHandler)
+            third.server_close()
+        except OSError as exc:
+            refused_v4 = exc.errno == errno.EADDRINUSE
+        checks.ok(
+            refused_v4,
+            "and a plain `0.0.0.0` bind on the same port is ALSO refused — the split the "
+            "incident measured cannot recur",
+        )
+    finally:
+        httpd.server_close()
 
 
 def check_cli_seams(checks: Checks) -> None:
@@ -31919,6 +31977,7 @@ def run() -> Result:
     check_origin_gate(checks)
     check_photo_cache(checks)
     check_app_serve(checks)
+    check_dual_stack_bind(checks)
     check_cli_seams(checks)
     check_code_ledger(checks)
     check_identify_preflight_stage(checks)

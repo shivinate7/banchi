@@ -264,11 +264,13 @@ from __future__ import annotations
 import base64
 import binascii
 import contextlib
+import errno
 import hashlib
 import json
 import os
 import re
 import signal
+import socket
 import sys
 import concurrent.futures
 import threading
@@ -330,7 +332,14 @@ from server import shipping_routes  # noqa: E402
 from server import order_transport  # noqa: E402
 from server import ports  # noqa: E402
 
-HOST = "0.0.0.0"
+# EVERY INTERFACE, BOTH FAMILIES, ONE SOCKET (2026-09-23 incident). `"::"` with
+# `IPV6_V6ONLY` cleared answers IPv6 and IPv4 (as a v4-mapped address) on the same listener
+# — `_capture_server()` below is what does that, and it falls back to plain `0.0.0.0` only
+# when IPv6 is not available on the machine at all. Before this, a SEPARATE process bound to
+# the other family could bind this same port too (measured: `0.0.0.0` and a later `::` both
+# succeed), so `localhost` — which resolves `::1` first on this Mac — silently reached
+# whichever process won the IPv6 half while `127.0.0.1` kept reaching this one.
+HOST = "::"
 
 # One identity per process, reported by `GET /status` so the app can tell a restart from a
 # reload. Computed at import, which is exactly the point: it changes when, and only when, this
@@ -14048,11 +14057,51 @@ class CaptureServer(ThreadingHTTPServer):
             self._pool.shutdown(wait=False)
 
 
+class _DualStackCaptureServer(CaptureServer):
+    """`CaptureServer` over one IPv6 socket with `IPV6_V6ONLY` cleared.
+
+    A dual-stack socket answers both families: an IPv4 client's connection arrives here as
+    a v4-mapped `::ffff:a.b.c.d` address. This is a SEPARATE class rather than a change to
+    `CaptureServer.address_family` because `address_family` is read once, at socket-creation
+    time in `TCPServer.__init__` — a class attribute is the only place Python's own
+    `socketserver` gives you to set it, and putting it here instead of on `CaptureServer`
+    keeps T7's direct `CaptureServer(("127.0.0.1", 0), ...)` calls on plain AF_INET,
+    unchanged. Used only by `_capture_server()`, which is `serve()`'s own factory.
+    """
+
+    address_family = socket.AF_INET6
+
+    def server_bind(self) -> None:
+        self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        super().server_bind()
+
+
+def _capture_server(host: str, port: int) -> Tuple[CaptureServer, str]:
+    """Bind the socket `serve()` runs on. Returns the bound server and the host it used.
+
+    `host="::"` (the default, `HOST` above) binds IPv6 dual-stack, so one socket answers a
+    LAN phone over IPv4 and a browser over IPv6 both (the 2026-09-23 incident: two
+    processes, one per family, could otherwise both bind this port). A `::` bind that fails
+    for a reason OTHER than the port already being taken — no IPv6 stack on this machine —
+    falls back to plain `0.0.0.0`, printed once. `EADDRINUSE` is raised straight through
+    either way: that refusal stays `serve()`'s to print, unchanged from before this existed.
+    """
+    if host == "::":
+        try:
+            return _DualStackCaptureServer((host, port), CaptureHandler), host
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                raise
+            print(f"IPv6 unavailable ({exc}) — listening on 0.0.0.0 only.")
+            host = "0.0.0.0"
+    return CaptureServer((host, port), CaptureHandler), host
+
+
 def serve(host: str = HOST, port: int = PORT) -> None:
     root = captures_root()
     root.mkdir(parents=True, exist_ok=True)
     try:
-        httpd = CaptureServer((host, port), CaptureHandler)
+        httpd, host = _capture_server(host, port)
     except OSError as exc:
         # `allow_reuse_address` is SO_REUSEADDR, which does not let a second process listen on
         # a port that is already bound — so this is what a stray `make server` beside a running
@@ -14076,7 +14125,9 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     with contextlib.suppress(ValueError):
         signal.signal(signal.SIGTERM, _term)
 
-    print(f"pkmnscan capture server on http://{host}:{port}")
+    # An IPv6 literal needs brackets in a URL (`http://[::]:8000`) — plain `0.0.0.0` does not.
+    display_host = f"[{host}]" if ":" in host else host
+    print(f"pkmnscan capture server on http://{display_host}:{port}")
     print(f"  photos    {root}")
     print(f"  store     {files.inventory_dir()}")
     # WHICH CHECKOUT IS SERVING, printed because the two lines above are absolute paths that

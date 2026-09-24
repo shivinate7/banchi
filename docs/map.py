@@ -2491,7 +2491,7 @@ COMPONENTS = [
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
                         "reload is scheduled and the guard is never reached.",
-                "governed_by": ["D18", "D43", "D53", "D138", "D158", "D176"],
+                "governed_by": ["D18", "D43", "D53", "D127", "D138", "D158", "D176"],
                 "tested_by": [],
             },
             "primary_sync.py": {
@@ -4111,8 +4111,8 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138", "D139",
-                                "D158", "D176"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D127", "D138",
+                                "D139", "D158", "D176"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
