@@ -62,14 +62,23 @@ for (const theme of ['light', 'dark'] as const) {
  * ============================================================================================ */
 
 test.describe('FilterBar', () => {
-  test('every facet and sort control in the wide row is one height (FLT-24)', async ({ page }) => {
-    await open(page, 1440)
-    const heights = await page
-      .locator('[data-specimen="FilterBar"] .bn-filterbar-row .bn-pick, [data-specimen="FilterBar"] .bn-filterbar-row .bn-sort-dir')
-      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
-    expect(heights.length).toBeGreaterThanOrEqual(5)
-    expect(new Set(heights).size, `heights ${heights.join(', ')}`).toBe(1)
-  })
+  /* THE WIDE ROW ONLY: 1440, 820 and 720 (above the 639px stack). The search field is IN this
+   *  row too (gripe 3: "the filters aren't even the same widths"), so it carries the SAME
+   *  height as every other control here — not its own standalone `--bn-control-h-lg`. */
+  for (const width of [1440, 820, 720] as const) {
+    test(`every control in the wide row, search field included, is one height at ${width} (FLT-24)`, async ({ page }) => {
+      await open(page, width)
+      const heights = await page
+        .locator(
+          '[data-specimen="FilterBar"] .bn-filterbar-row .bn-pick, ' +
+            '[data-specimen="FilterBar"] .bn-filterbar-row .bn-sort-dir, ' +
+            '[data-specimen="FilterBar"] .bn-filterbar-search .search-field-box',
+        )
+        .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
+      expect(heights.length).toBeGreaterThanOrEqual(6)
+      expect(new Set(heights).size, `heights ${heights.join(', ')}`).toBe(1)
+    })
+  }
 
   test('"N of M" is drawn by construction, and changes as a facet narrows (FLT-13)', async ({ page }) => {
     await open(page, 1440)

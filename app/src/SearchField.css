@@ -98,6 +98,19 @@
   padding: 0 var(--bn-2) 0 var(--bn-3);
   min-height: var(--bn-control-h-lg);
 }
+/* `controlHeight="bar"` (`SearchField.tsx`): ONE HEIGHT for every control a filter bar draws
+   (the owner's gripe: "the filters aren't even the same widths"). `kit/filters.tsx:FilterBar`
+   is the only caller that passes it — every OTHER `SearchField` on the product keeps its own
+   `--bn-control-h-lg` above, untouched. Below 767px, or on a coarse pointer, `--bn-control-h`
+   itself rises to 42px (`tokens.css`), so the 40px thumb floor still holds at any width
+   narrower than that, `FilterBar`'s own 639px phone stack included. */
+/* `height`, not `min-height`: the bar's other controls (`kit/data.css:.bn-pick`,
+   `.bn-sort-dir`) are a fixed height, and the field's own content (padding plus a line of
+   text) is taller than `--bn-control-h` on its own — `min-height` would let it grow past its
+   neighbours by a few pixels, the exact 1-pixel-off drift a filter bar cannot afford. `align-
+   items: center` on the box centers the input inside the shorter box, same as it already
+   centers the icon and the key. */
+.search-field-owner.search-field-bar .search-field-box { height: var(--bn-control-h); min-height: 0; }
 .search-field-owner .search-field-input {
   font-size: var(--bn-fs-base);
   padding: var(--bn-2) 0;

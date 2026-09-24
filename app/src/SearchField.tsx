@@ -51,6 +51,15 @@ export type SearchFieldProps = {
 
   /** What an empty press says. Defaults to the placeholder's own words. */
   emptyHint?: string
+
+  /** `'lg'` (the default, `--bn-control-h-lg`) everywhere this field stands alone. `'bar'` is
+   *  for a caller that sits this field beside OTHER controls sharing `--bn-control-h` — today
+   *  only `kit/filters.tsx:FilterBar` (the owner's gripe 3, "the filters aren't even the same
+   *  widths") — and takes that shorter height there ONLY: every other `SearchField` on the
+   *  product is untouched. Below 767px, or on a coarse pointer, `--bn-control-h` itself is
+   *  raised to 42px (`tokens.css`), so the 40px thumb floor still holds at any width narrower
+   *  than that, `FilterBar`'s own 639px phone stack included. */
+  controlHeight?: 'lg' | 'bar'
 }
 
 export function SearchField({
@@ -64,6 +73,7 @@ export function SearchField({
   onSubmit,
   submitLabel,
   emptyHint,
+  controlHeight = 'lg',
 }: SearchFieldProps) {
   const id = useId()
   const hintId = useId()
@@ -174,7 +184,7 @@ export function SearchField({
   }
 
   return (
-    <div className={`search-field search-field-${persona}`}>
+    <div className={`search-field search-field-${persona}${controlHeight === 'bar' ? ' search-field-bar' : ''}`}>
       {/* A real <label> in both skins, hidden visually on the owner's rather than replaced by an
           aria-label. */}
       <label className="search-field-label" htmlFor={id}>

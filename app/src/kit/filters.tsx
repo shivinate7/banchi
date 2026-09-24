@@ -146,6 +146,7 @@ export function FilterBar<K extends string = string>({
               onChange={search.onChange}
               placeholder={search.placeholder}
               label={search.label}
+              controlHeight="bar"
             />
           </div>
         )}
