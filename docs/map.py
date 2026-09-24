@@ -566,8 +566,17 @@ COMPONENTS = [
                                           "the one `pipeline/pricearchive.py:rows_from_store` "
                                           "actually tested is queued. A card with no "
                                           "photograph is never queued.",
-                                   "governed_by": ["D167", "D219", "D233", "D234", "D26", "D58", "D89"],
-                                   "tested_by": []},
+                                   "governed_by": ["D167", "D219", "D233", "D234", "D26", "D58",
+                                                   "D89", "D247"],
+                                   "tested_by": [],
+                                   "note": "PROVED BY `make archive-review-selftest`, "
+                                           "PATH GATED and IN `make check` as of D247's "
+                                           "seventeenth entry (owner's word, 2026-09-23) "
+                                           "— no network, over a throwaway store. Its one "
+                                           "caller, `pkmnscan archive sweep --write` "
+                                           "(`cli/cmd_pricearchive.py`), is the same real, "
+                                           "live caller that made `pricearchive-selftest`'s "
+                                           "own exemption go stale."},
             "cmd_rescue.py": {"does": "`pkmnscan rescue <run>` re-addresses a STRANDED run's "
                                       "cards to the positions their photographs are at now and "
                                       "derives a SECOND run over the drawer they are actually "
@@ -803,14 +812,16 @@ COMPONENTS = [
                                            "self-contradiction check is a separate, "
                                            "sibling build kept apart on the owner's ruling.",
                                     "governed_by": ["D146", "D173", "D234", "D237",
-                                                    "D239"],
-                                    "note": "PROVED BY `scripts/identity-checks-selftest.py`: "
+                                                    "D239", "D247"],
+                                    "note": "PROVED BY `make identity-checks-selftest`, "
+                                            "PATH GATED and IN `make check` as of D247's "
+                                            "nineteenth entry (owner's word, 2026-09-23): "
                                             "13 arms, including a mutation arm over the "
                                             "denominator check's dominant-vs-first-seen "
-                                            "choice. Not wired into `make check`, matching "
-                                            "`pricearchive.py`'s own precedent — its one "
-                                            "caller is a CLI subcommand, not tested_by any "
-                                            "harness id."},
+                                            "choice. Its one caller is the "
+                                            "`cli/cmd_cards.py:checks` CLI subcommand — "
+                                            "`grep -rl identity_checks harness/` names "
+                                            "nothing, so no harness id tests it either."},
             # THE SKU SELF-CONTRADICTION CHECK, KEPT SEPARATE FROM identity_checks.py (a
             # separate, sibling PR) ON THE OWNER'S OWN RULING.
             "sku_number_contradictions.py": {
@@ -828,15 +839,17 @@ COMPONENTS = [
                         "at all. Existence-only was this module's first, wrong shape: "
                         "vacuous in a dense set (Vendetta, 100% of numbers 1-166 real).",
                 "governed_by": ["D146", "D167", "D173", "D234",
-                                "D242"],
-                "note": "PROVED BY `scripts/sku-number-contradictions-selftest.py`: eight "
+                                "D242", "D247"],
+                "note": "PROVED BY `make sku-number-contradictions-selftest`, PATH GATED "
+                        "and IN `make check` as of D247's twenty-second entry (owner's "
+                        "word, 2026-09-23): eight "
                         "arms, including a `RaisingMarket` that fails the test if the "
                         "denominator-mismatch class ever calls it, and a mutation arm "
                         "running the ORIGINAL existence-only resolver against a dense-set "
                         "fixture — it wrongly reports SHARED_SKU where the real, "
-                        "name-agreement function correctly finds the one misread. Not "
-                        "wired into `make check`, matching `pricearchive.py`'s own "
-                        "precedent.",
+                        "name-agreement function correctly finds the one misread. Its one "
+                        "caller (`cli/cmd_sku_contradictions.py:run`, `./pkmnscan cards "
+                        "contradictions`) was tested nowhere else.",
             },
             # THE MIRROR: FIXED SKU, DISAGREEING NAME. Kept apart from
             # `sku_number_contradictions.py` on the same precedent that module was kept
@@ -1244,11 +1257,15 @@ COMPONENTS = [
                                        "live read. `history_begins` computes the date the "
                                        "chart states its own history starts from, off the "
                                        "buckets actually read, never the 357-day constant.",
-                                "governed_by": ["D62", "D219", "D227",
+                                "governed_by": ["D62", "D219", "D227", "D247",
                                                 "D-pricehistory-resolves-by-sku"],
                                 "note": "Exercised by `server/pipeline_routes.py:do_product_history` "
                                         "and by `app/tests/product-history.spec.ts`. No "
-                                        "network call in the archive-hit path."},
+                                        "network call in the archive-hit path. PROVED "
+                                        "AGAINST A THROWAWAY STORE BY `make "
+                                        "product-history-selftest`, PATH GATED and IN "
+                                        "`make check` as of D247's twenty-first entry "
+                                        "(owner's word, 2026-09-23)."},
             # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/revenue-plan.md` section 1,
             # second half; `D236`). The position is the SKU
             # (D212); quantity is the `cards` table's own state, never the marketplace
@@ -1272,10 +1289,11 @@ COMPONENTS = [
                                     "it. `build_holdings_report` is the one entry point: one "
                                     "range in, a `HoldingsReport` out.",
                                 "governed_by": ["D62", "D159", "D189", "D212", "D219", "D225",
-                                                "D236"],
-                                "note": "PROVED BY `make holdings-selftest`, not in `make "
-                                        "check` — no store on disk, no network, "
-                                        "`pricearchive-selftest.py`'s own precedent. Two "
+                                                "D236", "D247", "D250"],
+                                "note": "PROVED BY `make holdings-selftest`, PATH GATED "
+                                        "and IN `make check` as of D247's eighteenth entry "
+                                        "(owner's word, 2026-09-23) — no store on disk, no "
+                                        "network. Two "
                                         "mutation arms: `_adjacent` forced to always answer "
                                         "`True` (the gap interpolates) and "
                                         "`sealed_excluded_count` forced to always answer `0` "
@@ -1283,8 +1301,9 @@ COMPONENTS = [
                                         "own assertion red. `GET /pipeline/holdings-value` "
                                         "(`server/pipeline_routes.py:"
                                         "do_pipeline_holdings_value`) is the one route over "
-                                        "this module; NOT YET REACHABLE FROM A SCREEN — no "
-                                        "client function, no wire type, no control."},
+                                        "this module; REACHABLE FROM A SCREEN AS OF D250 — "
+                                        "`app/src/Revenue.tsx`'s `getHoldingsValue` calls it "
+                                        "from `#/revenue`'s \"Value my stock\" panel."},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -1828,16 +1847,19 @@ COMPONENTS = [
                                     "Marketplace Price` to an in-memory list, flushed by "
                                     "`Store.write()` with `db.append_postings` into "
                                     "`price_postings` — one `INSERT` per row, never an "
-                                    "`UPDATE` or a `DELETE`. No caller yet: `emit` and "
-                                    "`reprice apply` call `.record()` at the moment each "
-                                    "already decides a price reached a file.",
+                                    "`UPDATE` or a `DELETE`. `emit` and "
+                                    "`reprice apply` are its only two callers, at the moment "
+                                    "each already decides a price reached a file.",
                              "governed_by": ["D243", "D88", "D212",
-                                             "D219", "D189", "D86"],
-                             "note": "PROVED BY `make price-postings-selftest`, and by "
+                                             "D219", "D189", "D86", "D244", "D247"],
+                             "note": "PROVED BY `make price-postings-selftest`, PATH GATED "
+                                     "and IN `make check` as of D247's twentieth entry "
+                                     "(owner's word, 2026-09-23), and by "
                                      "`--mutate-to-upsert` (a real mutation test): rewriting "
                                      "`append_postings` into an upsert keyed on `sku` turns "
-                                     "the 13/13 pass into 3+ failures. NOT REACHABLE FROM A "
-                                     "SCREEN — the owner's ruling is record first, build the "
+                                     "the 13/13 pass into 3+ failures. NOTHING READS THIS "
+                                     "TABLE BACK ONTO A "
+                                     "SCREEN YET (D244) — the owner's ruling is record first, build the "
                                      "view later."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
@@ -2720,10 +2742,14 @@ COMPONENTS = [
                         "upsert keyed on `sku` by one literal string replacement, adds the "
                         "UNIQUE(sku) constraint that upsert needs, and re-runs the whole "
                         "suite against the mutated copy — which MUST go red, or the append-"
-                        "only property is not being tested at all. Not wired into "
-                        "`make check` — `make pricearchive-selftest`'s own precedent, a "
-                        "package with no caller a screen reaches yet.",
-                "governed_by": ["D243", "D88", "D212", "D219", "D189"],
+                        "only property is not being tested at all. PATH GATED, IN "
+                        "`make check` and `make ci-check` as of D247's twentieth entry "
+                        "(owner's word, 2026-09-23) — no network. `emit` and `reprice "
+                        "apply` are this table's own real callers, both real presses; the "
+                        "exemption this note used to state (\"no caller a screen reaches "
+                        "yet\") described the READ side, never the write side this file "
+                        "proves (D244 — the view is shelved, the record is not).",
+                "governed_by": ["D88", "D189", "D212", "D219", "D243", "D244", "D247"],
             },
             "price-postings-recovery.py": {
                 "does": "read-only measurement against the owner's real "
@@ -2747,10 +2773,13 @@ COMPONENTS = [
                         "exercises MISREAD, SHARED_SKU and UNRESOLVED. A mutation arm: a "
                         "naive first-side-wins resolver picks a wrong, silent winner on "
                         "the SHARED_SKU fixture; the real function reports both sides "
-                        "and picks none. 15 assertions. Not wired into `make check` — "
-                        "`pricearchive-selftest.py`'s own precedent, one entry above.",
-                "governed_by": ["D146", "D167", "D173", "D234",
-                                "D242"],
+                        "and picks none. Every arm proved, all passing. PATH GATED, IN "
+                        "`make check` and "
+                        "`make ci-check` as of D247's twenty-second entry (owner's word, "
+                        "2026-09-23) — its own caller "
+                        "(`cli/cmd_sku_contradictions.py:run`, `./pkmnscan cards "
+                        "contradictions`) was tested nowhere else.",
+                "governed_by": ["D146", "D167", "D173", "D234", "D242", "D247"],
             },
             "sku-name-contradictions-selftest.py": {
                 "does": "proves pipeline/sku_name_contradictions.py against literal "
@@ -2783,9 +2812,13 @@ COMPONENTS = [
                         "re-queued (D167). Mutation-tested: a broken apply that writes "
                         "the queue mapping directly, skipping Queue.upsert's own "
                         "cleared-entry guard, is shown to silently reopen an answered "
-                        "entry and lose its first_seen. Not wired into `make check` — "
-                        "`make pricearchive-selftest`'s own precedent.",
-                "governed_by": ["D167", "D219", "D233", "D234", "D238"],
+                        "entry and lose its first_seen. PATH GATED, IN `make check` and "
+                        "`make ci-check` as of D247's seventeenth entry (owner's word, "
+                        "2026-09-23) — this module is called by `pkmnscan archive sweep "
+                        "--write` itself (`cli/cmd_pricearchive.py`), the same real, live "
+                        "caller that made `pricearchive-selftest`'s own exemption go "
+                        "stale.",
+                "governed_by": ["D167", "D219", "D233", "D234", "D238", "D247"],
             },
             "identity-checks-selftest.py": {
                 "does": "proves pipeline/identity_checks.py against literal CardRecord "
@@ -2798,9 +2831,14 @@ COMPONENTS = [
                         "arm: a denominator check comparing against the first-seen value "
                         "instead of the dominant one is shown to blame the wrong card "
                         "before the real function is shown to survive the same fixture. "
-                        "13 assertions. Not wired into `make check` — "
-                        "`pricearchive-selftest.py`'s own precedent, one entry above.",
-                "governed_by": ["D146", "D173", "D234", "D237", "D239"],
+                        "13 assertions. PATH GATED, IN `make check` and `make ci-check` "
+                        "as of D247's nineteenth entry (owner's word, 2026-09-23) — the "
+                        "sentence that used to sit here (\"already covered by T7's "
+                        "harness sweep\") was itself wrong: T7 drives `cli/cmd_cards.py` "
+                        "through `cards_action='variants'` alone, never `'checks'`; this "
+                        "module's one caller (`cli/cmd_cards.py:checks`) was tested "
+                        "nowhere until now.",
+                "governed_by": ["D146", "D173", "D234", "D237", "D239", "D247"],
             },
             "pricehistory-cache-selftest.py": {
                 "does": "proves pipeline/pricehistory.py's two cache lifetimes against a "
@@ -2825,9 +2863,11 @@ COMPONENTS = [
                         "asserted by pointing an `ExplodingMarket` at the route and proving "
                         "it is never called; a SKU the archive has never swept reaches a "
                         "`FakeMarket` and answers `source: live`. Nine assertions, all "
-                        "passing. Not wired into `make check` — the same precedent this "
-                        "file's own sibling above sets.",
-                "governed_by": ["D227", "D62", "D18", "D22"],
+                        "passing. PATH GATED, IN `make check` and `make ci-check` as of "
+                        "D247's twenty-first entry (owner's word, 2026-09-23) — "
+                        "`do_product_history` is `#/product`'s own route (D226), a real, "
+                        "screen-reachable caller.",
+                "governed_by": ["D18", "D22", "D62", "D226", "D227", "D247"],
             },
             "d240-tolerance-fit.py": {
                 "does": "RESCUED, INCOMPLETE — the sweep exists, the measurement it takes "
@@ -2865,10 +2905,14 @@ COMPONENTS = [
                         "fail once the guard it checks is defeated: forcing `_adjacent` to "
                         "always answer `True` (the gap interpolates) and forcing "
                         "`sealed_excluded_count` to always answer `0` (the exclusion is "
-                        "dropped). 28 assertions, all passing. Not wired into `make check` "
-                        "— `pricearchive-selftest.py`'s own precedent.",
-                "governed_by": ["D62", "D159", "D189", "D212", "D219", "D18",
-                                "D236"],
+                        "dropped). 28 assertions, all passing. PATH GATED, IN `make check` "
+                        "and `make ci-check` as of D247's eighteenth entry (owner's word, "
+                        "2026-09-23) — the exemption this note used to state (\"no caller "
+                        "reachable from a screen yet\") described a state D250 already "
+                        "ended: `#/revenue`'s \"Value my stock\" panel calls "
+                        "`GET /pipeline/holdings-value` through `app/src/Revenue.tsx`'s "
+                        "`getHoldingsValue`.",
+                "governed_by": ["D18", "D62", "D159", "D189", "D212", "D219", "D236", "D247", "D250"],
             },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
@@ -4350,12 +4394,14 @@ COMPONENTS = [
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
                 "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48",
-                                "D53", "D54", "D58", "D60", "D65", "D68", "D74", "D76", "D80",
-                                "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122", "D123",
-                                "D127", "D129", "D133", "D135", "D138", "D139", "D140", "D141",
-                                "D149", "D158", "D160", "D166", "D171", "D172", "D173", "D176",
-                                "D178", "D189", "D215", "D219", "D222", "D223", "D224", "D229",
-                                "D233", "D234", "D240", "D247", "D-pricehistory-resolves-by-sku",
+                                "D53", "D54", "D58", "D60", "D62", "D65", "D68", "D74", "D76",
+                                "D80", "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122",
+                                "D123", "D127", "D129", "D133", "D135", "D138", "D139", "D140",
+                                "D141", "D146", "D149", "D158", "D159", "D160", "D166", "D167",
+                                "D171", "D172", "D173", "D176", "D178", "D189", "D212", "D215",
+                                "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
+                                "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
+                                "D247", "D250", "D-pricehistory-resolves-by-sku",
                                 "D-token-literals-are-pinned"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
