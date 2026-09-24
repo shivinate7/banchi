@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cli import (  # noqa: E402
+    cmd_boxes,
     cmd_cards,
     cmd_emit,
     cmd_identify,
@@ -255,6 +256,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="also print one line of machine-readable JSON. The prose is unchanged either way.",
+    )
+
+    # ---------------------------------------------------------------------------- boxes
+    # A BOX IS SHOWN BY ITS NAME (D-a-box-is-shown-by-its-name). `names` is the one-time
+    # backfill that gives every unnamed box the stored name `Box <number>`. Previews by default.
+    boxes = sub.add_parser(
+        "boxes",
+        help="box names: give every unnamed box its stored default name. Previews.",
+    )
+    boxes_sub = boxes.add_subparsers(dest="boxes_action")
+    boxes_names = boxes_sub.add_parser(
+        "names",
+        help="name every unnamed box `Box <number>`, in one transaction. Previews by default.",
+    )
+    boxes_names.add_argument(
+        "--write", action="store_true", help="actually write; previews without it"
     )
 
     # ---------------------------------------------------------------------------- cards
@@ -670,6 +687,7 @@ COMMANDS = {
     "reprice": cmd_reprice.run,
     "rescue": cmd_rescue.run,
     "cards": cmd_cards.run,
+    "boxes": cmd_boxes.run,
 }
 
 

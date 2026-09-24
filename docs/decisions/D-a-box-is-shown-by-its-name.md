@@ -64,6 +64,26 @@ its `B` sigil so that it reads apart from a count. Both put the box number on th
 
 ### What is built
 
-NOT BUILT. The locating lane builds it: the server's place labels, `departed_label`, the
-receipts, the default name at creation and the backfill. The lane moves to the larger model
-tier, because it now writes to the store. The kit-data lane's `BoxLabel` draws the name only.
+BUILT in the locating lane, server half:
+
+- `pipeline/join.py:Position.label` reads `<box name>, Section <n>, Card <m>`. The card counts
+  within its section. The parts are joined by a comma, so no separator dot is typed (D218). A
+  caller with no registry gets `Box <number>`, which is the name the backfill stores.
+- `join.departed_label` gives the same shape: the place the card left, with the number it would
+  take going back (`Position.was_card`). The store key and the word `departed` leave the
+  string. A screen draws the departure from `Place.slot` being null.
+- `store/master.py:Inventory.ensure_box` stores `Box <count+1>` for a new box with no name, or
+  the next free `Box <n>`.
+- The backfill is a press that previews first:
+
+  ```
+  ./pkmnscan boxes names            # preview: which box gets which name
+  ./pkmnscan boxes names --write    # one transaction; a second run changes nothing
+  ```
+
+T7's `check_box_names_and_place_labels` asserts the label, the departed place, the default
+name and the backfill.
+
+Still open: two departed copies that stood next to each other read the same place. The store
+key told them apart before. A screen that lists both draws each copy's own state beside it.
+A box whose name is cleared falls back to `Box <number>` until the backfill runs again.

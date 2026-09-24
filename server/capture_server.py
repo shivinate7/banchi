@@ -2588,7 +2588,10 @@ class _Places:
                 "fraction": None,
             }
 
-        position = join.Position(number, at, layout, occupied)
+        # THE NAME RIDES THE POSITION, so the label says it (D-a-box-is-shown-by-its-name).
+        position = join.Position(
+            number, at, layout, occupied, box_name=entry.name if entry is not None else None
+        )
         slot = position.slot
 
         # `Position.section_end` IS None FOR THE FINAL DECLARED SECTION, on purpose: it runs
@@ -2615,7 +2618,13 @@ class _Places:
         # departed records between the same two cards. It answers zero for a box where
         # nothing has left, and `placeSentence` already draws no gap phrase at zero, so the
         # sentence quietly stops carrying a clause that D58 made structurally empty.
-        first = occupied[position.section_start - 1] if occupied else at
+        # A SECTION WITH NO CARD LEFT ON HAND starts past the last card on hand: a departed
+        # card is counted in the section it left (`Position.section`), which may now be empty.
+        first = (
+            occupied[position.section_start - 1]
+            if 0 < position.section_start <= len(occupied)
+            else at
+        )
         last = occupied[end - 1] if (end is not None and 0 < end <= len(occupied)) else None
         neighbors, section_gaps = self._company(number, at, first, last)
 

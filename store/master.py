@@ -68,7 +68,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 # THE ONE INTRA-PACKAGE IMPORT THIS MODULE MAKES, and it is a container rather than a disk.
 # The comment beside `BadPosition` below explains why nothing here reaches `store/files.py`;
@@ -2178,6 +2178,12 @@ class Inventory:
         if entry is None:
             if name is not None:
                 self._check_name_free(name, number)
+            else:
+                # A BOX WITH NO NAME GETS A STORED ONE (D-a-box-is-shown-by-its-name). The
+                # owner's ruling, 2026-09-23: "If I choose to not name a box, it can default
+                # to count+1 Box as a default name". Stored at creation, not drawn at render,
+                # so it is a name like any other: it never renumbers when a box is deleted.
+                name = self.default_box_name()
             entry = Box(box=number, bid=self._issue_box_id(), name=name, created_at=now())
             self.boxes[str(number)] = entry
             # `bid` ON THE EVENT, NOT ONLY ON THE ROW. The row is deleted when the drawer is;
@@ -2192,6 +2198,81 @@ class Inventory:
             # could set by different rules.
             self.set_name(number, name)
         return entry
+
+    def _name_taken(self, name: str, number: Optional[int] = None) -> bool:
+        """Whether another box already answers to `name`, folded and stripped as
+        `_check_name_free` compares. `number` is the box being written, which is skipped."""
+        wanted = name.strip().casefold()
+        return any(
+            entry.name is not None
+            and entry.box != number
+            and entry.name.strip().casefold() == wanted
+            for entry in self.boxes.values()
+        )
+
+    def default_box_name(self, count: Optional[int] = None) -> str:
+        """`Box <count+1>`, or the next free `Box <n>` above it (D-a-box-is-shown-by-its-name).
+
+        `count` is how many boxes the registry holds before the new one, so the first box is
+        `Box 1`. Names are unique (D20, `_check_name_free`), so when `Box <count+1>` is taken
+        (a box was deleted, or the owner named one that way) the next free number is used.
+        """
+        n = (len(self.boxes) if count is None else int(count)) + 1
+        while self._name_taken(f"Box {n}"):
+            n += 1
+        return f"Box {n}"
+
+    def box_name_plan(self) -> List[Tuple[int, str]]:
+        """What `backfill_box_names` would write, as `(number, name)` pairs. Writes nothing.
+
+        THE BACKFILL OF THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name): every box
+        with no name gets the stored name `Box <number>`, today's number, so nothing visible
+        changes and the physical labels on the drawers still match. A box that has a name is
+        left alone, which is what makes the backfill idempotent: a second pass plans nothing.
+
+        THE REGISTRY ONLY, NEVER A WALK OF THE CARDS. Every path that puts a card in a box
+        registers the box first (`ensure_box`, and the v1 parse), so a box only cards name is
+        a legacy shape. Its cards still read `Box <number>` through `join.box_title`'s
+        fallback, which is the same string this plan would store for it.
+
+        WHEN `Box <number>` IS ALREADY ANOTHER BOX'S NAME, the next free `Box <n>` above it is
+        planned (D20, names are unique). Earlier entries of the plan count as taken.
+        """
+        numbers: Set[int] = set()
+        for key in self.boxes:
+            try:
+                numbers.add(int(key))
+            except (TypeError, ValueError):
+                continue
+        taken = {
+            entry.name.strip().casefold()
+            for entry in self.boxes.values()
+            if entry.name is not None and entry.name.strip() != ""
+        }
+        plan: List[Tuple[int, str]] = []
+        for number in sorted(numbers):
+            entry = self.boxes.get(str(number))
+            if entry is not None and entry.name is not None and entry.name.strip() != "":
+                continue
+            n = number
+            while f"Box {n}".casefold() in taken:
+                n += 1
+            wanted = f"Box {n}"
+            taken.add(wanted.casefold())
+            plan.append((number, wanted))
+        return plan
+
+    def backfill_box_names(self) -> List[Tuple[int, str]]:
+        """Apply `box_name_plan` to this inventory, and return the plan it applied.
+
+        Each name goes through `set_name`, so the uniqueness check and the `box_renamed` event
+        are the ones every other naming path takes. This changes the in-memory inventory only. The
+        caller commits it in one `Store().write()` transaction.
+        """
+        plan = self.box_name_plan()
+        for number, wanted in plan:
+            self.set_name(number, wanted)
+        return plan
 
     def _check_name_free(self, name: str, number: int) -> None:
         """Refuse a name another box already answers to. Folded and stripped to compare.

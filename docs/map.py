@@ -380,10 +380,9 @@ COMPONENTS = [
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
-                                            "D87", "D100", "D145", "D172", "D180",
-                                            "D189", "D210",
-                                            "D213", "D219", "D239",
-                                            "D242"],
+                                            "D87", "D100", "D145", "D172", "D180", "D189", "D210",
+                                            "D213", "D219", "D239", "D242",
+                                            "D-a-box-is-shown-by-its-name"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -457,6 +456,14 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
+            "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
+                                     "gives every unnamed box the stored name `Box <number>` "
+                                     "(`store/master.py:Inventory.box_name_plan`). Previews by "
+                                     "default; `--write` plans again inside the store lock and "
+                                     "applies it in one transaction. Idempotent: a named box is "
+                                     "never touched.",
+                             "governed_by": ["D-a-box-is-shown-by-its-name", "D20"],
+                             "tested_by": ["T7"]},
             "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|contradictions|"
                                      "sku-names|photos|variants>` — the card's stable name "
                                      "(D172). `name` "
@@ -736,7 +743,7 @@ COMPONENTS = [
                                            "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49",
                                            "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D137",
                                            "D145", "D147", "D150", "D156", "D166", "D180", "D183",
-                                           "D188", "D253"], "tested_by": ["T7"]},
+                                           "D188", "D253", "D-a-box-is-shown-by-its-name"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -898,7 +905,9 @@ COMPONENTS = [
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
                                         "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
                                         "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D162", "D213", "D253"], "tested_by": ["T3"]},
+                                        "D137", "D146", "D162", "D213", "D218", "D253",
+                                        "D-a-box-is-shown-by-its-name",
+                                        "D-a-card-is-counted-in-its-section"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -1687,7 +1696,7 @@ COMPONENTS = [
                                           "D24", "D26", "D30", "D34", "D36", "D55", "D56", "D58",
                                           "D59", "D63", "D67", "D83", "D87", "D88", "D89", "D100",
                                           "D115", "D132", "D145", "D146", "D167", "D172", "D183",
-                                          "D192", "D213", "D253"], "tested_by": ["T7"]},
+                                          "D192", "D213", "D253", "D-a-box-is-shown-by-its-name"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -4887,7 +4896,7 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D168", "D172", "D174", "D183", "D189", "D191",
                                 "D192", "D193", "D203", "D212", "D213", "D219", "D225", "D227",
-                                "D252", "D-no-git-no-live-port"],
+                                "D252", "D-a-box-is-shown-by-its-name", "D-no-git-no-live-port"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
