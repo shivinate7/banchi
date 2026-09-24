@@ -1135,8 +1135,12 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 @keyframes bn-sheet-down { from { transform: none; opacity: 1; } to { transform: translateY(24px); opacity: 0; } }
 
 /* On a phone every sheet and dialog rises from the bottom — once, here, rather than a copy
-   per screen. The drawer is the one sheet that stays on its edge. */
-@media (max-width: 767px) {
+   per screen. The drawer is the one sheet that stays on its edge.
+   639 (the 640 ladder step, DESIGN.md: "the phone/tablet seam") since kit-frame-2, 2026-09-24:
+   the shell's phone chrome (top bar, bottom tab bar) now ends there, not at 768 (owner ruling,
+   720 gets the desktop rail) — an overlay that still rose bottom-first at 720 would be reaching
+   for a tab bar that is no longer drawn. */
+@media (max-width: 639px) {
   .bn-sheet:not(.bn-drawer) {
     top: auto;
     left: 0;
@@ -1171,7 +1175,8 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-dialog[data-leaving] { animation: bn-dialog-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
 .bn-menu[data-leaving] { animation: bn-pop-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
 @keyframes bn-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
-@media (max-width: 767px) {
+/* The leave half of the bottom-rise above — same 639 (kit-frame-2, 2026-09-24), same reason. */
+@media (max-width: 639px) {
   .bn-sheet:not(.bn-drawer)[data-leaving] { animation-name: bn-sheet-down; }
   .bn-dialog[data-leaving] { animation: bn-sheet-down var(--bn-t-fast) var(--bn-ease) forwards; }
 }
@@ -1204,6 +1209,13 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   min-width: 0;
   font-size: var(--bn-fs-h3);
   line-height: var(--bn-lh-snug);
+  /* base.css's bare `h1, h2, h3, h4` rule gives every heading -0.02em tracking, added after
+     EVERY character including the space glyph itself. At this title's own 16px that is
+     -0.32px, and Manrope's own space advance here is narrow enough that a two-word title
+     read as one ("Go to" measured 2.9px wide — visually "Goto"). `word-spacing` widens only
+     the space glyph, so the letters keep the product's own tight tracking and only the gap
+     between words opens back up. Measured >=3.5px at 1440 and 390 (gallery.spec.ts). */
+  word-spacing: 0.1em;
 }
 .bn-overlay-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--bn-5); }
 .bn-overlay-foot {
@@ -1294,7 +1306,10 @@ img.bn-crop[data-cropped='true'] {
   width: min(380px, calc(100vw - 32px));
   pointer-events: none;
 }
-@media (max-width: 767px) {
+/* 639 (kit-frame-2, 2026-09-24), not 767: the 64px it clears here is the phone tab bar's own
+   height, and that bar stops being drawn at the same seam the sheet/dialog rise above now
+   answers to — a toast lifted for a bar that is not on screen would float over dead space. */
+@media (max-width: 639px) {
   .bn-toasts { right: var(--bn-3); left: var(--bn-3); width: auto; bottom: calc(64px + env(safe-area-inset-bottom)); }
 }
 .bn-toast {
@@ -1436,13 +1451,14 @@ img.bn-crop[data-cropped='true'] {
   .bn-toast-action { height: var(--bn-control-h-sm); }
   /* "What the server said" is a control a thumb opens (D-notice-detail). */
   .bn-notice-said > summary { min-height: var(--bn-control-h-sm); }
-  /* A name that opens a product or an order is pressed like any other control. The link is
-     kit-data's (kit/data.css); its floor is the kit's, here, with the others (D117). */
-  .bn-datalink { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
-  /* Two more of kit-data's controls, found by `phone.spec.ts` once `#/gallery` drew them: the
-     filtered count's Clear (18px) and the search field's Find (36px). */
-  .bn-filtercount-clear { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
-  .search-field-submit { min-height: var(--bn-control-h-sm); }
+  /* `.bn-datalink` and `.bn-filtercount-clear` WERE HERE, as a stopgap: kit-data's own controls,
+     lifted from the kit's sheet because kit-data did not yet own a phone-floor block of its own.
+     kit-data now carries both (kit/data.css's own `@media` block, mirroring this one), so the
+     copy here was a second source for one floor — removed (kit-frame-2, 2026-09-24).
+     `.search-field-submit` WAS HERE TOO, and never needed to be: SearchField.css's own rule
+     already reads `--bn-control-h-sm` unconditionally, so the token's own phone lift (tokens.css)
+     reached it without a copy anywhere. `phone.spec.ts` and `kit-data.spec.ts` still assert all
+     three reach 40px at 390 — against the ONE rule each now has, not this one. */
   .bn-toast-close { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); }
   /* an icon-only button is square off `--btn-h`, but `.bn-btn` can still be squeezed narrower by
      a flex parent — the drawer's and the palette's were 36px wide against a 42px height */

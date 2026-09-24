@@ -354,8 +354,13 @@
   --bn-pill-ink-ok: var(--bn-ok);
   --bn-pill-ink-warn: var(--bn-warn);
   /* live is a light orange-vermilion and danger a deeper crimson-rose: apart in hue and in
-     lightness, each over 4.5:1 on its tint on every dark ground */
-  --bn-pill-ink-danger: #f7608a;
+     lightness, each over 4.5:1 on its tint on every dark ground, INCLUDING a selected
+     (accent-tinted) row (kit-frame-2, 2026-09-24): a danger pill drawn on a selected row is a
+     second tint over a first one, and the review found it at 4.08:1 there against this token's
+     former #f7608a — lighter than the plain-row floor needed, so nobody had reason to raise it
+     until a row could tint under it. gallery.spec.ts now composites the row's own tint into the
+     ground it checks every pill against. */
+  --bn-pill-ink-danger: #f6799c;
   --bn-pill-ink-live: #ffab70;
 
   --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
