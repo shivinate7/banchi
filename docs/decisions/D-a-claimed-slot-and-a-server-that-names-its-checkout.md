@@ -29,6 +29,7 @@
 
 - A tree that runs code older than this entry does not read the registry. It keeps its hash slot. A claimed tree can share a slot with it until it updates. (c) still refuses a test run in the new tree. The claim steps past such a tree's slot only while its server is up.
 - The capture server does not answer `/__checkout`. The claim identifies a capture-port holder by `lsof` only. Where `lsof` is missing, an unknown holder counts as another checkout's, so the claim steps away from it. That can move a tree off its own slot once. It never puts two trees on one slot.
+- `/__checkout` gives the checkout's path to anyone who can reach the dev server on the LAN. The Vite dev server already serves source under `/@fs/` with absolute paths, so this adds no new exposure.
 - More than 300 live linked checkouts leave no free slot. The claim then says so and the hash answers.
 
 **The reader.** `make port-slots-selftest`, in `make check` and `make ci-check`, never in the commit hook (D18). It forces two throwaway trees into one hash slot. It picks a slot whose ports are free, so it never reaches a real checkout's server. It starts a real Vite in tree B and runs a real Playwright in tree A.
