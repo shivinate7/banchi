@@ -1,11 +1,6 @@
 {
   "_about": "THE SHRINKING OFFENDER LIST (the owner's ruling on Q3, 2026-09-23; D-page-scaffold). static: file -> rule -> the lane that owes the fix, read by scripts/kit-adoption.mjs. runtime: route path -> assertion -> lane, read by app/tests/scaffold.spec.ts. Both FAIL on a violation not listed here AND on an entry that no longer matches a violation. A lane that fixes one deletes its entry in the same commit. The list ONLY SHRINKS: scripts/kit-adoption.mjs refuses any key in either block that the list at the merge-base with origin/main does not hold, unless the key's rule is not defined at the merge-base (a rule born on the branch; the check prints which rule allowed it and why). Never add an entry to make a new screen pass: render <Page> from ./kit and use the kit's primitives.",
   "static": {
-    "app/src/App.tsx": {
-      "R2-dialog": "shell",
-      "R2-search": "shell",
-      "R2-class": "shell"
-    },
     "app/src/BoxBrowse.tsx": {
       "R2-select": "inventory",
       "R2-class": "inventory"
@@ -82,10 +77,6 @@
     "app/src/OrdersWalkPane.tsx": {
       "R2-class": "orders"
     },
-    "app/src/PriceHistory.tsx": {
-      "R2-class": "product",
-      "R2-money": "product"
-    },
     "app/src/PriceTrend.tsx": {
       "R2-class": "b-pricing"
     },
@@ -95,10 +86,6 @@
       "R2-class": "b-pricing",
       "R2-date": "b-pricing",
       "R2-money": "b-pricing"
-    },
-    "app/src/ProductHistory.tsx": {
-      "R1": "product",
-      "R2-class": "product"
     },
     "app/src/Revenue.tsx": {
       "R1": "sales",
@@ -152,87 +139,61 @@
       "page": "home",
       "h1": "home",
       "width": "home",
-      "top": "home",
-      "title": "shell"
+      "top": "home"
     },
     "/capture": {
       "page": "capture",
       "h1": "capture",
       "width": "capture",
-      "top": "capture",
-      "title": "shell"
+      "top": "capture"
     },
     "/runs": {
       "page": "b-runs",
       "width": "b-runs",
-      "top": "b-runs",
-      "title": "shell"
+      "top": "b-runs"
     },
     "/review": {
       "page": "review",
       "width": "review",
-      "top": "review",
-      "title": "shell"
+      "top": "review"
     },
     "/pricing": {
       "page": "b-pricing",
       "width": "b-pricing",
-      "top": "b-pricing",
-      "title": "shell"
+      "top": "b-pricing"
     },
     "/orders": {
       "page": "orders",
       "width": "orders",
-      "top": "orders",
-      "title": "shell"
+      "top": "orders"
     },
     "/shipping": {
       "page": "shipping",
       "width": "shipping",
-      "top": "shipping",
-      "title": "shell"
+      "top": "shipping"
     },
     "/revenue": {
       "page": "sales",
       "width": "sales",
-      "top": "sales",
-      "title": "shell"
+      "top": "sales"
     },
     "/inventory": {
       "page": "inventory",
       "width": "inventory",
-      "top": "inventory",
-      "title": "shell"
+      "top": "inventory"
     },
     "/graveyard": {
       "page": "library",
       "width": "library",
-      "top": "library",
-      "title": "shell"
+      "top": "library"
     },
     "/codes": {
       "page": "library",
       "width": "library",
-      "top": "library",
-      "title": "shell"
+      "top": "library"
     },
     "/fulfillment": {
-      "page": "fulfillment",
-      "palette": "shell",
-      "keys": "shell"
-    },
-    "/gallery": {
-      "title": "shell",
-      "palette": "shell",
-      "keys": "shell"
-    },
-    "/product": {
-      "page": "product",
-      "width": "product",
-      "top": "product",
-      "title": "shell",
-      "palette": "shell",
-      "keys": "shell"
+      "page": "fulfillment"
     }
   }
 }

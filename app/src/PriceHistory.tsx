@@ -14,7 +14,7 @@
 
 import { useMemo } from 'react'
 import type { HistoryPoint, HistoryRange, PriceHistoryPayload } from './types'
-import { Button, Icon, Notice } from './kit'
+import { Button, Icon, Loading, Money, Notice } from './kit'
 import './PriceHistory.css'
 
 /** How a range is captioned. The endpoint's own range names are drawn beside these, small. */
@@ -143,7 +143,7 @@ function Range({ range }: { range: HistoryRange }) {
           <span className="pricehistory-none">no sales in this range</span>
         ) : (
           <>
-            <span className="pricehistory-figure">${range.vwap}</span>
+            <span className="pricehistory-figure"><Money value={Number(range.vwap)} /></span>
             <span className="pricehistory-vwap-key">avg sale</span>
             {moved === null ? null : (
               <span className="pricehistory-moved" data-tone={tone}>
@@ -156,7 +156,9 @@ function Range({ range }: { range: HistoryRange }) {
       </div>
       {range.bound === null ? null : (
         <p className="pricehistory-bound">
-          <span>could be ${range.bound.low}–${range.bound.high}</span>
+          <span>
+            could be <Money value={Number(range.bound.low)} />–<Money value={Number(range.bound.high)} />
+          </span>
           {percent(range.bound.width_of_vwap) === null ? null : (
             <span>±{((Number(range.bound.width_of_vwap) / 2) * 100).toFixed(0)}%</span>
           )}
@@ -183,7 +185,7 @@ function Range({ range }: { range: HistoryRange }) {
         <div>
           <dt>Spread</dt>
           <dd>
-            {range.dispersion === null ? '—' : `$${range.dispersion}`}
+            {range.dispersion === null ? '—' : <Money value={Number(range.dispersion)} />}
             <span className="pricehistory-word">within a bucket</span>
           </dd>
         </div>
@@ -232,13 +234,7 @@ export function PriceHistoryPanel({
       </header>
 
       {read === undefined || read.kind === 'reading' ? (
-        <div className="pricehistory-loading" aria-live="polite" aria-label="reading the price history">
-          <span className="bn-skeleton" style={{ height: 18, width: '55%' }} />
-          <span className="bn-skeleton" style={{ height: 56 }} />
-          <span className="bn-skeleton" style={{ height: 30, width: '40%' }} />
-          <span className="bn-skeleton" style={{ height: 56 }} />
-          <span className="bn-skeleton" style={{ height: 30, width: '40%' }} />
-        </div>
+        <Loading shape="rows" rows={2} label="reading the price history" className="pricehistory-loading" />
       ) : read.kind === 'refused' ? (
         <div className="pricehistory-state">
           <Notice tone="danger" title="The reading did not come back">
@@ -261,7 +257,7 @@ export function PriceHistoryPanel({
               <Icon name="tag" size={12} /> Export market
             </span>
             <span className="pricehistory-listed-value" data-empty={read.payload.market === null ? 'true' : undefined}>
-              {read.payload.market === null ? 'no market price' : `$${read.payload.market}`}
+              {read.payload.market === null ? 'no market price' : <Money value={Number(read.payload.market)} />}
             </span>
             <span className="pricehistory-listed-note">
               {read.payload.market === null ? (
