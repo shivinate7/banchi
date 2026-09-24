@@ -232,11 +232,25 @@ async function open(
      *  `standing.ts`'s own link and is what a case bookmarking the composer's default scope
      *  passes here. */
     at?: string
+    /** What `POST /pipeline/runs/<name>/match` answers (flow interview, Q4). Recorded into the
+     *  wire either way, so a case can assert that the match ran with nobody pressing — or that
+     *  it did not. Default: not waiting, which changes nothing on screen. */
+    match?: (body: Record<string, unknown>) => unknown
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   const record = (method: string, url: string, body: unknown) =>
     wire.push({ method, path: new URL(url).pathname, body })
+
+  await page.route(/\/pipeline\/runs\/[^/]+\/match$/, async (route) => {
+    const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
+    record('POST', route.request().url(), body)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.match?.(body) ?? { ran: false, reason: 'not_waiting', summary: runRow() }),
+    })
+  })
 
   /* THE SPEND ROUTE, INTERCEPTED AND NEVER CALLED. The body is recorded so the assertion can
      read what the screen would have sent — the strongest thing a browser test can say about a
@@ -2897,6 +2911,44 @@ test('rebind: the write lands a receipt with a way back to the new run, never co
 
   const writes = wire.filter((call) => call.path.endsWith('/rescue'))
   expect(writes.map((call) => call.body)).toEqual([{ write: false }, { write: true }])
+})
+
+// ---------------------------------------------------- the match runs by itself (Q4)
+
+const matchPosts = (wire: Wire[]) => wire.filter((call) => call.method === 'POST' && call.path.endsWith('/match'))
+
+test('a finished reading is matched with nobody pressing anything', async ({ page }) => {
+  /* THE DEFAULT RUN HAS READ ITS CARDS AND WAITS FOR ITS MATCH: collected, not joined. The owner's
+     ruling (flow interview, Q4) is that this step runs by itself, so arriving is the cue. */
+  const wire = await open(page, { match: () => ({ ran: true, ok: true, summary: runRow({ phase: 'emit' }) }) })
+  await expect.poll(() => matchPosts(wire).length).toBe(1)
+  expect(matchPosts(wire)[0]?.body).toEqual({})
+  await expect(page.locator('.run-row').first()).toContainText('Matching')
+})
+
+test('a match that stopped is the run\'s next step, with one door, and is not asked again by itself', async ({
+  page,
+}) => {
+  const problem = {
+    code: 'export_needs_set_hint',
+    message: 'Every Pokémon card in a run has to name its set, and 3 of 40 do not.',
+    step: 'fetch',
+  }
+  const wire = await open(page, {
+    runs: [runRow({ match_problem: problem })],
+    detail: { match_problem: problem },
+    match: () => ({ ran: true, ok: true, summary: runRow({ phase: 'emit' }) }),
+  })
+  /* THE PILL SAYS WHAT IS IN THE WAY, in two words. */
+  await expect(page.locator('.run-row').first()).toContainText('Needs sets')
+  await openRun(page)
+  const notice = page.locator('.run-match-problem')
+  await expect(notice).toContainText('Some cards need a set before they can be matched.')
+  /* A PROBLEM THAT STANDS IS NOT ASKED AGAIN WITHOUT A PRESS: TCGplayer is asked nothing. */
+  expect(matchPosts(wire)).toHaveLength(0)
+  await notice.getByRole('button', { name: 'Try again' }).click()
+  await expect.poll(() => matchPosts(wire).length).toBe(1)
+  expect(matchPosts(wire)[0]?.body).toEqual({ retry: true })
 })
 
 test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ page }) => {

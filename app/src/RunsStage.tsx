@@ -46,7 +46,13 @@ export function stageOf(row: RunSummary): Stage {
     case 'identify':
       return { label: 'Not read', tone: 'warn', filled: 0, live: false, step: 0 }
     case 'join':
-      return { label: 'Needs matching', tone: 'warn', filled: 1, live: false, step: 1 }
+      /* THE MATCH RUNS BY ITSELF (flow interview, Q4), so "needs matching" is no longer a job
+         for the owner. What the row says is the match in progress, or the problem that stopped
+         it — which is then the run's next step, in two words. */
+      if (row.match_problem != null) {
+        return { label: matchProblemLabel(row.match_problem.code), tone: 'warn', filled: 1, live: false, step: 1 }
+      }
+      return { label: 'Matching…', tone: 'accent', filled: 1, live: false, step: 1 }
     case 'emit': {
       const review = row.counts.queued_main ?? 0
       if (review > 0) {
@@ -65,6 +71,36 @@ export function stageOf(row: RunSummary): Stage {
       return { label: 'Compared', tone: 'ok', filled: 6, live: false, step: 4 }
     default:
       return { label: 'Unknown', tone: 'default', filled: 0, live: false, step: 0 }
+  }
+}
+
+/** A match problem in two words, for the pill. The sentence is the detail panel's. */
+export function matchProblemLabel(code: string): string {
+  switch (code) {
+    case 'export_needs_set_hint':
+      return 'Needs sets'
+    case 'tcg_session_expired':
+    case 'tcg_cookie_missing':
+    case 'tcg_cookie_malformed':
+      return 'Sign in again'
+    default:
+      return 'Match stopped'
+  }
+}
+
+/** The problem as one sentence and the one thing to do about it. */
+export function matchProblemTitle(code: string): string {
+  switch (code) {
+    case 'export_needs_set_hint':
+      return 'Some cards need a set before they can be matched. Add the sets, then try again.'
+    case 'tcg_session_expired':
+    case 'tcg_cookie_missing':
+    case 'tcg_cookie_malformed':
+      return 'The TCGplayer sign-in has expired. Sign in again, then try again.'
+    case 'tcg_unreachable':
+      return 'TCGplayer did not answer, so the cards were not matched.'
+    default:
+      return 'The cards could not be matched.'
   }
 }
 

@@ -303,6 +303,14 @@ async function stubShell(page: Page, cards: number): Promise<void> {
      send is due, so it is as much a shell read as `/status` is. The answer is the empty one —
      nothing sent, nothing due — so no spec sees a check it did not ask for. A spec about sends
      registers its own handler after this one, and Playwright matches most-recent first. */
+  /* THE AUTOMATIC MATCH (flow interview, Q4). `#/runs` calls it for every run it sees waiting
+     for a match, and the shared fixtures' default run IS one — so every spec that draws the
+     list would otherwise meet the seal over a press nobody made. The answer is "not waiting",
+     which changes nothing on screen; a spec about the match registers its own handler after
+     this one, and Playwright matches most-recent first. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/match$/, (route) =>
+    json(route, { ran: false, reason: 'not_waiting', summary: {} }),
+  )
   await page.route(/\/pipeline\/sends$/, (route) =>
     json(route, { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }),
   )

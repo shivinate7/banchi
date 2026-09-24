@@ -17335,6 +17335,8 @@ def send_portal():
       `hold`      endpoint -> a `threading.Event` the handler waits on before answering, so a
                   case can look at a press while it is still running.
       `gate`      a `threading.Barrier` the live read waits on, so two presses overlap.
+      `catalog`   the CATALOGUE export a run's match fetches (a POST to the export URL), with
+                  `filters` as the set list `getjsonfilters` answers. `signed_out` reaches it.
 
     `state["live"]` is the export body; `state["signed_out"]` makes the GET redirect to the
     login page. The server is THREADED, as the real one is: a rollback sent while a slow chunk
@@ -17350,6 +17352,16 @@ def send_portal():
         "published_then_5xx": False,
         "hold": {},
         "gate": None,
+        "catalog": FIXTURE_EXPORT.read_bytes(),
+        "filters": {
+            "Sets": [
+                {"Text": "All Set Names", "Value": "0"},
+                {"Text": "SV09: Journey Together", "Value": "4242"},
+            ],
+            "Rarities": [{"Text": "All Rarities", "Value": "0"}],
+            "Conditions": [{"Text": "All Conditions", "Value": "0"}],
+            "Printings": [{"Text": "All Printings", "Value": "0"}],
+        },
         "calls": [],
         "rows": [],
         "moved": [],
@@ -17382,6 +17394,9 @@ def send_portal():
 
         def do_GET(self):  # noqa: N802
             state["calls"].append(("GET", urllib.parse.urlparse(self.path).path))
+            if "getjsonfilters" in self.path:
+                self._answer(200, json.dumps(state["filters"]).encode("utf-8"))
+                return
             gate = state["gate"]
             if gate is not None:
                 with contextlib.suppress(threading.BrokenBarrierError):
@@ -17403,6 +17418,15 @@ def send_portal():
                 self.rfile.read(length).decode("utf-8"), keep_blank_values=True
             )
             state["calls"].append(("POST", name))
+            if name == "downloadexportcsv":
+                if state["signed_out"]:
+                    self.send_response(302)
+                    self.send_header("Location", "https://store.tcgplayer.com/oauth/login")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                self._answer(200, state["catalog"], "text/csv")
+                return
             if name in state["refuse"]:
                 self._wait(name)
                 self._answer(400, b"{}")
@@ -18370,6 +18394,107 @@ def check_send_hazards(checks: Checks) -> None:
                 bool(record.get("unknown")) and not record.get("published_at"),
                 f"and its receipt stays, saying so, rather than being removed: {sorted(record)}",
             )
+
+
+def check_run_match(checks: Checks) -> None:
+    """Q4 of the flow interview: matching runs by itself when a reading finishes, and a problem
+    becomes the run's next step. Against the stand-in portal's catalogue export.
+
+    `POST /pipeline/runs/<name>/match` is what the screen calls when it sees a run reach the
+    match step. What is asserted: a finished reading is matched with nobody pressing anything;
+    a refusal is recorded as the run's `match_problem` and is NOT asked again by the next
+    automatic call; the door's own press (`retry`) asks again; and a run that is not waiting
+    for a match is left alone.
+    """
+    checks.note("")
+    checks.note("RUN MATCH — matching runs by itself when the reading finishes (Q4)")
+    cards = [(3, 1, "Dunsparce", "120/159", "normal"), (3, 2, "Articuno ex", "161/159", None)]
+
+    def reading_done(hinted):
+        """A run whose reading has finished: identified, collected, not yet matched."""
+        run, _ = seam_run(checks, cards, join=False)
+        path = run.directory / pipeline_routes.run_files.IDENTIFICATIONS
+        payload = json.loads(path.read_text())
+        for at, key in enumerate(sorted(payload["cards"])):
+            payload["cards"][key].pop("set_hint", None)
+            if at < hinted:
+                payload["cards"][key]["set_hint"] = "SV09"
+        path.write_text(json.dumps(payload))
+        run.set(collected=True)
+        return run
+
+    def exports(portal):
+        return [name for kind, name in portal["calls"] if kind == "POST" and name == "downloadexportcsv"]
+
+    with _case(checks, "Q4: a finished reading matches by itself"), send_portal() as portal, \
+            isolated_home():
+        run = reading_done(hinted=len(cards))
+        checks.equal(
+            pipeline_routes._summary(run.directory)["phase"],
+            "join",
+            "a finished reading waits for its match",
+        )
+        answer = pipeline_routes.do_run_match(run.name, {})
+        checks.ok(
+            answer["ran"] and answer["ok"],
+            f"THE MATCH RAN WITH NOBODY PRESSING: {answer.get('problem')}",
+        )
+        checks.equal(len(exports(portal)), 1, "it fetched the catalogue once")
+        checks.ok(
+            answer["summary"]["phase"] != "join" and answer["summary"]["match_problem"] is None,
+            f"and the run moved on to its next step: {answer['summary']['phase']}",
+        )
+        again = pipeline_routes.do_run_match(run.name, {})
+        checks.equal(
+            (again["ran"], again["reason"], len(exports(portal))),
+            (False, "not_waiting", 1),
+            "a run that is not waiting for a match is left alone",
+        )
+
+    with _case(checks, "Q4: a problem becomes the next step"), send_portal() as portal, \
+            isolated_home():
+        run = reading_done(hinted=0)
+        answer = pipeline_routes.do_run_match(run.name, {})
+        problem = answer["summary"]["match_problem"] or {}
+        checks.equal(
+            (answer["ok"], problem.get("code")),
+            (False, "export_needs_set_hint"),
+            "A CARD WITH NO SET is the run's next step, by name",
+        )
+        checks.equal(
+            pipeline_routes._summary(run.directory)["match_problem"]["code"],
+            "export_needs_set_hint",
+            "and every read of the run says so, until it is fixed",
+        )
+        calls = len(portal["calls"])
+        standing = pipeline_routes.do_run_match(run.name, {})
+        checks.equal(
+            (standing["ran"], standing["reason"], len(portal["calls"])),
+            (False, "problem_stands", calls),
+            "THE NEXT AUTOMATIC CALL DOES NOT ASK AGAIN over a problem that stands",
+        )
+        run = runs.open_run(run.directory)
+        path = run.directory / pipeline_routes.run_files.IDENTIFICATIONS
+        payload = json.loads(path.read_text())
+        for key in payload["cards"]:
+            payload["cards"][key]["set_hint"] = "SV09"
+        path.write_text(json.dumps(payload))
+        fixed = pipeline_routes.do_run_match(run.name, {"retry": True})
+        checks.ok(
+            fixed["ok"] and fixed["summary"]["match_problem"] is None,
+            "and the door's own press asks again, and the fixed run matches",
+        )
+
+    with _case(checks, "Q4: a signed-out session is the next step"), send_portal() as portal, \
+            isolated_home():
+        run = reading_done(hinted=len(cards))
+        portal["signed_out"] = True
+        answer = pipeline_routes.do_run_match(run.name, {})
+        checks.equal(
+            (answer["summary"]["match_problem"] or {}).get("code"),
+            "tcg_session_expired",
+            "A SIGN-IN THAT HAS EXPIRED is the run's next step, never a silent stall",
+        )
 
 
 def _refusal_code_transport(rows, *, listing: bool) -> Optional[str]:
@@ -32967,6 +33092,7 @@ def run() -> Result:
     check_send_guard(checks)
     check_send_press(checks)
     check_send_hazards(checks)
+    check_run_match(checks)
     check_publish_lag(checks)
     check_withholding(checks)
     check_pricing_route(checks)

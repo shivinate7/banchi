@@ -1892,6 +1892,14 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         "joined": bool(manifest.get("joined")),
         "counts": manifest.get("counts") or {},
         "usage": _usage(manifest),
+        # WHAT STOPPED THE AUTOMATIC MATCH, while the run still waits for one (Q4). Null when
+        # nothing did, and null once the run has moved on: a problem is the run's next step
+        # only for as long as it is the thing in the way.
+        "match_problem": (
+            (_read_match(directory) or {}).get("problem")
+            if _phase(manifest, pid is not None) == "join"
+            else None
+        ),
     }
 
 
@@ -7161,6 +7169,84 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
         }
     )
     return report
+
+
+MATCH_RECORD = "match.json"
+_MATCHING: Dict[str, bool] = {}
+_MATCHING_LOCK = threading.Lock()
+
+
+def _read_match(directory: Path) -> Optional[dict]:
+    target = directory / MATCH_RECORD
+    if not target.is_file():
+        return None
+    try:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+
+
+def _write_match(directory: Path, record: dict) -> None:
+    (directory / MATCH_RECORD).write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def do_run_match(name: str, payload: dict) -> dict:
+    """`POST /pipeline/runs/<name>/match` — match a run to TCGplayer once its reading is done.
+
+    THE OWNER'S RULING (flow interview, Q4): matching runs BY ITSELF when the reading finishes,
+    and a problem becomes the run's next step. The screen calls this the moment a run it is
+    showing reaches the match step — and, for a reading that finished while the app was
+    closed, on the next visit — so no job here runs unattended, exactly as Q3 rules for the
+    live check. It is the press `#/runs` already had, "fetch the export, then join against
+    it", with the default scope and nobody pressing it.
+
+    A PROBLEM IS RECORDED, NOT RETRIED. The fetch or the join refusing is written beside the
+    run (`match.json`) and read back by `_summary` as `match_problem`, so the run's next step
+    is the problem with its one door — add the sets, sign in again — and an automatic call
+    never asks TCGplayer again over a problem that stands. `retry: true` is the door's own
+    press.
+
+    ONE MATCH PER RUN AT A TIME. Two tabs that both see the reading finish would otherwise both
+    fetch and both join; the second is answered `running` and does nothing.
+    """
+    directory = _open_run(name)
+    manifest = _manifest(directory)
+    if _phase(manifest, _live_pid(directory) is not None) != "join":
+        return {"ran": False, "reason": "not_waiting", "summary": _summary(directory)}
+    standing = _read_match(directory) or {}
+    if standing.get("problem") and not bool(payload.get("retry")):
+        return {"ran": False, "reason": "problem_stands", "summary": _summary(directory)}
+    with _MATCHING_LOCK:
+        if _MATCHING.get(directory.name):
+            return {"ran": False, "reason": "running", "summary": _summary(directory)}
+        _MATCHING[directory.name] = True
+    try:
+        at = _now_iso()
+        try:
+            fetched = do_pipeline_export(name, {})
+        except PipelineRefusal as refusal:
+            problem = {"code": refusal.code, "message": str(refusal), "step": "fetch"}
+            _write_match(directory, {"at": at, "problem": problem})
+            return {"ran": True, "ok": False, "problem": problem, "summary": _summary(directory)}
+        result = do_pipeline_step(name, "join", {"fetched": [fetched["file"]]})
+        if not result["ok"]:
+            last = (result["console"].strip().splitlines() or [""])[-1]
+            problem = {"code": "match_refused", "message": last, "step": "join"}
+            _write_match(directory, {"at": at, "problem": problem, "fetched": fetched["file"]})
+            return {
+                "ran": True,
+                "ok": False,
+                "problem": problem,
+                "console": result["console"],
+                "summary": _summary(directory),
+            }
+        _write_match(directory, {"at": at, "problem": None, "fetched": fetched["file"]})
+        return {"ran": True, "ok": True, "console": result["console"], "summary": _summary(directory)}
+    finally:
+        with _MATCHING_LOCK:
+            _MATCHING.pop(directory.name, None)
 
 
 def do_pipeline_step(name: str, step: str, payload: dict) -> dict:

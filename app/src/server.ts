@@ -97,6 +97,7 @@ import type {
   ClaimRelease,
   HoldingsRange,
   HoldingsValuePayload,
+  RunMatchAnswer,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -3006,6 +3007,20 @@ export async function fetchExport(
       set_ids: options.setIds,
     }),
   })) as ExportFetched
+}
+
+/**
+ * THE AUTOMATIC MATCH (flow interview, Q4): fetch the catalogue and match the run to it, the
+ * moment its reading is done. The screen calls it for every run it sees waiting for a match;
+ * a problem is recorded server-side as the run's next step and is not asked again unless
+ * `retry` is the door's own press.
+ */
+export async function matchRun(name: string, retry = false): Promise<RunMatchAnswer> {
+  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/match`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(retry ? { retry: true } : {}),
+  })) as RunMatchAnswer
 }
 
 export async function runStep(

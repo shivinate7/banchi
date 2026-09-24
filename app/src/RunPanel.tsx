@@ -7,6 +7,7 @@ import {
   getRun,
   getRuns,
   getTcgSets,
+  matchRun,
   runStep,
   type Failure,
 } from './server'
@@ -19,7 +20,7 @@ import { RunFiles } from './RunFiles'
 import { RunRescue } from './RunRescue'
 import { FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
-import { COMMANDS, StageBar, StagePill, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
+import { COMMANDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
 import { boxOf, runBoxLabel } from './runScope'
 import { money, roundsToNothing } from './money'
 import './RunPanel.css'
@@ -311,6 +312,10 @@ type RunPanelProps = {
   readonly pageFailure: Failure | null
 }
 
+/** Runs this sitting has already asked to match (Q4). A module value, not state: it must outlive
+ *  a remount of the screen so arriving twice does not ask twice. */
+const AUTO_MATCHED = new Set<string>()
+
 export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, pageFailure }: RunPanelProps) {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -371,6 +376,39 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
     liveMs: POLL_MS,
     idleMs: IDLE_POLL_MS,
   })
+
+  /* THE MATCH RUNS BY ITSELF WHEN A READING FINISHES (flow interview, Q4). Every run this
+     screen sees waiting for a match — its reading done this minute, or done while the app was
+     closed — is matched once, with nobody pressing. A problem comes back recorded on the run
+     and is its next step; the server does not ask TCGplayer again over it until the door's own
+     press. `AUTO_MATCHED` is module-level so a remount does not ask twice in one sitting. */
+  useEffect(() => {
+    const waiting = runs.filter(
+      (row) => row.phase === 'join' && !row.live && row.match_problem == null && !AUTO_MATCHED.has(row.run),
+    )
+    if (waiting.length === 0) return
+    for (const row of waiting) AUTO_MATCHED.add(row.run)
+    void (async () => {
+      for (const row of waiting) {
+        try {
+          await matchRun(row.run)
+        } catch {
+          /* THE ROW SAYS WHAT HAPPENED on the next read; a refused call is not retried here. */
+        }
+      }
+      await loadRuns()
+      if (openRun !== null && waiting.some((row) => row.run === openRun)) setDetail(await getRun(openRun))
+    })()
+  }, [runs, loadRuns, openRun])
+
+  const retryMatch = () =>
+    guard('join', async () => {
+      if (openRun === null) return
+      const answer = await matchRun(openRun, true)
+      setDetail(await getRun(openRun))
+      await loadRuns()
+      if (answer.ok) toast({ kind: 'ok', title: 'Matched', body: 'The next step is on the run.', ttlMs: 4000 })
+    })
 
   const firstReload = useRef(true)
   useEffect(() => {
@@ -974,6 +1012,23 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   <Notice tone="warn" code={scopeInfo.reason ?? undefined}>
                     {scopeInfo.message}
                   </Notice>
+                ) : null}
+
+                {/* THE AUTOMATIC MATCH'S PROBLEM IS THE RUN'S NEXT STEP (Q4): one sentence, the
+                    server's own words behind the disclosure, and one door. */}
+                {detail.phase === 'join' && detail.match_problem != null ? (
+                  <Notice
+                    tone="warn"
+                    className="run-match-problem"
+                    title={matchProblemTitle(detail.match_problem.code)}
+                    code={detail.match_problem.code}
+                    detail={detail.match_problem.message}
+                    action={
+                      <Button size="sm" icon="refresh" busy={busy === 'join'} disabled={busy !== null} onClick={() => void retryMatch()}>
+                        Try again
+                      </Button>
+                    }
+                  />
                 ) : null}
 
                 <div className="run-actions">

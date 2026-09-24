@@ -644,6 +644,9 @@ _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # D165's rescue, offered from a screen. Matched before `_RUN_STEP_RE` for `_RUN_EXPORT_RE`'s
 # own reason: `rescue` is `[a-z]+` too, and the more specific pattern has to read first.
 _RUN_RESCUE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/rescue$")
+# THE AUTOMATIC MATCH (flow interview, Q4). Before `_RUN_STEP_RE` for `_RUN_EXPORT_RE`'s
+# reason: `match` is `[a-z]+` as well.
+_RUN_MATCH_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/match$")
 # The price history for ONE SKU, named on the query string (D62). Matched before the
 # run-item and step patterns for the same reason the two above are: the more specific
 # path reads first. `history` would otherwise be eaten by `_RUN_STEP_RE`, whose
@@ -13761,6 +13764,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_run_rescue(match.group(1), self._body()),
+                )
+            # Q4's automatic match, before `_RUN_STEP_RE` for the same reason as the two above.
+            match = _RUN_MATCH_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_run_match(match.group(1), self._body()),
                 )
             match = _RUN_STEP_RE.match(path)
             if match:
