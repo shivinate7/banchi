@@ -13976,7 +13976,9 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     # differ between trees by one path segment nobody reads at a glance. A worktree's server
     # over a worktree's empty store looks exactly like the real one until a capture lands
     # somewhere that gets deleted with the branch — which is the failure D46 exists for.
-    if ports.is_linked_worktree(ports.REPO_ROOT):
+    # Gated on "not the primary checkout", so a copy with no `.git` says so too
+    # (D-no-git-no-live-port, a copied tree never gets the live port).
+    if not ports.is_primary_checkout(ports.REPO_ROOT):
         print(f"  WORKTREE  {ports.REPO_ROOT.name} — this is NOT the main checkout's store")
         print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")
     print("  Ctrl-C to stop.")

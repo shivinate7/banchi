@@ -90,8 +90,12 @@ def is_primary_checkout(root: Path) -> bool:
 
     So the base port is kept by the one tree that proves it is a primary checkout: a
     `.git` directory. Everything else takes a slot from its own path, as a linked worktree
-    does. That covers a tarball, a container copy, a `cp -r` of the tree, and a failed stat.
-    A wrong guess here now costs a moved port, never a write to the owner's store.
+    does. That covers a tarball, a container copy, a copy without its `.git`, and a failed
+    stat. A wrong guess here now costs a moved port, never a write to the owner's store.
+
+    A plain `cp -r` copies `.git` too, and so does a second clone. Such a tree IS a primary
+    checkout of its own and still gets 8000. That is an accepted risk, recorded in the
+    decision entry.
 
     `app/devPort.ts:isPrimaryCheckout` is its twin, and `make port-agreement` asks both
     of them over a copy of each kind of tree.

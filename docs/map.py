@@ -4098,7 +4098,7 @@ COMPONENTS = [
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
                 "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D138", "D139",
-                                "D158", "D176"],
+                                "D158", "D176", "D-no-git-no-live-port"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -4402,8 +4402,7 @@ COMPONENTS = [
                                 "D171", "D172", "D173", "D176", "D178", "D189", "D212", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D254",
-                                "D256"],
+                                "D247", "D250", "D254", "D256", "D-no-git-no-live-port"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -4846,7 +4845,7 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D168", "D172", "D174", "D183", "D189", "D191",
                                 "D192", "D193", "D203", "D212", "D213", "D219", "D225", "D227",
-                                "D252"],
+                                "D252", "D-no-git-no-live-port"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "

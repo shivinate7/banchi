@@ -14,7 +14,7 @@
 
 - **CI** (`.github/workflows/check.yml`, `demo.yml`) checks out with `actions/checkout@v4`. The demo run of 2026-09-24 logs `Initialized empty Git repository in /home/runner/work/banchi/banchi/.git/`. So `.git` is a directory, CI is a primary checkout, and it keeps 8000 and 5173 as before. Nothing on CI moves.
 - **The GitHub Pages demo** (`make demo-static`, `VITE_DEMO=1`) sends every request through `app/src/server.ts:request`'s `DEMO` branch to `demoServer.ts`. It never fetches the baked port. `scripts/demo-record.py` starts its own server on a free port through `PKMNSCAN_PORT`. The demo does not read this derivation.
-- **A copied tree's store** is its own: `home()` answers the copy's `REPO_ROOT`, so its store is `<copy>/inventory/store.sqlite`. It is not the owner's store. But a `cp -r` of the MAIN checkout also copies the gitignored `inventory/`. The copy then holds a copy of the owner's real data. Writes land in the copy and never reach the owner's store.
+- **A copied tree's store** is its own: `home()` answers the copy's `REPO_ROOT`, so its store is `<copy>/inventory/store.sqlite`. It is not the owner's store. But a `cp -r` of the MAIN checkout also copies the gitignored `inventory/`. The copy then holds a copy of the owner's real data. Writes land in the copy and never reach the owner's store. A `cp -r` also copies the gitignored `.env`, with the TCGplayer session and the API key: a copied tree's server can spend money or read the live account.
 
 **The override is `PKMNSCAN_PORT`.** The lane plan named a capture-port override under a different name. No variable of that name exists. `server/ports.py:capture_port` reads `PKMNSCAN_PORT`, and `app/devPort.ts` reads no override at all. On the client, `VITE_CAPTURE_SERVER` is the override.
 
@@ -22,6 +22,8 @@
 
 - **`app/src/server.ts:FALLBACK_BASE`** was `http://localhost:8000`. A bundle built WITHOUT `vite.config.ts`'s port define used it. The browser cannot hash a path, so a build cannot derive the port here. It is now `about:invalid`, which opens no socket. `request` refuses with `no_server_address` and a sentence on screen before any fetch.
 - **`scripts/screenshot.sh`** fell back to 5173 when Python could not import `server/ports.py` and `.git` was not a FILE. A tree with no `.git` took that fallback. The test is now `[ ! -d .git ]`, so only the primary checkout falls back to 5173.
+
+**The banner follows the same rule.** The `WORKTREE ... NOT the main checkout's store` line in `server/capture_server.py`'s startup print and in `scripts/serve.py`'s `make up` summary now prints for every tree that is not the primary checkout. A copy with no `.git` says so too. The D158 guard (`scripts/serve.py:off_main`) is unchanged.
 
 **An accepted risk, recorded by the orchestrator on 2026-09-23: a copy that brings its `.git` directory.** A `cp -r` of the main checkout WITH `.git`, or a second clone, is a primary checkout of its own and still derives 8000. No local fact tells it apart from the owner's tree. No further guard is built. A second clone is a deliberate act. Its server gets `EADDRINUSE` while the owner's server runs. Its app still bakes 8000. The incident case, no `.git`, is closed.
 

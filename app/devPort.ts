@@ -87,8 +87,10 @@ function canonical(root: string): string {
 // "the main tree". On 2026-09-23 a scratch copy of main with no `.git` built an app. It
 // baked 8000, the owner's LIVE capture server, and the page read the real store. So the
 // base ports now go to the one tree that proves it is the primary checkout. A linked
-// worktree, a tarball, a container copy and a `cp -r` of the tree all take a slot from their
-// own path. A wrong guess here costs a moved port, never a write to the owner's store.
+// worktree, a tarball, a container copy and a copy without its `.git` all take a slot from
+// their own path. A wrong guess here costs a moved port, never a write to the owner's store.
+// A plain `cp -r` copies `.git` too, as does a second clone: that tree still gets 5173 and
+// 8000, an accepted risk recorded in the decision entry.
 // `server/ports.py:is_primary_checkout` is the twin, and `make port-agreement` asks both
 // of them over a copy of each kind of tree.
 function isPrimaryCheckout(root: string): boolean {
