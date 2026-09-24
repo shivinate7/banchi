@@ -2812,6 +2812,28 @@ COMPONENTS = [
                 "governed_by": ["D36", "D63", "D67", "D88", "D172", "D183", "D213",
                                 "D252"],
             },
+            "identity-readers-selftest.py": {
+                "does": "proves the evidence readers (identity-follows-sku.md §5.1, lane "
+                        "4), added on a review finding, HIGH, 2026-09-24: reading "
+                        "read_name/read_number/read_printed_total unconditionally left "
+                        "cli/requeue.py:identified answering None for every open entry "
+                        "and cli/resolve.py:store_payload filing {'name': None, "
+                        "'number': None} for a plainly-identified card, on every real "
+                        "card measured. cli/resolve.py:card_reading is the one shared "
+                        "helper both call: an unbound card's read_* where set, else its "
+                        "identity fields (the only reading an old, pre-lane-1 "
+                        "identification ever wrote); a bound card's read_* only, and a "
+                        "loud refusal — never the catalog identity — where read_* was "
+                        "never recorded. Three fixtures, over an in-memory Inventory, no "
+                        "store: an old unbound card, a bound card whose read name "
+                        "disputes its own catalog row (D253's own subject), and a bound "
+                        "card with no recorded evidence. Three .bak-protected mutations "
+                        "on card_reading's body, each red on exactly the case(s) it "
+                        "breaks: reverted to the identity fields outright, the read_* "
+                        "fallback removed (lane 4's own first, broken draft), and the "
+                        "refusal line alone removed.",
+                "governed_by": ["D63", "D172", "D213", "D253"],
+            },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
                         "throwaway store, no network (D219). A "
@@ -4555,7 +4577,7 @@ COMPONENTS = [
                                 "D213", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D252", "D254",
+                                "D247", "D250", "D252", "D253", "D254",
                                 "D256"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "

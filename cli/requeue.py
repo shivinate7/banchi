@@ -87,16 +87,28 @@ NO_CARD = "no_card"
 NO_GAME = "no_game"
 NO_EXPORT = "no_export"
 NO_READING = "no_reading"
+# THE SKU-BOUND, NO-EVIDENCE REFUSAL (identity-follows-sku.md §5.1, lane 4 — REVIEWED
+# 2026-09-24), distinct from `NO_READING` on purpose. `NO_READING` names a card this pass
+# has genuinely nothing to resolve with — unbound, blank name and number. `NO_EVIDENCE`
+# names a DIFFERENT, more alarming case: the card IS bound to a SKU, so it has plainly
+# been through the ladder once, but `record_identification` never wrote its `read_*`
+# evidence — bound by a migration, or bound before this call existed. Falling back to the
+# card's `name`/`number` there would compare the bound SKU's own catalog row against
+# itself and never find a dispute (D253's own hole); `run_resolve.card_reading` refuses
+# instead, and this is the reason this module reports for that refusal, never `NO_READING`.
+NO_EVIDENCE = "no_evidence"
 UNJOINABLE = "unjoinable"
 DEPARTED = "departed"
 
-SKIP_REASONS = (NO_CARD, NO_GAME, NO_EXPORT, NO_READING, UNJOINABLE, DEPARTED)
+SKIP_REASONS = (NO_CARD, NO_GAME, NO_EXPORT, NO_READING, NO_EVIDENCE, UNJOINABLE, DEPARTED)
 
 SKIP_SENTENCES = {
     NO_CARD: "no card is stored at this position any more",
     NO_GAME: "the card names a game this build does not register",
     NO_EXPORT: "no export was supplied for this card's game",
     NO_READING: "the card carries no name and no number to resolve",
+    NO_EVIDENCE: "the card is bound to a SKU but carries no recorded reading — "
+                 "re-identify it to refresh the evidence",
     UNJOINABLE: "this game has no lookup strategy",
     DEPARTED: "the card has left the box — sold, retired or moved",
 }
@@ -260,6 +272,13 @@ class RefreshPlan:
         return queues.apply_run(review, parked, self.main, self.parked, self.freed)
 
 
+class NoEvidenceRecorded(Exception):
+    """`identified()` raises this instead of returning `None` when `run_resolve.card_reading`
+    answers `READING_UNAVAILABLE` — a card bound to a SKU with no recorded evidence — so
+    `plan`'s own loop can report `NO_EVIDENCE` rather than the ordinary `NO_READING`. See
+    `identified`'s own docstring."""
+
+
 def identified(
     card: master.Card, views: Dict[int, join.BoxView]
 ) -> Optional[join.IdentifiedCard]:
@@ -273,13 +292,23 @@ def identified(
     `rarity_claim`, `game` — are the store's in both readers, because `CAPTURE_CLAIM_FIELDS`
     is where they live.
 
-    **READS `read_name`/`read_number`/`read_printed_total`, NEVER `card.name`/`card.number`/
-    `card.printed_total`** (identity-follows-sku.md §5.1, lane 4). `name`/`number`/
-    `printed_total` are the IDENTITY group now — equal to the bound SKU's own row once
-    `Inventory.bind_sku` has run, never the model's reading — so a builder that read them
-    here would hand `join.name_disputes` the catalog's own name to compare against the
-    catalog and see no dispute on any bound card, ever. This function is one of the two
-    §5.1 names as a builder that must move.
+    **READS THE MODEL'S READING THROUGH `run_resolve.card_reading(card)`, NEVER
+    `card.read_name`/`card.read_number`/`card.read_printed_total` DIRECTLY AND NEVER
+    `card.name`/`card.number`/`card.printed_total` DIRECTLY** (identity-follows-sku.md
+    §5.1, lane 4 — REVIEWED 2026-09-24). `name`/`number`/`printed_total` are the IDENTITY
+    group now — equal to the bound SKU's own row once `Inventory.bind_sku` has run, never
+    the model's reading — so a builder that read them unconditionally here would hand
+    `join.name_disputes` the catalog's own name to compare against the catalog and see no
+    dispute on any bound card, ever. **But `card.read_name`/`read_number`/`read_printed_total`
+    are not safe to read unconditionally EITHER**: every card identified before lane 1
+    existed carries `read_name is None` forever, until a migration backfills it, and MEASURED
+    on a copy of the owner's real store, that was every card — reading `read_*`
+    unconditionally turned `queue refresh` into a silent, store-wide no-op, `identified()`
+    answering `None` for every open entry with no reason ever printed. `card_reading` is the
+    one place both rules live: an unbound card's `read_*`, or its identity fields where
+    `read_*` was never written (an old reading, not a catalog echo); on a BOUND card,
+    `read_*` only, and a `NoEvidenceRecorded` refusal — never the identity fields — where
+    `read_*` was never written either. See `card_reading`'s own docstring for the argument.
 
     THE QUEUE ENTRY IS NOT CONSULTED, AND THAT IS THE POINT OF THE FIELD `detected_finish`
     ADDED TO `Card`. The entry's `read` carries a complete reading, so taking one field from
@@ -292,9 +321,10 @@ def identified(
     about what they are. One reading in, one verdict out.
 
     A CARD THE STORE HAS NO READING FOR IS REFUSED RATHER THAN GUESSED AT — the caller files
-    it as `no_reading` and names it. Falling back to the entry's `read` would be the same
-    mixing one layer down, and a card whose only reading is the one already on screen has
-    nothing for this pass to re-resolve anyway.
+    it as `no_reading` (unbound, blank) or `no_evidence` (bound, `read_*` never recorded —
+    `NoEvidenceRecorded`, above) and names it either way. Falling back to the entry's `read`
+    would be the same mixing one layer down, and a card whose only reading is the one
+    already on screen has nothing for this pass to re-resolve anyway.
 
     `answered_sku` IS DELIBERATELY NOT READ. It is `None` on every card this function is
     called for, because a card carrying an answer has a `cleared_by_human` entry and this
@@ -303,28 +333,23 @@ def identified(
     queue would quietly re-list every answer the operator has ever given.
     """
     game = card.game or games.DEFAULT_GAME
-    # `load`'s OWN NORMALISATION, CHARACTER FOR CHARACTER:
-    #     number = (identification.get("number") or "").strip() or None
-    #     total  = (identification.get("printed_total") or "").strip() or None
-    #     ... printed_total=total if number else None
-    # AN EMPTY STRING IS NOT A NUMBER AND THE TWO ROUTE DIFFERENTLY. `_key_number_and_printed_total`
-    # answers None for a card with no number, which sends it down the blank-`Number` name
-    # branch; `""` is a value, walks the number key, misses, and lands on D35's
-    # last-resort name rung as `number_unread_name_matched`. Measured before this line
-    # existed: 6 of 183 positions where the join listed a card and this module queued it,
-    # every one of them a record carrying `""` in `number` or `printed_total` — box 4's
-    # `Renata Glasc, Mastermind` and `Arcane Shift` among them. The store keeps `""` where a
-    # run record keeps it, so the normalisation has to happen on this side too.
-    name = card.read_name or ""
-    number = (card.read_number or "").strip() or None
-    total = (card.read_printed_total or "").strip() or None
-    if not name and not number:
+    # `run_resolve.card_reading` OWNS THE NORMALISATION NOW (its own docstring carries the
+    # `""` vs `None` argument this comment used to state alone — D35's last-resort name
+    # rung, `number_unread_name_matched`, and the 6-of-183 measurement that first justified
+    # it — this module and `cli/resolve.py:store_payload` share one copy of the rule).
+    reading = run_resolve.card_reading(card)
+    if reading.outcome == run_resolve.READING_UNAVAILABLE:
+        raise NoEvidenceRecorded(
+            f"{card.box}/{card.index}: bound to SKU {card.sku!r} with no recorded reading"
+        )
+    if reading.outcome == run_resolve.READING_NONE:
         return None
+    name, number, total = reading.name, reading.number, reading.printed_total
     return join.IdentifiedCard(
         position=views.get(int(card.box), join.BoxView()).at(card.box, card.index),
         name=name,
         number=number,
-        printed_total=total if number else None,
+        printed_total=total,
         metadata_finish=run_resolve._finish_claim(card.metadata_finish),
         detected_finish=run_resolve._detected(card.detected_finish, game),
         photo=card.photo,
@@ -429,7 +454,11 @@ def plan(
         if catalog is None:
             out.skipped.append(Skipped(position, queue_name, NO_EXPORT, game))
             continue
-        built = identified(card, views)
+        try:
+            built = identified(card, views)
+        except NoEvidenceRecorded:
+            out.skipped.append(Skipped(position, queue_name, NO_EVIDENCE, game))
+            continue
         if built is None:
             out.skipped.append(Skipped(position, queue_name, NO_READING, game))
             continue

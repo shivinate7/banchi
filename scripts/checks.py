@@ -886,6 +886,42 @@ CHECKS = (
         "governed_by": ("D36", "D63", "D67", "D88", "D172", "D183", "D213", "D252"),
     },
     {
+        "target": "identity-readers-selftest",
+        "runs": "python3 scripts/identity-readers-selftest.py && "
+                "python3 scripts/identity-readers-selftest.py --mutate-identity-fields && "
+                "python3 scripts/identity-readers-selftest.py --mutate-no-fallback && "
+                "python3 scripts/identity-readers-selftest.py --mutate-no-refusal",
+        "asserts": "the evidence readers (identity-follows-sku.md §5.1, lane 4), added on "
+                   "a review finding, HIGH, 2026-09-24: reading read_name/read_number/"
+                   "read_printed_total unconditionally left cli/requeue.py:identified "
+                   "answering None for every open entry and cli/resolve.py:store_payload "
+                   "filing a blank identification for a plainly-identified card, on every "
+                   "real card measured on a copy of the owner's store. Both builders now "
+                   "call cli/resolve.py:card_reading, proved over three in-memory "
+                   "fixtures: an old, unbound card whose identity fields ARE its only "
+                   "recorded reading; a bound card whose read name DISPUTES its own "
+                   "catalog row (D253's own subject), both builders carrying the read, "
+                   "never the catalog's; a bound card with no recorded evidence, both "
+                   "builders refusing loudly (NoEvidenceRecorded; identification: None) "
+                   "rather than echoing the catalog. Three .bak-protected mutations on "
+                   "card_reading's own body, each red on exactly the case(s) it breaks: "
+                   "reverted to the identity fields outright, the read_* fallback removed "
+                   "(lane 4's own first, broken draft), and the refusal line alone "
+                   "removed.",
+        "needs": ("python3",),
+        "writes": "cli/resolve.py itself, three times, mutated and restored through a "
+                  "`.bak` copy each time (never `git checkout`) — an in-memory Inventory "
+                  "otherwise, never a store on disk.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes (transiently, restored before it returns) "
+                               "to a real tracked file rather than a throwaway one; a hook "
+                               "context that could be interrupted mid-mutation is not "
+                               "where that risk belongs. PATH GATED into `make check` "
+                               "alone, identity-store-selftest's own precedent.",
+        "gates": True,
+        "governed_by": ("D63", "D172", "D213", "D253"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
