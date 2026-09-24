@@ -35,3 +35,63 @@ one, and the next live reconcile shows exactly what to lower on TCGplayer.
 **What this does not attempt.** A departed card (sold, retired, moved) refuses `card_departed`. Correcting a SOLD card's SKU is a larger question. It would also touch `sold_here` and a buyer's own order. This route does not answer that question. Nothing here uploads to TCGplayer. The release is a record in this store alone. The next `pkmnscan reconcile --live` tells the operator what to go and lower by hand.
 
 **Governed by:** D4 (the review queue's one-tap answer, and the guard against a free-text SKU this route does not weaken), D28 (the twenty-second undo shape, and the `undo_too_late` boundary this route reaches past), D46 (the catalog lookup and its re-read-on-the-server rule, reused rather than re-argued), D87 (the store-wide live reconcile this route's release is read by), D109 (the `beyond` bucket that is the whole of item 2's proof), D118 (the reserved slot, `CardLocations.css`'s rule reused), D196 (no decision id, path or pipeline noun on screen), D220 (the order walk is inventory's own pane, in a mode — why `#/orders` gets a prop and not a fork).
+
+---
+
+### Amendment — the rarity was never carried, and the number was never touched
+
+**The owner found three more cards on the live server, all corrected through this route.**
+`4/176`, `4/442`, `6/563`, found 2026-09-23. Each read `rarity = NULL` afterward. Each kept
+the model's misread `number` — the field this route exists to fix.
+
+**Rarity was a missing key, not a missing line.** `do_correct_answer` already read
+`chosen.get("rarity")` and wrote it onto the card. The row it reads, `_catalog_row`, carried no
+`"rarity"` key at all. `_candidate_rows` — the review queue's own row shape — has carried `rarity`
+since D213. `_catalog_row`'s own docstring claims "identical keys", and did not have them.
+`chosen.get("rarity")` therefore always answered `None`. This hit two readers: this route, and
+`do_review_answer`'s own D46 `from_catalog` branch. Fixed once, at `_catalog_row`, so both agree
+with `_candidate_rows` rather than carrying two copies of D213's rule.
+
+**The number was never set. This entry's first draft left that gap open.** Item 2 above answers
+what a correction does to a SKU's LISTING counts. Nothing there touched a card's own `number`
+field. The orchestrator's ruling, within D36: a correction is a human choosing a catalog row off
+the photograph. That is the same act that already rewrites `set_name`/`rarity`/`name` above. A
+chosen row's number is just as much "what this card is" as its name. So `card.number` and
+`card.printed_total` are now set from the same row, inside the same transaction.
+
+**Checked against D36 and D183 first, as the brief required. Neither governs this field.** D36
+decides which SLOT a photograph is in, keyed on `photo_sha256`. It says nothing about the identity
+fields a slot's occupant carries. This route never touches a position key. It never re-binds a
+slot. It writes nothing `realign` reads. D183 decides where a photograph's BYTES are filed. It is
+equally silent about `number`. A card's `cid` and its stored name are untouched here. The model's
+own reading is not lost. `identifications.json` still carries it verbatim. The `sku_corrected`
+line's `restores_to` now carries the old `number`/`printed_total` pair too. The misread stays
+recoverable two ways: from the run record D36 protects, and from this route's own undo (D28).
+
+**The catalog's `Number` cell is composed, not split. Storing it needed a new fold.**
+`_catalog_row`'s `"number"` key is the whole cell — `"074/219"`, already zero-padded. That column
+IS `join_key`'s own output shape. Every other writer of `card.number`/`card.printed_total` reads
+the two as separate fields, off a MODEL identification. None of them ever needed this reversal.
+`store/numbers.py:split_catalog_number` is the new, fourth member of that leaf module's family.
+`join_key` composes. `display_number` draws. `strip_set_code` repairs. This one decomposes.
+`pipeline/join.py` re-exports it under the same name as the other three. It splits on the LAST
+`/` — a secret rare's own numerator can itself carry no slash (`302*`). It returns `(raw, None)`
+for a denominator-less identifier (`"OP15-054"`). `number_key` then stays empty for that row, the
+same designed rule `pipeline/pricearchive.py` already documents for that case.
+
+**`number_key`/`number_display` are still never set directly, here or anywhere else.**
+`store/master.py:_card_columns` derives both from `card.number`/`card.printed_total`. It runs on
+the very next write any card makes. `do_correct_answer` sets the two fields and nothing more —
+the same chokepoint every other card write already passes through.
+
+**The undo carries both, symmetric with every field this route already restores.**
+`restores_to` gained `number`/`printed_total` beside `sku`/`condition`/`set_name`/`rarity`/`name`.
+`_reverse_correction` restores them the same way it restores `sku` and `rarity`. Unconditionally.
+Including `None`. Never guarded the way `name` is — a card can legitimately have carried no
+number at all before the correction being undone.
+
+**T7's `check_correct_answer` now asserts both.** Before and after the correction. After the undo
+too. Against the real Riftbound fixture row `8925897` (`Adaptatron`, `056/298`, `Uncommon`). It
+checks the persisted `number_key`/`number_display` columns too, not only the in-memory fields. So
+the proof covers `_card_columns`' own derivation, not a second copy of it in the test.
+

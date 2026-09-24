@@ -85,7 +85,12 @@ from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 # zfill/set-code-strip rules a third time. Every existing caller of `join.join_key` /
 # `join.display_number` / `join.strip_set_code` is unaffected — the names still resolve on
 # this module, they just live one file over.
-from store.numbers import display_number, join_key, strip_set_code  # noqa: F401
+from store.numbers import (  # noqa: F401
+    display_number,
+    join_key,
+    split_catalog_number,
+    strip_set_code,
+)
 
 # D7 — a playset. Configurable, but never guessed at. RE-EXPORTED rather than defined: the
 # figure lives in `pipeline/pricing.py`, which both this module and `pipeline/corpus.py`

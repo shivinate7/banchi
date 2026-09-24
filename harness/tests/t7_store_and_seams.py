@@ -11511,6 +11511,41 @@ def check_correct_answer(checks: Checks) -> None:
             "and the STORED NAME FOLLOWS THE CATALOG (owner's ruling) — it no longer says "
             "the wrong product's name",
         )
+        checks.equal(
+            card.rarity,
+            "Uncommon",
+            "and the STORED RARITY FOLLOWS THE CATALOG too — `_catalog_row` was missing "
+            "the key `_candidate_rows` has carried since D213, so every correction used to "
+            "land `rarity = NULL` whatever the chosen row's own Rarity cell said",
+        )
+        checks.equal(
+            (card.number, card.printed_total),
+            ("056", "298"),
+            "and the STORED NUMBER FOLLOWS THE CATALOG (the orchestrator's ruling, within "
+            "D36) — the chosen row's own `056/298`, split back into the pair the store "
+            "keeps, not the misread `179/298` left on the card by the wrong answer",
+        )
+        checks.equal(
+            capture_server._card_number_key(card),
+            "056/298",
+            "and `number_key` — `store/master.py:_card_columns` derives it from "
+            "`number`/`printed_total` on the very write this transaction makes, so there "
+            "is no second place this route has to set it",
+        )
+        checks.equal(
+            capture_server._number_display(card),
+            "056/298",
+            "and `number_display`, the same derivation, the same write",
+        )
+        conn = db.connect(files.inventory_dir())
+        checks.equal(
+            conn.execute(
+                "SELECT number_key, number_display FROM cards WHERE key = '4/1'"
+            ).fetchone(),
+            ("056/298", "056/298"),
+            "and the PERSISTED columns agree — `_card_columns` runs on every card write, "
+            "this route's own included, so the derivation is not only correct in memory",
+        )
 
         after_release = Store().read().inventory.listings[old_sku]
         checks.equal(
@@ -11599,6 +11634,15 @@ def check_correct_answer(checks: Checks) -> None:
         )
 
         capture_server.do_correct_answer(4, 1, {"sku": new_sku})
+        corrected_card = Store().read().inventory.cards["4/1"]
+        checks.equal(
+            (corrected_card.rarity, corrected_card.number, corrected_card.printed_total),
+            ("Uncommon", "056", "298"),
+            "before the undo: this card never carried a number or a rarity at all — "
+            "answered wrong, never corrected before — and the correction still writes "
+            "both from the chosen row, exactly as the identified-then-wrong card above did",
+        )
+
         undone = answers(
             checks,
             lambda: capture_server.do_correct_answer(4, 1, {"undo": True}),
@@ -11611,6 +11655,14 @@ def check_correct_answer(checks: Checks) -> None:
             (restored_card.sku, restored_card.condition, restored_card.name),
             (old_sku, "Near Mint", old_name),
             "the whole pair — sku, condition and name — comes back",
+        )
+        checks.equal(
+            (restored_card.rarity, restored_card.number, restored_card.printed_total),
+            (None, None, None),
+            "and rarity/number come back too, to exactly what they were before the "
+            "correction — nothing here, since this card was never corrected before — "
+            "restored VERBATIM rather than guessed, the same rule `_give_back_listing`'s "
+            "own stamps follow",
         )
         restored_listing = Store().read().inventory.listings[old_sku]
         checks.equal(

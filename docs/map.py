@@ -1661,7 +1661,7 @@ COMPONENTS = [
                                    "`pipeline/join.py` (which imports them back and re-exports "
                                    "under the same names) can reach them.",
                            "governed_by": ["D36", "D55", "D63", "D67",
-                                           "D234"], "tested_by": ["T7"]},
+                                           "D234", "D252"], "tested_by": ["T7"]},
             "master.py": {"does": "the cards, boxes and listings tables — cards, positions, SKUs, "
                                   "listing states, `open_section`, which puts one divider in front "
                                   "of the next card at the index only the store can read (D10), and "
@@ -2764,6 +2764,21 @@ COMPONENTS = [
                         "says plainly that a recovered receipt is one later snapshot, never a "
                         "history, and that every SKU's first posted price is gone either way.",
                 "governed_by": ["D243"],
+            },
+            "correction-rarity-number-repair.py": {
+                "does": "the one-time repair for the three cards D252's amendment names. "
+                        "Preview by default and read-only "
+                        "by construction — no `store.db`/`Store` import at all unless "
+                        "`--write --confirm` is given, and the default preview opens "
+                        "`inventory/store.sqlite` `mode=ro`, the same defence "
+                        "`price-postings-recovery.py` above uses. Reads each card's own "
+                        "run manifest and export CSV as plain files to re-derive what its "
+                        "rarity and number would become, reports whether the route's own "
+                        "undo-then-redo would even be allowed, and proposes the smaller "
+                        "fix instead: set `rarity`/`number`/`printed_total` alone, through "
+                        "`Store().write()`, with no listing touched. `--home` has no "
+                        "default, on purpose. NOT RUN by the session that wrote it.",
+                "governed_by": ["D36", "D183", "D213", "D252"],
             },
             "sku-number-contradictions-selftest.py": {
                 "does": "proves pipeline/sku_number_contradictions.py against literal "

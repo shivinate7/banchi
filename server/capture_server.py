@@ -6530,8 +6530,19 @@ def _catalog_row(row) -> dict:
     Identical keys to `cli/resolve.py:_candidate_rows`, deliberately: the screen renders these
     through the same component as the pipeline's own candidates, so a divergence here would be
     a second row shape nothing audits.
+
+    `rarity` WAS MISSING UNTIL D252'S AMENDMENT, AND THAT WAS THE BUG, NOT A
+    NARROWER ONE IN `do_correct_answer`. `_candidate_rows` has carried it since D213
+    ("`rarity` is HALF OF A CONTRADICTION ... Both halves travel now"), omitted on a blank
+    cell for the identical reason D213 states — an absent cell is evidence of nothing and a
+    drawn `""` would assert the row is unrated. This function never got the same line, so
+    every reader of `chosen.get("rarity")` off a catalog row — `do_review_answer`'s
+    `from_catalog` branch (D46) and `do_correct_answer` (D252) alike — read `None` always,
+    whatever the row's own `Rarity` cell said. `do_correct_answer`'s
+    `card.rarity = str(chosen.get("rarity") or "").strip() or None` line was already correct;
+    the row it read from was not.
     """
-    return {
+    entry: Dict[str, object] = {
         "sku": row[tcgcsv.SKU_COLUMN],
         "name": row[tcgcsv.NAME_COLUMN],
         "set": row.get(tcgcsv.SET_COLUMN, ""),
@@ -6539,6 +6550,10 @@ def _catalog_row(row) -> dict:
         "condition": row[tcgcsv.CONDITION_COLUMN],
         "market": row[tcgcsv.MARKET_PRICE_COLUMN],
     }
+    rarity = str(row.get(tcgcsv.RARITY_COLUMN) or "").strip()
+    if rarity:
+        entry["rarity"] = rarity
+    return entry
 
 
 def do_review_catalog(box: int, index: int, query: str) -> dict:
@@ -7480,7 +7495,25 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
     wrong about its name in the same breath, and `card.name` is what `#/inventory` and
     `#/orders` draw as the card's identity — neither should go on saying the old product's
     name once the SKU says otherwise. `set_name`/`rarity` are set from the same row a D46
-    `from_catalog` answer already sets them from.
+    `from_catalog` answer already sets them from — and, as of D252's amendment,
+    actually carry a rarity: `_catalog_row` was missing the key `_candidate_rows` has always
+    had (D213), so this line read `chosen.get("rarity")` off a row that could never answer,
+    and every correction landed `rarity = NULL`. Fixed at `_catalog_row`, the one place both
+    this route and `do_review_answer`'s own `from_catalog` branch read a chosen row from, so
+    the fix is not a second copy of D213's rule.
+
+    THE STORED NUMBER FOLLOWS THE CATALOG TOO, ON THE ORCHESTRATOR'S RULING (within D36,
+    checked against D36 and D183 — neither governs this field; D36 is about which SLOT a
+    photograph is in and D183 is about where a photograph's BYTES are filed, and `number` is
+    neither). A correction is a human choosing a catalog row off the photograph, the same act
+    that already rewrites `set_name`/`rarity`/`name` above — a chosen row's number is exactly
+    as much "what this card is" as its name. `card.number`/`card.printed_total` are set from
+    `chosen["number"]` through `join.split_catalog_number`, which reverses `join_key`'s own
+    composition; `number_key`/`number_display` are never set directly, because
+    `store/master.py:_card_columns` derives both from those two fields on every write. THE
+    MODEL'S OWN READING IS UNTOUCHED: `identifications.json` still carries it, and
+    `restores_to` below carries the pair being overwritten, so nothing the model saw is lost
+    — only the one field the store now shows a human corrected.
 
     REFUSALS, IN ORDER: `card_not_found` (no record at that position — this route corrects a
     card that exists and never creates one), `card_departed` (the card has left inventory —
@@ -7550,12 +7583,21 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
 
         # READ BEFORE THE WRITE, `do_review_answer`'s reason unchanged: this lock is the last
         # moment anything knows the pair the card is about to give up.
+        #
+        # `number`/`printed_total` JOIN THE PAIR HERE, ON THE ORCHESTRATOR'S RULING
+        # (within D36): a correction is a human choosing a catalog row off the photograph,
+        # so the stored number becomes the CHOSEN ROW'S number, not the model's misread.
+        # D36 governs which SLOT a photograph is in and does not speak to this field; the
+        # model's own reading stays put in `identifications.json` and in this very line,
+        # which is what `restores_to` is for.
         previous = {
             "sku": card.sku,
             "condition": card.condition,
             "set_name": card.set_name,
             "rarity": card.rarity,
             "name": card.name,
+            "number": card.number,
+            "printed_total": card.printed_total,
         }
 
         old_sku = card.sku
@@ -7580,6 +7622,15 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
         chosen_name = str(chosen.get("name") or "").strip()
         if chosen_name:
             card.name = chosen_name
+        # THE CHOSEN ROW'S NUMBER, SPLIT BACK INTO THE PAIR THE STORE KEEPS (the
+        # orchestrator's ruling). `chosen["number"]` is `_catalog_row`'s whole composed
+        # cell — `join.split_catalog_number`'s own docstring is the reasoning for reversing
+        # `join_key` rather than storing the composed string whole. `number_key` and
+        # `number_display` are never set directly: `store/master.py:_card_columns` derives
+        # both from `card.number`/`card.printed_total` on the very next write this
+        # transaction makes, the same chokepoint every other card write already passes
+        # through, so there is no second copy of that fold here.
+        card.number, card.printed_total = join.split_catalog_number(chosen.get("number"))
 
         _history(
             snapshot.inventory,
@@ -7590,6 +7641,8 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
             set_name=card.set_name,
             rarity=card.rarity,
             name=card.name,
+            number=card.number,
+            printed_total=card.printed_total,
             restores_to=previous,
             released=released or None,
             old_sku=old_sku,
@@ -7690,7 +7743,15 @@ def _reverse_correction(box: int, index: int) -> dict:
                 f"so there is nothing here to guess. Correct the card by hand.",
             )
         pair: Dict[str, Optional[str]] = {}
-        for field in ("sku", "condition", "set_name", "rarity", "name"):
+        for field in (
+            "sku",
+            "condition",
+            "set_name",
+            "rarity",
+            "name",
+            "number",
+            "printed_total",
+        ):
             value = previous.get(field)
             if value is not None and not isinstance(value, str):
                 raise BadRequest(
@@ -7732,6 +7793,14 @@ def _reverse_correction(box: int, index: int) -> dict:
         card.rarity = pair.get("rarity")
         if pair.get("name") is not None:
             card.name = pair.get("name")
+        # RESTORED VERBATIM, LIKE `sku`/`condition`/`set_name`/`rarity` ABOVE, AND NEVER
+        # GUARDED THE WAY `name` IS: a card can legitimately have carried no number before
+        # the correction this undoes (the position's very first identification, or the tail
+        # of an earlier undo), and putting `None` back is putting the card back to exactly
+        # that state — `_give_back_listing`'s own docstring states the same rule for a stamp
+        # that was never set.
+        card.number = pair.get("number")
+        card.printed_total = pair.get("printed_total")
 
         _history(
             snapshot.inventory,
