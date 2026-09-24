@@ -224,7 +224,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   white-space: nowrap;
   transition: opacity var(--bn-t) var(--bn-ease);
 }
@@ -408,7 +408,7 @@
   white-space: nowrap;
 }
 .bn-server[data-state='offline'] { color: var(--bn-danger); background: var(--bn-danger-tint); }
-.bn-server-detail { font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
+.bn-server-detail { font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
 /* D218: the card count is its own span; the seam before it is CSS, never typed. */
 .bn-server-detail::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 
@@ -559,9 +559,9 @@
   color: var(--bn-ink);
   outline: none;
 }
-.bn-cmdk-input input::placeholder { color: var(--bn-ink-4); }
+.bn-cmdk-input input::placeholder { color: var(--bn-ink-3); }
 .bn-cmdk-list { max-height: 50vh; overflow: auto; padding: var(--bn-2); }
-.bn-cmdk-group { padding: var(--bn-2) var(--bn-3) var(--bn-1); font-size: var(--bn-fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bn-ink-4); }
+.bn-cmdk-group { padding: var(--bn-2) var(--bn-3) var(--bn-1); font-size: var(--bn-fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bn-ink-3); }
 .bn-cmdk-item {
   display: flex;
   align-items: center;
@@ -576,8 +576,8 @@
 .bn-cmdk-item .bn-icon { color: var(--bn-ink-3); }
 .bn-cmdk-item[aria-selected='true'] { background: var(--bn-accent-tint); color: var(--bn-ink); }
 .bn-cmdk-item[aria-selected='true'] .bn-icon { color: var(--bn-accent); }
-.bn-cmdk-item-hint { margin-left: auto; color: var(--bn-ink-4); font-size: var(--bn-fs-sm); }
-.bn-cmdk-foot { display: flex; gap: var(--bn-4); padding: var(--bn-2) var(--bn-4); border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+.bn-cmdk-item-hint { margin-left: auto; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.bn-cmdk-foot { display: flex; gap: var(--bn-4); padding: var(--bn-2) var(--bn-4); border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .bn-cmdk-empty { padding: var(--bn-6); text-align: center; color: var(--bn-ink-3); }
 
 /* ---- unknown route ---------------------------------------------------------------- */
@@ -801,7 +801,7 @@
   border: 1px solid var(--bn-line);
   border-radius: var(--bn-r-sm);
   background: var(--bn-surface-2);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .app-keys-search:focus-within { border-color: var(--bn-accent); color: var(--bn-ink-3); }
 .app-keys-search-input {
@@ -816,7 +816,7 @@
 .app-keys-more, .app-keys-none {
   margin: 0 0 var(--bn-4);
   font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   columns: 1;
 }
 .app-keys-show-all {
@@ -857,7 +857,7 @@
   margin: 4px 0 var(--bn-3);
   font-size: var(--bn-fs-xs);
   line-height: 1.5;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .app-keys-goto {
   display: inline-flex;
@@ -880,9 +880,9 @@
 .app-keys-row { display: contents; }
 .app-keys-caps { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .app-keys-cap { display: inline-flex; align-items: center; gap: 4px; }
-.app-keys-join { font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
+.app-keys-join { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
 .app-keys-does { font-size: var(--bn-fs-md); line-height: 1.45; color: var(--bn-ink-2); }
-.app-keys-when { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+.app-keys-when { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 
 /* A run of caps long enough to be its own line takes the full width rather than stretching
    the column every other row is measured against. */
@@ -897,7 +897,7 @@
   border-top: 1px solid var(--bn-line);
   background: var(--bn-surface-2);
   font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .app-keys-foot .bn-kbd { margin-right: 3px; }
 .app-keys-foot-end { margin-left: auto; white-space: nowrap; }

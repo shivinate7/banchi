@@ -8,6 +8,6 @@
 
 **What D196 protected, and what protects it now.** D196 protected the owner from pipeline nouns on screen. The disclosure keeps the words one press away for a bug report and out of plain view. The machine-words browser check, in the text-checks lane, reads rendered `innerText`. A closed `<details>` contributes its summary only, so the check reads what the owner sees.
 
-**Two shapes for a failure (UX-041).** `Refusal` says that the press cannot be done here, and it offers no retry. `Retry` offers "Try again", and the button shows that it is trying. `server.ts:describeFailure` now says which shape a failure is (`kind`), and `FailureNotice` picks the shape.
+**Two shapes for a failure (UX-041).** `Refusal` says that the press cannot be done here, and it offers no retry. `Retry` offers "Try again", and the button shows that it is trying. `server.ts:describeFailure` now says which shape a failure is (`kind`), and `FailureNotice` picks the shape. `FailureNotice` never uses the server's message as its title. The title is a plain sentence, and the server's words go behind the disclosure.
 
 **The demo says one sentence.** Every refusal in `app/src/demoServer.ts` now says "Not in this demo." (TXT-46). The code still names the refusal, behind the disclosure.

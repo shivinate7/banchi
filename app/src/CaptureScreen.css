@@ -81,7 +81,7 @@
   margin: 0;
   font-size: var(--bn-fs-sm);
   line-height: 1.4;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   font-variant-numeric: tabular-nums;
 }
 .capture-odo-drawer { white-space: nowrap; }
@@ -829,7 +829,7 @@
 }
 .capture-film-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; padding: 0 2px; }
 .capture-film-hint { display: flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.capture-undo-depth { margin-left: 6px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-4); }
+.capture-undo-depth { margin-left: 6px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
 .capture-film-empty { display: flex; align-items: flex-start; gap: var(--bn-2); padding: 6px 4px 4px; font-size: var(--bn-fs-sm); }
 .capture-film-empty .bn-icon { color: var(--bn-ink-4); }
 .capture-undo-list {

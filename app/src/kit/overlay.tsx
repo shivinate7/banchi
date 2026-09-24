@@ -1,11 +1,11 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentType, ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { Button, useLeave } from './index'
-import { closeSheet, useOpenSheet } from './sheets'
+import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
 
-/* ONE SHEET, ONE MODAL, ONE POPOVER (UX-057, UX-090, UX-091).
+/* ONE SHEET, ONE MODAL, ONE POPOVER, AND ONE STACK OF LAYERS (UX-057, UX-090, UX-091).
  *
  * Seeded from `Codes.tsx`'s own local sheet, the one overlay in the product that already
  * portalled itself out of the page and gave focus back. What every overlay here shares:
@@ -13,9 +13,13 @@ import { closeSheet, useOpenSheet } from './sheets'
  *   - ONE HEADER: an h2 title and one "Close" button. A footer's dismiss word is "Cancel".
  *   - ONE SIDE: a sheet enters from the right; on a phone every sheet and modal rises from the
  *     bottom (kit.css). No overlay opens from the left.
- *   - FOCUS STAYS INSIDE a blocking overlay until it closes, and GOES BACK to the control that
- *     opened it. If that control has left the page, focus goes to the page's h1, never to body.
- *   - ESCAPE CLOSES THE TOP OVERLAY ONLY, and the shell never sees that Escape.
+ *   - ONE STACK: every open layer, the kit's and the shell's (the palette, the keys sheet, the
+ *     drawer), joins it through `useOverlayLayer`. ONLY THE TOP LAYER traps focus and takes
+ *     Escape, so a layer opened over another closes first and gives focus back to the control
+ *     inside the layer beneath it.
+ *   - FOCUS GOES BACK to the control that opened the layer. If that control has left the page,
+ *     focus goes to the page's h1, never to body. If the person has moved focus somewhere else
+ *     on purpose, it stays there.
  *   - PORTALLED TO <body>: `main.bn-page` animates a transform, and a transformed ancestor is
  *     the containing block for a fixed box, so a sheet drawn inline hangs off the page column.
  *
@@ -32,16 +36,35 @@ function focusables(root: HTMLElement): HTMLElement[] {
   })
 }
 
-/* The open overlays, innermost last, blocking and not. Escape acts for the top one only, and a
-   focus trap acts only while its overlay is on top. */
+/* ---- the layer stack ------------------------------------------------------------------------ */
+
+/* The open layers, innermost last, blocking and not. */
 const stack: HTMLElement[] = []
 
 function isTop(root: HTMLElement): boolean {
   return stack[stack.length - 1] === root
 }
 
-/** Puts `ref` on the overlay stack while `active`. */
-function useStacked(ref: RefObject<HTMLElement | null>, active: boolean): void {
+/** True while an overlay layer is open. The shell asks this before it takes a key of its own. */
+export function overlayOpen(): boolean {
+  return stack.length > 0
+}
+
+export type OverlayLayerOptions = {
+  /** The layer is open. */
+  readonly active: boolean
+  /** Escape closes it. Called only while this layer is the top one. Leave it out for a layer
+   *  Escape must not close (a confirm that is busy writing). */
+  readonly onEscape?: () => void
+  /** Tab and Shift-Tab stay inside it, and focus that leaves it is pulled back. A blocking layer
+   *  traps; a popover does not. Default true. */
+  readonly trap?: boolean
+}
+
+/** JOIN THE ONE STACK. Every layer that sits over the page calls this: the kit's `Sheet`,
+ *  `Modal` and `Popover`, and the shell's own palette, keys sheet and drawer. Only the top layer
+ *  traps focus and takes Escape, and nothing beneath it sees that Escape. */
+export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, onEscape, trap = true }: OverlayLayerOptions): void {
   useLayoutEffect(() => {
     const root = ref.current
     if (!active || root === null) return
@@ -51,18 +74,25 @@ function useStacked(ref: RefObject<HTMLElement | null>, active: boolean): void {
       if (at >= 0) stack.splice(at, 1)
     }
   }, [ref, active])
-}
 
-/** Keeps Tab and Shift-Tab inside `ref` while `active`, and pulls focus back if anything moves
- *  it outside (a press on the scrim, a script). Escape is not this hook's. */
-export function useFocusTrap(ref: RefObject<HTMLElement | null>, active = true): void {
+  const escape = useRef(onEscape)
+  useEffect(() => {
+    escape.current = onEscape
+  })
+
   useEffect(() => {
     const root = ref.current
     if (!active || root === null) return
-    // A trap nobody put on the stack (a caller outside this file) acts as if it were on top.
-    const blocked = () => stack.includes(root) && !isTop(root)
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab' || blocked()) return
+      if (!isTop(root)) return
+      if (event.key === 'Escape') {
+        // A busy layer swallows Escape without closing: the shell must not see it either.
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        escape.current?.()
+        return
+      }
+      if (event.key !== 'Tab' || !trap) return
       const items = focusables(root)
       if (items.length === 0) {
         event.preventDefault()
@@ -81,30 +111,43 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active = true):
       }
     }
     const onFocusIn = (event: FocusEvent) => {
-      if (blocked()) return
+      if (!trap || !isTop(root)) return
       const target = event.target
       if (target instanceof Node && root.contains(target)) return
-      // A toast sits above every overlay and may be pressed; everything else is behind.
+      // A toast sits above every layer and may be pressed; everything else is behind.
       if (target instanceof HTMLElement && target.closest('.bn-toasts') !== null) return
       const items = focusables(root)
       ;(items[0] ?? root).focus({ preventScroll: true })
     }
-    document.addEventListener('keydown', onKey, true)
+    window.addEventListener('keydown', onKey, true)
     document.addEventListener('focusin', onFocusIn)
     return () => {
-      document.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('keydown', onKey, true)
       document.removeEventListener('focusin', onFocusIn)
     }
-  }, [ref, active])
+  }, [ref, active, trap])
 }
 
-/** The page's own h1: where focus goes when the control that opened an overlay is gone. */
+/** Keeps Tab inside `ref` while `active`. The same trap `useOverlayLayer` sets, for a caller that
+ *  owns its own Escape. Prefer `useOverlayLayer`, which also joins the stack. */
+export function useFocusTrap(ref: RefObject<HTMLElement | null>, active = true): void {
+  useOverlayLayer(ref, { active })
+}
+
+/* ---- focus given back ------------------------------------------------------------------------ */
+
+/** The page's own h1: where focus goes when the control that opened a layer is gone. */
 function pageHeading(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-bn-page-title]') ?? document.querySelector<HTMLElement>('main h1')
 }
 
 function restore(opener: HTMLElement | null): void {
   window.requestAnimationFrame(() => {
+    // Focus the person moved somewhere else on purpose stays where they put it. Focus that was
+    // inside the layer (now gone, or leaving) is the focus this gives back.
+    const now = document.activeElement
+    const stranded = now === null || now === document.body || (now instanceof HTMLElement && now.closest('[data-bn-overlay]') !== null)
+    if (!stranded) return
     if (opener !== null && document.contains(opener) && opener.closest('[inert]') === null) {
       opener.focus({ preventScroll: true })
       if (document.activeElement === opener) return
@@ -117,10 +160,12 @@ function restore(opener: HTMLElement | null): void {
   })
 }
 
-/** Reads the focused control on the render that opens, and gives focus back to it when
- *  `active` turns false or the component unmounts. Read during render, not in an effect: a
- *  field's `autoFocus` inside the overlay has already moved focus by the time an effect runs. */
-export function useReturnFocus(active = true): void {
+/** Reads the focused control on the render that opens, and gives focus back to it when `active`
+ *  turns false or the component unmounts. Read during render, not in an effect: a field's
+ *  `autoFocus` inside the layer has already moved focus by the time an effect runs. `to` names
+ *  the control explicitly (a popover's trigger), for a browser that does not focus a pressed
+ *  button. */
+export function useReturnFocus(active = true, to?: RefObject<HTMLElement | null>): void {
   const opener = useRef<HTMLElement | null>(null)
   const armed = useRef(false)
   if (active && !armed.current) {
@@ -128,35 +173,23 @@ export function useReturnFocus(active = true): void {
     const now = document.activeElement
     opener.current = now instanceof HTMLElement && now !== document.body ? now : null
   }
+  const target = () => to?.current ?? opener.current
   useEffect(() => {
     if (active || !armed.current) return
     armed.current = false
-    restore(opener.current)
+    restore(to?.current ?? opener.current)
     opener.current = null
-  }, [active])
+  }, [active, to])
+  const latest = useRef(target)
+  useEffect(() => {
+    latest.current = target
+  })
   useEffect(
     () => () => {
-      if (armed.current) restore(opener.current)
+      if (armed.current) restore(latest.current())
     },
     [],
   )
-}
-
-/** Escape closes the top overlay, and nothing else sees that Escape. */
-function useEscape(ref: RefObject<HTMLElement | null>, active: boolean, onClose: () => void): void {
-  useEffect(() => {
-    if (!active) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      const root = ref.current
-      if (root === null || !isTop(root)) return
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      onClose()
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [ref, active, onClose])
 }
 
 function useScrollLock(active: boolean): void {
@@ -170,8 +203,8 @@ function useScrollLock(active: boolean): void {
   }, [active])
 }
 
-/** First focus: the element inside marked `data-autofocus`, else one that took focus by
- *  itself (`autoFocus`), else the panel. Never the page behind. */
+/** First focus: the element inside marked `data-autofocus`, else one that took focus by itself
+ *  (`autoFocus`), else the panel. Never the page behind. */
 function useFirstFocus(ref: RefObject<HTMLElement | null>, active: boolean): void {
   useEffect(() => {
     if (!active) return
@@ -185,6 +218,18 @@ function useFirstFocus(ref: RefObject<HTMLElement | null>, active: boolean): voi
   }, [ref, active])
 }
 
+/* ---- which heading a section inside a layer draws ----------------------------------------------- */
+
+/** True inside a `Sheet` or `Modal`. `Section` reads it: the layer's own title is the h2, so a
+ *  section inside it is an h3. */
+export const OverlayContext = createContext(false)
+
+export function useInOverlay(): boolean {
+  return useContext(OverlayContext)
+}
+
+/* ---- sheet and modal ---------------------------------------------------------------------------- */
+
 type OverlayProps = {
   readonly open: boolean
   readonly onClose: () => void
@@ -196,40 +241,42 @@ type OverlayProps = {
   readonly className?: string
 }
 
-function OverlayFrame({
-  kind,
-  open,
-  onClose,
-  title,
-  icon,
-  footer,
-  children,
-  className,
-}: OverlayProps & { readonly kind: 'sheet' | 'modal' }) {
+type FrameProps = OverlayProps & {
+  readonly kind: 'sheet' | 'modal'
+  readonly role?: 'dialog' | 'alertdialog'
+  /** False while the layer must not close: its Close is disabled, and Escape and the scrim do
+   *  nothing. A confirm is not dismissible while it writes. */
+  readonly dismissible?: boolean
+}
+
+function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className }: FrameProps) {
   const { mounted, leaving } = useLeave(open)
   const panel = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const live = open && !leaving && mounted
   useReturnFocus(open)
-  useStacked(panel, live)
-  useFocusTrap(panel, live)
-  useEscape(panel, live, onClose)
+  useOverlayLayer(panel, { active: live, onEscape: dismissible ? onClose : undefined })
   useScrollLock(mounted)
   useFirstFocus(panel, live)
   if (!mounted) return null
   const base = kind === 'sheet' ? 'bn-sheet bn-overlay' : 'bn-dialog bn-overlay'
   return createPortal(
     <>
-      <div className="bn-scrim" data-leaving={leaving ? 'true' : undefined} onClick={onClose} />
+      <div className="bn-scrim" data-leaving={leaving ? 'true' : undefined} onClick={dismissible ? onClose : undefined} />
       <div
         ref={panel}
         className={[base, className].filter(Boolean).join(' ')}
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
         data-leaving={leaving ? 'true' : undefined}
         data-bn-overlay={kind}
+        onKeyDownCapture={(event) => {
+          /* A HELD KEY NEVER PRESSES A BUTTON IN A LAYER. Enter held on the control that opened
+             the layer repeats into it; only a fresh press counts. */
+          if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault()
+        }}
       >
         <header className="bn-overlay-head">
           {icon ? (
@@ -240,11 +287,13 @@ function OverlayFrame({
           <h2 className="bn-overlay-title" id={titleId}>
             {title}
           </h2>
-          <Button variant="ghost" iconOnly icon="x" onClick={onClose} className="bn-overlay-close">
+          <Button variant="ghost" iconOnly icon="x" onClick={onClose} disabled={!dismissible} className="bn-overlay-close">
             Close
           </Button>
         </header>
-        <div className="bn-overlay-body">{children}</div>
+        <OverlayContext.Provider value>
+          <div className="bn-overlay-body">{children}</div>
+        </OverlayContext.Provider>
         {footer ? <footer className="bn-overlay-foot">{footer}</footer> : null}
       </div>
     </>,
@@ -265,7 +314,9 @@ export function Modal(props: OverlayProps) {
 
 /** ASK FIRST, ONLY FOR A PRESS THAT CANNOT BE UNDONE (docs/DESIGN.md, "Ask first, or undo
  *  after"). It says what will happen and to how many, and the verb is the button. A press that
- *  CAN be undone never comes here: it acts, and its receipt toast carries Undo. */
+ *  CAN be undone never comes here: it acts, and its receipt toast carries Undo.
+ *  FIRST FOCUS IS "CANCEL", and it is an `alertdialog`. WHILE `busy`, nothing closes it: its
+ *  Close is disabled and Escape and the scrim do nothing, so a write in flight is never hidden. */
 export function ConfirmSheet({
   open,
   onClose,
@@ -286,30 +337,43 @@ export function ConfirmSheet({
   readonly busy?: boolean
 }) {
   return (
-    <Modal
+    <OverlayFrame
+      kind="modal"
+      role="alertdialog"
+      dismissible={busy !== true}
       open={open}
       onClose={onClose}
       title={title}
       className="bn-confirm"
       footer={
         <>
-          <Button variant={tone === 'danger' ? 'danger-solid' : 'primary'} busy={busy} disabled={busy} onClick={onConfirm} data-autofocus="">
+          <Button variant={tone === 'danger' ? 'danger-solid' : 'primary'} busy={busy} disabled={busy} onClick={onConfirm}>
             {confirmLabel}
           </Button>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
+          <Button variant="ghost" onClick={onClose} disabled={busy} data-autofocus="">
             Cancel
           </Button>
         </>
       }
     >
       {children}
-    </Modal>
+    </OverlayFrame>
   )
 }
 
+/* ---- popover ------------------------------------------------------------------------------------ */
+
+/** The lowest y a popover may reach: the viewport, or the top of the phone's tab bar. */
+function floorY(): number {
+  const bar = document.querySelector<HTMLElement>('.bn-tabbar')
+  const top = bar !== null && bar.getClientRects().length > 0 ? bar.getBoundingClientRect().top : window.innerHeight
+  return Math.min(window.innerHeight, top)
+}
+
 /** A small panel under the control that opened it. Not blocking: no scrim, and the page stays
- *  live. Escape, a press outside, or focus leaving it closes it, and focus goes back to the
- *  control. */
+ *  live. Escape, a press outside, focus leaving it, or Tab past its last item closes it, and
+ *  focus goes back to the control. It opens ABOVE the control when there is no room below, and
+ *  shifts to stay inside the viewport and above the phone's tab bar. */
 export function Popover({
   open,
   onClose,
@@ -327,20 +391,30 @@ export function Popover({
 }) {
   const { mounted, leaving } = useLeave(open)
   const panel = useRef<HTMLDivElement>(null)
-  const [at, setAt] = useState<{ readonly top: number; readonly left: number } | null>(null)
+  const [at, setAt] = useState<{ readonly top: number; readonly left: number; readonly maxHeight: number } | null>(null)
   const live = open && !leaving && mounted
-  useReturnFocus(open)
-  useStacked(panel, live)
-  useEscape(panel, live, onClose)
+  useReturnFocus(open, anchor)
+  useOverlayLayer(panel, { active: live, onEscape: onClose, trap: false })
   useFirstFocus(panel, live)
   useLayoutEffect(() => {
     if (!mounted) return
     const place = () => {
       const a = anchor.current?.getBoundingClientRect()
-      if (a === undefined) return
-      const width = panel.current?.getBoundingClientRect().width ?? 0
-      const left = Math.max(8, Math.min(a.left, window.innerWidth - width - 8))
-      setAt({ top: a.bottom + 6, left })
+      const p = panel.current
+      if (a === undefined || p === null) return
+      const gap = 6
+      const edge = 8
+      const floor = floorY() - edge
+      const width = p.offsetWidth
+      const height = p.scrollHeight
+      const left = Math.max(edge, Math.min(a.left, window.innerWidth - width - edge))
+      const below = Math.max(floor - (a.bottom + gap), 0)
+      const above = Math.max(a.top - gap - edge, 0)
+      // below when it fits; above when only that fits; else the roomier side, scrolling
+      const down = height <= below || (height > above && below >= above)
+      const maxHeight = down ? below : above
+      const top = down ? a.bottom + gap : a.top - gap - Math.min(height, above)
+      setAt({ top, left, maxHeight })
     }
     place()
     window.addEventListener('resize', place)
@@ -377,7 +451,21 @@ export function Popover({
       tabIndex={-1}
       data-leaving={leaving ? 'true' : undefined}
       data-bn-overlay="popover"
-      style={at === null ? { visibility: 'hidden' } : { top: at.top, left: at.left }}
+      style={at === null ? { visibility: 'hidden', top: 0, left: 0 } : { top: at.top, left: at.left, maxHeight: at.maxHeight }}
+      onKeyDown={(event) => {
+        /* TAB PAST THE LAST ITEM (or Shift-Tab past the first) CLOSES IT, and focus goes back to
+           the control that opened it, not on into the page (UX-091). */
+        if (event.key !== 'Tab' || panel.current === null) return
+        const items = focusables(panel.current)
+        const first = items[0]
+        const last = items[items.length - 1]
+        const now = document.activeElement
+        const pastEnd = !event.shiftKey && (now === last || items.length === 0)
+        const pastStart = event.shiftKey && (now === first || now === panel.current || items.length === 0)
+        if (!pastEnd && !pastStart) return
+        event.preventDefault()
+        onClose()
+      }}
     >
       {children}
     </div>,
@@ -385,23 +473,31 @@ export function Popover({
   )
 }
 
-/* ---- the sheet host -----------------------------------------------------------------------
+/* ---- the sheet host -----------------------------------------------------------------------------
    THE ONE PLACE A REGISTERED SHEET IS DRAWN. The shell mounts `<SheetHost/>` once, and it draws
-   whatever `openSheet(kind, props)` opened (kit/sheets.ts), handing it `closeSheet` as its
-   `onClose`. The registry decides WHAT opens; this decides only WHERE it is drawn, so the two
-   cannot drift apart. A kind with no registered sheet never reaches here: `openSheet` sends it
-   to its own page instead. */
+   whatever `openSheet(kind, props)` opened (kit/sheets.ts), handing it `open` and `closeSheet` as
+   its `onClose`. When the sheet closes, the host keeps it mounted with `open={false}` for one
+   leave beat, so the sheet's own leave animation runs before it goes. The registry decides WHAT
+   opens; this decides only WHERE it is drawn. A kind with no registered sheet never reaches here:
+   `openSheet` sends it to its own page instead. */
+type HostedComponent = ComponentType<{ readonly open: boolean; readonly onClose: () => void }>
+
 export function SheetHost() {
-  const open = useOpenSheet()
-  if (open === null) return null
-  const { Component, props, kind } = open as unknown as {
+  const current = useOpenSheet()
+  const last = useRef<OpenSheet | null>(null)
+  if (current !== null) last.current = current
+  // one beat longer than the kit's leave (`useLeave`'s 140ms), so the sheet finishes its own
+  const { mounted } = useLeave(current !== null, 180)
+  const shown = current ?? (mounted ? last.current : null)
+  if (shown === null) return null
+  const { Component, props, kind } = shown as unknown as {
     readonly kind: string
     readonly props: object
-    readonly Component: ComponentType<{ readonly onClose: () => void }>
+    readonly Component: HostedComponent
   }
   return (
     <div data-bn-sheet-host={kind}>
-      <Component {...props} onClose={closeSheet} />
+      <Component {...props} open={current !== null} onClose={closeSheet} />
     </div>
   )
 }

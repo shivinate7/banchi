@@ -103,7 +103,7 @@
 .bn-eyebrow > *:not(:last-child)::after { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 .bn-title {
   font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-3xl);
+  font-size: var(--bn-fs-h1);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -138,7 +138,7 @@
 }
 .bn-mono { font-family: var(--bn-font-mono); font-feature-settings: 'tnum', 'zero'; }
 .bn-muted { color: var(--bn-ink-3); }
-.bn-faint { color: var(--bn-ink-4); }
+.bn-faint { color: var(--bn-ink-3); }
 .bn-money { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-money); }
 
 /* ---- the heading scale: three steps (UX-067) ----------------------------------------------
@@ -180,8 +180,10 @@
   line-height: var(--bn-lh-base);
   color: var(--bn-ink);
 }
-/* THE TOOLBAR FOLDS AS ONE UNIT. A wide column draws one row. A narrow one draws a grid of
-   equal cells, so no control is wider than its neighbour for its label's sake. */
+/* THE TOOLBAR FOLDS AS ONE UNIT, at ONE CONTROL HEIGHT. A wide column draws one row: the field
+   takes the room that is left, up to a reading width. A narrow column gives the field the whole
+   first row and wraps the chips and sorts beneath it. Every control in it is `--bn-control-h`
+   tall, which the thumb floor raises on a phone. */
 .bn-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -189,14 +191,21 @@
   gap: var(--bn-2);
   margin-bottom: var(--bn-4);
 }
-/* A field in the toolbar takes the room that is left, up to a reading width, and never pushes
-   its neighbours onto a line of their own. */
 .bn-toolbar > .bn-input,
 .bn-toolbar > .bn-input-wrap,
 .bn-toolbar > .search-field { flex: 1 1 16rem; width: auto; max-width: 28rem; min-width: 0; }
+.bn-toolbar > .bn-input,
+.bn-toolbar > .bn-input-wrap > .bn-input,
+.bn-toolbar > .bn-chip,
+.bn-toolbar > .bn-btn,
+.bn-toolbar > .bn-select { height: var(--bn-control-h); min-height: var(--bn-control-h); }
+.bn-toolbar > .bn-btn { --btn-h: var(--bn-control-h); }
+.bn-toolbar > .bn-seg { height: var(--bn-control-h); align-items: stretch; padding: 1px; }
+.bn-toolbar > .bn-seg > .bn-seg-item { height: auto; }
 @container bn-page (max-width: 640px) {
-  .bn-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
-  .bn-toolbar > * { width: 100%; max-width: none; min-width: 0; }
+  .bn-toolbar > .bn-input,
+  .bn-toolbar > .bn-input-wrap,
+  .bn-toolbar > .search-field { flex-basis: 100%; max-width: none; }
   .bn-page-head .bn-head-actions { width: 100%; }
 }
 .bn-page-body { min-width: 0; }
@@ -213,6 +222,7 @@
 }
 .bn-section-count { font-family: var(--bn-font-ui); font-size: var(--bn-fs-read); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; letter-spacing: normal; }
 .bn-section-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); }
+.bn-section-lede { margin: calc(-1 * var(--bn-2)) 0 var(--bn-3); font-size: var(--bn-fs-base); color: var(--bn-ink-3); max-width: 72ch; }
 
 /* THE ONE LOADING SHAPE (UX-098): rows the height of the rows that replace them. */
 .bn-loading { display: flex; flex-direction: column; gap: var(--bn-2); }
@@ -230,6 +240,31 @@
 .bn-loading-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--bn-2); }
 .bn-loading-line { height: var(--bn-3); width: 60%; }
 .bn-loading-line-short { width: 35%; }
+/* `shape="cards"`: a grid of tiles, for a screen whose body is cards. */
+.bn-loading-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: var(--bn-3); }
+.bn-loading-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+}
+.bn-loading-card-art { aspect-ratio: 63 / 88; width: 100%; }
+/* `shape="summary"`: a hero band of figures, for a screen that opens on where things stand. */
+.bn-loading-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-5);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+}
+.bn-loading-headline { height: var(--bn-6); width: 55%; }
+.bn-loading-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: var(--bn-4); }
+.bn-loading-figure { height: var(--bn-9); }
 
 /* ---- surfaces ------------------------------------------------------------ */
 .bn-panel {
@@ -507,8 +542,8 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   transition: border-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
 }
 .bn-textarea { padding: var(--bn-2) var(--bn-3); min-height: 96px; resize: vertical; line-height: 1.5; }
-.bn-input::placeholder, .bn-textarea::placeholder { color: var(--bn-ink-4); }
-.bn-input:hover, .bn-select:hover, .bn-textarea:hover { border-color: var(--bn-ink-4); }
+.bn-input::placeholder, .bn-textarea::placeholder { color: var(--bn-ink-3); }
+.bn-input:hover, .bn-select:hover, .bn-textarea:hover { border-color: var(--bn-ink-3); }
 .bn-input:focus-visible, .bn-select:focus-visible, .bn-textarea:focus-visible {
   outline: none;
   border-color: var(--bn-accent);
@@ -856,45 +891,43 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   overflow-wrap: anywhere;
 }
 
-/* ONE LINE, AND THE DISCLOSURE OPENS OVER THE PAGE (D118). A notice inside `StatusSlot` is
-   compact whether or not it asked to be: the slot is one notice high, and a notice that grew
-   would move the rows under the press that caused it. */
+/* THE DISCLOSURE OPENS OVER THE PAGE (D118). In a compact notice, and in any notice inside
+   `StatusSlot`, "What the server said" sits on the sentence's line and its panel opens over what
+   is below, the full width of the notice, so it stays inside the page's gutter at every width.
+   THE SENTENCE IS NEVER CLIPPED: it wraps. A notice appearing is a change of state, not a press
+   moving the page, so the slot may grow to hold it (the orchestrator's reading of D118,
+   2026-09-23). What the slot guarantees is its minimum: a one-line answer moves nothing. */
 .bn-notice-compact,
-.bn-status-slot > .bn-notice {
-  flex-wrap: nowrap;
-  align-items: center;
-  height: 100%;
-  min-height: 0;
-  padding-block: 0;
-}
-.bn-notice-compact .bn-notice-text,
-.bn-status-slot > .bn-notice .bn-notice-text { flex-direction: row; align-items: baseline; gap: var(--bn-2); overflow: hidden; }
-.bn-notice-compact .bn-notice-title,
-.bn-notice-compact .bn-notice-body,
-.bn-status-slot > .bn-notice .bn-notice-title,
-.bn-status-slot > .bn-notice .bn-notice-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.bn-notice-compact .bn-notice-title,
-.bn-status-slot > .bn-notice .bn-notice-title { flex: none; max-width: 60%; }
+.bn-status-slot > .bn-notice { position: relative; flex-wrap: wrap; align-items: center; row-gap: var(--bn-1); }
 .bn-notice-compact > .bn-icon,
 .bn-status-slot > .bn-notice > .bn-icon { margin-top: 0; }
+.bn-notice-compact .bn-notice-text,
+.bn-status-slot > .bn-notice .bn-notice-text { display: block; flex: 1 1 12rem; }
+.bn-notice-compact .bn-notice-title,
+.bn-status-slot > .bn-notice .bn-notice-title { display: inline; margin-right: var(--bn-2); }
+.bn-notice-compact .bn-notice-body,
+.bn-status-slot > .bn-notice .bn-notice-body { display: inline; }
 .bn-notice-compact .bn-notice-said,
-.bn-status-slot > .bn-notice .bn-notice-said { flex: none; order: 0; position: relative; padding-left: 0; }
+.bn-status-slot > .bn-notice .bn-notice-said { position: static; flex: none; order: 0; padding-left: 0; }
 .bn-notice-compact .bn-notice-said-body,
 .bn-status-slot > .bn-notice .bn-notice-said-body {
   position: absolute;
   z-index: 30;
+  left: 0;
   right: 0;
   top: calc(100% + var(--bn-2));
-  width: min(28rem, calc(100vw - 32px));
+  margin-top: 0;
   box-shadow: var(--bn-shadow-3);
 }
 
 /* ---- the status slot (Page) ---------------------------------------------------------------
-   One notice high whether or not a notice is in it (D118). The height is the control height
-   plus a margin, so it follows the thumb floor on a phone the way every control does. */
+   AT LEAST one notice high whether or not a notice is in it (D118): a one-line answer arrives
+   without moving anything below it. A longer answer grows the slot rather than being cut. The
+   height is the control height plus a margin, so it follows the thumb floor on a phone the way
+   every control does. */
 .bn-status-slot {
   position: relative;
-  height: calc(var(--bn-control-h) + var(--bn-3));
+  min-height: calc(var(--bn-control-h) + var(--bn-3));
   margin-bottom: var(--bn-4);
 }
 
@@ -1149,7 +1182,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 }
 @media (min-width: 768px) { .bn-confirm { width: min(440px, calc(100vw - 32px)); } }
 /* A popover is a menu surface fixed under its control, portalled out of the page. */
-.bn-popover { position: fixed; z-index: 62; max-width: calc(100vw - 16px); }
+.bn-popover { position: fixed; z-index: 62; max-width: calc(100vw - 16px); overflow: auto; }
 .bn-popover:focus { outline: none; }
 
 /* ---- photo frame --------------------------------------------------------------------------- */
@@ -1289,13 +1322,16 @@ img.bn-crop[data-cropped='true'] {
   animation: bn-drain linear forwards;
 }
 
-/* A keycap is a promise about a keyboard; a phone has none. Screens stop deciding it one by one.
-   EVERY keycap, not only the ones inside a control (UX-040): a hint beside a label, a pair in a
-   group, a key inside a field. `.bn-kbd-lg` stays: it is a target a finger lands on, not a hint.
-   ONE PLACEMENT RULE (UX-145): a keycap sits AFTER its label, on the same line, inside the
-   control it presses. */
+/* A keycap is a promise about a keyboard; a phone has none (UX-040). Two things hide on a coarse
+   pointer: a keycap INSIDE a control (the control still reads without it), and a `KeyHint`,
+   which wraps a WHOLE phrase — "Press , then a letter to jump" — so the sentence leaves with its
+   keys. A bare keycap in running text is NOT hidden: hiding it alone breaks the sentence around
+   it ("move open + letter jumps anywhere"). Screen lanes wrap those phrases in `KeyHint`.
+   ONE PLACEMENT RULE (UX-145): a keycap sits AFTER its label, on the same line. */
+/* A phrase that names keys, drawn as one unit so it can leave as one unit. */
+.bn-keyhint { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--bn-1); color: var(--bn-ink-3); }
 @media (hover: none) and (pointer: coarse) {
-  .bn-kbd:not(.bn-kbd-lg), .bn-kbd-group { display: none; }
+  .bn-btn .bn-kbd, .bn-seg-item .bn-kbd, .bn-toast-action .bn-kbd, .bn-chip .bn-kbd, .bn-keyhint { display: none; }
 }
 
 

@@ -47,18 +47,18 @@ INK
                                                          4.16:1 on --bn-surface-2, failing this
                                                          row's own job at 4.5:1. #666c76 clears
                                                          both (4.85:1, 4.55:1).
---bn-ink-4                      #6b717b      #7c8492     icons, separators, disabled, the lightest
-                                                         word. 4.51:1 on --bn-bg light, 5.13:1 dark.
-                                                         Raised 2026-09-23 (UX-047): #7f8791 was
-                                                         3.33:1 and #707886 4.04:1 on the surface,
-                                                         both under 4.5:1 for words people read
+--bn-ink-4                      #7f8791      #707886     NOT FOR TEXT: icons, separators, rules,
+                                                         a field's edge. At least 3:1 on every
+                                                         ground (3.13:1 on --bn-surface-2 light).
+                                                         A word is ink-3 at the faintest; every
+                                                         ink-4 text use moved to ink-3, 2026-09-23
 
 LINE                            (all three are ink at an alpha, so they ride the ground)
 --bn-line                       ink 8%       white 8%    the hairline. Every separation.
 --bn-line-strong                ink 16%      white 16%   the boundary of a control you type into
 --bn-line-focus                 accent 55%   accent 60%  a field that has focus
---bn-field-edge                 #878d97      #626977     the edge of a field or a checkbox, at 3:1
-                                                         on its ground in both themes (UX-094;
+--bn-field-edge                 = --bn-ink-4 in both themes: the edge of a field or a checkbox,
+                                                         at 3:1 on every ground (UX-094;
                                                          --bn-line-strong is 1.41:1 on white)
 
 BRAND
@@ -82,9 +82,9 @@ PILL INKS                       a tone's word on that tone's tint, at 4.5:1 over
                                 the tone ink itself, which already clears 5:1 on its tint.
 --bn-pill-ink-ok                #11733a
 --bn-pill-ink-warn              #a14b09
---bn-pill-ink-live              #b33020
+--bn-pill-ink-live              #a53f12      vermilion, toward orange
+--bn-pill-ink-danger            #b3123e      crimson, so live and danger read apart
 --bn-pill-ink-accent            = --bn-accent-hover in both themes: darker in light, lighter in dark
---bn-pill-ink-danger            = --bn-danger in both themes
 
 ELEVATION                       (three steps, each a hairline ring plus a shadow, so a panel
                                  is separated in dark where a 1px line alone disappears)
@@ -148,7 +148,8 @@ SHELL                           --bn-sidebar-w 236 · --bn-rail-w 64 · --bn-top
 --bn-control-h 34 · -lg 40 · -sm 28      → 42 · 46 · 40 under a coarse pointer
 PAGE WIDTH                      --bn-page-w 1600 · -rows 1344
                                 a CAP, not a breakpoint: 1536 and 1280 of content
---bn-page-top                   = --bn-6 (24). The one gap above every `Page`'s title (UX-133).
+--bn-page-top                   = --bn-6 (24), = --bn-4 (16) below 768. The one gap above
+                                every `Page`'s title (UX-133).
                                 A `Page` reads --bn-page-w alone; -rows is for the screens
                                 not yet on `Page` (D-one-page-width)
 
@@ -267,9 +268,11 @@ button and never has to redraw one.**
 | `Notice` | a warning or a standing condition. The code and any server text go behind "What the server said" (D-notice-detail) | a receipt of something that worked — that is a toast |
 | `Refusal` / `Retry` | a press that cannot be done here, with no retry / a failure that may pass, with a busy "Try again" | a warning that asks for nothing |
 | `ReloadButton` | the one reload: in the page's actions, labelled, on `R`, busy while it reads | a second reload with a key on the same page |
-| `Loading` | the one loading shape: rows the height of the rows that replace them | a spinner and a sentence |
+| `Loading` | the one loading style, in the shape of what replaces it: `rows`, `cards` or `summary` | a spinner and a sentence |
 | `Sheet` / `Modal` / `Popover` | work beside the page / one decision that stops it / a small menu under its control. One header, one "Close". Focus stays inside and goes back | a screen's own `role="dialog"` |
-| `ConfirmSheet` | a press that cannot be undone. It says what happens, and to how many | a press that can be undone, which acts and puts Undo on its toast |
+| `useOverlayLayer` | any other layer over the page (the shell's palette, keys sheet and drawer): it joins the one stack, and only the top layer traps focus and takes Escape | a layer with its own Escape listener |
+| `ConfirmSheet` | a press that cannot be undone. An `alertdialog`, first focus on Cancel. While it is busy nothing closes it, and a held Enter presses nothing | a press that can be undone, which acts and puts Undo on its toast |
+| `KeyHint` | a phrase that names keys. On a touch screen the whole phrase hides | a bare `Kbd` in a sentence, which stays |
 | `Segmented` | two to four exclusive views of the same thing | navigation between screens |
 | `Stat` | one figure with its label, on a dashboard row | a value in a key/value list (`.bn-kv`) |
 | `Logo` | the mark, in the shell and on the crash page | decoration inside a screen |
@@ -291,17 +294,26 @@ drift the file exists to prevent, and `ICON_NAMES` is what draws the whole set o
 contested icon means. `history` is a log of past events. `headstone` is the graveyard. `chart`
 is a price over time. A new meaning gets a new path.
 
-**One place for a keycap** (UX-145). A keycap sits after its label, on the same line, inside
-the control that it presses. On a touch screen every keycap hides (UX-040). `.bn-kbd-lg` stays,
-because it is a target and not a hint.
+**One place for a keycap** (UX-145). A keycap sits after its label, on the same line. On a
+touch screen a keycap inside a control hides, and a `KeyHint` hides as a whole phrase (UX-040).
+A bare keycap in a sentence does not hide by itself, because the sentence around it would break.
+A screen wraps that phrase in `KeyHint` instead.
 
 **Ask first, or undo after** (UX-099). A press that cannot be undone asks first, in a
 `ConfirmSheet` that names the count. A press that can be undone acts at once, and its receipt
 toast carries Undo. No press does both. No destructive press does neither.
 
 **The answer to a press lands where the press was** (D118, UX-058). A screen that answers in
-place passes `status` to `Page`. The status slot is one notice high, full or empty. Its "What
-the server said" opens over the page.
+place passes `status` to `Page`. The status slot is at least one notice high, full or empty, so
+a one-line answer moves nothing. A longer answer grows the slot, and the sentence is never cut:
+a notice appearing is a change of state, not a press moving the page. "What the server said"
+opens over the page, the full width of the notice, inside the gutter.
+
+**Only the top layer listens** (UX-090). Every layer over the page joins one stack. The top
+layer traps focus and takes Escape. When it closes, focus goes back to the control that opened
+it, even when that control is inside the layer beneath. A popover also closes when Tab passes
+its last item. It opens above its control when there is no room below, and stays clear of the
+phone's tab bar.
 
 **Every primitive is on one page, at `#/gallery`.** It is the kit rather than a component
 sheet now, it is reachable from the command palette (never the nav), `make screenshot`

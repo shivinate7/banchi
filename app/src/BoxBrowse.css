@@ -37,7 +37,7 @@
   min-width: 0;
 }
 .browse-map-top { display: flex; align-items: center; gap: var(--bn-2); }
-.browse-rail-toggle { flex: none; color: var(--bn-ink-4); }
+.browse-rail-toggle { flex: none; color: var(--bn-ink-3); }
 .browse-rail-toggle:hover { color: var(--bn-ink); }
 
 /* D213's game/set/rarity filter. The three `.bn-select`s wrap, three rows at every measured
@@ -448,11 +448,11 @@
 }
 /* No name yet. The row says the same phrase the hero and the claims sheet say, dimmed so the
    placeholder is legible AS a placeholder rather than mistakable for a card called this. */
-.browse-row-name.is-unnamed { color: var(--bn-ink-4); }
+.browse-row-name.is-unnamed { color: var(--bn-ink-3); }
 .browse-row[aria-current='true'] .browse-row-name.is-unnamed { color: var(--bn-ink-3); }
 .browse-row-badge { display: inline-grid; place-items: center; color: var(--bn-warn); }
-.browse-row-badge.is-out { color: var(--bn-ink-4); }
-.browse-rowline.is-departed .browse-row { color: var(--bn-ink-4); }
+.browse-row-badge.is-out { color: var(--bn-ink-3); }
+.browse-rowline.is-departed .browse-row { color: var(--bn-ink-3); }
 .browse-rowline.is-departed .browse-row-position { font-family: var(--bn-font-mono); font-weight: 500; }
 .browse-row[aria-current='true'] {
   background: var(--bn-accent-tint);
