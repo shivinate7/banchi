@@ -123,9 +123,15 @@ function row(index: number, boxName: string) {
 const json = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
 
-/** Stub the one box, its cards and the search the card pane asks. Newer routes win over the seal's. */
-async function stubBox(page: Page, boxName: string): Promise<void> {
+/** Stub the one box, its cards and the search the card pane asks. Newer routes win over the seal's.
+ *  `edit` changes the rows before any route answers, so the walk and the copies list agree. */
+async function stubBox(
+  page: Page,
+  boxName: string,
+  edit?: (cards: Record<string, ReturnType<typeof row>>) => void,
+): Promise<void> {
   const cards = Object.fromEntries(INDICES.map((i) => [`${BOX}/${i}`, row(i, boxName)]))
+  edit?.(cards)
   await page.route(/\/boxes(\?.*)?$/, (route) =>
     json(route, {
       boxes: [
@@ -354,16 +360,16 @@ for (const size of SIZES) {
 
 test('an unread neighbour is said in words on the ladder, never as a figure (LOC-28)', async ({ page }) => {
   await frame(page, SIZES[0], 'light')
-  await stubBox(page, 'RB Origins')
   /* The card toward the front of index 7 has not been read, and neither has the one after it:
-     the neighbour is "2 unread cards", the owner's words (amends D116). Newer routes win. */
-  const cards = Object.fromEntries(INDICES.map((i) => [`${BOX}/${i}`, row(i, 'RB Origins')]))
-  const seven = cards[`${BOX}/7`] as ReturnType<typeof row>
-  seven.place.neighbors = {
-    prev: seven.place.neighbors.prev,
-    next: { index: 8, slot: 7, name: null, unread: 2 } as unknown as typeof seven.place.neighbors.prev,
-  }
-  await page.route(/\/inventory\/1$/, (route) => json(route, { version: 2, cards, listings: {} }))
+     the neighbour is "2 unread cards", the owner's words (amends D116). */
+  await stubBox(page, 'RB Origins', (cards) => {
+    const seven = cards[`${BOX}/7`]
+    if (seven === undefined) return
+    seven.place.neighbors = {
+      prev: seven.place.neighbors.prev,
+      next: { index: 8, slot: 7, name: null, unread: 2 },
+    }
+  })
   await page.goto(`/#/inventory?box=${BOX}&card=cid-7`)
   await settleFonts(page)
 
