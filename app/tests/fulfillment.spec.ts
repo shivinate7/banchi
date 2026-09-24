@@ -1796,6 +1796,65 @@ test('a SKU owed 2 with 3 copies on hand shows "Pick 2" and every copy, none pre
   await battery(page, 'owed SKU with 3 copies')
 })
 
+/* THE SORT, PROVED AGAINST THE WIRE'S OWN DELIVERY ORDER, not against a fixture that already
+ * happens to agree with it. `pipeline/walkplan.py:plan` sorts stops by the solver's own cost,
+ * never by box number (`docs/specs/order-walk-plan.md` §7 — sections counted flat, boxes
+ * free), so a plan naming Box 5 before Box 1 is a real, legal answer the solver can send.
+ * This plan does exactly that; the screen must still draw Box 1 first. */
+const WALK_ORDER_PLAN = {
+  cost: 'sections',
+  stops: [
+    {
+      key: 'box/5/section/1', box: 5, box_name: null, section: 1, section_name: null,
+      pooled: false, game: null, game_display: null, order: 1,
+      span: { start: 1, end: 10 }, box_total: 10,
+      takes: [{
+        sku: '9199010', name: 'Xerneas', number_display: null, set: null, rarity: null,
+        condition: null, wanted: 1,
+        for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+        copies: [{
+          key: '5/1', state: 'identified', has_photo: true, capture_id: 'cap-x', cid: null,
+          place: {
+            label: 'Box 5 · Section 1 · Card 1', located: true, box: 5, index: 1, slot: 1,
+            section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
+            box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
+          },
+          here: true,
+        }],
+        listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null,
+      }],
+    },
+    {
+      key: 'box/1/section/1', box: 1, box_name: null, section: 1, section_name: null,
+      pooled: false, game: null, game_display: null, order: 2,
+      span: { start: 1, end: 10 }, box_total: 10,
+      takes: [{
+        sku: '9199011', name: 'Aerodactyl', number_display: null, set: null, rarity: null,
+        condition: null, wanted: 1,
+        for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+        copies: [{
+          key: '1/1', state: 'identified', has_photo: true, capture_id: 'cap-a', cid: null,
+          place: {
+            label: 'Box 1 · Section 1 · Card 1', located: true, box: 1, index: 1, slot: 1,
+            section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
+            box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
+          },
+          here: true,
+        }],
+        listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null,
+      }],
+    },
+  ],
+  shortfall: [],
+  counts: { stops: 2, boxes: 2, copies: 2, sections_considered: 2, sections_candidate: 2, exact: true, solve_ms: 2 },
+}
+
+test('two owed cards delivered out of walk order are drawn IN walk order', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: WALK_ORDER_PLAN })
+  // The wire named Box 5 (Xerneas) before Box 1 (Aerodactyl); the screen draws Box 1 first.
+  await expect(view(page).locator('.ff-owed-card h2')).toHaveText(['Aerodactyl', 'Xerneas'])
+})
+
 /* A card the same order also claims, reached by browsing a box instead of through "Cards to
  * pick" -- the walk-in case (`claim`, `Fulfillment.tsx`): a copy an order is waiting for is
  * sold through the order however he reaches it. This is also where "No name" is asserted now:
@@ -1847,6 +1906,31 @@ test('the search hint names a real card from this store, not a fixed example', a
   )
 })
 
+/* UX-055: the placeholder is a card's own name and has no length ceiling — "Promising Future"
+ * measured long enough at 390px, 24px font, to hard-clip mid-word ("Piercing Li") before this
+ * fix. `overflow`/`text-overflow: ellipsis` reaches a placeholder the same way it reaches
+ * typed text, so this asserts the computed style directly rather than a screenshot: the fix
+ * is the STYLE, and it holds regardless of which card's name happens to be the example. */
+test('the search placeholder ends in an honest ellipsis at 390px, never a raw mid-word cut', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openList(page, [], { orders: MULTI_ORDER, plan: MULTI_PLAN })
+  const input = page.getByPlaceholder(/^For example, /)
+  await expect(input).toHaveAttribute('placeholder', 'For example, Promising Future')
+  const style = await input.evaluate((node) => {
+    const computed = window.getComputedStyle(node)
+    return { overflow: computed.overflow, textOverflow: computed.textOverflow }
+  })
+  // Chromium normalizes a text `<input>`'s COMPUTED `overflow` to `clip` regardless of the
+  // author's declared value — a browser quirk over form controls' own internal scrolling,
+  // not a sign the rule did not apply. `hidden` is what was written; `clip` is what a
+  // Chromium `getComputedStyle` answers for it here, and `text-overflow: ellipsis` still
+  // renders correctly under either (proved live: `scratchpad/lanes/fulfillment/ff-*.png`).
+  expect(['hidden', 'clip']).toContain(style.overflow)
+  expect(style.textOverflow).toBe('ellipsis')
+})
+
 /* UX-101: this screen has no shell (D5), so the owner's own `?` sheet (`App.tsx`) cannot open
  * here at all -- and the dead `/` row that once claimed otherwise for this screen is deleted
  * from `App.tsx`'s own `SHORTCUTS` table. This is the screen's own small answer to `?`,
@@ -1860,6 +1944,9 @@ test('"?" opens this screen\'s own keyboard reference, and closes it again', asy
   await expect(sheet).toBeVisible()
   await expect(sheet).toContainText('Esc')
   await expect(sheet).toContainText('Close the enlarged photograph')
+  // THE FLOOR TABLE REACHES THE SHEET TOO — its key caps and text are on screen exactly
+  // like any other card, and `battery` holds them to the same nine rows while it is open.
+  await battery(page, 'keyboard shortcuts sheet')
 
   await page.keyboard.press('Escape')
   await expect(view(page).locator('.ff-keys')).toHaveCount(0)

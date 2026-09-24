@@ -419,6 +419,17 @@ function count(n: number, one: string, many: string): string {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
+/** A sort comparator over a number that may be null, WITHOUT the `Infinity - Infinity = NaN`
+ *  trap: `a - b` reads as a comparator return only while both sides are real numbers. A null
+ *  sorts after every real number (there is nothing to rank it against, so it is put last
+ *  rather than guessed into first); two nulls compare equal, 0 — the correct "no opinion"
+ *  answer a NaN silently was not. */
+function compareNullable(a: number | null, b: number | null): number {
+  if (a === null) return b === null ? 0 : 1
+  if (b === null) return -1
+  return a - b
+}
+
 /** `Box 3`, `Section 1`, `Card 17`, the figures ranked above the words. The text content of each
  *  part is the server's string character for character; only the weight changes. Each part is
  *  its own span (D218) so a narrow screen can stack them on purpose, breaking before `Card N`
@@ -678,8 +689,8 @@ export function Fulfillment() {
       if (pa === undefined || pb === undefined) return 0
       return (
         pa.box - pb.box ||
-        (pa.section ?? Infinity) - (pb.section ?? Infinity) ||
-        (pa.card ?? Infinity) - (pb.card ?? Infinity)
+        compareNullable(pa.section, pb.section) ||
+        compareNullable(pa.card, pb.card)
       )
     })
   }, [plan, soldSet])
@@ -1609,8 +1620,10 @@ export function Fulfillment() {
 
   /* The one thing this screen answers to on its own — UX-101, "the key works for the
      Fulfiller, or it leaves the list". The kit's own scrim/dialog primitives (`bn-scrim`,
-     `bn-dialog`, `bn-kbd` — `App.tsx`'s own `.app-keys` is the same pair, scaled up for its
-     own many-screen table); no route out, closed by Esc, the scrim, or its own button. */
+     `bn-dialog` — `App.tsx`'s own `.app-keys` is the same pair, scaled up for its own
+     many-screen table); no route out, closed by Esc, the scrim, or its own button. THE KEY
+     CAP IS NOT `.bn-kbd` — that chip is 10px, sized for the owner's dense reference sheet,
+     and this screen's own floor table reaches it too (`.ff-keys-key`, Fulfillment.css). */
   const keysSheet = !showKeys ? null : (
     <>
       <div className="bn-scrim" onClick={() => setShowKeys(false)} />
@@ -1636,11 +1649,11 @@ export function Fulfillment() {
         </header>
         <ul className="ff-keys-list">
           <li>
-            <kbd className="bn-kbd">Esc</kbd>
+            <kbd className="ff-keys-key">Esc</kbd>
             <span className="fulfillment-say">Close the enlarged photograph</span>
           </li>
           <li>
-            <kbd className="bn-kbd">?</kbd>
+            <kbd className="ff-keys-key">?</kbd>
             <span className="fulfillment-say">Open or close this list</span>
           </li>
         </ul>

@@ -1314,8 +1314,42 @@
    scrim/dialog primitives. This screen's own sheet, never the shell's `.app-keys` (App.css),
    which cannot open here at all (D5, no shell). --------------------------------------------- */
 .ff-keys { width: min(420px, calc(100vw - 32px)); padding: var(--bn-6); }
+/* Below 768px `.bn-dialog` (kit.css) already drops its own centering for a full-bleed
+   bottom sheet (`left/right: 0`) — this screen's own fixed `width` above fought that and
+   left it pinned at the left edge with empty space beside it. Clearing it here lets the
+   kit's own treatment stand, the gutter is its own `padding` unchanged. */
+@media (max-width: 767px) {
+  .ff-keys { width: auto; }
+}
 .ff-keys-head { display: flex; align-items: center; gap: var(--bn-4); margin-bottom: var(--bn-4); }
 .ff-keys-title { flex: 1 1 auto; }
 .ff-keys-close { flex: none; }
 .ff-keys-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-4); }
-.ff-keys-list li { display: flex; align-items: center; gap: var(--bn-4); }
+/* ONE COLUMN FOR THE KEYS (grid, not flex): `max-content` sizes the first column to the
+   widest cap across every row ("Esc" against "?"), so every row's own sentence starts at
+   the same x regardless of which key it names. */
+.ff-keys-list li {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: var(--bn-4);
+}
+/* THE FLOOR TABLE REACHES THE KEY CAP TOO — `--ff-fs-base` is this screen's own 20px body
+   floor, not the kit's `.bn-kbd` (10px, sized for a dense reference sheet nobody but the
+   owner reads). Boxed like `.ff-box-num`'s own chip, at the same corner radius family. */
+.ff-keys-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 var(--bn-3);
+  border-radius: var(--bn-r-sm);
+  border: 1px solid var(--bn-line-strong);
+  border-bottom-width: 3px;
+  background: var(--bn-surface);
+  font-family: var(--bn-font-mono);
+  font-size: var(--ff-fs-base);
+  font-weight: 700;
+  color: var(--bn-ink);
+}
