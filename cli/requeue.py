@@ -34,14 +34,24 @@ travel, and a refresh that restated the ladder would be a second thing to keep c
 
 WHAT IT NEEDS THAT A RUN HAD: the model's reading, and the STORE HOLDS IT — that is what
 makes a refresh run-free and therefore store-wide.
-`store/master.py:record_identification` writes `name`, `number`, `printed_total` and
-`confidence` onto the card, and `game`, `set_hint`, `metadata_finish` and `rarity_claim` are
-capture claims that live there too. **The fifth field, `detected_finish`, was missing and is
-added by this change** — see `Card.detected_finish` for the argument. Taking it off the queue
-entry instead looked free and is not: an entry may have been written by an OLDER
-identification of the same photograph, and a refresh reading four fields off the card and one
-off the entry gave the ladder two readings of one card. Measured: it queued six of box 4's
-cards that a join listed.
+`store/master.py:record_identification` writes `read_name`, `read_number`,
+`read_printed_total` and `confidence` onto the card (docs/specs/identity-follows-sku.md
+§3.4, lane 1 — the evidence group, never overwritten by a later binding), and `game`,
+`set_hint`, `metadata_finish` and `rarity_claim` are capture claims that live there too.
+**The fifth field, `detected_finish`, was missing and is added by this change** — see
+`Card.detected_finish` for the argument. Taking it off the queue entry instead looked free
+and is not: an entry may have been written by an OLDER identification of the same
+photograph, and a refresh reading four fields off the card and one off the entry gave the
+ladder two readings of one card. Measured: it queued six of box 4's cards that a join listed.
+
+**LANE 4 (identity-follows-sku.md §5.1): THIS FUNCTION READS `read_name`/`read_number`/
+`read_printed_total`, NEVER `card.name`/`card.number`/`card.printed_total`.** The identity
+fields now equal the SKU table's row (`store/master.py:Inventory.bind_sku`), so a refresh
+that compared a bound card's identity against itself would agree with itself on every card
+and D253's join-time dispute check would never fire — a disputed card would be silently
+released from the review queue the first time this module touched it. The evidence fields
+are the model's actual reading and are what `join.name_disputes` must compare against the
+catalog, unchanged by any binding.
 
 NO QUANTITY ARITHMETIC RUNS HERE. `join_batch` is handed no `copies_out` and no `live_now`:
 routing reads the resolution, the confidence and the cheapest candidate price, and none of
@@ -257,10 +267,19 @@ def identified(
 
     THE STORE IS THE READING, AND IT IS THE WHOLE READING. `load` takes the model's answer
     out of the run's `identifications.json`; this takes it off the card, where
-    `store/master.py:record_identification` wrote the same values at identify time — `name`,
-    `number`, `printed_total`, `confidence` and, since this module arrived, `detected_finish`.
-    The capture claims — `set_hint`, `metadata_finish`, `rarity_claim`, `game` — are the
-    store's in both readers, because `CAPTURE_CLAIM_FIELDS` is where they live.
+    `store/master.py:record_identification` wrote the same values at identify time —
+    `read_name`, `read_number`, `read_printed_total`, `confidence` and, since this module
+    arrived, `detected_finish`. The capture claims — `set_hint`, `metadata_finish`,
+    `rarity_claim`, `game` — are the store's in both readers, because `CAPTURE_CLAIM_FIELDS`
+    is where they live.
+
+    **READS `read_name`/`read_number`/`read_printed_total`, NEVER `card.name`/`card.number`/
+    `card.printed_total`** (identity-follows-sku.md §5.1, lane 4). `name`/`number`/
+    `printed_total` are the IDENTITY group now — equal to the bound SKU's own row once
+    `Inventory.bind_sku` has run, never the model's reading — so a builder that read them
+    here would hand `join.name_disputes` the catalog's own name to compare against the
+    catalog and see no dispute on any bound card, ever. This function is one of the two
+    §5.1 names as a builder that must move.
 
     THE QUEUE ENTRY IS NOT CONSULTED, AND THAT IS THE POINT OF THE FIELD `detected_finish`
     ADDED TO `Card`. The entry's `read` carries a complete reading, so taking one field from
@@ -296,9 +315,9 @@ def identified(
     # every one of them a record carrying `""` in `number` or `printed_total` — box 4's
     # `Renata Glasc, Mastermind` and `Arcane Shift` among them. The store keeps `""` where a
     # run record keeps it, so the normalisation has to happen on this side too.
-    name = card.name or ""
-    number = (card.number or "").strip() or None
-    total = (card.printed_total or "").strip() or None
+    name = card.read_name or ""
+    number = (card.read_number or "").strip() or None
+    total = (card.read_printed_total or "").strip() or None
     if not name and not number:
         return None
     return join.IdentifiedCard(

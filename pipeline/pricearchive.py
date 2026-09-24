@@ -65,7 +65,6 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
 from pipeline import games, join, tcgcsv
-from store import files
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive, Source, _key
 from store.session import Store
 
@@ -201,49 +200,41 @@ def _export_row(
 #
 #   (a) `store/pricearchive.py:Bucket.product_id`, an archive a previous sweep already
 #       verified for this exact SKU — no lookup at all, the fastest and most trusted tier.
-#   (b) the SKU's OWN row in the store's cached Filtered Export
-#       (`inventory/.exports/<game>/*.csv`) — its `Product Name` and `Number` describe that
-#       SKU's product BY DEFINITION, because TCGplayer itself filed the SKU under that row.
-#       Never a card's stored fields, which is what makes this tier trustworthy where a
-#       card's own read name is not.
+#   (b) the SKU's OWN row in the store's `skus` table (identity-follows-sku.md §3.2, lane
+#       4, superseding the disk read this tier used before the table existed) — its
+#       `Product Name` and `Number` describe that SKU's product BY DEFINITION, because
+#       TCGplayer itself filed the SKU under that row. Never a card's stored fields, which
+#       is what makes this tier trustworthy where a card's own read name is not.
 #   (c) TODAY'S BEHAVIOUR — the card's own last-known `(name, number)`, resolved through
 #       `pipeline/pricehistory.py:Market.product_id_for_row` exactly as it always was. Only
 #       reached for a SKU neither (a) nor (b) can answer.
 
 
-def merged_export_rows_by_sku() -> Dict[str, tcgcsv.Row]:
-    """Every row of every cached Filtered Export under `inventory/.exports/`, across every
-    game, merged into one `sku -> row` map — first-file-wins on a SKU seen twice, the same
-    choice `cli/cmd_cards.py:_variants`'s own `export_for` already makes and for the same
-    reason: a Set Name or a Product Name for one SKU does not change file to file, so the
-    freshest file to name it first is as good as any.
+def merged_export_rows_by_sku(snapshot=None) -> Dict[str, tcgcsv.Row]:
+    """Every SKU the store's own `skus` table (identity-follows-sku.md §3.2, lane 0) has ever
+    read out of a cached Filtered Export or a live export, as one `sku -> export-shaped row`
+    map.
 
-    EVERY GAME AT ONCE, NEVER ONE GAME AT A TIME. A SKU is TCGplayer's own primary key and
-    belongs to exactly one product, so it is unambiguous to look for it across every cached
-    export rather than first resolving which game's subdirectory to open — which would need
-    a `Product Line -> game key` reverse lookup `pipeline/games.py` does not publish. Reusing
-    that ambiguity-free fact is simpler than building the reverse lookup only to throw it
-    away after one dictionary access.
+    A READER OF THE TABLE, NOT A SECOND MAP (identity-follows-sku.md §3.2 and §5.3, lane 4).
+    Before lane 0 this function walked `inventory/.exports/` itself, first-file-wins on a SKU
+    seen twice. The table is that same map, written down once by `pkmnscan skus adopt` and
+    every export fetch since (`pipeline/skus.py`), and NEWEST FACTS WIN there
+    (`store/skus.py:Skus.fold`'s own rule — the newest file's stamp, never the first file
+    found) rather than first-file-wins — a deliberate change, because a table kept current by
+    every later fetch has no reason to prefer a stale row over a fresh one the way a
+    from-scratch disk walk with no ordering guarantee once did.
 
-    READS ONLY WHAT `make catalog-refresh`/A LIVE EXPORT FETCH ALREADY LEFT ON DISK. No
-    network call, and nothing here writes — the directory this reads is D166's own per-game
-    export cache, already fetched by an operator's own press on `#/runs`.
+    EACH ROW IS THE SKU'S OWN `raw` CELL — the whole CSV row as it was read
+    (`pipeline/skus.py:row_from_csv`'s own `raw=dict(row)`), so this answers the exact
+    `tcgcsv.Row` shape a real export line always has, unchanged for every existing caller
+    (`resolve_by_sku`'s tier (b), `pipeline/productview.py:row_for_sku`).
+
+    NO NETWORK CALL AND NOTHING HERE WRITES — a lock-free `Store().read()` when no `snapshot`
+    is given, matching `rows_from_store`'s own default just above.
     """
-    merged: Dict[str, tcgcsv.Row] = {}
-    root = files.inventory_dir() / files.EXPORTS_DIRNAME
-    if not root.is_dir():
-        return merged
-    for game_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        for path in sorted(game_dir.glob("*.csv")):
-            try:
-                export = tcgcsv.read_export(path)
-            except (OSError, tcgcsv.MalformedCsv):
-                continue
-            for row in export.rows:
-                sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
-                if sku and sku not in merged:
-                    merged[sku] = row
-    return merged
+    if snapshot is None:
+        snapshot = Store().read()
+    return {sku: dict(row.raw) for sku, row in snapshot.skus.entries.items()}
 
 
 # The reason each SKU in a `resolve_by_sku` result landed where it did — printed by

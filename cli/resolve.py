@@ -1941,13 +1941,23 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
     store-backed payload is already at today's slots by construction (see `load_from_store`).
 
     A CARD ALREADY IDENTIFIED, EVER, IS NOT RE-DETECTED BY STATE ALONE. `record_identification`
-    writes `confidence` UNCONDITIONALLY together with `name`/`number`/`printed_total` and
-    never with the Python `None` a field predating identification carries — `routing.py`'s
-    `CONFIDENCE_NONE` is the STRING `"none"` the model answers with, never a null — so
-    `card.confidence is not None` is the same fact `record_identification` last wrote and
-    survives a card that skipped straight from `captured` to `retired` (a card can be marked
-    `pulled`/`damaged`/`lost`/`given_away` before it is ever identified), which `state !=
-    captured` alone would have misread as identified.
+    writes `confidence` UNCONDITIONALLY together with `read_name`/`read_number`/
+    `read_printed_total` and never with the Python `None` a field predating identification
+    carries — `routing.py`'s `CONFIDENCE_NONE` is the STRING `"none"` the model answers with,
+    never a null — so `card.confidence is not None` is the same fact `record_identification`
+    last wrote and survives a card that skipped straight from `captured` to `retired` (a card
+    can be marked `pulled`/`damaged`/`lost`/`given_away` before it is ever identified), which
+    `state != captured` alone would have misread as identified.
+
+    THE `identification` DICT BELOW READS `read_name`/`read_number`/`read_printed_total`,
+    NEVER `card.name`/`card.number`/`card.printed_total` (identity-follows-sku.md §5.1, lane
+    4). Once `Inventory.bind_sku` has run, `name`/`number`/`printed_total` equal the bound
+    SKU's own row — the catalog's own answer, not the model's reading. `_resolve`'s loop
+    below compares this dict's `name`/`number` against the catalog to find a dispute
+    (`join.name_disputes`, D253); handing it the catalog's own values would make that
+    comparison agree with itself on every bound card and never fire again. The dict's OWN
+    keys stay `name`/`number`/`printed_total` — that is `_resolve`'s established wire shape,
+    unchanged since `Run.read_identifications()` — only the VALUES that fill them move.
 
     A KEY WITH NO CARD IS REFUSED, NEVER SILENTLY DROPPED — `CLAUDE.md`'s standing rule. A
     typo'd key names no card, and a card this store has never captured is not this pipeline's
@@ -1980,9 +1990,9 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
             ),
             "identification": (
                 {
-                    "name": card.name,
-                    "number": card.number,
-                    "printed_total": card.printed_total,
+                    "name": card.read_name,
+                    "number": card.read_number,
+                    "printed_total": card.read_printed_total,
                     "confidence": card.confidence,
                     "finish": card.detected_finish,
                 }
