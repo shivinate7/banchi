@@ -21,11 +21,12 @@ import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, SHIPPING_EXPORT_CSV } from './rou
  * `#/inventory` painted "Reading the inventory…" under a visible `<main>`, and read 4 words
  * mid-load against 156 once painted. `openSettled` waits for five things before any caller
  * reads the screen: `.bn-shell[data-route]` names the route, exactly one `.bn-view` exists,
- * nothing on the page is `[aria-busy="true"]`, no read the page sent is still unanswered, and
- * `.bn-view`'s `innerText` holds still over `QUIET_MS`. The wait is generic. It never waits
+ * nothing on the page is `[aria-busy="true"]`, no read is open or starts, and `.bn-view`'s
+ * `innerText` holds still, all over `QUIET_MS` together. The wait is generic. It never waits
  * on one screen's own loading sentence. The open-read count is what makes it hold for a SLOW
  * read: `#/inventory`'s "Reading the inventory…" carries no `aria-busy`, and a text-stability
- * wait alone returns that sentence once a read takes longer than `QUIET_MS`.
+ * wait alone returns that sentence once a read takes longer than `QUIET_MS`. The started-read
+ * count is what makes a request LOOP fail every run rather than on where a sample lands.
  *
  * THE ROUTES ARE DISCOVERED: `routesFromNav` at 1440, the phone drawer at 390 (the nav links
  * are `display: none` under 768, `routes.ts`'s own header). `#/product` is off-nav, so it is
@@ -50,43 +51,63 @@ function routePath(route: string): string {
   return route.slice(1).split('?')[0] ?? '/'
 }
 
-/** The page's `fetch`/`xhr` reads still waiting for an answer, per page. Set up once by
- *  `trackReads`; a page nobody tracks counts as having none open. */
-const OPEN_READS = new WeakMap<Page, Set<Request>>()
+/** The page's `fetch`/`xhr` reads, per page: the ones still waiting for an answer, and the
+ *  last few STARTED, with a running count. Set up once by `trackReads`; a page nobody tracks
+ *  counts as having none. */
+interface Reads {
+  open: Set<Request>
+  started: number
+  recent: string[]
+}
+const READS = new WeakMap<Page, Reads>()
 
 function trackReads(page: Page): void {
-  if (OPEN_READS.has(page)) return
-  const open = new Set<Request>()
-  OPEN_READS.set(page, open)
+  if (READS.has(page)) return
+  const reads: Reads = { open: new Set(), started: 0, recent: [] }
+  READS.set(page, reads)
   page.on('request', (request) => {
-    if (request.resourceType() === 'fetch' || request.resourceType() === 'xhr') open.add(request)
+    if (request.resourceType() !== 'fetch' && request.resourceType() !== 'xhr') return
+    reads.open.add(request)
+    reads.started += 1
+    reads.recent = [...reads.recent.slice(-4), `${request.method()} ${new URL(request.url()).pathname}`]
   })
-  page.on('requestfinished', (request) => open.delete(request))
-  page.on('requestfailed', (request) => open.delete(request))
+  page.on('requestfinished', (request) => reads.open.delete(request))
+  page.on('requestfailed', (request) => reads.open.delete(request))
 }
 
-/** Holds until no read is open AND the text has not changed for `QUIET_MS`. Throws, naming
- *  the route, when that never happens: a screen that never settles is a finding, not a pass. */
+/** Holds until, for `QUIET_MS` together, the text has not changed, no read is open and no new
+ *  read has STARTED. The last clause makes a request loop fail every time: a screen that
+ *  re-asks every few milliseconds has an open read at some samples and none at others, and a
+ *  check of "open" alone passes or fails on where the sample lands. Throws, naming the route
+ *  and the reads, when the screen never settles: that is a finding, not a pass. */
 async function settledInnerText(page: Page, region: Locator, route: string): Promise<string> {
-  const open = OPEN_READS.get(page)
+  const reads = READS.get(page)
   const deadline = Date.now() + SETTLE_TIMEOUT_MS
   let previous = await region.innerText()
+  let startedBefore = reads?.started ?? 0
   let quietSince = Date.now()
+  let textReset = 0
+  let readsReset = 0
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS))
     const next = await region.innerText()
-    if (next !== previous || (open !== undefined && open.size > 0)) {
+    const started = reads?.started ?? 0
+    const busy = reads !== undefined && (reads.open.size > 0 || started !== startedBefore)
+    if (next !== previous || busy) {
+      if (busy) readsReset += 1
+      if (next !== previous) textReset += 1
       previous = next
+      startedBefore = started
       quietSince = Date.now()
       continue
     }
     if (Date.now() - quietSince >= QUIET_MS) return next
   }
-  const waiting = open === undefined ? [] : [...open].map((r) => `${r.method()} ${new URL(r.url()).pathname}`)
-  throw new Error(
-    `${route}: never settled within ${SETTLE_TIMEOUT_MS}ms` +
-      (waiting.length > 0 ? ` — reads still open: ${waiting.join(', ')}` : ` — .bn-view's text kept changing`),
-  )
+  const why = [
+    textReset > 0 ? `the text changed at ${textReset} samples` : '',
+    readsReset > 0 ? `reads were open or starting at ${readsReset} samples, the last: ${reads?.recent.join(', ')}` : '',
+  ].filter(Boolean)
+  throw new Error(`${route}: never settled within ${SETTLE_TIMEOUT_MS}ms — ${why.join('; ')}`)
 }
 
 /** Open one route and wait until it is LOADED, not merely arrived. `#/shipping` fetches

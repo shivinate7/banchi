@@ -425,6 +425,21 @@ export async function seedPopulatedOrders(page: Page): Promise<void> {
       body: JSON.stringify(severalOrdersWalkPlan()),
     }),
   )
+  /* `POST /orders/picks` ANSWERS EVERY KEY THE LEDGER HOLDS, the way `do_order_picks` does.
+   * `shell.ts:stubStore`'s own answer is `{ orders: [] }`, right for its empty ledger and
+   * wrong for this one: these three orders ARE held. MEASURED 2026-09-24: with the empty
+   * answer, `#/orders` re-asks for the missing keys without end (4,934 requests in 10s), so
+   * the screen never settles. That loop is a product defect for the orders lane (the screen
+   * re-asks forever for a key the answer leaves out), recorded in `D-text-shape-checks`. */
+  await page.route(/\/orders\/picks$/, (route) => {
+    const asked = new Set<string>((route.request().postDataJSON() as { keys?: string[] } | null)?.keys ?? [])
+    const held = severalOrders().resolution.orders.filter((one) => asked.has(one.key))
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ orders: held }),
+    })
+  })
 }
 
 /* ------------------------------------------------------------------------- the shipping */

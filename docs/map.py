@@ -8186,14 +8186,17 @@ COMPONENTS = [
                     "routes off the nav at 1440 and the phone drawer at 390, and appends "
                     "`#/product` WITH a SKU. `openSettled` reads a screen only once it is "
                     "LOADED: `.bn-shell[data-route]` names the route, one `.bn-view`, nothing "
-                    "`[aria-busy=\"true\"]`, no `fetch`/`xhr` read still open, and `.bn-view`'s "
-                    "text still for 450ms. It throws, naming the route, when a screen never "
+                    "`[aria-busy=\"true\"]`, no `fetch`/`xhr` read open or started, and `.bn-view`'s "
+                    "text still, all for 450ms together. It throws, naming the route, when a screen never "
                     "settles. Reads only each route's landing state: no sheet, modal, toast, "
                     "drawer or palette."),
                 "governed_by": ["D194", "D-text-shape-checks"],
                 "note": ("MEASURED 2026-09-24: with every `/inventory` read held 900ms, a "
                          "text-stability wait alone measured `#/inventory` at 4 words (\"Reading "
-                         "the inventory…\"); with the open-read count it measured the painted 197.")
+                         "the inventory…\"); with the open-read count it measured the painted 197. The "
+                         "started-read count makes a request loop fail every run: with "
+                         "`stubStore`'s empty `/orders/picks` answer, `#/orders` asked 4,934 "
+                         "times in 10s and the sweep failed 3 runs of 3.")
             },
             "tests/textShape.ts": {
                 "does": ("`measureTextShape`, the one measurement `text-shape.spec.ts` runs "
