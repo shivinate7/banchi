@@ -49,10 +49,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from identify import cost  # noqa: E402
+from pipeline import games as games_module  # noqa: E402
+from pipeline import identity_binding as ib  # noqa: E402
+from pipeline import skus as skus_fill  # noqa: E402
+from pipeline import tcgcsv  # noqa: E402
 from store import Box, Card, Listing, Store  # noqa: E402
 from store import files as store_files  # noqa: E402
 from store import orders as orders_mod  # noqa: E402
 from store import photos as store_photos  # noqa: E402
+from store.master import IDENTITY_READ  # noqa: E402
 from store.queues import QueueEntry  # noqa: E402
 
 SEED = 20260906
@@ -356,6 +361,95 @@ def pick_rows(pool: List[Row], count: int, taken: set) -> List[Row]:
     return picked
 
 
+# ---------------------------------------------------------------------- identity binding
+
+# The three real, vendored exports `export_variants()` above already reads for the review
+# queue's candidates — the same files, reused rather than a fourth copy of the list.
+FIXTURE_EXPORTS = (
+    "sv09_export_untouched.csv",
+    "onepiece_export_untouched.csv",
+    "riftbound_export_untouched.csv",
+)
+
+# ONE card, deliberately mis-identified, so the confirm press, "Read as" and "Listed as"
+# (identity-follows-sku.md §5.9, lane 6) have something to draw on the published demo. Box
+# 3 is `priceable` — every SKU in it is a real fixture row — and never touched by the
+# "guarantee one moved card" fallback below (that one reaches into box 1), so this position
+# is safe from being overwritten by a later, unrelated rule.
+DISPUTE_BOX = 3
+DISPUTE_OFFSET = 0
+
+
+def seed_skus(inventory, skus) -> None:
+    """Fold the demo's own real fixture exports into the store's `skus` table
+    (identity-follows-sku.md §3.2, lane 0), through `pipeline/skus.apply_rows` — the SAME
+    fold `pkmnscan skus adopt` runs on a real store. Run before any card is bound: `bind_sku`
+    reads this table and refuses `sku_unknown` for anything not folded here first (§3.2:
+    "every writer upserts the row it is about to bind... before calling bind_sku").
+
+    ONE FIXED STAMP FOR ALL THREE FILES, off the demo's own clock rather than
+    `pipeline/skus.stamp_of` (which reads a `YYYYMMDD-HHMMSS` run stamp out of a FETCHED
+    export's filename) — these are checked-in fixtures named for what they hold, not when
+    they were pulled, so `stamp_of` finds nothing in any of the three names and a real
+    timestamp (`time.time()`) would make every rebuild a diff, the one property this whole
+    file exists to keep (SEED, NOW). The three files carry disjoint SKUs (three different
+    product lines), so no fold here is ever `CHANGED` — the exact stamp cannot move the
+    outcome, only `first_seen`/`last_seen`.
+    """
+    at = int(NOW.timestamp())
+    for name in FIXTURE_EXPORTS:
+        export = tcgcsv.read_export(FIXTURES / name)
+        skus_fill.apply_rows(
+            export.rows, at=at, source=name, skus=skus, events=inventory.events,
+        )
+
+
+def bind_or_hold(
+    inventory,
+    skus,
+    card: Card,
+    *,
+    sku: Optional[str],
+    game: str,
+    run: str,
+    read_name: Optional[str],
+    read_number: Optional[str],
+    read_printed_total: Optional[str],
+    confidence: str,
+) -> None:
+    """One card's identity, written the way the product writes it now
+    (identity-follows-sku.md §4, lane 6), never straight onto the record.
+
+    `record_identification` FIRST, ALWAYS — the evidence group (`read_name`/`read_number`/
+    `read_printed_total`/`confidence`), and, while the card carries no binding yet, the
+    identity group too (that method's own rule: "on a card with no SKU the identity follows
+    the read"). THEN, ONLY IF `sku` IS A ROW `seed_skus` ALREADY FOLDED IN, `bind_sku`
+    REPLACES that identity with the catalogue's own (§4.1, "the one writer") — the same
+    branch a real join takes, faked here only because identification is the one paid step
+    (see the module docstring). `card` must already be in `inventory.cards` — both writers
+    are silent no-ops on a key they cannot find.
+
+    Measured (§3.2, and this file's own `catalog()`): every `priceable` row's SKU is a real
+    row in the three fixture exports; 0 of the `other` pool's are. So this is `bind_sku` for
+    one pool and `IDENTITY_READ` for the other by construction, never a second flag.
+    """
+    inventory.record_identification(
+        card.key, name=read_name, number=read_number, printed_total=read_printed_total,
+        confidence=confidence, run=run,
+    )
+    row = skus.entries.get(sku) if sku else None
+    if row is None:
+        card.identity_source = IDENTITY_READ
+        return
+    entry = games_module.get(game)
+    disputes = ib.name_disputes(read_name, [ib._row_dict(row)])
+    inventory.bind_sku(
+        card.key, sku, bound_by="join", skus=skus,
+        number_strategy=entry["join_key"], expected_product_line=entry.get("product_line"),
+        read_disputes=disputes, event="sku_bound",
+    )
+
+
 # ------------------------------------------------------------------------------ states
 
 # How a real drawer is distributed. Most cards are listed and sitting there; a slice has
@@ -400,6 +494,8 @@ def build_store(force: bool) -> dict:
                 "PKMNSCAN_HOME says otherwise — pass --force if you meant it."
                 % (home, len(inventory.cards))
             )
+
+        seed_skus(inventory, snapshot.skus)
 
         for spec in BOXES:
             number = spec["box"]
@@ -461,22 +557,33 @@ def build_store(force: bool) -> dict:
                     condition=row.condition,
                     metadata_finish=None,
                 )
+                inventory.cards[card.key] = card
                 if state != "captured":
                     # An identified card knows what it is. A captured one does not yet —
                     # that is the whole difference, and the review queue is where the
-                    # difference gets settled.
-                    card.name = row.name
-                    card.number = row.number
-                    card.printed_total = row.printed_total
-                    card.sku = row.sku
-                    card.confidence = "high"
-                    card.run = "demo-run-%d" % number
+                    # difference gets settled. Written through `record_identification` and
+                    # `bind_sku` now, never straight onto the record (identity-follows-sku.md
+                    # §4, lane 6) — `bind_or_hold` above is what decides which of the two
+                    # this card gets, off whether its SKU is one `seed_skus` folded in.
+                    #
+                    # ONE DELIBERATE MISREAD (§5.9): the model's reading names a DIFFERENT
+                    # real card (`rows[DISPUTE_OFFSET + 1]`) from the one the join actually
+                    # binds this position to, so `read_disputes` comes back true and the
+                    # confirm press, "Read as" and "Listed as" all have something to draw.
+                    disputed = spec["box"] == DISPUTE_BOX and offset == DISPUTE_OFFSET
+                    read_row = rows[DISPUTE_OFFSET + 1] if disputed else row
+                    bind_or_hold(
+                        inventory, snapshot.skus, card,
+                        sku=row.sku, game=row.game, run="demo-run-%d" % number,
+                        read_name=read_row.name, read_number=read_row.number,
+                        read_printed_total=read_row.printed_total,
+                        confidence="low" if disputed else "high",
+                    )
                 if state == "retired":
                     card.retire_reason = "damaged"
                 if state == "moved":
                     card.moved_to = "4/%d" % (rng.randint(1, 18))
 
-                inventory.cards[card.key] = card
                 placed.append((card, row))
                 counts["cards"] += 1
                 if state in counts:
