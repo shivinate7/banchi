@@ -230,6 +230,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   product-history-selftest +
                     #   sku-number-contradictions-selftest + readings-selftest +
                     #   skus-selftest + identity-store-selftest +
+                    #   identity-cli-selftest +
                     #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +

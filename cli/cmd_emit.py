@@ -69,13 +69,40 @@ Everything past it is confirmed by something outside this pipeline — see `pkmn
 from __future__ import annotations
 
 from collections import OrderedDict
+from datetime import datetime
+from typing import Dict, Tuple
 
 from cli import resolve, runs
-from pipeline import corpus, decisions, join, merge, pricing, routing, tcgcsv
+from pipeline import corpus, decisions, games, join, merge, pricing, routing, tcgcsv
+from pipeline import skus as skus_walk
 from pathlib import Path
 
 from store import master, files, photos
 from store.session import Store
+
+
+def _skus_stamp(source: dict) -> Tuple[int, str]:
+    """`(at, source)` for `pipeline/skus.py:apply_rows`, out of `runs.describe_source`'s own
+    dict (`GameJoin.source`, `cli/resolve.py`) — docs/specs/identity-follows-sku.md §3.2's
+    "upsert every row into the SKU table" applied at the moment a SKU commits (§4.2's
+    `cli/cmd_emit.py` row), never from an export file `bind_sku` itself would read (its own
+    docstring: "READS THE SKU'S ROW FROM `skus`... NEVER FROM AN EXPORT FILE" — this is the
+    upsert that puts it there first, in the same transaction, exactly as that docstring
+    requires of every caller).
+
+    Tries the file's own name first — `pipeline/skus.py:stamp_of`'s convention, the one a
+    fetched or backfilled export already reduces to — so a run whose export happens to be a
+    cached, already-stamped file (one pulled straight out of `inventory/.exports/`) folds at
+    its real fetch time and agrees with whatever else in this repo folds that same file
+    under that name. A name carrying no such stamp (an ordinary hand-downloaded export)
+    falls back to the file's own mtime, already this module's own answer for "when this
+    file's data was read" elsewhere in this file (`Listing.observe_live`'s `as_of`,
+    `describe_source`'s own argument: "the time an export's Total Quantity was read")."""
+    name = Path(str(source["path"])).name
+    at = skus_walk.stamp_of(name)
+    if at is None:
+        at = int(datetime.fromisoformat(str(source["mtime"])).timestamp())
+    return at, name
 
 
 def _cap_for(args):
@@ -650,8 +677,24 @@ def run(args, say) -> int:
     # copies are pushed is a fact about the listing and deliberately not about any copy: the
     # owner's ruling is that copies are fungible, so an address here would be a fiction the
     # pull would then have to honour.
+    #
+    # PER-SKU GAME AND SOURCE, off `resolved.joins` rather than the flat `resolved.matches`.
+    # `GameJoin.matches` (`cli/resolve.py`) merges every game's own `sku -> SkuMatch` into
+    # one map — "SKUs are TCGplayer-global... the union is collision-free" — which is exactly
+    # right for iterating matches and exactly wrong for `bind_sku`, which needs the game's
+    # OWN `number_strategy` (`games.get(game)["join_key"]`) and `product_line`
+    # (identity-follows-sku.md §4.1). Built once, off the per-game slice that still carries
+    # them, before the union erases which game each SKU came from.
+    sku_game: Dict[str, str] = {}
+    sku_source: Dict[str, dict] = {}
+    for game_name, game_join in resolved.joins.items():
+        for sku in game_join.report.matches:
+            sku_game[sku] = game_name
+            sku_source[sku] = game_join.source
+
     pushed = 0
     pushed_skus = 0
+    disputed = 0
     with store.write() as writable:
         for match in resolved.matches.values():
             # IDENTITY IS WRITTEN FOR EVERY MATCHED SKU; ONLY THE COUNT WAITS FOR A FILE.
@@ -713,6 +756,22 @@ def run(args, say) -> int:
             # picked by `_committed_keys` out of `copies_on_hand`, which selects on `sku`, so
             # it is already stamped. A copy committed by having LEFT is not this command's to
             # relabel.
+            # THE SKU TABLE FILL, ONCE PER MATCH (identity-follows-sku.md §4.2's own row:
+            # "upsert the matched rows, then bind_sku(bound_by=join)"). `match.row` is the
+            # export row this SKU resolved to — the row `bind_sku` below is about to read
+            # back out of `writable.skus`, so it is put there first, in the same
+            # transaction, exactly as `bind_sku`'s own docstring requires of every caller.
+            # Once per SKU rather than once per position: every position under one match
+            # shares the identical row.
+            game_name = sku_game.get(match.sku)
+            entry = games.get(game_name) if game_name else None
+            if entry is not None:
+                at, source_name = _skus_stamp(sku_source[match.sku])
+                skus_walk.apply_rows(
+                    [match.row], at=at, source=source_name,
+                    skus=writable.skus, events=writable.inventory.events,
+                )
+
             copies = 0
             live_keys = {
                 master.position_key(p.box, p.index) for p in match.live_positions
@@ -740,6 +799,14 @@ def run(args, say) -> int:
                 # stays: `pushed` is not a state a card can wear any more, and passing it
                 # here now raises `UnknownState` rather than silently flagging a position.
                 #
+                # THE FIVE IDENTITY KWARGS ARE GONE (identity-follows-sku.md §4.1, §4.2):
+                # `sku`, `condition`, `set_name`, `rarity` and `name` are now `bind_sku`'s
+                # own write, below, never `set_state`'s — this call moves STATE alone.
+                # D253's `name=resolved.name_corrections.get(key)` retires with it: the
+                # identity name is the row's by construction (`bind_sku` composes it
+                # through `store/numbers.strip_name_suffix`), so there is nothing left for
+                # a near-miss correction to do.
+                #
                 # THE RETURN VALUE IS COUNTED ONLY FOR A COPY THAT REACHED THE FILE. The
                 # stamp now runs over a wider set than the count does, so the two can no
                 # longer share one increment: `pushed` is a commitment that a CSV row was
@@ -752,22 +819,36 @@ def run(args, say) -> int:
                 stamped = writable.inventory.set_state(
                     key,
                     master.IDENTIFIED,
-                    sku=match.sku,
-                    condition=match.condition,
-                    # D213: the catalogue
-                    # row this SKU resolved to is in hand right here, and this is the
-                    # moment it is committed to the card — the same moment `sku` and
-                    # `condition` always have been.
-                    set_name=match.set_name or None,
-                    rarity=match.rarity or None,
-                    # D253: the catalogue's own spelling, for the one
-                    # case `resolved.name_corrections` carries a position at all — a
-                    # near-miss read name, corrected at the same moment `set_name` and
-                    # `rarity` are. `None` on every other position, which leaves
-                    # `card.name` exactly as `record_identification` last wrote it.
-                    name=resolved.name_corrections.get(key),
                     run=run_dir.name,
                 )
+                # THE ONE WRITER (§4.1). `bind_sku` reads `match.row` back out of
+                # `writable.skus`, which the upsert above just put there, and refuses
+                # `sku_unknown`/`game_mismatch` rather than writing a guess. IT REFUSES A
+                # CARD WHOSE READ DISPUTES THE ROW, TOO (§4.1: "A join caller refuses to
+                # bind a card whose read disputes the row. This never fires after D253,
+                # which queues such a card. It is counted and reported if it fires.") — D253
+                # already routes a disputing match to the review queue during `pkmnscan
+                # join`, before it can ever reach `emit`, so this is a defensive backstop
+                # rather than the ordinary path; a card it catches keeps whatever identity
+                # it already had (unbound, if this is its first join) and is named in the
+                # report rather than silently bound to a row its own evidence disagrees
+                # with.
+                if entry is not None:
+                    card = writable.inventory.cards.get(key)
+                    disputes = join.name_disputes(
+                        card.read_name if card is not None else None, [match.row]
+                    )
+                    if disputes:
+                        disputed += 1
+                    else:
+                        writable.inventory.bind_sku(
+                            key,
+                            match.sku,
+                            bound_by="join",
+                            skus=writable.skus,
+                            number_strategy=entry["join_key"],
+                            expected_product_line=entry.get("product_line") or None,
+                        )
                 if stamped and key in live_keys:
                     copies += 1
             if copies and match.sku in emitted:
@@ -809,6 +890,11 @@ def run(args, say) -> int:
     say("")
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> "
         f"{master.PUSHED}")
+    if disputed:
+        # docs/specs/identity-follows-sku.md §4.1 — never fires after D253, so a real count
+        # here is a card the join and the identify step disagreed about since.
+        say(f"disputed         {disputed} card(s) left unbound: the read disputes the "
+            f"matched row (D253 should have queued these before emit)")
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")
@@ -1061,13 +1147,20 @@ def run_merged(args, say) -> int:
     for game, group in by_game.items():
         if not group:
             continue
-        games = merge.games_in(group)
-        headers = {tuple(catalogs[one].header) for one in games if one in catalogs}
+        # RENAMED FROM `games` (it shadowed the `pipeline.games` module import for the
+        # REST OF THIS FUNCTION — Python scopes a name assigned anywhere in a function to
+        # the whole function body, so the later `games.get(row.game)` calls below picked up
+        # whatever list this loop last bound rather than the module, and raised
+        # `AttributeError: 'list' object has no attribute 'get'` the moment a real send hit
+        # them — caught by `make harness`'s T7, not by this lane's own self-test, which
+        # never sent a merged file spanning more than one game).
+        games_here = merge.games_in(group)
+        headers = {tuple(catalogs[one].header) for one in games_here if one in catalogs}
         if len(headers) > 1:
             say("REFUSING: these games' exports carry different columns, and one file needs")
-            say(f"one header. Re-run with --split-games. ({', '.join(games)})")
+            say(f"one header. Re-run with --split-games. ({', '.join(games_here)})")
             return 1
-        catalog = catalogs[games[0]]
+        catalog = catalogs[games_here[0]]
         # THE SPLIT IS OVER THE ONE PLAN AND NEVER A SECOND ONE. `merged_plan` spent the cap
         # over the union of positions once; filing the rows into two files after the fact
         # cannot change a quantity, which is exactly why the split is applied HERE and not by
@@ -1102,6 +1195,7 @@ def run_merged(args, say) -> int:
     # room toward `pushed`.
     pushed = 0
     pushed_skus = 0
+    disputed = 0
     shipped = {row.sku for _, group in written for row in group}
     store = Store()
     with store.write() as writable:
@@ -1110,6 +1204,23 @@ def run_merged(args, say) -> int:
                 continue
             live_keys = merged_plan.live_keys.get(row.sku, set())
             copies = 0
+
+            # THE SKU TABLE FILL, ONCE PER SKU (identity-follows-sku.md §4.2's own row for
+            # this command). `row.match.row` is the NEWEST leg's export row
+            # (`pipeline/merge.py:_merged_match`, "THE ROW IS THE NEWEST LEG'S") — the same
+            # row `bind_sku` reads back below, put into `writable.skus` first, in the same
+            # transaction, as its own docstring requires of every caller. `row.game` is
+            # `MergedSku`'s own field (`pipeline/merge.py`), never re-derived.
+            entry = games.get(row.game) if row.game else None
+            if entry is not None:
+                newest_run = row.legs[-1].run
+                source = resolved_by_run[newest_run].joins[row.game].source
+                at, source_name = _skus_stamp(source)
+                skus_walk.apply_rows(
+                    [row.match.row], at=at, source=source_name,
+                    skus=writable.skus, events=writable.inventory.events,
+                )
+
             # ONE PASS PER POSITION, NOT PER LEG, AND THE DEDUPE IS THE COUNT. Box 3 has been
             # joined three times on this machine, so its cards are in three of this send's
             # runs and every one of them carries the same `(box, index)`. Walking the legs
@@ -1135,20 +1246,30 @@ def run_merged(args, say) -> int:
                         photo=resolved_by_run[run_name].photos.get(key),
                     )
                 )
+                # THE FIVE IDENTITY KWARGS ARE GONE, exactly as in `run` above — `bind_sku`
+                # below is the one writer now, and D253's `name_corrections` read retires
+                # with it.
                 stamped = writable.inventory.set_state(
                     key,
                     master.IDENTIFIED,
-                    sku=row.sku,
-                    condition=row.match.condition,
-                    set_name=row.match.set_name or None,
-                    rarity=row.match.rarity or None,
-                    # D253, read off THIS LEG'S OWN run — the run that
-                    # owns this position (`owner` above) is the one whose join computed
-                    # the correction, exactly as `set_name`/`rarity` read `row.match`
-                    # rather than some other leg's.
-                    name=resolved_by_run[run_name].name_corrections.get(key),
                     run=run_name,
                 )
+                if entry is not None:
+                    card = writable.inventory.cards.get(key)
+                    disputes = join.name_disputes(
+                        card.read_name if card is not None else None, [row.match.row]
+                    )
+                    if disputes:
+                        disputed += 1
+                    else:
+                        writable.inventory.bind_sku(
+                            key,
+                            row.sku,
+                            bound_by="join",
+                            skus=writable.skus,
+                            number_strategy=entry["join_key"],
+                            expected_product_line=entry.get("product_line") or None,
+                        )
                 if stamped and key in live_keys:
                     copies += 1
             if copies:
@@ -1184,6 +1305,9 @@ def run_merged(args, say) -> int:
 
     say("")
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> {master.PUSHED}")
+    if disputed:
+        say(f"disputed         {disputed} card(s) left unbound: the read disputes the "
+            f"matched row (D253 should have queued these before emit)")
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")

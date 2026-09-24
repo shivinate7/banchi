@@ -143,6 +143,11 @@ help:
 	@echo "                    it; SkuUnknown/GameMismatch both write nothing;"
 	@echo "                    record_identification writes only read_* on a bound card. No"
 	@echo "                    store, no disk write at all. In \`check\`, never in the hook."
+	@echo "  make identity-cli-selftest  the CLI writers (identity-follows-sku.md lane 3b):"
+	@echo "                    emit upserts the matched row then binds through bind_sku;"
+	@echo "                    a re-identification writes only read_* on a bound card;"
+	@echo "                    join --export and reconcile --live fill the table from every"
+	@echo "                    row. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -225,6 +230,7 @@ help:
 	@echo "                    product-history-selftest +"
 	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
 	@echo "                    skus-selftest + identity-store-selftest +"
+	@echo "                    identity-cli-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -596,6 +602,7 @@ check:
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory skus-selftest
 	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-cli-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -655,6 +662,7 @@ ci-check:
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory skus-selftest
 	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-cli-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -1277,7 +1285,22 @@ skus-selftest:
 identity-store-selftest:
 	@$(PYTHON) scripts/identity-store-selftest.py
 
-.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest
+# THE CLI WRITERS, AGAINST A REAL THROWAWAY STORE AND THE REAL CLI DISPATCH
+# (identity-follows-sku.md §4.2, lane 3b). `pkmnscan emit` upserts the matched export row
+# into `skus` and THEN binds through `Inventory.bind_sku` — proved by binding on a store
+# whose `skus` table starts empty, so a successful bind is proof the upsert ran first. A
+# re-identification of an already-bound card (`cli/cmd_identify.py:_read_disputes_for`)
+# writes only `read_*`; the bound identity does not move. `pkmnscan join --export` and
+# `pkmnscan reconcile --live` each fill the table from EVERY row of the file they read, not
+# only the rows a card matched.
+#
+# IN `check`, NEVER IN THE GIT HOOK: it writes a temp store under `mktemp -d` (D18). Answers
+# from the tree alone (its one real-fixture read is `fixtures/sv09_export_untouched.csv`,
+# committed), so it is in `ci-check` too.
+identity-cli-selftest:
+	@$(PYTHON) scripts/identity-cli-selftest.py
+
+.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest identity-cli-selftest
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null

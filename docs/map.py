@@ -413,8 +413,8 @@ COMPONENTS = [
                                         "`pipeline/selection.py:scope_block` rather than a "
                                         "second copy of it.",
                                 "governed_by": ["D1", "D2", "D21", "D23", "D33", "D36", "D43",
-                                                "D48", "D145", "D163", "D165", "D172", "D174",
-                                                "D180"]},
+                                                "D48", "D63", "D145", "D163", "D165", "D172",
+                                                "D174", "D180"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
                                     "SEEDS inventory/prices.json's rule and basis on the first "
                                     "join of an EMPTY corpus and never reassigns them (D49, D86) "
@@ -2812,6 +2812,26 @@ COMPONENTS = [
                 "governed_by": ["D36", "D63", "D67", "D88", "D172", "D183", "D213",
                                 "D252"],
             },
+            "identity-cli-selftest.py": {
+                "does": "proves the CLI writers (identity-follows-sku.md §4.2, lane 3b) "
+                        "against a real throwaway store and the real CLI dispatch. "
+                        "`pkmnscan join` then `pkmnscan emit` over a store whose skus "
+                        "table starts empty: the bind succeeds only because cmd_emit "
+                        "upserts the matched export row before calling bind_sku, in the "
+                        "same transaction bind_sku's own docstring requires — proof the "
+                        "upsert ran first. The bound card's identity equals the skus "
+                        "table's row and bound_by is 'join'. A re-identification of an "
+                        "already-bound card (cli/cmd_identify.py:_read_disputes_for, "
+                        "exercised directly, in memory) leaves the bound identity "
+                        "untouched and writes only read_name/read_number/"
+                        "read_printed_total, with read_disputes True on a disputing read, "
+                        "False on an agreeing one, None on an unbound card. "
+                        "`pkmnscan join --export` and `pkmnscan reconcile --live` each "
+                        "fold EVERY row of the fixture export into the skus table, "
+                        "including a SKU no card in the run matched.",
+                "governed_by": ["D25", "D36", "D63", "D64", "D87", "D104", "D137",
+                                "D166", "D172", "D213", "D253"],
+            },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
                         "throwaway store, no network (D219). A "
@@ -4543,18 +4563,22 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D26", "D36", "D42", "D43", "D44", "D47",
+                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43",
+                                "D44", "D47",
                                 "D48",
-                                "D53", "D54", "D58", "D60", "D62", "D63", "D65", "D67", "D68",
+                                "D53", "D54", "D58", "D60", "D62", "D63", "D64", "D65", "D67",
+                                "D68",
                                 "D74", "D76",
-                                "D80", "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122",
-                                "D123", "D127", "D129", "D133", "D135", "D138", "D139", "D140",
+                                "D80", "D82", "D83", "D86", "D87", "D88", "D89", "D92", "D104",
+                                "D111", "D122",
+                                "D123", "D127", "D129", "D133", "D135", "D137", "D138", "D139",
+                                "D140",
                                 "D141", "D146", "D149", "D158", "D159", "D160", "D166", "D167",
                                 "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
                                 "D213", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D252", "D254",
+                                "D247", "D250", "D252", "D253", "D254",
                                 "D256"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "

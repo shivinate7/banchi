@@ -22,18 +22,34 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from typing import Optional, Tuple
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Optional, Tuple
 
 from cli import resolve, runs
-from pipeline import corpus, decisions, join, pricing, routing, worklist
+from pipeline import corpus, decisions, join, pricing, routing, tcgcsv, worklist
 from pipeline import readings as readings_walk
 from pipeline import selection as selection_mod
+from pipeline import skus as skus_walk
 from store import master, queues
 from store import files
 from store import readings as readings_store
 from store.session import Store
 
 STALE_EXPORT_DAYS = 7
+
+
+def _skus_stamp(source: dict) -> Tuple[int, str]:
+    """`(at, source)` for `pipeline/skus.py:apply_rows` — see `cli/cmd_emit.py`'s own copy
+    of this function for the full argument. Duplicated rather than imported: no file in this
+    lane's fence is a shared home for it, and this repo's own idiom for a one-line stamp
+    parse (`pipeline/corpus.py`, `cli/cmd_reprice.py`) is already to inline
+    `datetime.fromisoformat` at each call site rather than share one helper."""
+    name = Path(str(source["path"])).name
+    at = skus_walk.stamp_of(name)
+    if at is None:
+        at = int(datetime.fromisoformat(str(source["mtime"])).timestamp())
+    return at, name
 
 
 def _keys_from(raw) -> Optional[Tuple[str, ...]]:
@@ -494,7 +510,30 @@ def run(args, say) -> int:
     # A card this run resolved leaves whichever queue it was sitting in. Scoped to the
     # positions this run actually processed, so joining box 3 cannot evict box 7's entries.
     freed = resolved.processed_positions - resolved.queued_positions
+
+    # THE SKU TABLE FILL (docs/specs/identity-follows-sku.md §3.2, item 3: "An export a
+    # person hands the CLI ... cli/cmd_join.py's --export"). EVERY ROW, not
+    # `game_join.export`'s D137 narrowing (Near Mint and Sealed, this game's own Product
+    # Line alone) — this table is a registry of every SKU this repo has ever read, in
+    # whatever condition and whatever `Product Line` it carried, the same completeness
+    # `pipeline/skus.py:fill` reads off a raw file on disk. Read once per DISTINCT file
+    # (two games can share one export — `pokemon` and `pokemon_code`) and BEFORE the write
+    # lock opens, so the fold under it costs only the fold.
+    full_exports: Dict[Path, tcgcsv.Export] = {}
+    path_source: Dict[Path, dict] = {}
+    for game_join in resolved.joins.values():
+        path = Path(str(game_join.source["path"]))
+        if path not in full_exports:
+            full_exports[path] = tcgcsv.read_export(path)
+            path_source[path] = game_join.source
+
     with store.write() as writable:
+        for path, full_export in full_exports.items():
+            at, source_name = _skus_stamp(path_source[path])
+            skus_walk.apply_rows(
+                full_export.rows, at=at, source=source_name,
+                skus=writable.skus, events=writable.inventory.events,
+            )
         # Upsert and release as one unit — `queues.apply_run` also releases the entry a
         # re-routed position leaves behind in the OTHER queue, which the two independent
         # release calls that used to sit here could not see. Found by a real run: 16
