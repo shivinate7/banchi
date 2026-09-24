@@ -18274,7 +18274,10 @@ def check_send_hazards(checks: Checks) -> None:
     # ---------------------------------------------------- S3: the same bytes, windowed
     with _case(checks, "S3: the same bytes, windowed"), isolated_home():
         now = send_routes._now()
-        for stamp, age in (("20260924-110000-cccccc", 20 * 60), ("20260924-115900-dddddd", 60)):
+        # ROUND-1 STAMPS, WITHOUT THE RANDOM TAIL: the old shape still reads, and it is the
+        # shape the round-1 build could see, so this case goes red on that build for the
+        # right reason (it refused the 20-minute-old bytes) rather than by not seeing them.
+        for stamp, age in (("20260924-110000", 20 * 60), ("20260924-115900", 60)):
             send_routes._write(
                 send_routes.sends_dir() / stamp,
                 {
@@ -18289,7 +18292,7 @@ def check_send_hazards(checks: Checks) -> None:
         )
         checks.equal(
             send_routes._already_pushed("d60"),
-            "20260924-115900-dddddd",
+            "20260924-115900",
             "and the same bytes inside the window still do",
         )
 
