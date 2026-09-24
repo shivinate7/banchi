@@ -19,6 +19,18 @@ WHAT THIS PROVES, the lane's own "done when" line (§11's table):
      `skus` table from EVERY row of the file they read, not only the rows a card matched —
      `cli/cmd_join.py` re-reads the file whole for this reason (its own catalog is D137's
      Near-Mint-and-Sealed narrowing, which this table must not inherit).
+  4. A two-game merged emit (`pkmnscan emit <pokemon-run> <riftbound-run>`, no
+     --split-games) resolves each SKU's `number_strategy` and `product_line` off its OWN
+     game — a Pokemon card's number splits at the slash, a Riftbound card's stays whole —
+     and every card of the merged send binds: `sku`, `identity_source == 'sku'`,
+     `bound_by == 'join'`.
+  5. REVIEW FINDING, HIGH, on commit 1b5c90e5. A card re-identified between `join` and
+     `emit`, disputing the row `join` already matched, is WITHHELD before anything is
+     written for it: absent from `import.csv`, no `pushed` count, no posting, no
+     `set_state` — the card is byte-for-byte untouched — and it is routed to the review
+     queue under D253's `routing.NAME_DISPUTED` (§4.1's own fallback: Lane 2's own reason,
+     if it ever lands on this branch, replaces it). RED on 1b5c90e5 (the position reached
+     the CSV and was pushed with no SKU bound); GREEN after `_withhold_disputed`.
 
 NO SQLITE FOR CASE 2 (record_identification/`_read_disputes_for`) — pure `Inventory`/`Skus`
 objects in memory, `scripts/identity-store-selftest.py`'s own style, because that is what is
@@ -43,12 +55,13 @@ import tempfile
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from typing import Optional
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from cli import cmd_identify, runs  # noqa: E402
-from pipeline import games, tcgcsv  # noqa: E402
+from pipeline import games, routing, tcgcsv  # noqa: E402
 from pipeline.skus import row_from_csv  # noqa: E402
 from store import files, master  # noqa: E402
 from store.master import Card, Inventory  # noqa: E402
@@ -83,6 +96,15 @@ DUNSPARCE_NUMBER = "120"
 # `harness/tests/t3_join_coverage.py:AMPERSAND_NORMAL_SKU`.
 UNMATCHED_SKU = "8608674"
 BOX = 3
+
+# A second game's real fixture and one real row from it, for the two-game merged-emit case
+# (review finding, MEDIUM) — `harness/tests/t3_join_coverage.py:RIFTBOUND_DEFY_SKU`, the
+# same row, reused rather than re-typed.
+RIFTBOUND_FIXTURE = ROOT / "fixtures" / "riftbound_export_untouched.csv"
+RIFTBOUND_SKU = "8925787"
+RIFTBOUND_NAME = "Defy"
+RIFTBOUND_NUMBER = "045/298"
+RIFTBOUND_BOX = 4
 
 
 # ------------------------------------------------------------------------------ the store
@@ -123,9 +145,14 @@ def _capture(copies: int, box: int = BOX) -> None:
             )
 
 
-def _identifications(copies: int, name: str, number: str, box: int = BOX) -> dict:
+def _identifications(
+    copies: int, name: str, number: str, box: int = BOX, *,
+    game: str = "pokemon", printed_total: Optional[str] = "159",
+) -> dict:
     """`harness/tests/t3_join_coverage.py:_identifications` — an `identifications.json`
-    payload shaped as `cli/cmd_identify.py` writes it."""
+    payload shaped as `cli/cmd_identify.py` writes it. `game`, per card and never per run
+    (D21) — `harness/tests/t3_join_coverage.py:_two_game_payload`'s own reason to carry it
+    here rather than default it, for the two-game merged-emit case."""
     return {
         "prompt_fingerprint": "identity-cli-selftest",
         "cards": {
@@ -136,10 +163,11 @@ def _identifications(copies: int, name: str, number: str, box: int = BOX) -> dic
                 "set_hint": None,
                 "metadata_finish": "normal",
                 "status": "ok",
+                "game": game,
                 "identification": {
                     "name": name,
                     "number": number,
-                    "printed_total": "159",
+                    "printed_total": printed_total,
                     "confidence": "high",
                     "finish": "normal",
                 },
@@ -340,6 +368,130 @@ def _case_3b_reconcile_live_fills_every_row() -> None:
            "every row of the fixture is in the table", f"{len(entries)} of {len(export.rows)}")
 
 
+# --------------------------------------------------------------------------------- case 4
+
+
+def _case_4_two_game_merged_emit() -> None:
+    print("\n-- 4. a two-game merged emit, no --split-games (review finding, MEDIUM) --")
+    with _isolated_home():
+        _capture(1, box=BOX)
+        _capture(1, box=RIFTBOUND_BOX)
+
+        pokemon_export = tcgcsv.read_export(SOURCE_FIXTURE)
+        riftbound_export = tcgcsv.read_export(RIFTBOUND_FIXTURE)
+
+        run_a = runs.create("identity-cli-merge-pokemon")
+        run_a.write_identifications(
+            _identifications(1, DUNSPARCE_NAME, DUNSPARCE_NUMBER, box=BOX, game="pokemon")
+        )
+        pokemon_path = run_a.path("export.csv")
+        tcgcsv.write_csv(pokemon_path, pokemon_export.header, pokemon_export.rows)
+
+        run_b = runs.create("identity-cli-merge-riftbound")
+        run_b.write_identifications(
+            _identifications(
+                1, RIFTBOUND_NAME, RIFTBOUND_NUMBER, box=RIFTBOUND_BOX,
+                game="riftbound", printed_total=None,
+            )
+        )
+        riftbound_path = run_b.path("export.csv")
+        tcgcsv.write_csv(riftbound_path, riftbound_export.header, riftbound_export.rows)
+
+        _command("join", str(run_a.directory), "--export", str(pokemon_path))
+        _command("join", str(run_b.directory), "--export", str(riftbound_path))
+
+        output = _command("emit", str(run_a.directory), str(run_b.directory))
+
+        import_path = run_b.path(runs.IMPORT_MERGED)
+        ok(import_path.exists(), "one merged file, no --split-games refusal", output)
+        if import_path.exists():
+            by_sku = tcgcsv.read_export(import_path).by_sku()
+            ok(DUNSPARCE_SKU in by_sku and RIFTBOUND_SKU in by_sku,
+               "both games' SKUs are in the SAME file", sorted(by_sku))
+
+        snapshot = Store().read()
+        pokemon_card = snapshot.inventory.cards[master.position_key(BOX, 1)]
+        riftbound_card = snapshot.inventory.cards[master.position_key(RIFTBOUND_BOX, 1)]
+
+        ok(pokemon_card.sku == DUNSPARCE_SKU, "Pokemon card bound to its own SKU",
+           pokemon_card.sku)
+        ok((pokemon_card.number, pokemon_card.printed_total) == ("120", "159"),
+           "Pokemon's number_strategy (number_and_printed_total) split the cell",
+           f"{pokemon_card.number!r}/{pokemon_card.printed_total!r}")
+        ok(pokemon_card.identity_source == master.IDENTITY_SKU
+           and pokemon_card.bound_by == "join",
+           "Pokemon card: identity_source='sku', bound_by='join'",
+           (pokemon_card.identity_source, pokemon_card.bound_by))
+
+        ok(riftbound_card.sku == RIFTBOUND_SKU, "Riftbound card bound to its own SKU",
+           riftbound_card.sku)
+        ok((riftbound_card.number, riftbound_card.printed_total) == ("045/298", None),
+           "Riftbound's number_strategy (printed_code) kept the cell verbatim",
+           f"{riftbound_card.number!r}/{riftbound_card.printed_total!r}")
+        ok(riftbound_card.identity_source == master.IDENTITY_SKU
+           and riftbound_card.bound_by == "join",
+           "Riftbound card: identity_source='sku', bound_by='join'",
+           (riftbound_card.identity_source, riftbound_card.bound_by))
+
+
+# --------------------------------------------------------------------------------- case 5
+
+
+def _case_5_dispute_withheld_before_write() -> None:
+    print("\n-- 5. a card disputed between join and emit is withheld, not written "
+          "(review finding, HIGH, on 1b5c90e5) --")
+    with _isolated_home():
+        _capture(1, box=BOX)
+        run = runs.create("identity-cli-dispute")
+        run.write_identifications(_identifications(1, DUNSPARCE_NAME, DUNSPARCE_NUMBER))
+        export_path = run.path("export.csv")
+        export = tcgcsv.read_export(SOURCE_FIXTURE)
+        tcgcsv.write_csv(export_path, export.header, export.rows)
+
+        _command("join", str(run.directory), "--export", str(export_path))
+
+        key = master.position_key(BOX, 1)
+
+        # THE PLANT: a re-identification landing BETWEEN join and emit, disagreeing with
+        # the row join already matched — this is `pkmnscan identify` running again over
+        # the same photograph, the ordinary shape a defensive backstop has to survive.
+        with Store().write() as writable:
+            writable.inventory.record_identification(
+                key, name="Charizard", number="4", printed_total="102", confidence="high",
+            )
+        before = dict(Store().read().inventory.cards[key].__dict__)
+
+        output = _command("emit", str(run.directory))
+
+        import_path = run.path(runs.IMPORT_MERGED)
+        ok(not import_path.exists(),
+           "no CSV copy: the only copy of this SKU was the disputed one, so "
+           "add_to_quantity is 0 and emit's own D54 guard never opens the file at all",
+           output)
+
+        after = dict(Store().read().inventory.cards[key].__dict__)
+        ok(before == after,
+           "the card is BYTE-FOR-BYTE untouched by emit — no set_state, no bind_sku",
+           {k: (before.get(k), after.get(k)) for k in before if before.get(k) != after.get(k)})
+
+        listing = Store().read().inventory.listings.get(DUNSPARCE_SKU)
+        ok(listing is None or listing.pushed == 0,
+           "no PUSHED count moved for it — no posting either, by the same code path",
+           listing)
+
+        ok("disputed" in output and "1 card(s) withheld" in output,
+           "the output names it, under its own heading", output)
+
+        entry = Store().read().review.entries.get(key)
+        ok(entry is not None, "and it is routed to the review queue", entry)
+        if entry is not None:
+            ok(entry.reason == routing.NAME_DISPUTED,
+               "under D253's routing.NAME_DISPUTED — §4.1's own fallback reason",
+               entry.reason)
+            ok(entry.read.get("name") == "Charizard",
+               "carrying the fresh, disputing read", entry.read)
+
+
 # ------------------------------------------------------------------------------------- main
 
 
@@ -350,6 +502,8 @@ def main() -> int:
     _case_2_reidentify_writes_only_read()
     _case_3_join_export_fills_every_row()
     _case_3b_reconcile_live_fills_every_row()
+    _case_4_two_game_merged_emit()
+    _case_5_dispute_withheld_before_write()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

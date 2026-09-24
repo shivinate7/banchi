@@ -2828,9 +2828,18 @@ COMPONENTS = [
                         "False on an agreeing one, None on an unbound card. "
                         "`pkmnscan join --export` and `pkmnscan reconcile --live` each "
                         "fold EVERY row of the fixture export into the skus table, "
-                        "including a SKU no card in the run matched.",
-                "governed_by": ["D25", "D36", "D63", "D64", "D87", "D104", "D137",
-                                "D166", "D172", "D213", "D253"],
+                        "including a SKU no card in the run matched. A two-game merged "
+                        "emit (Pokemon plus Riftbound, no --split-games) resolves each "
+                        "SKU's number_strategy and product_line off its own game and "
+                        "binds every card. REVIEW FINDING, HIGH, on commit 1b5c90e5: a "
+                        "card re-identified between join and emit, disputing the row "
+                        "join already matched, is withheld before anything is written "
+                        "for it — absent from import.csv, no pushed count, no posting, "
+                        "no set_state — and routed to review under D253's "
+                        "routing.NAME_DISPUTED, with JoinReport.ok's closure invariant "
+                        "kept rather than tripped.",
+                "governed_by": ["D21", "D25", "D36", "D54", "D63", "D64", "D87", "D104",
+                                "D137", "D166", "D172", "D213", "D253"],
             },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "

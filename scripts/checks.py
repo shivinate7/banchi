@@ -905,7 +905,16 @@ CHECKS = (
                    "agreeing one, None on an unbound card. `pkmnscan join --export` and "
                    "`pkmnscan reconcile --live` each fold EVERY row of the fixture export "
                    "into the skus table, including a SKU no card in the run matched — never "
-                   "only pipeline/join.py:Catalog's D137-narrowed or matched rows.",
+                   "only pipeline/join.py:Catalog's D137-narrowed or matched rows. A "
+                   "two-game merged emit (Pokemon plus Riftbound, no --split-games) resolves "
+                   "each SKU's number_strategy and product_line off its OWN game and binds "
+                   "every card of the send. REVIEW FINDING, HIGH, on commit 1b5c90e5: a card "
+                   "re-identified between join and emit, disputing the row join already "
+                   "matched, is withheld before anything is written for it — absent from "
+                   "import.csv, no pushed count, no posting, no set_state, the card "
+                   "byte-for-byte untouched — and routed to review under D253's "
+                   "routing.NAME_DISPUTED, with JoinReport.ok's own closure invariant "
+                   "(cards_in vs cards_out) kept rather than tripped.",
         "needs": ("python3",),
         "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
                   "repointed for the whole run, so the operator's own store is never opened.",
