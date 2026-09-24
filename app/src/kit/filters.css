@@ -1,0 +1,134 @@
+/* THE ONE FILTER BAR (`kit/filters.tsx`). `--bn-*` tokens only.
+
+   THE BREAKPOINT IS 639px, THE SAME ONE `data.css` ALREADY STACKS `FilterChips` AT. Below it
+   a screen is a phone (D195's own column), and at or above it a screen is desktop-shaped even
+   at 720 (the owner's ruling on the rail breakpoint moving to about 640, 2026-09-23) — so the
+   wide row shows at 1440, 820 and 720, and only 390 gets the compact trigger and the sheet. */
+
+.bn-filterbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+
+.bn-filterbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+
+.bn-filterbar-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  max-width: 420px;
+}
+
+.bn-filterbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+
+.bn-filterbar-compact { display: none; }
+
+/* ---- HideToggle: no extra shape past `Chip`'s own (FLT-16's one control) ---------------------- */
+.bn-hidetoggle { flex: none; }
+
+/* ---- SortHeaderButton: a table column that marks the one it is sorted by (FLT-19) ------------- */
+.bn-sortth {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  min-height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-1);
+  margin: calc(var(--bn-1) * -1);
+  border-radius: var(--bn-r-sm);
+  font: inherit;
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  transition: color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-sortth:hover { color: var(--bn-ink); background: var(--bn-hover); }
+.bn-sortth-end { flex-direction: row-reverse; }
+/* THE ACTIVE COLUMN IS MARKED IN TWO CHANNELS, not only the chevron a squint could miss
+   (FLT-19's own complaint about a chevron on every header): the label goes to full ink weight
+   and the chevron itself only draws once a column is active — an inactive header shows its
+   label alone, so "which column is this" is answered by presence, not by reading `aria-sort`. */
+.bn-sortth-icon { flex: none; opacity: 0; color: var(--bn-accent); transition: opacity var(--bn-t-fast) var(--bn-ease); }
+.bn-sortth[data-active='true'] { color: var(--bn-ink); }
+.bn-sortth[data-active='true'] .bn-sortth-icon { opacity: 1; }
+
+/* ---- The phone trigger and its sheet --------------------------------------------------------- */
+.bn-filterbar-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1-5);
+  height: var(--bn-control-h);
+  padding: 0 var(--bn-3);
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  font: inherit;
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-ink-2);
+  transition: border-color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-filterbar-trigger:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
+.bn-filterbar-trigger[data-active='true'] { border-color: var(--bn-accent); background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
+.bn-filterbar-trigger-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--bn-1-5);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bn-filterbar-sheet-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--bn-3);
+}
+/* Inside the sheet, every control is a phone-width column, same as `FilterChips`'s own stack
+   (D195: same-role controls share a width). `SortControl`'s two pieces and `HideToggle` follow
+   the facets' own full width so nothing in the sheet is narrower than its neighbour. */
+.bn-filterbar-sheet-body .bn-filterchips,
+.bn-filterbar-sheet-body .bn-sort,
+.bn-filterbar-sheet-body .bn-hidetoggle {
+  width: 100%;
+}
+.bn-filterbar-sheet-body .bn-filterchips > .bn-fchip { flex: 1 1 100%; }
+.bn-filterbar-sheet-body .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; }
+.bn-filterbar-sheet-body .bn-sort { flex-direction: column; align-items: stretch; }
+.bn-filterbar-sheet-body .bn-sort > .bn-pick,
+.bn-filterbar-sheet-body .bn-sort-dir { width: 100%; justify-content: flex-start; }
+
+/* ---- The match highlight (`kit/highlight.tsx`) ------------------------------------------------ */
+.bn-highlight {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--bn-accent-tint);
+  color: inherit;
+  font-weight: 700;
+}
+:root[data-theme='dark'] .bn-highlight { background: var(--bn-accent-tint-2); }
+
+/* ---- Below 639px: the row hides, the compact trigger and its sheet take over ------------------ */
+@media (max-width: 639px) {
+  .bn-filterbar-row { display: none; }
+  .bn-filterbar-compact { display: block; }
+  .bn-filterbar-search { flex-basis: 100%; max-width: none; }
+}

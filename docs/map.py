@@ -5580,6 +5580,48 @@ COMPONENTS = [
                                             "`useOpenSheet` (kit/sheets.ts). Seeded from the local "
                                             "sheet on the code-card screen.",
                                     "governed_by": ["D94", "D95", "D118"]},
+            "src/kit/filters.tsx": {"does": "THE ONE FILTER BAR (FLT-15, the owner's gripes about "
+                                            "Inventory's game-then-set-then-rarity lock and Orders' "
+                                            "four-width strip): `FilterBar` composes `Select`, "
+                                            "`FilterChips`, `FilterCount`, `SortControl` and "
+                                            "`SearchField` into one toolbar. It draws \"N of M\" by "
+                                            "construction, and opens a popover on the desk, one "
+                                            "bottom sheet behind a single trigger on the phone. Also "
+                                            "`HideToggle` (one shape for \"Hide sold\" / \"Hide "
+                                            "never-seen\" / \"Holding\", FLT-16) and "
+                                            "`SortHeaderButton` (a table column that marks itself "
+                                            "active, FLT-19, and re-sorts at once, FLT-01).",
+                                    "governed_by": ["D118", "D209", "D-one-filter-control"]},
+            "src/kit/filters.css": {"does": "the filter bar's styles. Below 639px (`data.css`'s own "
+                                            "phone stack) the wide row hides and the compact trigger "
+                                            "and its sheet take over — both trees are always mounted, "
+                                            "CSS alone decides which is visible.",
+                                    "governed_by": ["D50", "D118", "D195", "D-one-filter-control"]},
+            "src/kit/filters.specimens.tsx": {"does": "`FilterBar`, `HideToggle`, `SortHeaderButton` "
+                                                       "and `Highlight`, in every state a screen puts "
+                                                       "them in, on invented data. The kit page mounts "
+                                                       "`FilterSpecimens`; `tests/filters/` mounts it "
+                                                       "too.",
+                                               "governed_by": ["D5", "D-one-filter-control"]},
+            "src/kit/highlight.tsx": {"does": "THE MATCH HIGHLIGHT (FLT-08: \"no search result shows "
+                                              "what matched\"). `Highlight` marks the substring of a "
+                                              "row's text that a query's words found, folded the same "
+                                              "way `kit/match.ts` folds case, accents and apostrophes, "
+                                              "with the same compact fallback for a hyphen or a "
+                                              "comma. BEST EFFORT, BY DESIGN: it does not reverse "
+                                              "match.ts's card-number or SKU-prefix arithmetic, so a "
+                                              "row that matched only on those draws no mark — never a "
+                                              "wrong one.",
+                                      "governed_by": ["D5"]},
+            "src/kit/viewState.ts": {"does": "THE ONE URL VIEW STATE (D-view-state-in-url, the "
+                                             "owner's ruling: filter memory lives in the URL on every "
+                                             "screen). `useViewQuery`/`patchViewQuery` read and write "
+                                             "the current hash's own query string via "
+                                             "`history.replaceState`, read back through "
+                                             "`useSyncExternalStore`; `useViewParam`, `useViewFlag`, "
+                                             "`useFacetParams` and `useSortParam` are the typed hooks "
+                                             "over it. A value at its own default writes no key.",
+                                     "governed_by": ["D217", "D-view-state-in-url"]},
             # ---- the shell ----
             "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens, then base, "
                                      "then the kit — every later sheet resolves against tokens, and "
@@ -8332,6 +8374,47 @@ COMPONENTS = [
             "tests/kit-data/harness.tsx": {
                 "does": "the test page's entry: the tokens, the kit styles and the specimens, "
                         "with `?theme=dark` for the dark theme.",
+                "governed_by": ["D5"],
+            },
+            "tests/match.spec.ts": {
+                "does": "`kit/match.cases.json`'s case table, run data-driven, one Playwright test "
+                        "per row: `matchQuery` against every case, pure, no browser. The other half "
+                        "of `matchQuery`'s coverage — the hand-written, narrated cases — is "
+                        "`kit-data.spec.ts`'s. Run by `make design-check`.",
+                "governed_by": ["D5"],
+            },
+            "src/kit/match.cases.json": {
+                "does": "the one case table for `kit/match.ts`: query, `MatchFields` and the "
+                        "expected verdict, one row per rule the matcher's own header states. Read "
+                        "by `tests/match.spec.ts`; meant for `search-server`'s Python side too, so "
+                        "the browser's matcher and the server's candidate step are checked against "
+                        "the same table.",
+                "governed_by": ["D5"],
+            },
+            "tests/filters.spec.ts": {
+                "does": "`FilterBar`, `HideToggle`, `SortHeaderButton`, `Highlight`, and "
+                        "`kit/viewState.ts`'s hooks. Every specimen at 1440, 820, 720 and 390 in "
+                        "both themes with no sideways scroll; one control height across the wide "
+                        "row; \"N of M\" drawn by construction and changing as a facet narrows; a "
+                        "zero count drawn, not hidden; no facet disabled; single vs multi marked "
+                        "differently; the phone's compact trigger opening a sheet with nothing "
+                        "outside it moving (D118); the active sort column marked and re-sorting at "
+                        "once; the match highlight; and the URL view state — a press writes the "
+                        "URL, a default writes no key, a reload restores every value, and a path "
+                        "change leaves a place for Back. Run by `make design-check`.",
+                "governed_by": ["D118", "D-one-filter-control", "D-view-state-in-url"],
+            },
+            "tests/filters/index.html": {
+                "does": "a test page the dev server serves and the build never ships: it mounts "
+                        "`FilterSpecimens` and a small view-state demo, so `filters.spec.ts` does "
+                        "not wait on a real screen to mount either.",
+                "governed_by": ["D5"],
+            },
+            "tests/filters/harness.tsx": {
+                "does": "the test page's entry: the tokens, the kit styles, `FilterSpecimens`, and "
+                        "`ViewStateDemo` — one small component that binds every `viewState.ts` hook "
+                        "to a few buttons and reads back what each thinks the URL says. "
+                        "`?theme=dark` draws the dark theme.",
                 "governed_by": ["D5"],
             },
             "tests/pull-confirm.spec.ts": {
