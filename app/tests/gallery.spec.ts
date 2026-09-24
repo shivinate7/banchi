@@ -775,12 +775,6 @@ const AXE_KNOWN: readonly { readonly rule: string; readonly selector: string; re
     owner: 'locating lane',
     why: 'the same muted PositionLabel, its store key',
   },
-  {
-    rule: 'color-contrast',
-    selector: '.bn-pick-label',
-    owner: 'kit-data',
-    why: 'the active Select label reads 4.29:1 on its tint; kit-data is fixing it',
-  },
 ]
 
 test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is listed with its owner', async ({ page }) => {
