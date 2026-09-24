@@ -257,13 +257,15 @@
 .review-caption .position-run-num { white-space: nowrap; }
 .review-caption > .bn-icon { color: var(--bn-accent); flex: none; }
 /* THE LABEL AND, UNDER IT, WHICH WAY THE BOX RUNS (UX-228): `back`, the neighbour toward the
-   back, this card, the neighbour toward the front, `front`. One compact line; a long name is
-   cut with an ellipsis here only, because the whole sentence rides the screen-reader text. */
+   back, this card, the neighbour toward the front, `front`. One compact line that wraps between
+   its parts when the pill is narrow; a long name is cut with an ellipsis here only, because the
+   whole sentence rides the screen-reader text. */
 .review-caption-body { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .review-caption-order {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--bn-1-5);
+  gap: 0 var(--bn-1-5);
   min-width: 0;
   font-size: var(--bn-fs-sm);
   line-height: var(--bn-lh-snug);
@@ -277,8 +279,10 @@
   text-transform: uppercase;
   color: var(--bn-ink-3);
 }
+/* Whole or cut, never squeezed: the line wraps between its parts at 390 (like the label above
+   it), and only a name longer than 16 characters is cut. */
 .review-caption-nb {
-  min-width: 0;
+  flex: none;
   max-width: 16ch;
   overflow: hidden;
   text-overflow: ellipsis;
