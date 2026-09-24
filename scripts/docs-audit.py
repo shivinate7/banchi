@@ -13250,7 +13250,7 @@ def check_typed_interpunct(report: Report) -> None:
 # installed — so the toolchain argument against gating (D18's, not D74's) does not transfer:
 # nothing new has to be present on a machine that can already run this hook at all.
 #
-# A RATCHET, NEVER A CLIFF, on the SAME three arguments D194 and D218 already settled: a hard
+# A RATCHET, NEVER A CLIFF, on the SAME three arguments D218 already settled: a hard
 # gate over an 11,361-finding backlog blocks every commit on day one; the number may only fall,
 # silently, printed; and a rise is never quiet, however small. `scripts/ste-ratchet.json` pins
 # the total, the four ERROR-severity rules' own counts, and the ruler below, written only by
