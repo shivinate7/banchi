@@ -243,7 +243,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
                     #   subagent-override-selftest + guard-scope-selftest +
-                    #   token-literal-check-selftest + kit-adoption-selftest,
+                    #   token-literal-check-selftest + kit-adoption-selftest +
+                    #   port-slots-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -281,6 +282,9 @@ make kit-adoption   # every ROUTES view renders <Page> from the kit, and no scre
                     #   fails open and says so.
 make kit-adoption-selftest  # that checker, on in-memory fixtures in both directions. Writes
                     #   nothing (D18).
+make port-slots-selftest  # two throwaway trees forced into one port slot, a real Vite and a
+                    #   real Playwright in each. A run in one tree refuses the other's server.
+                    #   After a claim, each tree holds its own slot. Writes under `mktemp -d`.
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
 make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
                     #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.
@@ -699,7 +703,12 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
 - **EVERY CHECKOUT HAS ITS OWN STORE AND ITS OWN PORTS** (D43). `store/files.py:home()`
   defaults to the checkout the code runs from. Ports derive from the checkout's path
   (`app/devPort.ts`, `server/ports.py`, kept in step by `make port-agreement`). An empty
-  inventory in a worktree is correct — the real one is the main checkout's.
+  inventory in a worktree is correct — the real one is the main checkout's. A hash of the
+  path put two live worktrees on one port, so a linked checkout now CLAIMS its slot once in
+  `~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`). `make dev`, `server`, `up`,
+  `design-check` and `scripts/launch-config.py` claim first. A test run refuses a reused dev server
+  that does not name this checkout (`app/checkoutIdentity.ts`,
+  D-a-claimed-slot-and-a-server-that-names-its-checkout).
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing
   about a card in `localStorage`. **Eleven keys are stored on the device**, each a fact about

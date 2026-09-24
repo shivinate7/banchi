@@ -35,3 +35,5 @@
 - No arm loads a page or opens a socket.
 
 `harness/tests/t7_store_and_seams.py` asserts that a root with no `.git` does not derive 5173.
+
+**AMENDED 2026-09-24 by D-a-claimed-slot-and-a-server-that-names-its-checkout, a checkout claims its port slot once.** The slot a non-primary tree takes is now the slot it claimed in `~/.pkmnscan/port-slots.json` when there is one, and the path hash when there is not. The primary checkout's rule here is unchanged.

@@ -1206,6 +1206,26 @@ CHECKS = (
         "gates": True,
         "governed_by": ("D18", "D173"),
     },
+    {
+        "target": "port-slots-selftest",
+        "runs": "python3 scripts/port-slots.py selftest",
+        "asserts": "two throwaway trees forced into one port slot, each with a real Vite and a "
+                   "real Playwright. With nothing claimed, a test run in one tree refuses the "
+                   "other tree's server by name (red with the identity check removed: the run "
+                   "passes against the wrong code). After both claim, each holds its own slot, "
+                   "server/ports.py and app/devPort.ts answer it alike, a second claim does not "
+                   "move it, and the run passes on its own server. A removed tree frees its "
+                   "slot, and a damaged registry reads as nothing claimed on both sides.",
+        "needs": ("python3", "node", "app deps"),
+        "writes": "two throwaway trees and a slot registry under `mktemp -d`, reached through "
+                  "PKMNSCAN_SLOT_REGISTRY so the real registry is never touched.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, starts a Vite and a Playwright run, binds "
+                               "ports and stops the processes it started.",
+        "gates": True,
+        "governed_by": ("D18", "D43", "D-no-git-no-live-port",
+                        "D-a-claimed-slot-and-a-server-that-names-its-checkout"),
+    },
 )
 
 

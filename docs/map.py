@@ -2312,8 +2312,7 @@ COMPONENTS = [
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D-page-scaffold",
-                                "D-text-shape-checks"],
+                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D-page-scaffold", "D-text-shape-checks", "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -3308,7 +3307,22 @@ COMPONENTS = [
                 # node, and the git hook runs bare python3 with nothing installed, so it lives
                 # in `make check` beside the other two self-tests rather than on the commit
                 # path.
-                "governed_by": ["D18", "D43", "D-no-git-no-live-port"],
+                "governed_by": ["D18", "D43", "D-no-git-no-live-port", "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
+            },
+            "port-slots.py": {
+                "does": "the port slot registry's one writer. `claim` records one slot per "
+                        "checkout in `~/.pkmnscan/port-slots.json`, which `server/ports.py` "
+                        "and `app/devPort.ts` read before the path hash. A claimed slot never "
+                        "moves; a new claim starts at the hash slot and steps past a slot "
+                        "another checkout claimed or whose port another checkout's server "
+                        "holds. `make dev`, `server`, `up`, `design-check` and "
+                        "`scripts/launch-config.py` claim first. Over a damaged registry, a "
+                        "claim keeps a `.bad-<stamp>` copy and says so. Fails open, loudly. "
+                        "`selftest` forces two throwaway trees into one slot and proves, with "
+                        "a real Vite and a real Playwright, that a run refuses the other "
+                        "tree's server and that the claim gives each its own slot, and that "
+                        "`.claude/launch.json` names the claimed port.",
+                "governed_by": ["D18", "D43", "D122", "D-no-git-no-live-port", "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
             },
             "set-hint-agreement.py": {
                 "does": "port-agreement.py's shape, one decision over: proves "
@@ -3808,8 +3822,8 @@ COMPONENTS = [
                 # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
-                "governed_by": ["D16", "D18", "D43", "D47", "D42", "D53", "D139",
-                                "D176", "D257"],
+                "governed_by": ["D16", "D18", "D42", "D43", "D47", "D53", "D139", "D176", "D257",
+                                "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
             },
             "worktree-provision.sh": {
                 "does": "the cache-copy, image-mirror-symlink and node_modules provisioning "
@@ -4468,7 +4482,9 @@ COMPONENTS = [
                                 "D171", "D172", "D173", "D176", "D178", "D189", "D212", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D254", "D256", "D-no-git-no-live-port", "D-page-scaffold"],
+                                "D247", "D250", "D254", "D256",
+                                "D-a-claimed-slot-and-a-server-that-names-its-checkout",
+                                "D-no-git-no-live-port", "D-page-scaffold"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -4563,7 +4579,9 @@ COMPONENTS = [
                         "unasked at session start, and `make status` passes `--check` and "
                         "writes nothing. Only an ABSENT file or this repo's own shape at "
                         "the wrong port is rewritten; anything a person edited is reported "
-                        "and left alone, which is D44's asymmetry rather than a new one.",
+                        "and left alone, which is D44's asymmetry rather than a new one. "
+                        "Both writers claim the port slot FIRST, so the file never names a "
+                        "hash port another checkout holds.",
                 # D43 is the whole subject — the port follows the checkout's PATH, and this
                 # file was the sixth reader that entry found after the other five moved. The
                 # amendment naming it says why it is the worst to get wrong: a stale port
@@ -4574,7 +4592,8 @@ COMPONENTS = [
                 # icloud-sweep` deletes only what is provably a duplicate and only ever
                 # reports what differs, because guessing is the one way a cleanup tool
                 # destroys work. A provisioner running unasked has more reason, not less.
-                "governed_by": ["D18", "D43", "D44"],
+                "governed_by": ["D18", "D43", "D44",
+                                "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
                 "note": "STDLIB ONLY, AND BARE `python3` MUST RUN IT. The hook calls this "
                         "BEFORE it builds `.venv`, because the port is wanted whether or "
                         "not the pip install ever succeeds — so an import needing a package "
@@ -4705,7 +4724,9 @@ COMPONENTS = [
                 # the store, and this script had been the one caller that did not follow it.
                 # D18 is the rule that keeps it off `make check`: it writes, and nothing
                 # that writes may run on the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18", "D43", "D129", "D-no-git-no-live-port"],
+                "governed_by": ["D5", "D13", "D18", "D43", "D129",
+                                "D-a-claimed-slot-and-a-server-that-names-its-checkout",
+                                "D-no-git-no-live-port"],
             },
             "screenshot.mjs": {
                 "does": "the browser half of `make screenshot`: one render, and the proof "
@@ -4819,14 +4840,17 @@ COMPONENTS = [
                 "does": "which ports THIS checkout serves on, derived from where the checkout "
                         "is. The main tree keeps :8000 and :5173, and only a tree whose `.git` "
                         "is a DIRECTORY is the main tree; a linked worktree, or a copy with no "
-                        "`.git`, gets its own pair from one slot off its path. `PKMNSCAN_PORT` "
-                        "overrides and an "
+                        "`.git`, gets its own pair from one slot: the slot it claimed in "
+                        "`~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`), else a hash "
+                        "of its path. It reads that registry and never writes it. "
+                        "`PKMNSCAN_PORT` overrides and an "
                         "out-of-range value is ignored rather than obeyed.",
                 # D43 is the decision. D13 is why it matters: one truth on the Mac, and the
                 # store already defaults per-checkout — so a shared port meant one tree's UI
                 # writing into another tree's store, which is that entry's promise broken by
                 # a socket rather than by a design.
-                "governed_by": ["D13", "D43", "D-no-git-no-live-port"],
+                "governed_by": ["D13", "D43", "D-no-git-no-live-port",
+                                "D-a-claimed-slot-and-a-server-that-names-its-checkout"],
                 "note": "Stdlib only, like the server it serves. `scripts/status.py` imports "
                         "it and the git hook never does.",
             },
@@ -5340,18 +5364,32 @@ COMPONENTS = [
                                    "DESIGN.md's floors against code the branch never had — "
                                    "green, and meaningless. Only a tree whose `.git` is a "
                                    "DIRECTORY keeps 5173; a linked worktree and a copy with "
-                                   "no `.git` both take a slot",
-                           "governed_by": ["D5", "D13", "D43", "D-no-git-no-live-port"]},
+                                   "no `.git` both take a slot. The slot is the one this "
+                                   "checkout CLAIMED in `~/.pkmnscan/port-slots.json` when "
+                                   "there is one, and the path hash when there is not",
+                           "governed_by": ["D5", "D13", "D43", "D-no-git-no-live-port", "D-a-claimed-slot-and-a-server-that-names-its-checkout"]},
+            "checkoutIdentity.ts": {"does": "a reused dev server must name this checkout. "
+                                            "The Vite plugin answers `GET /__checkout` with the "
+                                            "checkout's resolved path; the default export is "
+                                            "Playwright's `globalSetup`, which runs after the "
+                                            "`webServer` is up and refuses the whole run unless "
+                                            "that server names THIS checkout. Two worktrees "
+                                            "once shared a port and a design-check passed "
+                                            "against the other tree's code. "
+                                            "`PKMNSCAN_CHECKOUT_IDENTITY=off` skips it",
+                                    "governed_by": ["D43", "D-a-claimed-slot-and-a-server-that-names-its-checkout"]},
             "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
                                        "Makefile and scripts/views.txt would all three be wrong. "
                                        "The port comes from devPort.ts: :5173 in the main tree, "
-                                       "per-worktree elsewhere",
-                               "governed_by": ["D13", "D43"]},
+                                       "per-worktree elsewhere. Its plugin list carries "
+                                       "checkoutIdentity.ts's `/__checkout` answer",
+                               "governed_by": ["D13", "D43", "D-a-claimed-slot-and-a-server-that-names-its-checkout"]},
             "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
                                              "Vite it starts for itself. reuseExistingServer stays "
-                                             "ON and is safe only because devPort.ts makes the port "
-                                             "per-checkout. `expect.timeout` is 15s rather than "
+                                             "ON, and `globalSetup` (checkoutIdentity.ts) refuses "
+                                             "the run unless the server names this checkout. "
+                                             "`expect.timeout` is 15s rather than "
                                              "Playwright's 5s: fullyParallel puts every worker's "
                                              "first visibility wait against a cold Vite, and that "
                                              "wait — never an assertion — was the whole of the "
@@ -5360,7 +5398,7 @@ COMPONENTS = [
                                              "and check.yml uploads it: the one-test runner red "
                                              "has never reproduced on the rig (D128), so the run "
                                              "that fails is the only witness there is",
-                                     "governed_by": ["D5", "D16", "D128"]},
+                                     "governed_by": ["D5", "D16", "D128", "D-a-claimed-slot-and-a-server-that-names-its-checkout"]},
             "design-check-reporter.ts": {"does": "THE VERDICT, AS ONE SMALL FILE. A Playwright "
                                                  "reporter that writes `.serve/design-check.json` "
                                                  "— pass/fail, the counts, and every failing title "

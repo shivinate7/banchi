@@ -34,6 +34,7 @@
     "src",
     "tests",
     "devPort.ts",
+    "checkoutIdentity.ts",
     "vite.config.ts",
     "playwright.config.ts"
   ]

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -21,6 +21,18 @@ NPM_GUARD = @[ -d app/node_modules ] || { \
 	echo "app/ dependencies are not installed."; \
 	echo "  Fix: npm --prefix app install"; \
 	exit 1; }
+
+# A LINKED CHECKOUT CLAIMS ITS OWN PORT SLOT BEFORE IT SERVES OR TESTS
+# (D-a-claimed-slot-and-a-server-that-names-its-checkout). A hash into 300 slots put two live
+# worktrees on one port. The claim records one slot per checkout in ~/.pkmnscan/port-slots.json,
+# and server/ports.py and app/devPort.ts read it. The primary checkout claims nothing. It fails
+# open and says so: the ports then fall back to the hash, and app/checkoutIdentity.ts still
+# refuses a test run against another checkout's server.
+# `.claude/launch.json` names a port too, so `scripts/launch-config.py` claims BEFORE it writes
+# that file. `make launch-config`, `make venv` and `make worktree-setup` reach the claim
+# through it, and so does the SessionStart hook. A file written from the hash port before a
+# claim moved the tree would open ANOTHER tree's server in the Browser pane.
+PORT_CLAIM = @python3 scripts/port-slots.py claim --quiet
 
 # `venv` is already idempotent — the venv module tolerates an existing dir and pip happily
 # reinstalls — so the gap was never the install, it was that nothing said to re-run it.
@@ -166,6 +178,8 @@ help:
 	@echo "  make guard-scope-selftest  that gate, both-ways wiring included."
 	@echo "  make sync-selftest  the primary checkout's self-sync, proved by violating it."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
+	@echo "  make port-slots-selftest  two throwaway trees forced into one port slot: a test run in"
+	@echo "                    one refuses the other's server, and a claim gives each its own."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make readiness-agreement  app/src/readiness.ts against pipeline/decisions.py:blocking."
 	@echo "  make mutate-anchors  every mutation anchor still present in the guard it targets. 0.03s."
@@ -225,7 +239,7 @@ help:
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
 	@echo "                    guard-scope-selftest + token-literal-check-selftest +"
-	@echo "                    kit-adoption-selftest"
+	@echo "                    kit-adoption-selftest + port-slots-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -619,6 +633,7 @@ check:
 	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory kit-adoption-selftest
+	@$(MAKE) --no-print-directory port-slots-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -678,6 +693,7 @@ ci-check:
 	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory kit-adoption-selftest
+	@$(MAKE) --no-print-directory port-slots-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -801,6 +817,17 @@ kit-adoption:
 kit-adoption-selftest:
 	$(NPM_GUARD)
 	@node scripts/kit-adoption.mjs --self-test
+
+# TWO THROWAWAY TREES FORCED INTO ONE PORT SLOT, AND A REAL VITE AND A REAL PLAYWRIGHT IN EACH
+# (D-a-claimed-slot-and-a-server-that-names-its-checkout). It goes red on the 2026-09-24
+# incident: with the identity check removed, a run in one tree passes against the other's
+# server. Then both claim, each gets its own slot on both sides, and the run passes on its own
+# server. It starts processes, binds ports and writes a registry under `mktemp -d`, so it is
+# here and never in the commit hook (D18). It picks a slot whose ports are free, so it never
+# reaches a real checkout's server, and it stops only the processes it started.
+port-slots-selftest:
+	$(NPM_GUARD)
+	@python3 scripts/port-slots.py selftest
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
@@ -1451,6 +1478,7 @@ lan-check:
 #
 # `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
 up:
+	$(PORT_CLAIM)
 	@$(PYTHON) scripts/serve.py up $(ARGS)
 
 down:
@@ -1473,6 +1501,7 @@ launch-agent:
 # building and operating actually needs.
 dev:
 	$(NPM_GUARD)
+	$(PORT_CLAIM)
 	@npm --prefix app run dev
 
 # Foreground and blocking, like any server. An agent that runs this in the foreground hangs
@@ -1493,6 +1522,7 @@ dev:
 # every other route is unaffected and that one says what to do.
 server:
 	@$(PYTHON) scripts/serve.py guard-foreground
+	$(PORT_CLAIM)
 	@$(PYTHON) server/capture_server.py
 
 # The manifest is an INPUT and lives beside the script that reads it. It used to point at
@@ -1550,6 +1580,7 @@ screenshot:
 # Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
 design-check:
 	$(NPM_GUARD)
+	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
 	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
@@ -1590,6 +1621,7 @@ subagent-override-selftest:
 # verdict file should ask for this one.
 design-check-quiet:
 	$(NPM_GUARD)
+	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
 	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
