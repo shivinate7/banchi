@@ -3574,14 +3574,14 @@ export function CaptureScreen() {
           </div>
 
           {/* The way onward: once the box holds cards, the run hands it to the pipeline. Runs
-              reads only `?run=` today, so the box is picked there. */}
+              reads `?box=` and opens the Identify sheet on this box (UX-030). */}
           {box !== null && !boxIsEmpty ? (
             <div className="capture-onward">
               <Button
                 icon="zap"
                 iconRight="arrowRight"
                 block
-                onClick={() => (window.location.hash = '#/runs')}
+                onClick={() => (window.location.hash = `#/runs?box=${box}`)}
               >
                 {/* THE NAME HERE TOO (D142), even though the destination
                     draws `Box 4 · Mixed Singles`. This button is read on THIS screen, by

@@ -63,6 +63,18 @@ function stateInHash(): boolean {
   return new URLSearchParams(query).get('state') === 'captured'
 }
 
+/** `#/runs?box=<n>` — Capture's "Identify <box> on Runs" (UX-030). THE PRESS ARRIVES WITH THE
+ *  BOX IT NAMED AS ITS SCOPE, which is D39's own outcome: the selection is handed to the screen.
+ *  Before this the button landed on the store-wide start, so the next press spent money across
+ *  every box while the label named one. A value that is not a whole number is no box at all. */
+function boxInHash(): number | null {
+  const query = window.location.hash.split('?')[1] ?? ''
+  const raw = new URLSearchParams(query).get('box')
+  if (raw === null || !/^[0-9]+$/.test(raw)) return null
+  const box = Number(raw)
+  return box >= 1 ? box : null
+}
+
 export function Runs() {
   const [boxes, setBoxes] = useState<readonly BoxRecord[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -106,6 +118,16 @@ export function Runs() {
         setFailure(null)
         if (handoffApplied.current) return
         handoffApplied.current = true
+
+        /* THE BOX CAPTURE NAMED, if the registry still holds it. It wins over a stale tick list:
+           it is the press the operator just made. A box the registry no longer holds falls
+           through to the ordinary start rather than to a guess. */
+        const named = boxInHash()
+        if (named !== null && answer.boxes.some((record) => record.box === named)) {
+          setDraft({ ...NO_DRAFT, start: 'drawers', boxes: [named] })
+          setComposerOpen(true)
+          return
+        }
 
         /* THE HANDOFF IS VALIDATED AGAINST THE REGISTRY BEFORE IT IS DRAWN, AND PER KEY RATHER
            THAN WHOLE. `CarriedScope` is a flat list of `box/index` keys, which is what lets a
@@ -198,7 +220,7 @@ export function Runs() {
       <PageHeader
         icon="play"
         title="Runs"
-        lede="Identify, join, emit and reconcile a box. Identify is the only step that spends money."
+        lede="Only Identify costs money."
 
         actions={
           <>
@@ -216,9 +238,8 @@ export function Runs() {
             >
               Reload boxes and runs
             </Button>
-            <Button icon="upload" onClick={() => setSyncOpen(true)} aria-label="Reconcile the whole store">
-              <span className="runs-hide-sm">Reconcile the store</span>
-              <span className="runs-only-sm">Reconcile</span>
+            <Button icon="upload" onClick={() => setSyncOpen(true)}>
+              Check what is live
             </Button>
             {/* ONE VERB, WHATEVER THE SELECTION IS OVER. It read `Identify a box` / `Identify N
                 boxes`, which named the unit of work in the label of the button that opens the

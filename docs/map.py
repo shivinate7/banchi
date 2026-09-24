@@ -7067,7 +7067,7 @@ COMPONENTS = [
                                          "on is OWNERSHIP age.",
                                  "governed_by": ["D7", "D9", "D13", "D33", "D49", "D64", "D86",
                                                  "D87", "D94", "D95", "D100", "D103", "D104",
-                                                 "D105"],
+                                                 "D105", "D-one-press-sends-and-makes-live"],
                                  # `app/tests/markdown.spec.ts` is the check the hard rule says
                                  # does not otherwise exist — it runs under `make design-check`,
                                  # not at turn end, so it is named here in prose rather than in
@@ -7707,7 +7707,8 @@ COMPONENTS = [
                                 # condition is read from; D63 is the two-map ledger behind it;
                                 # D114 is the no-status-vocabulary rule the `open`-keyed join
                                 # obeys instead of reading `status`.
-                                "governed_by": ["D63", "D69", "D114", "D121", "D202"]},
+                                "governed_by": ["D63", "D69", "D114", "D121", "D202",
+                                                "D-one-press-sends-and-makes-live"]},
             "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
                                             "`captured_at` by a 30-minute gap, and the ribbon "
                                             "geometry Home's foot draws from them. The unit is a "

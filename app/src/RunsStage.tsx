@@ -20,7 +20,7 @@ export function runningFor(row: { created_at?: string | null }): string {
   return mins < 60 ? `Running ${mins}m` : `Running ${Math.floor(mins / 60)}h ${mins % 60}m`
 }
 
-export const STAGES = ['Identify', 'Join', 'Review', 'Price', 'Emit', 'Reconcile'] as const
+export const STAGES = ['Identify', 'Match', 'Review', 'Price', 'Send', 'Compare'] as const
 
 /** The four commands this screen drives, in order. */
 export const COMMANDS = ['identify', 'join', 'emit', 'reconcile'] as const
@@ -44,20 +44,24 @@ export function stageOf(row: RunSummary): Stage {
     case 'ready':
       return { label: 'Not started', tone: 'default', filled: 0, live: false, step: 0 }
     case 'identify':
-      return { label: 'Not collected', tone: 'warn', filled: 0, live: false, step: 0 }
+      return { label: 'Not read yet', tone: 'warn', filled: 0, live: false, step: 0 }
     case 'join':
-      return { label: 'Needs join', tone: 'warn', filled: 1, live: false, step: 1 }
+      return { label: 'Needs matching', tone: 'warn', filled: 1, live: false, step: 1 }
     case 'emit': {
       const review = row.counts.queued_main ?? 0
       if (review > 0) {
         return { label: `${review} to review`, tone: 'warn', filled: 2, live: false, step: 2 }
       }
-      return { label: 'Needs pricing', tone: 'accent', filled: 3, live: false, step: 2 }
+      /* THE REAL NEXT STEP, NOT A GUESS ABOUT PRICES (UX-006). This row cannot see whether a
+         price is owed — that is Pricing's worklist, too heavy for the polled list — so it names
+         the step itself, which is one screen and one press whatever the prices say. Home's line
+         reads the worklist and says which. */
+      return { label: 'Price and send', tone: 'accent', filled: 3, live: false, step: 2 }
     }
     case 'reconcile':
-      return { label: 'Emitted', tone: 'ok', filled: 5, live: false, step: 3 }
+      return { label: 'Written', tone: 'ok', filled: 5, live: false, step: 3 }
     case 'done':
-      return { label: 'Reconciled', tone: 'ok', filled: 6, live: false, step: 4 }
+      return { label: 'Compared', tone: 'ok', filled: 6, live: false, step: 4 }
     default:
       return { label: 'Unknown', tone: 'default', filled: 0, live: false, step: 0 }
   }

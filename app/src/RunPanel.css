@@ -13,6 +13,10 @@
 @media (min-width: 1024px) {
   .runs-body { grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); }
   .runs-back { display: none; }
+  /* NO RUN OPEN: THE LIST IS THE SCREEN AT EVERY WIDTH (UX-148). A "pick a run" panel beside it
+     only described the list it sat next to. */
+  .runs-body:not([data-open='true']) { grid-template-columns: minmax(0, 1fr); }
+  .runs-body:not([data-open='true']) .runs-detail { display: none; }
 }
 /* Under the two-column width the list is the screen; a run opens as a pushed page. With no
    run open the "pick a run" panel is not drawn — it would only repeat, under the list, the
@@ -53,13 +57,8 @@
   flex-direction: column;
   min-width: 0;
 }
-@media (min-width: 1024px) {
-  .runs-master {
-    position: sticky;
-    top: var(--bn-6);
-    max-height: calc(100vh - var(--bn-6) * 2);
-  }
-}
+/* THE LIST SCROLLS WITH THE PAGE (UX-114). It used to be a sticky box with its own scroll and
+   no cue, so a list of 17 drew 10 and hid the rest. */
 /* A section head is 16/20 (the kit's .bn-panel-head); the detail's hero head is 20/20/16. */
 .runs-master-head {
   display: flex;

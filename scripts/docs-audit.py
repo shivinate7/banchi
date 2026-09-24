@@ -5480,10 +5480,6 @@ _STORE_TOTAL_SITES: Tuple[_DuplicatedMeasurementSite, ...] = (
     ),
     (
         "app/src/RunsComposer.tsx",
-        re.compile(r"every one of (\d{1,3}(?:,\d{3})*) cards was already answered and cached"),
-    ),
-    (
-        "app/src/RunsComposer.tsx",
         re.compile(r"a press over (\d{1,3}(?:,\d{3})*) cards in five drawers\."),
     ),
     ("app/src/runScope.ts", re.compile(r"of the owner's (\d{1,3}(?:,\d{3})*) stamped cards")),

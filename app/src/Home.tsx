@@ -23,6 +23,7 @@ import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbo
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { runBoxLabel } from './runScope'
 import { hubState } from './OrdersHubStore'
+import { useLiveCheck } from './liveCheck'
 import './Home.css'
 
 /* BANCHI HOME — the one page where the product is drawn as a picture: the six-stage spine
@@ -410,6 +411,9 @@ export function Home() {
   const runs = useLoad<RunSummary[]>(getRuns)
   const orders = useLoad<OrdersPayload>(getOrders)
   const pricing = useLoad<PricingWorklist>(() => getPricingWorklist())
+  /* A VISIT TO HOME RUNS A DUE LIVE CHECK (the owner's Q3 ruling): a send whose wait ended
+     while the app was closed is checked here, by itself. */
+  const liveCheck = useLiveCheck()
   /* The hero's own newest-captured cards, off a lean top-K route rather than the whole card
      map (D192, item 2) — on its own load so no panel above waits on it, and `deckFromCards`
      below applies exactly the same filter/sort/slice it always has over the smaller result. */
@@ -477,6 +481,7 @@ export function Home() {
     pricingFailed: pricing.state === 'failed',
     runs: runs.state === 'ready' ? runs.value : null,
     runsFailed: runs.state === 'failed',
+    unconfirmed: liveCheck.status?.unconfirmed.copies ?? null,
   })
 
   /* Shipping: the export the hub last read, if one is in hand. */

@@ -110,7 +110,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
               <span>free</span>
             </span>
             <h2 className="livecheck-head" id="livecheck-head">
-              Reconcile the whole store
+              Check what is live
             </h2>
           </div>
           <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
@@ -120,18 +120,12 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
 
         <div className="livecheck-body">
           <p className="livecheck-says">
-            One live export — TCGplayer&rsquo;s <strong>My Pricing</strong>, all printings — checked
-            against every SKU in the store. Reports both directions: copies sent that TCGplayer no
-            longer holds, and SKUs it holds that were never sent from here. Moves quantities; marks no
-            card sold.
+            Compares what TCGplayer holds with every card in the store. It marks no card sold.
           </p>
 
           <p className="livecheck-age">
             <Icon name="clock" size={14} />
-            <span>
-              Every <strong>live</strong> figure in the store is only as current as the last time this ran
-              {readAt === null ? '.' : ` — read ${whenLabel(readAt)}.`}
-            </span>
+            <span>{readAt === null ? 'Not checked yet.' : `Last checked ${whenLabel(readAt)}.`}</span>
           </p>
 
           {/* THE SAME DOCUMENT THE MARKDOWN SHEET FETCHES, AND THE SAME FILE (D104). An
@@ -164,7 +158,6 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
             >
               {fetching ? 'Asking TCGplayer…' : 'Fetch my live listings'}
             </Button>
-            <span className="livecheck-hint">or drop a My Pricing export below.</span>
           </div>
 
           <div className="livecheck-pick">
@@ -192,17 +185,17 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
           {report === null ? null : (
             <>
               {wrote ? (
-                <Notice tone="ok" title="Reconciled">
-                  Live quantities written, each dated to this reading. Nothing marked sold.
+                <Notice tone="ok" title="The store now matches TCGplayer">
+                  Nothing was marked sold.
                 </Notice>
               ) : (
                 <Notice tone="info" title="Preview — nothing written yet">
-                  Read what would move, then reconcile the store below.
+                  Read what would change, then press Match the store below.
                 </Notice>
               )}
               <LogWell
                 text={report}
-                label={wrote ? 'What the reconcile printed' : 'What the preview printed'}
+                label={wrote ? 'What changed' : 'What would change'}
                 className="livecheck-console"
                 maxHeight={420}
               />
@@ -218,7 +211,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
               Not now
             </Button>
             <Button variant="primary" icon="check" busy={busy} disabled={busy} onClick={() => void send(true)}>
-              Reconcile the store
+              Match the store
             </Button>
           </footer>
         )}

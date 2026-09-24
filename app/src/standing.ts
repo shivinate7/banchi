@@ -68,7 +68,15 @@ export type StandingInput = {
   readonly pricingFailed: boolean
   readonly runs: readonly RunSummary[] | null
   readonly runsFailed: boolean
+  /** Copies written to a file and not yet found at TCGplayer (`GET /pipeline/sends`), or null
+   *  where that was not read — the demo, an older server. Null never reads as zero. */
+  readonly unconfirmed?: number | null
 }
+
+/** THE ONE `owes` REASON THAT IS NOT A PRICE. `server/pipeline_routes.py:_run_owes` appends it
+ *  to a joined run that has never written a file: the run waits on the SEND, and counting it
+ *  as "to price" is what had Home say "2 runs to price" while Pricing said "Ready" (UX-006). */
+const NOT_YET_WRITTEN = 'never emitted'
 
 const n = (v: number): Say => ({ text: v.toLocaleString(), em: true })
 const t = (text: string): Say => ({ text })
@@ -136,7 +144,18 @@ export function standing(input: StandingInput): Standing | null {
     orders === null || openKeys === null
       ? null
       : orders.resolution.orders.reduce((sum, o) => sum + (openKeys.has(o.key) ? (o.outstanding ?? 0) : 0), 0)
-  const owed = pricing === null ? null : pricing.roster.filter((r) => r.open && r.owes.length > 0).length
+  const owed =
+    pricing === null
+      ? null
+      : pricing.roster.filter((r) => r.open && r.owes.some((reason) => reason !== NOT_YET_WRITTEN)).length
+  /* WHAT IS PRICED AND WAITS ON THE SEND: every unsent copy of an open run that owes no price. */
+  const readyCopies =
+    pricing === null
+      ? null
+      : pricing.roster
+          .filter((r) => r.open && r.owes.every((reason) => reason === NOT_YET_WRITTEN))
+          .reduce((sum, r) => sum + (r.unsent ?? 0), 0)
+  const unconfirmed = input.unconfirmed ?? null
   const live = runs === null ? null : runs.filter((r) => r.live)
 
   const behind: Behind[] = []
@@ -238,7 +257,44 @@ export function standing(input: StandingInput): Standing | null {
       tone: 'warn',
       icon: 'tag',
       lead: 'Waiting on you',
-      say: [t(' — price '), n(owed), t(owed === 1 ? ' run before it can be emitted.' : ' runs before they can be emitted.')],
+      say: [t(' — price '), n(owed), t(owed === 1 ? ' run before it can be sent.' : ' runs before they can be sent.')],
+      href: '#/pricing',
+      kbd: ',P',
+      behind,
+      problem,
+      running: live !== null && live.length > 0,
+    }
+  }
+
+  /* 4b — priced and not sent. The send is one press on Pricing
+         (`D-one-press-sends-and-makes-live`), so this waits on the owner, not on the machine. */
+  if (readyCopies !== null && readyCopies > 0) {
+    return {
+      key: 'send',
+      tone: 'warn',
+      icon: 'send',
+      lead: 'Waiting on you',
+      say: [t(' — send '), n(readyCopies), t(readyCopies === 1 ? ' copy to TCGplayer.' : ' copies to TCGplayer.')],
+      href: '#/pricing',
+      kbd: ',P',
+      behind,
+      problem,
+      running: live !== null && live.length > 0,
+    }
+  }
+
+  /* 4c — a file written by hand and never found at TCGplayer (the owner's Q8 ruling). */
+  if (unconfirmed !== null && unconfirmed > 0) {
+    return {
+      key: 'unconfirmed',
+      tone: 'warn',
+      icon: 'alert',
+      lead: 'Waiting on you',
+      say: [
+        t(' — '),
+        n(unconfirmed),
+        t(unconfirmed === 1 ? ' copy written, not confirmed at TCGplayer.' : ' copies written, not confirmed at TCGplayer.'),
+      ],
       href: '#/pricing',
       kbd: ',P',
       behind,
