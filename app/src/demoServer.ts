@@ -49,7 +49,7 @@
 
 // `#demo-bundle` is the recording when one exists and a type-only stub when it does not.
 // See src/demoBundle.stub.ts: the recording is generated and gitignored, so a static path
-// here made `tsc` — and therefore `make check` — depend on a build artefact nothing makes.
+// here made `tsc` — and therefore `make check` — depend on a build artifact nothing makes.
 import bundle from '#demo-bundle'
 import { filterByQuery } from './kit/match'
 import { ServerError } from './server'
