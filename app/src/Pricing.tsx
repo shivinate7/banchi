@@ -3737,7 +3737,7 @@ export function Pricing() {
           )}
 
           {shipTrouble === null ? null : (
-            <FailureNotice failure={shipTrouble} title="Nothing was sent. The prices at TCGplayer did not change." />
+            <FailureNotice failure={shipTrouble} title="Nothing was sent. The prices at TCGplayer did not change." onRetry={() => setPush('sending')} busy={push !== 'idle'} />
           )}
         </aside>
       )}

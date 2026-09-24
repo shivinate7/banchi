@@ -87,10 +87,30 @@ async function open(
     /** What the apply route answers. A function so a case can differ between the check and
      *  the write, which is the pair this screen's two presses are about. */
     apply?: (body: Record<string, unknown>) => Record<string, unknown>
+    /** What `POST /pipeline/markdowns/<stamp>/send` answers: 200 with a receipt that went
+     *  live, or a refusal code. Nothing here reaches TCGplayer. */
+    send?: () => { status: number; code?: string }
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   const skus = options.skus ?? [live()]
+
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/send$/, async (route) => {
+    wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    const answer = options.send?.() ?? { status: 200 }
+    await route.fulfill({
+      status: answer.status,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        answer.status === 200
+          ? {
+              stamp: STAMP,
+              published: { upload_id: 'u-1', rows: 1, accepted: 1, messages: [], pushed_at: '2026-09-24T12:00:00+00:00', published_at: '2026-09-24T12:00:05+00:00' },
+            }
+          : { error: { code: answer.code ?? 'refused', message: 'The server said no.' } },
+      ),
+    })
+  })
 
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>
@@ -322,14 +342,14 @@ test('the press sends only the rows a hand priced, and carries the revision it r
   await field.blur()
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
 
-  await page.getByRole('button', { name: 'Check these prices' }).click()
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
 
   const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
   /* ONE ROW, NOT TWO. The untouched listing is simply absent, which `read_back` reports as
      `dropped` — "left alone, which is what deleting a line means". */
   expect(sent.edits).toEqual([{ sku: '8608859', price: '17.50' }])
-  expect(sent.write).toBe(false)
+  expect(sent.write).toBe(true)
   /* AND NO `worklist`. This client writes no CSV — `app/package.json` carries two runtime
      dependencies and PapaParse is not one — so the pairs go as JSON and the ROUTE materialises
      them with the repo's own writer. */
@@ -339,7 +359,7 @@ test('the press sends only the rows a hand priced, and carries the revision it r
   expect(typeof sent.revision).toBe('string')
 })
 
-test('the write press does not exist until a check has answered', async ({ page }) => {
+test('one press writes the file, sends it and makes it live', async ({ page }) => {
   const wire = await open(page)
 
   const field = page.locator('.pricing-input').first()
@@ -348,42 +368,31 @@ test('the write press does not exist until a check has answered', async ({ page 
   await field.type('17.50')
   await field.blur()
 
-  /* AN ABSENCE AND NOT A DISABLED BUTTON, which is `Markdown.tsx`'s own three-step register:
-     the press that spends is not drawn until the free one has answered. */
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(0)
-
-  await page.getByRole('button', { name: 'Check these prices' }).click()
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(1)
-
-  await page.getByRole('button', { name: 'Write the upload file' }).click()
-  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(2)
-  expect((wire.filter((row) => row.path.includes('/apply'))[1]?.body as Record<string, unknown>).write).toBe(true)
-  await expect(page.getByRole('link', { name: 'import.csv' })).toHaveCount(1)
+  /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the file is written, then the server
+     reads what is live, sends it and makes it live. No check press and no second press. */
+  await expect(page.getByRole('button', { name: 'Check these prices' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.endsWith('/send')).length).toBe(1)
+  const order = wire.filter((row) => row.path.includes('/apply') || row.path.endsWith('/send')).map((row) => row.path.split('/').pop())
+  expect(order).toEqual(['apply', 'send'])
+  expect(wire.find((row) => row.path.endsWith('/send'))?.body).toEqual({ confirm: true })
 })
 
-test('changing a price after a check withdraws the write press', async ({ page }) => {
-  await open(page)
-
+test('Download the file instead writes it and sends nothing', async ({ page }) => {
+  const wire = await open(page)
   const field = page.locator('.pricing-input').first()
   await field.click()
   await field.fill('')
   await field.type('17.50')
   await field.blur()
-  await page.getByRole('button', { name: 'Check these prices' }).click()
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(1)
 
-  /* A CHECK THAT DESCRIBED A DIFFERENT SET OF EDITS IS WORSE THAN NONE — it would offer a
-     write over rows the operator has since changed, which on this path is the file that moves
-     money at a marketplace. */
-  await field.click()
-  await field.fill('')
-  await field.type('16.00')
-  await field.blur()
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Download the file instead' }).click()
+  await expect(page.getByRole('link', { name: 'import.csv' })).toHaveCount(1)
+  expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
 })
 
-test('a refused check keeps the check press and offers no write', async ({ page }) => {
-  await open(page, {
+test('a refused write sends nothing and says so', async ({ page }) => {
+  const wire = await open(page, {
     apply: () => ({
       ok: false,
       exit_code: 1,
@@ -399,11 +408,22 @@ test('a refused check keeps the check press and offers no write', async ({ page 
   await field.fill('')
   await field.type('17.50')
   await field.blur()
-  await page.getByRole('button', { name: 'Check these prices' }).click()
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
 
-  await expect(page.locator('.pricing-ship pre')).toContainText('REFUSED')
-  await expect(page.getByRole('button', { name: 'Check these prices' })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(0)
+  await expect(page.locator('.pricing-ship-trouble')).toContainText('These prices could not be written, so nothing was sent.')
+  expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
+})
+
+test('a send the live read refuses says nothing changed, and offers Try again', async ({ page }) => {
+  await open(page, { send: () => ({ status: 502, code: 'live_check_failed' }) })
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('')
+  await field.type('17.50')
+  await field.blur()
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect(page.getByText('Nothing was sent. The prices at TCGplayer did not change.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(1)
 })
 
 test('the cut-off is the run\'s own control, and on a lens it is spent by a press', async ({
@@ -528,7 +548,8 @@ test('neither run ship bar is drawn on a lens', async ({ page }) => {
      fetches, so both run bars hide themselves with no edit. Asserted because "the run path is
      untouched" is the claim this whole build rests on. */
   await expect(page.getByRole('region', { name: 'Ship these runs' })).toHaveCount(0)
-  await expect(page.getByRole('region', { name: 'Push these prices' })).toHaveCount(1)
+  await expect(page.getByRole('region', { name: 'Send these prices' })).toHaveCount(1)
+  await expect(page.getByRole('region', { name: 'Send to TCGplayer' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Write the import file/ })).toHaveCount(0)
 })
 

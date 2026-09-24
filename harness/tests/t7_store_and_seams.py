@@ -17685,6 +17685,16 @@ def check_send_press(checks: Checks) -> None:
         status = send_routes.do_sends()
         checks.equal(status["unconfirmed"]["copies"], 4, "and Pricing can name all four copies")
         checks.equal(pushed(ARTICUNO_SKU), 3, "the file's copies are held out of the next file")
+        stamp = answer["send"]["stamp"]
+        checks.ok(
+            ARTICUNO_SKU.encode() in send_routes.do_send_file(stamp, answer["send"]["files"][0]),
+            "the file the download door wrote is served by name",
+        )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send_file(stamp, "../send.json")),
+            "no_such_file",
+            "and a name the receipt does not list is refused, never joined onto a path",
+        )
         taken = send_routes.do_take_back(answer["send"]["stamp"], {"confirm": True})
         checks.equal(taken["send"]["state"], "taken_back", "Take them back puts them back")
         checks.equal(pushed(ARTICUNO_SKU), 0, "and the next send offers them again")

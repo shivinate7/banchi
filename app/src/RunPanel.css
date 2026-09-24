@@ -515,6 +515,15 @@
 .run-fine-link { color: var(--bn-accent); text-decoration: underline; text-underline-offset: 3px; }
 .run-fine-link:hover { color: var(--bn-accent-hover); }
 .runs-detail-files { padding: var(--bn-4) var(--bn-5) var(--bn-5); border-top: 1px solid var(--bn-line); }
+.runs-detail-files > summary {
+  cursor: pointer;
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-sm);
+  min-height: var(--bn-control-h-sm);
+  display: flex;
+  align-items: center;
+}
+.runs-detail-files[open] > summary { margin-bottom: var(--bn-3); }
 @container (max-width: 640px) {
   .runs-detail-files { padding-left: var(--bn-4); padding-right: var(--bn-4); }
 }

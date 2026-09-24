@@ -119,6 +119,28 @@ and change for listing files? Or does something else hold D100's outcome for a l
 
 ### What is built
 
-NOT BUILT. The owner released the runs and pricing lanes. Both touch Pricing's write bar, so
-they run in sequence. The runs lane goes first, with the send, live and reconcile plumbing. The
-pricing lane follows, with the screen and the Live tab.
+BUILT BY THE RUNS LANE, AND NEVER RUN AGAINST THE REAL ACCOUNT. Every path below is proved on a
+loopback portal in T7 (`check_send_guard`, `check_send_press`) and in `pricing.spec.ts`. The
+first real send needs the owner's word.
+
+- The double-send guard is `pipeline/sendguard.py`. After a send, the live count at TCGplayer
+  plus the copies added may never be more than the copies on hand. It reads the fresh live
+  export and the shelf. It does not read the store's listing records. `emit --live-guard`
+  lowers each card's send quantity to the room that is left, and it names each trim.
+- The one press is `POST /pipeline/send` in `server/send_routes.py`. In order, it fetches the
+  live export, runs `reconcile --live --write`, runs `emit --live-guard`, pushes the file and
+  publishes the file. If the live read fails, the press refuses and nothing is written. If the
+  push or the publish fails, the upload is rolled back and the copies go back on the list. The
+  press refuses a second push of the same file bytes. With `download: true` it stops after the
+  file.
+- The check after the lag is `POST /pipeline/live-check`. It runs only when a request asks.
+  `app/src/liveCheck.ts` asks on a visit to Pricing or Home. Otherwise one timer in the page
+  asks when the wait ends.
+- `cli/cmd_reprice.py:published_recently` now reads the send receipts too. Before, a listing
+  that went live had no lag guard.
+- A mark-down has one press too: `POST /pipeline/markdowns/<stamp>/send`. It keeps D100's
+  zero-quantity rule exactly as it was.
+- The transport takes a listing file only through a keyword argument, `listing=True`. That is
+  the open question above, and it stays open.
+
+The pricing lane follows, with the rest of the screen and the Live tab.

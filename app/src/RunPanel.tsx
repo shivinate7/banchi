@@ -1245,9 +1245,12 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
               </StepCard>
             </div>
 
-            <div className="runs-detail-files">
+            {/* THE RUN'S OWN FILES, CLOSED (UX-020). They are the record, not the job: the owner
+                opens them to check a run, never to do the next step. */}
+            <details className="runs-detail-files">
+              <summary>Files</summary>
               <RunFiles run={detail.run} files={detail.files} only="run" />
-            </div>
+            </details>
           </div>
         )}
       </section>

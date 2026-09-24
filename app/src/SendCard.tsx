@@ -227,10 +227,14 @@ export function SendCard({
           disabled={busy}
           onClick={() => setDownloadOpen((open) => !open)}
         >
-          Download the file instead
+          {/* THE SAME PRESS, SHORTER ON A PHONE (UX-007): both quiet doors fit on the line under
+              the send, so the bar stays two lines high. */}
+          <span className="send-long">Download the file instead</span>
+          <span className="send-short">Download file</span>
         </Button>
         <Button variant="quiet" icon="refresh" busy={live.checking} disabled={live.checking} onClick={() => void live.checkNow()}>
-          Check what is live
+          <span className="send-long">Check what is live</span>
+          <span className="send-short">Check live</span>
         </Button>
       </div>
 
@@ -273,7 +277,9 @@ export function SendCard({
       {standing === null ? null : (
         <>
           <SendStanding send={standing} />
-          {standing.kind === 'send' && standing.state !== 'failed' && standing.state !== 'taken_back' ? <TrimList trimmed={standing.trimmed} /> : null}
+          {/* WHAT THE GUARD HELD BACK, ANSWERED TO THE PRESS THAT MADE IT. It is read once,
+              right after this visit's own send; a later visit does not carry it in the bar. */}
+          {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
         </>
       )}
 

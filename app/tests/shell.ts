@@ -298,6 +298,14 @@ async function stubShell(page: Page, cards: number): Promise<void> {
       next_index: {},
     }),
   )
+  /* THE SEND STATUS, BESIDE `/status` AND FOR ITS REASON (`D-one-press-sends-and-makes-live`,
+     Q3). Every visit to Home and to Pricing reads it to learn whether the live check after a
+     send is due, so it is as much a shell read as `/status` is. The answer is the empty one —
+     nothing sent, nothing due — so no spec sees a check it did not ask for. A spec about sends
+     registers its own handler after this one, and Playwright matches most-recent first. */
+  await page.route(/\/pipeline\/sends$/, (route) =>
+    json(route, { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }),
+  )
 }
 
 /* ---------------------------------------------------------------------- the small store */
