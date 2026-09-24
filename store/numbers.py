@@ -1,5 +1,5 @@
-"""A card's number, in the three forms this repo has ever needed: composed, screen-drawn,
-and stripped of a glued set code. No imports beyond the stdlib, on purpose (D63).
+"""A card's number, in the four forms this repo has ever needed: composed, screen-drawn,
+stripped of a glued set code, and decomposed. No imports beyond the stdlib, on purpose (D63).
 
 WHY THIS IS A LEAF MODULE UNDER `store/` AND NOT LEFT IN `pipeline/join.py`. `store/` may
 not import `pipeline/` — D63's own argument (`docs/decisions/D063-…md`, and
@@ -25,7 +25,7 @@ against `pipeline/games.py`'s per-game rules and has no reason to be a leaf.
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Optional, Tuple
 
 # THREE BOUNDS DO THE WORK AND EACH ONE IS LOAD-BEARING (D55, D67):
 #   letters only   `T02 // T03` starts with a token carrying digits, so the 13 double-sided
@@ -128,3 +128,60 @@ def strip_set_code(text) -> str:
     prompt is being ignored 1.5% of the time.
     """
     return _SET_CODE_PREFIX.sub("", str(text or "").strip()).strip()
+
+
+def split_catalog_number(text) -> Tuple[Optional[str], Optional[str]]:
+    """The reverse of `join_key`: a catalog row's own `Number` cell, taken apart into the
+    pair a card record stores.
+
+    BUILT FOR D252'S AMENDMENT, THE FOURTH FORM THIS MODULE'S DOCSTRING NAMES.
+    Every other writer of `card.number`/`card.printed_total` reads them off a MODEL
+    identification, which already returns the two as separate fields — `cli/resolve.py`'s
+    `identification.get("number")` / `identification.get("printed_total")`. A catalog row
+    carries no such split: `_catalog_row`'s own `"number"` key is `row[tcgcsv.NUMBER_COLUMN]`,
+    the whole composed cell — `"074/219"`, already zero-padded, because that column is
+    `join_key`'s own OUTPUT shape (`join_key`'s docstring: "Built from pokemontcg.io data,
+    matched against the Number column"). `POST /inventory/<box>/<index>/correct` (D252,
+    amended) is the first writer that ever needed to go the other way: a human chose the
+    ROW, and the row's number becomes the stored fact, but the store still wants it in the
+    two-field shape `number_key`/`number_display` are built from (`store/master.py:
+    _card_columns`, `server/capture_server.py:_card_number_key`) — both guarded on
+    `card.number AND card.printed_total` being truthy. Storing the composed cell whole in
+    `card.number` and leaving `card.printed_total` untouched (or stale from the WRONG catalog
+    row this is correcting away from) would either double the denominator
+    (`join_key("074/219", "219")` -> `"074/219/219"`) or carry forward a denominator that
+    belongs to the card this correction is replacing.
+
+    SPLIT ON THE LAST `/`, NEVER THE FIRST. Every fixture's `Number` cell (SV09, wide
+    Pokemon, Riftbound, One Piece) puts the denominator after the one slash the cell
+    contains, and a secret rare's own numerator can itself look like `302*` — no slash of
+    its own — so there is never a second one to prefer the first over.
+
+    A CELL WITH NO `/` IS A DENOMINATOR-LESS GAME'S OWN IDENTIFIER, whole
+    (`"OP15-054"`, `"EB03-018"`) — `printed_total` comes back `None`, and the guard above
+    then leaves `number_key` empty for it, which `pipeline/pricearchive.py`'s own comment
+    already documents as the designed state for a game with no denominator: "`number_key`
+    IS EMPTY BY DESIGN FOR A GAME WITH NO DENOMINATOR ... this falls back to the bare
+    `number`" — and the bare `number` this leaves behind IS the whole identifier, so that
+    fallback still reads correctly.
+
+    A BLANK CELL RETURNS `(None, None)`, matching `_catalog_row`'s own `""` for a blank
+    `Number` — nothing to compose from nothing.
+
+    ROUND-TRIPS THROUGH `join_key` FOR EVERY CASE MEASURED: `join_key(*split_catalog_number(
+    "074/219"))` == `"074/219"`, and the same for `"145a/219"`, `"302*/298"` and
+    `"161/159"` (a secret rare, `join_key`'s own worked example — exceeding the denominator
+    is not treated as invalid here either, because nothing here reasons about the two parts'
+    relative size).
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return None, None
+    if "/" not in raw:
+        return raw, None
+    number, _, total = raw.rpartition("/")
+    number = number.strip()
+    total = total.strip()
+    if not number:
+        return raw, None
+    return number, (total or None)

@@ -85,7 +85,53 @@ from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 # zfill/set-code-strip rules a third time. Every existing caller of `join.join_key` /
 # `join.display_number` / `join.strip_set_code` is unaffected — the names still resolve on
 # this module, they just live one file over.
-from store.numbers import display_number, join_key, strip_set_code  # noqa: F401
+from store.numbers import (  # noqa: F401
+    display_number,
+    join_key,
+    split_catalog_number,
+    strip_set_code,
+)
+
+
+def catalog_number_fields(game: str, raw_number) -> Tuple[Optional[str], Optional[str]]:
+    """The `(number, printed_total)` pair a CORRECTED card should carry, off a catalog row's
+    raw `Number` cell — the reverse of `_key_number_and_printed_total`/`_key_printed_code`
+    above, driven by the SAME `games.get(game)["join_key"]` strategy those two dispatch on,
+    so a corrected card's stored pair is the pair `identify/prompt.py`'s own writer for that
+    game would have produced, and `number_key`/`number_display` come out identical to a
+    fresh identification's.
+
+    GAME-AWARE THROUGH THE REGISTRY, NEVER A HAND-TYPED GAME LIST — reading
+    `JOIN_KEY_STRATEGIES` above the way every other consumer of it does, so a THIRD strategy
+    value never falls through silently: it lands in the verbatim branch below, which is the
+    safe default for a game this function has never heard of, exactly as `_key_printed_code`
+    is the safe fallback shape for one.
+
+    `number_and_printed_total` (Pokemon): `split_catalog_number` — the catalog cell IS
+    `join_key`'s own composed output, so decomposing it is exactly reversing that fold.
+
+    EVERY OTHER STRATEGY — `printed_code` (Riftbound, One Piece), `name_only`, `not_joined`
+    — STORES THE CELL VERBATIM AND LEAVES `printed_total` EMPTY, because that is what every
+    OTHER writer for those games already does. `_key_printed_code`'s own docstring: "these
+    games print ONE identifier and the export's `Number` cell carries that same string, so
+    there is nothing to compose and nothing to pad" — and `printed_total` is "not consulted
+    at all, in either direction. A game keyed this way has no denominator to disagree with."
+    Splitting Riftbound's `179/298` into `("179", "298")` would fill `card.number` with a
+    key `_key_printed_code` no longer matches (it expects `179/298` whole) and fill
+    `number_key`, which `pipeline/pricearchive.py`'s own comment documents as EMPTY BY
+    DESIGN for a game with no denominator. Riftbound's real cells also include a
+    double-sided token, `T01 // T02` — a `/`-splitting rule finds two candidate splits in
+    that string and both are wrong, which is what makes "split on the composed shape" the
+    wrong tool here rather than merely an unnecessary one.
+
+    A BLANK CELL RETURNS `(None, None)` either way, matching `split_catalog_number`'s own
+    rule for nothing to compose from nothing.
+    """
+    strategy = games.get(game)["join_key"]
+    if strategy == "number_and_printed_total":
+        return split_catalog_number(raw_number)
+    raw = str(raw_number or "").strip()
+    return (raw or None), None
 
 # D7 — a playset. Configurable, but never guessed at. RE-EXPORTED rather than defined: the
 # figure lives in `pipeline/pricing.py`, which both this module and `pipeline/corpus.py`
