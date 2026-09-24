@@ -47,14 +47,19 @@ INK
                                                          4.16:1 on --bn-surface-2, failing this
                                                          row's own job at 4.5:1. #666c76 clears
                                                          both (4.85:1, 4.55:1).
---bn-ink-4                      #7f8791      #707886     icons, separators, disabled — 3.6:1 light,
-                                                         4.0:1 dark. THE FLOOR A WORD MAY SIT AT,
-                                                         never a caption; data-bearing text is ink-3
+--bn-ink-4                      #6b717b      #7c8492     icons, separators, disabled, the lightest
+                                                         word. 4.51:1 on --bn-bg light, 5.13:1 dark.
+                                                         Raised 2026-09-23 (UX-047): #7f8791 was
+                                                         3.33:1 and #707886 4.04:1 on the surface,
+                                                         both under 4.5:1 for words people read
 
 LINE                            (all three are ink at an alpha, so they ride the ground)
 --bn-line                       ink 8%       white 8%    the hairline. Every separation.
 --bn-line-strong                ink 16%      white 16%   the boundary of a control you type into
 --bn-line-focus                 accent 55%   accent 60%  a field that has focus
+--bn-field-edge                 #878d97      #626977     the edge of a field or a checkbox, at 3:1
+                                                         on its ground in both themes (UX-094;
+                                                         --bn-line-strong is 1.41:1 on white)
 
 BRAND
 --bn-accent                     #3d5af1      #7f90ff     action: buttons, links, selection, focus
@@ -72,6 +77,14 @@ SEMANTIC                        (the kit paints these as TEXT — pills, buttons
 --bn-warn / --bn-warn-tint      #b45309 5.0:1             #f5a524
 --bn-danger / --bn-danger-tint  #b91c1c 6.5:1             #ff5c5c
 --bn-money                      = ink in both themes: money is not a color, it is a weight
+PILL INKS                       a tone's word on that tone's tint, at 4.5:1 over --bn-bg,
+                                --bn-surface and --bn-surface-2 in light (UX-047). Dark reads
+                                the tone ink itself, which already clears 5:1 on its tint.
+--bn-pill-ink-ok                #11733a
+--bn-pill-ink-warn              #a14b09
+--bn-pill-ink-live              #b33020
+--bn-pill-ink-accent            = --bn-accent-hover light, = --bn-accent dark
+--bn-pill-ink-danger            = --bn-danger in both themes
 
 ELEVATION                       (three steps, each a hairline ring plus a shadow, so a panel
                                  is separated in dark where a 1px line alone disappears)
@@ -135,6 +148,16 @@ SHELL                           --bn-sidebar-w 236 · --bn-rail-w 64 · --bn-top
 --bn-control-h 34 · -lg 40 · -sm 28      → 42 · 46 · 40 under a coarse pointer
 PAGE WIDTH                      --bn-page-w 1600 · -rows 1344
                                 a CAP, not a breakpoint: 1536 and 1280 of content
+--bn-page-top                   = --bn-6 (24). The one gap above every `Page`'s title (UX-133).
+                                A `Page` reads --bn-page-w alone; -rows is for the screens
+                                not yet on `Page` (D-one-page-width)
+
+TYPE ROLES                      aliases onto the scale, never new sizes (UX-067, UX-115)
+--bn-fs-h1                      = --bn-fs-3xl (28)  the page title, `.bn-title`
+--bn-fs-h2                      = --bn-fs-xl (18)   a section, `.bn-h2`
+--bn-fs-h3                      = --bn-fs-lg (16)   a part of a section, `.bn-h3`, an overlay title
+--bn-fs-read                    = --bn-fs-md (13)   the floor for a sentence a person must read
+--bn-fs-label                   = --bn-fs-xs (11)   a caps label, a pill. Never a sentence
 ```
 
 **Three registers, and the third one is two colors rather than one.** `--bn-accent` is
@@ -250,7 +273,7 @@ button and never has to redraw one.**
 | `useLeave` | keeping an overlay mounted one beat so it can animate out | delaying a write |
 | `cropStyle` | turning `POST /pipeline/crop-preview`'s rectangle into a picture of the card rather than of the stand | deciding WHEN to ask for one — that is a screen's policy |
 
-**The icon set is 70 paths in `app/src/kit/Icon.tsx`**, on a 24-unit grid at 1.75 stroke with
+**The icon set is 73 paths in `app/src/kit/Icon.tsx`**, on a 24-unit grid at 1.75 stroke with
 round caps and joins, drawn in one idiom so the whole product speaks a single line weight.
 They inherit `currentColor` and are `aria-hidden`, so an icon is never the accessible name of
 anything. **Add an icon by adding a path**; a screen that draws its own `<svg>` inline is the
@@ -398,6 +421,7 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   pricing 939   Pricing — the row becomes a compact two-line row
   pricing 1040  Pricing — the DIRECT column joins the table
   (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
+  bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line
 
 COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
   Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column

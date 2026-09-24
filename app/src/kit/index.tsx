@@ -187,29 +187,202 @@ export function EmptyState({
 }
 
 /* ---- Notice ---------------------------------------------------------------------------- */
+/** A refusal, a warning, a standing condition. The sentence is the person's; the machine's own
+ *  words — the `code`, and any server text with a path or a command in it (`detail`) — sit
+ *  behind "What the server said", closed by default (D-notice-detail, amends D196). They are
+ *  one press away for a bug report and never in plain view (UX-038).
+ *
+ *  `compact` draws one line that fits `StatusSlot`, and the disclosure opens OVER the page, so
+ *  the answer to a press moves nothing below it (D118). `action` is one control beside the
+ *  sentence: a retry, a way forward. */
 export function Notice({
   tone = 'info',
   title,
   code,
+  detail,
+  action,
+  compact,
   children,
   className,
 }: {
   readonly tone?: 'info' | 'warn' | 'danger' | 'ok'
   readonly title?: ReactNode
   readonly code?: string
+  readonly detail?: ReactNode
+  readonly action?: ReactNode
+  readonly compact?: boolean
   readonly children?: ReactNode
   readonly className?: string
 }) {
   const icon: IconName = tone === 'danger' ? 'alert' : tone === 'warn' ? 'alert' : tone === 'ok' ? 'check' : 'info'
+  const said = code || detail
   return (
-    <div className={['bn-notice', tone !== 'info' ? `bn-notice-${tone}` : '', className ?? ''].filter(Boolean).join(' ')} role={tone === 'danger' ? 'alert' : 'status'}>
+    <div
+      className={['bn-notice', tone !== 'info' ? `bn-notice-${tone}` : '', compact ? 'bn-notice-compact' : '', className ?? ''].filter(Boolean).join(' ')}
+      role={tone === 'danger' ? 'alert' : 'status'}
+    >
       <Icon name={icon} size={16} />
-      <div className="bn-stack" style={{ gap: 2 }}>
+      <div className="bn-notice-text">
         {title ? <div className="bn-notice-title">{title}</div> : null}
-        {children ? <div>{children}</div> : null}
-        {code ? <div className="bn-notice-code">{code}</div> : null}
+        {children ? <div className="bn-notice-body">{children}</div> : null}
       </div>
+      {said ? (
+        <details className="bn-notice-said">
+          <summary>What the server said</summary>
+          <div className="bn-notice-said-body">
+            {detail ? <div>{detail}</div> : null}
+            {code ? <code className="bn-notice-code">{code}</code> : null}
+          </div>
+        </details>
+      ) : null}
+      {action ? <div className="bn-notice-action">{action}</div> : null}
     </div>
+  )
+}
+
+/* ---- Refusal and Retry ------------------------------------------------------------------- */
+/* TWO SHAPES FOR "THAT DID NOT WORK", AND THEY ARE NOT THE SAME THING (UX-041). A REFUSAL is a
+   permanent "no" from this place: it says it cannot be done here and offers no retry, because
+   pressing again gets the same answer. A RETRY is a failure that may pass: it offers "Try again",
+   and the button shows that it is trying. Both draw next to the control that caused them. */
+
+/** It cannot be done here. One sentence, and a way forward if there is one. Never a retry. */
+export function Refusal({
+  title,
+  children,
+  code,
+  detail,
+  action,
+  compact,
+  className,
+}: {
+  readonly title: ReactNode
+  readonly children?: ReactNode
+  readonly code?: string
+  readonly detail?: ReactNode
+  /** A way FORWARD (another screen, another press), never the same press again. */
+  readonly action?: ReactNode
+  readonly compact?: boolean
+  readonly className?: string
+}) {
+  return (
+    <Notice tone="warn" title={title} code={code} detail={detail} action={action} compact={compact} className={['bn-refusal', className].filter(Boolean).join(' ')}>
+      {children}
+    </Notice>
+  )
+}
+
+/** It failed and may pass on a second try. "Try again" spins while it tries and keeps its size. */
+export function Retry({
+  title,
+  children,
+  code,
+  detail,
+  onRetry,
+  busy,
+  retryLabel = 'Try again',
+  compact,
+  className,
+}: {
+  readonly title: ReactNode
+  readonly children?: ReactNode
+  readonly code?: string
+  readonly detail?: ReactNode
+  readonly onRetry: () => void
+  readonly busy?: boolean
+  readonly retryLabel?: string
+  readonly compact?: boolean
+  readonly className?: string
+}) {
+  return (
+    <Notice
+      tone="danger"
+      title={title}
+      code={code}
+      detail={detail}
+      compact={compact}
+      className={['bn-retry', className].filter(Boolean).join(' ')}
+      action={
+        <Button size="sm" icon="refresh" busy={busy} disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={onRetry}>
+          {retryLabel}
+        </Button>
+      }
+    >
+      {children}
+    </Notice>
+  )
+}
+
+/** The shape `server.ts:describeFailure` says a failure is: a refusal or a retry. */
+export function FailureNotice({
+  failure,
+  title,
+  onRetry,
+  busy,
+  compact,
+}: {
+  readonly failure: { readonly code: string; readonly message: string; readonly kind?: 'refusal' | 'retry' }
+  readonly title?: ReactNode
+  readonly onRetry?: () => void
+  readonly busy?: boolean
+  readonly compact?: boolean
+}) {
+  if (failure.kind === 'retry' && onRetry !== undefined) {
+    return (
+      <Retry title={title ?? failure.message} code={failure.code} detail={title === undefined ? undefined : failure.message} onRetry={onRetry} busy={busy} compact={compact} />
+    )
+  }
+  return <Refusal title={title ?? failure.message} code={failure.code} detail={title === undefined ? undefined : failure.message} compact={compact} />
+}
+
+/* ---- Reload ---------------------------------------------------------------------------------- */
+/** THE ONE RELOAD CONTROL (UX-056): one place (the page's actions), one label, one key, one busy
+ *  state. It spins and refuses a second press while the read is in flight, and `R` presses it
+ *  from anywhere on the page that is not a field. `hotkey={false}` for a second one on a page. */
+export function ReloadButton({
+  onReload,
+  busy,
+  label = 'Reload',
+  hotkey = true,
+  className,
+}: {
+  readonly onReload: () => void
+  readonly busy?: boolean
+  readonly label?: string
+  readonly hotkey?: boolean
+  readonly className?: string
+}) {
+  const latest = useRef({ onReload, busy })
+  useEffect(() => {
+    latest.current = { onReload, busy }
+  })
+  useEffect(() => {
+    if (!hotkey) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'r' && event.key !== 'R') return
+      if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return
+      const target = event.target
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select') !== null)) return
+      if (document.querySelector('[aria-modal="true"]') !== null) return
+      if (latest.current.busy) return
+      event.preventDefault()
+      latest.current.onReload()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [hotkey])
+  return (
+    <Button
+      icon="refresh"
+      kbd={hotkey ? 'R' : undefined}
+      busy={busy}
+      disabled={busy}
+      aria-busy={busy ? 'true' : undefined}
+      onClick={onReload}
+      className={['bn-reload', className].filter(Boolean).join(' ')}
+    >
+      {label}
+    </Button>
   )
 }
 
@@ -478,3 +651,20 @@ export function applyTheme(theme: Theme): void {
   else document.documentElement.removeAttribute('data-theme')
   rememberTheme(theme)
 }
+
+/* ---- the page scaffold and the overlays ----------------------------------------------------
+   Every screen imports these from here and never from the files behind them, so one import line
+   is how a new screen inherits every other screen's frame (D-one-page-width). */
+export { Page, PageRouteContext, usePageRoute, Verdict, Toolbar, StatusSlot, Loading, Section } from './Page'
+export type { PageProps, PageRoute } from './Page'
+export { Sheet, Modal, Popover, ConfirmSheet, SheetHost, sheetChannel, useFocusTrap, useReturnFocus } from './overlay'
+export type { HostedSheet } from './overlay'
+
+/* ---- kit-data's primitives -----------------------------------------------------------------
+   TODO(kit-data integration): the wave-0 contract puts these in `./data` and `./sheets`, built
+   in parallel on `ux/kit-data`. Neither file exists on this branch's base, so the re-exports
+   are written here and held commented out. The orchestrator enables them when the two branches
+   meet, and wires `openSheet` and `closeSheet` onto `sheetChannel` (kit/overlay.tsx).
+export { Money, Count, FilterCount, Select, FilterChips, SortControl, StatusBadge, STATUS_TONES, CardLine, CardThumb, BoxLabel, Sep, ProductLink, OrderLink, Location } from './data'
+export { registerSheet, openSheet, closeSheet } from './sheets'
+*/

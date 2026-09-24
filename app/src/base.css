@@ -220,13 +220,25 @@ summary::-webkit-details-marker { display: none; }
     scroll-behavior: auto !important;
   }
   /* …except the loops that CARRY MEANING. A busy ring frozen at a partial arc is a disabled
-     button; a stopped shimmer is broken content. These keep turning, slowly. */
+     button, so the rings keep turning, and slower than they turn at rest: a request for less
+     motion never makes a thing move faster. The skeleton's shimmer and the live dot's pulse are
+     NOT on this list (UX-125). The shimmer is a decorative sweep and the grey block says
+     "loading" by itself; the live dot is vermilion whether it pulses or not. Both used to run
+     here at 1.4s, which made the dot pulse FASTER than its own 1.8s. */
   .bn-btn[data-busy='true']::after,
-  .bn-skeleton::after,
-  .bn-dot-live,
   .capture-frame-spinner,
   .review-spinner {
     animation-duration: 1.4s !important;
     animation-iteration-count: infinite !important;
   }
+}
+
+/* EVERY TOGGLE SHOWS FOCUS THE SAME WAY (UX-100). A chip or any other pressed-state control
+   can carry an outline of its own as decoration (Shipping's dashed "Needs a look" lane), and an
+   author outline at one class outranks the `:focus-visible` ring above by source order. Two
+   selectors of weight, so the ring wins over a one-class decoration without `!important`. */
+.bn-chip:focus-visible,
+[aria-pressed]:focus-visible {
+  outline: 2px solid var(--bn-accent);
+  outline-offset: 2px;
 }

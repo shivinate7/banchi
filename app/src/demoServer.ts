@@ -110,8 +110,14 @@ function refuse(code: string, message: string, status = 409): never {
   throw new ServerError(code, message, status)
 }
 
+/** EVERY DEMO REFUSAL SAYS THIS AND NOTHING ELSE (TXT-46). The longer sentences these replaced
+ *  printed a request path with twenty SKUs in it and a repository command to a demo visitor. The
+ *  code under it still names which refusal it was, behind the kit's "What the server said". */
+const NOT_IN_DEMO = 'Not in this demo.'
+
 /**
- * The four things a published page genuinely cannot do, each with the reason on it.
+ * The things a published page genuinely cannot do. The third field is WHY, for the reader of
+ * this file; the screen is told `NOT_IN_DEMO` and the code, never the reason.
  *
  * Keyed by the path prefix that reaches them. Ordered longest-first at the call site so a
  * specific path wins over a general one.
@@ -404,15 +410,11 @@ export async function demoRequest(path: string, init?: RequestInit): Promise<unk
     /* A GET the recording does not hold. Named as such rather than dressed up as an empty
      * result: an empty list is an answer, and answering a question this bundle cannot
      * answer with one is how a demo tells a confident lie. */
-    refuse(
-      'demo_not_recorded',
-      `This demo's recording holds no answer for ${path}. Rebuild it with \`make demo\`.`,
-      404,
-    )
+    refuse('demo_not_recorded', NOT_IN_DEMO, 404)
   }
 
-  for (const [prefix, code, message] of CANNOT) {
-    if (path === prefix || path.startsWith(`${prefix}/`)) refuse(code, message)
+  for (const [prefix, code] of CANNOT) {
+    if (path === prefix || path.startsWith(`${prefix}/`)) refuse(code, NOT_IN_DEMO)
   }
 
   let match: RegExpExecArray | null
@@ -447,15 +449,12 @@ export async function demoRequest(path: string, init?: RequestInit): Promise<unk
   if (path === '/shipping/batches' && method === 'POST') {
     const made = responses['POST /shipping/batches']
     if (made !== undefined) return made.body
-    refuse('demo_not_recorded', 'This demo recorded no shipping export.', 404)
+    refuse('demo_not_recorded', NOT_IN_DEMO, 404)
   }
 
   /* Everything else. Not an error page and not a crash: a named refusal, which every screen
    * in this app already draws as a sentence with the code small beneath it. */
-  refuse(
-    'demo_read_only',
-    'This demo is a frozen copy of a real store, so this action is not wired up. ' +
-      'Selling a card, answering the review queue, pricing a card, holding one back, ' +
-      'renaming a box and dropping a divider all write for real — try those.',
-  )
+  /* What does write for real here: selling a card, answering the review queue, pricing a card,
+   * holding one back, renaming a box and dropping a divider. */
+  refuse('demo_read_only', NOT_IN_DEMO)
 }

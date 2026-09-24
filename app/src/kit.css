@@ -141,6 +141,91 @@
 .bn-faint { color: var(--bn-ink-4); }
 .bn-money { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-money); }
 
+/* ---- the heading scale: three steps (UX-067) ----------------------------------------------
+   h1 is `.bn-title` (--bn-fs-h1). A section is `.bn-h2`, a part of a section `.bn-h3`. */
+.bn-h2,
+.bn-h3 {
+  font-family: var(--bn-font-display);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-tight);
+  line-height: var(--bn-lh-snug);
+  color: var(--bn-ink);
+  display: flex;
+  align-items: baseline;
+  gap: var(--bn-2);
+}
+.bn-h2 { font-size: var(--bn-fs-h2); }
+.bn-h3 { font-size: var(--bn-fs-h3); }
+/* A sentence a person must read is 13px or more; a label is 10-11px and never a sentence. */
+.bn-read { font-size: var(--bn-fs-read); line-height: var(--bn-lh-base); }
+
+/* ---- the page scaffold (`Page`, kit/Page.tsx) ----------------------------------------------
+   ONE WIDTH, ONE TOP GAP, ONE LEFT EDGE (D-one-page-width, amends D197). A page drawn by `Page`
+   ignores `--bn-page-max`: `--bn-page-w` at every screen, fluid below it. The page is the query
+   container `bn-page`, so a tier follows the column the shell gave it, not the window. */
+.bn-page[data-bn-page] {
+  max-width: var(--bn-page-w);
+  padding-top: var(--bn-page-top);
+  container-type: inline-size;
+  container-name: bn-page;
+}
+.bn-page-head { margin-bottom: var(--bn-4); }
+.bn-page-head .bn-head-actions { margin-top: 0; }
+[data-bn-page-title]:focus { outline: none; }
+.bn-verdict {
+  margin-bottom: var(--bn-4);
+  max-width: 72ch;
+  font-size: var(--bn-fs-lg);
+  font-weight: 600;
+  line-height: var(--bn-lh-base);
+  color: var(--bn-ink);
+}
+/* THE TOOLBAR FOLDS AS ONE UNIT. A wide column draws one row. A narrow one draws a grid of
+   equal cells, so no control is wider than its neighbour for its label's sake. */
+.bn-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+  margin-bottom: var(--bn-4);
+}
+@container bn-page (max-width: 640px) {
+  .bn-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+  .bn-toolbar > * { width: 100%; min-width: 0; }
+  .bn-page-head .bn-head-actions { width: 100%; }
+}
+.bn-page-body { min-width: 0; }
+
+/* A part of a page. The title is an h2 and the actions sit on its line. */
+.bn-section + .bn-section { margin-top: var(--bn-7); }
+.bn-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-2) var(--bn-4);
+  margin-bottom: var(--bn-3);
+}
+.bn-section-count { font-family: var(--bn-font-ui); font-size: var(--bn-fs-read); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; letter-spacing: normal; }
+.bn-section-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); }
+
+/* THE ONE LOADING SHAPE (UX-098): rows the height of the rows that replace them. */
+.bn-loading { display: flex; flex-direction: column; gap: var(--bn-2); }
+.bn-loading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  height: calc(var(--bn-8) + var(--bn-4));
+  padding: 0 var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+}
+.bn-loading-thumb { flex: none; width: var(--bn-8); height: var(--bn-8); }
+.bn-loading-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--bn-2); }
+.bn-loading-line { height: var(--bn-3); width: 60%; }
+.bn-loading-line-short { width: 35%; }
+
 /* ---- surfaces ------------------------------------------------------------ */
 .bn-panel {
   background: var(--bn-surface);
@@ -300,11 +385,11 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   background: var(--bn-surface-2);
 }
 .bn-pill .bn-icon { width: 12px; height: 12px; }
-.bn-pill-accent { color: var(--bn-accent); background: var(--bn-accent-tint); }
-.bn-pill-ok { color: var(--bn-ok); background: var(--bn-ok-tint); }
-.bn-pill-warn { color: var(--bn-warn); background: var(--bn-warn-tint); }
-.bn-pill-danger { color: var(--bn-danger); background: var(--bn-danger-tint); }
-.bn-pill-live { color: var(--bn-live); background: var(--bn-live-tint); }
+.bn-pill-accent { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); }
+.bn-pill-ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
+.bn-pill-warn { color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
+.bn-pill-danger { color: var(--bn-pill-ink-danger); background: var(--bn-danger-tint); }
+.bn-pill-live { color: var(--bn-pill-ink-live); background: var(--bn-live-tint); }
 .bn-pill-mono { font-family: var(--bn-font-mono); font-weight: 500; }
 .bn-pill-outline { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
 /* Inside a button, a tab or a dense row: one small pill rather than a height per screen. */
@@ -409,7 +494,8 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   min-height: var(--bn-control-h);
   padding: 0 var(--bn-3);
   border-radius: var(--bn-r);
-  border: 1px solid var(--bn-line-strong);
+  /* 3:1 in both themes (UX-094): the edge is the only thing telling a field from its ground */
+  border: 1px solid var(--bn-field-edge);
   background: var(--bn-surface);
   color: var(--bn-ink);
   font-size: var(--bn-fs-base);
@@ -452,7 +538,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  border: 1.5px solid var(--bn-line-strong);
+  border: 1.5px solid var(--bn-field-edge);
   background: var(--bn-surface);
   display: grid;
   place-content: center;
@@ -724,7 +810,88 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-notice-ok { background: var(--bn-ok-tint); }
 .bn-notice-ok > .bn-icon { color: var(--bn-ok); }
 .bn-notice-title { font-weight: 600; }
-.bn-notice-code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.bn-notice { flex-wrap: wrap; }
+.bn-notice-text { display: flex; flex-direction: column; gap: var(--bn-0-5); flex: 1 1 16rem; min-width: 0; }
+.bn-notice-action { flex: none; align-self: center; }
+.bn-notice-code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow-wrap: anywhere; }
+
+/* "WHAT THE SERVER SAID" (D-notice-detail): the machine's own words, one press away and never in
+   plain view. On its own line under the sentence, indented to the text's edge. */
+.bn-notice-said { flex: 1 0 100%; order: 3; padding-left: calc(var(--bn-4) + var(--bn-3)); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.bn-notice-said > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  font-weight: 500;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  border-radius: var(--bn-r-xs);
+}
+.bn-notice-said > summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform var(--bn-t-fast) var(--bn-ease);
+}
+.bn-notice-said[open] > summary::before { transform: rotate(90deg); }
+.bn-notice-said > summary:hover { color: var(--bn-ink); }
+.bn-notice-said-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  margin-top: var(--bn-1);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  color: var(--bn-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* ONE LINE, AND THE DISCLOSURE OPENS OVER THE PAGE (D118). A notice inside `StatusSlot` is
+   compact whether or not it asked to be: the slot is one notice high, and a notice that grew
+   would move the rows under the press that caused it. */
+.bn-notice-compact,
+.bn-status-slot > .bn-notice {
+  flex-wrap: nowrap;
+  align-items: center;
+  height: 100%;
+  min-height: 0;
+  padding-block: 0;
+}
+.bn-notice-compact .bn-notice-text,
+.bn-status-slot > .bn-notice .bn-notice-text { flex-direction: row; align-items: baseline; gap: var(--bn-2); overflow: hidden; }
+.bn-notice-compact .bn-notice-title,
+.bn-notice-compact .bn-notice-body,
+.bn-status-slot > .bn-notice .bn-notice-title,
+.bn-status-slot > .bn-notice .bn-notice-body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bn-notice-compact .bn-notice-title,
+.bn-status-slot > .bn-notice .bn-notice-title { flex: none; max-width: 60%; }
+.bn-notice-compact > .bn-icon,
+.bn-status-slot > .bn-notice > .bn-icon { margin-top: 0; }
+.bn-notice-compact .bn-notice-said,
+.bn-status-slot > .bn-notice .bn-notice-said { flex: none; order: 0; position: relative; padding-left: 0; }
+.bn-notice-compact .bn-notice-said-body,
+.bn-status-slot > .bn-notice .bn-notice-said-body {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  top: calc(100% + var(--bn-2));
+  width: min(28rem, calc(100vw - 32px));
+  box-shadow: var(--bn-shadow-3);
+}
+
+/* ---- the status slot (Page) ---------------------------------------------------------------
+   One notice high whether or not a notice is in it (D118). The height is the control height
+   plus a margin, so it follows the thumb floor on a phone the way every control does. */
+.bn-status-slot {
+  position: relative;
+  height: calc(var(--bn-control-h) + var(--bn-3));
+  margin-bottom: var(--bn-4);
+}
 
 /* ---- receipt (undo toast, inline) ------------------------------------------------------ */
 .bn-receipt {
@@ -936,6 +1103,50 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   .bn-dialog[data-leaving] { animation: bn-sheet-down var(--bn-t-fast) var(--bn-ease) forwards; }
 }
 
+/* ---- the kit's overlays: one header, one body, one foot (kit/overlay.tsx) --------------------
+   A `Sheet` and a `Modal` share this frame. The header is the title and one "Close"; the foot
+   is the verb, then "Cancel". The body scrolls; the header and the foot do not. */
+.bn-overlay { display: flex; flex-direction: column; overflow: hidden; }
+.bn-overlay:focus { outline: none; }
+.bn-overlay-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-5);
+  border-bottom: 1px solid var(--bn-line);
+}
+.bn-overlay-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--bn-7);
+  height: var(--bn-7);
+  border-radius: var(--bn-r);
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+}
+.bn-overlay-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--bn-fs-h3);
+  line-height: var(--bn-lh-snug);
+}
+.bn-overlay-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--bn-5); }
+.bn-overlay-foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+  padding: var(--bn-3) var(--bn-5);
+  border-top: 1px solid var(--bn-line);
+}
+@media (min-width: 768px) { .bn-confirm { width: min(440px, calc(100vw - 32px)); } }
+/* A popover is a menu surface fixed under its control, portalled out of the page. */
+.bn-popover { position: fixed; z-index: 62; max-width: calc(100vw - 16px); }
+.bn-popover:focus { outline: none; }
+
 /* ---- photo frame --------------------------------------------------------------------------- */
 .bn-photo {
   position: relative;
@@ -1073,9 +1284,13 @@ img.bn-crop[data-cropped='true'] {
   animation: bn-drain linear forwards;
 }
 
-/* A keycap is a promise about a keyboard; a phone has none. Screens stop deciding it one by one. */
+/* A keycap is a promise about a keyboard; a phone has none. Screens stop deciding it one by one.
+   EVERY keycap, not only the ones inside a control (UX-040): a hint beside a label, a pair in a
+   group, a key inside a field. `.bn-kbd-lg` stays: it is a target a finger lands on, not a hint.
+   ONE PLACEMENT RULE (UX-145): a keycap sits AFTER its label, on the same line, inside the
+   control it presses. */
 @media (hover: none) and (pointer: coarse) {
-  .bn-btn .bn-kbd, .bn-seg-item .bn-kbd, .bn-toast-action .bn-kbd, .bn-chip .bn-kbd { display: none; }
+  .bn-kbd:not(.bn-kbd-lg), .bn-kbd-group { display: none; }
 }
 
 

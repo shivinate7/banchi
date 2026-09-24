@@ -55,12 +55,18 @@
   --bn-ink-3: #666c76;           /* metadata, captions, placeholders — 4.85:1 on --bn-bg,
                                     4.55:1 on --bn-surface-2 (was #6b7280, 4.43:1 / 4.16:1,
                                     failing this token's own documented job; measured 2026-09-20) */
-  --bn-ink-4: #7f8791;           /* faint: icons, separators, disabled — 3.6:1 on the page. Data-bearing
-                                    text reads ink-3; this is the floor a word may sit at, never a caption */
+  --bn-ink-4: #6b717b;           /* faint: icons, separators, disabled, and the lightest word on screen —
+                                    4.51:1 on --bn-bg, 4.91:1 on --bn-surface. Was #7f8791 (3.33:1 on the
+                                    page, failing 4.5:1 under words a person reads; UX-047, 2026-09-23) */
 
   --bn-line: rgba(15, 18, 23, 0.08);
   --bn-line-strong: rgba(15, 18, 23, 0.16);
   --bn-line-focus: rgba(61, 90, 241, 0.55);
+  /* THE EDGE OF A CONTROL YOU TYPE INTO OR TICK, at 3:1 (UX-094). `--bn-line-strong` is 1.41:1 on
+     a white field, which D50 set at 3.36:1 before the legacy `--field` moved onto it. A new name,
+     so every hairline that reads `--bn-line-strong` keeps its weight: 3.34:1 on --bn-surface,
+     3.06:1 on --bn-bg. */
+  --bn-field-edge: #878d97;
 
   /* ---- brand ------------------------------------------------------------- */
   --bn-accent: #3d5af1;          /* action. Buttons, links, selection, focus ring */
@@ -95,6 +101,16 @@
   --bn-danger-tint: rgba(220, 38, 38, 0.10);
   --bn-money: #0f1217;
 
+  /* PILL INKS: a word in a tone, drawn on that tone's tint (UX-047). The tone inks above are
+     4.0-4.4:1 once the tint is under them, at 10-11px. These clear 4.5:1 on the tint over
+     --bn-bg, --bn-surface and --bn-surface-2. Dark keeps the tone ink itself, which already
+     clears 5:1 on its tint. */
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09;
+  --bn-pill-ink-danger: var(--bn-danger);
+  --bn-pill-ink-live: #b33020;
+
   /* ---- elevation --------------------------------------------------------- */
   --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
   --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18),
@@ -113,6 +129,15 @@
   --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
   --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* TYPE ROLES — aliases onto the scale below, never new sizes (UX-067, UX-115). A heading is
+     one of three steps; a sentence a person must read is at least 13px; a label (a caps word,
+     a pill, a keycap) is 10-11px and is never a sentence. */
+  --bn-fs-h1: var(--bn-fs-3xl);
+  --bn-fs-h2: var(--bn-fs-xl);
+  --bn-fs-h3: var(--bn-fs-lg);
+  --bn-fs-read: var(--bn-fs-md);
+  --bn-fs-label: var(--bn-fs-xs);
 
   --bn-fs-2xs: 10px;
   --bn-fs-xs: 11px;
@@ -245,6 +270,12 @@
      to 330px on the owner's own rig; `app/tests/page-edge.spec.ts` asserts the anchor. */
   --bn-page-w: 1600px;
   --bn-page-w-rows: 1344px;
+  /* ONE WIDTH AND ONE TOP GAP FOR EVERY PAGE BUILT ON `Page` (D-one-page-width, amends D197).
+     A page drawn by `Page` carries `data-bn-page` and ignores `--bn-page-max`: the width is
+     `--bn-page-w` at every screen, fluid below it, and the title sits `--bn-page-top` below the
+     shell's own edge. `--bn-page-max` and `--bn-page-w-rows` stay for the screens that have not
+     moved onto `Page` yet, and go dead one screen at a time as they do. */
+  --bn-page-top: var(--bn-6);
 
   --bn-control-h: 34px;
   --bn-control-h-lg: 40px;
@@ -293,11 +324,13 @@
   --bn-ink: #eef0f4;
   --bn-ink-2: #b9bfc9;
   --bn-ink-3: #838b98;
-  --bn-ink-4: #707886;           /* 4.0:1 on the dark page */
+  --bn-ink-4: #7c8492;           /* 5.13:1 on the dark page, 4.77:1 on --bn-surface. Was #707886
+                                    (4.04:1 on the surface; UX-047, 2026-09-23) */
 
   --bn-line: rgba(255, 255, 255, 0.08);
   --bn-line-strong: rgba(255, 255, 255, 0.16);
   --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-field-edge: #626977;      /* 3.26:1 on --bn-surface, 3.5:1 on --bn-bg */
 
   --bn-accent: #7f90ff;
   --bn-accent-hover: #93a2ff;
@@ -316,6 +349,12 @@
   --bn-danger: #ff5c5c;
   --bn-danger-tint: rgba(255, 92, 92, 0.14);
   --bn-money: #eef0f4;
+
+  --bn-pill-ink-accent: var(--bn-accent);
+  --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn);
+  --bn-pill-ink-danger: var(--bn-danger);
+  --bn-pill-ink-live: var(--bn-live);
 
   --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
