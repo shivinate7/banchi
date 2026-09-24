@@ -128,6 +128,11 @@
   font-size: var(--bn-fs-base);
   padding: var(--bn-2) 0;
 }
+/* Inside a FilterBar's wide row, EVERY control reads at the bar's own 13px (`--bn-fs-md`): the
+   pick triggers, the sort control and the hide toggle already do (`kit/data.css`,
+   `kit/filters.css`). Only the search field's `.search-field-bar` class narrows this — a
+   standalone `SearchField` elsewhere keeps `--bn-fs-base` (14px), untouched. */
+.search-field-bar .search-field-input { font-size: var(--bn-fs-md); }
 .search-field-owner .search-field-key {
   flex: none;
   display: inline-flex;

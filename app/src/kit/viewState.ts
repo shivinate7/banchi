@@ -128,17 +128,25 @@ export function readFacets(query: URLSearchParams, facets: readonly FilterFacet[
 
 /** A sort, read against its options. A key no option carries falls back to `defaultValue`. A
  *  direction that is neither `asc` nor `desc` falls back to the key's own first direction
- *  (`SortOption.first`), then to the default's. */
+ *  (`SortOption.first`), then to the default's.
+ *
+ *  AN ABSENT KEY IS NOT AN ABSENT DIRECTION (the reversed-default regression, filtering round
+ *  3): `useSortParam.set` writes NO `sort` key while the column stays the default's own key
+ *  (`patchViewQuery`'s "no key at rest"), so reversing the default column's direction writes
+ *  only `?dir=desc` — the key is legitimately missing, not unknown. A missing key with a real
+ *  `asc`/`desc` reads as the DEFAULT'S key in that direction, never as `defaultValue` whole. */
 export function readSort<K extends string>(
   rawKey: string | null,
   rawDir: string | null,
   defaultValue: SortValue<K>,
   options?: readonly SortOption<K>[],
 ): SortValue<K> {
-  const known = rawKey !== null && (options === undefined || options.some((option) => option.key === rawKey))
+  const dir = rawDir === 'asc' || rawDir === 'desc' ? rawDir : null
+  if (rawKey === null) return dir === null ? defaultValue : { key: defaultValue.key, dir }
+  const known = options === undefined || options.some((option) => option.key === rawKey)
   if (!known) return defaultValue
   const key = rawKey as K
-  if (rawDir === 'asc' || rawDir === 'desc') return { key, dir: rawDir }
+  if (dir !== null) return { key, dir }
   if (key === defaultValue.key) return defaultValue
   return { key, dir: options?.find((option) => option.key === key)?.first ?? defaultValue.dir }
 }

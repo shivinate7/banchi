@@ -62,6 +62,17 @@ test.describe('the URL is read as untrusted', () => {
     expect(readSort('name', 'desc', rest, options)).toEqual({ key: 'name', dir: 'desc' })
     expect(readSort(null, null, rest, options)).toEqual(rest)
   })
+
+  test('an absent sort key still reads a written direction, against the DEFAULT\'s own key (the reversed-default regression, filtering round 3: reversing the resting column wrote only `?dir=`, and readSort ignored it because the key was absent)', () => {
+    const options = [
+      { key: 'name', label: 'Name', first: 'asc' as const },
+      { key: 'price', label: 'Price' },
+    ]
+    const def = { key: 'name' as const, dir: 'asc' as const }
+    expect(readSort(null, 'desc', def, options)).toEqual({ key: 'name', dir: 'desc' })
+    expect(readSort(null, 'asc', def, options)).toEqual(def)
+    expect(readSort(null, null, def, options)).toEqual(def)
+  })
 })
 
 test.describe('facet counts', () => {
@@ -185,6 +196,14 @@ test.describe('FilterBar', () => {
       expect(new Set(heights).size, `heights ${heights.join(', ')}`).toBe(1)
       /* `--bn-control-h`: 34px on a desk, raised to 42px below 768px for a thumb (tokens.css). */
       expect(heights[0]).toBe(width >= 768 ? 34 : 42)
+    })
+
+    test(`the search input reads at the bar's own 13px, same as the facet triggers, inside FilterBar only at ${width}`, async ({ page }) => {
+      await open(page, width)
+      const barInput = await page.locator(`${BAR} .bn-filterbar-search .search-field-input`).evaluate((el) => getComputedStyle(el).fontSize)
+      const pick = await page.locator(`${BAR} .bn-filterbar-row .bn-pick`).first().evaluate((el) => getComputedStyle(el).fontSize)
+      expect(barInput).toBe(pick)
+      expect(barInput).toBe('13px')
     })
 
     test(`every facet trigger in one bar is ONE width at ${width}, and a pick changes none (the owner's gripe, D118)`, async ({ page }) => {
@@ -577,6 +596,25 @@ test.describe('view state in the URL', () => {
     await expect(page.locator('[data-hide]')).toHaveText('false')
     await expect(page.locator('[data-game]')).toHaveText('pokemon,riftbound')
     await expect(page.locator('[data-sort]')).toHaveText('price:desc')
+  })
+
+  test('reversing the DEFAULT column writes only `?dir=`, and the value reads back at once and survives a reload (the reversed-default regression, filtering round 3)', async ({ page }) => {
+    await open(page, 1440)
+    const dir = page.locator(`${DEMO} .bn-filterbar-row .bn-sort-dir`)
+    await expect(page.locator('[data-sort]')).toHaveText('name:asc')
+    expect(new URL(page.url()).hash).not.toContain('sort=')
+
+    await dir.click()
+    /* The key stays at rest (no `sort=` key written), only the direction moves. */
+    expect(new URL(page.url()).hash).toContain('dir=desc')
+    expect(new URL(page.url()).hash).not.toContain('sort=')
+    await expect(page.locator('[data-sort]')).toHaveText('name:desc')
+    await expect(dir).toHaveAccessibleName('Order: Z to A. Press to reverse.')
+
+    await page.reload()
+    expect(new URL(page.url()).hash).toContain('dir=desc')
+    await expect(page.locator('[data-sort]')).toHaveText('name:desc')
+    await expect(page.locator(`${DEMO} .bn-filterbar-row .bn-sort-dir`)).toHaveAccessibleName('Order: Z to A. Press to reverse.')
   })
 
   test('a link elsewhere in the app (a path change) leaves a place for Back to return to', async ({ page }) => {
