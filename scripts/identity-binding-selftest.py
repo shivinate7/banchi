@@ -326,8 +326,8 @@ def main() -> int:
        "one product whose SKUs disagree on rarity — CAUGHT (§4.3's third bullet)",
        findings4.rarity_disagreement)
 
-    # --------------------------------------------------- the human-bound exclusion (§5.5)
-    print("\nthe human-bound exclusion (§5.5, D242/D255's replacement)")
+    # ----------------------------------------------- the approved-bound exclusion (§5.5)
+    print("\nthe approved-bound exclusion (§5.5, D242/D255's replacement)")
     disputing_row = sku_row("600", "Rell, Magnetic Storm", "100/298")
     automatic_card = card(
         4, sku="600", identity_source=IDENTITY_SKU, bound_by="join",
@@ -369,7 +369,47 @@ def main() -> int:
         excluded.printed_total = "298"
         findings_act = ib.audit([excluded], {"600": disputing_row}, set())
         ok(excluded.key not in findings_act.name_half,
-           f"bound_by={act!r} is excluded too — every member of HUMAN_BOUND_BY")
+           f"bound_by={act!r} is excluded too — every member of APPROVED_BOUND_BY")
+
+    # REVIEWED HIGH, 2026-09-24: `migration` belongs in the exclusion too — without it,
+    # every card the press itself bound reports its own approved dispute FOREVER, on every
+    # future preview, which is exactly the cry-wolf failure §5.5 exists to prevent.
+    migration_card = card(
+        9, sku="600", identity_source=IDENTITY_SKU, bound_by="migration",
+        read_name="Rell, Noxus", read_number="100", read_printed_total="298",
+    )
+    migration_card.name = disputing_row.product_name
+    migration_card.number = "100"
+    migration_card.printed_total = "298"
+    migration_card.rarity = disputing_row.rarity
+    migration_card.set_name = disputing_row.set_name
+    migration_card.condition = disputing_row.condition
+    findings_migration = ib.audit([migration_card], {"600": disputing_row}, set())
+    ok(migration_card.key not in findings_migration.name_half,
+       "bound_by='migration' is excluded too — the owner approved this dispute AT "
+       "MIGRATION TIME (ruling 2, '38 disputed names... listed once'); reporting it again "
+       "on every later preview is the bug this fix closes (RED before, GREEN after)",
+       findings_migration.name_half)
+    ok(not findings_migration.identity_drift,
+       "identity_drift is UNAFFECTED by the exclusion — this card's stored identity still "
+       "matches its SKU row, so there is nothing to drift-catch here", findings_migration)
+
+    drifted_migration_row = sku_row("601", "Rell, Magnetic Storm (reprint)", "100/298")
+    drifted_migration_card = card(
+        10, sku="601", identity_source=IDENTITY_SKU, bound_by="migration",
+        name="Rell, Magnetic Storm", number="100", printed_total="298",
+    )
+    drifted_migration_card.rarity = drifted_migration_row.rarity
+    drifted_migration_card.set_name = drifted_migration_row.set_name
+    drifted_migration_card.condition = drifted_migration_row.condition
+    findings_migration_drift = ib.audit(
+        [drifted_migration_card], {"601": drifted_migration_row}, set(),
+    )
+    drifted_keys = [key for key, _sku in findings_migration_drift.identity_drift]
+    ok(drifted_migration_card.key in drifted_keys,
+       "identity_drift STILL catches a migration-bound card whose SKU facts changed since "
+       "(a real TCGplayer rename, §9 risk 3) — the exclusion is name_half/number_half only",
+       findings_migration_drift.identity_drift)
 
     number_disputing = card(
         7, sku="600", identity_source=IDENTITY_SKU, bound_by="join",
@@ -403,6 +443,104 @@ def main() -> int:
        entry.reason)
     ok(entry.candidates and entry.candidates[0]["sku"] == "402",
        "the entry's own candidates lead with the bound SKU's row", entry.candidates)
+
+    # ---------------------------------------------------- already_cleared (§7.3, HIGH fix)
+    print("\nalready_cleared — BOTH queues, not just review (2026-09-24 review finding)")
+
+    class _FakeEntry:
+        def __init__(self, reason: str, cleared: bool):
+            self.reason = reason
+            self.cleared_by_human = cleared
+
+    ok(ib.already_cleared({}, {}, "1/1") is None,
+       "neither queue holds anything for this position — nothing blocks it")
+    ok(ib.already_cleared({"1/1": _FakeEntry("no_catalog_row", False)}, {}, "1/1") is None,
+       "an OPEN (unanswered) review entry does not block — only a CLEARED one does")
+    ok(ib.already_cleared(
+        {"1/1": _FakeEntry("no_catalog_row", True)}, {}, "1/1",
+    ) == ("review", "no_catalog_row"),
+       "a human-cleared REVIEW entry blocks and names its queue and reason")
+    # THE REPRODUCTION: a card set aside with D37's stand-down sits in PARKED, never
+    # REVIEW — `cli/cmd_cards.py`'s own `--write` loop used to check `snapshot.review.
+    # entries` alone and missed this, opening a new `listing_disputed` entry over a
+    # position a human had already cleared under `set_ambiguous`. RED on 27334bed.
+    ok(ib.already_cleared(
+        {}, {"3/747": _FakeEntry("set_ambiguous", True)}, "3/747",
+    ) == ("parked", "set_ambiguous"),
+       "a human-cleared PARKED entry blocks too, and is told apart from a review one — "
+       "GREEN after the fix", "3/747 reproduces the coordinator's own finding")
+    ok(ib.already_cleared(
+        {}, {"1/1": _FakeEntry("set_ambiguous", False)}, "1/1",
+    ) is None,
+       "an OPEN parked entry (never answered, just low-value) does not block either")
+
+    # ---------------------------------------------------- identity_moves (§7.1, LOW fix)
+    print("\nCardPlan.identity_moves — the real dispute/fold tests, not .upper() (§7.1)")
+
+    def plan_for(cls_row: SkuRow, *, cls: str, read_name, read_number, read_printed_total,
+                 new_name, new_number, new_printed_total) -> "ib.CardPlan":
+        classification = ib.Classification(
+            cls=cls, row=cls_row, new_name=new_name, new_number=new_number,
+            new_printed_total=new_printed_total,
+        )
+        return ib.CardPlan(
+            key="1/1", sku="700", game="pokemon", state=IDENTIFIED, cid=None,
+            classification=classification, read_name=read_name, read_number=read_number,
+            read_printed_total=read_printed_total, old_name=read_name,
+            old_number=read_number, old_printed_total=read_printed_total,
+        )
+
+    t1_row = sku_row("700", "Pikachu", "025/202")
+    t1_plan = plan_for(
+        t1_row, cls=ib.T1, read_name="Pikachu", read_number="25", read_printed_total="202",
+        new_name="Pikachu", new_number="025", new_printed_total="202",
+    )
+    ok(not t1_plan.identity_moves, "T1: exact match, nothing moves", t1_plan)
+
+    t2_plan = plan_for(
+        t1_row, cls=ib.T2, read_name="Pikcahu", read_number="25", read_printed_total="202",
+        new_name="Pikachu", new_number="025", new_printed_total="202",
+    )
+    ok(not t2_plan.identity_moves,
+       "T2: a near miss is a SPELLING change, never a move — the real bug this fix closes "
+       "(the old .upper() test would have flagged this one too, but for the wrong reason)",
+       t2_plan)
+
+    t4u_row = sku_row("701", "Aspirant's Climb", "276/298")
+    t4u_plan = plan_for(
+        t4u_row, cls=ib.T4U, read_name="Aspirant's Climb", read_number="61",
+        read_printed_total="298", new_name="Aspirant's Climb", new_number="276",
+        new_printed_total="298",
+    )
+    ok(t4u_plan.identity_moves, "T4u: the number genuinely moves", t4u_plan)
+
+    t3_row = sku_row("702", "Rell, Magnetic Storm", "100/298")
+    t3_name_moves = plan_for(
+        t3_row, cls=ib.T3, read_name="Rell, Noxus", read_number="100",
+        read_printed_total="298", new_name="Rell, Magnetic Storm", new_number="100",
+        new_printed_total="298",
+    )
+    ok(t3_name_moves.identity_moves,
+       "T3: a human-chosen SKU whose READ NAME disputes it — a real move, and the case "
+       "the old .upper() test undercounted 30-for-fewer on the real store", t3_name_moves)
+
+    t3_number_moves = plan_for(
+        t3_row, cls=ib.T3, read_name="Rell, Magnetic Storm", read_number="999",
+        read_printed_total="298", new_name="Rell, Magnetic Storm", new_number="100",
+        new_printed_total="298",
+    )
+    ok(t3_number_moves.identity_moves,
+       "T3: a human-chosen SKU whose READ NUMBER disagrees — the case the old test missed "
+       "ENTIRELY (`number_moves = cls == T4U` never looked at T3 at all)", t3_number_moves)
+
+    t3_no_move = plan_for(
+        t3_row, cls=ib.T3, read_name="Rell, Magnetic Storm", read_number="100",
+        read_printed_total="298", new_name="Rell, Magnetic Storm", new_number="100",
+        new_printed_total="298",
+    )
+    ok(not t3_no_move.identity_moves,
+       "T3: read name AND number both already agree — most of the 612 (435 of them, per "
+       "§7.2) are exactly this, and none of them should count as a move", t3_no_move)
 
     # -------------------------------------------------------------------- plan_migration
     print("\nplan_migration / class_counts — the whole pass, end to end")

@@ -495,7 +495,7 @@ COMPONENTS = [
                                      "— it is the one thing here that touches 4.45 GB that "
                                      "cannot be re-taken",
                              "governed_by": ["D172", "D183",
-                                             "D26", "D88", "D89",
+                                             "D26", "D37", "D88", "D89",
                                              "D162", "D167", "D213", "D239",
                                              "D240", "D242", "D253", "D255"],
                              "tested_by": ["T7"]},
@@ -913,16 +913,21 @@ COMPONENTS = [
                         "`identifications` table by `photo_sha256` rather than trusting its "
                         "own position key, for the same reason. `audit()` is §4.3's three "
                         "failures PLUS §5.5's name half/number half — D242/D255's "
-                        "replacement, excluding any card `bound_by` a human act "
-                        "(`HUMAN_BOUND_BY`), because a human who chose that SKU has already "
-                        "answered the report's question. `held_review_candidates`/"
+                        "replacement, excluding any card `bound_by` an owner-approved act "
+                        "(`APPROVED_BOUND_BY` — four human acts plus `migration` itself, "
+                        "reviewed and fixed 2026-09-24: without `migration` a bound card "
+                        "reported its own approved dispute forever). `already_cleared` "
+                        "checks BOTH queues (review and parked) for a human's prior "
+                        "clearing under a DIFFERENT question — reviewed and fixed "
+                        "2026-09-24 (HIGH): a card set aside under D37 lives in parked, not "
+                        "review, and was missed. `held_review_candidates`/"
                         "`held_review_entry` build the `+listing_disputed` queue entry a "
                         "held, identified card gets on `--write` — the SKU's own row plus "
                         "D253's two candidate sets, `found_by` tagged `listing`/`name`/"
                         "`number`, read off the SKU table's own `raw` rather than a "
                         "re-fetched export.",
-                "governed_by": ["D55", "D63", "D67", "D81", "D146", "D162", "D172", "D242",
-                                "D253", "D255"],
+                "governed_by": ["D37", "D55", "D63", "D67", "D81", "D146", "D162", "D167",
+                                "D172", "D242", "D253", "D255"],
                 "note": "PROVED BY `make identity-binding-selftest`: every class in §7.2's "
                         "own order, the human-bound exclusion, both report halves, over "
                         "plain fixtures, no store. `scripts/identity-replay.py` imports "
@@ -2855,9 +2860,12 @@ COMPONENTS = [
                         "newest_human_sku's captured_at scoping (the '6/53' finding); "
                         "backfill_read's digest match and fallback; audit()'s three §4.3 "
                         "failures, each proved to fire and to stay silent; the §5.5 "
-                        "human-bound exclusion over every member of HUMAN_BOUND_BY; "
-                        "held_review_candidates' found_by tagging.",
-                "governed_by": ["D55", "D63", "D67", "D162", "D172", "D242", "D253", "D255"],
+                        "approved-bound exclusion over every member of APPROVED_BOUND_BY, "
+                        "including `migration` itself; already_cleared over both queues "
+                        "(review and parked, D37); held_review_candidates' found_by "
+                        "tagging; CardPlan.identity_moves' real dispute/fold tests.",
+                "governed_by": ["D37", "D55", "D63", "D67", "D162", "D167", "D172", "D242",
+                                "D253", "D255"],
             },
             "identity-replay.py": {
                 "does": "the migration's replay, before any write (identity-follows-sku.md "
