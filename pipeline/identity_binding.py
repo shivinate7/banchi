@@ -426,24 +426,63 @@ class CardPlan:
 
     @property
     def identity_moves(self) -> bool:
-        """Does the DRAWN identity move to a different card (§7.1) — the read name moves to
-        one the read disputes, or the read number moves to one the fold disagrees with.
-        Never true for a spelling-only change (case, accent, qualifier, D146's own
-        tolerance)."""
+        """Does the DRAWN identity move to a different card (§7.1) — "One case is the drawn
+        name moving to a name the read disputes. The other is the drawn number moving to a
+        number the read does not equal after the join's fold." Both halves reuse the exact
+        tests the classifier itself ran (`name_disputes`, `number_agrees`), never a bare
+        string or case comparison — a case, accent or qualifier difference (D146's own
+        tolerance) is a spelling change, never a move, and only the real dispute/fold tests
+        can tell the two apart. Reviewed and fixed 2026-09-24 (LOW): the prior `.upper()`
+        name test and the unconditional `cls == T4U` number test undercounted T3's own
+        number moves entirely — §7.2's own table says 177 of 612 T3 cards move (30 name, 139
+        number, 8 both), which combined with T4u's 70 gives 247, not this property's old
+        217.
+        """
         if not derives(self.cls):
             return False
-        name_moves = (self.old_name or "").strip().upper() != (
-            self.classification.new_name or ""
-        ).strip().upper() and self.cls not in (T1, T2)
-        # T1/T2 change spelling only, by the ladder's own construction — the number test at
-        # T4u is what can genuinely move a number, and T3 is a human act and never "moves"
-        # anything by this test's own definition (§7.1: "a wrong human answer" is a
-        # different, unmeasured risk, not an identity move this table counts).
-        number_moves = self.cls == T4U
+        row = self.classification.row
+        if row is None:
+            return False
+        name_moves = name_disputes(self.read_name, [_row_dict(row)])
+        strategy = games_module.get(self.game)["join_key"]
+        number_moves = not number_agrees(
+            strategy, self.read_number, self.read_printed_total, row.number,
+        )
         return name_moves or number_moves
 
 
 # --------------------------------------------------------------- the held review entry (§7.3)
+
+
+def already_cleared(
+    review_entries: Mapping[str, object], parked_entries: Mapping[str, object], key: str,
+) -> Optional[Tuple[str, str]]:
+    """`("review", reason)` or `("parked", reason)` if a human has already cleared THIS
+    position under a different question, or `None` if neither queue has.
+
+    BOTH QUEUES, NEVER ONE. §7.3's own premise — "a held card has no answered entry...
+    every held card is in the no-human class" — is FALSE for a card a human cleared under
+    an EARLIER question before this migration ever ran: `no_catalog_row` in the review
+    queue (the join once found no candidate at all), or a D37 stand-down like
+    `set_ambiguous` in the PARKED queue. `server/capture_server.py:_drop_from_stores`'s own
+    comment is the precedent for checking both: "a position can hold an entry in each
+    file... nothing in store/queues.py prevents it." A card cleared in EITHER one has
+    already had ITS question answered, and `store/queues.py:Queue.upsert`'s own refusal
+    (D167/D4: never re-queue a position a human already answered) is this module's reason
+    to check before calling it, not after — the caller reports the block by name instead of
+    silently opening nothing.
+
+    Takes plain mappings of duck-typed entries (`.cleared_by_human`, `.reason`) rather than
+    `store.queues.QueueEntry` by name, so this stays importable without `store.queues` at
+    module scope (see `held_review_entry`'s own docstring for why that import stays local).
+    """
+    review = review_entries.get(key)
+    if review is not None and getattr(review, "cleared_by_human", False):
+        return "review", getattr(review, "reason", "")
+    parked = parked_entries.get(key)
+    if parked is not None and getattr(parked, "cleared_by_human", False):
+        return "parked", getattr(parked, "reason", "")
+    return None
 
 
 def _candidate_dict(row: SkuRow, found_by: Optional[str]) -> Dict[str, object]:
@@ -548,8 +587,18 @@ def held_review_entry(card: Card, row: SkuRow, plan: "MigrationPlan") -> "QueueE
 # §5.5: D242 (`cards contradictions`) and D255 (`cards sku-names`) retire into this report's
 # name half and number half. Both exclude a card a human has already answered — "a human who
 # chose that SKU off the photograph has already answered the report's question", and a guard
-# that goes red on an answered question is spent (§5.5's own words).
-HUMAN_BOUND_BY = ("answer", "group_answer", "correction", "confirm")
+# that goes red on an answered question is spent (§5.5's own words). `migration` belongs
+# beside the four human acts, EVEN THOUGH NO HUMAN CHOSE IT: the owner approved every T3
+# and T4u case at migration time — ruling 1 for T4u's 70, ruling 2 for T3's 38 disputed
+# names, "listed once" in the preview and never again. Without this a migration-bound card
+# reports the identical dispute on EVERY future run forever, which is the exact cry-wolf
+# failure §5.5 exists to prevent — reviewed and found HIGH, 2026-09-24: every re-run after
+# `--write` reported all 38 T3 names and 217 numbers, unbounded. `identity_drift` above is
+# NOT gated on this tuple — a migration-bound card whose SKU facts later change (a real
+# TCGplayer rename) must still be caught, and it is, because that check runs before this
+# one. Named `APPROVED_BOUND_BY` rather than `HUMAN_BOUND_BY`, because "the owner approved
+# this identity" is what every member now has in common, not "a human clicked it".
+APPROVED_BOUND_BY = ("answer", "group_answer", "correction", "confirm", "migration")
 
 
 @dataclass(frozen=True)
@@ -558,7 +607,7 @@ class AuditFindings:
 
     `identity_drift`/`sku_not_in_table`/`rarity_disagreement` are §4.3's three audit
     failures. `name_half`/`number_half` are D242/D255's replacement (§5.5): every
-    SKU-bound, non-human-bound card whose READ still disputes the row it is bound to — a
+    SKU-bound card, `bound_by` not in `APPROVED_BOUND_BY`, whose READ still disputes the row it is bound to — a
     property that can change after the bind, when a newer export changes the row's own
     facts (§3.2's `sku_facts_changed`)."""
 
@@ -599,7 +648,7 @@ def audit(cards: Sequence[Card], skus: Mapping[str, SkuRow], listings: Set[str])
         )
         if expected != actual:
             identity_drift.append((card.key, str(card.sku)))
-        if card.bound_by in HUMAN_BOUND_BY:
+        if card.bound_by in APPROVED_BOUND_BY:
             continue
         if name_disputes(card.read_name, [_row_dict(row)]):
             name_half.append(card.key)

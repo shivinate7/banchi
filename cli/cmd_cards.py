@@ -511,7 +511,8 @@ def _print_plan(plan: "ib.MigrationPlan", findings: "ib.AuditFindings", say) -> 
 
     say("")
     say("NAME/NUMBER CONTRADICTIONS (§5.5 — replaces `cards contradictions`/`cards "
-        "sku-names`, human-bound cards excluded)")
+        "sku-names`, owner-approved bindings excluded: a human answer/correction/confirm, "
+        "or this press's own migration)")
     say(f"  name half (read disputes its own bound SKU): {len(findings.name_half)}")
     say(f"  number half (read number disagrees with its own bound SKU): {len(findings.number_half)}")
 
@@ -541,7 +542,7 @@ def _identity(args, say) -> int:
         "review_already_open": 0, "review_blocked": 0, "sold_reported": 0,
         "skipped_moved": 0,
     }
-    blocked_entries: List[Tuple[str, str]] = []
+    blocked_entries: List[Tuple[str, str, str]] = []
     with Store().write() as snapshot:
         for p in plan.plans:
             card = snapshot.inventory.cards.get(p.key)
@@ -582,20 +583,27 @@ def _identity(args, say) -> int:
                     card.identity_source = IDENTITY_READ
                     census["held"] += 1
                 if card.state == master.IDENTIFIED:
-                    # MEASURED ON THE OWNER'S STORE: two held, identified cards (3/968,
-                    # 3/987) already carry a HUMAN-CLEARED entry under `no_catalog_row`
-                    # from 2026-09-01 — a real answer to a DIFFERENT, older question, at a
-                    # position the join once could not resolve at all. §7.3's own premise
-                    # ("a held card has no answered entry... every held card is in the
-                    # no-human class") is false for these two. `Queue.upsert` (D167/D4's own
-                    # protection: never re-queue a position a human already answered)
-                    # correctly refuses rather than overwriting that human's line, so this
-                    # is reported rather than forced through.
-                    existing = snapshot.review.entries.get(p.key)
-                    if existing is not None and existing.cleared_by_human:
+                    # MEASURED ON THE OWNER'S STORE: held, identified cards already carry a
+                    # HUMAN-CLEARED entry from an earlier, DIFFERENT question — 3/968 and
+                    # 3/987 under `no_catalog_row` in the REVIEW queue, 3/747 and 3/811 under
+                    # `set_ambiguous` in the PARKED queue (D37's stand-down: a human set them
+                    # aside rather than answering). §7.3's own premise ("a held card has no
+                    # answered entry... every held card is in the no-human class") is false
+                    # for all four. BOTH QUEUES ARE CHECKED — `_drop_from_stores`'s own
+                    # comment in `server/capture_server.py` is the precedent: "a position can
+                    # hold an entry in each file... nothing in store/queues.py prevents it" —
+                    # so a card cleared in EITHER one has already had its question answered,
+                    # and `Queue.upsert` (D167/D4's own protection: never re-queue a position
+                    # a human already answered) correctly refuses on the review side rather
+                    # than overwriting that human's line. Reported rather than forced through.
+                    review_existing = snapshot.review.entries.get(p.key)
+                    cleared_in = ib.already_cleared(
+                        snapshot.review.entries, snapshot.parked.entries, p.key,
+                    )
+                    if cleared_in is not None:
                         census["review_blocked"] += 1
-                        blocked_entries.append((p.key, existing.reason))
-                    elif existing is not None and existing.reason == "listing_disputed":
+                        blocked_entries.append((p.key, cleared_in[1], cleared_in[0]))
+                    elif review_existing is not None and review_existing.reason == "listing_disputed":
                         # RE-RUNNABLE (§7.3): an entry this same press already opened is
                         # left exactly as it is rather than upserted again — upserting an
                         # identical entry is harmless, but "re-runnable" means the SECOND
@@ -621,8 +629,8 @@ def _identity(args, say) -> int:
     if census["review_blocked"]:
         say(f"  HELD, IDENTIFIED, BUT ALREADY HUMAN-CLEARED UNDER A DIFFERENT REASON — no "
             f"new entry opened, D167/D4's own protection: {census['review_blocked']}")
-        for key, reason in blocked_entries:
-            say(f"    {key}  already cleared under {reason!r}")
+        for key, reason, queue in blocked_entries:
+            say(f"    {key}  already cleared in {queue}, under {reason!r}")
     say(f"  sold and held, report only: {census['sold_reported']}")
     if census["skipped_moved"]:
         say(f"  SKIPPED, SKU moved since the preview: {census['skipped_moved']}")

@@ -848,11 +848,11 @@ rather than disabled until its preflight has answered. What changed is reading o
 zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-sixteen strings and the screen labels FIFTEEN of them — six from the variant ladder in
+named strings and the screen labels every live one — the variant ladder in
 `pipeline/variant.py`
 (`no_catalog_row`, `metadata_not_stocked`,
 `detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
-`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and NINE from
+`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and
 routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
 `set_ambiguous`, `card_not_detected`, `no_market_data`, `name_disputed` — the name read off
 the photograph matching none of the rows its number found, which is D23's cross-check run
