@@ -40,6 +40,15 @@ WHAT THIS DOES NOT DO. It does not call the network, does not read or write
 repair a single stored field. It only decides which refusals are safe to route to a human at
 all (`is_identification_refusal`, below), and builds the entries `Queue.upsert` already knows
 how to hold.
+
+A CARD THIS MODULE CANNOT QUEUE IS NAMED, NEVER SILENTLY ABSENT (`queue_entries`'s own
+`QueueBuild.unavailable`, review round, HIGH finding, 2026-09-24) — `CLAUDE.md`'s hard rule,
+"never drop a card without saying so", applied to the one shape this module can itself
+produce: a SKU-bound card whose evidence (`read_name`/`read_number`/`read_printed_total`)
+was never recorded matches its own refusal exactly and still carries no reading to show a
+human beside its photograph. `cli/cmd_pricearchive.py:_sweep` prints every one of these BY
+POSITION, beside its "queued" and "already queued or answered" lines, so a reader of the
+sweep's own output never has to notice a card is missing to go and ask why.
 """
 
 from __future__ import annotations
@@ -91,6 +100,31 @@ class _Match:
     card: master.Card
     sku: str
     reason: str
+
+
+@dataclass(frozen=True)
+class SkippedCard:
+    """One position `queue_entries` could not queue, and why — plain words, never a code
+    a caller has to translate. `position` is `"box/index"`, the same shape every other
+    reader of this module's entries already keys on.
+    """
+
+    position: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class QueueBuild:
+    """`queue_entries`'s own answer: the entries ready for `Queue.upsert`, and every
+    position it could not build one for — CLAUDE.md's own hard rule, "never drop a card
+    without saying so" (review round, HIGH finding, 2026-09-24). A card with no photograph
+    was already silently skipped before this fix; a bound card with no recorded reading
+    joined it the day `card_reading` landed, and this is what stopped both being silent —
+    a caller reports `unavailable` BY NAME, never folds it into a bare count.
+    """
+
+    entries: List["queues.QueueEntry"]
+    unavailable: List[SkippedCard]
 
 
 def cards_for_refusals(
@@ -154,7 +188,7 @@ def cards_for_refusals(
 def queue_entries(
     matches: Iterable[_Match],
     box_views: Mapping[int, "join.BoxView"],
-) -> List["queues.QueueEntry"]:
+) -> QueueBuild:
     """`cards_for_refusals`'s matches, each carrying its photograph, ready for
     `store/queues.py:Queue.upsert` — never written here, so a caller stays free to preview.
 
@@ -167,10 +201,27 @@ def queue_entries(
     builds it from every box a match names) falls back to `join.BoxView()`'s bare index
     space, D58's own precedent for "no layout to consult" rather than a raised exception.
 
-    A CARD WITH NO PHOTOGRAPH IS SKIPPED, NEVER QUEUED WITHOUT ONE — this task's own rule,
-    "a card reaching the queue carries its photograph."
+    RETURNS `QueueBuild`, NOT A BARE LIST, since the review round (HIGH finding,
+    2026-09-24): a card this function cannot build an entry for must be named, never
+    dropped where nothing reads it. Two things stop a match becoming an entry, and only one
+    of them is reported here:
+
+      no photograph        skipped silently, unchanged from before this fix. "A card
+                           reaching the queue carries its photograph" (this task's own
+                           rule) is a photo-store fact this module has no reason to
+                           report — a card is missing a photograph for the same reasons
+                           it is missing anything else about its own record, and nothing
+                           about an ARCHIVE refusal caused it.
+      no recorded reading  collected into `unavailable`, one `SkippedCard` per position.
+                           `card_reading` answering `READING_UNAVAILABLE` (a SKU-bound card
+                           whose `read_*` was never recorded) is a direct CONSEQUENCE of
+                           routing this refusal here at all — the card matched, a human
+                           needs to look at it, and this function is the one place that
+                           knows both facts. Silently excluding it would make the sweep's
+                           own report say fewer cards needed a look than actually did.
     """
     entries: List["queues.QueueEntry"] = []
+    unavailable: List[SkippedCard] = []
     seen: set = set()
     for match in sorted(matches, key=lambda m: (m.card.box, m.card.index)):
         card = match.card
@@ -184,16 +235,18 @@ def queue_entries(
         # only. Once a card is SKU-bound, `card.name`/`card.number` are the bound SKU's
         # own catalog row (§3.1) — building this block from them unconditionally would
         # show the operator the listing's own name back as though it were evidence.
-        #
-        # `READING_UNAVAILABLE` (a bound card whose evidence was never recorded) IS
-        # SKIPPED, NEVER QUEUED WITH A GUESS — this function's own established rule for a
-        # card with no photograph, extended: a queued entry this module builds must carry
-        # a real reading to show a human beside the photo, not the thing the refusal is
-        # about. `make check`'s `archive-review-selftest` fixtures are all old-shape,
-        # unbound cards, so this branch is unreached there; it is a real, reachable path
-        # once a bound card's own archive refusal ever reaches this module.
         reading = run_resolve.card_reading(card)
         if reading.outcome == run_resolve.READING_UNAVAILABLE:
+            seen.add(key)
+            unavailable.append(
+                SkippedCard(
+                    position=f"{card.box}/{card.index}",
+                    reason=(
+                        f"bound to SKU {card.sku} with no recorded reading — cannot be "
+                        f"queued without one to show beside its photograph"
+                    ),
+                )
+            )
             continue
         seen.add(key)
         game = card.game or games.DEFAULT_GAME
@@ -214,7 +267,7 @@ def queue_entries(
                 candidates=[],
             )
         )
-    return entries
+    return QueueBuild(entries=entries, unavailable=unavailable)
 
 
 def apply(review: "queues.Queue", entries: Iterable["queues.QueueEntry"]) -> int:
