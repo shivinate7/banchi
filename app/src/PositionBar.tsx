@@ -110,10 +110,20 @@ export function PositionBar({
           track with `querySelector('.position-bar-track')`, and the section ruler carries that
           class too; only document order makes that selector return the strip. The visual order
           is done with CSS `order`. */}
-      <p className="position-bar-text position-bar-text-box">
-        {boxCaption}
-        {boxDetail === null ? null : <span className="position-bar-text-detail">{boxDetail}</span>}
-      </p>
+      {/* WITH THE RULER, THE CAPTION SHARES ITS LINE WITH \`back\` AND \`front\` (LOC-06), so saying which
+          end is card 1 costs the row no height: the copies row is sized to the fold (D118). */}
+      {sectionDepth ? (
+        <div className="position-bar-ends-row">
+          <span className="position-bar-end-back" aria-hidden="true">back</span>
+          <p className="position-bar-text position-bar-text-box">{boxCaption}</p>
+          <span className="position-bar-end-front" aria-hidden="true">front</span>
+        </div>
+      ) : (
+        <p className="position-bar-text position-bar-text-box">
+          {boxCaption}
+          {boxDetail === null ? null : <span className="position-bar-text-detail">{boxDetail}</span>}
+        </p>
+      )}
       <div className="position-bar-track">
         {spans.length === 0 ? (
           <span className="position-bar-segment position-bar-segment-blank" />
@@ -207,11 +217,6 @@ export function PositionBar({
                 </span>
               </>
             )}
-          </p>
-          {/* WHICH END IS CARD 1 (LOC-06): the owner's orientation, said once for both scales. */}
-          <p className="position-bar-ends" aria-hidden="true">
-            <span className="position-bar-end-back">back</span>
-            <span className="position-bar-end-front">front</span>
           </p>
         </div>
       )}

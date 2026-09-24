@@ -132,7 +132,12 @@ export function PlaceNeighbors({
     parts.prev === null ? null : `${name(parts.prev)} toward the back`,
     parts.next === null ? null : `${name(parts.next)} toward the front`,
   ].filter((part): part is string => part !== null)
-  const said = `${departed ? 'Was between' : 'Between'} ${sides.join(' and ')}`
+  /* THE SKIP IS STATED WHERE IT HAPPENED (D116): a landmark two cards away must say so, or the
+     sentence sends a hand to the wrong slot. One clause covers both sides. */
+  const skipped = (parts.prev?.skipped ?? 0) + (parts.next?.skipped ?? 0)
+  const skip = skipped > 0 ? `, with ${skipped} unidentified card${skipped === 1 ? '' : 's'} in between` : ''
+  const lead = sides.length === 2 ? (departed ? 'Was between' : 'Between') : departed ? 'Was next to' : 'Next to'
+  const said = `${lead} ${sides.join(' and ')}${skip}`
   const here = place?.card ?? null
 
   return (

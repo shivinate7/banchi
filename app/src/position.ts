@@ -399,7 +399,9 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
     /* PAST TENSE, ONE FACT (LOC-23, and the owner's ruling that a departed card speaks of the
        place it left). The number is the one the server's departed label carries. */
     const was = placePartsOf(place.label)?.card ?? null
-    const tail: readonly string[] = [was === null ? 'was in this section' : `was card ${was} of ${of}`]
+    /* No `of N` here: a card that stood behind the section's last card would read `was card 12 of
+       11`, which is true of the place and reads as an error. */
+    const tail: readonly string[] = [was === null ? 'was in this section' : `was card ${was}`]
     return {
       slot: null,
       of,

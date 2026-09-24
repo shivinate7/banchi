@@ -269,7 +269,8 @@ for (const size of SIZES) {
       await expect(page.locator('.card-locations-row.is-gone .nb')).toHaveAttribute('aria-label', /^Was between /)
 
       /* A SECTION TITLE KEEPS ITS NAME WHOLE AND SAYS ITS COUNT ONCE (LOC-21). */
-      if (size.width >= 720) {
+      /* The walk list is on the page beside the card from 820 up; below that it is in the rail sheet. */
+      if (size.width >= 820) {
         const heads = page.locator('.browse-secthead')
         const count = await heads.count()
         expect(count).toBeGreaterThan(0)

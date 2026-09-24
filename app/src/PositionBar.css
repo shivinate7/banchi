@@ -152,7 +152,7 @@
 }
 .position-bar.position-bar-owner[data-depth] > .position-bar-zoom { order: 0; }
 .position-bar.position-bar-owner[data-depth] > .position-bar-track { order: 1; }
-.position-bar.position-bar-owner[data-depth] > .position-bar-text-box {
+.position-bar.position-bar-owner[data-depth] .position-bar-text-box {
   order: 2;
   align-self: flex-end;
 }
@@ -248,20 +248,31 @@
 .position-bar-owner[data-depth] .position-bar-segment { position: relative; }
 
 /* WHICH END IS CARD 1 (LOC-06). The owner's orientation: card 1 is at the far back, the highest
-   number nearest the body. Said once, under both scales, in the caption register. */
+   number nearest the body. Said once, under both scales, on the line the strip's caption already
+   takes: \`back\` at the left edge, the caption, \`front\` at the right edge. The Fulfiller's strip
+   draws the same two words on a row of its own (\`.position-bar-ends\`). */
+.position-bar-ends-row,
 .position-bar-ends {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
+  gap: var(--bn-2);
   margin: 0;
+  min-width: 0;
+}
+.position-bar-end-back,
+.position-bar-end-front {
+  flex: none;
   font-family: var(--bn-font-ui);
   font-size: var(--bn-fs-2xs);
   font-weight: 600;
   letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
-  line-height: 1.2;
+  line-height: var(--pb-cap-box);
   color: var(--bn-ink-3);
 }
-.position-bar.position-bar-owner[data-depth] > .position-bar-zoom > .position-bar-ends { order: 3; }
+.position-bar.position-bar-owner[data-depth] > .position-bar-ends-row { order: 2; }
+.position-bar-ends-row > .position-bar-text-box { flex: 0 1 auto; min-width: 0; }
 
 /* ---- the owner's density ---- */
 .position-bar-owner .position-bar-text {
