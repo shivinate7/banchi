@@ -156,7 +156,10 @@ function card(input: {
   /* A card with no name has no read at all, which is why both halves hang off it. */
   const number = input.number ?? (input.name === null ? null : '090')
   const printedTotal = input.printedTotal ?? (input.name === null ? null : '132')
-  const label = `Box ${box} · Section ${input.section} · Card ${slot}`
+  /* THE SERVER'S LABEL SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name): the
+     box's NAME, the section and the card within it, joined by commas. */
+  const boxName = input.boxName ?? 'ME01 commons'
+  const label = `${boxName}, Section ${input.section}, Card ${slot}`
 
   /* A DEPARTED CARD IS IN NO SLOT (D58), and the fixture has to say so or it is asserting
      against a shape the server cannot produce: the number it used to hold belongs to the card
@@ -169,7 +172,7 @@ function card(input: {
            the identical string — this file's own walk case expected `Box 2 · departed` twice —
            so the label carries the one number about a departed card that cannot lie about a
            shelf. `join.departed_label` is still the one composer of it. */
-        label: `Box ${box} · departed · B${box} #${input.index}`,
+        label: `${boxName}, Section ${input.section}, Card ${slot}`,
         box,
         index: input.index,
         slot: null,
@@ -1548,7 +1551,7 @@ function sellableStore(): {
       const place = held.place
       const gone = {
         ...place,
-        label: `Box ${place.box} · departed · B${place.box} #${place.index}`,
+        label: place.label,
         slot: null,
         card: null,
         fraction: null,
@@ -6451,8 +6454,8 @@ function stackedStore(): { store: Store; depart: (key: string) => void } {
       cards[key] = {
         ...held,
         state: 'sold',
-        label: `Box ${place.box} · departed · B${place.box} #${place.index}`,
-        place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null },
+        label: place.label,
+        place: { ...place, slot: null, card: null, fraction: null },
       }
       delete (cards[key] as { card?: number }).card
       void inner

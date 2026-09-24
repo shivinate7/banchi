@@ -65,13 +65,19 @@ two ends say which end is the far back.
 
 ### What is built
 
-NOT BUILT. The locating lane builds it (LOC-03 to LOC-07, and the ruler). It moved to wave 1 in
-the round-two plan, so the screen lanes use its vocabulary. `docs/specs/box-map.md` uses the same
-orientation for its move receipts.
+BUILT in the locating lane:
 
-The round-two plan names three locating entries for the same rulings (slugs `section-ruler`,
-`card-one-at-back` and `section-card-number`). One copy of each argument must go before either
-merges.
+- The server's label counts the card within its section, and a departed card is counted in the
+  section it left (`pipeline/join.py:Position.section`, in index space).
+- `app/src/position.ts:placePartsOf` is the one reader of the label. `sentencePartsOf` says
+  `Card 5 of 12` for both personas. `sectionDepthOf` gives the ruler section numbers at both
+  ends and the card's own cell.
+- `app/src/PositionBar.tsx`: the ruler fills the card's cell and puts the pin at its centre. The
+  strip under it numbers the box's sections and outlines this one. `back` and `front` are
+  written under both. The caret is gone.
+- `app/src/PlaceNeighbors.tsx` draws back, this card, front. A departed card reads `was here`,
+  and its accessible name is `Was between ...`.
+- `app/tests/locating.spec.ts` asserts it at 1440, 820, 720 and 390, in both themes.
 
 ### One more word: slots
 

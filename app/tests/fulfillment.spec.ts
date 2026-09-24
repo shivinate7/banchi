@@ -707,7 +707,7 @@ function multiCopy(key: string, box: number, section: number, card: number, sect
     capture_id: `cap-${key.replace('/', '-')}`,
     cid: null,
     place: {
-      label: `Box ${box} · Section ${section} · Card ${card}`,
+      label: `Box ${box}, Section ${section}, Card ${card}`,
       located: true,
       box,
       index: card,

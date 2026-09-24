@@ -6567,31 +6567,29 @@ COMPONENTS = [
             # sentence: each takes a `persona` and renders owner-dense or Fulfiller-large from
             # ONE implementation. The alternative — a second component per screen — is what
             # docs/DESIGN.md rejected when it declined two visual worlds.
-            "src/PositionBar.tsx": {"does": "D20's sentence drawn, at two scales — and the SECTION is "
-                                            "the instrument. A graduated 26px ruler with a fill, a pin "
-                                            "that crosses it and the section's own bounds written "
-                                            "inside its two ends; under it an 8px strip of chips for "
-                                            "the box, with a caret on the chip this card is in. Says "
-                                            "'#40 of 250 · 16% in' for a sealed box and '#12 of 62' "
-                                            "for an open one — NO 'SO FAR' ANYWHERE (owner's ruling, "
-                                            "2026-09-19: the words trailed unconditionally on every "
-                                            "open box, an opt-out flag nothing ever set, now deleted). "
-                                            "THE SVG TRAPEZOID IS DELETED "
-                                            "(D155): its two legs' slope ratio "
-                                            "carried neither a width nor a height term and its "
-                                            "arithmetic pointed at the wrong chip by up to 42px. THE "
-                                            "ZOOM BLOCK MOUNTS ON THE `sectionDepth` PROP and never on "
-                                            "whether the depth resolved, so all four owner states are "
-                                            "one DOM at one height (D118).",
+            "src/PositionBar.tsx": {"does": "where a card sits: its SECTION drawn as a graduated "
+                                            "ruler that marks the exact card (its own cell filled, the "
+                                            "pin at the cell's centre) with section numbers at both "
+                                            "ends, and under it a strip of the box's sections, "
+                                            "numbered, with this section outlined, so the sections "
+                                            "before and after show. `back` and `front` are written "
+                                            "under both, because card 1 is at the far back (the "
+                                            "owner's ruling, 2026-09-23, amending D155; "
+                                            "D-a-card-is-counted-in-its-section). The strip's caption "
+                                            "is `Section 2 of 3`; without the ruler it is the card's "
+                                            "`Card 5 of 12`. THE ZOOM BLOCK MOUNTS ON THE "
+                                            "`sectionDepth` PROP and never on whether the depth "
+                                            "resolved, so every owner state is one DOM at one height "
+                                            "(D118).",
                                     "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41",
                                                     "D58", "D68", "D118", "D132", "D155", "D218",
                                                     "D-a-card-is-counted-in-its-section"]},
-            "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST, in two "
-                                             "parts: `#/inventory`'s shelf and `#/orders`' walk both "
-                                             "draw it. The section's name shrinks and ellipsizes; its "
-                                             "card count keeps its own width, so a narrow column cuts "
-                                             "the name and never the count a hand checks the rows "
-                                             "against. The comma rides the count's span, so the text is "
+            "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST: "
+                                             "`#/inventory`'s shelf and `#/orders`' walk both draw "
+                                             "it. The section's name is whole (it wraps, never cut: it "
+                                             "is the divider's own label), and its count is spoken and "
+                                             "not drawn, because both lists draw the count in a pill "
+                                             "beside it (LOC-21). The text is still "
                                              "`position.ts:sectionTitleText`'s whole sentence. A "
                                              "component alone in its file so React Refresh can "
                                              "hot-reload it.",
@@ -8145,6 +8143,21 @@ COMPONENTS = [
                         "Run by `make design-check`.",
                 "governed_by": ["D5", "D173", "D-page-scaffold"],
             },
+            "tests/locating.spec.ts": {
+                "does": "where a card is, said one way (the locating lane): at 1440, 820, 720 "
+                        "and 390 in both themes, `#/inventory?box=N&card=<cid>` opens that card; "
+                        "its place names the box by name and never by number; the ruler's ends "
+                        "are section numbers, `back` sits before `front` (card 1 at the far "
+                        "back), and the pin's centre lies inside the card's own cell; the strip "
+                        "numbers the sections before and after; neighbours draw back, this, "
+                        "front; a departed copy is struck through with a past-tense accessible "
+                        "name and no word; section titles are whole with one drawn count; and "
+                        "Review's pill links to the card and reads as a sentence. Its fixture is "
+                        "`pipeline/join.py:Position`'s arithmetic written out. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D-a-box-is-shown-by-its-name", "D-a-card-is-counted-in-its-section",
+                                "D58", "D155", "D218"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "
@@ -8393,7 +8406,9 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134", "D174", "D192"]},
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
+                                "D124", "D125", "D134", "D174", "D192",
+                                "D-a-box-is-shown-by-its-name"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -8768,7 +8783,7 @@ COMPONENTS = [
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
                                 "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D213",
-                                "D218"],
+                                "D218", "D-a-box-is-shown-by-its-name"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

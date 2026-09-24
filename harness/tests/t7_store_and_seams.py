@@ -4036,6 +4036,7 @@ def check_queues(checks: Checks) -> None:
                 "age_days",
                 "box",
                 "candidates",
+                "cid",
                 "cleared_by_human",
                 "confidence",
                 "first_seen",
@@ -4043,11 +4044,13 @@ def check_queues(checks: Checks) -> None:
                 "label",
                 "market",
                 "photo",
+                "place",
                 "position",
                 "read",
                 "reason",
             ],
-            "a queue row is the whole QueueEntry record plus age_days — not a projection "
+            "a queue row is the whole QueueEntry record plus age_days, the card's place block "
+            "and its stable name (the review pill opens THIS card, LOC-12) — not a projection "
             "the app has to hold against review.json field by field",
         )
         checks.equal(

@@ -185,7 +185,7 @@ async function open(
         box,
         index,
         key: `${box}/${index}`,
-        label: `Box ${box} · Section 1 · Card ${index}`,
+        label: `Box ${box}, Section 1, Card ${index}`,
         section: 1,
         card: index,
         new_box: index === 1,
@@ -346,7 +346,7 @@ async function shootInto(page: Page, box: number, first: number, count: number):
     await page.keyboard.press('c')
     await expect(rows(page).first()).toHaveAttribute(
       'aria-label',
-      new RegExp(`Box ${box} · Section 1 · Card ${first + at}$`),
+      new RegExp(`Box ${box}, Section 1, Card ${first + at}$`),
     )
   }
 }

@@ -70,7 +70,7 @@
 .position-bar-segment-num {
   display: block;
   overflow: hidden;
-  padding: 0 3px;
+  padding: 0 var(--bn-0-75);
   font-size: var(--bn-fs-2xs);
   font-weight: 700;
   line-height: var(--pb-track);

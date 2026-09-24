@@ -157,14 +157,14 @@ function card(over: {
   return {
     box: over.box,
     index: over.index,
-    label: `Box ${over.box} · Section ${over.section} · Card ${over.card}`,
+    label: `${over.boxName ?? `Box ${over.box}`}, Section ${over.section}, Card ${over.card}`,
     section: over.section,
     card: over.card,
     place: {
       located: true,
-      label: gone
-        ? `Box ${over.box} · departed`
-        : `Box ${over.box} · Section ${over.section} · Card ${over.card}`,
+      /* THE SERVER'S LABEL (D-a-box-is-shown-by-its-name): the box's name, the section and the card
+         within it, a departed card naming the place it left. `slot` null is what marks it gone. */
+      label: `${over.boxName ?? `Box ${over.box}`}, Section ${over.section}, Card ${over.card}`,
       box: over.box,
       index: over.index,
       section: over.section,
