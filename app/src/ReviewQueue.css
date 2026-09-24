@@ -272,12 +272,18 @@
   color: var(--bn-ink-2);
   white-space: nowrap;
 }
+/* `--bn-ink-3` READS 2.8:1 HERE IN LIGHT, NOT ITS DOCUMENTED 4.85:1 (F3, round 3 of the
+   locating review). That figure is measured against `--bn-bg`; this pill sits on
+   `--bn-surface-glass` over `--rv-well`, the dark neutral behind the photo — a lighter,
+   translucent ground the token was never measured against. `--bn-ink-2` is: ~5.46:1 in
+   light, ~9.99:1 in dark, composited the same way `app/tests/kit-data.spec.ts`'s
+   `contrastOf` composites it. `app/tests/review.spec.ts` asserts the floor. */
 .review-caption-end {
   flex: none;
   font-size: var(--bn-fs-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--bn-ink-3);
+  color: var(--bn-ink-2);
 }
 /* Whole or cut, never squeezed: the line wraps between its parts at 390 (like the label above
    it), and only a name longer than 16 characters is cut. */
@@ -287,9 +293,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.review-caption-nb.is-unread { font-style: italic; color: var(--bn-ink-3); }
+.review-caption-nb.is-unread { font-style: italic; color: var(--bn-ink-2); }
 .review-caption-this { flex: none; font-weight: 600; color: inherit; }
-.review-caption-arrow { flex: none; color: var(--bn-ink-3); }
+.review-caption-arrow { flex: none; color: var(--bn-ink-2); }
 .review-caption .position-run {
   font-size: var(--pos-slot); line-height: 1; letter-spacing: 0;
   /* repainted by `.review-caption-link:hover`; a <span> is outside the floor's reach. */
