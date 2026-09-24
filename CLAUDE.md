@@ -266,7 +266,9 @@ make kit-adoption   # every ROUTES view renders <Page> from the kit, and no scre
                     #   AST. `scripts/kit-adoption-allow.json` is a SHRINKING offender list,
                     #   file -> rule -> lane: an unlisted violation fails, a stale entry fails,
                     #   and a key that the list at the merge-base with origin/main does not
-                    #   hold fails. With no merge-base it fails open and says so.
+                    #   hold fails, unless its rule is not defined at the merge-base (a rule
+                    #   born on the branch). The output names each such rule and why. With
+                    #   no merge-base it fails open and says so.
 make kit-adoption-selftest  # that checker, on in-memory fixtures in both directions. Writes
                     #   nothing (D18).
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
@@ -441,8 +443,10 @@ it, and a screen that hand-rolls a primitive that the kit owns. `app/tests/scaff
 browser, per route, at 1440, 820, 720 and 390. The exceptions are one shrinking offender list,
 `scripts/kit-adoption-allow.json` (file -> rule -> lane). It fails on an unlisted violation and
 on a stale entry. It also fails on a key that the list at the merge-base with `origin/main` does
-not hold, so the list only gets shorter. A lane that moves a screen onto `Page` deletes that
-screen's entries in the same commit.
+not hold. So every rule that exists at the merge-base only shrinks. The one exception is a rule
+that the merge-base does not define, which is a rule born on the branch. Its first offenders may
+be listed, and the check prints which rule allowed them and why. A lane that moves a screen onto
+`Page` deletes that screen's entries in the same commit.
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
 stage strip, joined client-side on order number. Not D31's defect returning: one sale, two

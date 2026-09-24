@@ -334,9 +334,10 @@ CHECKS = (
                    "heuristic's edge stated in the script's header. "
                    "scripts/kit-adoption-allow.json is a SHRINKING offender list, file -> "
                    "rule -> lane: an unlisted violation fails, a stale entry fails, and a "
-                   "key the list at the merge-base with origin/main does not hold fails "
-                   "(read-only git; fails open, printed, with no merge-base or no list "
-                   "there). Never a pinned count.",
+                   "key the list at the merge-base with origin/main does not hold fails, "
+                   "unless its rule is not defined at the merge-base (a rule born on the "
+                   "branch; printed with its reason). Read-only git; fails open, printed, "
+                   "with no merge-base or no list there. Never a pinned count.",
         "needs": ("node", "app deps"),
         "writes": "",
         "commit_path": False,
@@ -1193,8 +1194,9 @@ CHECKS = (
                    "refused, and an unreadable or empty ROUTES table is a loud failure. R1's "
                    "answer does not depend on JSX order, follows any depth and ends a cycle, "
                    "and a default-import view resolves. A new allow key fails against the "
-                   "base list, a removed one passes, and the git read sees the committed list "
-                   "at HEAD. The fixtures are in-memory maps, never files.",
+                   "base list for an existing rule, passes for a rule born on the branch, a "
+                   "removed one passes, an unread rule definition excuses nothing, and the "
+                   "git read sees the committed list and rules at HEAD. The fixtures are in-memory maps, never files.",
         "needs": ("node", "app deps"),
         "writes": "",
         "commit_path": False,

@@ -70,14 +70,22 @@
  * it cannot stop a branch ADDING an entry to excuse a new screen. So the check also reads the
  * allow list as it stood at the merge-base with `origin/main` (`git merge-base HEAD origin/main`,
  * then `git show <base>:scripts/kit-adoption-allow.json`: two plain reads, so D18 holds) and
- * REFUSES every key the branch added: a new file -> rule pair in `static`, or a new route ->
- * assertion pair in `runtime`. A removed key passes: that is the list shrinking. A new lane on a
- * key that already existed is not growth. IT FAILS OPEN, AND PRINTS WHY: no git, no
+ * REFUSES every key the branch added for a rule that EXISTS AT THE MERGE-BASE: a new file -> rule
+ * pair in `static`, or a new route -> assertion pair in `runtime`. A removed key passes: that is
+ * the list shrinking. A new lane on a key that already existed is not growth.
+ * ONE EXCEPTION, the orchestrator's call (option b, 2026-09-23): a new key is ALLOWED when its
+ * rule is NOT defined at the merge-base, because a rule born on this branch finds offenders
+ * nobody could have listed before it existed. "Defined at the merge-base" is read, never
+ * assumed: the keys of `RULES` in this file for `static`, and the members of `PER_ROUTE` and
+ * `SHELL_WIDE` in `app/tests/scaffold.spec.ts` for `runtime`, each by `git show <base>:<file>`.
+ * Each allowed key is PRINTED with the rule that allowed it and why. A definition that cannot be
+ * read at the merge-base allows nothing. Once the branch merges, its new rule exists at every
+ * later merge-base, so from then on that rule only shrinks too. IT FAILS OPEN, AND PRINTS WHY: no git, no
  * `origin/main`, no merge-base, or no allow list at the merge-base. The last is the branch that
  * gives the list its birth, where every entry is new by definition.
  *
  * `runtime` in the same file belongs to `app/tests/scaffold.spec.ts`, which validates it. This
- * script checks that the block is an object, and that it does not grow.
+ * script checks that the block is an object, and that it grows only by the rule above.
  *
  * WHAT IS NOT SEEN, said here so nobody reads green as more than it is:
  *   - a class name, role or type that reaches JSX through a variable (`const c = 'bn-money'`,
@@ -93,7 +101,7 @@
  *     node scripts/kit-adoption.mjs --routes     ROUTES as JSON, for scaffold.spec.ts
  *
  * NEVER WRITES (D18). The self-test builds its fixtures as in-memory maps of path -> source. Its
- * one read of the disk is the only-shrinks case that reads the committed list at HEAD with
+ * one read of the disk is the only-shrinks case that reads the committed list and rules at HEAD with
  * `git merge-base` and `git show`, which write nothing.
  */
 
@@ -583,31 +591,79 @@ export function judge(violations, allow) {
   return { errors, unlisted, stale, listed }
 }
 
-/** Every key of a two-level block, `outer -> inner`, as `outer -> inner` strings. */
+/** Every key of a two-level block, `outer -> inner`, as `{ key: 'outer -> inner', rule: inner }`. */
 function pairs(block) {
-  const out = new Set()
+  const out = new Map()
   if (block === null || typeof block !== 'object' || Array.isArray(block)) return out
   for (const [outer, inner] of Object.entries(block)) {
     if (inner === null || typeof inner !== 'object' || Array.isArray(inner)) continue
-    for (const key of Object.keys(inner)) out.add(`${outer} -> ${key}`)
+    for (const rule of Object.keys(inner)) out.set(`${outer} -> ${rule}`, rule)
   }
   return out
 }
 
-/** ONLY SHRINKS. Every key `head` holds in `static` or `runtime` that `base` did not. `base` null
- *  means there was nothing to compare against: the caller fails open and prints why. */
-export function growth(base, head) {
+/** ONLY SHRINKS, WITH ONE EXCEPTION (the orchestrator's call, option b, 2026-09-23). Every key
+ *  `head` holds in `static` or `runtime` that `base` did not is growth. Growth is REFUSED for a
+ *  rule that exists at the merge-base, and ALLOWED only for a rule born on this branch: a new
+ *  rule finds offenders nobody could have listed before it existed. `baseRules` is
+ *  `{ static, runtime }`, each the Set of rule ids defined at the merge-base (RULES in this file;
+ *  PER_ROUTE and SHELL_WIDE in scaffold.spec.ts), or null when that definition could not be read.
+ *  A null set allows nothing: an unread definition never excuses growth. `base` null means there
+ *  was nothing to compare against: the caller fails open and prints why.
+ *  Returns `{ refused, allowed }`, each a list of `{ block, key, rule, why }`, or null. */
+export function growth(base, head, baseRules = { static: null, runtime: null }) {
   if (base === null) return null
-  const grown = []
+  const refused = []
+  const allowed = []
   for (const block of ['static', 'runtime']) {
     const before = pairs(base?.[block])
-    for (const key of pairs(head?.[block])) if (!before.has(key)) grown.push({ block, key })
+    const known = baseRules?.[block] ?? null
+    for (const [key, rule] of pairs(head?.[block])) {
+      if (before.has(key)) continue
+      if (known !== null && !known.has(rule)) {
+        allowed.push({ block, key, rule, why: `rule "${rule}" is not defined at the merge-base, so it was born on this branch and its first offenders may be listed` })
+      } else {
+        const why = known === null
+          ? `the merge-base's ${block} rule definitions could not be read, so "${rule}" cannot be shown to be new`
+          : `rule "${rule}" exists at the merge-base, and a rule that exists only shrinks`
+        refused.push({ block, key, rule, why })
+      }
+    }
   }
-  return grown
+  return { refused, allowed }
 }
 
-/** The allow list as it stood at the merge-base with origin/main, or the reason there is none.
- *  Two plain reads (`git merge-base`, `git show`), so nothing is written (D18). */
+/** The ids a source defines: the keys of an object literal named `objectName`, or the string
+ *  members of array literals named in `arrayNames`. Null when none of them is found. */
+export function definedIds(source, { objectName = null, arrayNames = [] } = {}) {
+  const sf = ts.createSourceFile('x.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const ids = new Set()
+  let found = false
+  const visit = (n) => {
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+      const init = unwrap(n.initializer)
+      if (n.name.text === objectName && ts.isObjectLiteralExpression(init)) {
+        found = true
+        for (const p of init.properties) {
+          if (p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name))) ids.add(p.name.text)
+        }
+      } else if (arrayNames.includes(n.name.text) && ts.isArrayLiteralExpression(init)) {
+        found = true
+        for (const el of init.elements) if (ts.isStringLiteral(el)) ids.add(el.text)
+      }
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return found ? ids : null
+}
+
+const SPEC_FILE = 'app/tests/scaffold.spec.ts'
+const SELF_FILE = 'scripts/kit-adoption.mjs'
+
+/** The allow list, and the rule ids defined, as they stood at the merge-base with `reference`,
+ *  or the reason there is none. Plain reads (`git merge-base`, `git show`), so nothing is
+ *  written (D18). */
 function allowAtBase(reference = 'origin/main') {
   const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   let base
@@ -622,11 +678,24 @@ function allowAtBase(reference = 'origin/main') {
   } catch {
     return { allow: null, reason: `${ALLOW_FILE} does not exist at the merge-base ${base.slice(0, 8)}, so this branch gives it its birth and every entry is new` }
   }
+  let allow
   try {
-    return { allow: JSON.parse(text), base }
+    allow = JSON.parse(text)
   } catch (err) {
     return { allow: null, reason: `${ALLOW_FILE} at the merge-base ${base.slice(0, 8)} is not JSON (${err.message})` }
   }
+  const idsAt = (file, shape) => {
+    try {
+      return definedIds(git('show', `${base}:${file}`), shape)
+    } catch {
+      return null
+    }
+  }
+  const rules = {
+    static: idsAt(SELF_FILE, { objectName: 'RULES' }),
+    runtime: idsAt(SPEC_FILE, { arrayNames: ['PER_ROUTE', 'SHELL_WIDE'] }),
+  }
+  return { allow, base, rules }
 }
 
 /* ---- the real tree ------------------------------------------------------------------------- */
@@ -678,14 +747,20 @@ function run() {
     )
   }
   const atBase = allowAtBase()
-  const grown = growth(atBase.allow, allow)
+  const grown = growth(atBase.allow, allow, atBase.rules)
   if (grown === null) {
     console.log(`kit-adoption: only-shrinks not compared: ${atBase.reason}. Failing open.`)
   } else {
-    for (const g of grown) {
+    for (const g of grown.allowed) {
+      console.log(
+        `kit-adoption: ${ALLOW_FILE}: ${g.block} gained "${g.key}", ALLOWED by rule ${g.rule}: ${g.why} ` +
+          `(merge-base ${atBase.base.slice(0, 8)}).`,
+      )
+    }
+    for (const g of grown.refused) {
       console.error(
         `kit-adoption: ${ALLOW_FILE}: ${g.block} gained "${g.key}", which the merge-base ` +
-          `${atBase.base.slice(0, 8)} with origin/main does not hold. The list only shrinks: fix the ` +
+          `${atBase.base.slice(0, 8)} with origin/main does not hold. Refused: ${g.why}. Fix the ` +
           `screen instead of excusing it.`,
       )
     }
@@ -693,7 +768,7 @@ function run() {
   const lanes = {}
   for (const lane of listed.values()) lanes[lane] = (lanes[lane] ?? 0) + 1
   const byLane = Object.entries(lanes).sort().map(([l, n]) => `${l} ${n}`).join(', ')
-  if (errors.length || unlisted.length || stale.length || (grown !== null && grown.length > 0)) process.exit(1)
+  if (errors.length || unlisted.length || stale.length || (grown !== null && grown.refused.length > 0)) process.exit(1)
   console.log(
     `kit-adoption: ${result.routes.length} routes, ${result.violations.length} violations, every one ` +
       `listed; ${listed.size} allow-list entries still owed (${byLane || 'none'}).`,
@@ -909,38 +984,59 @@ function selfTest() {
 
   /* ONLY SHRINKS (F3): the growth read against the merge-base. */
   const base = { static: { 'app/src/A.tsx': { R1: 'home', 'R2-class': 'home' } }, runtime: { '/': { page: 'home' } } }
+  /* The rules defined at the merge-base: every rule this file knows today, minus R2-new, which
+     stands for a rule born on the branch. */
+  const baseRules = { static: new Set(Object.keys(RULES)), runtime: new Set(['page', 'h1', 'width', 'top', 'scroll', 'title', 'palette', 'keys']) }
   const clone = (o) => JSON.parse(JSON.stringify(o))
-  add('a new static key (a new file) is growth, so red', () => {
+  const refusedOnly = (g, block, key) => g.refused.length === 1 && g.allowed.length === 0 && g.refused[0].block === block && g.refused[0].key === key
+  add('a new static key (a new file) for an existing rule is refused, so red', () => {
     const head = clone(base)
     head.static['app/src/B.tsx'] = { R1: 'x' }
-    const g = growth(base, head)
-    return g.length === 1 && g[0].block === 'static' && g[0].key === 'app/src/B.tsx -> R1'
+    return refusedOnly(growth(base, head, baseRules), 'static', 'app/src/B.tsx -> R1')
   })
-  add('a new rule under a file the list already names is growth, so red', () => {
+  add('a new key for an existing rule under a file the list already names is refused, so red', () => {
     const head = clone(base)
     head.static['app/src/A.tsx']['R2-date'] = 'home'
-    return growth(base, head).length === 1
+    return refusedOnly(growth(base, head, baseRules), 'static', 'app/src/A.tsx -> R2-date')
   })
-  add('a new runtime key is growth, so red', () => {
+  add('a new runtime key for an existing assertion is refused, so red', () => {
     const head = clone(base)
     head.runtime['/']['width'] = 'home'
-    const g = growth(base, head)
-    return g.length === 1 && g[0].block === 'runtime' && g[0].key === '/ -> width'
+    return refusedOnly(growth(base, head, baseRules), 'runtime', '/ -> width')
+  })
+  add('a new key for a rule born on this branch (not defined at the merge-base) is allowed, so green, and says why', () => {
+    const head = clone(base)
+    head.static['app/src/B.tsx'] = { 'R2-new': 'x' }
+    head.runtime['/']['focus'] = 'shell'
+    const g = growth(base, head, baseRules)
+    return g.refused.length === 0 && g.allowed.length === 2 &&
+      g.allowed.some((a) => a.rule === 'R2-new' && /born on this branch/.test(a.why)) && g.allowed.some((a) => a.rule === 'focus')
+  })
+  add('a rule definition the merge-base read could not parse excuses nothing: growth is refused', () => {
+    const head = clone(base)
+    head.static['app/src/B.tsx'] = { 'R2-new': 'x' }
+    const g = growth(base, head, { static: null, runtime: null })
+    return g.refused.length === 1 && /could not be read/.test(g.refused[0].why)
   })
   add('a removed key is the list shrinking, so green; a changed lane is not growth', () => {
     const head = clone(base)
     delete head.static['app/src/A.tsx']['R2-class']
     delete head.runtime['/']
     head.static['app/src/A.tsx'].R1 = 'capture'
-    return growth(base, head).length === 0
+    const g = growth(base, head, baseRules)
+    return g.refused.length === 0 && g.allowed.length === 0
   })
   add('no allow list at the merge-base fails open (null), never a silent pass', () => growth(null, base) === null)
-  add('the git read sees its subject: the committed list at HEAD, plus one key, is growth', () => {
+  add('the git read sees its subject: the committed list and both rule definitions at HEAD', () => {
     const at = allowAtBase('HEAD')
     if (at.allow === null) throw new Error(`nothing to read: ${at.reason}`)
     const head = clone(at.allow)
     head.static['app/src/NotARealScreen.tsx'] = { R1: 'x' }
-    return growth(at.allow, at.allow).length === 0 && growth(at.allow, head).length === 1
+    const same = growth(at.allow, at.allow, at.rules)
+    const more = growth(at.allow, head, at.rules)
+    return at.rules.static !== null && Object.keys(RULES).every((r) => at.rules.static.has(r)) &&
+      at.rules.runtime !== null && ['page', 'title', 'palette', 'keys'].every((a) => at.rules.runtime.has(a)) &&
+      same.refused.length === 0 && same.allowed.length === 0 && more.refused.length === 1
   })
 
   let failed = 0

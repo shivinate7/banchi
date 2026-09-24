@@ -767,8 +767,9 @@ token-literal-check-selftest:
 # a <select>, a kit class, a date format or a money format. Read from the TypeScript AST, like
 # scripts/user-strings.mjs. The exceptions are scripts/kit-adoption-allow.json, a SHRINKING
 # offender list (file -> rule -> lane): an unlisted violation fails, and so does a stale entry,
-# and so does a key the list at the merge-base with origin/main does not hold (read-only git;
-# fails open, printed, with no merge-base). Never a pinned count. Writes nothing. Needs app/node_modules for typescript, so it is in
+# and so does a key the list at the merge-base with origin/main does not hold, unless its rule
+# is not defined at the merge-base: a rule born on the branch, printed with its reason
+# (read-only git; fails open, printed, with no merge-base). Never a pinned count. Writes nothing. Needs app/node_modules for typescript, so it is in
 # `make check` and not the git hook: a fresh clone has no node_modules until `npm ci`.
 kit-adoption:
 	$(NPM_GUARD)
