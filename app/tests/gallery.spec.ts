@@ -664,6 +664,48 @@ test('a second modal over the first dims it with its own scrim, not the first mo
   await expect(first).toBeVisible()
 })
 
+/* A THIRD SCRIMMED LAYER IS REFUSED, NOT DRAWN BROKEN (kit-frame-2, 2026-09-24). `layerZ`
+ * (kit/overlay.tsx) clamps at `MAX_LAYER_DEPTH` (2): past it, a scrimmed layer's own scrim
+ * would reuse the SECOND layer's pair and land BELOW its panel — undimmed, the same defect
+ * `assertUpperScrimDims` above exists to catch, reappearing one layer deeper where nothing here
+ * was checking. Nothing this product opens goes three scrimmed layers deep (the file's own
+ * argument), so `useOverlayLayer` throws rather than joining the stack, and the nearest route's
+ * own error boundary (App.tsx's `RouteBoundary`) is where that lands — the same door a real
+ * defect uses, never a silent wrong dim.
+ * NO NEW SPECIMEN NEEDED: the existing "Open a modal" trigger (`data-kit-open="modal"`) still
+ * sits in the DOM under the two open layers, so calling its own `.click()` reaches its
+ * independent `Modal` — exactly a third concurrent scrimmed layer. A `page.locator(...).click()`
+ * would hit the top scrim instead (it covers the viewport and is what a real pointer would
+ * land on), which is the wrong thing to be testing: this proves the THIRD LAYER is refused, not
+ * that a click can be aimed through two others.
+ * OBSERVED RED BEFORE IT WAS KEPT. Mutation: `.bak` `kit/overlay.tsx` and drop the `throw` (keep
+ * the two `push`es). The third layer opens, `.no-such-view` never appears, and the assertion
+ * below reports 0 where it wants 1 — silently wrong, exactly the failure mode this guards. */
+test('a third scrimmed layer is refused loudly rather than drawn with a broken dim', async ({ page }) => {
+  const opener = page.locator('[data-kit-open="layered"]')
+  await opener.scrollIntoViewIfNeeded()
+  await opener.click()
+  const first = page.locator('[data-bn-overlay="modal"]').filter({ hasText: 'The first layer' })
+  await expect(first).toBeVisible()
+
+  await first.locator('[data-kit-open="second"]').click()
+  const second = page.locator('[data-bn-overlay="modal"]').filter({ hasText: 'The second layer' })
+  await expect(second).toBeVisible()
+
+  await page.locator('[data-kit-open="modal"]').evaluate((el) => (el as HTMLElement).click())
+  await expect(page.locator('.no-such-view')).toBeVisible()
+  await expect(page.locator('.no-such-view-path')).toHaveText('Too many things tried to open on this screen at once.')
+
+  /* `sealEveryTest`'s own `afterEach` (shell.ts) refuses to end ANY case on this crash page — a
+     defect this suite is built to notice, and this case's own assertion just above is the one
+     place that is meant to see it. "Reload this screen" is `RouteBoundary`'s own recovery, the
+     same one a real crash offers, and it leaves the route fully fresh (every specimen's state
+     was in the tree the boundary discarded). */
+  await page.getByRole('button', { name: 'Reload this screen' }).click()
+  await expect(page.locator('.no-such-view')).toHaveCount(0)
+  await expect(page.locator('h1')).toHaveText('Kit')
+})
+
 test('a popover closes on Escape, and on Tab past its last item, and gives focus back to its trigger', async ({ page }) => {
   const opener = page.locator('[data-kit-open="popover"]')
   await opener.scrollIntoViewIfNeeded()
@@ -740,13 +782,20 @@ for (const theme of ['light', 'dark'] as const) {
         return parse(c)
       }
       const grounds = ['--bn-bg', '--bn-surface', '--bn-surface-2'].map((t) => probe(`var(${t})`).rgb)
+      // A SELECTED ROW'S OWN GROUND: `.bn-list-row[aria-selected]` (kit.css) tints `.bn-panel`'s
+      // `--bn-surface` with `--bn-accent-tint`, and a pill drawn on it sits on a second tint over
+      // that first one, not on a plain ground — the review found a danger pill there at 4.08:1
+      // in dark, under a spec that had only ever checked a pill against the three PLAIN grounds
+      // above (kit-frame-2, 2026-09-24).
+      const selectedRow = over(probe('var(--bn-accent-tint)'), probe('var(--bn-surface)').rgb)
+      const pillGrounds = [...grounds, selectedRow]
       const ink3 = probe('var(--bn-ink-3)').rgb
       const ink4 = probe('var(--bn-ink-4)').rgb
       const edge = probe('var(--bn-field-edge)').rgb
       const pills = ['accent', 'ok', 'warn', 'danger', 'live'].map((tone) => {
         const ink = probe(`var(--bn-pill-ink-${tone})`).rgb
         const tint = probe(`var(--bn-${tone}-tint)`)
-        return { tone, ink, worst: Math.min(...grounds.map((g) => ratio(ink, over(tint, g)))) }
+        return { tone, ink, worst: Math.min(...pillGrounds.map((g) => ratio(ink, over(tint, g)))) }
       })
       const hue = (rgb: number[]) => {
         const [r, g, b] = rgb.map((v) => v / 255) as [number, number, number]
@@ -808,6 +857,36 @@ test.describe('on a touch screen', () => {
     /* a bare keycap in running text is left alone: hiding it alone breaks its sentence */
     const bare = page.locator('[data-kit-section="kbd"] .kit-row > .bn-kbd').first()
     await expect(bare).toBeVisible()
+  })
+})
+
+test.describe('on a touch screen at 1440', () => {
+  /* THE POINTER DECIDES, NOT THE WIDTH (CLAUDE.md, docs/DESIGN.md's own "an iPad in portrait is
+     820px wide and all thumb"). `.bn-status-slot`'s two-row layout (kit.css) fires on
+     `(max-width: 1023px), (hover: none) and (pointer: coarse)` — an OR of a width and a pointer
+     — and every status-slot case above only ever drove the WIDTH half of it, always at a fine
+     (mouse) pointer. A coarse pointer at a DESKTOP width was never exercised, so an `and` typed
+     where the rule means `or` would still read green above (kit-frame-2, 2026-09-24).
+     OBSERVED RED BEFORE IT WAS KEPT. Mutation: `.bak` kit.css and change this query's leading
+     `,` to `and`. The grid stays four columns at 1440 on a touch context and both assertions
+     below fail. */
+  test.use({ hasTouch: true, viewport: { width: 1440, height: 900 } })
+
+  test('the status slot still draws two rows at 1440 on a coarse pointer (D118)', async ({ page }) => {
+    const spec = page.locator('[data-specimen="status-slot"]')
+    await spec.scrollIntoViewIfNeeded()
+    await spec.locator('[data-kit-answer="short"]').click()
+    const notice = spec.locator('.bn-notice')
+    await expect(notice).toBeVisible()
+    const icon = notice.locator('.bn-icon').first()
+    const said = notice.locator('.bn-notice-said > summary')
+    const [iconTop, saidTop, columns] = await Promise.all([
+      icon.evaluate((el) => el.getBoundingClientRect().top),
+      said.evaluate((el) => el.getBoundingClientRect().top),
+      notice.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
+    ])
+    expect(columns, 'a coarse pointer drops the notice grid to three columns, even at 1440').toBe(3)
+    expect(saidTop, 'the disclosure sits on a second row, under the sentence').toBeGreaterThan(iconTop + 4)
   })
 })
 

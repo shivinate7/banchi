@@ -1436,13 +1436,14 @@ img.bn-crop[data-cropped='true'] {
   .bn-toast-action { height: var(--bn-control-h-sm); }
   /* "What the server said" is a control a thumb opens (D-notice-detail). */
   .bn-notice-said > summary { min-height: var(--bn-control-h-sm); }
-  /* A name that opens a product or an order is pressed like any other control. The link is
-     kit-data's (kit/data.css); its floor is the kit's, here, with the others (D117). */
-  .bn-datalink { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
-  /* Two more of kit-data's controls, found by `phone.spec.ts` once `#/gallery` drew them: the
-     filtered count's Clear (18px) and the search field's Find (36px). */
-  .bn-filtercount-clear { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
-  .search-field-submit { min-height: var(--bn-control-h-sm); }
+  /* `.bn-datalink` and `.bn-filtercount-clear` WERE HERE, as a stopgap: kit-data's own controls,
+     lifted from the kit's sheet because kit-data did not yet own a phone-floor block of its own.
+     kit-data now carries both (kit/data.css's own `@media` block, mirroring this one), so the
+     copy here was a second source for one floor — removed (kit-frame-2, 2026-09-24).
+     `.search-field-submit` WAS HERE TOO, and never needed to be: SearchField.css's own rule
+     already reads `--bn-control-h-sm` unconditionally, so the token's own phone lift (tokens.css)
+     reached it without a copy anywhere. `phone.spec.ts` and `kit-data.spec.ts` still assert all
+     three reach 40px at 390 — against the ONE rule each now has, not this one. */
   .bn-toast-close { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); }
   /* an icon-only button is square off `--btn-h`, but `.bn-btn` can still be squeezed narrower by
      a flex parent — the drawer's and the palette's were 36px wide against a 42px height */

@@ -64,13 +64,24 @@ const BASE_LAYER_Z = 60
  *  this product opens goes three layers deep at once (a confirm over a sheet, or two stacked
  *  modals, are both two): a depth past this ceiling REUSES the ceiling's own pair rather than
  *  climbing into the shell's range, which loses correct ordering only past a depth nothing here
- *  reaches. */
+ *  reaches.
+ *  THAT LAST CLAIM IS NOW ENFORCED, NOT ONLY ARGUED (kit-frame-2, 2026-09-24). A layer past this
+ *  ceiling that also carries a SCRIM reuses the ceiling pair too, and its scrim then sits BELOW
+ *  the layer beneath it — undimmed, silently, the exact defect the stack-position scheme exists
+ *  to prevent (see the big comment at the top of this file). A layer with no scrim (`Popover`,
+ *  Fulfillment's own photo zoom) has nothing to dim and is unaffected, so only a THIRD scrimmed
+ *  layer is refused — see `scrimmedStack` below. */
 const MAX_LAYER_DEPTH = 2
 
 function layerZ(depth: number): { readonly scrim: number; readonly panel: number } {
   const at = Math.min(depth, MAX_LAYER_DEPTH - 1)
   return { scrim: BASE_LAYER_Z + 2 * at, panel: BASE_LAYER_Z + 2 * at + 1 }
 }
+
+/** Currently open layers that carry a scrim, oldest first — a narrower view of `stack` that
+ *  leaves out the ones that do not (`Popover`, Fulfillment's own photo zoom: see `scrim` on
+ *  `OverlayLayerOptions`). Its length is what `MAX_LAYER_DEPTH` actually bounds. */
+const scrimmedStack: HTMLElement[] = []
 
 /** True while an overlay layer is open. The shell asks this before it takes a key of its own. */
 export function overlayOpen(): boolean {
@@ -101,7 +112,20 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
   useLayoutEffect(() => {
     const root = ref.current
     if (!active || root === null) return
+    const scrimEl = scrim?.current ?? null
+    /* A THIRD SCRIMMED LAYER IS REFUSED, LOUDLY, RATHER THAN DRAWN WRONG. `layerZ` clamps at
+     * `MAX_LAYER_DEPTH`, so a scrimmed layer past it would reuse the ceiling pair — its own
+     * scrim landing BELOW the panel it is meant to dim, the exact defect the stack-position
+     * scheme exists to prevent, quietly this time because nothing else would notice. Nothing
+     * this product opens goes three scrimmed layers deep (this file's own argument, above), so a
+     * build that tries is a mistake in that screen, not a live condition to draw around — the
+     * nearest route's own error boundary (App.tsx) is where it is caught, the same door a real
+     * crash uses. */
+    if (scrimEl !== null && scrimmedStack.length >= MAX_LAYER_DEPTH) {
+      throw new Error('Too many things tried to open on this screen at once.')
+    }
     stack.push(root)
+    if (scrimEl !== null) scrimmedStack.push(root)
     /* WHICHEVER OPENED LAST PAINTS ON TOP. `.bn-dialog`/`.bn-sheet`/`.bn-popover`/`.bn-scrim`'s
      * own static z-index (kit.css) ties two layers that are not siblings in DOM paint order —
      * a portalled panel and a plain fixed-position overlay elsewhere in the tree (Fulfillment's
@@ -115,11 +139,14 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
      * across a long session. */
     const { scrim: scrimZ, panel: panelZ } = layerZ(stack.length - 1)
     root.style.zIndex = String(panelZ)
-    const scrimEl = scrim?.current ?? null
     if (scrimEl !== null) scrimEl.style.zIndex = String(scrimZ)
     return () => {
       const at = stack.lastIndexOf(root)
       if (at >= 0) stack.splice(at, 1)
+      if (scrimEl !== null) {
+        const sat = scrimmedStack.lastIndexOf(root)
+        if (sat >= 0) scrimmedStack.splice(sat, 1)
+      }
       root.style.zIndex = ''
       if (scrimEl !== null) scrimEl.style.zIndex = ''
     }
