@@ -3264,7 +3264,7 @@ async function sectionTitleFit(title: Locator, count: string): Promise<{ countIn
   }, count)
 }
 
-test('a long section name is cut before the count is, at 820', async ({ page }) => {
+test('a long section name is drawn whole, and its count is said once, at 820', async ({ page }) => {
   /* THE COUNT IS THE FACT A HAND CHECKS THE ROWS AGAINST, so a narrow rail cuts the NAME and
      keeps `19 cards` whole (`SectionTitle.tsx`). Verified red first: on the one-span title the
      ellipsis cut the END of the sentence, which is the count. */
@@ -3281,9 +3281,11 @@ test('a long section name is cut before the count is, at 820', async ({ page }) 
 
   const title = page.locator('.browse-list .browse-secttitle').first()
   await expect(title).toHaveText('RB Epics, Section 2: Holographic promos from the vintage binder, 19 cards')
-  const fit = await sectionTitleFit(title, '19 cards')
-  expect(fit.overflow).toBeGreaterThan(0)
-  expect(fit.countInside).toBe(true)
+  /* THE OWNER'S RULING, LOC-21: the section's name is the label on its divider, so it is never cut;
+     it wraps. The count is the pill's, and the title only speaks it (\`.bn-sr\`). */
+  const fit = await sectionTitleFit(title.locator('.browse-secttitle-head'), 'vintage binder')
+  expect(fit.overflow).toBeLessThanOrEqual(0.5)
+  await expect(title.locator('.browse-secttitle-count')).toHaveClass(/bn-sr/)
 })
 
 /* ------------------------------------------------------------------- the trap: no re-sort */

@@ -332,12 +332,16 @@
   color: var(--bn-ink);
   white-space: normal;
 }
-/* Back and front at his floor: the body size, the body ink, no caps. */
+/* Back and front at his floor: the body size, the body ink, no caps. The words carry their own
+   class's small caps on the owner's bar, so the Fulfiller's rule names them too. */
+.position-bar-fulfiller .position-bar-end-back,
+.position-bar-fulfiller .position-bar-end-front,
 .position-bar-fulfiller .position-bar-ends {
   font-size: 20px;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
+  line-height: var(--bn-lh-snug);
   color: inherit;
 }
 

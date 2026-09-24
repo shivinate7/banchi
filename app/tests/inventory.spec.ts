@@ -4283,7 +4283,7 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
      which is what the one-composer rule in server.ts is for. */
   await expect(band).toHaveAttribute(
     'aria-label',
-    'between Galio, Indefaticable and Evelynn, Entrancing',
+    'Between Galio, Indefaticable toward the back and Evelynn, Entrancing toward the front',
   )
 })
 
@@ -4354,7 +4354,7 @@ test('a card at the front of the box gets one row, not a pretend between', async
      Pokemon name takes this branch and is drawn exactly as the server sent it. */
   await expect(front.locator('.nb-name b')).toHaveText(['Conscription'])
   await expect(front.locator('.nb-rest')).toHaveCount(0)
-  await expect(front).toHaveAttribute('aria-label', 'before Conscription')
+  await expect(front).toHaveAttribute('aria-label', 'Next to Conscription toward the front')
 })
 
 test('a landmark the walk had to reach says how far it reached (D116)', async ({ page }) => {
@@ -4392,7 +4392,7 @@ test('a landmark the walk had to reach says how far it reached (D116)', async ({
   await expect(adjacent.locator('.nb-skip')).toHaveCount(0)
   await expect(adjacent).toHaveAttribute(
     'aria-label',
-    'between Galio, Indefaticable and Evelynn, Entrancing',
+    'Between Galio, Indefaticable toward the back and Evelynn, Entrancing toward the front',
   )
 })
 
@@ -4774,7 +4774,7 @@ test('the address is drawn without a separator, and the server string survives o
      address rather than to index 2, so a formula with a different number of parts still puts the
      finest thing said on the biggest step. */
   const num = page.locator('.card-locations-row.is-current .card-locations-label .position-num')
-  await expect(num).toHaveText(String(label).split(' · ').pop()!.replace('Card ', ''))
+  await expect(num).toHaveText(/Card (\d+)$/.exec(String(label))?.[1] ?? '')
 })
 
 test('the address holds one line at both widths, including the longest label the store can emit', async ({
@@ -5792,7 +5792,7 @@ test('D132 — unticked, departed rows sink under the live ones in their own sec
   await expandAll(again)
   /* REMEMBERED: the press above wrote `show`, and this open wrote nothing over it. */
   await expect(again.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
-  await expect(again.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', 'B2 #1', '#1'])
+  await expect(again.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', '#1', '#1'])
   /* The section header the sold card led is still ONE section, folded open, not two. */
   await expect(again.locator('.browse-sectfold')).toHaveCount(2)
 })
@@ -5830,8 +5830,8 @@ test('D132 — the row the walk stands on survives its own sale while sold is hi
   /* The receipt lands where the sale was pressed (D119) — which needs the row to still exist,
      and to still be where it was (D118): the re-read draws it departed, in its place. */
   await expect(page.locator('.card-locations-row.is-current').getByRole('button', { name: /Undo/ })).toBeVisible()
-  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', 'B2 #3', '#2'])
-  await expect(page.locator('.browse-row[aria-current="true"] .browse-row-position')).toHaveText('B2 #3')
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3', '#2'])
+  await expect(page.locator('.browse-row[aria-current="true"] .browse-row-position')).toHaveText('#3')
 
   /* Step off it and it is folded away with the rest. */
   await page.locator('.browse-row').nth(2).click()
@@ -5875,7 +5875,7 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
      stands on survives its own sale (D119) and stays drawn as `B2 #3`. The old count
      (`departedHere`) would read 2 here; this is the 6-claimed-5-hidden defect at its smallest
      reproduction. */
-  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', 'B2 #3'])
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3'])
   await expect(chip.locator('.bn-chip-count')).toHaveText('1')
 
   /* Step off the sold row and the fold takes it too — both departed rows hidden, both counted. */
@@ -5942,7 +5942,7 @@ test('D132 — the address leads with the name and the index is its note, on the
   await expect(label).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 1')
 
   const rows = page.locator('.card-locations-row .position-path')
-  await expect(rows.nth(0)).toHaveText('BOX ME01 commonsBox 2SECTION 1')
+  await expect(rows.nth(0)).toHaveText('BOX ME01 commonsSECTION 1')
 })
 
 test('D132 — an unnamed box keeps the index in the address and draws no note beside it', async ({ page }) => {
@@ -6539,7 +6539,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
      come up — a jump in the left rail while the hand is in the right pane. The walk's row keys
      are its slot cells, and the departed one reads as the store key (D68). */
   expect(walkBefore).toEqual(['#38', '#39', '#40'])
-  expect(await walkOrder(page)).toEqual(['B7 #38', '#39', '#40'])
+  expect(await walkOrder(page)).toEqual(['#38', '#39', '#40'])
 
   /* And the control says how stale the order is, rather than the list quietly reshuffling. */
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
@@ -6667,8 +6667,8 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
       cards['7/39'] = {
         ...held,
         state: 'retired',
-        label: `Box 7 · departed · B7 #39`,
-        place: { ...place, label: `Box 7 · departed · B7 #39`, slot: null, card: null, fraction: null },
+        label: place.label,
+        place: { ...place, slot: null, card: null, fraction: null },
       }
       delete (cards['7/39'] as { card?: number }).card
     }
@@ -6702,13 +6702,13 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
   await page.getByRole('dialog').getByRole('button', { name: 'Damaged' }).click()
 
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #39"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 39"]'),
   ).toHaveCount(1)
   await expect(labels).toHaveCount(6)
-  expect(await copyOrder(page)).toEqual([before[0], 'Box 7 · departed · B7 #39', ...before.slice(2)])
+  expect(await copyOrder(page)).toEqual([before[0], 'Was at Box 7, Section 1, Card 39', ...before.slice(2)])
   /* AND THE WALK, which folds departed rows away under `Hide sold` and is held by the same set. */
   expect(walkBefore).toEqual(['#38', '#39', '#40'])
-  expect(await walkOrder(page)).toEqual(['#38', 'B7 #39', '#40'])
+  expect(await walkOrder(page)).toEqual(['#38', '#39', '#40'])
   /* One sentence for both doors: a retirement is a copy leaving, and the order is stale by it. */
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
 })
@@ -6720,7 +6720,7 @@ test('a new search takes a new order, so the staleness never carries across answ
     const held = cards[key]
     if (held === undefined) return
     const place = held.place
-    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    cards[key] = { ...held, state: 'sold', label: place.label, place: { ...place, slot: null, card: null, fraction: null } }
     delete (cards[key] as { card?: number }).card
   }
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
@@ -6827,7 +6827,7 @@ test.skip(
     const held = cards[key]
     if (held === undefined) return
     const place = held.place
-    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    cards[key] = { ...held, state: 'sold', label: place.label, place: { ...place, slot: null, card: null, fraction: null } }
     delete (cards[key] as { card?: number }).card
   }
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
@@ -7052,7 +7052,7 @@ test('a box whose last live match departs keeps the walk, rather than handing it
     const held = cards[key]
     if (held === undefined) return
     const place = held.place
-    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    cards[key] = { ...held, state: 'sold', label: place.label, place: { ...place, slot: null, card: null, fraction: null } }
     delete (cards[key] as { card?: number }).card
   }
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('2/1') }), {
@@ -7067,7 +7067,7 @@ test('a box whose last live match departs keeps the walk, rather than handing it
 
   await copyRow(page, 'Box 2, Section 1, Card 1').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 2 · departed · B2 #1"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 2, Section 1, Card 1"]'),
   ).toHaveCount(1)
 
   /* STILL STANDING IN BOX 2. Without the freeze the box holds no live match any more, drops out

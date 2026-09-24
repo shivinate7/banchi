@@ -159,7 +159,7 @@ export function PlaceNeighbors({
         <span className="nb-key">{departed ? 'was' : 'this'}</span>
         <span className="nb-name">
           <span className="nb-name-line">
-            {departed ? 'here' : here === null ? 'this card' : `card ${here}`}
+            {departed ? 'here' : here === null ? 'this card' : `#${here}`}
           </span>
         </span>
       </p>
