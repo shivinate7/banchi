@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -64,6 +64,8 @@ help:
 	@echo "                    THE ONE GENERATOR: it writes and gates nothing (D18)."
 	@echo "                    Previews. ARGS=--write applies. ARGS=--selftest proves it."
 	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
+	@echo "  make text-density  on-demand cut table over the text checks' own seeded screens"
+	@echo "                    (D-text-shape-checks). Never a gate. ARGS=\"--route '#/x'\"."
 	@echo "  make orient       which component renders the thing, and what selects it."
 	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
 	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
@@ -520,6 +522,19 @@ map-fix:
 
 map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
+
+# THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D194): a
+# REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one
+# receipt, `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never
+# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-shape.spec.ts` with
+# `TEXT_DENSITY=1`, so it reads the SAME populated fixture and the same loaded screens as the
+# two gates, at 1440 and 390, whatever this checkout's own store holds. Playwright starts or
+# reuses this checkout's own Vite (D43); every read is stubbed, so no store is read. One
+# worker, `line` reporter, so `.serve/design-check.json` is never touched. ARGS reaches the
+# script raw, e.g. `ARGS="--route '#/pricing' --top 8"`.
+text-density:
+	$(NPM_GUARD)
+	@node scripts/text-density/density.mjs $(ARGS)
 
 # WHICH COMPONENT RENDERS THE THING, AND WHAT SELECTS IT. A RENDERER — it writes nothing and
 # gates nothing, so D18 does not reach it, the same standing `make map` has.

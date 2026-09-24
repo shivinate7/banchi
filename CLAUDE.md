@@ -202,6 +202,15 @@ make suite-lock-selftest # the lock, proved by violating it, including a holder 
                     #   In `check`.
 make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
                     #   real tree (D215). In `check`.
+make text-density   # the owner's third D194 replacement (`D-text-shape-checks`): an
+                    #   ON-DEMAND density pass, never a gate (D18: it writes one receipt,
+                    #   `.serve/text-density.json`). Runs `text-shape.spec.ts` in a report
+                    #   mode (`TEXT_DENSITY=1`), so it reads the SAME seeded screens as the
+                    #   gates, at 1440 and 390, with no dev server or store needed. Prints a
+                    #   CUT TABLE: per route, the largest prose blocks with word counts, then
+                    #   what repeats and what runs long. ARGS="--route '#/pricing' --top 8".
+                    #   NOT in `make check` or `make design-check`. The skill
+                    #   `.claude/skills/text-density/SKILL.md` says how to read the table.
 make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
                     #   is not a fork, what is real and what is invented, why VITE_DEMO is
@@ -403,7 +412,7 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 **The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
 Three routes are off-nav (the `aside` group — Kit, Cards to pull, and the per-product view
-D226 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
+D227 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
 `ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
 below).
 
@@ -433,7 +442,7 @@ below).
 #/fulfillment  Cards to pull  the Fulfiller's whole product. NO shell (D5)
 #/gallery      Kit            the component sheet, rendered by the build
 #/product      Product history one product's market history and the owner's own sales on
-                              it, by SKU. Off-nav, deep-linked (D226)
+                              it, by SKU. Off-nav, deep-linked (D227)
 ```
 
 **A new screen is one `ROUTES` entry plus a view that returns `<Page>`** (D-page-scaffold).
@@ -459,7 +468,7 @@ stages, not two unrelated views.
 not routes. Box operations live in its Manage box sheet.
 
 **Three routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
-kit, and `#/product`, the per-product view (D226). It is a deep link reached
+kit, and `#/product`, the per-product view (D227). It is a deep link reached
 by SKU, never a destination anyone browses to cold. All three stay registered routes,
 reachable from elsewhere.
 
@@ -489,10 +498,10 @@ first paint, cross-faded as one mechanism. A screen not looked at in dark is not
 everything), `--bn-font-mono` (JetBrains Mono, machine strings only — SKUs, run names, reason
 codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono, except
 money: a dollar figure takes the mono face through `.bn-money`, never a hand-rolled
-declaration (D221). **NOT MECHANIZED:** a machine cannot tell a dollar figure
-from another tabular machine string by its CSS alone. Mono, 600-weight and tabular-nums
-already mark SKUs, run ids and card numbers throughout `app/src`. Which face a span deserves
-is read from what it holds, never from its declaration. Body is 14px.
+declaration (D221). Mechanized by `app/tests/money-face.spec.ts`, in a real browser. CSS
+alone cannot tell a dollar figure from a SKU, because mono, 600-weight and tabular-nums mark
+both. So the spec reads what a span HOLDS. Every `$` figure in the rendered text fails unless
+its resolved face is JetBrains Mono, whole dollars and inputs included. Body is 14px.
 
 **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders all of it. Reach for
 the kit before writing a primitive. A fourth hand-rolled button is how a design system dies.
@@ -502,10 +511,22 @@ are a real sentence and one action. **No user-visible string may name a decision
 path, or a pipeline-internal noun** (D196). Mechanized by `make docs-audit`'s
 `no mechanism on screen` row over `scripts/user-strings.mjs`.
 
-**The visible word count on every owner screen may only go down** (D194). Blind to which words
-a screen uses — a rewording that says the same thing in fewer words is exactly what this
-rewards. `app/tests/copy-budget.spec.ts` asserts against `app/tests/copy-budget.json`'s pinned
-ceiling. Only `node scripts/copy-budget.mjs --pin` raises it, run by `make design-check`.
+**D194's pinned word ceiling is retired** (superseded by `D-text-shape-checks`, 2026-09-23, the
+owner's ruling). Three checks replace it, none of them a count.
+`app/tests/text-shape.spec.ts` catches four shapes. A repeated sentence on three-plus
+repeating cards or rows. A number-plus-noun fact stated twice. A sentence over 25 words. A
+caption repeating 60%+ of its heading. `app/tests/machine-words.spec.ts` closes D196's own
+gap. It reads rendered `innerText`, not just JSX literals. `app/tests/money-face.spec.ts`
+reads D221: every dollar figure must sit in the mono face. All three read every route through
+one sweep, `app/tests/routeSweep.ts`, at 1440 and 390. The seeded store is deterministic, and
+a screen is read only once it is loaded.
+Each reads a shrinking pending list in `app/tests/`, keyed to the finding. An entry excuses
+one finding, and a new one on the same route is red. `text-shape-allow.json` is route ->
+assertion -> finding text -> lane. `machine-words-allow.json` is route -> word -> lane, with
+no wildcard route. `money-face-allow.json` is route -> amount -> lane. Each fails on an
+unlisted finding and on a stale entry.
+`make text-density` is the third piece of the owner's ruling, an on-demand cut table off the
+same sweep, never a gate (D18: it writes).
 
 **The mark is generated** (D102). `Logo` renders `docs/specs/logo.md`'s locked set, six
 variants, `bluesteel` default. `scripts/build-mark.mjs` writes its geometry and

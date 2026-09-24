@@ -77,11 +77,13 @@ never a pushed entry. D217 states why, and names the trade it costs.
 - `scripts/views.txt` — the `revenue` render line, over the empty store every worktree starts
   with (D43).
 
-## The copy-budget ceiling
+## The copy-budget ceiling (retired)
 
-`app/tests/copy-budget.json` pins `#/revenue` at 64 words, raised from 56 by
-`D217`. See that entry for the eight-word breakdown, and for why the ceiling was
-already measuring a populated screen rather than the empty state.
+D194's pinned word ceiling is gone. `D-text-shape-checks` (2026-09-23) supersedes it. This
+screen's own history under the old ceiling stays in `D217`. It was raised to 64 words from
+56. `D217` says why: that ceiling already measured a populated screen. The current checks are
+`app/tests/text-shape.spec.ts`, `app/tests/machine-words.spec.ts` and
+`app/tests/money-face.spec.ts`. None of them pins a count.
 
 ## Measured, once, on the owner's live store (2026-09-19)
 

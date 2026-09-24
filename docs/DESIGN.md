@@ -1237,7 +1237,10 @@ Mechanized past the reason-string exception: `scripts/docs-audit.py`'s `no mecha
 screen` row (D196) refuses a decision citation, a repository path, or a
 pipeline-internal noun in any other user-visible string in `app/src`.
 
-Less text is always better than more, and it is a ratchet rather than an opinion: a route's
-visible word count may only go down. Mechanized by `app/tests/copy-budget.spec.ts`
-(D194), run by `make design-check`, against the ceilings pinned in
-`app/tests/copy-budget.json`.
+Less text is always better than more. D194's pinned-ceiling ratchet is retired, on the owner's
+ruling (`D-text-shape-checks`, 2026-09-23): no more stagnant static pin. Three checks replace
+it, run by `make design-check`: `app/tests/text-shape.spec.ts` (a repetition and a sentence-
+shape check), `app/tests/machine-words.spec.ts` (D196's own gap, over rendered text) and
+`app/tests/money-face.spec.ts` (D221, over the mono face). `make text-density`
+(`scripts/text-density/`) is the third piece, a repeatable on-demand reviewer rather than a
+gate.

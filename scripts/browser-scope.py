@@ -137,6 +137,15 @@ SCOPE = (
                "offender list the spec reconciles against (D-page-scaffold). Deleting an "
                "entry is a claim that a screen now passes, and only the browser proves it.",
     },
+    {
+        "path": "scripts/machine-words.json",
+        "why": "Read by `app/tests/machine-words.spec.ts`: the one word list the rendered-text "
+               "check scans every route for (D196, D-text-shape-checks). A word added or "
+               "removed changes what the browser refuses, so only the browser proves it. The "
+               "three browser pending lists (`app/tests/*-allow.json`) sit under `app/**` "
+               "already. `scripts/machine-words-allow.json` is the AST row's list and no spec "
+               "reads it.",
+    },
 )
 
 
