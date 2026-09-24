@@ -66,12 +66,9 @@ test.describe('matchQuery', () => {
     expect(foldText('Flabébé')).toBe('flabebe')
   })
 
-  test('a box, a SKU and a condition word each find the row', () => {
-    expect(matchQuery('B4', abra)).toBe(true)
-    expect(matchQuery('box4', abra)).toBe(true)
-    expect(matchQuery('box 4', abra)).toBe(true)
-    expect(matchQuery('B5', abra)).toBe(false)
+  test("a box's name, a SKU and a condition word each find the row", () => {
     expect(matchQuery('mixed', abra)).toBe(true)
+    expect(matchQuery('mixed singles', abra)).toBe(true)
     expect(matchQuery('860123', abra)).toBe(true)
     expect(matchQuery('near mint', abra)).toBe(true)
     expect(matchQuery('damaged', { text: ['Boss’s Orders', 'Damaged'] })).toBe(true)
@@ -85,11 +82,11 @@ test.describe('matchQuery', () => {
 
   /* The reviewer's probes, 2026-09-23. Every card below is in a box, so a digit that falls back
    * to a box's number is caught. */
-  const inBox = (box: number, text: string[], numbers: string[] = []) => ({
+  const inBox = (box: number, text: string[], numbers: string[] = [], name = 'Mixed Singles') => ({
     text,
     numbers,
     skus: ['7700001'],
-    boxes: [{ box, name: 'Mixed Singles' }],
+    boxes: [{ box, name }],
   })
 
   test('a digit never finds a box by its number', () => {
@@ -99,8 +96,16 @@ test.describe('matchQuery', () => {
     expect(matchQuery('box 4', inBox(14, ['Pikachu']))).toBe(false)
     expect(matchQuery('box 4', inBox(41, ['Pikachu']))).toBe(false)
     expect(matchQuery('#12', inBox(112, ['Pikachu'], ['001/100']))).toBe(false)
-    expect(matchQuery('box 4', inBox(4, ['Pikachu']))).toBe(true)
-    expect(matchQuery('b4', inBox(4, ['Pikachu']))).toBe(true)
+    /* A box is found by its NAME only (the owner's ruling, 2026-09-23): box 4 named `Mixed
+       Singles` is not found by its number in any spelling. */
+    expect(matchQuery('4', inBox(4, ['Pikachu'], ['010/100']))).toBe(false)
+    expect(matchQuery('B4', inBox(4, ['Pikachu'], ['010/100']))).toBe(false)
+    expect(matchQuery('box4', inBox(4, ['Pikachu']))).toBe(false)
+    expect(matchQuery('box 4', inBox(4, ['Pikachu']))).toBe(false)
+    expect(matchQuery('mixed', inBox(4, ['Pikachu']))).toBe(true)
+    /* An unnamed box carries the stored name `Box 4`, and that name is text. */
+    expect(matchQuery('box 4', inBox(4, ['Pikachu'], [], 'Box 4'))).toBe(true)
+    expect(matchQuery('box 4', inBox(14, ['Pikachu'], [], 'Box 14'))).toBe(false)
     expect(matchQuery('#12', inBox(112, ['Pikachu'], ['012/100']))).toBe(true)
     /* A digit word in text is a whole word: `12` finds `00012`, never `112`. */
     expect(matchQuery('12', inBox(3, ['Order 112']))).toBe(false)

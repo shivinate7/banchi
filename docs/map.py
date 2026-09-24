@@ -5496,8 +5496,8 @@ COMPONENTS = [
                                          "(the owner's ruling, 2026-09-23): every word in any "
                                          "order; case, accents and punctuation folded; a card "
                                          "number with or without its leading zeros, split by a "
-                                         "space, a hyphen or a slash; `B4` or `box 4` for a box, "
-                                         "and a digit never finds a box by its number; a SKU by "
+                                         "space, a hyphen or a slash; a box by its name only, "
+                                         "never by its number; a SKU by "
                                          "its start. The rules are stated in its header, so "
                                          "another search can be checked against them. The "
                                          "server's own search does not use it.",

@@ -17,8 +17,8 @@
  *  2. SPLIT. The query is NFKC-normalized, commas become spaces, and it is cut on white space.
  *     Each token loses the punctuation at its ends, except a `#` or a `/` in front.
  *  3. EVERY TOKEN MUST MATCH, IN ANY ORDER. An empty query matches every row. Two tokens next
- *     to each other may match TOGETHER as one card number or one box (rules 4 and 5), so
- *     `54 132`, `swsh 050` and `box 4` work. Every way to cover the tokens is tried.
+ *     to each other may match TOGETHER as one card number (rule 4), so `54 132` and `swsh 050`
+ *     work. Every way to cover the tokens is tried.
  *  4. A CARD NUMBER is compared on its CANONICAL form: each `/` part is folded, its spaces are
  *     removed, and the zeros in front of its first digit run are removed. `054/132` is
  *     `54/132`, `SWSH050` is `swsh50`, `OP01-001` is `op1001`.
@@ -28,9 +28,10 @@
  *      - A token that starts with `/` matches the second part: `/132` finds every `N/132`.
  *      - Two tokens next to each other match as one number joined by `/` or by nothing.
  *      - Never a substring: `54` does not find `154/200`.
- *  5. A BOX. `B4`, `box4`, `box-4`, or `box` then `4`, matches box 4 and no other. `box` alone
- *     matches any row that is in a box. A box's NAME is text (rule 7). Its number is never text,
- *     so a digit never finds a box by accident: `4` does not find box 14.
+ *  5. A BOX IS FOUND BY ITS NAME ONLY, which is text (rule 7). Its number is never shown and
+ *     never searched (the owner's ruling, 2026-09-23): `4` and `B4` do not find a box named
+ *     `Mixed Singles` whose number is 4. A box nobody named carries the stored name `Box 4`, so
+ *     `box 4` still finds it, by name.
  *  6. A SKU. A token of three or more digits matches a SKU that STARTS with it, zeros kept.
  *  7. TEXT. Otherwise the token is folded (rule 1) into words, and every word must be found in
  *     some text field:
@@ -53,7 +54,8 @@ export type MatchFields = {
   readonly numbers?: readonly (string | null | undefined)[]
   /** TCGplayer SKUs. Rule 6. */
   readonly skus?: readonly (string | number | null | undefined)[]
-  /** The boxes the row is in, with their names. Rule 5; a name is also text (rule 7). */
+  /** The boxes the row is in. Only the NAME is matched, as text (rules 5 and 7); `box` is
+   *  kept so a caller can hand the record over whole, and is never searched. */
   readonly boxes?: readonly { readonly box: number; readonly name?: string | null }[]
 }
 
@@ -94,12 +96,11 @@ export function canonicalNumber(value: string): string {
 /** What a canonical card number may look like: letters, digits, an optional letter, and an
  *  optional second part of the same shape. */
 const NUMBER_SHAPE = /^\p{L}{0,6}\d+\p{L}{0,2}(?:\/\p{L}{0,6}\d+\p{L}{0,2})?$/u
-const BOX_SHAPE = /^b(?:ox)?-?(\d+)$/u
 const SKU_SHAPE = /^\d{3,}$/u
 const DIGITS = /^\d+$/u
 const HAS_DIGIT = /\d/u
 const HAS_LETTER = /\p{L}/u
-/** The punctuation a token loses at its ends. `#` and `/` survive in front (rules 4 and 5). */
+/** The punctuation a token loses at its ends. `#` and `/` survive in front (rule 4). */
 const EDGE_PUNCTUATION = /^[^\p{L}\p{N}#/]+|[^\p{L}\p{N}]+$/gu
 
 /** Rule 2: the raw tokens of a query. */
@@ -127,7 +128,6 @@ type Prepared = {
   readonly words: ReadonlySet<string>
   readonly numbers: readonly NumberParts[]
   readonly skus: readonly string[]
-  readonly boxes: ReadonlySet<number>
 }
 
 function prepare(fields: MatchFields): Prepared {
@@ -148,7 +148,6 @@ function prepare(fields: MatchFields): Prepared {
         return { whole, first, second: second ?? null }
       }),
     skus: (fields.skus ?? []).filter(present).map((sku) => String(sku).trim()),
-    boxes: new Set((fields.boxes ?? []).map((one) => one.box)),
   }
 }
 
@@ -185,22 +184,14 @@ function textMatch(raw: string, row: Prepared): boolean {
 
 /** Rules 4 to 7 for one token alone. */
 function tokenMatch(raw: string, row: Prepared): boolean {
-  const lower = raw.toLowerCase()
-  if (lower === 'box') return row.boxes.size > 0
-  const box = BOX_SHAPE.exec(lower)
-  if (box !== null && row.boxes.has(Number.parseInt(box[1] ?? '', 10))) return true
   if (SKU_SHAPE.test(raw) && row.skus.some((sku) => sku.startsWith(raw))) return true
   if (numberMatch(raw, row)) return true
   if (raw.startsWith('/')) return false
   return textMatch(raw, row)
 }
 
-/** Rule 3: two neighbouring tokens that match together as one box or one card number. */
+/** Rule 3: two neighbouring tokens that match together as one card number. */
 function pairMatch(left: string, right: string, row: Prepared): boolean {
-  const lower = left.toLowerCase()
-  if ((lower === 'box' || lower === 'b') && DIGITS.test(right)) {
-    return row.boxes.has(Number.parseInt(right, 10))
-  }
   if (left.startsWith('/') || right.startsWith('/') || right.startsWith('#')) return false
   return numberMatch(`${left}/${right}`, row) || numberMatch(`${left}${right}`, row)
 }
