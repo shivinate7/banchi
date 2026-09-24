@@ -1,29 +1,56 @@
-/* `#/product` — the per-product view (D227). Every color is a `--bn-*`
-   token; the market series and the owner's own fills are drawn with deliberately different
-   marks (a line versus a diamond), never a shared color standing in for the distinction. */
+/* `#/product` — one product's own view (D227, D62, `D-product-view-hybrid`). Every color is a
+   `--bn-*` token; the market series and the owner's own fills are drawn with deliberately
+   different marks (a line versus a diamond), never a shared color standing in for the
+   distinction. The page frame (width, top gap, the h1) is the kit's `Page` now — this file
+   only lays out what goes inside its body. */
 
-.producthistory {
+.producthistory-body {
   display: flex;
   flex-direction: column;
   gap: var(--bn-5);
-  padding-bottom: var(--bn-8);
 }
 
-.producthistory-search {
+/* THE SEARCH RESULTS LIST — the name field's own answer (`SearchField` + `useSearch`), a
+   row per printing (D212: one SKU each), never a second inventory view (the same restraint
+   `kit/data.tsx:CardLine`'s own header states for `capture_id`). */
+.producthistory-results {
   display: flex;
-  align-items: flex-end;
-  gap: var(--bn-3);
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--bn-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.producthistory-search label {
+.producthistory-result {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  align-items: flex-start;
+  width: 100%;
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r);
+  border: 1px solid var(--bn-line);
+  background: var(--bn-surface);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.producthistory-result-name {
+  font-family: var(--bn-font-display);
+  font-weight: 600;
+  color: var(--bn-ink);
+}
+.producthistory-result-meta {
   font-size: var(--bn-fs-xs);
   color: var(--bn-ink-3);
 }
-.producthistory-search input {
-  min-width: 220px;
+
+/* WHICH PRINTING THIS IS, beside the others sharing its name — a one-press switch, never a
+   second chart drawn on top of this one (owner ruling, 2026-09-23). */
+.producthistory-printings {
+  display: flex;
+  gap: var(--bn-2);
+  flex-wrap: wrap;
 }
 
 .producthistory-product {
