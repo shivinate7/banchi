@@ -760,6 +760,12 @@ def run(args, say) -> int:
                     # `condition` always have been.
                     set_name=match.set_name or None,
                     rarity=match.rarity or None,
+                    # D253: the catalogue's own spelling, for the one
+                    # case `resolved.name_corrections` carries a position at all — a
+                    # near-miss read name, corrected at the same moment `set_name` and
+                    # `rarity` are. `None` on every other position, which leaves
+                    # `card.name` exactly as `record_identification` last wrote it.
+                    name=resolved.name_corrections.get(key),
                     run=run_dir.name,
                 )
                 if stamped and key in live_keys:
@@ -1136,6 +1142,11 @@ def run_merged(args, say) -> int:
                     condition=row.match.condition,
                     set_name=row.match.set_name or None,
                     rarity=row.match.rarity or None,
+                    # D253, read off THIS LEG'S OWN run — the run that
+                    # owns this position (`owner` above) is the one whose join computed
+                    # the correction, exactly as `set_name`/`rarity` read `row.match`
+                    # rather than some other leg's.
+                    name=resolved_by_run[run_name].name_corrections.get(key),
                     run=run_name,
                 )
                 if stamped and key in live_keys:

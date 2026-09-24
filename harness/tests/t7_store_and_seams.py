@@ -213,12 +213,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import envfile  # noqa: E402
 from harness.tests import Checks, Result  # noqa: E402
 
-from cli import cmd_cards, cmd_reprice, requeue, resolve, runs  # noqa: E402
+from cli import cmd_cards, cmd_reconcile, cmd_reprice, requeue, resolve, runs  # noqa: E402
 from identify import batch, cost, prompt, sidecar  # noqa: E402
 from pipeline import (  # noqa: E402
     corpus,
     games,
     join,
+    livecheck,
     merge,
     orders,
     pirateship,
@@ -11373,6 +11374,389 @@ def check_review_catalog(checks: Checks) -> None:
             Store().read().inventory.cards["1/3"].sku is None,
             "and that refusal wrote nothing",
         )
+
+
+def check_correct_answer(checks: Checks) -> None:
+    """POST /inventory/<box>/<index>/correct — D252.
+
+    THE SCENARIO THIS ROUTE WAS BUILT FOR, off the real fixture. A card answered onto the
+    wrong catalog row, with the wrong SKU already pushed and live — `do_review_answer`'s own
+    undo refuses `undo_too_late` at exactly this point, and until this route there was no
+    other door. This section proves three things in order: the correction itself (the new row
+    lands, the old one is released), that item 2 of the brief is answered by
+    `pipeline/livecheck.py:compare` — D109's OWN `beyond` bucket, unmodified — rather than by a
+    second mechanism, and the reversal.
+    """
+    checks.note("")
+    checks.note("CORRECT A LISTED ANSWER — POST /inventory/<box>/<index>/correct")
+
+    # Two real rows off the committed Riftbound export, not invented ones.
+    old_sku, old_name, old_number = "8926937", "Acceptable Losses", "179/298"
+    new_sku, new_name = "8925897", "Adaptatron"
+
+    with isolated_home() as home:
+        run_dir = home / "runs" / "2026-09-23-box4-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-09-23T00:00:00+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(4, game="riftbound"))
+        with Store().write() as snapshot:
+            for key in ("4/1", "4/2", "4/3"):
+                snapshot.inventory.cards[key].game = "riftbound"
+                snapshot.inventory.cards[key].run = "2026-09-23-box4-01"
+            # 4/1 — answered wrong, already pushed AND live, and IN NO QUEUE — the exact
+            # shape D28's undo refuses on and this route exists to reach anyway.
+            snapshot.inventory.set_state(
+                "4/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
+            )
+            snapshot.inventory.cards["4/1"].name = old_name
+            snapshot.inventory.cards["4/1"].number = old_number
+            snapshot.inventory.listing(old_sku, condition="Near Mint").set(
+                master.PUSHED, 1
+            )
+            snapshot.inventory.listing(old_sku, condition="Near Mint").set(
+                master.LIVE, 1
+            )
+            # 4/2 — captured, never identified. Nothing here to correct.
+            # 4/3 — identified, then departed. A correction there is a different question.
+            snapshot.inventory.set_state(
+                "4/3", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
+            )
+            snapshot.inventory.set_state("4/3", master.SOLD)
+
+        refusal(
+            checks,
+            lambda: capture_server.do_correct_answer(9, 9, {"sku": new_sku}),
+            "card_not_found",
+            "a correction for a position with no record refuses — this route corrects a "
+            "card that exists and never creates one",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 3, {"sku": new_sku}),
+            "card_departed",
+            "a correction on a SOLD card refuses — a departed card's SKU is a different, "
+            "larger question this route does not attempt",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 2, {"sku": new_sku}),
+            "not_identified",
+            "a correction on a never-identified card refuses — that is do_review_answer's "
+            "job, and this route has no wrong answer to correct",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 1, {"sku": "0000000"}),
+            "sku_not_in_catalog",
+            "an unknown sku refuses — D46's own guard, reused verbatim: the row is re-read "
+            "server-side and never taken on the client's word",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 1, {"sku": old_sku}),
+            "sku_unchanged",
+            "choosing the row the card already carries refuses — there is nothing here to "
+            "correct",
+        )
+
+        # ------------------------------------------------------------- the correction itself
+        before_release = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            (before_release.pushed, before_release.live),
+            (1, 1),
+            "before the correction: the wrong sku is pushed and live",
+        )
+
+        body = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 1, {"sku": new_sku}),
+            "the correction succeeds even though the wrong sku is pushed and live — the "
+            "exact case do_review_answer's own undo refuses",
+        )
+        if body is not None:
+            checks.equal(body["sku"], new_sku, "and it reports the new sku")
+            checks.equal(body["previous_sku"], old_sku, "and the sku it replaced")
+            checks.equal(
+                body["released"],
+                {"pushed": 1},
+                "and what Listing.release gave up on the old sku — least-committed-first, "
+                "D34's own rule, so `pushed` goes before `live`",
+            )
+            checks.equal(
+                body["restores_to"]["sku"],
+                old_sku,
+                "and what an undo would put back, since the NEW sku carries no hold yet",
+            )
+
+        card = Store().read().inventory.cards["4/1"]
+        checks.equal(
+            (card.sku, card.condition),
+            (new_sku, "Near Mint"),
+            "the new pair lands on the card",
+        )
+        checks.equal(
+            card.name,
+            new_name,
+            "and the STORED NAME FOLLOWS THE CATALOG (owner's ruling) — it no longer says "
+            "the wrong product's name",
+        )
+
+        after_release = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            (after_release.pushed, after_release.live),
+            (0, 1),
+            "and the OLD sku gave up exactly one pushed copy — least-committed-first left "
+            "`live` untouched, because one copy was enough to cover the release",
+        )
+        checks.ok(
+            new_sku not in Store().read().inventory.listings,
+            "the NEW sku gets no listing record — choosing a catalog row is not pushing "
+            "one, and nothing here duplicates what `emit` alone does",
+        )
+
+        line = last_event("4/1")
+        checks.equal(
+            line.get("event"),
+            "sku_corrected",
+            "the history line is its OWN event name, never `answered` — a correction is a "
+            "different claim from an ordinary D4 answer",
+        )
+        checks.equal(
+            line.get("restores_to", {}).get("sku"),
+            old_sku,
+            "and it carries the old pair, which is what the undo reads back",
+        )
+
+        # -------------------------------------------------------- item 2 of the brief itself
+        #
+        # PROVEN AGAINST THE REAL MODULE, NOT REINVENTED. `pipeline/livecheck.py:compare` is
+        # what `pkmnscan reconcile --live` calls — D109's own `beyond` bucket: "TCGplayer's
+        # own quantity for a SKU this pipeline never sent — more than it sent". A live export
+        # that still shows the old sku's copy (nobody has told TCGplayer yet) now reads as
+        # exactly that, with no second mechanism built to say so.
+        after = Store().read().inventory
+        sold, hand, seen = cmd_reconcile._card_counts(after)
+        report = livecheck.compare(
+            [{"TCGplayer Id": old_sku, "Total Quantity": "1"}],
+            after.listings,
+            sold,
+            hand,
+            seen,
+        )
+        checks.ok(
+            any(row.sku == old_sku for row in report.beyond),
+            "the corrected-away sku reads as `beyond` on the very next live reconcile — "
+            "TCGplayer still shows it, and nothing here sent it any more",
+            f"beyond: {[row.sku for row in report.beyond]}",
+        )
+        checks.ok(
+            not any(row.sku == old_sku for row in report.agreed + report.unexplained),
+            "and it does not also read as agreed or unexplained — one bucket, one sentence",
+        )
+
+    # Fresh store for the undo path, so the sequencing above cannot leak into it.
+    with isolated_home() as home:
+        run_dir = home / "runs" / "2026-09-23-box4-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-09-23T00:00:00+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+        capture_server.do_capture(capture_payload(4, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/1"].game = "riftbound"
+            snapshot.inventory.cards["4/1"].run = "2026-09-23-box4-01"
+            snapshot.inventory.set_state(
+                "4/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
+            )
+            snapshot.inventory.cards["4/1"].name = old_name
+            snapshot.inventory.listing(old_sku, condition="Near Mint").set(
+                master.PUSHED, 1
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 1, {"undo": True}),
+            "not_corrected",
+            "an undo where nothing was ever corrected refuses",
+        )
+
+        capture_server.do_correct_answer(4, 1, {"sku": new_sku})
+        undone = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 1, {"undo": True}),
+            "the undo puts the correction back",
+        )
+        if undone is not None:
+            checks.equal(undone["sku"], old_sku, "the old sku is restored")
+        restored_card = Store().read().inventory.cards["4/1"]
+        checks.equal(
+            (restored_card.sku, restored_card.condition, restored_card.name),
+            (old_sku, "Near Mint", old_name),
+            "the whole pair — sku, condition and name — comes back",
+        )
+        restored_listing = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            restored_listing.pushed,
+            1,
+            "and the released copy is handed back to the old sku's own record",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 1, {"undo": True}),
+            "not_corrected",
+            "a SECOND undo refuses — the card's own sku no longer matches the newest "
+            "correction line, which is the ground truth this reversal reads rather than a "
+            "flag",
+        )
+
+        # --------------------------------------------------------- undo_too_late, symmetric
+        capture_server.do_correct_answer(4, 1, {"sku": new_sku})
+        with Store().write() as snapshot:
+            snapshot.inventory.listing(new_sku, condition="Near Mint").set(
+                master.LIVE, 1
+            )
+        refusal(
+            checks,
+            lambda: capture_server.do_correct_answer(4, 1, {"undo": True}),
+            "undo_too_late",
+            "an undo refuses once the NEW sku is itself out of this Mac — the same guard "
+            "do_review_answer's own undo checks, read on the card's current sku",
+        )
+
+        corrupt_history(position="4/1")
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_correct_answer(4, 1, {"undo": True}),
+            "a log that will not read refuses rather than guessing a pair back",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "correction_origin_unknown",
+                "in its own code",
+            )
+
+
+def check_correct_answer_live_release(checks: Checks) -> None:
+    """POST /inventory/<box>/<index>/correct — the `live` stage of the release, and the
+    stamps a round trip must not corrupt. D252, review round 2.
+
+    `Listing.release`'s own rule is least-committed-first: `pushed`, then `staged`, then
+    `live`. Every other case in `check_correct_answer` leaves `pushed` non-zero, so the
+    release never reaches past it — `_give_back_listing`'s `master.LIVE` branch has never
+    run. This fixture starts the old SKU at `pushed=0, staged=0, live=2`, so the ONE copy
+    this correction gives up has nowhere else to come from.
+
+    AND `release()` RESTAMPS `live_as_of` TO NOW WHEN IT TAKES FROM `live` — D34's own rule,
+    "an observation made now, like a sale" — so the stamp the operator's ORIGINAL live
+    reading carried is gone the moment the correction lands. The undo must not read that
+    loss as further permission to restamp AGAIN to whatever "now" happens to be when the
+    undo is pressed: `stamps` on the `sku_corrected` line carries the PRE-CORRECTION value,
+    and `_give_back_listing` puts it back verbatim once the counts are restored.
+    """
+    checks.note("")
+    checks.note("CORRECT A LISTED ANSWER — the live stage, and the stamp round trip")
+
+    old_sku, new_sku = "8926937", "8925897"
+    original_live_as_of = "2020-01-01T00:00:00+00:00"
+
+    with isolated_home() as home:
+        run_dir = home / "runs" / "2026-09-23-box5-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-09-23T00:00:00+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+        capture_server.do_capture(capture_payload(5, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["5/1"].game = "riftbound"
+            snapshot.inventory.cards["5/1"].run = "2026-09-23-box5-01"
+            snapshot.inventory.set_state(
+                "5/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
+            )
+            # `pushed` and `staged` are BOTH zero — the one copy the correction gives up can
+            # only come from `live`, which is the branch under test.
+            snapshot.inventory.listing(old_sku, condition="Near Mint").set(master.LIVE, 2)
+            snapshot.inventory.listings[old_sku].live_as_of = original_live_as_of
+
+        before = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            (before.pushed, before.staged, before.live, before.live_as_of),
+            (0, 0, 2, original_live_as_of),
+            "before the correction: nothing pushed or staged, two copies live, an old reading",
+        )
+
+        body = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(5, 1, {"sku": new_sku}),
+            "the correction succeeds with nothing to release from pushed or staged",
+        )
+        if body is not None:
+            checks.equal(
+                body["released"],
+                {"live": 1},
+                "and `Listing.release` reached `live` — the branch `_give_back_listing` had "
+                "never exercised",
+            )
+
+        after_release = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            (after_release.pushed, after_release.staged, after_release.live),
+            (0, 0, 1),
+            "one live copy is given up, and nothing else moves",
+        )
+        checks.ok(
+            after_release.live_as_of != original_live_as_of,
+            "and `release()` restamped `live_as_of` to now — D34's own rule for a copy taken "
+            "off `live`, unchanged by this correction",
+        )
+
+        undone = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(5, 1, {"undo": True}),
+            "the undo gives the live copy back",
+        )
+        restored = Store().read().inventory.listings[old_sku]
+        checks.equal(
+            (restored.pushed, restored.staged, restored.live),
+            (0, 0, 2),
+            "every count is restored exactly, live included",
+        )
+        checks.equal(
+            restored.live_as_of,
+            original_live_as_of,
+            "and `live_as_of` is the PRE-CORRECTION stamp, not `release()`'s restamp and not "
+            "a fresh `now` from the undo itself — a correct-then-undo round trip must not "
+            "manufacture a reading nobody took, which is exactly what `staged_stale` and "
+            "`reprice` would otherwise read as new evidence",
+        )
+        if undone is not None:
+            checks.ok(True, "and the route itself answered")
 
 
 def check_catalog_set_rarity_match(checks: Checks) -> None:
@@ -27495,6 +27879,80 @@ def check_price_history(checks: Checks) -> None:
         "unglued number behaves exactly as before",
     )
 
+    # ------------------------------------------ D254: a caller
+    # that already has a productId in hand — the archive's own already-verified answer for
+    # this SKU, `store/pricearchive.py:Bucket.product_id` — skips resolving the row at all.
+    # The owner's ruling (2026-09-23) closed a session's earlier attempt to weigh a card's
+    # own READ name against the number it found: the reviewer's re-measurement found 15 of
+    # 20 new refusals had a correct old answer and 1 of 29 flips was wrong, because a
+    # Riftbound "Champion, Title" card's read NAME is the unreliable field, not the number.
+    # The fix is to never ask the card at all — resolve by the SKU, never by a read field —
+    # and `pipeline/pricearchive.py:resolve_by_sku`/`merged_export_rows_by_sku` carry that;
+    # this proves the primitive they are built on, in `Market` itself, with no store and no
+    # `pipeline/pricearchive.py` import at all.
+    #
+    # PROVEN WITH NO NETWORK AND NO CACHE, THE ROW ITSELF UNRESOLVABLE ON PURPOSE. A `Product
+    # Line` no registry names would raise `NotResolvable` the moment `category_id` ran, and
+    # `ranges=()` means `self.history` is never reached either — so a reading that succeeds
+    # here, over this row, is proof the whole resolution walk was skipped, not proof it
+    # happened to succeed.
+    unresolvable_row = {
+        tcgcsv.PRODUCT_LINE_COLUMN: "Not A Real Product Line",
+        tcgcsv.SET_COLUMN: "Not A Real Set",
+        tcgcsv.NUMBER_COLUMN: "999/999",
+        tcgcsv.NAME_COLUMN: "Not A Real Name",
+        tcgcsv.SKU_COLUMN: "9999999",
+        tcgcsv.CONDITION_COLUMN: "Near Mint",
+    }
+
+    def _no_network(url):
+        raise AssertionError(f"MUTATION: the network was reached at {url!r}")
+
+    skip_market = pricehistory.Market(fetcher=_no_network)
+    verified_reading = skip_market.reading_for_row(
+        unresolvable_row, ranges=(), product_id=555
+    )
+    checks.equal(
+        verified_reading.product_id, 555,
+        "reading_for_row(product_id=555) trusts the given id as-is, over a row that would "
+        "otherwise refuse — the archive-verified tier, D254",
+    )
+    checks.equal(
+        verified_reading.series, {},
+        "and asks for nothing over an empty ranges tuple — nothing here proves the walk "
+        "ran and merely returned this id anyway",
+    )
+    batch_readings, batch_refusals = skip_market.readings_for_rows(
+        [unresolvable_row], ranges=(), product_ids={"9999999": 777}
+    )
+    checks.equal(
+        batch_readings["9999999"].product_id, 777,
+        "readings_for_rows(product_ids=...) honours a verified id the same way, per SKU",
+    )
+    checks.ok(
+        not batch_refusals,
+        "and never refuses a row it was never asked to resolve",
+        batch_refusals,
+    )
+    # MUTATION GUARD: the identical row, with NO verified id offered, refuses exactly as it
+    # always has — proves the skip above is conditional on being HANDED an id, never a
+    # general relaxation of `product_id_for_row`'s own refusal. A DIFFERENT market, whose
+    # fetcher answers an ordinary empty catalogue rather than asserting on any call —
+    # `product_id_for_row` DOES have to reach it here, legitimately, to fail on "no such
+    # category" rather than on this test's own network trap.
+    refusing_market = pricehistory.Market(fetcher=lambda url: {"results": []})
+    raised = checks.raises(
+        pricehistory.NotResolvable,
+        lambda: refusing_market.reading_for_row(unresolvable_row, ranges=()),
+        "MUTATION GUARD: the same row with no product_id given still refuses — "
+        "product_id_for_row runs exactly as before when nothing was verified",
+    )
+    checks.ok(
+        raised is not None and "Not A Real Product Line" in str(raised),
+        "and the refusal names the row's own unresolvable Product Line, the ordinary "
+        "resolution failure, proving product_id_for_row is what ran",
+    )
+
     # ---------------------------------------------------------------- the parse, on real bytes
     #
     # THE ORDER ASSERTION IS THE POINT OF COMMITTING THIS FILE. Both halves, so a change
@@ -31120,6 +31578,8 @@ def run() -> Result:
     check_identify_preflight_stage(checks)
     check_review_stand_down(checks)
     check_review_catalog(checks)
+    check_correct_answer(checks)
+    check_correct_answer_live_release(checks)
     check_catalog_set_rarity_match(checks)
     check_run_realignment(checks)
     check_reused_box_refusal(checks)

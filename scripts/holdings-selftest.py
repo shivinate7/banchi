@@ -12,8 +12,14 @@ HAS BEEN SEEN TO FAIL ON THE DEFECT IT GUARDS. Both defeat the guard by monkeypa
 one line that matters, run the same assertion, and require it to go red. If either one
 passes instead, this script exits non-zero and says so.
 
-Written, not wired into `make check` — `scripts/pricearchive-selftest.py`'s own precedent: a
-fast, self-contained proof of a package with no caller reachable from a screen yet.
+PATH GATED, THE EIGHTEENTH (D247, owner's word 2026-09-23, on the same ground as
+`pricearchive-selftest`'s sixteenth entry): `make holdings-selftest`, wired into `make check`
+and `make ci-check` through `scripts/guard-scope.py`. This file is no longer the exception it
+was when written — the sentence that used to sit here ("no caller reachable from a screen
+yet") described a state D250 already ended: `GET /pipeline/holdings-value`
+(`server/pipeline_routes.py:do_pipeline_holdings_value`) is called by `app/src/Revenue.tsx`'s
+`getHoldingsValue`, wired to `#/revenue`'s "Value my stock" panel. Once it's done, it only
+needs to be tested when touched.
 """
 
 from __future__ import annotations

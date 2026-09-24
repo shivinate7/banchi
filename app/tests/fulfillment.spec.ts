@@ -2432,6 +2432,31 @@ test('only one copy is ever past its first step, so only one fill is on screen',
   await expect(copyCard(page, EISCUE_FIRST).getByRole('button', { name: 'Pull' })).toBeVisible()
 })
 
+/* D218: this card's own `.card-locations-place-large` paragraph keeps the server's raw
+ * `Position.label` on purpose — `PositionLabel.tsx`'s header names this firewall and
+ * `docs/DESIGN.md`'s hard floors are why it stays untouched. The two ACCESSIBLE NAMES this
+ * same card carries are not that paragraph: the photo's `alt` (`CardLocations.tsx:FulfillerCard`)
+ * and the Pull button's `aria-label` (`Fulfillment.tsx:actionFor`) each compose a SENTENCE
+ * around the label, and neither has a `::before` to draw a separator with — both read through
+ * `sayPlace` before they reach a screen reader. */
+test('the card speaks its place without the server\'s middle dot, in what a screen reader hears', async ({
+  page,
+}) => {
+  await openSearch(page, 'Eiscue', 2)
+
+  const card = copyCard(page, EISCUE_FIRST)
+  const photoAlt = await card.locator('img.card-locations-photo').getAttribute('alt')
+  expect(photoAlt).not.toMatch(/[·•]/)
+  expect(photoAlt).toBe(`The card in ${EISCUE_FIRST.replace(/ · /g, ', ')}`)
+
+  const pullName = await card.getByRole('button', { name: 'Pull' }).getAttribute('aria-label')
+  expect(pullName).not.toMatch(/[·•]/)
+  expect(pullName).toBe(`Pull ${EISCUE_FIRST.replace(/ · /g, ', ')}`)
+
+  // AND THE DISPLAYED PARAGRAPH IS UNTOUCHED — the one exception this sweep leaves alone.
+  await expect(card.locator('.card-locations-place-large')).toHaveText(EISCUE_FIRST)
+})
+
 test(`a copy sold from a search result leaves both lists, and keeps its undo for ${UNDO_FLOOR_MS / 1000}s`, async ({
   page,
 }) => {

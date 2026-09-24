@@ -220,6 +220,18 @@ class Resolved:
         return merged
 
     @property
+    def name_corrections(self) -> Dict[str, str]:
+        """Every game's `position key -> catalog product name`
+        (`pipeline/join.py:JoinReport.name_corrections`, D253), merged
+        and re-keyed the way `cli/cmd_emit.py` already keys a position
+        (`master.position_key`), so it is a plain lookup at the one place a SKU commits."""
+        merged: Dict[str, str] = {}
+        for game_join in self.joins.values():
+            for (box, index), name in game_join.report.name_corrections.items():
+                merged[master.position_key(box, index)] = name
+        return merged
+
+    @property
     def queued_positions(self):
         """Positions this run put in a standing queue."""
         return {

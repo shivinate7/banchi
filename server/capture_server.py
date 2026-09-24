@@ -21,6 +21,10 @@
                                            record untouched, allocator never involved (D26)
     POST   /inventory/<box>/<index>/remove delete one capture mid-box and slide every higher
                                            card down one index (D10, owner ruling 1)
+    POST   /inventory/<box>/<index>/correct  a wrong catalog row corrected to the right one,
+                                           whether or not the card is still in any queue —
+                                           the SKU it leaves is recorded as over-listed by
+                                           one copy, or its undo (D252)
     DELETE /boxes/<box>                    delete a whole box — records, photos, sidecars,
                                            queue entries, cache, registry (D10, owner ruling
                                            3, amended D134 — a departed record no longer
@@ -559,6 +563,10 @@ _REVIEW_STAND_DOWN_RE = re.compile(r"^/review/(\d+)/(\d+)/stand-down$")
 _SOLD_RE = re.compile(r"^/inventory/(\d+)/(\d+)/sold$")
 _RETIRE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/retire$")
 _RESHOOT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/photo$")
+# D252. A different verb on a longer path than `/inventory/<box>/<index>`,
+# exactly like `_SOLD_RE` and `_RETIRE_RE` beside it, so it cannot shadow or be shadowed by the
+# PUT/DELETE routes on the shorter path.
+_CORRECT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/correct$")
 # The mid-box delete (D10, owner ruling 1). A DISTINCT POST PATH, not a flag on the DELETE
 # route, and the shape is load-bearing twice over. First, the old newest-only undo must not
 # be one stray token away from an operation that renumbers a box: the capture screen's undo
@@ -790,6 +798,14 @@ STAND_DOWN_FIELDS = ("reason", "undo")
 # never trusted — `_answer_target` runs the same checks for both routes, so the group cannot
 # accept a pair the single route would refuse.
 GROUP_ANSWER_ENTRY_FIELDS = ("box", "index", "sku", "condition")
+
+# What `POST /inventory/<box>/<index>/correct` carries (D252). Only the
+# new SKU — the row is re-read from the card's own export exactly as `from_catalog` answers
+# already are (D46), and `condition` is never accepted from the client for the same reason it
+# is never accepted there: it comes off the chosen row, not off the wire. `undo` is the same
+# shape `ANSWER_FIELDS` carries it in, and for the identical reason — one control, one window,
+# no second path to the reversal a stale client could find on its own.
+CORRECT_FIELDS = ("sku", "undo")
 
 # Mark-sold's whole body. The sale itself needs nothing: the position is in the path and the
 # state is a constant, so `{}` sells and `{"undo": true}` reverses. One route rather than a
@@ -1170,6 +1186,37 @@ BURIED = "buried"
 # `pushed`/`staged`/`live` are not members of `master.STATES` in the first place.
 LISTINGS_RELEASED = "listings_released"
 
+# THE ELEVENTH AND TWELFTH ROUTE-WRITTEN EVENTS (D252). A card that was
+# answered onto the wrong catalog row (D4) gets a SECOND catalog row, chosen the same way the
+# first one was — a human, looking at the photograph, picking from this card's own export
+# (D46) — after the first SKU has already gone out (D28's undo refuses `undo_too_late` at
+# exactly this point, which is the gap this pair closes). NOT `answered`/`unanswered`:
+# reusing those names would make this route's own history indistinguishable from an ordinary
+# D4 answer, and the two are different claims — an answer says the pipeline offered nothing
+# and a human chose the first row; a correction says a human already chose, and chose wrong.
+#
+#   sku_corrected            carries the position, the new pair (`sku`, `condition`,
+#                            `set_name`, `rarity`, `name`), the old pair as `restores_to`
+#                            (`_answer_before`'s shape, reused verbatim so one reader parses
+#                            both), and `released` — what `Listing.release` gave up on the
+#                            OLD sku (D34's own primitive, not a second one: the pipeline is
+#                            giving back exactly the commitment this card's wrong answer put
+#                            on it). `pushed`/`staged`/`live` are counts on the SKU and never
+#                            addresses (D7 amended), so a correction cannot say WHICH copy of
+#                            the old SKU stops being backed by this card — only that one is —
+#                            and least-committed-first is `release`'s own rule for exactly
+#                            that unknown.
+#   sku_correction_undone    the reversal: the new pair comes off, the old pair goes back on,
+#                            and `released` is given back to the old SKU's listing record.
+#                            Ground truth for "is there something to reverse" is the CARD
+#                            itself — its `sku`/`condition` must still match what the newest
+#                            `sku_corrected` line wrote — so unlike `stood_down` this pair
+#                            needs no `undone` flag riding one event name: a second undo, or
+#                            an undo after the card moved on again, finds no match and refuses
+#                            rather than reading a flag.
+SKU_CORRECTED = "sku_corrected"
+SKU_CORRECTION_UNDONE = "sku_correction_undone"
+
 # D20's five, and they differ from the route-written names above in WHO APPENDS THEM. Those are
 # written here, by `_history`, because the store has no opinion about them. These five are
 # written by `store/master.py:Inventory._log` from inside `set_sections`, `ensure_box`,
@@ -1231,6 +1278,8 @@ SERVER_EVENTS = (
     BOX_DELETED,
     BURIED,
     LISTINGS_RELEASED,
+    SKU_CORRECTED,
+    SKU_CORRECTION_UNDONE,
     RESECTIONED,
     BOX_CREATED,
     BOX_RENAMED,
@@ -7310,6 +7359,404 @@ def _reverse_answer(box: int, index: int) -> dict:
     return body
 
 
+# -------------------------------------------------------------- correcting a listed answer
+
+
+def _correction_event(events, key: str) -> Optional[dict]:
+    """The newest `sku_corrected` line at this position, or None. D252.
+
+    `_clearing_event`'s shape, narrowed to one event name. There is no companion event to
+    tell apart here the way `stood_down` and `answered` are: the ground truth for whether a
+    correction is still standing is the CARD itself — `_reverse_correction` checks that its
+    `sku`/`condition` still match what this line wrote — not a flag on a queue entry, because
+    a corrected card holds no queue entry to carry one. So this scan answers one question
+    only: which correction, if any, would `{"undo": true}` be undoing.
+
+    A `renumbered` LINE THIS POSITION SITS ABOVE IS A HARD STOP, `_answer_before`'s rule and
+    for the identical reason: the mid-box delete slides a DIFFERENT physical card into every
+    index above the deleted one, so a `sku_corrected` line older than the shift belongs to
+    the position's previous occupant.
+    """
+    try:
+        at_box, at_index = (int(part) for part in str(key).split("/"))
+    except (TypeError, ValueError):
+        at_box = at_index = None
+    for event in reversed(list(events)):
+        if (
+            at_box is not None
+            and event.get("event") == RENUMBERED
+            and event.get("box") == at_box
+            and isinstance(event.get("from"), int)
+            and at_index >= event["from"]
+        ):
+            return None
+        if event.get("position") != key:
+            continue
+        if event.get("event") == SKU_CORRECTED:
+            return event
+    return None
+
+
+def _give_back_listing(
+    inventory: master.Inventory,
+    sku: str,
+    condition: Optional[str],
+    released: Dict[str, int],
+    stamps: Optional[dict] = None,
+) -> None:
+    """Reverse of `Listing.release`: hand `released` back onto `sku`'s own record.
+
+    `Listing.release` (D34) is the primitive `do_correct_answer` spends when it gives up the
+    old SKU's copy; this is that spend running backwards, through the SAME record's own
+    public writers rather than a second direct-`setattr` path — `bump` for `pushed`/`staged`,
+    `set` for `live`. `bump` REFUSES `live` on purpose (D115): a reclaimed live copy is an
+    observation made now, not a delta on an old reading, which is the exact posture D34's own
+    `release` takes when it is the one reaching `live`.
+
+    `stamps` PUTS `staged_at`/`live_as_of` BACK TOO, AFTER THE COUNTS, so the round trip is
+    exact and not merely equal in number. `release()` restamps both on its way out — `staged_at`
+    when `staged` reaches zero, `live_as_of` whenever it reaches `live` — and `bump`/`set` above
+    restamp them AGAIN on the way back, to now, which is wrong twice over: it is not when the
+    stage was really touched, and a correction-then-undo would otherwise read as fresher than
+    the record ever was — hiding exactly the staleness `staged_stale` and `reprice` exist to
+    catch. Restored VERBATIM, including a `None` either one held before the release, which is
+    what "back to exactly what it was" means for a stamp that was never set.
+    """
+    if not released:
+        return
+    entry = inventory.listing(sku, condition=condition)
+    for stage, count in released.items():
+        count = int(count or 0)
+        if count <= 0:
+            continue
+        if stage == master.LIVE:
+            entry.set(master.LIVE, int(entry.live) + count)
+        elif stage in (master.PUSHED, master.STAGED):
+            entry.bump(stage, count)
+    if stamps is not None:
+        entry.staged_at = stamps.get("staged_at")
+        entry.live_as_of = stamps.get("live_as_of")
+
+
+def do_correct_answer(box: int, index: int, payload: dict) -> dict:
+    """Correct a card that was answered onto the WRONG catalog row. D252.
+
+    THE GAP THIS CLOSES. `do_review_answer`'s own undo refuses `undo_too_late` the moment the
+    wrong SKU has gone out — pushed, staged or live — which for a real mistake is usually
+    already true by the time anyone notices. Measured on the owner's live server, 2026-09-23:
+    three cards read correctly by eye and answered onto the wrong product, all three already
+    imported. The refusal's own message says "correct the card by hand"; until this route
+    there was no hand to do it with — no route could rewrite an already-answered card's SKU
+    outside a queue at all.
+
+    IT NEVER TAKES THE QUEUE'S WORD, AND IT NEVER NEEDS TO. `_answer_target` requires an open
+    entry in `review.json` or `parked.json`, because D4's whole guard is "only a row the
+    pipeline offered" — but a card this route was built for is not in a queue any more;
+    `do_review_answer` already cleared it, correctly, for the wrong row. So this route
+    re-reads the new SKU straight out of `_catalog_for_card`'s export through `_catalog_answer`
+    (D46's own primitive, not a second one) and never opens `review.json` or `parked.json` at
+    all. That is also why this is its own route rather than a branch on `do_review_answer`:
+    that route's whole first half is "which queue entry governs this answer", and a card
+    holding none has nothing for it to govern.
+
+    THE OLD SKU IS RELEASED BY ONE COPY, THROUGH `Listing.release` — D34's primitive and not a
+    second one. `pushed`/`staged`/`live` are counts on a SKU, never addresses (D7 amended), so
+    there is no field anywhere recording "this card backed that listing" to simply clear.
+    What IS true is the fact D34's own release states when a box loses its copies: one fewer
+    physical card now backs whatever this SKU's counts claim, so one copy of the least-
+    committed stage — pushed first, then staged, then live — is given up, exactly as a box
+    losing a card gives one up. `pipeline/livecheck.py:compare` was read before this was
+    built (the brief's item 2): its buckets are `pushed+staged` against `live+sold`, and
+    nothing about a card's own identity moves either number on its own — only a release does.
+    Once it runs, the next `pkmnscan reconcile --live` reads a SKU whose `claim` no longer
+    covers what TCGplayer still shows live as `beyond` (D109's own bucket): "TCGplayer's own
+    quantity for a SKU this pipeline never sent — more than it sent", which is the sentence
+    that tells the operator exactly what to go and lower.
+
+    THE NEW SKU GETS NO LISTING WRITE. Choosing a catalog row is not pushing one — that stays
+    `emit`'s job (D54) — so nothing here touches the new SKU's `pushed`/`staged`/`live`.
+
+    THE STORED NAME FOLLOWS THE CATALOG, on the owner's ruling. A card wrong about its SKU is
+    wrong about its name in the same breath, and `card.name` is what `#/inventory` and
+    `#/orders` draw as the card's identity — neither should go on saying the old product's
+    name once the SKU says otherwise. `set_name`/`rarity` are set from the same row a D46
+    `from_catalog` answer already sets them from.
+
+    REFUSALS, IN ORDER: `card_not_found` (no record at that position — this route corrects a
+    card that exists and never creates one), `card_departed` (the card has left inventory —
+    correcting a sold or retired card's SKU is a different, larger question this route does
+    not attempt), `not_identified` (no existing SKU to correct — that is `do_review_answer`'s
+    job), `sku_required`, `sku_not_in_catalog` (`_catalog_answer`'s own D46 refusal, reused
+    verbatim — no export, no run, or the SKU is not a row in it), `sku_unchanged` (the row
+    chosen is the row already on the card).
+
+    IT GOES BOTH WAYS, D28's shape. `{"undo": true}` is `_reverse_correction` below, on the
+    same one-control-one-window posture `do_review_answer`'s own undo takes: no clock here,
+    the window is the screen's.
+    """
+    undo = _optional_flag(payload, "undo", "undo_invalid")
+    if undo:
+        _reject_unknown(payload, UNDO_FIELDS)
+        return _reverse_correction(box, index)
+
+    _reject_unknown(payload, CORRECT_FIELDS)
+    sku = _require_text(
+        payload,
+        "sku",
+        "sku_required",
+        "Send `sku` — the TCGplayer Id of the correct row, chosen from this card's own "
+        "export.",
+    )
+
+    key = master.position_key(box, index)
+
+    with Store().write() as snapshot:
+        card = snapshot.inventory.cards.get(key)
+        if card is None:
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "card_not_found",
+                f"No card at box {box}, card {index}. This route corrects a card that "
+                f"exists; it never creates one.",
+            )
+        if card.state in master.TERMINAL_STATES:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "card_departed",
+                f"Box {box}, card {index} has left inventory ({card.state}). This route "
+                f"corrects an on-hand card's identity; a departed one is a different, "
+                f"larger question it does not attempt.",
+            )
+        if card.state == master.CAPTURED or not card.sku:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "not_identified",
+                f"Box {box}, card {index} carries no SKU yet, so there is nothing here to "
+                f"correct. Answer it on the review screen first.",
+            )
+
+        # D46's OWN LOOKUP AND ITS OWN REFUSAL, REUSED VERBATIM: the row is re-read from
+        # THIS CARD'S export, inside the lock, and never taken on the client's word.
+        chosen = _catalog_answer(card, sku)
+        new_condition = str(chosen.get("condition") or "")
+
+        if str(chosen.get("sku") or "") == str(card.sku or ""):
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "sku_unchanged",
+                f"{sku} is the row box {box}, card {index} already carries. Choose a "
+                f"different row — this one was answered correctly the first time.",
+            )
+
+        # READ BEFORE THE WRITE, `do_review_answer`'s reason unchanged: this lock is the last
+        # moment anything knows the pair the card is about to give up.
+        previous = {
+            "sku": card.sku,
+            "condition": card.condition,
+            "set_name": card.set_name,
+            "rarity": card.rarity,
+            "name": card.name,
+        }
+
+        old_sku = card.sku
+        old_entry = snapshot.inventory.listings.get(old_sku) if old_sku else None
+        # READ BEFORE `release()`, WHICH TOUCHES BOTH OF THESE ITSELF: it stamps `staged_at`
+        # only when `staged` reaches zero and `live_as_of` only when it gives up a `live`
+        # copy — so the record `release` leaves behind is not the record it started from, and
+        # an undo that only reversed the COUNTS would still corrupt the staleness a later
+        # `staged_stale` or `reprice` reads off these two stamps. `_give_back_listing` restores
+        # them from here, verbatim, once the counts are back.
+        stamps_before = (
+            {"staged_at": old_entry.staged_at, "live_as_of": old_entry.live_as_of}
+            if old_entry is not None
+            else None
+        )
+        released: Dict[str, int] = old_entry.release(1) if old_entry is not None else {}
+
+        card.sku = sku
+        card.condition = new_condition
+        card.set_name = str(chosen.get("set") or "").strip() or None
+        card.rarity = str(chosen.get("rarity") or "").strip() or None
+        chosen_name = str(chosen.get("name") or "").strip()
+        if chosen_name:
+            card.name = chosen_name
+
+        _history(
+            snapshot.inventory,
+            SKU_CORRECTED,
+            key,
+            sku=sku,
+            condition=new_condition,
+            set_name=card.set_name,
+            rarity=card.rarity,
+            name=card.name,
+            restores_to=previous,
+            released=released or None,
+            old_sku=old_sku,
+            stamps=stamps_before,
+        )
+
+        # THE SAME QUESTION `do_review_answer` ASKS AFTER ITS OWN WRITE, ON THE NEW SKU: is
+        # the row this card now carries already out of this Mac. If it is — a coincidence, or
+        # this same SKU pushed from another copy — an undo of THIS correction would leave an
+        # import file disagreeing with the inventory, exactly as it would there.
+        held = _listing_hold(snapshot.inventory, card)
+
+        body = {
+            "position": key,
+            "box": int(box),
+            "index": int(index),
+            "corrected": True,
+            "undone": False,
+            "sku": sku,
+            "condition": new_condition,
+            "previous_sku": old_sku,
+            "released": released,
+            "restores_to": None if held else previous,
+            "card": _card_row(snapshot.inventory, box, index, card),
+        }
+
+    return body
+
+
+def _reverse_correction(box: int, index: int) -> dict:
+    """Take one SKU correction back. D252, `_reverse_answer`'s twin.
+
+    FOUR REFUSALS: `card_not_found` (no record); `not_corrected` (the log names no
+    `sku_corrected` line here, or the card's own `sku`/`condition` no longer match the newest
+    one — it moved on, through a second correction or a fresh answer, and reversing the OLD
+    line would overwrite whichever of those actually stands, or the line's own `restores_to`
+    is missing or malformed); `correction_origin_unknown` (the log will not read at all);
+    `undo_too_late` (the corrected SKU is already out of this Mac — `_listing_hold`'s own
+    guard, checked on the card exactly as `do_review_answer`'s reversal checks it).
+
+    THE GROUND TRUTH FOR "IS THERE SOMETHING TO REVERSE" IS THE CARD ITSELF, not a flag on an
+    event. `sku_corrected` carries no companion "undone" flag the way `stood_down` rides one
+    name in both directions, because there is no queue entry here whose `cleared_by_human` bit
+    could already answer the question. The card's own `sku`/`condition` matching the newest
+    correction line IS the answer, and it composes for free: a second correction on top, or a
+    fresh answer, changes those fields, and this reversal then correctly finds nothing of ITS
+    OWN to put back rather than guessing which of two corrections was meant.
+
+    WHAT COMES BACK: the pair this correction overwrote, and the release it took off the old
+    SKU — handed back through `_give_back_listing`, D34's own writers run in reverse.
+    """
+    key = master.position_key(box, index)
+    store = Store()
+
+    with store.write() as snapshot:
+        card = snapshot.inventory.cards.get(key)
+        if card is None:
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "card_not_found",
+                f"No card at box {box}, card {index}. This route reverses a correction "
+                f"written onto a card that exists; it never creates one.",
+            )
+
+        try:
+            event = _correction_event(store.history_at(key), key)
+        except (files.StoreError, OSError, ValueError) as exc:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "correction_origin_unknown",
+                f"the store's history could not be read ({type(exc).__name__}: {exc}), so "
+                f"nothing here will guess. Correct the card by hand instead.",
+            ) from exc
+        if event is None:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "not_corrected",
+                f"Box {box}, card {index} carries no correction this route wrote, so there "
+                f"is nothing here to take back.",
+            )
+        if str(card.sku or "") != str(event.get("sku") or "") or str(
+            card.condition or ""
+        ) != str(event.get("condition") or ""):
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "not_corrected",
+                f"Box {box}, card {index} has moved on since that correction — a later "
+                f"correction or a fresh answer stands instead. Correct it again if that one "
+                f"is also wrong.",
+            )
+
+        previous = event.get("restores_to")
+        if not isinstance(previous, dict):
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "not_corrected",
+                f"Box {box}, card {index}'s correction record carries nothing to put back, "
+                f"so there is nothing here to guess. Correct the card by hand.",
+            )
+        pair: Dict[str, Optional[str]] = {}
+        for field in ("sku", "condition", "set_name", "rarity", "name"):
+            value = previous.get(field)
+            if value is not None and not isinstance(value, str):
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "not_corrected",
+                    f"Box {box}, card {index}'s correction record is malformed, so there is "
+                    f"nothing here to guess. Correct the card by hand.",
+                )
+            pair[field] = value
+
+        held = _listing_hold(snapshot.inventory, card)
+        if held:
+            summary = ", ".join(f"{count} {stage}" for stage, count in held)
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "undo_too_late",
+                f"Box {box}, card {index} was corrected to SKU {card.sku}, and that SKU is "
+                f"already out of this Mac: {summary}. Taking the correction back would leave "
+                f"an import file — and then TCGplayer — holding a listing the inventory no "
+                f"longer claims. Pull the listing first, or correct the card again by hand.",
+            )
+
+        withdrawn = {"sku": card.sku, "condition": card.condition}
+        released = event.get("released")
+        old_sku = pair.get("sku")
+        stamps = event.get("stamps")
+        if isinstance(released, dict) and old_sku:
+            _give_back_listing(
+                snapshot.inventory,
+                old_sku,
+                pair.get("condition"),
+                released,
+                stamps=stamps if isinstance(stamps, dict) else None,
+            )
+
+        card.sku = pair.get("sku")
+        card.condition = pair.get("condition")
+        card.set_name = pair.get("set_name")
+        card.rarity = pair.get("rarity")
+        if pair.get("name") is not None:
+            card.name = pair.get("name")
+
+        _history(
+            snapshot.inventory,
+            SKU_CORRECTION_UNDONE,
+            key,
+            withdrew=withdrawn,
+            restored=pair,
+            reclaimed=released if isinstance(released, dict) else None,
+        )
+
+        body = {
+            "position": key,
+            "box": int(box),
+            "index": int(index),
+            "corrected": False,
+            "undone": True,
+            "sku": card.sku,
+            "condition": card.condition,
+            "restores_to": None,
+            "card": _card_row(snapshot.inventory, box, index, card),
+        }
+
+    return body
+
+
 # ------------------------------------------------------------------------ the group answer
 
 
@@ -12900,6 +13347,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _RESHOOT_RE.match(path)
             if match:
                 body = do_reshoot(int(match.group(1)), int(match.group(2)), self._body())
+                return self._json(HTTPStatus.OK, body)
+            # D252. A different verb on the same longer-path pattern as
+            # the sale and the two D26 routes just above, so it cannot shadow the PUT and
+            # DELETE routes on `/inventory/<box>/<index>` either.
+            match = _CORRECT_RE.match(path)
+            if match:
+                body = do_correct_answer(
+                    int(match.group(1)), int(match.group(2)), self._body()
+                )
                 return self._json(HTTPStatus.OK, body)
             # The mid-box delete (D10, ruling 1). A POST and not a mode of the DELETE verb:
             # the regex comment at `_REMOVE_RE` has the argument — the shift is not

@@ -27,14 +27,20 @@
  * the same manual-wins-until-toggled behaviour, just kept inside the component that draws it.
  */
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { readingAgo, stateLabel, stateTone } from './cardState'
-import { Icon, Pill } from './kit'
-import { photoUrl } from './server'
-import type { InventoryCard, Listing, PricingPayload } from './types'
+import { Button, Icon, Pill } from './kit'
+import { toast } from './kit/toast'
+import { sayPlace } from './position'
+// D46's own picker, reused rather than forked — this file's own header rule: "added to
+// inventory and both screens get it, not a fork" (D252).
+import { CatalogPanel } from './ReviewQueue'
+import { correctAnswer, describeFailure, photoUrl, reviewCatalog, undoCorrectAnswer } from './server'
+import type { CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload } from './types'
+import './CardHero.css'
 
 /** One inventory row: the store key plus the card it names. `BoxBrowse.tsx` re-exports this
  *  (`export type { Row } from './CardHero'`) so `Inventory.tsx`'s own import keeps working. */
@@ -298,7 +304,12 @@ export type PhotoPanelProps = {
  *  by the caller's own choice: `#/orders` passes `null`, since re-shooting a card mid-walk is
  *  an Inventory-only correction. */
 export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot }: PhotoPanelProps) {
-  const where = label ?? `store key ${row.key}`
+  /* D218: `label` is the server's `Position.label`, and this panel only ever speaks it —
+     the paragraph below and the photo's own `alt` are plain text and an accessible name,
+     where there is no CSS to draw the ` · ' with, so `sayPlace` reads it as a sentence
+     instead. Shared by `#/inventory` (`BoxBrowse.tsx`) and `#/orders`
+     (`OrdersWalkPane.tsx`), so fixing it here fixes both callers at once. */
+  const where = label === null ? `store key ${row.key}` : sayPlace(label)
 
   if (row.card.photo === null) {
     return (
@@ -362,17 +373,30 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
 
 /** `identity · claims · provenance` — `BoxBrowse.tsx`'s own disclosure, moved whole. Owns its
  *  open/closed state (default open unless `phone`, same as before) rather than reading it off
- *  the caller, so both screens get the identical control with no prop to keep in step. */
+ *  the caller, so both screens get the identical control with no prop to keep in step.
+ *
+ *  `correctable` IS THE SCREEN'S OWN WORD, on the owner's ruling (D252):
+ *  "Inventory only" — the listing-correction control shows on `#/inventory` and not on
+ *  `#/orders`, and the screen says so rather than this file guessing from the route. DEFAULTS
+ *  FALSE — an ALLOW-LIST of one screen, on the owner's OWN wording, so a THIRD screen that
+ *  mounts this pane later inherits nothing silently. `BoxBrowse.tsx` passes `correctable` at
+ *  its one call site (the smallest edit that ruling reaches into a fenced file for);
+ *  `OrdersWalkPane.tsx` needs no flag at all now — omitting one IS "no control", the same
+ *  answer `false` gave before. `false`/omitted renders NOTHING for the control, not an empty
+ *  reserved slot — D118 protects a control's OWN state change, and a screen that never draws
+ *  the control has no such change to protect against. */
 export function CardDetailsSection({
   card,
   market,
   listings,
   phone,
+  correctable = false,
 }: {
   readonly card: InventoryCard
   readonly market: MarketRead | undefined
   readonly listings: Readonly<Record<string, Listing>>
   readonly phone: boolean
+  readonly correctable?: boolean
 }) {
   const [openState, setOpenState] = useState<boolean | null>(null)
   const open = openState ?? !phone
@@ -402,6 +426,172 @@ export function CardDetailsSection({
           </div>
         ))}
       </div>
+      {correctable ? <ListingCorrection card={card} /> : null}
     </details>
+  )
+}
+
+/* -------------------------------------------------------- correcting a listed answer */
+
+/** D252: a card answered onto the wrong catalog row, whose wrong SKU is
+ *  already pushed or live, has no way back through `do_review_answer`'s own undo —
+ *  `undo_too_late` refuses it by name, and the message says "correct the card by hand". This
+ *  is that hand: `POST /inventory/<box>/<index>/correct` rewrites the card to a DIFFERENT
+ *  row from its own catalog export, whether or not it is still in any queue, and the wrong
+ *  SKU is released (D34) rather than left silently over-listed.
+ *
+ *  SHOWN ONLY FOR AN IDENTIFIED, ON-HAND CARD — the two conditions the route itself refuses
+ *  on (`not_identified`, `card_departed`) — so the control never offers a press the server
+ *  would only reject.
+ *
+ *  ONE OF `#/inventory`'S OWN CARD PANE, on this file's own precedent: "added to inventory
+ *  and both screens get it, not a fork." `#/orders` draws the same pane and gets the same
+ *  control; retire, move and reshoot are Inventory-only for the same structural reason
+ *  (`BoxBrowse.tsx`'s own `CardOps` menu is not reachable from here), while this one needs
+ *  nothing `#/orders` cannot already do — the box and index alone.
+ *
+ *  A SEPARATE PANEL EVERY WRITE ON THIS SCREEN TAKES: neither the header nor the details
+ *  disclosure re-reads after a correction, because both are drawn from the `card` this
+ *  component was HANDED, owned by `BoxBrowse.tsx`/`OrdersWalkPane.tsx` and not by this file.
+ *  The receipt below still stands and its Undo still works — the write and the reversal are
+ *  both real — the rest of the pane simply catches up the way every other write on this
+ *  screen does, on the caller's own next read. */
+/** The identity this control believes the card carries RIGHT NOW — `card` if this control has
+ *  written nothing, or the last write's own answer once it has. `screen-freshness.mjs`'s
+ *  idiom 4 ("the response carries the new state"), and the real reason it exists: `card` is
+ *  owned by `BoxBrowse.tsx`/`OrdersWalkPane.tsx` and does not move until their own next read,
+ *  so without this a second press — or the small note below it — would work off what the
+ *  card USED to be. */
+type Corrected = { sku: string; condition: string; name: string | null }
+
+function ListingCorrection({ card }: { readonly card: InventoryCard }) {
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [lookup, setLookup] = useState<CatalogLookup | null>(null)
+  const [failed, setFailed] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [written, setWritten] = useState<Corrected | null>(null)
+  const inflight = useRef(0)
+
+  const sku = written?.sku ?? card.sku
+  const name = written?.name ?? nameOf(card)
+
+  // The two refusals `POST /inventory/<box>/<index>/correct` would give this card anyway —
+  // checked here so the control is never offered a press the server would only reject.
+  const eligible = sku !== null && card.state === 'identified'
+
+  const { box, index } = card
+
+  const search = (query: string) => {
+    const mine = ++inflight.current
+    setLookup(null)
+    setFailed(null)
+    void reviewCatalog(box, index, query)
+      .then((found) => {
+        if (inflight.current === mine) setLookup(found)
+      })
+      .catch((err: unknown) => {
+        if (inflight.current === mine) setFailed(describeFailure(err).message)
+      })
+  }
+
+  const openPanel = () => {
+    setOpen(true)
+    setTyped('')
+    search('')
+  }
+
+  const runUndo = (atBox: number, atIndex: number) => {
+    void undoCorrectAnswer(atBox, atIndex)
+      .then((result) => {
+        setWritten({ sku: result.sku, condition: result.condition, name: nameOf(result.card) })
+        toast({
+          kind: 'ok',
+          icon: 'undo',
+          title: 'Correction undone',
+          body: `Box ${atBox}, Card ${atIndex} — back to ${result.sku}`,
+        })
+      })
+      .catch((err: unknown) => {
+        toast({ kind: 'refusal', title: 'The correction was not undone', body: describeFailure(err).message })
+      })
+  }
+
+  const choose = (row: CandidateRow) => {
+    if (busy) return
+    setBusy(true)
+    correctAnswer(box, index, row.sku)
+      .then((result) => {
+        setOpen(false)
+        setWritten({ sku: result.sku, condition: result.condition, name: nameOf(result.card) })
+        toast({
+          kind: result.restores_to ? 'receipt' : 'status',
+          icon: 'wand',
+          title: 'Card corrected',
+          body: `${result.card.name ?? row.name} — SKU ${result.previous_sku ?? '?'} → ${result.sku}`,
+          action: result.restores_to ? { label: 'Undo', onPress: () => runUndo(box, index) } : undefined,
+        })
+      })
+      .catch((err: unknown) => {
+        toast({ kind: 'refusal', title: 'The card was not corrected', body: describeFailure(err).message })
+      })
+      .finally(() => setBusy(false))
+  }
+
+  // THE SLOT KEEPS ITS HEIGHT WHEN THE CONTROL BECOMES ITS OWN RESULT (D118),
+  // `.card-locations-action`'s own rule (app/src/CardLocations.css), reused rather than
+  // invented: `.card-correction`'s CSS reserves `Wrong card?`'s own height always, so a press
+  // ELSEWHERE ON THIS CARD (Mark sold — `card.state` turns `sold`/`retired`, `eligible` turns
+  // false) empties this slot without resizing it. The wrapper always renders; what changes is
+  // only what stands inside it.
+  return (
+    <div className="card-correction">
+      {!eligible ? null : (
+        <>
+          {written !== null ? (
+            // WRITTEN, NOT `card` — the header and the Details panel above still show what
+            // this component was handed until the caller's own next read; this line is the
+            // one place on the pane that already knows what actually happened.
+            <p className="card-correction-note">
+              Now {name ?? 'unnamed'}, SKU {sku}. The rest of this panel updates on the next reload.
+            </p>
+          ) : null}
+          {!open ? (
+            <Button variant="quiet" size="sm" icon="search" onClick={openPanel}>
+              Wrong card?
+            </Button>
+          ) : (
+            <div
+              className="bn-panel card-correction-panel"
+              // `CatalogPanel`'s own copy promises `Esc` goes back — true on `#/review`, where
+              // the container already binds it, and not true here without this. Bound on the
+              // panel rather than the document, so it never reaches past this control.
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setOpen(false)
+              }}
+            >
+              <div className="bn-panel-head">
+                <span className="bn-section-title">Correct the listing</span>
+                <Button size="sm" variant="ghost" iconOnly icon="x" onClick={() => setOpen(false)}>
+                  Close
+                </Button>
+              </div>
+              <div className="bn-panel-body">
+                <CatalogPanel
+                  lookup={lookup}
+                  failed={failed}
+                  typed={typed}
+                  onTyped={setTyped}
+                  onSearch={() => search(typed)}
+                  onChoose={choose}
+                  overruling
+                  busy={busy}
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   )
 }

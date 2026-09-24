@@ -75,6 +75,10 @@ const PATHS = {
   paste: 'M9 3h6v3H9z M7 5H5v16h14V5h-2',
   ruler: 'M3 17L17 3l4 4L7 21z M8 12l2 2 M11 9l2 2 M14 6l2 2',
   wand: 'M15 4l5 5L9 20l-5-5z M15 4l-1.5 1.5 M18 7l-1.5 1.5 M4 4h.01 M9 2h.01 M20 12h.01 M20 19h.01 M2 12h.01',
+  /* A lidded box with a handle strap — retiring a card is putting it away, not deleting it
+     (`trash`) or shipping it (`package`/`box`). Added for the Retire control (owner's ruling,
+     2026-09-20, "clearer icon only"): the bare `minus` read as unclear icon-only. */
+  archive: 'M3 4h18v4H3z M4 8h16v11H4z M10 12h4',
 } as const
 
 export type IconName = keyof typeof PATHS

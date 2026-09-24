@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -55,6 +55,7 @@ help:
 	@echo "  make venv         .venv + requirements.txt   (before the first harness run, and"
 	@echo "                    again whenever requirements.txt changes — safe to re-run)"
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
+	@echo "  make worktree-provision-selftest  that node_modules clone/install logic, on a fixture"
 	@echo "  make launch-config   .claude/launch.json for THIS checkout's dev port (D43)"
 	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
 	@echo "  make harness      T1-T8 verification tests. Run at turn end by the Stop hook."
@@ -97,6 +98,34 @@ help:
 	@echo "                    re-shoot excused by a RECORDED digest, and a -9 mid-transaction."
 	@echo "                    Counts syscalls, because an outcome assertion cannot see work"
 	@echo "                    that no longer happens. In \`check\`, never in the hook."
+	@echo "  make pricearchive-selftest  D-pricehistory-resolves-by-sku's three tiers,"
+	@echo "                    merged_export_rows_by_sku and row_for_sku, proved against a"
+	@echo "                    throwaway store and real cached-export files under mktemp."
+	@echo "                    PATH GATED (D247's sixteenth). In \`check\`, never in the hook."
+	@echo "  make archive-review-selftest  cli/archive_review.py, proved against a throwaway"
+	@echo "                    store, no network: an identification refusal reaches the"
+	@echo "                    review queue with its photo, a network-shaped one never does."
+	@echo "                    PATH GATED (D247's seventeenth). In \`check\`, never in the hook."
+	@echo "  make holdings-selftest  pipeline/holdings.py, proved against in-memory fixtures,"
+	@echo "                    no store on disk, no network: on-hand quantity, the gap"
+	@echo "                    guard, sealed-product exclusion, each with a mutation arm."
+	@echo "                    PATH GATED (D247's eighteenth). In \`check\`, never in the hook."
+	@echo "  make identity-checks-selftest  pipeline/identity_checks.py's four stored-data"
+	@echo "                    checks, proved against literal fixtures, no store, no network."
+	@echo "                    PATH GATED (D247's nineteenth). In \`check\`, never in the hook."
+	@echo "  make price-postings-selftest  store/postings.py's price_postings table, proved"
+	@echo "                    against a throwaway store: two postings of one SKU land two"
+	@echo "                    rows, and --mutate-to-upsert proves the append-only property."
+	@echo "                    PATH GATED (D247's twentieth). In \`check\`, never in the hook."
+	@echo "  make product-history-selftest  pipeline/productview.py and"
+	@echo "                    server/pipeline_routes.py:do_product_history, proved against a"
+	@echo "                    throwaway store: archive-hit and live-fallback, no network"
+	@echo "                    call on the archive-hit arm."
+	@echo "                    PATH GATED (D247's twenty-first). In \`check\`, never in the hook."
+	@echo "  make sku-number-contradictions-selftest  pipeline/sku_number_contradictions.py,"
+	@echo "                    proved against literal fixtures and duck-typed Market fakes,"
+	@echo "                    no store, no network."
+	@echo "                    PATH GATED (D247's twenty-second). In \`check\`, never in the hook."
 	@echo "  make cid-audit    does every card's name still resolve to its photograph? Reads"
 	@echo "                    the whole corpus, so it is NOT in \`check\` — \`make lan-check\`'s"
 	@echo "                    reason. Three verdicts, and the third is \`not known\`."
@@ -128,7 +157,7 @@ help:
 	@echo "  make serve-scope   what serve-selftest reads, and whether this branch touches it."
 	@echo "                    ARGS=list | ARGS=\"classify --base <rev>\". Fails open."
 	@echo "  make serve-scope-selftest  that gate, including a CARRY drift it must catch."
-	@echo "  make guard-scope   the SECOND path gate: what each of 15 guard self-tests reads,"
+	@echo "  make guard-scope   the SECOND path gate: what each of 22 guard self-tests reads,"
 	@echo "                    derived from its own source. ARGS=list [--target <name>] |"
 	@echo "                    ARGS=\"classify --target <name> --base <rev>\". Fails open."
 	@echo "                    PKMNSCAN_GUARD_SCOPE=off runs every gated self-test regardless."
@@ -147,6 +176,10 @@ help:
 	@echo "                    nowhere — the whole declaration drops silently."
 	@echo "  make css-var-check-selftest  that checker, proved on fixtures in both directions,"
 	@echo "                    including a property defined only from TSX."
+	@echo "  make token-literal-check  a CSS literal exactly equal to a design token's value,"
+	@echo "                    in its own property family — should have been var(...)."
+	@echo "                    Ratcheted per file; PKMNSCAN_TOKEN_LITERALS=off skips it."
+	@echo "  make token-literal-check-selftest  that checker, on fixtures in both directions."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
@@ -168,20 +201,25 @@ help:
 	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
 	@echo "                    screen-freshness +"
 	@echo "                    screen-freshness-selftest + sigil-check +"
-	@echo "                    css-var-check + css-var-check-selftest + ignore-check +"
+	@echo "                    css-var-check + css-var-check-selftest + token-literal-check +"
+	@echo "                    ignore-check +"
 	@echo "                    lint + vale + typecheck + audit-self-test +"
 	@echo "                    mutate-anchors +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + debts-selftest +"
 	@echo "                    gates-selftest + submission-selftest +"
-	@echo "                    cid-selftest + readings-selftest +"
+	@echo "                    cid-selftest + pricearchive-selftest +"
+	@echo "                    archive-review-selftest + holdings-selftest +"
+	@echo "                    identity-checks-selftest + price-postings-selftest +"
+	@echo "                    product-history-selftest +"
+	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
 	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
-	@echo "                    guard-scope-selftest"
+	@echo "                    guard-scope-selftest + token-literal-check-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -299,6 +337,16 @@ worktree-setup:
 	$(MAKE) --no-print-directory venv; \
 	bash scripts/worktree-provision.sh "$$main"
 	@echo "worktree ready. \`make harness\` should now be green without spending anything."
+
+# scripts/worktree-provision.sh's app/node_modules clone/install/staleness logic
+# (D-worktree-node-modules), proved against a throwaway two-tree fixture with a stubbed
+# `npm` — never a real network install. ITS SELF-TEST IS NOT IN `make check`, on
+# `catalog-index-selftest`'s precedent: it proves a mechanism this checkout's own session
+# start and `make worktree-setup` already exercise on every worktree, one step further from
+# the product. Run it when `scripts/worktree-provision.sh` or `scripts/serve.py`'s
+# `npm_install_owed`/`NPM_RECEIPT` change.
+worktree-provision-selftest:
+	@bash scripts/worktree-provision-selftest.sh
 
 # core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh
 # clone carries scripts/githooks/pre-commit as a tracked file with NOTHING POINTING AT IT, and
@@ -510,6 +558,7 @@ check:
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory token-literal-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory vale
@@ -525,6 +574,13 @@ check:
 	@$(MAKE) --no-print-directory gates-selftest
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory cid-selftest
+	@$(MAKE) --no-print-directory pricearchive-selftest
+	@$(MAKE) --no-print-directory archive-review-selftest
+	@$(MAKE) --no-print-directory holdings-selftest
+	@$(MAKE) --no-print-directory identity-checks-selftest
+	@$(MAKE) --no-print-directory price-postings-selftest
+	@$(MAKE) --no-print-directory product-history-selftest
+	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -539,6 +595,7 @@ check:
 	@$(MAKE) --no-print-directory js-breakpoints-selftest
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
+	@$(MAKE) --no-print-directory token-literal-check-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -574,6 +631,13 @@ ci-check:
 	@$(MAKE) --no-print-directory gates-selftest
 	@$(MAKE) --no-print-directory submission-selftest
 	@$(MAKE) --no-print-directory cid-selftest
+	@$(MAKE) --no-print-directory pricearchive-selftest
+	@$(MAKE) --no-print-directory archive-review-selftest
+	@$(MAKE) --no-print-directory holdings-selftest
+	@$(MAKE) --no-print-directory identity-checks-selftest
+	@$(MAKE) --no-print-directory price-postings-selftest
+	@$(MAKE) --no-print-directory product-history-selftest
+	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
@@ -589,6 +653,7 @@ ci-check:
 	@$(MAKE) --no-print-directory js-breakpoints-selftest
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
+	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -597,6 +662,7 @@ ci-check:
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory token-literal-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
@@ -664,6 +730,28 @@ css-var-check:
 # `css-var-check` itself.
 css-var-check-selftest:
 	@python3 scripts/css-var-check.py --self-test
+
+# A CSS LITERAL EXACTLY EQUAL TO A DESIGN TOKEN'S VALUE, IN ITS OWN PROPERTY FAMILY
+# (`docs/reviews/ux-2026-09-20/RANKING.md` §4): `font-size: 22px` where `--bn-fs-2xl: 22px`
+# means nothing here stops the two diverging the next time the scale moves. `css-var-check`'s
+# sibling, opposite direction: that one catches a `var()` pointed at nothing, this one catches
+# a value that should have BEEN a `var()`. Reads `tokens.css` itself on every run — no copied
+# list. RATCHETED PER FILE (D-token-literals-are-pinned, D229's shape): main already carries
+# many of these, so the gate is a ceiling on each file's OWN count, not zero. Writes nothing;
+# `token-literal-check-pin.py --pin` is the one thing that may (D18). In `make check`, not the
+# git hook — same reasons as `css-var-check` immediately above.
+token-literal-check:
+	@python3 scripts/token-literal-check.py
+
+# THE GUARD IS NOT TRUSTED UNTIL IT HAS GONE RED ON THE DEFECT IT GUARDS: a literal equal to a
+# token in its own family fails; the same value as var() passes; a var() fallback passes; the
+# same value under a DIFFERENT family's property passes (4px matches --bn-r-xs under
+# border-radius and --bn-1 under padding, never the other's); a raised per-file count fails; a
+# lowered one passes and is only noted; an unseen file with findings fails; a stale allow-list
+# entry fails; a shorthand is counted component by component. Wired last among the guard
+# self-tests, `make check`'s own D161 order, beside `guard-scope-selftest`.
+token-literal-check-selftest:
+	@python3 scripts/token-literal-check.py --self-test
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
@@ -1064,6 +1152,70 @@ cid-selftest:
 		$(PYTHON) scripts/cid-selftest.py; \
 	else \
 		echo "cid-selftest: SKIPPED — this branch does not touch the card's stable name or the photograph store. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
+
+# THE SIXTEENTH GATED TARGET (D247, owner's word 2026-09-23 on the SKU-first price-history
+# rebuild: "once it's done, it only needs to be tested when touched"). Answers from the
+# tree alone, same standing as `cid-selftest` right above it: a throwaway store and real
+# cached-export files under `mktemp`, never the operator's own store or their real
+# `inventory/.exports/`. In `check`, never in the git hook, D18 — it writes a temp store.
+pricearchive-selftest:
+	@if python3 scripts/guard-scope.py classify --target pricearchive-selftest --base origin/main; then \
+		$(PYTHON) scripts/pricearchive-selftest.py; \
+	else \
+		echo "pricearchive-selftest: SKIPPED — this branch does not touch price-history resolution or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
+
+# SIX MORE GATED TARGETS, SEVENTEENTH THROUGH TWENTY-SECOND (D247, owner's word
+# 2026-09-23): each self-test below cited "pricearchive-selftest.py's own precedent" as its
+# reason to stay out of `make check`. That precedent went stale the moment the entry above
+# was wired — its own header, and each of these six, say what real caller made the wait
+# wrong. Same standing as `pricearchive-selftest` and `cid-selftest`: no network, no store on
+# disk but a throwaway one, D18 — none of them gate on writing the operator's own store.
+archive-review-selftest:
+	@if python3 scripts/guard-scope.py classify --target archive-review-selftest --base origin/main; then \
+		$(PYTHON) scripts/archive-review-selftest.py; \
+	else \
+		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
+
+holdings-selftest:
+	@if python3 scripts/guard-scope.py classify --target holdings-selftest --base origin/main; then \
+		$(PYTHON) scripts/holdings-selftest.py; \
+	else \
+		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
+
+identity-checks-selftest:
+	@if python3 scripts/guard-scope.py classify --target identity-checks-selftest --base origin/main; then \
+		$(PYTHON) scripts/identity-checks-selftest.py; \
+	else \
+		echo "identity-checks-selftest: SKIPPED — this branch does not touch the stored-data identification checks or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
+
+# TWO INVOCATIONS: the real run, then `--mutate-to-upsert`, which MUST itself go red inside
+# store/postings.py's mutated copy for the append-only property to count as proved — see the
+# self-test's own header.
+price-postings-selftest:
+	@if python3 scripts/guard-scope.py classify --target price-postings-selftest --base origin/main; then \
+		$(PYTHON) scripts/price-postings-selftest.py && \
+		$(PYTHON) scripts/price-postings-selftest.py --mutate-to-upsert; \
+	else \
+		echo "price-postings-selftest: SKIPPED — this branch does not touch the price-postings ledger or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
+
+product-history-selftest:
+	@if python3 scripts/guard-scope.py classify --target product-history-selftest --base origin/main; then \
+		$(PYTHON) scripts/product-history-selftest.py; \
+	else \
+		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
+
+sku-number-contradictions-selftest:
+	@if python3 scripts/guard-scope.py classify --target sku-number-contradictions-selftest --base origin/main; then \
+		$(PYTHON) scripts/sku-number-contradictions-selftest.py; \
+	else \
+		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
 cid-audit:

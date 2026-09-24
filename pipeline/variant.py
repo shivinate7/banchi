@@ -46,7 +46,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from pipeline import games, tcgcsv
 
@@ -214,6 +214,29 @@ def _check_claim(
     return tuple(finish for finish in stocked if finish in members)
 
 
+def rarity_filter(
+    candidates: Sequence[tcgcsv.Row], rarity_claim: Optional[Sequence[str]]
+) -> List[tcgcsv.Row]:
+    """The rows whose `Rarity` cell agrees with the claim — D23 job (a)'s own filter,
+    factored out so a caller outside the ladder can ask the identical question rather
+    than restating it.
+
+    A falsy claim keeps everything. A blank `Rarity` cell PASSES regardless of the claim,
+    exactly as `resolve` treats it: a row that carries no rarity is evidence of nothing.
+    MAY RETURN EMPTY — the claim contradicting every row is a real answer, not an error,
+    and `resolve` is what decides what an empty result MEANS (a review reason, or a
+    release when the name corroborates). This function only answers which rows agree.
+    """
+    if not rarity_claim:
+        return list(candidates)
+    return [
+        row
+        for row in candidates
+        if not (row.get(tcgcsv.RARITY_COLUMN) or "").strip()
+        or (row.get(tcgcsv.RARITY_COLUMN) or "").strip() in rarity_claim
+    ]
+
+
 def _resolved(stage: str, row: tcgcsv.Row) -> Resolution:
     return Resolution(
         stage=stage,
@@ -286,12 +309,7 @@ def resolve(
     # calling here at all. A human who looked at the photograph outranks a claim about the
     # stack it came from.
     if rarity_claim:
-        kept = [
-            row
-            for row in candidates
-            if not (row.get(tcgcsv.RARITY_COLUMN) or "").strip()
-            or (row.get(tcgcsv.RARITY_COLUMN) or "").strip() in rarity_claim
-        ]
+        kept = rarity_filter(candidates, rarity_claim)
         if not kept:
             # THE CONTRADICTION IS RELEASED WHEN THE NAME AGREES WITH THE ROWS, and this is
             # the one exit this branch has that is not a refusal.

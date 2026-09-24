@@ -1,5 +1,6 @@
 import type {
   AnswerResult,
+  CorrectResult,
   CodeExportResult,
   CodeLedger,
   LotReceipt,
@@ -1221,6 +1222,45 @@ export async function undoStandDown(
  */
 export function undoAnswer(box: number, index: number): Promise<AnswerResult> {
   return answerCall(box, index, { undo: true })
+}
+
+/**
+ * Correct a card that was answered onto the WRONG catalog row — `POST
+ * /inventory/<box>/<index>/correct` (D252).
+ *
+ * THE GAP `undoAnswer` LEAVES: its own `undo_too_late` refuses the moment the wrong SKU has
+ * gone out — pushed, staged or live — which for a real mistake is usually already true. This
+ * route rewrites an identified card's SKU to a different catalog row regardless of the queue,
+ * and the server never takes `sku` on the wire's word: it is re-read from the card's own
+ * export, exactly as a D46 `fromCatalog` answer's row is.
+ *
+ * THE OLD SKU IS RELEASED BY ONE COPY, `released` says by which stage, and nothing here
+ * touches TCGplayer — the next live reconcile is what tells the operator what to go and
+ * lower.
+ */
+export function correctAnswer(box: number, index: number, sku: string): Promise<CorrectResult> {
+  return correctCall(box, index, { sku })
+}
+
+/**
+ * Take one correction back. Refuses `undo_too_late` the same way `undoAnswer` does — read on
+ * the SKU the card carries NOW — and `not_corrected` once the card has moved on: a second
+ * correction, or a fresh answer, since this one.
+ */
+export function undoCorrectAnswer(box: number, index: number): Promise<CorrectResult> {
+  return correctCall(box, index, { undo: true })
+}
+
+async function correctCall(
+  box: number,
+  index: number,
+  body: Record<string, unknown>,
+): Promise<CorrectResult> {
+  return (await request(`/inventory/${box}/${index}/correct`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as CorrectResult
 }
 
 /**

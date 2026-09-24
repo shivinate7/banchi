@@ -14,10 +14,29 @@ two ways:
      the whole suite is run against it. The mutated run MUST fail: a suite that stays green
      under this mutation is not testing the property it claims to.
 
-NO NETWORK, NO SCREEN. This package has no caller a screen reaches yet (`store/postings.py`'s
-own docstring says why), so this is written the way `scripts/pricearchive-selftest.py` and
-`scripts/catalog-index-selftest.py` were: a fast, self-contained proof, not wired into
-`make check`.
+NO NETWORK. `emit` and `reprice apply` are `store/postings.py:Postings.record()`'s only two
+callers today, both real presses (`./pkmnscan emit`, `./pkmnscan reprice apply`) — the sentence
+that used to sit here ("no caller a screen reaches yet") described the table's READ side,
+never the write side this file proves, and had gone stale for the write side regardless.
+NOTHING READS `price_postings` BACK ONTO A SCREEN YET (D244 — "shelved until there is a
+history to draw"); that is a separate fact from whether a press writes it, and this file
+proves only the write.
+
+PATH GATED, THE TWENTIETH (D247, owner's word 2026-09-23, on the same ground as
+`pricearchive-selftest`'s sixteenth entry): `make price-postings-selftest`, wired into
+`make check` and `make ci-check` through `scripts/guard-scope.py`. This file is no longer
+the exception it was when written — the "own precedent" it used to cite was
+`pricearchive-selftest.py`'s OWN prior exemption, and that exemption is gone: once it's
+done, it only needs to be tested when touched.
+
+`store.db` and `store.session` ARE LOADED BY NAME (`importlib.import_module`, further
+down), purging `sys.modules` first — the only way to swap in a mutated copy of
+`store/db.py` for the mutation arm without a stale, pre-mutation module staying bound.
+That call's own STRING LITERAL is what `scripts/guard-scope.py:derive_subjects`'s AST walk
+reads directly: `_PathCollector.visit_Call` resolves an `importlib.import_module("<dotted
+name>")` argument the same way `visit_ImportFrom` resolves a static import, so
+`store/postings.py` and `store/session.py` are derived subjects with no decoy import here
+and nothing hand-typed beside it.
 """
 
 from __future__ import annotations
@@ -57,15 +76,21 @@ def _fresh_home() -> Path:
     return home
 
 
-def run_suite(db_module, session_module) -> None:
+def run_suite(db_module, session_module, postings_module) -> None:
     """The whole proof, over whichever `store.db` module is handed in — the real one, or a
-    mutated copy. Never imports `store.db`/`store.session` at module scope, so this function
-    can be run twice in one process against two different implementations.
+    mutated copy. Never imports `store.db`/`store.session`/`store.postings` at module
+    scope, so this function can be run twice in one process against two different
+    implementations.
     """
     Store = session_module.Store
 
     # ------------------------------------------------------------ 1. a posted price lands
     with Store().write() as writable:
+        ok(isinstance(writable.postings, postings_module.Postings),
+           "`Store.write()` hands the caller `store/postings.py`'s own `Postings`, "
+           "not a stand-in — proves `store/session.py`'s `postings=Postings()` wiring "
+           "reaches the real class, in whichever `store/` copy this run loaded",
+           type(writable.postings))
         writable.postings.record(sku="9999001", price="4.99", source="emit", run="run-a")
     rows = db_module.postings_for_sku(_conn(db_module), "9999001")
     ok(len(rows) == 1, "one posting lands one row", rows)
@@ -203,15 +228,17 @@ def _run_against(home: Path, mutate: bool) -> int:
                     del sys.modules[name]
             db_module = importlib.import_module("store.db")
             session_module = importlib.import_module("store.session")
+            postings_module = importlib.import_module("store.postings")
         else:
             for name in list(sys.modules):
                 if name == "store" or name.startswith("store."):
                     del sys.modules[name]
             db_module = importlib.import_module("store.db")
             session_module = importlib.import_module("store.session")
+            postings_module = importlib.import_module("store.postings")
 
         try:
-            run_suite(db_module, session_module)
+            run_suite(db_module, session_module, postings_module)
         except Exception as exc:  # noqa: BLE001 — a crash under mutation IS a failure, not a hang
             import traceback
             traceback.print_exc()

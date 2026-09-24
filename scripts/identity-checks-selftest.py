@@ -13,9 +13,14 @@ the FIRST denominator seen rather than the DOMINANT one, and shows the mutant fl
 common case instead of the rare one — the argument for "dominant, not first" is not free
 without this.
 
-Not wired into `make check`, matching `scripts/pricearchive-selftest.py`'s own precedent: a
-fast, self-contained proof of a package whose one caller (`cli/cmd_cards.py:checks`) is
-already covered by T7's harness sweep over the CLI surface.
+PATH GATED, THE NINETEENTH (D247, owner's word 2026-09-23, on the same ground as
+`pricearchive-selftest`'s sixteenth entry): `make identity-checks-selftest`, wired into
+`make check` and `make ci-check` through `scripts/guard-scope.py`. The sentence that used to
+sit here ("already covered by T7's harness sweep over the CLI surface") had gone stale for a
+second, independent reason beyond the dead precedent it cited: `grep -rl identity_checks
+harness/` names nothing — `harness/tests/t7_store_and_seams.py` drives `cli/cmd_cards.py`
+through `cards_action = "variants"` alone, never `"checks"`. This module's one caller
+(`cli/cmd_cards.py:checks`, `./pkmnscan cards checks`) was tested nowhere until now.
 """
 
 from __future__ import annotations
