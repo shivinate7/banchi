@@ -116,6 +116,12 @@ SCOPE = (
         "why": "Named in the `design-check` recipe: the suite starts through it.",
     },
     {
+        "path": "scripts/port-slots.py",
+        "why": "Named in the `design-check` recipe: it claims this checkout's port slot "
+               "before the suite starts, so it decides which port the browser is pointed at "
+               "(D-a-claimed-slot-and-a-server-that-names-its-checkout).",
+    },
+    {
         "path": ".github/workflows/check.yml",
         "why": "The gate itself. A change to how the matrix is invoked, sharded or skipped "
                "has to run the matrix, or the change is verified by nothing.",
@@ -769,7 +775,7 @@ _SHARED_EXACT = {
 }
 _SHARED_APP_FILES = {
     "app/playwright.config.ts", "app/vite.config.ts", "app/devPort.ts",
-    "app/design-check-reporter.ts", "app/eslint.config.js",
+    "app/checkoutIdentity.ts", "app/design-check-reporter.ts", "app/eslint.config.js",
 }
 
 

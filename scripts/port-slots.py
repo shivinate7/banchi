@@ -3,8 +3,9 @@
 (D-a-claimed-slot-and-a-server-that-names-its-checkout).
 
 D43 promised "every checkout has its own ports" and delivered a hash of the path into 300
-slots. Measured 2026-09-24: about 35 worktrees on this Mac. The chance that two of 35 share
-a slot out of 300 is about 87% (the birthday bound). Two of them did: `jovial-banach-362f31`
+slots. Measured 2026-09-24: 44 folders under `.claude/worktrees/` on this Mac. The chance
+that two of n paths share a slot out of 300 is about 87% at 35 and 96% at 44 (the birthday
+bound). Two of them did: `jovial-banach-362f31`
 and `agent-a591036a4885f7533` both derived dev port 5218. A design-check in one reused the
 other's Vite and passed.
 
@@ -40,7 +41,6 @@ and after both claim, each has its own slot and the same run passes against its 
 from __future__ import annotations
 
 import argparse
-import errno
 import fcntl
 import json
 import os

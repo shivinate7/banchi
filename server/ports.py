@@ -26,6 +26,12 @@ tree reads as a pair — 5285 beside 8185. An allocator handing out the next fre
 answer differently every run, and `strictPort` could then not tell "someone else is here"
 from "I moved".
 
+A HASH IS NOT ONE SLOT PER CHECKOUT, SO A SLOT MAY BE CLAIMED
+(D-a-claimed-slot-and-a-server-that-names-its-checkout). Two live worktrees hashed into one
+slot on 2026-09-24. `scripts/port-slots.py claim` records a checkout's slot ONCE in a
+machine-wide registry, and `slot_for` reads it before the hash. A claimed slot never moves,
+so the answer stays as stable as the hash was.
+
 THE MAIN WORKING TREE KEEPS 8000, exactly as it keeps 5173, so nothing about the ordinary
 single-checkout workflow changes and every doc that names the number stays true. ONLY the
 main working tree keeps them: a tree must show a `.git` DIRECTORY to get the base ports, and
@@ -121,7 +127,7 @@ def is_primary_checkout(root: Path) -> bool:
 def slot_registry() -> Optional[Path]:
     """Where the claimed slots are recorded. `PKMNSCAN_SLOT_REGISTRY` overrides.
 
-    The default sits beside D122's machine-wide suite lock, under `~/.pkmnscan/`, because a
+    The default sits beside the machine-wide suite lock, under `~/.pkmnscan/`, because a
     slot is a fact about this machine and not about any one checkout. None when there is no
     home directory to find, and then nothing is claimed.
     """
