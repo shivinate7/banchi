@@ -233,10 +233,6 @@ from pipeline import (  # noqa: E402
     tcgcsv,
     variant,
 )
-# `pipeline.skus`, aliased — this module's own `skus` name would collide with
-# `store.skus`'s `Skus`/`SkuRow` classes imported right below, and both are read in the
-# same checks (identity-follows-sku.md, lane 3a).
-from pipeline import skus as sku_pipeline  # noqa: E402
 from store.skus import SkuRow  # noqa: E402
 from server import (  # noqa: E402
     capture_server,
