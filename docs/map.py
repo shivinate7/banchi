@@ -4612,9 +4612,9 @@ COMPONENTS = [
                 # a first version wrote a top-level `answers` map that `Corpus.parse` kept as
                 # `unknown` and no reader ever saw. D25 is the per-game number split, which
                 # the export carries whole and a card record carries in halves.
-                "governed_by": ["D3", "D4", "D7", "D10", "D13", "D21", "D25", "D26", "D39",
-                                "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86",
-                                "D87", "D172"],
+                "governed_by": ["D3", "D4", "D7", "D10", "D13", "D20", "D21", "D25", "D26", "D39",
+                                "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86", "D87",
+                                "D172", "D213", "D216", "D219", "D227", "D236"],
             },
             "demo-record.py": {
                 "does": "spawns its own capture server over the demo store on its own port, "
@@ -4625,7 +4625,8 @@ COMPONENTS = [
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D76"],
+                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D159", "D172",
+                                "D183", "D213", "D216", "D227"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "
@@ -5689,8 +5690,9 @@ COMPONENTS = [
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28",
                                             "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61",
                                             "D63", "D66", "D69", "D70", "D94", "D95", "D100",
-                                            "D105", "D109", "D120", "D123", "D134", "D159", "D207",
-                                            "D227"]},
+                                            "D105", "D109", "D120", "D123", "D134", "D159", "D196",
+                                            "D204", "D207", "D227", "D-drawer-foot-joins-the-list",
+                                            "D-page-scaffold", "D-palette-go-to"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -5736,7 +5738,8 @@ COMPONENTS = [
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51",
                                             "D94", "D95", "D110", "D117", "D118", "D123", "D134",
-                                            "D152", "D204", "D205", "D218"]},
+                                            "D152", "D204", "D205", "D218",
+                                            "D-drawer-foot-joins-the-list", "D-palette-go-to"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -7281,9 +7284,8 @@ COMPONENTS = [
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
                                                "never plotted.",
-                                       "governed_by": ["D227", "D62",
-                                                       "D219", "D212",
-                                                       "D196", "D50"],
+                                       "governed_by": ["D50", "D62", "D196", "D212", "D218", "D219",
+                                                       "D227", "D-product-view-hybrid"],
                                        "note": "No harness test -- a Playwright spec would be "
                                                "the honest coverage and none exists yet, named "
                                                "rather than silently absent."},
@@ -7294,8 +7296,8 @@ COMPONENTS = [
                                                "screen that is a fact rather than a reading, "
                                                "and never a color standing in for beat-or-miss "
                                                "(D62: direction is a sign and a word).",
-                                       "governed_by": ["D227", "D62", "D94",
-                                                       "D41", "D218"]},
+                                       "governed_by": ["D41", "D62", "D94", "D212", "D218", "D227",
+                                                       "D-product-view-hybrid"]},
             # D79 is the batched half of D62, and D62 is why this file is separate from
             # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
             # has and the strip draws a shape and a sign, which are two answers to two
@@ -8189,7 +8191,7 @@ COMPONENTS = [
                         "block, route -> assertion -> lane: an unlisted failure is red and an "
                         "entry that now passes at every width is red (stale). Writes nothing. "
                         "Run by `make design-check`.",
-                "governed_by": ["D5", "D173", "D-page-scaffold"],
+                "governed_by": ["D5", "D173", "D-page-scaffold", "D-palette-go-to"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
@@ -8287,7 +8289,7 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117", "D204"],
+                "governed_by": ["D50", "D95", "D117", "D204", "D-drawer-foot-joins-the-list"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
                         "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "
@@ -8440,7 +8442,7 @@ COMPONENTS = [
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
-                                "D124", "D125", "D134", "D174", "D192",
+                                "D124", "D125", "D134", "D174", "D192", "D-palette-go-to",
                                 "D-one-press-sends-and-makes-live"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
@@ -8485,7 +8487,9 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D109", "D134", "D174", "D192", "D20"],
+                "governed_by": ["D5", "D20", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D95",
+                                "D100", "D105", "D109", "D134", "D174", "D192", "D-page-scaffold",
+                                "D-palette-go-to"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -8700,6 +8704,20 @@ COMPONENTS = [
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
                                 "D217", "D225"],
             },
+            "tests/demo-coverage.spec.ts": {
+                "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "
+                        "origin under its base path as a static host serves it, or read from a "
+                        "running preview when `DEMO_PREVIEW_URL` is set. Every recorded card has "
+                        "its photograph in the build; Inventory, Review, Pricing, Capture, Home "
+                        "and Cards to pull draw photographs that answer 200; Mark sold then Undo restores the box "
+                        "count; a Game pick draws counts; a typed search, the order walk, a "
+                        "review answer and its undo, the graveyard, product history, the value "
+                        "band and 'Value my stock' all draw without the demo refusal. Proved to "
+                        "fail: 13 of 17 cases go red on the previous `demoServer.ts` with no "
+                        "photographs. SKIPS BY NAME with no `dist-demo/` — `make demo-static` "
+                        "builds it, and `make design-check` does not.",
+                "governed_by": ["D52", "D126", "D183", "D213", "D227"],
+            },
             "tests/product-history.spec.ts": {
                 "does": "`#/product`'s own hard rule (D227): the market "
                         "series and the owner's own fills draw as two different SVG shapes, "
@@ -8711,8 +8729,7 @@ COMPONENTS = [
                         "requests are intercepted (the product history and the orders "
                         "payload); no real request is made and no store is touched. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D227", "D62", "D212",
-                                 "D219"],
+                "governed_by": ["D62", "D212", "D219", "D227", "D-product-view-hybrid"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "

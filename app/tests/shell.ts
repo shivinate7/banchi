@@ -306,6 +306,21 @@ async function stubShell(page: Page, cards: number): Promise<void> {
   await page.route(/\/pipeline\/sends$/, (route) =>
     json(route, { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }),
   )
+  /* THE PALETTE'S CARD SEARCH IS THE SHELL'S OWN READ NOW (D-palette-go-to): typing two letters
+     into "Go to" asks `GET /search`. It is answered EMPTY, and ONLY while the palette is open.
+     A screen's own search falls back to the seal, so a spec that forgot to stub its screen's
+     search is still named rather than handed a shared answer. A spec that wants cards in the
+     palette registers its own `/search` handler, which is newer and wins. */
+  await page.route(/\/search\?/, async (route) => {
+    const fromPalette = await route
+      .request()
+      .frame()
+      .evaluate(() => document.querySelector('.bn-cmdk') !== null)
+      .catch(() => false)
+    if (!fromPalette) return route.fallback()
+    const q = new URL(route.request().url()).searchParams.get('q') ?? ''
+    return json(route, { query: q, groups: [] })
+  })
 }
 
 /* ---------------------------------------------------------------------- the small store */
