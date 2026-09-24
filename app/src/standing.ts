@@ -78,6 +78,12 @@ export type StandingInput = {
  *  as "to price" is what had Home say "2 runs to price" while Pricing said "Ready" (UX-006). */
 const NOT_YET_WRITTEN = 'never emitted'
 
+/** Runs that owe a PRICE, not only the send. ONE COUNT FOR HOME'S LINE AND HOME'S TILE, so the
+ *  two cannot say different things about the same runs (UX-006; D198's one-figure rule). */
+export function runsOwingPrice(roster: PricingWorklist['roster']): number {
+  return roster.filter((r) => r.open && r.owes.some((reason) => reason !== NOT_YET_WRITTEN)).length
+}
+
 const n = (v: number): Say => ({ text: v.toLocaleString(), em: true })
 const t = (text: string): Say => ({ text })
 
@@ -144,10 +150,7 @@ export function standing(input: StandingInput): Standing | null {
     orders === null || openKeys === null
       ? null
       : orders.resolution.orders.reduce((sum, o) => sum + (openKeys.has(o.key) ? (o.outstanding ?? 0) : 0), 0)
-  const owed =
-    pricing === null
-      ? null
-      : pricing.roster.filter((r) => r.open && r.owes.some((reason) => reason !== NOT_YET_WRITTEN)).length
+  const owed = pricing === null ? null : runsOwingPrice(pricing.roster)
   /* WHAT IS PRICED AND WAITS ON THE SEND: every unsent copy of an open run that owes no price. */
   const readyCopies =
     pricing === null

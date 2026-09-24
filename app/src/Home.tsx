@@ -18,7 +18,7 @@ import type {
 } from './types'
 import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
-import { standing, type Standing } from './standing'
+import { runsOwingPrice, standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { runBoxLabel } from './runScope'
@@ -464,7 +464,7 @@ export function Home() {
       : 0
 
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
-  const runsToPrice = pricing.state === 'ready' ? pricing.value.roster.filter((r) => r.open && r.owes.length > 0).length : null
+  const runsToPrice = pricing.state === 'ready' ? runsOwingPrice(pricing.value.roster) : null
   /* And the copies every joined run still holds that TCGplayer does not (D156)
      — the same `unsent` the picker draws per run, summed, so this note and that chip agree. */
   const unsentCopies = pricing.state === 'ready' ? pricing.value.roster.reduce((n, r) => n + (r.unsent ?? 0), 0) : null
@@ -528,7 +528,7 @@ export function Home() {
             : 'reading the worklist…'
           : runsToPrice === 0
             ? unsentCopies !== null && unsentCopies > 0
-              ? `nothing to price and ${plural(unsentCopies, 'copy', 'copies')} unsent`
+              ? `${plural(unsentCopies, 'copy', 'copies')} ready to send`
               : 'nothing to price'
             : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
       tone: runsToPrice ? 'warn' : runsToPrice === 0 ? 'ok' : undefined,

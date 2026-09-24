@@ -7707,7 +7707,7 @@ COMPONENTS = [
                                 # condition is read from; D63 is the two-map ledger behind it;
                                 # D114 is the no-status-vocabulary rule the `open`-keyed join
                                 # obeys instead of reading `status`.
-                                "governed_by": ["D63", "D69", "D114", "D121", "D202",
+                                "governed_by": ["D63", "D69", "D114", "D121", "D198", "D202",
                                                 "D-one-press-sends-and-makes-live"]},
             "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
                                             "`captured_at` by a 30-minute gap, and the ribbon "
