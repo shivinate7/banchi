@@ -1697,7 +1697,14 @@ COMPONENTS = [
                                    "`pipeline/`, so these three pure functions moved out of "
                                    "`pipeline/join.py` to where both `store/master.py` and "
                                    "`pipeline/join.py` (which imports them back and re-exports "
-                                   "under the same names) can reach them.",
+                                   "under the same names) can reach them. `strip_name_suffix` "
+                                   "(identity-follows-sku.md §3.3, lane 1) joined them the same "
+                                   "way: `Inventory.bind_sku` composes a card's `name` off a "
+                                   "catalog row's `Product Name`, dropping a trailing collector "
+                                   "number (`Stufful - 111/132` -> `Stufful`) case and all — "
+                                   "`pipeline/join.py:name_index_key` runs the identical pattern "
+                                   "for a different job (matching, uppercased) and keeps its own "
+                                   "copy for now, since lane 1's fence does not reach that file.",
                            "governed_by": ["D36", "D55", "D63", "D67",
                                            "D234", "D252"], "tested_by": ["T7"]},
             "master.py": {"does": "the cards, boxes and listings tables — cards, positions, SKUs, "
@@ -1720,8 +1727,25 @@ COMPONENTS = [
                                   "its box binds to. `next_box_number` beside it is unchanged and "
                                   "still hands out the lowest free integer (D20) — the number is a "
                                   "label on a drawer and the id is an identity, which is `Place."
-                                  "slot` and `Place.index` one register up (D58)",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23",
+                                  "slot` and `Place.index` one register up (D58). "
+                                  "`Inventory.bind_sku`/`unbind_sku` (identity-follows-sku.md "
+                                  "§4.1, lane 1) are the ONE WRITER of the identity fields "
+                                  "(`name`, `number`, `printed_total`, `rarity`, `set_name`, "
+                                  "`condition`) together with `bound_by`/`bound_at`/"
+                                  "`identity_source` — reading the `skus` table (a sibling on "
+                                  "`Snapshot`, passed in) rather than an export file, refusing "
+                                  "`SkuUnknown`/`GameMismatch` before writing anything. "
+                                  "`record_identification` now writes `read_name`/`read_number`/"
+                                  "`read_printed_total` (the evidence), and the identity fields "
+                                  "too only while no binding is active — §4.2's own rule. "
+                                  "`set_state` keeps its `sku`/`condition`/`set_name`/`rarity`/"
+                                  "`name` parameters UNCHANGED as of lane 1 — `cli/cmd_emit.py` "
+                                  "(lane 3b) and `harness/tests/t7_store_and_seams.py` (lane 3a) "
+                                  "still call it with them, and lane 1's own fence stops at a "
+                                  "caller of `set_state` — so a later lane trims the signature "
+                                  "once every caller has moved onto `bind_sku`.",
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D22",
+                                          "D23",
                                           "D24", "D26", "D30", "D34", "D36", "D55", "D56", "D58",
                                           "D59", "D63", "D67", "D83", "D87", "D88", "D89", "D100",
                                           "D115", "D132", "D145", "D146", "D167", "D172", "D183",
@@ -2761,6 +2785,30 @@ COMPONENTS = [
                         "count unchanged; a timed fill of the real "
                         "fixtures/riftbound_export_untouched.csv.",
                 "governed_by": ["D88", "D166", "D189", "D219"],
+            },
+            "identity-store-selftest.py": {
+                "does": "proves Inventory.bind_sku/unbind_sku, the one writer "
+                        "(identity-follows-sku.md §4.1, lane 1), and "
+                        "record_identification's narrowed write, over an in-memory "
+                        "Inventory and Skus table — no store, no disk write at all. "
+                        "bind_sku stamps name/number/printed_total/rarity/set_name/"
+                        "condition off a skus row for a Pokemon card (the catalog Number "
+                        "cell split, via pipeline/join.catalog_number_fields, called by "
+                        "the test and handed in — never re-derived inside store/), a "
+                        "Riftbound card (the cell kept verbatim) and a Riftbound "
+                        "double-sided token cell (T02 // T03, no `/`-split misfire); the "
+                        "name composer drops a trailing collector number through the new "
+                        "store/numbers.strip_name_suffix. SkuUnknown and GameMismatch "
+                        "each refuse before the card, the events list or the skus table "
+                        "are touched; a falsy expected_product_line (the misc game) "
+                        "never refuses; UnknownBoundBy refuses an act outside "
+                        "BOUND_BY_ACTS. unbind_sku round-trips a rebind back to the "
+                        "first binding — every field but bound_at restored exactly — and "
+                        "clears to identity_source=read when handed no previous sku. "
+                        "record_identification writes only the read_* fields on a bound "
+                        "card, and the identity too on an unbound one.",
+                "governed_by": ["D36", "D63", "D67", "D88", "D172", "D183", "D213",
+                                "D252"],
             },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
@@ -4493,15 +4541,18 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D26", "D42", "D43", "D44", "D47", "D48",
-                                "D53", "D54", "D58", "D60", "D62", "D65", "D68", "D74", "D76",
+                "governed_by": ["D7", "D16", "D17", "D18", "D26", "D36", "D42", "D43", "D44", "D47",
+                                "D48",
+                                "D53", "D54", "D58", "D60", "D62", "D63", "D65", "D67", "D68",
+                                "D74", "D76",
                                 "D80", "D82", "D83", "D86", "D88", "D89", "D92", "D111", "D122",
                                 "D123", "D127", "D129", "D133", "D135", "D138", "D139", "D140",
                                 "D141", "D146", "D149", "D158", "D159", "D160", "D166", "D167",
-                                "D171", "D172", "D173", "D176", "D178", "D189", "D212", "D215",
+                                "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
+                                "D213", "D215",
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D254",
+                                "D247", "D250", "D252", "D254",
                                 "D256"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "

@@ -229,7 +229,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   identity-checks-selftest + price-postings-selftest +
                     #   product-history-selftest +
                     #   sku-number-contradictions-selftest + readings-selftest +
-                    #   skus-selftest +
+                    #   skus-selftest + identity-store-selftest +
                     #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +

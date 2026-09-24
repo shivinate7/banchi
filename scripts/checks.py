@@ -849,6 +849,40 @@ CHECKS = (
         "governed_by": ("D88", "D166", "D189", "D219"),
     },
     {
+        "target": "identity-store-selftest",
+        "runs": "python3 scripts/identity-store-selftest.py",
+        "asserts": "Inventory.bind_sku/unbind_sku, the one writer (store/master.py, "
+                   "docs/specs/identity-follows-sku.md §4.1 lane 1), and "
+                   "record_identification's narrowed write — over an in-memory Inventory "
+                   "and a Skus table, no store, no disk. bind_sku stamps name/number/"
+                   "printed_total/rarity/set_name/condition off a skus row for a Pokemon "
+                   "card (the catalog Number cell split into numerator/denominator, via "
+                   "pipeline/join.catalog_number_fields, called by the test and handed in "
+                   "— never re-derived inside store/), a Riftbound card (the cell kept "
+                   "verbatim) and a Riftbound double-sided token cell (`T02 // T03`, no "
+                   "`/`-split misfire); the name composer drops a trailing collector "
+                   "number (`Stufful - 111/132` -> `Stufful`) through the new store/"
+                   "numbers.strip_name_suffix. SkuUnknown and GameMismatch each refuse "
+                   "before the card, the events list or the skus table are touched; a "
+                   "falsy expected_product_line (the misc game) never refuses; "
+                   "UnknownBoundBy refuses an act outside BOUND_BY_ACTS. unbind_sku "
+                   "round-trips a rebind back to the first binding — every field but "
+                   "bound_at restored exactly, bound_at a fresh stamp on purpose — and "
+                   "clears to identity_source=read (identity falls back to read_*) when "
+                   "handed no previous sku. record_identification writes only read_name/"
+                   "read_number/read_printed_total on a card bind_sku has bound, and the "
+                   "identity too on a card with no active binding.",
+        "needs": ("python3",),
+        "writes": "nothing — an in-memory Inventory and Skus table only, never a store on "
+                  "disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. PATH GATED into "
+                               "`make check` alone (D247's own precedent for a self-test "
+                               "with nothing to write), never the hook.",
+        "gates": True,
+        "governed_by": ("D36", "D63", "D67", "D88", "D172", "D183", "D213", "D252"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "

@@ -52,6 +52,26 @@ from typing import Optional, Tuple
 # `UNL 029/219`, `OGN 019/298`, ...), none of them a real printed code losing a character.
 _SET_CODE_PREFIX = re.compile(r"^[A-Za-z]{2,5}(?:\s*[•·/-]\s*|\s+(?=\d))")
 
+# THE NUMBER A CATALOG ROW DECORATES A `Product Name` WITH, WHEN IT DECORATES ONE AT ALL
+# (docs/specs/identity-follows-sku.md §3.3, lane 1). Anchored at the end and requiring the
+# slash, so only a TRAILING collector number matches: `Ho-Oh`, `Wally's Compassion` and
+# `Team Rocket's Mewtwo` keep every character they have.
+#
+# THE SAME PATTERN AS `pipeline/join.py:_NAME_NUMBER_SUFFIX`, KEPT AS A SEPARATE COPY
+# HERE ON PURPOSE, FOR NOW. `join_key`/`display_number`/`strip_set_code` above already
+# moved out of `pipeline/join.py` into this leaf module and left a re-export behind
+# (`from store.numbers import ...`, under the same names) so every caller stayed unchanged
+# — §3.3 says the trailing-number rule takes the same trip: "It moves to the leaf module
+# store/numbers.py, beside join_key, display_number, strip_set_code and
+# split_catalog_number." Lane 1's own fence is `store/master.py`, `store/numbers.py` and
+# `scripts/identity-store-selftest.py` — it does not include `pipeline/join.py`, so this
+# lane adds the destination and leaves `pipeline/join.py`'s `_NAME_NUMBER_SUFFIX` (which
+# feeds `name_index_key`, a different job — see that function's own docstring) untouched.
+# The two copies are IDENTICAL BY CONSTRUCTION today, not yet by import; a later lane
+# (touching `pipeline/join.py`) is what makes `pipeline/join.py` import this one the way it
+# already imports the other three.
+_NAME_NUMBER_SUFFIX = re.compile(r"\s*-\s*[A-Za-z0-9]+\s*/\s*[A-Za-z0-9]+\s*$")
+
 
 def join_key(number, printed_total) -> str:
     """zfill(3)(number) + "/" + printedTotal. `161/159` is a secret rare, not an error.
@@ -128,6 +148,25 @@ def strip_set_code(text) -> str:
     prompt is being ignored 1.5% of the time.
     """
     return _SET_CODE_PREFIX.sub("", str(text or "").strip()).strip()
+
+
+def strip_name_suffix(text) -> str:
+    """A catalog `Product Name` with its trailing collector number dropped, case and all —
+    THE COMPOSER, NOT THE INDEX FOLD (docs/specs/identity-follows-sku.md §3.3, lane 1).
+
+    `pipeline/join.py:name_index_key` runs the identical `_NAME_NUMBER_SUFFIX` pattern and
+    then UPPERCASES and collapses whitespace, because that function's job is matching two
+    spellings against each other. This one's job is what a SCREEN draws:
+    `Inventory.bind_sku` writes its answer straight onto `card.name`, so `Stufful -
+    111/132` becomes `Stufful`, not `STUFFUL` — see `_NAME_NUMBER_SUFFIX`'s own comment,
+    two names up, for why this module carries its own copy of the pattern rather than
+    importing `pipeline/join.py`'s.
+
+    ANCHORED AT THE END AND REQUIRING THE SLASH: `Ho-Oh`, `Wally's Compassion` and `Team
+    Rocket's Mewtwo` keep every character they have. Measured (§3.3): 150 of the 3,502
+    SKU-bound cards on the owner's store carry a name of this shape.
+    """
+    return _NAME_NUMBER_SUFFIX.sub("", str(text or "").strip())
 
 
 def split_catalog_number(text) -> Tuple[Optional[str], Optional[str]]:

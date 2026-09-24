@@ -137,6 +137,12 @@ help:
 	@echo "                    newer one, a changed fact writes one event and keeps the row,"
 	@echo "                    no delete path, a version-10 store upgrades to 11 with every"
 	@echo "                    other table's rows intact. In \`check\`, never in the hook."
+	@echo "  make identity-store-selftest  the one writer (identity-follows-sku.md lane 1):"
+	@echo "                    bind_sku stamps the identity off a skus row for Pokemon,"
+	@echo "                    Riftbound and a double-sided token cell; unbind_sku round-trips"
+	@echo "                    it; SkuUnknown/GameMismatch both write nothing;"
+	@echo "                    record_identification writes only read_* on a bound card. No"
+	@echo "                    store, no disk write at all. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -218,7 +224,7 @@ help:
 	@echo "                    identity-checks-selftest + price-postings-selftest +"
 	@echo "                    product-history-selftest +"
 	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
-	@echo "                    skus-selftest +"
+	@echo "                    skus-selftest + identity-store-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -589,6 +595,7 @@ check:
 	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory skus-selftest
+	@$(MAKE) --no-print-directory identity-store-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -647,6 +654,7 @@ ci-check:
 	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
 	@$(MAKE) --no-print-directory skus-selftest
+	@$(MAKE) --no-print-directory identity-store-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -1255,7 +1263,21 @@ readings-selftest:
 skus-selftest:
 	@$(PYTHON) scripts/skus-selftest.py
 
-.PHONY: submission-selftest readings-selftest skus-selftest
+# THE ONE WRITER, PROVED IN MEMORY (identity-follows-sku.md §4.1, lane 1). `bind_sku` stamps
+# name/number/printed_total/rarity/set_name/condition off a skus table row for a Pokemon
+# card (the catalog Number split), a Riftbound card (kept verbatim) and a Riftbound
+# double-sided token cell (`T02 // T03`); `unbind_sku` round-trips a rebind back to the
+# first binding, every field but `bound_at` restored exactly; SkuUnknown and GameMismatch
+# both refuse before touching the card, the events list or the skus table;
+# `record_identification` writes only `read_*` on a bound card and the identity too on an
+# unbound one.
+#
+# IN `check`, NEVER IN THE GIT HOOK. Writes nothing to disk at all — no store, no `mktemp`
+# (D18 does not even apply) — so it is in `ci-check` too.
+identity-store-selftest:
+	@$(PYTHON) scripts/identity-store-selftest.py
+
+.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null
