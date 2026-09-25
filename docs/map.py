@@ -5945,8 +5945,8 @@ COMPONENTS = [
                                           "`banchi.theme` — device-local like the camera's "
                                           "deviceId (D27), and nothing about a card.",
                                   "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
-                                                  "D117", "D118", "D125", "D196", "D269",
-                                                  "D272", "D-icon-buttons"]},
+                                                  "D117", "D118", "D125", "D196", "D269", "D272",
+                                                  "D-icon-buttons"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
@@ -6041,10 +6041,13 @@ COMPONENTS = [
                                             "`SearchField` into one toolbar. It draws \"N of M\" by "
                                             "construction and names every narrowing in it (the "
                                             "picks, the search, the hide toggle), with the one "
-                                            "clear-all. Every facet trigger in one bar is one width. "
-                                            "It opens a popover in a wide bar and one sheet behind a "
-                                            "single trigger in a narrow one, by the bar's own width. "
-                                            "A slot beside the search takes a screen's own control, "
+                                            "clear-all. ONE LINE AT EVERY WIDTH (the owner, "
+                                            "2026-09-24, amending D270): search "
+                                            "plus one \"Filters\" trigger, never a wide inline row. "
+                                            "`compact` (default `'popover'`) picks the overlay the "
+                                            "trigger opens: a floating `Popover`, or `'sheet'` for "
+                                            "the kit's `Sheet` (the inventory lane's own call on a "
+                                            "phone). A slot beside the search takes a screen's own control, "
                                             "and the search takes `useSearch`'s busy and failure "
                                             "states. Also the quiet `HideToggle` (one shape for "
                                             "\"Hide sold\" / \"Hide never-seen\" / \"Holding\", "
@@ -6053,12 +6056,12 @@ COMPONENTS = [
                                             "per-column first direction, re-sorting at once, "
                                             "FLT-01).",
                                     "governed_by": ["D118", "D132", "D209", "D270"]},
-            "src/kit/filters.css": {"does": "the filter bar's styles. A container query on the "
-                                            "bar's own width: below 480px of bar (a phone column, "
-                                            "Inventory's rail) the wide row hides and the compact "
-                                            "trigger and its sheet take over — both trees are always "
-                                            "mounted, CSS alone decides which is visible. The facet "
-                                            "triggers share one grid track width.",
+            "src/kit/filters.css": {"does": "the filter bar's styles. One line at every width "
+                                            "(amending D270, 2026-09-24): no "
+                                            "container query decides the layout any more — the "
+                                            "compact trigger is always shown, and its overlay "
+                                            "(`.bn-menu.bn-filterbar-popover`, or the kit's own "
+                                            "`Sheet` styling) is picked by the `compact` prop.",
                                     "governed_by": ["D50", "D118", "D195", "D270",
                                                      "D-icon-buttons"]},
             "src/kit/filters.specimens.tsx": {"does": "`FilterBar` (full width, and in a 280px "
@@ -9643,8 +9646,8 @@ COMPONENTS = [
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
                 "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
-                                "D118", "D125", "D136", "D193", "D212", "D218",
-                                "D259", "D-icon-buttons"],
+                                "D118", "D125", "D136", "D193", "D212", "D218", "D259",
+                                "D-icon-buttons"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "
