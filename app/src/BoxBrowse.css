@@ -105,7 +105,8 @@
   display: flex;
   flex-direction: column;
   padding: var(--bn-1);
-  /* THREE AND A HALF BOXES, the half row saying the list scrolls (UX-206): the walk list below is
+  /* THREE AND A HALF BOXES (D-inventory-walk-first), the half row saying the list scrolls
+     (UX-206): the walk list below is
      the thing the rail is for, and at 1440x900 it was a 183px window. Most recent first (D132),
      so the box the hand wants is at the top. */
   max-height: 164px;
