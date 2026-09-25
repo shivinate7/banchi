@@ -316,6 +316,10 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   number_unread_name_matched: 'Is this the row it matched?',
   name_disputed: 'Is this the right card at all?',
   no_market_data: 'Is this the card?',
+  /* `pipeline/routing.py:LISTING_DISPUTED` (identity-follows-sku.md §7.3, lane 2): a held
+   * card from `cards identity --write` — the read disputes the SKU it is bound to, and
+   * nobody has looked. `reasons.ts` carries the shorter sub-label under this headline. */
+  listing_disputed: 'Is the listing the right card?',
 }
 
 const RETIRED_HEADLINE = 'This question was retired.'
@@ -527,6 +531,10 @@ function durationText(ms: number): string {
 // -------------------------------------------------------------------------------- keys
 
 const MAX_KEYED_CANDIDATES = 9
+// HOW MANY MORE ROWS ONE "SHOW MORE" PRESS REVEALS, off rows `GET /review/<box>/<index>/
+// catalog` already sent — never a second fetch. The owner's own words: "a 'show 10 more'
+// etc." Rows past `MAX_KEYED_CANDIDATES` stay mouse-only either way (`CandidateButton`).
+const CATALOG_REVEAL_STEP = 10
 const SKIP_KEY = 's'
 const SKIP_KEY_LABEL = 'S'
 const CLEAR_KEY = 'c'
@@ -2196,6 +2204,17 @@ export type CatalogPanelProps = {
  * binds `Escape` on its own panel, so "Esc goes back" is true there too. */
 export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoose, overruling, busy }: CatalogPanelProps): ReactNode {
   const rows = lookup?.rows ?? []
+  // NO CUTOFF, THEN A KEYBOARD LIMIT (owner's ruling, 2026-09-24: "the search shouldn't
+  // cut off i should see all rows that matched unless it's an egregious amount ... or a
+  // 'show 10 more' etc"). The server sends every match up to its own egregious ceiling
+  // (`CATALOG_EGREGIOUS_LIMIT`); `revealed` is how many of THOSE rows this press has
+  // uncovered, never a second network round trip — D118: a press adds rows below and
+  // moves nothing above it. Reset per search, so an earlier reveal never survives a typed
+  // query it does not belong to.
+  const [revealed, setRevealed] = useState(MAX_KEYED_CANDIDATES)
+  useEffect(() => setRevealed(MAX_KEYED_CANDIDATES), [lookup?.query])
+  const shown = rows.slice(0, revealed)
+  const more = rows.length - shown.length
   return (
     <div className="review-catalog">
       <div className="review-catalog-head">
@@ -2251,7 +2270,7 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
         </p>
       ) : (
         <ul className="review-candidates">
-          {rows.map((row, at) => (
+          {shown.map((row, at) => (
             <li key={`${row.sku}:${at}`} style={{ animationDelay: `${at * 40}ms` }}>
               <CandidateButton candidate={row} at={at} shared={false} tags={[]} onChoose={() => onChoose(row)} disabled={busy} fromCatalog />
             </li>
@@ -2259,9 +2278,15 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
         </ul>
       )}
 
+      {more > 0 ? (
+        <Button variant="ghost" block onClick={() => setRevealed((n) => n + CATALOG_REVEAL_STEP)} disabled={busy}>
+          Show {Math.min(more, CATALOG_REVEAL_STEP)} more
+        </Button>
+      ) : null}
+
       {lookup !== null && lookup.truncated ? (
         <p className="review-catalog-more">
-          {lookup.found} rows match; the first {rows.length} are shown because the digits stop at {MAX_KEYED_CANDIDATES}. Narrow the search to see the rest.
+          Only the first {rows.length} of {lookup.found} rows are shown. Narrow the search to see the rest.
         </p>
       ) : null}
     </div>
@@ -2307,7 +2332,8 @@ function Facts({ row }: { row: Row }) {
         ),
     },
     { label: 'Waiting', value: seenText(entry) },
-    { label: 'Position', value: entry.label },
+    // No `Position` fact: the photo caption already names the card's place, and the place
+    // shows once on this screen.
   ]
   return (
     <details className="review-details">
@@ -2436,7 +2462,7 @@ function AbsentPhoto({ title, detail, label, box, cid, place, children }: { titl
 
 /* The card's address, and the way back to it: this opens THE CARD on Inventory
  * (`#/inventory?box=<n>&card=<cid>`), not the box at its first card (LOC-12). The label names
- * the box by its name (D-a-box-is-shown-by-its-name), and its accessible name is the place as a
+ * the box by its name (D259), and its accessible name is the place as a
  * sentence (`Box 1, Section 3, Card 13`). A card with no box has no destination and draws the
  * plain caption; a card the server sent no name for opens its box.
  *

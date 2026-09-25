@@ -152,7 +152,7 @@ PAGE WIDTH                      --bn-page-w 1600 · -rows 1344
 --bn-page-top                   = --bn-6 (24), = --bn-4 (16) below 768. The one gap above
                                 every `Page`'s title (UX-133).
                                 A `Page` reads --bn-page-w alone; -rows is for the screens
-                                not yet on `Page` (D-one-page-width)
+                                not yet on `Page` (D272)
 
 TYPE ROLES                      aliases onto the scale, never new sizes (UX-067, UX-115)
 --bn-fs-h1                      = --bn-fs-3xl (28)  the page title, `.bn-title`
@@ -262,11 +262,11 @@ button and never has to redraw one.**
 | `Chip` | choose one of a set, or filter a list. Pressed is ink-on-page, not accent | a button with a rounded corner |
 | `Pill` | a state, a count, a lane — something the row IS | anything pressable |
 | `Kbd` | the key that does this thing, owner-side only | the Fulfiller's screens, which are touch |
-| `Page` | every screen, from now on: one width, one top gap, one h1, the verdict, the toolbar, the status slot, the loading and empty states (D-one-page-width) | a panel inside a screen |
+| `Page` | every screen, from now on: one width, one top gap, one h1, the verdict, the toolbar, the status slot, the loading and empty states (D272) | a panel inside a screen |
 | `Section` | a titled part of a page. Its title is an h2 | a heading inside a card, which is `.bn-h3` |
 | `PageHeader` | a screen not yet on `Page`. It stays for backward compatibility | a new screen, which uses `Page` |
 | `EmptyState` | a list with nothing in it, saying what would put something there | an error |
-| `Notice` | a warning or a standing condition. The code and any server text go behind "What the server said" (D-notice-detail) | a receipt of something that worked — that is a toast |
+| `Notice` | a warning or a standing condition. The code and any server text go behind "What the server said" (D269) | a receipt of something that worked — that is a toast |
 | `Refusal` / `Retry` | a press that cannot be done here, with no retry / a failure that may pass, with a busy "Try again" | a warning that asks for nothing |
 | `ReloadButton` | the one reload: in the page's actions, labelled, on `R`, busy while it reads | a second reload with a key on the same page |
 | `Loading` | the one loading style, in the shape of what replaces it: `rows`, `cards` or `summary` | a spinner and a sentence |
@@ -409,7 +409,7 @@ control heights follow the pointer instead. **720 is the owner's own second view
 chrome. So a page at 720 is a desktop page in a narrow column, and it must look designed. The
 page is a query container, so its tiers follow that column and not the window.
 
-**One width for every page** (D-one-page-width, amends D197). A `Page` is 1600 px at most, and
+**One width for every page** (D272, amends D197). A `Page` is 1600 px at most, and
 fluid below that, under one top gap, `--bn-page-top`. It ignores `--bn-page-max`. That token
 stays for the screens not yet on `Page`, and goes when the last of them moves.
 
@@ -918,21 +918,26 @@ rather than disabled until its preflight has answered. What changed is reading o
 zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-fifteen strings and the screen labels FOURTEEN of them — six from the variant ladder in
-`pipeline/variant.py`
-(`no_catalog_row`, `metadata_not_stocked`,
-`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
-`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and EIGHT from
-routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
-`set_ambiguous`, `card_not_detected`, `no_market_data`, `name_disputed` — the name read off
-the photograph matching none of the rows its number found, which is D23's cross-check run
-backwards and the only signal that catches a confidently misread number — and D35's
-`number_unread_name_matched` — the only reason the JOIN writes over a successful ladder
-resolution, keeping that row so the entry offers exactly one candidate, which is what makes a
-queue of them one D29 group. It is *not* the only reason sitting on a card the ladder resolved:
-`low_confidence` and `no_market_data` do too, and the difference is that they reach
-`routing.route` still resolved and are re-routed there, where this one arrives already
-un-resolved). Showing only a friendly label
+named strings, and the screen labels every live one. Six come from the variant ladder in
+`pipeline/variant.py` (`no_catalog_row`, `metadata_not_stocked`,
+`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition` and D23's
+`rarity_claim_mismatch`). D23's reason is the stack claim contradicting every candidate row.
+The rest come from routing in `pipeline/routing.py` (`low_confidence`, `no_position`,
+`identification_failed`, `set_ambiguous`, `card_not_detected`, `no_market_data`,
+`name_disputed`, D35's `number_unread_name_matched` and `listing_disputed`).
+`name_disputed` is the name read off the photograph matching none of the rows its number
+found. It is D23's cross-check run backwards. It is the only signal that catches a
+confidently misread number. `number_unread_name_matched` is the only reason the JOIN writes
+over a successful ladder resolution. It keeps that row, so the entry offers exactly one
+candidate, and a queue of them is one D29 group. It is *not* the only reason sitting on a
+card the ladder resolved. `low_confidence` and `no_market_data` do too. The difference is
+that they reach `routing.route` still resolved and are re-routed there. This one arrives
+already un-resolved.
+
+identity-follows-sku.md §7.3 (lane 2) opens `listing_disputed`. `./pkmnscan cards identity
+--write` opens it for a held, identified card. `routing.route` never opens it.
+
+Showing only a friendly label
 creates a second vocabulary that nothing audits — the drift D16 exists to catch — and
 leaves no way to get from what you saw on screen to what the pipeline actually said.
 Showing only the raw string is honest and unreadable. Both, at two sizes, costs one line of
@@ -1238,7 +1243,7 @@ screen` row (D196) refuses a decision citation, a repository path, or a
 pipeline-internal noun in any other user-visible string in `app/src`.
 
 Less text is always better than more. D194's pinned-ceiling ratchet is retired, on the owner's
-ruling (`D-text-shape-checks`, 2026-09-23): no more stagnant static pin. Three checks replace
+ruling (`D284`, 2026-09-23): no more stagnant static pin. Three checks replace
 it, run by `make design-check`: `app/tests/text-shape.spec.ts` (a repetition and a sentence-
 shape check), `app/tests/machine-words.spec.ts` (D196's own gap, over rendered text) and
 `app/tests/money-face.spec.ts` (D221, over the mono face). `make text-density`

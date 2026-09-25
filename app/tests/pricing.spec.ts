@@ -225,9 +225,12 @@ async function open(
      *  request that had not finished. */
     pricingDelayMs?: number
     /** What `POST /pipeline/send` answers, as a function of the body the card sent — the one
-     *  press (`D-one-press-sends-and-makes-live`). `status` other than 200 answers the server's
+     *  press (`D273`). `status` other than 200 answers the server's
      *  refusal envelope with `code`. Default: a send that went live. */
     send?: (body: Record<string, unknown>) => { status: number; body?: unknown; code?: string; data?: unknown }
+    /** HOLD `POST /pipeline/send` OPEN THIS LONG, so a case can measure the card WHILE the press
+     *  runs (round 9, D118). */
+    sendDelayMs?: number
     /** What `GET /pipeline/sends` answers, as a function of what the page has already sent (the
      *  wire so far). A function and not a queue: the page may read the status more than once on
      *  arrival, and a queue would hand the second read an answer meant for later. Default:
@@ -261,6 +264,7 @@ async function open(
   await page.route(/\/pipeline\/send$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pipeline/send', body })
+    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs))
     const answer: { status: number; body?: unknown; code?: string; data?: unknown } = (
       options.send ?? (() => ({ status: 200, body: { send: sendSummary(), console: '' } }))
     )(body)
@@ -1479,6 +1483,49 @@ test('r8: a refused count of live copies is offered back at TCGplayer count', as
   await expect.poll(() => sendPosts(wire).length).toBe(2)
   expect(sendPosts(wire)[1]?.body).toMatchObject({ moves: [{ sku: '8608859', price: '19.99', copies: 2 }] })
 })
+
+/* ROUND 9, D118: A PRESS CHANGES WHAT IS ON THE SCREEN, NEVER WHERE THE REST OF IT IS. The press
+   named its live copies on two lines at 390 and became the one-line "Checking TCGplayer, then
+   sending…" under the finger, so the sticky bar shrank and the press moved. Measured before and
+   during a press held open, at a phone and a tablet width: the press, and the door beside it,
+   stay where they were. */
+for (const width of [390, 820]) {
+  test(`r9: the send press keeps its place and size while it runs (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    const wire = await open(page, {
+      skus: [
+        sku({
+          sku: '8608859',
+          name: 'Articuno',
+          add_to_quantity: 1,
+          copies: 1,
+          live_before: 2,
+          listing: { pushed: 2, staged: 0, live: 2 },
+          live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '22.03' },
+        }),
+      ],
+      decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99' } },
+      sendDelayMs: 1500,
+    })
+    const press = page.locator('.send-press')
+    const door = page.locator('.send-act').getByRole('button', { name: /Download/ })
+    await expect(press).toContainText('2 live copies move to')
+    const before = { press: await press.boundingBox(), door: await door.boundingBox() }
+    await press.click()
+    await expect(press).toHaveAttribute('data-busy', 'true')
+    await expect.poll(() => sendPosts(wire).length).toBe(1)
+    const during = { press: await press.boundingBox(), door: await door.boundingBox() }
+    for (const key of ['press', 'door'] as const) {
+      const a = before[key]
+      const b = during[key]
+      expect(b, `${key} is drawn during the press`).not.toBeNull()
+      expect(Math.abs((b?.x ?? 0) - (a?.x ?? 0)), `${key} x`).toBeLessThanOrEqual(0.5)
+      expect(Math.abs((b?.y ?? 0) - (a?.y ?? 0)), `${key} y`).toBeLessThanOrEqual(0.5)
+      expect(Math.abs((b?.width ?? 0) - (a?.width ?? 0)), `${key} width`).toBeLessThanOrEqual(0.5)
+      expect(Math.abs((b?.height ?? 0) - (a?.height ?? 0)), `${key} height`).toBeLessThanOrEqual(0.5)
+    }
+  })
+}
 
 /* ROUND 6, S4: A ROLLBACK'S ANSWER IS NOT PROOF. A press TCGplayer turned away and Banchi rolled
    back offers no Try again, and keeps "check the Staged list" until the owner dismisses it. */

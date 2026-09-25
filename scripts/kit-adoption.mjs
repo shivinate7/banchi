@@ -9,7 +9,7 @@
  * one status slot, one loading shape. A screen inherits them only if it renders `<Page>`. A
  * screen that draws its own `role="dialog"`, its own `<select>` or its own `bn-money` span has
  * stepped around the kit, and the next change to the kit will not reach it. D173: a rule that
- * can be enforced mechanically must be. This is the mechanism. D-page-scaffold is the argument.
+ * can be enforced mechanically must be. This is the mechanism. D275 is the argument.
  *
  * TWO RULES, READ FROM THE TYPESCRIPT AST (the same reader `scripts/user-strings.mjs` and
  * `scripts/screen-freshness.mjs` use, for their reason: a regex reads JSX, ternaries and
@@ -686,7 +686,7 @@ function compareWithBase(atBase, allow, headRules) {
 }
 
 /** `scripts/only_shrinks.py`, THE ONE HELPER for every shrinking list's only-shrinks rules
- *  (D-ratchets-become-offender-lists). This file cannot import Python, so it runs the helper
+ *  (D280). This file cannot import Python, so it runs the helper
  *  as a command, with `input` as JSON on stdin, and reads JSON back. Null when it cannot run. */
 function onlyShrinks(args, input = null) {
   try {
@@ -802,7 +802,7 @@ function run() {
   if (unlisted.length > 0) {
     console.error(
       `kit-adoption: ${unlisted.length} violation(s) the allow list does not name. Fix the screen: render ` +
-        `<Page> from ./kit, or use the kit's primitive. D-page-scaffold says why.`,
+        `<Page> from ./kit, or use the kit's primitive. D275 says why.`,
     )
   }
   const atBase = allowAtBase()

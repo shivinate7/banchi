@@ -1517,7 +1517,7 @@ def check_line_anchors(report: Report, docs: List[Path], allowed: Dict[str, str]
     report.add("line anchors", MECHANICAL, findings, summary, scanned=len(anchors))
 
 
-# ------------------------------------------------ line anchor offenders (D245, D-ratchets-become-offender-lists)
+# ------------------------------------------------ line anchor offenders (D245, D280)
 
 # CLAUSE C: A SHRINKING OFFENDER LIST OF LINE ANCHORS, NEVER A PINNED COUNT. The owner's ruling,
 # 2026-09-24, "convert both of the last pins": D229's per-file count is retired here the way the
@@ -2837,6 +2837,21 @@ def decision_heading_lines_across(paths: Iterable[Path], letter: str) -> List[Tu
     return out
 
 
+def decision_id_code_haystack() -> List[Path]:
+    """Every non-markdown file `decision ids in code` reads for a D/C citation.
+
+    ITS OWN FUNCTION, SO `scripts/claim-ids.py`'s SELF-TEST CAN CALL IT DIRECTLY, rather than
+    retyping the suffix list this scan reads. The claimer's own walk once skipped every
+    dotted directory (`.claude/skills/`), so a slug cited in
+    `.claude/skills/text-density/SKILL.md` survived a claim commit unrewritten and this very
+    row refused PR #462's merge over it (commits 34c54259/eaef7ce7) — `check_decision_ids`
+    calling this function, and the claimer's self-test importing it too, is what keeps the
+    two walks from drifting apart again the way `.js` already once did (see the paragraph
+    below).
+    """
+    return python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js"))
+
+
 def check_decision_ids(report: Report, docs: List[Path]) -> None:
     singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
     codes = decision_headings(ROOT / "docs" / "CODES-DECISIONS.md", "C")
@@ -2927,7 +2942,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # ONE HAYSTACK, BUILT BEFORE THE SCAN, so the row can declare how many files it read.
     # It was two `scan()` calls with the count nowhere, which is the shape that let this
     # file print `ok` over a walk that had found nothing.
-    code_haystack = python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js"))
+    code_haystack = decision_id_code_haystack()
     scan(code_haystack, in_code)
 
     report.add("decision ids", MECHANICAL, in_docs,
@@ -4175,6 +4190,176 @@ def check_import_layering(report: Report) -> None:
         f"{len(store_files)} store/ files scanned, 0 import pipeline/" if not findings
         else f"{len(store_files)} store/ files scanned, {len(findings)} import pipeline/",
         scanned=len(store_files),
+    )
+
+
+# docs/specs/identity-follows-sku.md §4.1/§4.3 (lane 7): the directories a real card mutation
+# can reach — the same six the spec's own text names for this row.
+_IDENTITY_WRITERS_ROOTS = ("server", "store", "pipeline", "cli", "codes", "scripts")
+
+# EMPTY, AND PINNED AT ZERO. The two entries lane 7 pinned here were
+# `cli/cmd_cards.py:_variants`'s direct `set_name`/`rarity` writes. That press is now a
+# stub that refuses and names `cards identity --write` (identity-follows-sku.md §4.2:
+# "retired"), so the list is empty. `UNSCOPED_WALK_ALLOWED`'s own idiom: an entry here is a
+# debt this row can SEE, never one it hides, and the ratchet below cannot silently grow.
+IDENTITY_WRITERS_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset()
+IDENTITY_WRITERS_ALLOWED_EXPECTED = 0
+
+
+def _identity_field_assignments(
+    path: Path, fields: FrozenSet[str]
+) -> List[Tuple[int, Optional[str], Optional[str], str]]:
+    """Every `card.<field> = ...` (or `+=`) in `path`, for a `field` in `fields`, tagged with
+    the enclosing class and function ('' / None at module scope) — so the caller can tell a
+    sanctioned writer's own body from everywhere else, `_pipeline_imports`'s own shape
+    (module-level or nested, a lazy write hidden in a function body is exactly the risk).
+
+    ONLY A BASE NAMED EXACTLY `card` COUNTS. Measured over every file under `server/`,
+    `store/`, `pipeline/`, `cli/`, `codes/` and `scripts/`: every genuine `Card` mutation in
+    the tree already uses that one local name, and filtering on it is what keeps this row
+    from flooding on an unrelated class that happens to share a field name — `Row.sku` in
+    `scripts/demo-seed.py`, `Box.name`, `Listing.condition`, a test fixture's own
+    `automatic_card.rarity` in `scripts/identity-binding-selftest.py`. WHAT IT CANNOT SEE: a
+    real `Card` write through a variable named anything else. None exists in the scanned
+    roots today — `harness/tests/` fixtures use `resolved`/`ghost`/`transplant` and are not
+    scanned at all (outside the six roots) — so this is a live gap, stated rather than
+    quietly closed by a cleverer reader that would cost this row its whole simplicity.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (SyntaxError, UnicodeDecodeError, OSError):
+        return []
+    found: List[Tuple[int, Optional[str], Optional[str], str]] = []
+
+    def visit(node: ast.AST, cls: Optional[str], func: Optional[str]) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.ClassDef):
+                visit(child, child.name, None)
+                continue
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                visit(child, cls, child.name)
+                continue
+            if isinstance(child, (ast.Assign, ast.AugAssign)):
+                targets = child.targets if isinstance(child, ast.Assign) else [child.target]
+                for target in targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and target.attr in fields
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "card"
+                    ):
+                        found.append((child.lineno, cls, func, target.attr))
+            visit(child, cls, func)
+
+    visit(tree, None, None)
+    return found
+
+
+def check_identity_writers(report: Report) -> None:
+    """docs/specs/identity-follows-sku.md §4.1/§4.3 (lane 7): ONE WRITER, CHECKED BY A
+    MACHINE (CLAUDE.md D173: "a rule that can be mechanically enforced must be").
+    `store/master.py` exports two constants this row reads — never copies — `IDENTITY_
+    FIELDS` (the eleven identity/binding fields) and `IDENTITY_WRITERS` (the method names
+    allowed to assign one). A `card.<field> = ...` anywhere else under `server/`, `store/`,
+    `pipeline/`, `cli/`, `codes/` or `scripts/` is this row's own defect to report.
+
+    SIX WRITERS ARE SANCTIONED, NOT THE FOUR LANE 7'S OWN BRIEF NAMED (`bind_sku`,
+    `unbind_sku`, `restore_identity`, and `hold_sku`, this lane's own addition) — and that
+    gap is worth stating rather than quietly resolved either way (CLAUDE.md: "surface
+    ambiguity instead of resolving it silently"). Two more are PRE-EXISTING, ALREADY-
+    ARGUED holdovers from earlier lanes, each with its own docstring in `store/master.py`
+    making the case this row only points at: `record_identification` ("not a second writer
+    of the identity — it is the same writer bind_sku becomes the moment a binding exists,
+    continuous rather than switched") and `move_card` (D83's tombstone clear, spec §4.2:
+    "clears sku and condition on the tombstone... unchanged"). `set_state` WAS A THIRD
+    HOLDOVER, ITS OWN DOCSTRING ONCE READING "A DEVIATION... FLAGGED RATHER THAN MADE
+    SILENTLY" — commit `66442b32` closed it: its five identity parameters are gone, and it
+    is no longer in `IDENTITY_WRITERS`. A row that recognised only the four lane 7's brief
+    named would fail the merged tree on sight, over writes two earlier review rounds already
+    settled — `IDENTITY_WRITERS` in `store/master.py` is the constant that says so, not this
+    file.
+
+    ONLY A `card.<field>` ASSIGNMENT COUNTS — see `_identity_field_assignments`'s own
+    docstring for the heuristic and what it cannot see. `IDENTITY_WRITERS_ALLOWED` above is
+    a SEPARATE, RATCHETED exception list, `UNSCOPED_WALK_ALLOWED`'s own idiom. It is empty
+    and pinned at zero since `cards variants` retired — see that constant's own comment.
+
+    TRUSTED ONLY ONCE IT GOES RED ON THE DEFECT IT GUARDS (owner's rule): a planted
+    `card.name = "whatever"` inside `cli/cmd_cards.py`'s `_audit` function is how this row
+    was proved, by hand, before this docstring was written — never checked in, because a
+    fixture that stayed would be the violation this row exists to catch.
+    """
+    path = ROOT / "store" / "master.py"
+    if not exists(path):
+        report.add("identity writers", MECHANICAL,
+                   [Finding(rel(path), "store/master.py does not exist.")])
+        return
+    literals = literals_from_module(path)
+    fields, writers = literals.get("IDENTITY_FIELDS"), literals.get("IDENTITY_WRITERS")
+    if not fields or not writers:
+        report.add("identity writers", MECHANICAL, [Finding(
+            rel(path),
+            "`IDENTITY_FIELDS`/`IDENTITY_WRITERS` could not be read as module-level "
+            "literal tuples. They are parsed with `ast.literal_eval` and never imported, "
+            "so each must stay a plain tuple of strings.",
+        )])
+        return
+    fields = frozenset(fields)
+    writers = frozenset(writers)
+
+    scanned_files: List[Path] = []
+    for name in _IDENTITY_WRITERS_ROOTS:
+        root = ROOT / name
+        if exists(root):
+            scanned_files += _walk(root, (".py",))
+
+    findings: List[Finding] = []
+    scanned = 0
+    allowed_seen: Set[Tuple[str, str, str]] = set()
+    for file in scanned_files:
+        for lineno, cls, func, field in _identity_field_assignments(file, fields):
+            scanned += 1
+            if file == path and cls == "Inventory" and func in writers:
+                continue
+            key = (rel(file), func or "", field)
+            if key in IDENTITY_WRITERS_ALLOWED:
+                allowed_seen.add(key)
+                continue
+            findings.append(Finding(
+                f"{rel(file)}:{lineno}",
+                f"`{func or '<module scope>'}` assigns `card.{field}` directly. The only "
+                f"code identity-follows-sku.md §4.1 allows to do that is one of "
+                f"Inventory.{{{', '.join(sorted(writers))}}} in store/master.py — route "
+                f"this write through `bind_sku` (the SKU is trusted), `hold_sku` (it is "
+                f"known but the read disputes it), or `unbind_sku`/`restore_identity` for "
+                f"an undo.",
+            ))
+
+    for key in sorted(IDENTITY_WRITERS_ALLOWED - allowed_seen):
+        findings.append(Finding(
+            "scripts/docs-audit.py -> IDENTITY_WRITERS_ALLOWED",
+            f"names {key!r}, and this scan finds no such direct assignment there any more.\n"
+            f"  Either the site moved to a shape this reader does not recognise, or it was "
+            f"genuinely fixed and the entry was not deleted with it. Delete the entry and "
+            f"lower IDENTITY_WRITERS_ALLOWED_EXPECTED in the same commit, or say why the "
+            f"shape changed.",
+        ))
+
+    if len(IDENTITY_WRITERS_ALLOWED) != IDENTITY_WRITERS_ALLOWED_EXPECTED:
+        findings.append(Finding(
+            "scripts/docs-audit.py -> IDENTITY_WRITERS_ALLOWED",
+            f"has {len(IDENTITY_WRITERS_ALLOWED)} entries where "
+            f"{IDENTITY_WRITERS_ALLOWED_EXPECTED} are pinned. Raise the pin only alongside "
+            f"a new, deliberately-kept exception named in the commit message, and lower it "
+            f"in the same commit that fixes one away.",
+        ))
+
+    report.add(
+        "identity writers", MECHANICAL, findings,
+        f"{scanned} direct card.<field> assignment(s) found, all inside the "
+        f"{len(writers)} sanctioned writers or the {len(IDENTITY_WRITERS_ALLOWED)} pinned "
+        f"exception(s)" if scanned else "no direct card.<field> assignment found anywhere",
+        scanned=scanned,
     )
 
 
@@ -6316,7 +6501,7 @@ BINARY_SUFFIXES = frozenset({
 # retired per-file prose pin, whose keys were decision FILENAMES. Its replacement,
 # `scripts/ste-offenders.json`, keys a decision entry by its tail and folds every decision id in
 # a label (`scripts/ste_measure.py:list_key`, `fold`), so it holds no id to skip, and the skip
-# was deleted with its only member (D-ratchets-become-offender-lists).
+# was deleted with its only member (D280).
 
 
 def cited_decisions(path: Path) -> Set[str]:
@@ -12669,7 +12854,7 @@ USER_STRINGS_SCRIPT = ROOT / "scripts" / "user-strings.mjs"
 APP_TS_COMPILER = ROOT / "app" / "node_modules" / "typescript" / "lib" / "typescript.js"
 
 # THE ONE PLACE THIS LIST LIVES IS scripts/machine-words.json, not a Python dict, since D196's
-# 2026-09-23 amendment (D-text-shape-checks) put a SECOND reader on it: `app/tests/
+# 2026-09-23 amendment (D284) put a SECOND reader on it: `app/tests/
 # machine-words.spec.ts` reads the rendered TEXT every route draws, catching server- and
 # demo-composed strings this AST walk cannot (it only sees JSX literals). One file, so growing
 # the list edits one dictionary rather than two that can drift apart. `run`, `box`, `export`,
@@ -12809,7 +12994,7 @@ def _no_mechanism_exempt(where_file: str) -> bool:
 
 # THE SHRINKING OFFENDER LIST, on `scripts/kit-adoption-allow.json`'s own precedent and the
 # owner's Q3 ruling, 2026-09-23: file -> word -> the lane that owes the fix. Growing
-# `scripts/machine-words.json`'s word list (D-text-shape-checks) put ten new pipeline nouns —
+# `scripts/machine-words.json`'s word list (D284) put ten new pipeline nouns —
 # `emit`, `sub-threshold`, `index`, `span`, `parked`, `Pushed`, `Staged`, `make demo`,
 # `/pipeline/`, `manual:c` — in front of this row for the first time, and several of them are
 # real, on screens no wave-2 lane has reached yet. A hard gate with no allow list would fail
@@ -12986,10 +13171,10 @@ def check_no_mechanism_on_screen(report: Report) -> None:
     )
 
 
-# ------------------------------------------ shrinking offender lists (D-ratchets-become-offender-lists)
+# ------------------------------------------ shrinking offender lists (D280)
 #
 # THE OWNER'S RULING, 2026-09-24: no pinned count survives. D194's word ceiling went first
-# (D-text-shape-checks). D218's typed-dot count and D229's per-file prose ratio follow it
+# (D284). D218's typed-dot count and D229's per-file prose ratio follow it
 # here. Each is replaced by a RULE check and a SHRINKING OFFENDER LIST in the shape
 # `scripts/kit-adoption-allow.json` set: file -> rule -> entries, with the lane that owes the
 # fix. Three things fail, and a count is none of them:
@@ -13155,7 +13340,7 @@ def _read_offender_list(path: Path) -> Tuple[Optional[object], Optional[str]]:
 # D41 deleted the dot-joined address string from the screen on 2026-08-29 and moved the
 # separator into CSS (`.boxops-identity-part::before { content: '·' }` and its siblings) —
 # the separator is a STYLE now, drawn beside a fact, never typed INTO one. D218 is the full
-# argument. Its pinned count is retired (D-ratchets-become-offender-lists): the row now fails
+# argument. Its pinned count is retired (D280): the row now fails
 # on every typed dot that `scripts/typed-interpunct-allow.json` does not name.
 
 # U+00B7 MIDDLE DOT and U+2022 BULLET — the two characters the survey named. Kept as a fixed
@@ -13282,7 +13467,7 @@ def _typed_interpunct_found(strings: List[Dict[str, object]]) -> Dict[str, Dict[
 
 def check_typed_interpunct(report: Report) -> None:
     """No user-visible string may TYPE a middle dot or bullet as a separator (D41's own
-    ruling, generalised repo-wide 2026-09-19). See D218, and D-ratchets-become-offender-lists
+    ruling, generalised repo-wide 2026-09-19). See D218, and D280
     for the list that replaced its pinned count.
 
     THE EXTRACTION IS THE SAME AST WALK `no mechanism on screen` USES, `scripts/user-
@@ -13384,7 +13569,7 @@ def check_typed_interpunct(report: Report) -> None:
 # vendored `scripts/ste/ste_lint.py` (MIT, pure standard-library Python, so the bare-`python3`
 # pre-commit hook can run it with nothing new installed).
 #
-# THE PINNED RATIO IS RETIRED (D-ratchets-become-offender-lists, superseding D229's ratchet).
+# THE PINNED RATIO IS RETIRED (D280, superseding D229's ratchet).
 # A per-file ratio let a new bad sentence pass wherever an old one was fixed in the same file,
 # and it had to be re-pinned by hand. The row now names every OFFENDER — one sentence that
 # breaks one of the four ERROR-severity rules, after D226's four exemption classes — and fails
@@ -13411,7 +13596,7 @@ STE_OFFENDERS_JSON = ROOT / "scripts" / "ste-offenders.json"
 
 def check_ste_offenders(report: Report) -> None:
     """No markdown sentence may break one of the four ERROR-severity STE rules unless
-    `scripts/ste-offenders.json` names it (D226; D-ratchets-become-offender-lists).
+    `scripts/ste-offenders.json` names it (D226; D280).
 
     READS THE WHOLE TRACKED MARKDOWN TREE EVERY RUN, staged or not — `markdown_files()`
     resolves to the committed INDEX under `--staged` and to `git ls-files` otherwise, so this
@@ -20697,7 +20882,7 @@ def self_test() -> int:
         ok(pairs == [("Runs.tsx", "RunsX.tsx")],
            "and a staged `git mv` in a throwaway repository is one rename pair", f"{pairs}")
 
-    # THE SHRINKING LIST'S OWN ARITHMETIC (D-ratchets-become-offender-lists), in memory: plain
+    # THE SHRINKING LIST'S OWN ARITHMETIC (D280), in memory: plain
     # dicts in, findings out, no file read and none written (D18). Each arm below is one of the
     # three failures the list exists for, or one of the two things it must let through.
     print("\ntyped interpunct: the shrinking list, in memory")
@@ -21541,6 +21726,7 @@ def audit(staged_only: bool) -> Report:
     check_shell_substitution(report)
     check_unscoped_walk(report)
     check_import_layering(report)
+    check_identity_writers(report)
     check_rule_enforcement(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
     # file's check definitions against the calls in this function.

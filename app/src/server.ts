@@ -2,6 +2,7 @@ import type {
   AnswerResult,
   LiveMove,
   PriceChange,
+  ConfirmResult,
   CorrectResult,
   CodeExportResult,
   CodeLedger,
@@ -145,7 +146,7 @@ import type {
  * A bundle built without that define — a bare `tsc`, a test harness, an editor's type server,
  * a bundler that never read `vite.config.ts` — cannot know its tree's port: the browser cannot
  * hash a path. It used to guess `http://localhost:8000`, the primary checkout's LIVE server,
- * which is the guess that must never be made (D-no-git-no-live-port, a copied tree never gets
+ * which is the guess that must never be made (D268, a copied tree never gets
  * the live port). It now has NO address. `about:invalid` opens no socket, so a photo or file
  * link built on it loads nothing, and `request` refuses by name before any fetch.
  *
@@ -153,8 +154,8 @@ import type {
  * OPENED FROM ANOTHER DEVICE. `VITE_CAPTURE_DEFAULT` is a whole URL and its host is
  * `localhost`, which is correct at the desk and catastrophic anywhere else: on a phone,
  * `localhost` IS THE PHONE, so every request goes to a server that is not there. The capture
- * server has bound `0.0.0.0` since it was written and was reachable the whole time — the
- * client was the half that could not be told.
+ * server has bound every interface since it was written and was reachable the whole time —
+ * the client was the half that could not be told.
  *
  * So the derived default is composed here from `location` plus the checkout's port. It keeps
  * every property the injected URL had — the port still comes from the same slot as the Vite
@@ -1310,6 +1311,46 @@ async function correctCall(
 }
 
 /**
+ * Confirm a held card's own listing as the right card — `POST /inventory/<box>/<index>/confirm`
+ * (`docs/specs/identity-follows-sku.md` §8.1).
+ *
+ * THE SIBLING CASE `correctAnswer` DOES NOT REACH: a card whose SKU is already right but whose
+ * drawn name is the camera's, not the listing's (`identity_source: 'read'`) — the owner's own
+ * examples are a misread "Rell" and "Jax". This route takes NO `sku`: the listing already on
+ * the card is what gets confirmed, never a new one, which is the one thing that tells this
+ * press apart from `correctAnswer` at the call site as much as on screen.
+ *
+ * REFUSES `card_not_found`, `card_departed`, `not_identified`, `already_confirmed` or
+ * `sku_unknown` — `CardHero.tsx`'s own control is offered only where none of the four
+ * conflicts would fire, the same discipline `ListingCorrection`'s `eligible` already keeps for
+ * `correctAnswer`.
+ */
+export function confirmIdentity(box: number, index: number): Promise<ConfirmResult> {
+  return confirmCall(box, index, {})
+}
+
+/**
+ * Take one confirm back — `{"undo": true}` on the same route, D28's shape once more. Refuses
+ * `not_confirmed` once the card has moved on: a second confirm, a correction, or a fresh
+ * answer, since this one.
+ */
+export function undoConfirmIdentity(box: number, index: number): Promise<ConfirmResult> {
+  return confirmCall(box, index, { undo: true })
+}
+
+async function confirmCall(
+  box: number,
+  index: number,
+  body: Record<string, unknown>,
+): Promise<ConfirmResult> {
+  return (await request(`/inventory/${box}/${index}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as ConfirmResult
+}
+
+/**
  * Answer a homogeneous group of queued cards in one write — `POST /review/group-answer`,
  * docs/DECISIONS.md's "A homogeneous queue may be answered as a group" (the entry that
  * reopens D4's one-card-at-a-time, narrowly).
@@ -2373,7 +2414,7 @@ export async function publishMarkdown(stamp: string): Promise<MarkdownPublish> {
 
 /**
  * ONE PRESS for a mark-down: read what is live, then push and publish this markdown's file
- * (`D-one-press-sends-and-makes-live`). **This changes what buyers pay.** A failed publish
+ * (`D273`). **This changes what buyers pay.** A failed publish
  * rolls the push back server-side, so no half-sent state is left for a screen to explain.
  */
 export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
@@ -2385,7 +2426,7 @@ export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
 }
 
 /**
- * THE ONE PRESS for listings (`D-one-press-sends-and-makes-live`): the server reads what is
+ * THE ONE PRESS for listings (`D273`): the server reads what is
  * live first and refuses whole if it cannot, writes the file behind the double-send guard,
  * sends it and makes it live. **This changes what buyers see.**
  *

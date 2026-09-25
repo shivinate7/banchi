@@ -162,7 +162,7 @@ function card(over: {
     card: over.card,
     place: {
       located: true,
-      /* THE SERVER'S LABEL (D-a-box-is-shown-by-its-name): the box's name, the section and the card
+      /* THE SERVER'S LABEL (D259): the box's name, the section and the card
          within it, a departed card naming the place it left. `slot` null is what marks it gone. */
       label: `${over.boxName ?? `Box ${over.box}`}, Section ${over.section}, Card ${over.card}`,
       box: over.box,
@@ -298,7 +298,7 @@ async function stubShell(page: Page, cards: number): Promise<void> {
       next_index: {},
     }),
   )
-  /* THE SEND STATUS, BESIDE `/status` AND FOR ITS REASON (`D-one-press-sends-and-makes-live`,
+  /* THE SEND STATUS, BESIDE `/status` AND FOR ITS REASON (`D273`,
      Q3). Every visit to Home and to Pricing reads it to learn whether the live check after a
      send is due, so it is as much a shell read as `/status` is. The answer is the empty one —
      nothing sent, nothing due — so no spec sees a check it did not ask for. A spec about sends
@@ -314,7 +314,7 @@ async function stubShell(page: Page, cards: number): Promise<void> {
   await page.route(/\/pipeline\/sends$/, (route) =>
     json(route, { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }),
   )
-  /* THE PALETTE'S CARD SEARCH IS THE SHELL'S OWN READ NOW (D-palette-go-to): typing two letters
+  /* THE PALETTE'S CARD SEARCH IS THE SHELL'S OWN READ NOW (D276): typing two letters
      into "Go to" asks `GET /search`. It is answered EMPTY, and ONLY while the palette is open.
      A screen's own search falls back to the seal, so a spec that forgot to stub its screen's
      search is still named rather than handed a shared answer. A spec that wants cards in the

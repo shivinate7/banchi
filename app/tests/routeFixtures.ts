@@ -19,7 +19,7 @@ import type {
 /* THE BUILDER FUNCTIONS `run-panel.spec.ts`, `orders.spec.ts` AND `shipping.spec.ts` ALREADY
  * WROTE, MOVED HERE SO A FOURTH AND FIFTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING
  * SHAPE (a gap D194 closed in the PR that named it; D194 is superseded by
- * `D-text-shape-checks`, and this module's job did not go with it).
+ * `D284`, and this module's job did not go with it).
  *
  * `app/tests/text-shape.spec.ts` and `app/tests/machine-words.spec.ts` render `#/runs`,
  * `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` off `sealEveryTest({ store: true,
@@ -430,7 +430,7 @@ export async function seedPopulatedOrders(page: Page): Promise<void> {
    * wrong for this one: these three orders ARE held. MEASURED 2026-09-24: with the empty
    * answer, `#/orders` re-asks for the missing keys without end (4,934 requests in 10s), so
    * the screen never settles. That loop is a product defect for the orders lane (the screen
-   * re-asks forever for a key the answer leaves out), recorded in `D-text-shape-checks`. */
+   * re-asks forever for a key the answer leaves out), recorded in `D284`. */
   await page.route(/\/orders\/picks$/, (route) => {
     const asked = new Set<string>((route.request().postDataJSON() as { keys?: string[] } | null)?.keys ?? [])
     const held = severalOrders().resolution.orders.filter((one) => asked.has(one.key))
@@ -803,6 +803,58 @@ export async function seedPopulatedProduct(page: Page): Promise<void> {
   )
 }
 
+/* ------------------------------------------------------------------------ #/review */
+
+/** One export row, in the loose shape `GET /review/<box>/<index>/catalog` answers with —
+ *  this module's other builders take their route's own shape rather than the client's
+ *  stricter type, `codeEntry`'s own precedent. */
+function catalogRow(sku: string, overrides: Record<string, unknown> = {}) {
+  return {
+    sku,
+    name: 'Calm Rune',
+    set: 'Spiritforged',
+    number: 'R02',
+    condition: 'Near Mint',
+    market: '0.10',
+    ...overrides,
+  }
+}
+
+/** Replaces `shell.ts:stubStore`'s own EMPTY catalog answer for the same zero-candidate
+ *  entry that stub already seeds, with a WIDE one — D23's own review finding:
+ *  `routeSweep.ts:sweepEveryRoute`'s one sweep already visits `#/review` with the catalog
+ *  open (`showCatalog` is true whenever an entry carries no candidates, D46), but every
+ *  route through this fixture answered zero rows, so "Show N more" and the truncation
+ *  notice `CatalogPanel` draws for a wide result never rendered anywhere the sweep's own
+ *  text checks (`text-shape.spec.ts`, `machine-words.spec.ts`, `money-face.spec.ts`) could
+ *  see them. 200 rows delivered against 205 found is the same shape a real egregious search
+ *  returns (`CATALOG_EGREGIOUS_LIMIT`, `server/capture_server.py`), so this measures BOTH
+ *  new strings in the one state: the reveal button (`revealed < rows.length`) and the
+ *  truncation notice (`lookup.truncated`). The queue entry itself is untouched — this only
+ *  replaces what the SEARCH answers, the way `stubStore`'s own comment says a populated
+ *  catalog answer follows from populating the queue at all. */
+export async function seedPopulatedReview(page: Page): Promise<void> {
+  const rows = Array.from({ length: 200 }, (_, at) =>
+    catalogRow(String(9139800 + at), { market: `${(at % 9) + 1}.00` }),
+  )
+  await page.route(/\/review\/\d+\/\d+\/catalog/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        box: 2,
+        index: 1,
+        game: 'riftbound',
+        query: 'Volcanion',
+        searched: false,
+        rows,
+        found: 205,
+        truncated: true,
+      }),
+    }),
+  )
+}
+
 /* ------------------------------------------------------------------------- the roster */
 
 /** The six routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
@@ -829,4 +881,5 @@ export const POPULATED_ROUTE_SEEDS: Record<string, (page: Page) => Promise<void>
   '#/codes': seedPopulatedCodes,
   '#/graveyard': seedPopulatedGraveyard,
   [PRODUCT_ROUTE]: seedPopulatedProduct,
+  '#/review': seedPopulatedReview,
 }

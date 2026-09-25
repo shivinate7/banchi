@@ -3,8 +3,8 @@
  * ONE RENDERING OF `pipeline/join.py:Position.label` FOR EVERY OWNER SITE (D41, amended).
  *
  * THE LABEL IS THE BOX'S NAME, THE SECTION AND THE CARD WITHIN ITS SECTION, AND NOTHING ELSE
- * (the owner's rulings of 2026-09-23: D-a-box-is-shown-by-its-name and
- * D-a-card-is-counted-in-its-section). The server composes `Mixed Singles, Section 2, Card 17`,
+ * (the owner's rulings of 2026-09-23: D259 and
+ * D260). The server composes `Mixed Singles, Section 2, Card 17`,
  * `position.ts:placePartsOf` reads it back from the right end (a box name may hold a comma), and
  * this ranks the three facts for the eye: a muted path of box and section, and the card as the
  * figure. The box NUMBER is never drawn, not as a value and not as a note.
@@ -50,10 +50,10 @@ type PositionLabelProps = {
 
   /* A NOTE THAT RIDES THE FIRST PATH LINE — the box's human name, handed over by a caller whose
      label predates the name being in it. Since the owner's ruling the server's label already
-     says the name (D-a-box-is-shown-by-its-name), so a note equal to it is not drawn twice. */
+     says the name (D259), so a note equal to it is not drawn twice. */
   boxNote?: ReactNode
 
-  /* THE BOX'S NAME (D132, then D-a-box-is-shown-by-its-name). When given it is the box part's
+  /* THE BOX'S NAME (D132, then D259). When given it is the box part's
      value. The box NUMBER is never drawn beside it any more: the owner ruled that the number is
      an index the store keeps, and a person reads the name. */
   boxName?: string | null

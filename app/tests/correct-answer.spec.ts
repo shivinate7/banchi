@@ -274,5 +274,9 @@ test('the listing-correction control is reachable on #/inventory for a card not 
 
   await expect.poll(() => undone).not.toBeNull()
   expect((undone as unknown as { body: { undo: boolean } }).body.undo).toBe(true)
-  await expect(page.locator('.bn-toast', { hasText: 'Correction undone' })).toBeVisible()
+  const undoneToast = page.locator('.bn-toast', { hasText: 'Correction undone' })
+  await expect(undoneToast).toBeVisible()
+  // The body names the place from the card's own label, never the box and store index alone.
+  await expect(undoneToast).toContainText('Box 2, Section 1, Card 1 — back to 8937370')
+  await expect(undoneToast).not.toContainText('Box 2, Card 1')
 })

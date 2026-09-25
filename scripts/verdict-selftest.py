@@ -119,9 +119,9 @@ def build_tree(where: Path, spec: str) -> Path:
     return result
 
 
-def run(where: Path) -> int:
+def run(where: Path, *args: str) -> int:
     proc = subprocess.run(
-        [str(PLAYWRIGHT), "test"],
+        [str(PLAYWRIGHT), "test", *args],
         cwd=where / "app",
         capture_output=True,
         text=True,
@@ -218,6 +218,37 @@ def main() -> int:
                 ok("\x1b" not in message, "no ANSI escapes in it", repr(message))
                 ok("\x00" not in message, "no NUL bytes in it", repr(message))
                 ok(json.dumps(got).isprintable() or True, "and the whole payload is JSON, by construction")
+
+    # A LIST RUN RUNS NOTHING, SO IT MAY SAY NOTHING. Until 2026-09-24 `playwright test --list`
+    # overwrote the real verdict with `"verdict": "pass"` and 0 passed. The sentinel below is
+    # not JSON the reporter would ever write, so any write at all changes the bytes.
+    print("\na --list run leaves the previous verdict file byte-identical")
+    with tempfile.TemporaryDirectory() as tmp:
+        where = Path(tmp)
+        result = build_tree(where, FAILING_SPEC)
+        result.parent.mkdir(parents=True, exist_ok=True)
+        sentinel = '{"sentinel": "written before the --list run"}\n'
+        result.write_text(sentinel)
+        code = run(where, "--list")
+        after = result.read_text() if result.exists() else None
+        ok(code == 0, "the list run itself succeeded", f"exit {code}")
+        ok(after == sentinel, "the verdict file is unchanged", f"after the list run: {after!r}")
+
+    # A RUN THAT EXECUTED NOTHING IS NOT A PASS. An empty shard is the real case: CI runs
+    # `--shard=N/6` over a narrowed spec list, and Playwright answers `passed` with 0 tests.
+    # `--grep` with no match is not this case — Playwright already calls that `failed`.
+    print("\na run that executes zero tests is `empty`, never `pass`")
+    with tempfile.TemporaryDirectory() as tmp:
+        where = Path(tmp)
+        result = build_tree(where, FAILING_SPEC)
+        run(where, "--shard=2/2")
+        ok(result.exists(), "the reporter wrote a verdict for the empty run")
+        if result.exists():
+            got = json.loads(result.read_text())
+            ok(got.get("verdict") == "empty", "verdict is `empty`", json.dumps(got, indent=2))
+            counts = got.get("counts") or {}
+            ok(sum(counts.get(k, 0) for k in ("passed", "failed", "flaky", "skipped")) == 0,
+               "and no test was counted as run", str(counts))
 
     print("\n" + "=" * 72)
     if failures:

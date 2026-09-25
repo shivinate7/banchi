@@ -7,7 +7,7 @@ import { routesFromNav } from './routes'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 
-/* EVERY SCREEN INHERITS THE PAGE SCAFFOLD, ASSERTED IN A BROWSER (D-page-scaffold).
+/* EVERY SCREEN INHERITS THE PAGE SCAFFOLD, ASSERTED IN A BROWSER (D275).
  *
  * The owner, 2026-09-23: "say a new page in the sidebar gets built tomorrow, it should be able
  * to autocall/inherit the properties of the other pages". `scripts/kit-adoption.mjs` proves the
@@ -29,7 +29,7 @@ import { sealEveryTest } from './shell'
  *            (6000 + 4000), once per motion setting. Every read must be the one fixed title. The
  *            window is this file's own number, never read from App.tsx: a test that reads the
  *            value it checks passes when that value is wrong (brand.spec.ts says the same).
- *   palette  the palette ("Go to", D-palette-go-to) lists the route in its Screens group
+ *   palette  the palette ("Go to", D276) lists the route in its Screens group
  *   keys     the keyboard sheet, every screen shown, has an entry that names the route
  *
  * THE ROUTES ARE READ FROM `ROUTES` ITSELF, by the same reader the static check uses
@@ -157,9 +157,17 @@ async function settle(page: Page): Promise<void> {
   await expect(page.locator('main').first(), 'the route drew no <main>').toBeVisible()
   /* A screen still loading has not drawn its frame yet. `Page` marks its body `aria-busy`
      while it loads; wait for that to clear, but never fail on it: a screen that never clears
-     it is measured as it stands. */
+     it is measured as it stands.
+     THE ROUTE'S OWN PAGE BODY, NOT ANY `aria-busy` ON THE SCREEN. `#/gallery` draws the kit's
+     loading and busy specimens, and they are busy forever on purpose. A document-wide query
+     waited the full 5s at every width there: 20s of a 30s test, measured under a 4x CPU
+     throttle, and a timeout on the slower CI runner. */
   await page
-    .waitForFunction(() => document.querySelector('[aria-busy="true"]') === null, null, { timeout: 5000 })
+    .waitForFunction(
+      () => document.querySelector('main[data-bn-page]')?.querySelector(':scope > .bn-page-body[aria-busy="true"]') == null,
+      null,
+      { timeout: 5000 },
+    )
     .catch(() => undefined)
 }
 

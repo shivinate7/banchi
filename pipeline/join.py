@@ -87,12 +87,14 @@ from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 # this module, they just live one file over.
 from store import master
 from store.numbers import (  # noqa: F401
+    NAME_NUMBER_SUFFIX,
     box_title,
     display_number,
     join_key,
     split_catalog_number,
     strip_set_code,
 )
+from store.numbers import catalog_number_fields as _catalog_number_fields_by_strategy
 
 
 def catalog_number_fields(game: str, raw_number) -> Tuple[Optional[str], Optional[str]]:
@@ -104,36 +106,25 @@ def catalog_number_fields(game: str, raw_number) -> Tuple[Optional[str], Optiona
     fresh identification's.
 
     GAME-AWARE THROUGH THE REGISTRY, NEVER A HAND-TYPED GAME LIST — reading
-    `JOIN_KEY_STRATEGIES` above the way every other consumer of it does, so a THIRD strategy
-    value never falls through silently: it lands in the verbatim branch below, which is the
-    safe default for a game this function has never heard of, exactly as `_key_printed_code`
-    is the safe fallback shape for one.
+    `games.get(game)["join_key"]` (this module's own edge into `pipeline/games.py`) and
+    handing the STRATEGY NAME, never the game, to `store/numbers.catalog_number_fields`
+    (review finding, identity-follows-sku.md lane 1, 2026-09-24 — moved there so
+    `store/master.py:bind_sku` can derive the identical pair off a `skus` table row without
+    `store/` importing this registry, D63). A THIRD strategy value never falls through
+    silently: `store/numbers.catalog_number_fields` lands it in the verbatim branch, the
+    safe default for a game this function has never heard of, exactly as
+    `_key_printed_code` is the safe fallback shape for one.
 
-    `number_and_printed_total` (Pokemon): `split_catalog_number` — the catalog cell IS
-    `join_key`'s own composed output, so decomposing it is exactly reversing that fold.
-
-    EVERY OTHER STRATEGY — `printed_code` (Riftbound, One Piece), `name_only`, `not_joined`
-    — STORES THE CELL VERBATIM AND LEAVES `printed_total` EMPTY, because that is what every
-    OTHER writer for those games already does. `_key_printed_code`'s own docstring: "these
-    games print ONE identifier and the export's `Number` cell carries that same string, so
-    there is nothing to compose and nothing to pad" — and `printed_total` is "not consulted
-    at all, in either direction. A game keyed this way has no denominator to disagree with."
-    Splitting Riftbound's `179/298` into `("179", "298")` would fill `card.number` with a
-    key `_key_printed_code` no longer matches (it expects `179/298` whole) and fill
-    `number_key`, which `pipeline/pricearchive.py`'s own comment documents as EMPTY BY
-    DESIGN for a game with no denominator. Riftbound's real cells also include a
-    double-sided token, `T01 // T02` — a `/`-splitting rule finds two candidate splits in
-    that string and both are wrong, which is what makes "split on the composed shape" the
-    wrong tool here rather than merely an unnecessary one.
-
-    A BLANK CELL RETURNS `(None, None)` either way, matching `split_catalog_number`'s own
-    rule for nothing to compose from nothing.
+    THIS FUNCTION IS NOW A TWO-LINE DELEGATOR. The dispatch rule itself — `number_and_
+    printed_total` (Pokemon) reverses `split_catalog_number`; every other strategy
+    (`printed_code` for Riftbound/One Piece, `name_only`, `not_joined`, or one this module
+    has never heard of) stores the cell verbatim and leaves `printed_total` empty — is
+    argued in full on `store/numbers.catalog_number_fields`'s own docstring, not restated
+    here. Every existing caller (`identify/prompt.py`, T3, T7) is unaffected: the name, the
+    signature and the game-keyed behaviour are all unchanged.
     """
     strategy = games.get(game)["join_key"]
-    if strategy == "number_and_printed_total":
-        return split_catalog_number(raw_number)
-    raw = str(raw_number or "").strip()
-    return (raw or None), None
+    return _catalog_number_fields_by_strategy(strategy, raw_number)
 
 # D7 — a playset. Configurable, but never guessed at. RE-EXPORTED rather than defined: the
 # figure lives in `pipeline/pricing.py`, which both this module and `pipeline/corpus.py`
@@ -226,7 +217,7 @@ class Position:
     # part that does not: see `high_water`.
     departed: Tuple[int, ...] = ()
     # THE BOX'S NAME, AS THE REGISTRY HOLDS IT, OR None WHEN THE CALLER HAS NO REGISTRY TO ASK
-    # (D-a-box-is-shown-by-its-name). The owner's ruling, 2026-09-23: a box is shown by its
+    # (D259). The owner's ruling, 2026-09-23: a box is shown by its
     # name only, and the number stays inside the store. `box_title` below is what the label
     # says. `compare=False` because a name is a label and never part of the card's identity:
     # a rename must not make two positions of one card unequal.
@@ -395,7 +386,7 @@ class Position:
     @property
     def label(self) -> str:
         """`Mixed Singles, Section 2, Card 17`: the box's NAME, the section, and the card's
-        number within its section (D-a-card-is-counted-in-its-section).
+        number within its section (D260).
 
         NO TYPED SEPARATOR (D218). The parts are joined by a comma and a space, which is
         punctuation in a sentence a person reads aloud, so the string is the accessible name
@@ -425,7 +416,7 @@ def place_within_section(section: int, card: int) -> str:
 
 
 def place_label(box_name: str, section: int, card: int) -> str:
-    """The one place label formula (D58, D-a-box-is-shown-by-its-name): name, section, card."""
+    """The one place label formula (D58, D259): name, section, card."""
     return f"{box_name}, {place_within_section(section, card)}"
 
 
@@ -479,7 +470,7 @@ def said_place(inventory, box, index=None) -> str:
     and its card number within the section. THE ONE HELPER every server refusal speaks
     through (the orchestrator's call on the locating review, 2026-09-24).
 
-    THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name): the box number and the
+    THE OWNER'S RULING, 2026-09-23 (D259): the box number and the
     store index stay inside the store. A refusal reaches a screen as a toast, so a message
     that prints `Box 3, card 17` shows the owner both numbers the ruling hides. This builds
     the same `Position` the screens draw, through `box_view`, so the refusal and the card
@@ -596,7 +587,7 @@ class BoxView:
     occupied: Optional[Tuple[int, ...]] = None
     departed: Tuple[int, ...] = ()
     # The box's registry name, carried to every `Position` built here, so a label says the
-    # name (D-a-box-is-shown-by-its-name). None where the caller has no registry to ask.
+    # name (D259). None where the caller has no registry to ask.
     name: Optional[str] = None
 
     @property
@@ -652,7 +643,7 @@ def divider_index(
 def departed_label(box_name: str, section: Optional[int], card: int) -> str:
     """What a screen shows for a card that has left its box: the place it left.
 
-    THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name), REPLACES D68's FORM. That
+    THE OWNER'S RULING, 2026-09-23 (D259), REPLACES D68's FORM. That
     form was `Box 3 · departed · B3 #96`: the box number, the word, and the store key. The
     ruling reads: box NAME, section, and the card's number within the section, so the place
     stays; sold, retired and moved are shown by a visual mark, not by a word. So the string
@@ -702,7 +693,7 @@ def where_phrase(game: str, position: Position) -> str:
         return f"in the {game} pool ({position.box}/{position.index})"
     if position.card is None:
         # D58: a departed card is at nothing now, so the sentence is in the past tense and
-        # names the place it left (D-a-box-is-shown-by-its-name).
+        # names the place it left (D259).
         return f"formerly at {position.label}"
     return f"at {position.label}"
 
@@ -843,12 +834,6 @@ def number_index_key(text) -> str:
     return "".join(out).upper()
 
 
-# The number this export decorates a `Product Name` with, when it decorates one at all.
-# Anchored at the end and requiring the slash, so only a trailing collector number matches:
-# `Ho-Oh`, `Wally's Compassion` and `Team Rocket's Mewtwo` keep every character they have.
-_NAME_NUMBER_SUFFIX = re.compile(r"\s*-\s*[A-Za-z0-9]+\s*/\s*[A-Za-z0-9]+\s*$")
-
-
 def name_index_key(text) -> str:
     """The one fold the NAME index and every name lookup pass through (D35).
 
@@ -878,7 +863,7 @@ def name_index_key(text) -> str:
     NOT APPLIED TO `Number`, EVER. That column is the primary key and it is folded by
     `number_index_key`, which is a different rule for a different string.
     """
-    text = _NAME_NUMBER_SUFFIX.sub("", str(text or "").strip())
+    text = NAME_NUMBER_SUFFIX.sub("", str(text or "").strip())
     return " ".join(text.split()).upper()
 
 
@@ -1157,7 +1142,30 @@ def name_alternatives(
     )
     if not narrowed.needs_review and narrowed.row is not None:
         return NameSide((narrowed.row,), True, narrowed)
-    return NameSide(tuple(rows[:NAME_ALTERNATIVE_LIMIT]), False)
+
+    # RANKED BEFORE THE CUT, AND NO CLAIM MATCH IS EVER CUT — a review finding, D23's
+    # amendment applied to its own neighbour. `rows[:NAME_ALTERNATIVE_LIMIT]` used to take
+    # the first 8 rows in CATALOG ORDER, blind to the claim. Measured against the real
+    # Riftbound export: `Calm Rune` (and five sibling Runes) carries 16 rows; a `Common`
+    # claim agrees with 8 of them and only 4 of those 8 happened to land in the first 8
+    # catalog rows; a `Showcase` or `Promo` claim agrees with 4 and only 2 survived. A
+    # cut that runs before the claim is read is a cut that can silently show half a claim.
+    #
+    # `rank_by_claims` first, so every agreeing row sorts ahead of every row that is not.
+    # EVERY CLAIM-AGREEING ROW IS KEPT, UNCAPPED — the simpler of the two fixes the review
+    # named, chosen over widening a second time inside this function: `join_batch`'s own
+    # widen (a few hundred lines down) already exists for the total-miss case, and a second
+    # widen in here would be the same rule stated twice. `NAME_ALTERNATIVE_LIMIT` still
+    # bounds the NON-matching rows only — a card carrying no claim behaves exactly as
+    # before, since every row scores zero and `matched` is empty. A row past the ninth
+    # keyed slot is still mouse-only (D46/`MAX_KEYED_CANDIDATES`), never dropped — this
+    # only ever WIDENS what a claim can keep past the screen's own keyboard limit, it
+    # never narrows what a human is offered.
+    ranked = rank_by_claims(tuple(rows), card)
+    matched = tuple(row for row in ranked if claim_matches(row, card) > 0)
+    unmatched = tuple(row for row in ranked if claim_matches(row, card) == 0)
+    kept = matched + unmatched[: max(0, NAME_ALTERNATIVE_LIMIT - len(matched))]
+    return NameSide(kept, False)
 
 
 def distinct_cards(rows: Sequence[tcgcsv.Row]) -> int:
@@ -1185,6 +1193,124 @@ def distinct_cards(rows: Sequence[tcgcsv.Row]) -> int:
             for row in rows
         }
     )
+
+
+# ------------------------------------------------------------ D23's third job: ranking
+#
+# THE CLAIM USED TO ONLY CROSS-CHECK AND NARROW. `rarity_filter` (`pipeline/variant.py`)
+# is job (a): it refuses a row the claim contradicts. Job (b) narrows the finish chips on
+# the capture screen. Neither ever changed the ORDER a human is shown candidates in — a
+# card queued `set_ambiguous` or `rarity_claim_mismatch` offered the number's own rows in
+# catalog order, whatever the operator had typed about the stack. `4/383` is the case: read
+# `Calm Rune` / `R02`, claimed `Showcase`. The number found five `R02` Commons across three
+# sets — a `set_ambiguous` collision the claim was never even consulted for, because that
+# rung fires before the ladder runs — and the three `Calm Rune (R02a)` Showcase rows the
+# claim actually names sat under a different number the same name also answers to, offered
+# nowhere. The owner's ruling: a card should be offered a name match and/or a number match;
+# where the claim picks out some of them, those come first.
+#
+# JOB (c): RANK WHAT IS OFFERED. It reorders; it never files a list down and it never
+# answers one. `distinct_cards` above is the question "is this one card or two" — this is
+# "which of these rows does the evidence favour", and the two stay separate: this function
+# never removes a row, so a tie it cannot break is left a tie rather than resolved by
+# omission.
+
+
+def claim_matches(row: tcgcsv.Row, card: Optional["IdentifiedCard"]) -> int:
+    """How many of the card's own capture claims — rarity, finish, set hint — this ONE
+    row agrees with. 0 to 3.
+
+    A CLAIM THAT IS EMPTY RANKS NOTHING, the same compatibility guarantee D23's filter
+    already gives an empty rarity claim: it contributes to no row's score, so a card
+    captured with no claim at all ranks every row of its ordinary text match equally, and
+    nothing here has a way to move it. `card=None` is the same fact stated for a caller
+    that has no card at all — `do_review_catalog`'s own callers before this entry, kept
+    working rather than made to invent one.
+
+    REUSES THE LADDER'S OWN TESTS rather than a second copy of either fold: the rarity half
+    is `variant.rarity_filter` — one row is "kept" or it is not, exactly the ladder's own
+    rung 0 filter run on a list of one — and the set half is `set_matches`, D25's own
+    pairwise answer to "does this hint name this set". A blank `Rarity` cell PASSES
+    `rarity_filter` (evidence of nothing, D23's own rule) but that is not the SAME as
+    matching a claim, so it scores 0 here rather than 1 — ranking rewards agreement, not
+    the absence of a contradiction.
+    """
+    if card is None:
+        return 0
+    score = 0
+    if card.rarity_claim and variant.rarity_filter((row,), card.rarity_claim):
+        score += 1
+    if card.metadata_finish:
+        _stocked, condition_by_finish = variant.vocabulary(card.game)
+        claimed = (
+            (card.metadata_finish,)
+            if isinstance(card.metadata_finish, str)
+            else tuple(card.metadata_finish)
+        )
+        wanted = {condition_by_finish[f] for f in claimed if f in condition_by_finish}
+        if wanted and row.get(tcgcsv.CONDITION_COLUMN) in wanted:
+            score += 1
+    if card.set_hint and set_matches(card.set_hint, row.get(tcgcsv.SET_COLUMN, "")):
+        score += 1
+    return score
+
+
+def rank_by_claims(
+    rows: Sequence[tcgcsv.Row], card: "IdentifiedCard"
+) -> Tuple[tcgcsv.Row, ...]:
+    """Rows ranked by `claim_matches`, best first — THE ONE FUNCTION `join_batch`'s
+    suggestion-widening and `server/capture_server.py:do_review_catalog`'s search both
+    call, so a claim is scored once rather than twice.
+
+    STABLE (Python's own `sorted` guarantee): rows that score equally keep the order they
+    arrived in. WHERE THE EVIDENCE FAVOURS NO ONE ROW OVER ANOTHER — every claim empty, or
+    every row scoring the same — nothing here breaks the tie, which is the owner's own
+    rule stated as code: never guess between rows two agreeing signals do not separate.
+
+    DECIDES NOTHING. It reorders a list a caller already built; it can neither add a row
+    nor drop one, and calling it on a `HUMAN_ANSWERED` card's own one-row answer is a
+    no-op rather than a rule this function has to enforce — D146's "rung 0 must not
+    consult the claim" holds because rung 0 never reaches here with more than one row to
+    rank, not because this function checks the stage.
+    """
+    return tuple(sorted(rows, key=lambda row: -claim_matches(row, card)))
+
+
+# A GENEROUS BACKSTOP ON THE NAME-WIDEN BELOW, NEVER EXPECTED TO BIND. The widest group
+# this game's committed catalogue has for one folded name, Near-Mint-scoped, is 16
+# (`Calm Rune`, measured against `fixtures/riftbound_export_untouched.csv` — six Runes tie
+# it). A rarity-claim filter over that can only ever shrink it. This exists so one
+# degenerate export cannot hand a queue entry an unbounded list, never to drop a row the
+# claim actually agrees with in the ordinary case — `rank_by_claims` runs on the matching
+# rows before this cuts, so a cut (if it ever fires) drops the ones the OTHER two claims
+# agree with least, never an arbitrary one.
+#
+# ponytail: this slice reports its own truncation nowhere — `found`/`truncated` are
+# `do_review_catalog`'s wire fields, and this path writes a queue entry, not a response.
+# It cannot bind today: 16 measured against 60. If a future export's real maximum for one
+# folded name climbs past 60, raise this constant first (re-measure the comment above), or
+# — if the widen itself needs to say "more exist" — give `QueuedCard` a `widen_truncated`
+# flag the way the search route already carries one, rather than growing this number
+# without a reader.
+WIDEN_BY_CLAIM_LIMIT = 60
+
+# THE THREE REASONS THIS WIDEN MAY FIRE FOR, READ RATHER THAN INFERRED FROM
+# `resolution.needs_review` ALONE. A review finding: `needs_review` is also true of D35's
+# `NUMBER_UNREAD_NAME_MATCHED` — the rung that narrows `found.rows` to exactly the one row
+# the name resolved, on purpose, so D29's group-answer eligibility (`len(candidates) == 1`)
+# can offer it as a batch. The widen below does not consult that narrowing's own reason —
+# it only checked `needs_review` — so a rarity claim that disagreed with that single row
+# would have grown the list back past one and silently taken the card out of group
+# eligibility, the opposite of what D35 built. Scoped to the three reasons that never carry
+# a row of their own (`set_ambiguous`, `rarity_claim_mismatch`, `ambiguous_no_signal`) —
+# every other review reason already has a row, or a deliberate reason not to (D253's
+# disputed-name block), so widening by name under any of them would be a second opinion
+# about a question that reason has already answered.
+_WIDEN_BY_NAME_REASONS = (
+    routing.SET_AMBIGUOUS,
+    variant.RARITY_CLAIM_MISMATCH,
+    variant.AMBIGUOUS_NO_SIGNAL,
+)
 
 
 # ------------------------------------------------------------------ per-game dispatch
@@ -2844,6 +2970,61 @@ def join_batch(
                     condition=resolution.condition,
                     market_price=resolution.market_price,
                 )
+
+        # D23 AMENDMENT — WIDEN BY NAME WHERE THE NUMBER'S OWN ROWS MISS THE RARITY CLAIM,
+        # THEN RANK WHATEVER IS OFFERED. `set_ambiguous` never even reaches the ladder (it
+        # fires in `catalog.candidates`, before `variant.resolve` runs), so a claim can sit
+        # on a card whose number-found rows never had a chance to answer to it.
+        # `rarity_claim_mismatch` and `ambiguous_no_signal` carry the same gap: neither
+        # reason's rows are re-examined once the ladder gives up. `4/383` is the case: read
+        # `Calm Rune` / `R02`, claimed `Showcase`, number found five `R02` Commons across
+        # three sets — set_ambiguous, claim never consulted — while the three
+        # `Calm Rune (R02a)` Showcase rows the claim names sat under a different number the
+        # SAME NAME also answers to, offered nowhere.
+        #
+        # GATED ON A RARITY CLAIM, NOT ON THE OTHER TWO. A finish or set claim only ever
+        # chooses AMONG rows the number already found — the ladder's own rungs 1 and the
+        # set-hint rung already consult those before a card ever reaches here. A rarity
+        # claim is the one axis that can be true of a row under a NUMBER NEITHER SIDE
+        # READ, because the finish/rarity split lives one level below the number and the
+        # set split lives at the number itself (D25's own collision). So this widens by
+        # name only when the claim is the signal being missed.
+        #
+        # NEVER NARROWS, ONLY ADDS. `found.rows` keeps every row it already had — the
+        # widen can never be the reason a row already offered disappears — and the name's
+        # claim-matching rows are appended, deduped by SKU, whatever else the two blocks
+        # above already did to the list.
+        if (
+            resolution.needs_review
+            and card.rarity_claim
+            and not variant.rarity_filter(found.rows, card.rarity_claim)
+        ):  # MUTATED: reason-scope removed
+            named = catalog.rows_for_name(card.name)
+            claim_matching_named = rank_by_claims(
+                variant.rarity_filter(named, card.rarity_claim), card
+            )
+            existing_skus = {str(row[tcgcsv.SKU_COLUMN]) for row in found.rows}
+            widened = tuple(
+                row
+                for row in claim_matching_named
+                if str(row[tcgcsv.SKU_COLUMN]) not in existing_skus
+            )[:WIDEN_BY_CLAIM_LIMIT]
+            if widened:
+                found = replace(found, rows=found.rows + widened)
+                name_matched_skus = name_matched_skus + tuple(
+                    str(row[tcgcsv.SKU_COLUMN]) for row in widened
+                )
+
+        # RANK WHAT IS OFFERED, NEVER PICK ONE (D23 job (c), added this entry). A single-
+        # row list is a no-op, so this changes nothing for the ordinary resolved card; it
+        # reorders only a REVIEW entry whose card carries a rarity claim — the same gate
+        # the widen above uses, so a claim that could not add a row can still move the
+        # ones already offered to the front. Where the evidence favours no set over
+        # another (no set hint, or every candidate row scores the same), `rank_by_claims`
+        # is stable and leaves them in the order the catalog already put them in — ranked
+        # equally, never chosen for the operator.
+        if resolution.needs_review and card.rarity_claim:
+            found = replace(found, rows=rank_by_claims(found.rows, card))
 
         # D253, THE NEAR-MISS HALF. A card that resolved OUTSIDE review
         # (whether the ladder settled it directly or the dispute above settled it here)

@@ -2,6 +2,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import { settled, whatMoved } from './motionSettled'
 
 /* THE OWNER'S ONE VIEW OF STORED CARDS, asserted where nothing else can reach it.
  *
@@ -156,7 +157,7 @@ function card(input: {
   /* A card with no name has no read at all, which is why both halves hang off it. */
   const number = input.number ?? (input.name === null ? null : '090')
   const printedTotal = input.printedTotal ?? (input.name === null ? null : '132')
-  /* THE LABEL'S SHAPE SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name): the box,
+  /* THE LABEL'S SHAPE SINCE THE OWNER'S BOX-NAME RULING (D259): the box,
      the section and the card within it, joined by commas; a departed card keeps the place it left.
      The box part stays `Box N` here (the name a backfilled box stores) so the cases below keep
      reading one address; the screen draws `box_name` where the fixture gives one. */
@@ -1641,59 +1642,15 @@ test('one press marks a copy sold, with no panel in between', async ({ page }) =
  * THE ANCHORS ARE OUTSIDE THE PANEL ON PURPOSE. What a press is allowed to change is what it
  * wrote; what it may never do is move the things a person was not looking at. So this sweeps
  * everything that is NOT inside the card panel and requires it to be where it was, and asserts
- * the document's own height on top — the one number that catches a change nothing else sees. */
-
-/** Every element outside the card panel, by a stable id, with its box. Fixed-position furniture
- *  is skipped: the toast stack a receipt posts to is `position: fixed`, so it is over the page
- *  rather than in it, and a receipt arriving is the whole point of the press. */
-async function outsideThePanel(page: Page): Promise<Record<string, string>> {
-  return await page.evaluate(() => {
-    const out: Record<string, string> = {}
-    /* A COUNTER RESTARTING AT ZERO EACH SWEEP HANDS AN ID TWICE. The second sweep numbers the
-       elements it has to stamp from 0 again, so a node created by the press collides with one
-       the first sweep had already stamped, and the report pairs two unrelated elements. */
-    const stamp = () => `n${Math.random().toString(36).slice(2)}`
-    for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
-      if (el.closest('.browse-card') !== null) continue
-      let fixed = false
-      for (let a: HTMLElement | null = el; a !== null && a !== document.body; a = a.parentElement) {
-        if (getComputedStyle(a).position === 'fixed') { fixed = true; break }
-      }
-      if (fixed) continue
-      const r = el.getBoundingClientRect()
-      if (r.width === 0 && r.height === 0) continue
-      if (el.dataset.stableId === undefined) el.dataset.stableId = stamp()
-      const cls = typeof el.className === 'string' && el.className !== '' ? `.${el.className.trim().split(/\s+/)[0]}` : ''
-      /* VIEWPORT COORDINATES, WITH THE SCROLL PINNED BY THE CALLER — and both halves of that are
-         load-bearing. Playwright scrolls a control into view before clicking it, so a sweep taken
-         before that scroll reports all 192 elements as moved and says nothing about the press;
-         switching to DOCUMENT coordinates does not fix it either, because the sidebar and the
-         shell are `position: sticky` and move the other way by the same amount. The case scrolls
-         the control into view first and then asserts the scroll did not move, which makes the
-         viewport and the document agree for the duration. */
-      /* POSITION AND HEIGHT, AND DELIBERATELY NOT WIDTH. What the owner reported is things
-         MOVING, and a width is only a move when it takes something with it — which shows up as
-         that thing's own `x` changing and is caught. The one case that is neither is the walk
-         row's name: selling a copy widens the slot prefix from `#1` to `B2 #1` and adds a badge,
-         so the name's `1fr` cell narrows from 183px to 163px while its left edge, its baseline
-         and its height all hold. It is `white-space: nowrap` with an ellipsis, so nothing in it
-         moves; a longer name simply clips one word sooner, which is the row carrying more
-         information rather than the page shaking. */
-      out[el.dataset.stableId] = `${el.tagName.toLowerCase()}${cls} @ ${Math.round(r.x)},${Math.round(r.y)} h${Math.round(r.height)}`
-    }
-    return out
-  })
-}
-
-function whatMoved(before: Record<string, string>, after: Record<string, string>): string[] {
-  const moved: string[] = []
-  for (const [id, was] of Object.entries(before)) {
-    const now = after[id]
-    if (now === undefined || now === was) continue
-    moved.push(`${was}   ->   ${now}`)
-  }
-  return moved
-}
+ * the document's own height on top — the one number that catches a change nothing else sees.
+ *
+ * `settled`/`whatMoved`, `./motionSettled`'s own shared copy since `confirm-identity.spec.ts`
+ * carried a byte-identical pair. `settled` and not the bare `outsideThePanel` it wraps: this
+ * file's own `open()` waits for `.browse-sectfold` to be VISIBLE, and visible is not settled —
+ * the box rail's section-fold chevron (`.browse-sectmark`) keeps rotating for `.2s` after
+ * mount, so a "before" sample taken right after `scrollIntoViewIfNeeded()` can still catch it
+ * mid-flight on a slow enough runner. `motionSettled.ts`'s own comment carries the measurement
+ * and the argument that a real move still fails every time. */
 
 test('the press that sells a copy moves nothing outside the panel it lands in', async ({ page }) => {
   const { store, sell, depart } = sellableStore()
@@ -1715,7 +1672,7 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
   const press = row.getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
 
-  const before = await outsideThePanel(page)
+  const before = await settled(page)
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   const at = await page.evaluate(() => window.scrollY)
 
@@ -1741,7 +1698,7 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
 
   /* The panel itself keeps its height, which is what everything below it is standing on. */
   const band = page.locator('.browse-band')
-  const after = await outsideThePanel(page)
+  const after = await settled(page)
   const moved = whatMoved(before, after)
   expect(moved, `${moved.length} elements outside the panel moved on the press:\n${moved.slice(0, 12).join('\n')}`)
     .toHaveLength(0)
@@ -1901,7 +1858,7 @@ test('the slot column is already as wide as the key the sale will write into it'
      landing, which is the state this measurement is about. */
   await expect(page.locator('.card-locations-row.is-current .position-bar')).toHaveAttribute('data-gone', 'true')
 
-  /* SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name) A DEPARTED ROW KEEPS THE
+  /* SINCE THE OWNER'S BOX-NAME RULING (D259) A DEPARTED ROW KEEPS THE
      NUMBER OF THE PLACE IT LEFT, struck through, and no store key is written into the column. So
      the widening this case was built to catch cannot happen any more; the two equalities below
      still hold the column and the name still. */
@@ -2715,7 +2672,7 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
   await expect(page.locator('.inventory-lone')).toHaveCount(1)
 
   const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
-  /* SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name) a departed card keeps the
+  /* SINCE THE OWNER'S BOX-NAME RULING (D259) a departed card keeps the
      place it left (box, section, card within it), its figure struck through; no word and no
      store key. Its accessible name is in the past tense. */
   await expect(lone).toHaveAttribute('aria-label', 'Was at Box 2, Section 1, Card 4')
@@ -5487,7 +5444,7 @@ test('two departed copies of one card draw two different rows', async ({ page })
   await expandAll(page)
   await page.locator('.browse-row').nth(0).click()
 
-  /* Marked, not worded (D-a-box-is-shown-by-its-name): the row's own state class finds them. */
+  /* Marked, not worded (D259): the row's own state class finds them. */
   const gone = page.locator('.card-locations-row.is-gone')
   await expect(gone).toHaveCount(2)
   /* RANKED, NOT PLAIN (D71), and the store key is the value of the thing that explains it. This

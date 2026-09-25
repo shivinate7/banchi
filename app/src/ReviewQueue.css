@@ -250,7 +250,7 @@
   max-width: calc(100% - var(--bn-5) * 2);
 }
 /* THE PLACE WRAPS BETWEEN ITS PARTS, NEVER INSIDE ONE, AND NEVER CLIPS. A box is named now, not
-   numbered (D-a-box-is-shown-by-its-name), so the pill is as long as the name: at 390 the card's
+   numbered (D259), so the pill is as long as the name: at 390 the card's
    own number fell off the end under `overflow: hidden`. Each part keeps one line. */
 .review-caption .position-run { white-space: normal; line-height: var(--bn-lh-snug); }
 .review-caption .position-run-path,
@@ -571,7 +571,7 @@
 .review-tag-name { background: var(--bn-surface-3); color: var(--bn-ink-2); }
 .review-tag-number { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line); color: var(--bn-ink-3); }
 .review-candidate-price {
-  font-family: var(--bn-font-display);
+  font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xl);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -833,6 +833,9 @@
 .review-row-price { font-family: var(--bn-font-display); font-size: var(--bn-fs-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bn-ink); white-space: nowrap; }
 .review-row-sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .review-row-position { white-space: nowrap; }
+/* The current card's place shows once, on the photo caption. The selected row keeps the
+   slot and hides the text, so the row does not change height when it is selected (D118). */
+.review-row[aria-current='true'] .review-row-position { visibility: hidden; }
 .review-row-reason { color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .review-row-pill { font-size: var(--bn-fs-2xs); font-weight: 600; padding: 1px 6px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); color: var(--bn-ink-3); line-height: 1.5; }
 

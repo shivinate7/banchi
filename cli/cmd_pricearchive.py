@@ -353,7 +353,8 @@ def _sweep(args, say) -> int:
         matches = archive_review.cards_for_refusals(inventory, rows, id_refusals)
         boxes = {match.card.box for match in matches}
         views = run_resolve.box_views(inventory, boxes=boxes)
-        entries = archive_review.queue_entries(matches, views)
+        build = archive_review.queue_entries(matches, views)
+        entries = build.entries
         if entries:
             with Store().write() as writable:
                 added = archive_review.apply(writable.review, entries)
@@ -367,6 +368,20 @@ def _sweep(args, say) -> int:
                     f"                   {len(entries) - added} already queued or answered — "
                     "left exactly as they stand (D167)"
                 )
+        # CLAUDE.md's own hard rule, "never drop a card without saying so" (review round,
+        # HIGH finding, 2026-09-24, widened lane 7). A bound card matched this sweep's own
+        # refusal but could not be queued — no recorded reading, or no photograph on record
+        # (`archive_review.QueueBuild.unavailable`) — named BY POSITION in this press's own
+        # output, never folded into a bare count and never left for a reader to notice is
+        # missing.
+        if build.unavailable:
+            say("")
+            say(
+                f"unavailable      {len(build.unavailable)} card(s) matched this sweep's "
+                f"own refusal but could not be queued:"
+            )
+            for skipped in build.unavailable:
+                say(f"                   {skipped.position}  {skipped.reason}")
 
     say("")
     say(f"written          {total_buckets} bucket(s) folded in across up to {len(chunks)} "
