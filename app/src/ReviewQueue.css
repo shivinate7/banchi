@@ -447,10 +447,13 @@
 }
 
 /* UX-251: a RESERVED FRAME (D28's pattern, the same one the photo already uses), so a card
-   with fewer chips — or none — never moves the rows below it by however many lines its own
-   chips did not need. Two rows is the most one card can offer at once (D23's rarity claim
-   beside the finish pair). */
-.review-claims { display: flex; gap: var(--bn-2); flex-wrap: wrap; min-height: calc(60px + var(--bn-2)); align-content: flex-start; }
+   with fewer chips — or none — never moves the rows below it (measured: a card with no chips
+   beside a card with one dropped the candidate rows by 53px). One row is the common case; a
+   card whose chips wrap to a second (D23's rarity claim beside the finish pair, both long
+   values) still grows past the reserve rather than being clipped — narrower than the ceiling
+   this used to reserve for every card, chips or not, which cost 720/390 the room UX-203/204
+   need. */
+.review-claims { display: flex; gap: var(--bn-2); flex-wrap: wrap; min-height: 30px; align-content: flex-start; }
 .review-chip {
   display: inline-flex;
   align-items: center;
@@ -915,7 +918,7 @@
      it holds rather than to the column: a full-width well drew two black bands beside the
      card (200px each at 820px). The height is the smaller of the viewport's share and what
      the column's width can carry, so the photograph grows into the room it has. */
-  .review { --rv-photo-h: min(56vh, calc((100vw - 48px) * 1.7778)); }
+  .review { --rv-photo-h: min(34vh, calc((100vw - 48px) * 1.7778)); }
   .review-card { grid-template-columns: minmax(0, 1fr); gap: var(--bn-4); }
   /* The whole stage narrows, not just the well: the lookahead pill is the stage's child and
      has to stay over the photograph. */
@@ -1018,6 +1021,10 @@
 @media (max-width: 767px) {
   .review-pagehead .bn-head-actions .bn-btn:not(.bn-btn-icon) { padding-left: var(--bn-3); padding-right: var(--bn-3); }
   .review-group-bar { bottom: calc(64px + var(--bn-3) + env(safe-area-inset-bottom)); }
+  /* UX-204: the receipt is where the thumb is. Sticky rather than fixed, so it still scrolls
+     with the card until its own reserved slot (`.review-tray`, above) would carry it off the
+     bottom edge — the same pattern `.review-group-bar` already uses above the tab bar. */
+  .review-tray { position: sticky; bottom: calc(var(--bn-tabbar-h) + var(--bn-3)); z-index: 4; }
   .review-progress-bar { width: 96px; }
   /* The queue sheet keeps a band of scrim beside it: 380px in a 390px viewport left a 10px
      sliver of the page, which reads as a misfit rather than as an overlay. */

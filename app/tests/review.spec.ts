@@ -765,7 +765,7 @@ test('the operator can overrule the pipeline rows and search the export instead'
   page,
 }) => {
   const sent = await open(page, WRONG_ROWS)
-  await page.getByRole('button', { name: /search the export/i }).click()
+  await page.getByRole('button', { name: /search tcgplayer/i }).click()
 
   await expect.poll(() => sent.filter((s) => s.url.includes('/catalog?')).length).toBe(1)
 
@@ -782,7 +782,7 @@ test('a digit answers the row that is on screen, not the row the entry holds', a
   page,
 }) => {
   const sent = await open(page, WRONG_ROWS)
-  await page.getByRole('button', { name: /search the export/i }).click()
+  await page.getByRole('button', { name: /search tcgplayer/i }).click()
   await expect(page.locator('.review-candidate').first()).toContainText('Master Yi')
 
   /* ONE FRAME AFTER THE ROWS PAINT, and it is a synchronisation rather than a sleep. The digit
@@ -811,7 +811,7 @@ test('a digit answers the row that is on screen, not the row the entry holds', a
 
 test('escape comes back to the pipeline rows and writes nothing', async ({ page }) => {
   const sent = await open(page, WRONG_ROWS)
-  await page.getByRole('button', { name: /search the export/i }).click()
+  await page.getByRole('button', { name: /search tcgplayer/i }).click()
   await expect(page.locator('.review-candidate').first()).toContainText('Master Yi')
 
   await page.keyboard.press('Escape')
@@ -833,7 +833,7 @@ test('a zero-candidate card is not offered a control that would toggle one list 
      would be a button whose two states are identical — the shape `CLEAR_KEY` states the rule
      for: a control that is drawn while it does nothing is the opposite of what showing it is
      for. */
-  await expect(page.getByRole('button', { name: /search the export/i })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /search tcgplayer/i })).toHaveCount(0)
 })
 
 test('the reason the pipeline gave has a sentence, and it says the rows may be another card', async ({
