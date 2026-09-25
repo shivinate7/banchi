@@ -3,9 +3,6 @@
   "#/": {
     "repeated-fact": { "4 copies": "home" }
   },
-  "#/revenue": {
-    "long-sentence": { "0 lines were marked refunded or canceled during fulfilment and left out — your o": "sales" }
-  },
   "#/product?sku=9191486": {
     "long-sentence": { "Reported precision decays over time for a fixed sale — the same sale sits in a f": "product" }
   }

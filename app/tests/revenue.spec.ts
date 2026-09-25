@@ -124,8 +124,27 @@ function progressOf(over: Partial<OrderLineProgress> & { sku: string }): OrderLi
   }
 }
 
+/** `/orders`, plus the two reads this screen now fires ON ARRIVAL (D-sales-rows-by-sku):
+ *  the thumbnail lookup and "On the shelf" (moved off its own press, sales-directions.md
+ *  finding 3). Every test stubs these through here so `sealEveryTest` sees nothing leak —
+ *  neither shape matters to a case that is not testing them, so both default to "nothing
+ *  found" rather than a case-specific fixture. */
 async function stub(page: Page, orders: OrderRow[]) {
   await page.route(/\/orders$/, (route) => json(route, payloadOf(orders)))
+  await page.route(/\/skus\/photos\?/, (route) => json(route, { photos: {} }))
+  await page.route(/\/pipeline\/holdings-value\?/, (route) =>
+    json(route, {
+      range: 'month',
+      width_days: 30,
+      history_begins: null,
+      at: '2026-09-19T00:00:00+00:00',
+      on_hand_names: 0,
+      series: [],
+      totals: [],
+      unmarked: { names: 0 },
+      sealed_excluded: { names: 0, reason: 'sealed product has no card record' },
+    }),
+  )
 }
 
 /** Stubs `/pipeline/price-now` and counts how many times it was hit — the press-only
@@ -154,9 +173,11 @@ async function open(page: Page, query = ''): Promise<void> {
 
 /** Every visible (non-detail) product row's Name cell text, top to bottom, in the order the
  *  table currently draws it — locale-agnostic callers compare this array's own SHAPE (does it
- *  reverse, does it narrow) rather than asserting one hard-coded order. */
+ *  reverse, does it narrow) rather than asserting one hard-coded order. Reads `.bn-datalink`
+ *  (the `ProductLink` the name sits inside) rather than the whole `<td>`, so a Foil `Pill`
+ *  beside the name never concatenates onto it. */
 async function productNames(page: Page): Promise<string[]> {
-  return page.locator('.revenue-table tbody tr:not(.revenue-detail-row) td:nth-child(2)').allInnerTexts()
+  return page.locator('.revenue-table tbody tr:not(.revenue-detail-row) td:nth-child(2) .bn-datalink').allInnerTexts()
 }
 
 sealEveryTest({ store: true })
@@ -173,6 +194,7 @@ test('no orders at all draws the empty state, not a table with nothing in it', a
 })
 
 test('a failed read draws the failure notice', async ({ page }) => {
+  await stub(page, [])
   await page.route(/\/orders$/, (route) => route.abort('addressunreachable'))
   await page.goto('/#/revenue')
   await expect(page.getByText('Could not read your orders')).toBeVisible()
@@ -234,12 +256,12 @@ test('clicking a month filters the product table to it, and Clear removes the fi
   await stub(page, generalOrders())
   await open(page, '?period=all')
 
-  await page.locator('.revenue-month-row', { hasText: 'Jul 2026' }).click()
+  await page.locator('.revenue-month-col', { hasText: 'Jul 2026' }).click()
   await expect(page.locator('.revenue-active-filter')).toContainText('Jul 2026 only')
   expect(await productNames(page)).toEqual(['Charizard ex'])
-  await expect(page.locator('.revenue-month-row[aria-pressed="true"]')).toContainText('Jul 2026')
+  await expect(page.locator('.revenue-month-col[aria-pressed="true"]')).toContainText('Jul 2026')
 
-  await page.getByRole('button', { name: 'Clear' }).click()
+  await page.getByRole('button', { name: 'Clear the month' }).click()
   await expect(page.locator('.revenue-active-filter')).toHaveCount(0)
   expect(await productNames(page)).toHaveLength(3)
 })
@@ -247,10 +269,10 @@ test('clicking a month filters the product table to it, and Clear removes the fi
 test('the current month is marked in progress on the strip', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  const current = page.locator('.revenue-month-row[data-current="true"]')
+  const current = page.locator('.revenue-month-col[data-current="true"]')
   await expect(current).toContainText('Sep 2026')
-  await expect(current).toContainText('ongoing')
-  await expect(page.locator('.revenue-month-row:has-text("ongoing")')).toHaveCount(1)
+  await expect(current).toContainText('so far')
+  await expect(page.locator('.revenue-month-col:has-text("so far")')).toHaveCount(1)
 })
 
 test('a drill-down opens a product row into the orders behind it, and closes again', async ({ page }) => {
@@ -281,7 +303,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
 
   await page.getByRole('columnheader', { name: 'Name' }).getByRole('button').click()
   await page.getByPlaceholder('Find what you sold').fill('char')
-  await page.locator('.revenue-month-row', { hasText: 'Jul 2026' }).click()
+  await page.locator('.revenue-month-col', { hasText: 'Jul 2026' }).click()
 
   await expect(page).toHaveURL(/[?&]sort=name&dir=asc/)
   await expect(page).toHaveURL(/[?&]q=char/)
@@ -315,8 +337,10 @@ test('a custom range shows week buckets for a short span, and states the range i
   await open(page, '?period=all')
 
   await page.getByRole('button', { name: 'Custom' }).click()
-  await page.getByLabel('From').fill('2026-09-01')
-  await page.getByLabel('To').fill('2026-09-15')
+  await page.getByLabel('From', { exact: true }).fill('2026-09-01')
+  // { exact: true }: Playwright's substring match otherwise also finds a missing-photo
+  // thumbnail's "no photo" aria-label, which contains "to" (defect fix).
+  await page.getByLabel('To', { exact: true }).fill('2026-09-15')
 
   await expect(page.getByText(/from Sep 1, 2026 to Sep 15, 2026/)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'By week' })).toBeVisible()
@@ -412,10 +436,10 @@ test('a line closed as refunded is subtracted from the total, and the count is s
     }),
   ])
   await open(page, '?period=all')
-  await expect(page.locator('.revenue-verdict-said')).toContainText('$12.50')
-  await expect(page.locator('.revenue-verdict-said')).not.toContainText('$32.50')
-  await expect(page.locator('.revenue-verdict-refunded')).toHaveText(
-    "1 line was marked refunded or canceled during fulfilment and left out — your own note, not TCGplayer's, so treat it as a habit rather than a guarantee.",
+  await expect(page.locator('.revenue-summary-figure')).toContainText('$12.50')
+  await expect(page.locator('.revenue-summary-figure')).not.toContainText('$32.50')
+  await expect(page.locator('.revenue-verdict-refunded')).toContainText(
+    '1 line was marked refunded or canceled during fulfilment and left out.',
   )
   // The two exclusions are NEVER conflated: no order here carries a Canceled status, so
   // that sentence states zero rather than folding this line's count into it.
@@ -434,10 +458,10 @@ test('a line closed for a DIFFERENT reason (shipped_elsewhere) is not excluded',
     }),
   ])
   await open(page, '?period=all')
-  await expect(page.locator('.revenue-verdict-said')).toContainText('$12.50')
+  await expect(page.locator('.revenue-summary-figure')).toContainText('$12.50')
   // BOTH exclusion sentences still render, stating zero plainly rather than staying silent.
-  await expect(page.locator('.revenue-verdict-refunded')).toHaveText(
-    "0 lines were marked refunded or canceled during fulfilment and left out — your own note, not TCGplayer's, so treat it as a habit rather than a guarantee.",
+  await expect(page.locator('.revenue-verdict-refunded')).toContainText(
+    '0 lines were marked refunded or canceled during fulfilment and left out.',
   )
   await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 orders were canceled by the marketplace and left out.')
 })
@@ -465,8 +489,8 @@ test('the owner\'s real store has zero not_shipping lines today, and the screen 
   ])
   await open(page, '?period=all')
   await expect(page.locator('.revenue-verdict-canceled')).toHaveText('1 order was canceled by the marketplace and left out.')
-  await expect(page.locator('.revenue-verdict-refunded')).toHaveText(
-    "0 lines were marked refunded or canceled during fulfilment and left out — your own note, not TCGplayer's, so treat it as a habit rather than a guarantee.",
+  await expect(page.locator('.revenue-verdict-refunded')).toContainText(
+    '0 lines were marked refunded or canceled during fulfilment and left out.',
   )
 })
 
@@ -551,6 +575,59 @@ test('the archive answers first, and a name only readings has priced still draws
   await expect(charizard).toContainText('$18.00')
   const pikachu = page.locator('.revenue-table tbody tr', { hasText: 'Pikachu VMAX' }).locator('.revenue-market')
   await expect(pikachu).toContainText('$9.00')
+})
+
+/* --------------------------------------------------------- rows by SKU (D-sales-rows-by-sku) */
+
+test('a foil and a normal printing sharing a name draw as two rows, never one merged row (defect fix)', async ({ page }) => {
+  await stub(page, [
+    orderRow({
+      number: 'ORD-NORMAL',
+      placed_at: '2026-08-05T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9100001', name: 'Charizard ex', condition: 'Near Mint', quantity: 1, unit_price: '12.50' })],
+    }),
+    orderRow({
+      number: 'ORD-FOIL',
+      placed_at: '2026-08-06T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9100002', name: 'Charizard ex', condition: 'Near Mint Holofoil', quantity: 1, unit_price: '40.99' })],
+    }),
+  ])
+  await open(page, '?period=all')
+  // The old build collapsed these onto one row and compared the wrong printing's price —
+  // two SKUs sharing a name now draw as two, both leading with the same name.
+  expect(await productNames(page)).toEqual(['Charizard ex', 'Charizard ex'])
+  const foilRow = page.locator('.revenue-table tbody tr', { hasText: 'Charizard ex' }).filter({ has: page.getByText('Foil') })
+  await expect(foilRow.locator('.bn-money').first()).toHaveText('$40.99')
+})
+
+/* ----------------------------------------------------------- the $0.00 line (finding 1) */
+
+test('a line with no price from TCGplayer draws "no price", never a false $0.00 (defect fix)', async ({ page }) => {
+  await stub(page, [
+    orderRow({
+      number: 'ORD-NOPRICE',
+      placed_at: '2026-08-05T10:00:00+00:00',
+      status: 'Shipped',
+      // The feed's own way of saying "no price on this line" — an empty string, not `null`.
+      lines: [line({ sku: '9600006', name: 'Sizzlipede', quantity: 1, unit_price: '' })],
+    }),
+    orderRow({
+      number: 'ORD-PRICED',
+      placed_at: '2026-08-06T10:00:00+00:00',
+      status: 'Shipped',
+      lines: [line({ sku: '9100001', name: 'Charizard ex', quantity: 1, unit_price: '12.50' })],
+    }),
+  ])
+  await open(page, '?period=all')
+  // Both lines still count as sales — neither is dropped, and the unpriced one is never
+  // read as a genuine $0.00 sale.
+  expect(await productNames(page)).toEqual(['Charizard ex', 'Sizzlipede'])
+  const unpriced = page.locator('.revenue-table tbody tr', { hasText: 'Sizzlipede' })
+  await expect(unpriced.locator('.revenue-no-price')).toHaveText('no price')
+  await expect(unpriced.locator('.bn-money')).toHaveCount(0)
+  await expect(page.locator('.revenue-summary-figure')).toContainText('$12.50')
 })
 
 test('both themes: the table stays usable and sortable in dark', async ({ page }) => {

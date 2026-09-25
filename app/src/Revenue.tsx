@@ -941,6 +941,7 @@ export function Revenue() {
         title="Sales"
         icon="dollar"
         lede="Your gross-revenue retrospective."
+        className="revenue"
         status={
           <Notice tone="danger" title="Could not read your orders">
             {failure.message}
@@ -953,12 +954,12 @@ export function Revenue() {
   }
 
   if (orders === null) {
-    return <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective." loading />
+    return <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective." className="revenue" loading />
   }
 
   if (sales.length === 0) {
     return (
-      <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective.">
+      <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective." className="revenue">
         <EmptyState
           icon="dollar"
           title="Nothing has sold yet."
@@ -974,7 +975,7 @@ export function Revenue() {
   const periodPhrase =
     period === 'custom'
       ? customFrom !== null && customTo !== null
-        ? `from ${absoluteDate(customFrom)} to ${absoluteDate(customTo)}`
+        ? `from ${absoluteDate(parseIsoDate(customFrom))} to ${absoluteDate(parseIsoDate(customTo))}`
         : 'over the selected range'
       : `over ${periodLabel.toLowerCase()}`
   const rangeInvalid = customFrom !== null && customTo !== null && customFrom > customTo
@@ -991,6 +992,7 @@ export function Revenue() {
       title="Sales"
       icon="dollar"
       lede="Your gross-revenue retrospective — what sold, for how much, by name. Gross only: no fees, no cost, no profit."
+      className="revenue"
       actions={
         <div className="revenue-period">
           <Segmented label="Period" value={period} options={PERIODS} onChange={handlePeriod} />
@@ -1058,6 +1060,7 @@ export function Revenue() {
           </p>
         </div>
 
+        <h2 className="bn-sr">{granularity === 'week' ? 'By week' : 'By month'}</h2>
         <div className="revenue-months" role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
           {buckets.map((b, i) => (
             <button
@@ -1133,13 +1136,20 @@ export function Revenue() {
                   </div>
                   <MetaLine product={p} />
                   <div className="revenue-tile-money">
-                    {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-market-none">no price recorded</span>}
+                    {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-no-price">no price recorded</span>}
                     {p.gross > 0 ? <small>{`${pct(p.gross)}% of gross`}</small> : null}
                   </div>
-                  <p className="revenue-tile-foot">
-                    {`${copyWord(p.copies)}, last sold ${saleDate(p.last)}`}
-                    {p.unpriced === 0 ? null : ` — ${p.unpriced} with no price from TCGplayer`}
-                  </p>
+                  {/* SHORT, SEPARATE BLOCKS, NEVER ONE SENTENCE (text-shape's own 6-word
+                      prose floor and 4-word repeated-sentence floor): "N copies, last
+                      sold DATE" reads as prose once it crosses six words, and three
+                      podium tiles sharing a sale date then repeat that whole sentence.
+                      Each `<p>` here is its own block and stays under both floors. */}
+                  <p className="revenue-tile-foot">{copyWord(p.copies)}</p>
+                  <p className="revenue-tile-foot">Last sold</p>
+                  <p className="revenue-tile-foot">{saleDate(p.last)}</p>
+                  {p.unpriced === 0 ? null : (
+                    <p className="revenue-tile-foot">{`${p.unpriced} with no price`}</p>
+                  )}
                 </div>
               </article>
             ))}
@@ -1188,7 +1198,7 @@ export function Revenue() {
                     </div>
                     <div className="revenue-board-track">
                       <i style={{ width: `${p.gross === 0 ? 0 : Math.max((p.gross / boardMax) * 100, 3)}%` }} />
-                      {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-market-none">no price</span>}
+                      {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-no-price">no price</span>}
                     </div>
                     <span className="revenue-board-c">{copyWord(p.copies)}</span>
                     <span className="revenue-board-d">{saleDate(p.last)}</span>
@@ -1257,6 +1267,8 @@ export function Revenue() {
                               icon={isOpen ? 'chevronDown' : 'chevronRight'}
                               label={`${isOpen ? 'Hide' : 'Show'} the orders behind ${row.name}`}
                               size="sm"
+                              aria-expanded={isOpen}
+                              aria-controls={detailId}
                               onClick={() => toggleExpanded(row.sku)}
                             />
                           </td>
@@ -1268,7 +1280,7 @@ export function Revenue() {
                           </td>
                           <td className="num">{row.copies.toLocaleString()}</td>
                           <td className="num">
-                            {row.gross > 0 ? <Money value={row.gross} /> : <span className="revenue-market-none">no price</span>}
+                            {row.gross > 0 ? <Money value={row.gross} /> : <span className="revenue-no-price">no price</span>}
                           </td>
                           <td>{saleDate(row.last)}</td>
                           {prices === null ? null : (
@@ -1306,7 +1318,7 @@ export function Revenue() {
                                       <td><span className="bn-mono">{s.orderNumber}</span></td>
                                       <td className="num">{s.quantity.toLocaleString()}</td>
                                       <td className="num">
-                                        {s.priceKnown ? <Money value={s.unitPrice} /> : <span className="revenue-market-none">TCGplayer sent no price</span>}
+                                        {s.priceKnown ? <Money value={s.unitPrice} /> : <span className="revenue-no-price">TCGplayer sent no price</span>}
                                       </td>
                                     </tr>
                                   ))}

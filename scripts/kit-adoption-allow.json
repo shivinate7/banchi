@@ -205,11 +205,6 @@
       "width": "shipping",
       "top": "shipping"
     },
-    "/revenue": {
-      "page": "sales",
-      "width": "sales",
-      "top": "sales"
-    },
     "/inventory": {
       "page": "inventory",
       "width": "inventory",

@@ -182,6 +182,7 @@
 .revenue-tile-money .bn-money { font-size: var(--bn-fs-2xl); font-weight: 600; }
 .revenue-tile-money small { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
 .revenue-tile-foot { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.revenue-tile-foot + .revenue-tile-foot { margin-top: 2px; }
 
 .revenue-mix { padding: var(--bn-5); }
 .revenue-mix h3 { margin: 0 0 var(--bn-3); }
@@ -284,7 +285,8 @@
 .revenue-table > tbody > tr { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
 
 .revenue-market { white-space: normal; }
-.revenue-market-none { color: var(--bn-ink-3); }
+.revenue-market-none,
+.revenue-no-price { color: var(--bn-ink-3); }
 .revenue-market-delta { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 
 .revenue-market-refresh { display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; }
