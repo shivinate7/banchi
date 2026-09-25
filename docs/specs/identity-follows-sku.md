@@ -359,14 +359,17 @@ enforced) requires a mechanism, not a sentence. Three, each proving a different 
    reads the Python AST of `server/`, `store/`, `pipeline/`, `cli/`, `codes/` and `scripts/`.
    It fails a commit that assigns `sku`, `condition`, `name`, `number`, `printed_total`,
    `rarity` or `set_name` on a card outside the methods it allows.
-   **AS BUILT (lane 7): seven methods, not the two this plan named.** `bind_sku`,
-   `unbind_sku`, `restore_identity` and `hold_sku` choose or restore an identity.
-   `record_identification`, `set_state` and `move_card` are pre-existing, already-argued
-   holdovers from earlier lanes' own review rounds. This row is the first thing that
-   reconciles all seven against one another. See the decision entry, "Identity follows the
-   SKU", for the argument and the field. Its allow list is a constant exported from
-   `store/master.py`, never a copy of it. It is trusted only once a planted
-   `card.name = ...` in a fixture file turns it red.
+   **AS BUILT (lane 7): seven methods at first, not the two this plan named — now six.**
+   `bind_sku`, `unbind_sku`, `restore_identity` and `hold_sku` choose or restore an
+   identity. `record_identification` and `move_card` are pre-existing, already-argued
+   holdovers from earlier lanes' own review rounds. `set_state` was a third holdover,
+   flagged as a deviation from this section's own "done when" line below, until D258
+   closed it: every caller that passed it `sku`/`condition`/`set_name`/`rarity`/`name`
+   moved to `bind_sku` or `hold_sku`, and the five parameters and the row's own membership
+   were removed together. This row reconciles all six against one another. See the
+   decision entry, "Identity follows the SKU", for the argument and the field. Its allow
+   list is a constant exported from `store/master.py`, never a copy of it. It is trusted
+   only once a planted `card.name = ...` in a fixture file turns it red.
 2. **The store's own audit, part of the one merged report (ruling 6).**
    +`./pkmnscan cards identity` reads the store and the SKU table, never an export file. Three
    verdicts, D172's shape: pass, fail, not known. It fails on any of these:

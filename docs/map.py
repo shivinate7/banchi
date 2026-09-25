@@ -955,9 +955,9 @@ COMPONENTS = [
                                 "fetch started sending every play grade",
                         "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16",
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
-                                        "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
-                                        "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D162", "D213", "D218", "D253",
+                                        "D36", "D41", "D46", "D49", "D54", "D55", "D56", "D58",
+                                        "D59", "D63", "D64", "D65", "D67", "D68", "D71", "D76",
+                                        "D87", "D137", "D146", "D162", "D213", "D218", "D253",
                                         "D259",
                                         "D260"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
@@ -1799,17 +1799,19 @@ COMPONENTS = [
                                   "`record_identification` now writes `read_name`/`read_number`/"
                                   "`read_printed_total` (the evidence), and the identity fields "
                                   "too only while no binding is active — §4.2's own rule. "
-                                  "`set_state` keeps its `sku`/`condition`/`set_name`/`rarity`/"
-                                  "`name` parameters UNCHANGED as of lane 1 — `cli/cmd_emit.py` "
-                                  "(lane 3b) and `harness/tests/t7_store_and_seams.py` (lane 3a) "
-                                  "still call it with them, and lane 1's own fence stops at a "
-                                  "caller of `set_state` — so a later lane trims the signature "
-                                  "once every caller has moved onto `bind_sku`.",
+                                  "`set_state` TAKES NO IDENTITY FIELD (§11's own \"done when\" "
+                                  "line, D258): its `sku`/`condition`/`set_name`/`rarity`/`name` "
+                                  "parameters are gone. `cli/cmd_emit.py` had already moved off "
+                                  "before this landed; the 24 test fixtures under "
+                                  "`harness/tests/` that still passed them now call `bind_sku` "
+                                  "or `hold_sku`, or write the `Card` field directly where "
+                                  "neither writer can build the fixture's exact state.",
                           "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D22",
                                           "D23", "D24", "D26", "D28", "D30", "D34", "D36", "D55",
                                           "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88",
                                           "D89", "D100", "D115", "D132", "D145", "D146", "D167",
-                                          "D172", "D173", "D183", "D192", "D213", "D253", "D259"], "tested_by": ["T7"]},
+                                          "D172", "D173", "D183", "D192", "D213", "D253", "D258",
+                                          "D259"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -3048,8 +3050,9 @@ COMPONENTS = [
             },
             "price-postings-recovery.py": {
                 "does": "read-only measurement against the owner's real "
-                        "inventory/store.sqlite (opened `mode=ro`, never `store.db`, no "
-                        "`pkmnscan` command run): how much price HISTORY survives before "
+                        "inventory/store.sqlite (opened through `store/db.py:open_read_only`, "
+                        "never `store.db.connect`, no `pkmnscan` command run): how much price "
+                        "HISTORY survives before "
                         "`price_postings` existed to record it. Counts `pushed` events and "
                         "how many name a price (always 0 — the payload has no such field). "
                         "Walks `inventory/markdowns/*/` and counts a folder as APPLIED only "
@@ -9149,7 +9152,15 @@ COMPONENTS = [
                         "delegates to it rather than keeping its own narrower copy, which asked "
                         "`main` for its OWN animations and so could not see a staggered row "
                         "under it at all. Not a harness test; `make design-check` runs the specs "
-                        "that import it.",
+                        "that import it. ALSO `outsideThePanel`/`whatMoved`/`settled` — D118's "
+                        "own panel-exclusion sweep, moved here from two byte-identical copies in "
+                        "`inventory.spec.ts` and `confirm-identity.spec.ts` rather than kept as "
+                        "two. `settled` closes a DIFFERENT race than `settleMotion` above: the "
+                        "box rail's section-fold chevron rotates in on MOUNT, so it can finish "
+                        "before either spec's `open()` ever calls `settleMotion`, or still be "
+                        "mid-rotation a tick after `open()` returns — `settled` reads the sweep "
+                        "twice 75ms apart and waits for agreement, which `settleMotion`'s "
+                        "start-to-finish wait cannot do for an animation it was never watching.",
                 "governed_by": ["D16", "D50", "D118"]},
             "tests/nav.spec.ts": {
                 "does": "the shell's keyboard, and the first test this app has had of the strip "
@@ -9203,25 +9214,28 @@ COMPONENTS = [
                         "`#/codes` and `#/graveyard`, which no existing spec seeded at all. The "
                         "three specs above now import from here rather than defining their own "
                         "(unchanged behaviour — all 112 of their cases still pass). Also exports "
-                        "one `seedPopulated*` function per one of six under-fixtured "
+                        "one `seedPopulated*` function per one of seven under-fixtured "
                         "routes (`#/runs`, `#/orders`, `#/shipping`, `#/codes`, `#/graveyard`, "
-                        "and `#/product` WITH a SKU, `PRODUCT_ROUTE`): each registers a "
-                        "`page.route` stub with real-shaped rows, registered AFTER "
-                        "`shell.ts:stubStore`'s own empty answer for the same path so the "
-                        "richer one wins (Playwright matches newest-first). Nothing in it is "
-                        "random. Read by `routeSweep.ts:sweepEveryRoute`, which registers "
-                        "every seed ONCE before its sweep — `copy-budget.spec.ts` read them "
-                        "first, before D194 was superseded.",
-                "governed_by": ["D20", "D83", "D134", "D194", "D284"],
+                        "`#/review` with a wide catalog answer (D46), and `#/product` WITH a "
+                        "SKU, `PRODUCT_ROUTE`): each registers a `page.route` stub with "
+                        "real-shaped rows, registered AFTER `shell.ts:stubStore`'s own empty "
+                        "answer for the same path so the richer one wins (Playwright matches "
+                        "newest-first). Nothing in it is random. Read by "
+                        "`routeSweep.ts:sweepEveryRoute`, which registers every seed ONCE "
+                        "before its sweep — `copy-budget.spec.ts` read them first, before "
+                        "D194 was superseded; `text-shape.spec.ts`, `machine-words.spec.ts` "
+                        "and `money-face.spec.ts` read them now, through the same one sweep.",
+                "governed_by": ["D20", "D23", "D46", "D83", "D134", "D194", "D284"],
                 "note": "CLOSED D194'S OWN NAMED GAP, and the argument still holds for its "
-                        "successors. Its ceilings on the five routes above were pinned "
-                        "against `stubStore`'s empty-ish answer — no run, no order, no "
-                        "export, no code, no departed record — so a sentence added to any of "
-                        "the five could grow in its POPULATED state without a check reading "
-                        "only the empty one ever seeing it. The owner's own alternative — pin "
-                        "against the live `:8000` store instead of a checked-in fixture — was "
-                        "rejected: order numbers, buyer names and run ids change daily on a "
-                        "real store, so nothing pinned against it would reproduce in CI.",
+                        "successors. Its ceilings on the routes above were pinned against "
+                        "`stubStore`'s empty-ish answer — no run, no order, no export, no "
+                        "code, no departed record, no wide catalog — so a sentence added to "
+                        "any of them could grow in its POPULATED state without a check "
+                        "reading only the empty one ever seeing it. The owner's own "
+                        "alternative — pin against the live `:8000` store instead of a "
+                        "checked-in fixture — was rejected: order numbers, buyer names and "
+                        "run ids change daily on a real store, so nothing pinned against it "
+                        "would reproduce in CI.",
             },
             "tests/orders.spec.ts": {"does": "the order screen in a browser: that the six-way "
                                              "counts render including the zeros, that a pick "
@@ -9561,9 +9575,9 @@ COMPONENTS = [
                         "`POST /inventory/2/1/confirm` with an EMPTY body (never a `sku`), "
                         "asserts the receipt toast and its Undo, and reads the undo's own "
                         "`{\"undo\": true}` body. Second case: the D118 sweep this control's "
-                        "own review round required — `inventory.spec.ts`'s own "
-                        "`outsideThePanel`/`whatMoved` shape, duplicated rather than imported "
-                        "for the same reason `correct-answer.spec.ts` gives — asserts the press "
+                        "own review round required — `whatMoved`/`settled` imported from "
+                        "`./motionSettled`, `inventory.spec.ts`'s own shared copy since the two "
+                        "specs' versions were byte-identical — asserts the press "
                         "moves nothing outside `.browse-card` and changes neither the "
                         "document's scroll height nor its scroll position. EVERY ROUTE IS "
                         "STUBBED, the same rule: no write ever reaches a real store.",
@@ -9631,7 +9645,7 @@ COMPONENTS = [
                 # an all-or-nothing worklist — two entries out of a hundred and one used to
                 # suppress it for the other ninety-nine.
                 "governed_by": ["D4", "D13", "D16", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D46", "D77", "D136", "D146", "D194", "D218"],
+                                "D41", "D46", "D77", "D118", "D136", "D146", "D194", "D218"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

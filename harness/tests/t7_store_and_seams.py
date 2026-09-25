@@ -879,6 +879,54 @@ def refusal(checks: Checks, fn, code: str, label: str) -> None:
         checks.ok(False, label, "did not refuse")
 
 
+_STRATEGY_BY_GAME = {"pokemon": "number_and_printed_total", "riftbound": "printed_code"}
+_PRODUCT_LINE_BY_GAME = {
+    "pokemon": "Pokemon",
+    "riftbound": "Riftbound League of Legends Trading Card Game",
+}
+
+
+def _bind(
+    snapshot,
+    key: str,
+    sku: str,
+    *,
+    condition: str = "Near Mint",
+    game: str = "pokemon",
+    set_name: str = "T7 Fixture Set",
+    product_name: str = "T7 Fixture Card",
+    number: str = "001/999",
+    rarity: str = "Common",
+    bound_by: str = "answer",
+):
+    """The sanctioned writer, in place of `set_state`'s retired `sku=`/`condition=`
+    shortcut — D258's "six writers are sanctioned" as of `66442b32`, which closed the
+    entry's own former "`set_state` is a flagged, temporary deviation" line. Builds a
+    one-row `Skus` table naming `sku` and binds through it — `scripts/
+    identity-store-selftest.py`'s own recipe, narrowed to what a fixture that only needs
+    `card.sku`/`card.condition` set needs. Call `inventory.set_state(key, state)` first for
+    the state transition; this never touches `state`, exactly as `bind_sku` itself does not.
+    """
+    snapshot.skus.entries[sku] = SkuRow(
+        product_line=_PRODUCT_LINE_BY_GAME[game],
+        set_name=set_name,
+        product_name=product_name,
+        number=number,
+        rarity=rarity,
+        condition=condition,
+        grade=condition,
+        printing=None,
+        first_seen=1_700_000_000,
+        last_seen=1_700_000_000,
+        source="t7-fixture",
+        raw={},
+    )
+    return snapshot.inventory.bind_sku(
+        key, sku, bound_by=bound_by, skus=snapshot.skus,
+        number_strategy=_STRATEGY_BY_GAME[game],
+    )
+
+
 def _refusal_text(fn) -> Optional[Tuple[str, str]]:
     """`(code, message)` off the refusal `fn` raised, or None if it did not refuse.
 
@@ -1367,6 +1415,39 @@ def check_set_and_rarity(checks: Checks) -> None:
         )
 
 
+@contextmanager
+def _no_new_files_in(directory: Path):
+    """Strips write permission from `directory` for the block, restoring it in `finally` so
+    `isolated_home`'s own `TemporaryDirectory` cleanup can still remove it afterward.
+
+    THE REAL CAUSE, MEASURED, NOT THE FIRST GUESS: a cold, fully-checkpointed WAL store (no
+    `-wal`/`-shm`) makes a plain `mode=ro` open FAIL on this Mac's SQLite 3.54, with the
+    directory left writable throughout — measured directly, same directory, same missing
+    side files, same connection string, both with and without this context manager wrapped
+    around it. So `open_read_only`'s fallback path is reached here regardless of directory
+    permission, and the coordinator's first reading (a writable directory is what lets a
+    cold `mode=ro` open succeed) does not hold on this platform. What DOES hold, on every
+    SQLite build this repo could find a citation for: `-shm` is a file the WAL locking
+    machinery creates on first touch, and creating any file needs write permission on its
+    directory — a `mode=ro` connection has never been documented promising to skip that need,
+    only to refuse writes to the database's own contents once open. A CI runner's bundled
+    SQLite (Ubuntu 24.04's `actions/setup-python@v5` 3.11 build) may simply create `-shm` on
+    a read-only-mode open where this Mac's refuses to — that is a real, plausible version
+    difference this repo cannot reproduce locally (no second Python build, no container
+    runtime on this checkout) — but EITHER WAY, taking directory write permission away is
+    the one condition no SQLite version can route around: `-shm` cannot be created without
+    it, so the plain `mode=ro` attempt fails for the same underlying reason on every
+    platform, and `open_read_only`'s fallback is what this fixture is FOR.
+    """
+    directory = Path(directory)
+    mode = directory.stat().st_mode
+    directory.chmod(0o555)
+    try:
+        yield
+    finally:
+        directory.chmod(mode)
+
+
 def check_open_read_only(checks: Checks) -> None:
     """`store/db.py:open_read_only`, the one read-only door: it never migrates, and it sees
     every commit, including one still in the WAL.
@@ -1426,17 +1507,232 @@ def check_open_read_only(checks: Checks) -> None:
         folder.close()
         for side in ("-wal", "-shm"):
             Path(f"{target}{side}").unlink(missing_ok=True)
-        cold = db.open_read_only(target)
-        checks.equal(
-            cold.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
-            ("seen",),
-            "and the door still opens a WAL store with no side files, and reads the commit "
-            "from the main file",
-        )
-        cold.close()
-        checks.ok(
-            not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
-            "and opening it cold created no side file",
+        with _no_new_files_in(directory):
+            # PROBE THE PLAIN OPEN'S OWN REFUSAL FIRST, SEPARATELY, SO THE PASS LINE BELOW
+            # NAMES THE REAL BUILD'S CODE — this is the harness's own answer to guessing a
+            # build's error code twice and being wrong twice (PR #463): never guess again,
+            # measure and print it. `open_read_only` below makes its own, separate attempt
+            # right after — same file, same permission state, so the shape it sees is the
+            # same one this probe just recorded.
+            probe = sqlite3.connect(f"file:{target}?mode=ro", uri=True)
+            errorname: Optional[str] = None
+            errormessage: Optional[str] = None
+            try:
+                probe.execute("PRAGMA schema_version")
+            except sqlite3.OperationalError as exc:
+                errorname = getattr(exc, "sqlite_errorname", None)
+                errormessage = str(exc)
+            finally:
+                probe.close()
+
+            cold = db.open_read_only(target)
+            checks.equal(
+                cold.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+                ("seen",),
+                "and the door still opens a WAL store with no side files, and reads the "
+                "commit from the main file — this build's plain open refused with "
+                f"sqlite_errorname={errorname!r} message={errormessage!r}",
+            )
+            cold.close()
+            checks.ok(
+                not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
+                "and opening it cold created no side file",
+            )
+
+
+def check_open_read_only_race(checks: Checks) -> None:
+    """`open_read_only` checks the WAL, then opens, in two steps — and a commit that lands
+    between them sends it down the `immutable=1` path anyway, then misses that exact commit.
+    SQLite's own docs for `immutable`: a file that changes under an immutable connection
+    "might return incorrect query results and/or SQLITE_CORRUPT errors".
+
+    FORCED DETERMINISTICALLY, NO THREAD AND NO SLEEP. `sqlite3.connect` is monkeypatched to
+    land a commit the instant `open_read_only` asks for the `immutable=1` connection — the
+    race landing on purpose, every run, in the exact gap between the failed plain `mode=ro`
+    open and the immutable fallback, rather than the small chance a real thread interleaving
+    would give it.
+
+    THE COMMIT MUST STAY IN THE WAL, NOT AUTO-CHECKPOINT AWAY ON ITS OWN WRITER'S CLOSE — a
+    plain "open, write, close" with nothing else holding the file open lets SQLite checkpoint
+    it into the main file right there, which would prove nothing: an `immutable=1` open right
+    after would read it from the main file regardless, race or no race. `check_open_read_only`
+    above already holds the WAL open the same way — a `holder` connection with a `SELECT`
+    inside an open transaction — for exactly this reason, and this reuses it.
+    """
+    checks.note("")
+    checks.note("READ-ONLY DOOR RACE — a commit lands between the check and the open")
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        db.connect(directory).close()
+        target = db.path(directory)
+
+        # THE COLD STATE, `check_open_read_only`'s own recipe: no side files, so
+        # `open_read_only`'s plain `mode=ro` attempt is guaranteed to refuse and reach the
+        # immutable fallback this test targets.
+        folder = sqlite3.connect(str(target), isolation_level=None)
+        folder.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        folder.close()
+        for side in ("-wal", "-shm"):
+            Path(f"{target}{side}").unlink(missing_ok=True)
+
+        real_connect = sqlite3.connect
+        fired = {"n": 0}
+        state: Dict[str, Optional[sqlite3.Connection]] = {"holder": None}
+        original_mode = directory.stat().st_mode
+
+        def racing_connect(database, *args, **kwargs):
+            if fired["n"] == 0 and "immutable=1" in str(database):
+                fired["n"] += 1
+                # `_no_new_files_in`'s own restriction is lifted HERE, before the simulated
+                # external writer below — that writer needs directory write permission to
+                # create its OWN `-wal`/`-shm` too, the same requirement this whole fixture
+                # is built on. Only the plain `mode=ro` attempt above this needed to be
+                # denied; the race it races against never did.
+                directory.chmod(original_mode)
+                # A live connection that keeps a read snapshot open through the rest of
+                # this test — the thing that stops the writer's own close from
+                # auto-checkpointing its commit into the main file. Closed in `finally`
+                # below, never leaked.
+                holder = real_connect(str(target), isolation_level=None)
+                holder.execute("BEGIN")
+                holder.execute("SELECT count(*) FROM meta").fetchone()
+                state["holder"] = holder
+                writer = real_connect(str(target), isolation_level=None)
+                writer.execute(
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES ('race', 'landed')"
+                )
+                writer.close()
+            return real_connect(database, *args, **kwargs)
+
+        directory.chmod(0o555)  # `_no_new_files_in`'s own reason: forces the plain `mode=ro`
+        # attempt below to refuse on every platform, never only on the one this was measured
+        # on — see that context manager's docstring, above `check_open_read_only`.
+        sqlite3.connect = racing_connect
+        try:
+            door = db.open_read_only(target)
+        finally:
+            sqlite3.connect = real_connect
+            directory.chmod(original_mode)
+
+        try:
+            checks.equal(fired["n"], 1, "the race actually fired once, at the immutable open")
+            checks.ok(
+                Path(f"{target}-wal").stat().st_size > 0,
+                "and the fixture really left the commit stranded in the WAL, unchecked "
+                "against a version that never reaches the immutable branch at all",
+            )
+            checks.equal(
+                door.execute("SELECT value FROM meta WHERE key = 'race'").fetchone(),
+                ("landed",),
+                "a commit landing between the failed plain open and the immutable fallback "
+                "is still seen, never served from a stale immutable connection that missed "
+                "it",
+            )
+            door.close()
+        finally:
+            holder = state["holder"]
+            if holder is not None:
+                holder.execute("ROLLBACK")
+                holder.close()
+
+
+def check_open_read_only_wal_present_never_falls_back(checks: Checks) -> None:
+    """`open_read_only`'s fallback is keyed on what makes `immutable=1` SAFE — an absent or
+    empty `-wal` — never on which error the plain open raised (PR #463: two builds raised
+    two different codes for the identical fixture, and naming each one in turn was tried
+    twice and was wrong twice). This proves the other half of that rule: a plain-open
+    failure while `-wal` genuinely holds a commit the main file does not yet have is RAISED,
+    never swallowed, whatever shape the failure takes — falling back there would silently
+    serve a stale snapshot.
+
+    FORCED DETERMINISTICALLY, no thread: `sqlite3.connect` is monkeypatched so the plain
+    `mode=ro` open's own forced statement raises, while a real `holder` connection —
+    `check_open_read_only`'s own trick — keeps a genuine, uncheckpointed commit stranded in
+    `-wal` throughout.
+    """
+    checks.note("")
+    checks.note("READ-ONLY DOOR — a real WAL is never traded for a stale immutable snapshot")
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        db.connect(directory).close()
+        target = db.path(directory)
+
+        # A REAL commit stranded in the WAL — `check_open_read_only`'s own recipe: `holder`
+        # keeps a read snapshot open so nothing auto-checkpoints `writer`'s commit away.
+        holder = sqlite3.connect(str(target), isolation_level=None)
+        holder.execute("BEGIN")
+        holder.execute("SELECT count(*) FROM meta").fetchone()
+        writer = sqlite3.connect(str(target), isolation_level=None)
+        writer.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('door', 'stranded')")
+        writer.close()
+
+        try:
+            checks.ok(
+                Path(f"{target}-wal").stat().st_size > 0,
+                "the fixture really left a commit in the WAL before the plain open is even "
+                "asked to fail",
+            )
+
+            real_connect = sqlite3.connect
+
+            class _AlwaysFailsPlainOpen:
+                """Stands in for the plain `mode=ro` connection and refuses its forced
+                statement outright — the SHAPE of the refusal is deliberately generic
+                (`disk I/O error`, no `sqlite_errorname` at all), because this property
+                must hold whatever a real build's own refusal looks like."""
+
+                def execute(self, *_args, **_kwargs):
+                    raise sqlite3.OperationalError("disk I/O error")
+
+                def close(self) -> None:
+                    pass
+
+            def failing_plain_connect(database, *args, **kwargs):
+                if "immutable=1" not in str(database) and "mode=ro" in str(database):
+                    return _AlwaysFailsPlainOpen()
+                return real_connect(database, *args, **kwargs)
+
+            sqlite3.connect = failing_plain_connect
+            try:
+                checks.raises(
+                    sqlite3.OperationalError,
+                    lambda: db.open_read_only(target),
+                    "a plain-open failure while the WAL genuinely holds a commit raises, "
+                    "never falls back to a stale immutable snapshot",
+                )
+            finally:
+                sqlite3.connect = real_connect
+        finally:
+            holder.execute("ROLLBACK")
+            holder.close()
+
+
+def check_open_read_only_corrupt_main_file(checks: Checks) -> None:
+    """The immutable fallback forces ITS OWN open too (`PRAGMA schema_version`, the same
+    reason the plain open forces its own), so a genuinely corrupt or unreadable main file
+    raises there and is never handed back as a connection that looks fine until its first
+    real query — `open_read_only` never falls back a second time to paper over a bad file.
+    """
+    checks.note("")
+    checks.note("READ-ONLY DOOR — a corrupt main file is refused, never served")
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        target = db.path(directory)
+        target.write_bytes(b"not a sqlite database, not even close")
+        # `sqlite3.DatabaseError`, THE BROADER CLASS, NOT `OperationalError`: "file is not a
+        # database" is SQLite's own `SQLITE_NOTADB`, and Python's sqlite3 module raises it as
+        # a plain `DatabaseError` rather than the narrower `OperationalError` subclass the
+        # cold-store refusal above raises. `open_read_only` only ever catches
+        # `OperationalError`, so this one was never going to be caught either way — this
+        # proves that, rather than assuming it.
+        checks.raises(
+            sqlite3.DatabaseError,
+            lambda: db.open_read_only(target),
+            "a garbage main file raises rather than returning a connection — corruption is "
+            "never mistaken for the cold-store state the fallback exists for",
         )
 
 
@@ -2361,9 +2657,8 @@ def check_undo(checks: Checks) -> None:
             "cannot be reached for by accident",
         )
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(
-                "3/2", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
-            )
+            snapshot.inventory.set_state("3/2", master.IDENTIFIED)
+            _bind(snapshot, "3/2", "8608859", condition="Near Mint Holofoil")
             snapshot.inventory.listing("8608859", condition="Near Mint Holofoil").bump(
                 master.PUSHED, 1
             )
@@ -2711,9 +3006,8 @@ def check_queue_refresh(checks: Checks) -> None:
             # EACH TERMINAL STATE THROUGH THE DOOR THAT SETS IT, never by assigning `state`:
             # `move_card` writes `moved_to` and leaves a live record in box 2, and `retire`
             # writes `retire_reason`. A hand-set state would be a card no route could produce.
-            snapshot.inventory.set_state(
-                "1/4", master.SOLD, sku=DUNSPARCE_SKU, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("1/4", master.SOLD)
+            _bind(snapshot, "1/4", DUNSPARCE_SKU, condition="Near Mint")
             snapshot.inventory.retire("1/5", "damaged")
             snapshot.inventory.move_card("1/6", 2)
 
@@ -3461,9 +3755,13 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.set_state("3/4", master.IDENTIFIED)
 
-        # A listed SKU above blocks it too — its row is already in a file.
+        # A listed SKU above blocks it too — its row is already in a file. DIRECT FIELD
+        # WRITE, NOT `_bind`: this card's own name ("N3", from the fixture's earlier
+        # identification loop) must survive untouched — `bind_sku` always overwrites it
+        # from the row, which is not this refusal's own subject.
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("3/3", master.IDENTIFIED, sku="8608859")
+            snapshot.inventory.set_state("3/3", master.IDENTIFIED)
+            snapshot.inventory.cards["3/3"].sku = "8608859"
             snapshot.inventory.listing("8608859").bump(master.PUSHED, 1)
         caught = checks.raises(
             capture_server.BadRequest,
@@ -3644,7 +3942,8 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         move_result = capture_server.do_move_card(3, 3, {"capture_id": "r4", "to_box": 9})
         moved_to = move_result["to"]
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("3/1", master.IDENTIFIED, sku="8608859")
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED)
+            _bind(snapshot, "3/1", "8608859")
             snapshot.inventory.listing("8608859", condition="Near Mint").set(
                 master.PUSHED, 1
             )
@@ -4770,9 +5069,16 @@ def check_review_answer(checks: Checks) -> None:
             # reopen. first_seen is seeded to a fixed day on both, because "the undo does
             # not reset how long the card has been waiting" is unfalsifiable against
             # today().
-            snapshot.inventory.set_state(
-                "3/1", master.IDENTIFIED, sku=prior["sku"], condition=prior["condition"]
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`/`bind_sku`: the whole point of this fixture is
+            # a card whose `sku`/`condition` are set and whose `set_name`/`rarity` are NOT —
+            # exactly `do_review_answer`'s own narrow, four-field `restores_to` shape below
+            # (D213: "an undo puts the card back to carrying no answer, set and rarity
+            # included"). `bind_sku` always derives all five together, so it cannot build
+            # this state; `harness/` sits outside the `identity writers` row's scope for
+            # this reason.
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED)
+            snapshot.inventory.cards["3/1"].sku = prior["sku"]
+            snapshot.inventory.cards["3/1"].condition = prior["condition"]
             snapshot.review.upsert(entry(3, 1, market="12.00"))
             snapshot.parked.upsert(
                 entry(3, 1, market="0.05", candidates=[dict(STALE_CANDIDATE)])
@@ -4783,12 +5089,10 @@ def check_review_answer(checks: Checks) -> None:
             # and the card carries a SKU, but its `answered` line records only what was
             # written. Hand-built inside the store's own write, because no current route
             # can produce this line any more; that is the point of the case.
-            snapshot.inventory.set_state(
-                "3/2",
-                master.IDENTIFIED,
-                sku=DUNSPARCE_REVERSE_SKU,
-                condition="Near Mint Reverse Holofoil",
-            )
+            # SAME REASON, direct field write: `set_name`/`rarity` stay unset.
+            snapshot.inventory.set_state("3/2", master.IDENTIFIED)
+            snapshot.inventory.cards["3/2"].sku = DUNSPARCE_REVERSE_SKU
+            snapshot.inventory.cards["3/2"].condition = "Near Mint Reverse Holofoil"
             snapshot.review.upsert(entry(3, 2, market="12.00"))
             snapshot.review.entries["3/2"].cleared_by_human = True
             capture_server._history(
@@ -5662,9 +5966,14 @@ def check_mark_sold(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(3))
 
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(
-                "3/1", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: `bind_sku` logs its own `sku_bound` history
+            # line, which would put a fifth line in the four-line sequence this function's
+            # own history assertion checks below — fields set BEFORE `set_state` so its one
+            # logged line already carries them, exactly as the retired `sku=`/`condition=`
+            # parameters did in one call.
+            card = snapshot.inventory.cards["3/1"]
+            card.sku, card.condition = "8608859", "Near Mint Holofoil"
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED)
             # The SKU is out on TCGplayer, and 3/1 is one of its copies. Under the
             # per-position model this card would have WORN `live`; here the quantity sits on
             # the listing and the card's own state is what the reversal must read.
@@ -5966,9 +6275,8 @@ def check_mark_sold_releases_ledger(checks: Checks) -> None:
         # sends one; `Ledger.record_pull`'s `CopyNotIdentifiable` refuses a card with none.
         capture_server.do_capture(capture_payload(4, capture_id="u1-copy"))
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(
-                "4/1", master.IDENTIFIED, sku="9191486", condition="Near Mint"
-            )
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            _bind(snapshot, "4/1", "9191486")
             capture_id = str(snapshot.inventory.cards["4/1"].capture_id)
             checks.equal(capture_id, "u1-copy", "the fixture's capture id round-trips")
             snapshot.ledger.ingest([
@@ -6091,9 +6399,12 @@ def check_retire(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(3))
 
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(
-                "3/1", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: same reason as `check_mark_sold` — `bind_sku`
+            # would add a `sku_bound` line to the exact history sequence this function
+            # checks below.
+            card = snapshot.inventory.cards["3/1"]
+            card.sku, card.condition = "8608859", "Near Mint Holofoil"
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED)
             # The SKU is out on TCGplayer with one live copy — the shape that makes the
             # no-decrement assertion below able to fail in either direction.
             snapshot.inventory.listing("8608859", condition="Near Mint Holofoil").set(
@@ -7034,7 +7345,8 @@ def check_history(checks: Checks) -> None:
         # it appends the same `removed` line for the same reason. 4/2 is the top of its
         # box, so this is the empty-shift case and no `renumbered` line accompanies it.
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("4/2", master.IDENTIFIED, sku="8608860")
+            snapshot.inventory.set_state("4/2", master.IDENTIFIED)
+            _bind(snapshot, "4/2", "8608860")
             snapshot.cache.put("4/2", {"name": "Rhyhorn"}, "sha-of-photo", "prompt-1")
         capture_server.do_remove_card(4, 2, {"capture_id": None})
         paid = last_event("4/2")
@@ -12157,9 +12469,12 @@ def check_correct_answer(checks: Checks) -> None:
                 snapshot.inventory.cards[key].run = "2026-09-23-box4-01"
             # 4/1 — answered wrong, already pushed AND live, and IN NO QUEUE — the exact
             # shape D28's undo refuses on and this route exists to reach anyway.
-            snapshot.inventory.set_state(
-                "4/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: `rarity` must stay unset going in — the
+            # same "never carried a rarity at all" shape this function's undo checks
+            # elsewhere. `bind_sku` always derives `rarity` alongside `sku`/`condition`.
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            snapshot.inventory.cards["4/1"].sku = old_sku
+            snapshot.inventory.cards["4/1"].condition = "Near Mint"
             snapshot.inventory.cards["4/1"].name = old_name
             snapshot.inventory.cards["4/1"].number = old_number
             snapshot.inventory.listing(old_sku, condition="Near Mint").set(
@@ -12170,9 +12485,9 @@ def check_correct_answer(checks: Checks) -> None:
             )
             # 4/2 — captured, never identified. Nothing here to correct.
             # 4/3 — identified, then departed. A correction there is a different question.
-            snapshot.inventory.set_state(
-                "4/3", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("4/3", master.IDENTIFIED)
+            snapshot.inventory.cards["4/3"].sku = old_sku
+            snapshot.inventory.cards["4/3"].condition = "Near Mint"
             snapshot.inventory.set_state("4/3", master.SOLD)
 
         refusal(
@@ -12430,9 +12745,13 @@ def check_correct_answer(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["4/1"].game = "riftbound"
             snapshot.inventory.cards["4/1"].run = "2026-09-23-box4-01"
-            snapshot.inventory.set_state(
-                "4/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            # DIRECT FIELD WRITE, NOT `_bind`: this card must carry no `rarity`/`number` at
+            # all going in — "never carried a number or a rarity at all" is the exact shape
+            # the undo assertion below checks the correction restores to. `bind_sku` always
+            # derives both together with `sku`/`condition`, so it cannot build this state.
+            snapshot.inventory.cards["4/1"].sku = old_sku
+            snapshot.inventory.cards["4/1"].condition = "Near Mint"
             snapshot.inventory.cards["4/1"].name = old_name
             snapshot.inventory.listing(old_sku, condition="Near Mint").set(
                 master.PUSHED, 1
@@ -12544,9 +12863,11 @@ def check_correct_answer(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["7/1"].game = "pokemon"
             snapshot.inventory.cards["7/1"].run = "2026-09-23-box7-01"
-            snapshot.inventory.set_state(
-                "7/1", master.IDENTIFIED, sku=wrong_sku, condition="Near Mint"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: `rarity` stays unset going in, matching this
+            # function's other fixtures — `bind_sku` always derives it with `sku`/`condition`.
+            snapshot.inventory.set_state("7/1", master.IDENTIFIED)
+            snapshot.inventory.cards["7/1"].sku = wrong_sku
+            snapshot.inventory.cards["7/1"].condition = "Near Mint"
             snapshot.inventory.cards["7/1"].name = "Alolan Geodude"
             snapshot.inventory.cards["7/1"].number = "044"
             snapshot.inventory.cards["7/1"].printed_total = "159"
@@ -12614,9 +12935,11 @@ def check_correct_answer(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["4/1"].game = "riftbound"
             snapshot.inventory.cards["4/1"].run = "2026-09-23-box4-01"
-            snapshot.inventory.set_state(
-                "4/1", master.IDENTIFIED, sku=new_sku, condition="Near Mint"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: `rarity` stays unset, this function's own
+            # recurring shape — `bind_sku` always derives it with `sku`/`condition`.
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            snapshot.inventory.cards["4/1"].sku = new_sku
+            snapshot.inventory.cards["4/1"].condition = "Near Mint"
             snapshot.inventory.cards["4/1"].name = new_name
             # WHATEVER THE CARD CARRIES NOW — this run wrote it after the hand-crafted
             # correction below, exactly as a real one-time repair or a later re-identify
@@ -12715,9 +13038,8 @@ def check_correct_answer_live_release(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["5/1"].game = "riftbound"
             snapshot.inventory.cards["5/1"].run = "2026-09-23-box5-01"
-            snapshot.inventory.set_state(
-                "5/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("5/1", master.IDENTIFIED)
+            _bind(snapshot, "5/1", old_sku, game="riftbound")
             # `pushed` and `staged` are BOTH zero — the one copy the correction gives up can
             # only come from `live`, which is the branch under test.
             snapshot.inventory.listing(old_sku, condition="Near Mint").set(master.LIVE, 2)
@@ -12951,9 +13273,8 @@ def check_identity_binding(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["62/1"].game = "riftbound"
             snapshot.inventory.cards["62/1"].run = "2026-09-24-box62-01"
-            snapshot.inventory.set_state(
-                "62/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("62/1", master.IDENTIFIED)
+            _bind(snapshot, "62/1", old_sku, game="riftbound")
         before_correction = Store().read().inventory.identity_snapshot("62/1")
         answers(
             checks,
@@ -13021,27 +13342,38 @@ def check_identity_binding(checks: Checks) -> None:
             snapshot.skus.entries[held_sku] = held_row
             # 63/1 — the held card: a SKU already on it, a read that disputes it, and
             # `identity_source = read` — §7.3's own T5 shape ("write identity_source =
-            # read. Leave every identity field exactly as it is today").
-            snapshot.inventory.set_state("63/1", master.IDENTIFIED, sku=held_sku)
+            # read. Leave every identity field exactly as it is today"). `hold_sku`, the
+            # sanctioned writer for exactly this shape (§4.1), in place of the retired
+            # `set_state(sku=...)` shortcut.
+            snapshot.inventory.set_state("63/1", master.IDENTIFIED)
+            snapshot.inventory.hold_sku(
+                "63/1", held_sku, skus=snapshot.skus, read_disputes=True
+            )
             snapshot.inventory.cards["63/1"].game = "riftbound"
             snapshot.inventory.cards["63/1"].read_name = "Yi, Ionia"
             # §3.1: "read: ...the identity fields equal the evidence fields" — a real held
             # card's `name` already equals its own `read_name`, so the fixture sets both
             # rather than leaving `name` at its default and asking the confirm's undo to
-            # derive one restore_identity was never built to derive.
+            # derive one restore_identity was never built to derive. `identity_source` and
+            # `read_disputes` are already `hold_sku`'s own doing, above.
             snapshot.inventory.cards["63/1"].name = "Yi, Ionia"
-            snapshot.inventory.cards["63/1"].read_disputes = True
-            snapshot.inventory.cards["63/1"].identity_source = master.IDENTITY_READ
             # 63/2 — never identified, for `not_identified`.
-            # 63/3 — sold, for `card_departed`.
-            snapshot.inventory.set_state(
-                "63/3", master.IDENTIFIED, sku=held_sku, condition="Near Mint"
+            # 63/3 — sold, for `card_departed`. `held_row`'s own row, already in the
+            # table above — `bind_sku` directly rather than `_bind`, which would plant a
+            # second, different fake row under the same `held_sku` key.
+            snapshot.inventory.set_state("63/3", master.IDENTIFIED)
+            snapshot.inventory.bind_sku(
+                "63/3", held_sku, bound_by="answer", skus=snapshot.skus,
+                number_strategy="printed_code",
             )
             snapshot.inventory.set_state("63/3", master.SOLD)
-            # 63/4 — a SKU with no row in the table, for `sku_unknown`.
-            snapshot.inventory.set_state(
-                "63/4", master.IDENTIFIED, sku="7000404", condition="Near Mint"
-            )
+            # 63/4 — a SKU with no row in the table, for `sku_unknown`. DIRECT FIELD
+            # WRITE: this is the one state neither `bind_sku` nor `hold_sku` can build —
+            # both refuse `SkuUnknown` on a sku with no row, and this fixture needs the
+            # card to already carry one anyway, to prove the route refuses it too.
+            snapshot.inventory.set_state("63/4", master.IDENTIFIED)
+            snapshot.inventory.cards["63/4"].sku = "7000404"
+            snapshot.inventory.cards["63/4"].condition = "Near Mint"
             snapshot.inventory.cards["63/4"].game = "riftbound"
 
         refusal(
@@ -13209,7 +13541,11 @@ def check_identity_binding(checks: Checks) -> None:
             snapshot.skus.entries[disputed_sku] = disputed_row
             snapshot.skus.entries[other_sku] = other_row
             for i in (1, 2):
-                snapshot.inventory.set_state(f"64/{i}", master.IDENTIFIED, sku=disputed_sku)
+                snapshot.inventory.set_state(f"64/{i}", master.IDENTIFIED)
+                snapshot.inventory.bind_sku(
+                    f"64/{i}", disputed_sku, bound_by="answer", skus=snapshot.skus,
+                    number_strategy="printed_code",
+                )
                 snapshot.inventory.cards[f"64/{i}"].game = "riftbound"
                 snapshot.inventory.cards[f"64/{i}"].read_name = "Jax, Icathia"
             disputed_candidates = [
@@ -13328,11 +13664,11 @@ def check_identity_binding(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.skus.entries[held_sku_a] = held_row_a
             for i in (1, 2):
-                snapshot.inventory.set_state(f"65/{i}", master.IDENTIFIED, sku=held_sku_a)
+                snapshot.inventory.set_state(f"65/{i}", master.IDENTIFIED)
+                snapshot.inventory.hold_sku(f"65/{i}", held_sku_a, skus=snapshot.skus)
                 snapshot.inventory.cards[f"65/{i}"].game = "riftbound"
                 snapshot.inventory.cards[f"65/{i}"].read_name = "Jax, Icathia"
                 snapshot.inventory.cards[f"65/{i}"].name = "Jax, Icathia"
-                snapshot.inventory.cards[f"65/{i}"].identity_source = master.IDENTITY_READ
             # 65/3, an ordinary metadata_detection_disagreement entry, offering the SAME
             # sku and condition — proving the `listing_disputed` refusal fires ahead of
             # the ordinary reasons/uniformity check (which this mixed-reason group would
@@ -13659,6 +13995,110 @@ def check_catalog_set_rarity_match(checks: Checks) -> None:
         "still finds the shorter catalogued `Master Yi` — `name in wanted`, for the same "
         "reason",
     )
+
+
+class _ClaimCard:
+    """Everything `join.claim_matches`/`join.rank_by_claims` read off a card, duck-typed —
+    `_catalog_matches`'s own `card` parameter never requires `store.master.Card` itself,
+    only these four attributes."""
+
+    def __init__(self, rarity_claim=None, metadata_finish=None, set_hint=None, game="riftbound"):
+        self.rarity_claim = rarity_claim
+        self.metadata_finish = metadata_finish
+        self.set_hint = set_hint
+        self.game = game
+
+
+def check_catalog_claim_rank_and_no_cutoff(checks: Checks) -> None:
+    """D23's amendment, 2026-09-24: `do_review_catalog` no longer cuts the wire response at
+    nine, and its ranking puts the card's own claim-agreeing rows first — `4/383` on the
+    owner's real store, over the SAME committed fixture `check_catalog_set_rarity_match`
+    already reads.
+
+    `GET /review/4/383/catalog?q=Calm%20Rune` found all 16 `Calm Rune` rows and returned 9,
+    silently, before this fix — the owner's own report, and this file's real numbers.
+    """
+    checks.note("")
+    checks.note(
+        "D23 AMENDMENT — server/capture_server.py:_catalog_matches, no cutoff, claim rank"
+    )
+
+    catalog = join.Catalog.from_export(
+        tcgcsv.read_export(RIFTBOUND_EXPORT), "riftbound"
+    )
+
+    unranked = capture_server._catalog_matches(catalog, "riftbound", "Calm Rune")
+    checks.equal(
+        len(unranked), 16,
+        "EVERY MATCH IS RETURNED, not the old nine-row cut — the owner's own real count "
+        "for this real query",
+    )
+
+    claimed_card = _ClaimCard(rarity_claim=("Showcase",))
+    ranked = capture_server._catalog_matches(catalog, "riftbound", "Calm Rune", claimed_card)
+    checks.equal(
+        len(ranked), 16, "the claim ranks; it does not narrow — the same 16 rows either way"
+    )
+    checks.equal(
+        [row.get("rarity") for row in ranked[:4]],
+        ["Showcase"] * 4,
+        "THE CLAIM-AGREEING ROWS LEAD — all four `Showcase` printings of `Calm Rune` "
+        "ranked ahead of every Common, Promo and unclaimed row, none of which agree",
+    )
+    checks.ok(
+        "9139842" in [row["sku"] for row in ranked[:4]],
+        "and Spiritforged's own Showcase row — the real SKU the owner's case names — is "
+        "one of the four",
+    )
+    checks.equal(
+        {row["sku"] for row in unranked}, {row["sku"] for row in ranked},
+        "ranking reorders; it drops nothing and adds nothing",
+    )
+
+    # `do_review_catalog` itself, over a real card carrying the claim, end to end.
+    with isolated_home() as home:
+        run_dir = home / "runs" / "2026-09-11-box4-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps({
+                "created_at": "2026-09-11T00:00:00+00:00", "joined": True,
+                "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+            })
+        )
+        for _ in range(1):
+            capture_server.do_capture(capture_payload(4, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            card = snapshot.inventory.cards["4/1"]
+            card.game = "riftbound"
+            card.run = "2026-09-11-box4-01"
+            card.rarity_claim = ["Showcase"]
+            snapshot.review.upsert(
+                entry(
+                    4, 1, candidates=[], reason="set_ambiguous",
+                    read={"name": "Calm Rune", "number": "R02"},
+                )
+            )
+
+        wired = answers(
+            checks,
+            lambda: capture_server.do_review_catalog(4, 1, "Calm Rune"),
+            "the live route, over a card carrying the claim",
+        )
+        if wired is not None:
+            checks.equal(
+                (wired["found"], len(wired["rows"]), wired["truncated"]),
+                (16, 16, False),
+                "16 found, all 16 on the wire, and truncated is false — under "
+                "CATALOG_EGREGIOUS_LIMIT",
+            )
+            checks.equal(
+                [row.get("rarity") for row in wired["rows"][:4]],
+                ["Showcase"] * 4,
+                "and the card's own stored claim ranks the search exactly as the direct "
+                "call above did",
+            )
 
 
 def check_identify_preflight_stage(checks: Checks) -> None:
@@ -36118,6 +36558,9 @@ def run() -> Result:
     check_store(checks)
     check_set_and_rarity(checks)
     check_open_read_only(checks)
+    check_open_read_only_race(checks)
+    check_open_read_only_wal_present_never_falls_back(checks)
+    check_open_read_only_corrupt_main_file(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
     check_server_routes(checks)
@@ -36175,6 +36618,7 @@ def run() -> Result:
     check_identity_binding(checks)
     check_catalog_number_fields_round_trip(checks)
     check_catalog_set_rarity_match(checks)
+    check_catalog_claim_rank_and_no_cutoff(checks)
     check_run_realignment(checks)
     check_reused_box_refusal(checks)
     check_box_true_index(checks)

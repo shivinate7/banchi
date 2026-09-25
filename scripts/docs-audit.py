@@ -4263,19 +4263,21 @@ def check_identity_writers(report: Report) -> None:
     allowed to assign one). A `card.<field> = ...` anywhere else under `server/`, `store/`,
     `pipeline/`, `cli/`, `codes/` or `scripts/` is this row's own defect to report.
 
-    SEVEN WRITERS ARE SANCTIONED, NOT THE FOUR LANE 7'S OWN BRIEF NAMED (`bind_sku`,
+    SIX WRITERS ARE SANCTIONED, NOT THE FOUR LANE 7'S OWN BRIEF NAMED (`bind_sku`,
     `unbind_sku`, `restore_identity`, and `hold_sku`, this lane's own addition) — and that
     gap is worth stating rather than quietly resolved either way (CLAUDE.md: "surface
-    ambiguity instead of resolving it silently"). Three more are PRE-EXISTING, ALREADY-
+    ambiguity instead of resolving it silently"). Two more are PRE-EXISTING, ALREADY-
     ARGUED holdovers from earlier lanes, each with its own docstring in `store/master.py`
     making the case this row only points at: `record_identification` ("not a second writer
     of the identity — it is the same writer bind_sku becomes the moment a binding exists,
-    continuous rather than switched"), `set_state` (its own docstring: "A DEVIATION...
-    FLAGGED RATHER THAN MADE SILENTLY", pending a later lane trimming its signature), and
-    `move_card` (D83's tombstone clear, spec §4.2: "clears sku and condition on the
-    tombstone... unchanged"). A row that recognised only the four lane 7's brief named would
-    fail the merged tree on sight, over writes three earlier review rounds already settled —
-    `IDENTITY_WRITERS` in `store/master.py` is the constant that says so, not this file.
+    continuous rather than switched") and `move_card` (D83's tombstone clear, spec §4.2:
+    "clears sku and condition on the tombstone... unchanged"). `set_state` WAS A THIRD
+    HOLDOVER, ITS OWN DOCSTRING ONCE READING "A DEVIATION... FLAGGED RATHER THAN MADE
+    SILENTLY" — commit `66442b32` closed it: its five identity parameters are gone, and it
+    is no longer in `IDENTITY_WRITERS`. A row that recognised only the four lane 7's brief
+    named would fail the merged tree on sight, over writes two earlier review rounds already
+    settled — `IDENTITY_WRITERS` in `store/master.py` is the constant that says so, not this
+    file.
 
     ONLY A `card.<field>` ASSIGNMENT COUNTS — see `_identity_field_assignments`'s own
     docstring for the heuristic and what it cannot see. `IDENTITY_WRITERS_ALLOWED` above is

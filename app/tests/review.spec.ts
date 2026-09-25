@@ -183,8 +183,22 @@ async function settleEnter(page: Page): Promise<void> {
 type Sent = { method: string; url: string; body: unknown }
 
 /** Opens the screen with every route it calls intercepted. Returns the writes it attempted,
- *  which is the strongest thing a browser test can say about a route it must not call. */
-async function open(page: Page, review = REVIEW, parked: Entry[] = []): Promise<Sent[]> {
+ *  which is the strongest thing a browser test can say about a route it must not call.
+ *
+ *  `catalogRows` defaults to `CATALOG_ROWS`, D77's own fixture — a fourth parameter rather
+ *  than a second `page.route` call after this one returns, because the arrival fetch this
+ *  screen makes on a zero-candidate entry has already gone through `open()`'s own `goto` by
+ *  the time a caller could register anything after it (found running `openWide`'s first
+ *  draft: a route added post-`open()` never won a single request, and every assertion read
+ *  the two-row default instead). `truncated`/`found` are read off `catalogRows.length`
+ *  rather than pinned at `false`, so a caller that wants to prove D23's own ceiling can pass
+ *  a fixture the client should treat as cut off. */
+async function open(
+  page: Page,
+  review = REVIEW,
+  parked: Entry[] = [],
+  catalogRows: Candidate[] = CATALOG_ROWS,
+): Promise<Sent[]> {
   const sent: Sent[] = []
 
   await page.route(/\/queues$/, async (route) => {
@@ -208,8 +222,8 @@ async function open(page: Page, review = REVIEW, parked: Entry[] = []): Promise<
     sent.push({ method: request.method(), url: request.url(), body: null })
     const url = new URL(request.url())
     const q = url.searchParams.get('q') ?? ''
-    const rows = q === '' || CATALOG_ROWS.some((r) => r.name.toLowerCase().includes(q.toLowerCase()))
-      ? CATALOG_ROWS
+    const rows = q === '' || catalogRows.some((r) => r.name.toLowerCase().includes(q.toLowerCase()))
+      ? catalogRows
       : []
     await route.fulfill({
       status: 200,
@@ -740,6 +754,171 @@ test('the search box does not answer the card when a digit is typed into it', as
   await page.waitForTimeout(150)
   expect(sent.filter((s) => s.method === 'POST')).toHaveLength(0)
   await expect(box).toHaveValue('1')
+})
+
+/* ---------------------------------- D23 amendment: no cutoff, and "Show N more" */
+
+/* `4/383` on the owner's real store: `GET /review/4/383/catalog?q=Calm%20Rune` found 16
+   rows and the server used to send 9. This fixture is that shape — sixteen rows, one
+   query — over `pipeline/join.py:rank_by_claims`'s own real Riftbound fixture data
+   (`fixtures/riftbound_export_untouched.csv`), so the SKUs and names here are the real
+   ones T3's and T7's own harness tests assert against, not invented. */
+const WIDE_CATALOG_ROWS: Candidate[] = [
+  { sku: '8925762', name: 'Calm Rune (R02a)', set: 'Origins', number: '042a/298', condition: 'Near Mint Foil', market: '3.10', rarity: 'Showcase' },
+  { sku: '9139842', name: 'Calm Rune (R02a)', set: 'Spiritforged', number: 'R02a', condition: 'Near Mint Foil', market: '2.85', rarity: 'Showcase' },
+  { sku: '9277737', name: 'Calm Rune (R02a)', set: 'Unleashed', number: 'R02a', condition: 'Near Mint Foil', market: '2.40', rarity: 'Showcase' },
+  { sku: '9436656', name: 'Calm Rune (R02a)', set: 'Vendetta', number: 'R02a', condition: 'Near Mint Foil', market: '2.55', rarity: 'Showcase' },
+  { sku: '8925752', name: 'Calm Rune', set: 'Origins', number: '042/298', condition: 'Near Mint', market: '0.12', rarity: 'Common' },
+  { sku: '8925757', name: 'Calm Rune', set: 'Origins', number: '042/298', condition: 'Near Mint Foil', market: '0.20', rarity: 'Common' },
+  { sku: '9011917', name: 'Calm Rune (R02b)', set: 'Riftbound Organized Play Promotional Cards', number: '042b/298', condition: 'Near Mint Foil', market: '0.30', rarity: 'Promo' },
+  { sku: '9139616', name: 'Calm Rune', set: 'Spiritforged', number: 'R02', condition: 'Near Mint', market: '0.10', rarity: 'Common' },
+  { sku: '9314061', name: 'Calm Rune', set: 'Unleashed', number: 'R02', condition: 'Near Mint', market: '0.10', rarity: 'Common' },
+  { sku: '9314066', name: 'Calm Rune', set: 'Unleashed', number: 'R02', condition: 'Near Mint Foil', market: '0.18', rarity: 'Common' },
+  { sku: '9405193', name: 'Calm Rune', set: 'Vendetta', number: 'R02', condition: 'Near Mint', market: '0.10', rarity: 'Common' },
+  { sku: '9445915', name: 'Calm Rune', set: 'Vendetta', number: 'R02', condition: 'Near Mint Foil', market: '0.18', rarity: 'Common' },
+  { sku: '9012001', name: 'Calm Rune (R02c)', set: 'Riftbound Organized Play Promotional Cards', number: 'R02c', condition: 'Near Mint', market: '0.25', rarity: 'Promo' },
+  { sku: '9012002', name: 'Calm Rune (R02b)', set: 'Riftbound Organized Play Promotional Cards', number: 'R02b', condition: 'Near Mint Foil', market: '0.30', rarity: 'Promo' },
+  { sku: '9012003', name: 'Calm Rune', set: 'Origins', number: '042/298', condition: 'Near Mint', market: '0.12', rarity: 'Common' },
+  { sku: '9012004', name: 'Calm Rune', set: 'Origins', number: '042/298', condition: 'Near Mint Foil', market: '0.20', rarity: 'Common' },
+]
+
+const WIDE_ROWS: Entry[] = [
+  { ...entry(383, 'set_ambiguous', null, []), read: { name: 'Calm Rune', number: 'R02', set: '', rarity_claim: ['Showcase'] } },
+]
+
+async function openWide(page: Page): Promise<Sent[]> {
+  return open(page, WIDE_ROWS, [], WIDE_CATALOG_ROWS)
+}
+
+test('nine rows are keyed, and the rest wait behind "Show N more"', async ({ page }) => {
+  await openWide(page)
+
+  const rows = page.locator('.review-catalog .review-candidate')
+  await expect(rows).toHaveCount(9)
+  await expect(rows.nth(3).locator('.review-key')).toHaveText('4')
+  // The claim-agreeing rows lead, so the ninth key still belongs to a row the number's own
+  // five Commons never offered — the whole point of the widen this amendment builds.
+  await expect(rows.first()).toContainText('Calm Rune')
+
+  const more = page.getByRole('button', { name: /Show \d+ more/ })
+  await expect(more).toBeVisible()
+  await expect(more).toHaveText('Show 7 more')
+
+  await more.click()
+  await expect(rows).toHaveCount(16)
+  await expect(more).toHaveCount(0)
+  // Past the ninth, a row is mouse-only — the same floor `CandidateButton` has always held
+  // for a row past `MAX_KEYED_CANDIDATES`, unchanged by where the cutoff used to sit.
+  await expect(rows.nth(9).locator('.review-key-blank')).toBeVisible()
+})
+
+test('"Show N more" reveals rows already on the wire, never a second fetch', async ({ page }) => {
+  const sent = await openWide(page)
+  await page.getByRole('button', { name: /Show \d+ more/ }).click()
+  await expect(page.locator('.review-catalog .review-candidate')).toHaveCount(16)
+
+  // One GET on arrival, none from the press — the wire already carried all 16.
+  await expect
+    .poll(() => sent.filter((s) => s.url.includes('/catalog?')).length)
+    .toBe(1)
+})
+
+/** `.review-card`'s own bounding shape, sampled the way `confirm-identity.spec.ts`'s own
+ *  `outsideThePanel` samples `.browse-card`'s: everything on the page OUTSIDE the panel a
+ *  press lands in, keyed by a stamped id so a re-render of the SAME element is still the
+ *  same row here. NOT AN IMPORT of that file's own helper — importing a spec file re-runs
+ *  every `test()` it registers as a module side effect, so each file keeps its own copy. */
+type Placed = { label: string; x: number; y: number }
+
+/** POSITION ONLY, NOT HEIGHT — the one deliberate difference from
+ *  `confirm-identity.spec.ts`'s own `outsideThePanel`. That press never changes the
+ *  page's height at all, so comparing height caught a real move there. This press adds
+ *  rows BELOW the panel BY DESIGN, so every block ancestor of `.review-card` legitimately
+ *  grows taller (`div.review-body`, `main.review`, `.bn-shell`, …) without their own
+ *  top-left corner ever moving — measured: every ancestor's `x,y` held exactly still
+ *  while its height grew from 1,177px to 1,621px. Comparing height here would fail on the
+ *  feature working as designed, not on a defect. */
+async function outsideThePanel(page: Page): Promise<Record<string, Placed>> {
+  return await page.evaluate(() => {
+    const out: Record<string, Placed> = {}
+    const stamp = () => `n${Math.random().toString(36).slice(2)}`
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+      if (el.closest('.review-card') !== null) continue
+      let fixed = false
+      for (let a: HTMLElement | null = el; a !== null && a !== document.body; a = a.parentElement) {
+        if (getComputedStyle(a).position === 'fixed') {
+          fixed = true
+          break
+        }
+      }
+      if (fixed) continue
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 && r.height === 0) continue
+      if (el.dataset.stableId === undefined) el.dataset.stableId = stamp()
+      const cls =
+        typeof el.className === 'string' && el.className !== '' ? `.${el.className.trim().split(/\s+/)[0]}` : ''
+      out[el.dataset.stableId] = { label: `${el.tagName.toLowerCase()}${cls}`, x: r.x, y: r.y }
+    }
+    return out
+  })
+}
+
+// A ONE-PIXEL ROUNDING FLOOR, MEASURED RATHER THAN GUESSED AT. Over the same page growth
+// (1,177px to 1,621px) three sidebar/header icons — nowhere near `.review-catalog` — read
+// one device pixel off between two independently `settled()` samples, both stable across
+// 40 re-reads each. That is sub-pixel layout rounding from the taller document, not a
+// human-visible shift; a threshold above 1px would start hiding the moves this sweep
+// exists to catch.
+const ROUNDING_FLOOR_PX = 1
+
+function whatMoved(before: Record<string, Placed>, after: Record<string, Placed>): string[] {
+  const moved: string[] = []
+  for (const [id, was] of Object.entries(before)) {
+    const now = after[id]
+    if (now === undefined) continue
+    if (Math.abs(now.x - was.x) <= ROUNDING_FLOOR_PX && Math.abs(now.y - was.y) <= ROUNDING_FLOOR_PX) continue
+    moved.push(
+      `${was.label} @ ${Math.round(was.x)},${Math.round(was.y)}   ->   ${now.label} @ ${Math.round(now.x)},${Math.round(now.y)}`,
+    )
+  }
+  return moved
+}
+
+/** Sampled twice, 75ms apart, until two reads agree — `confirm-identity.spec.ts`'s own
+ *  `settled()`, read for the before and after samples the D118 sweep below takes. */
+async function settled(page: Page, tries = 40): Promise<Record<string, Placed>> {
+  let last = await outsideThePanel(page)
+  for (let i = 0; i < tries; i += 1) {
+    await page.waitForTimeout(75)
+    const next = await outsideThePanel(page)
+    if (JSON.stringify(next) === JSON.stringify(last)) return next
+    last = next
+  }
+  return last
+}
+
+test('"Show N more" adds rows below and moves nothing outside the card panel (D118)', async ({
+  page,
+}) => {
+  await openWide(page)
+  const more = page.getByRole('button', { name: /Show \d+ more/ })
+  await expect(more).toBeVisible()
+  // `confirm-identity.spec.ts`'s own precedent: scrolled into view BEFORE the "before"
+  // sample, so the click's own actionability scroll is not read as something the PRESS
+  // moved — the sweep is about what the press's EFFECT moves, not what reaching the
+  // button on a tall panel costs.
+  await more.scrollIntoViewIfNeeded()
+
+  const before = await settled(page)
+  await more.click()
+  await expect(page.locator('.review-catalog .review-candidate')).toHaveCount(16)
+  const after = await settled(page)
+
+  const moved = whatMoved(before, after)
+  expect(
+    moved,
+    `${moved.length} element(s) outside the card panel moved on the press:\n${moved.slice(0, 12).join('\n')}`,
+  ).toHaveLength(0)
 })
 
 /* ------------------------------------- D77: the rows are there and they are the wrong card */
