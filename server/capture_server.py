@@ -10164,13 +10164,13 @@ def _deduped_capped_terms(text: str, *, lower: bool = False) -> List[str]:
     """A query's terms, deduped (first occurrence kept) and capped at
     `_SUPPLEMENTAL_TERM_CAP` distinct terms — the ONE place this happens, shared by the
     candidate-widening step (`_fts_supplemental_candidates`) and `do_search`'s own rank
-    loop below (F1, round-5 Opus delta review, 2026-09-25, on 65b8f39d). `lower=True` for
-    the rank loop, matching its own pre-existing case fold (`_match_rank`'s literal
-    number-fallback check compares against a lower-cased set); the widening step never
-    lower-cased its terms before this fix either, and every source function folds case
-    itself (`match.fold_text`/`match.compact_text`, or a digit-only check that does not
-    care), so changing that behavior here was never needed and would only be a second,
-    unrequested change riding along with this one.
+    loop below (F1, round-5 Opus delta review, 2026-09-25, on 65b8f39d). BOTH CALLERS PASS
+    `lower=True` (the widening step joined round-6, R5-3 below — round 5 kept it
+    case-sensitive there on the theory that every source function folds case internally
+    anyway, so it never mattered; that theory missed the DEDUPE ITSELF, which happens
+    BEFORE any source function runs). `lower=False` stays available and tested, because
+    the two callers agreeing is a fact about their own call sites today, not a promise
+    this function makes on their behalf.
 
     THE RANK LOOP HAD ITS OWN, SEPARATE, UNDEDUPED LIST. `do_search`'s
     `terms = [term.lower() for term in text.split()]` ran `_match_rank` once per RAW term
@@ -10227,10 +10227,13 @@ def _fts_slash_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[
     return list(out.items())
 
 
+_ZERO_PAD_SHAPE = re.compile(r"^[0-9]+[A-Za-z]{0,2}$")
+
+
 def _fts_zero_pad_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows for ONE ALL-DIGIT term, ignoring how many leading zeros the
-    STORED number carries against how many the QUERY carries (F8, round-3 Opus review,
-    2026-09-25: "card numbers with or without leading zeros").
+    """Card `(key, sku)` rows for ONE zero-pad-widenable term, ignoring how many leading
+    zeros the STORED number carries against how many the QUERY carries (F8, round-3 Opus
+    review, 2026-09-25: "card numbers with or without leading zeros").
 
     `_zero_padded_variant`'s FTS widening only covers a term of 1 OR 2 DIGITS — it pads to
     `zfill(3)`, the width `store/numbers.py:join_key` always composes, so a query of `54`
@@ -10253,16 +10256,34 @@ def _fts_zero_pad_candidates_for_term(conn: sqlite3.Connection, term: str) -> Li
     WITH its own extra leading zeros (`0934` finding a card stored as `934`) is covered by
     the same comparison, not a second one.
 
+    ALSO A `/%` PREFIX MATCH, NOT ONLY EQUALITY (R5-2, round-6 Opus delta review,
+    2026-09-25, on ce5a6168). `number_key` is empty for 2,919 of the owner's real 3,510
+    cards — `number` alone carries the composed form (`027/166`), and `LTRIM(column,
+    '0')` on that whole string only strips the FRONT of it (`27/166`), which never
+    equals a bare digit query (`0027` -> `27`). `q=0027` dropped 3 of 4 real matches,
+    `0217` 5 of 5, `0190` 3 of 3. The `LIKE bare || '/%'` clause matches the SAME cards
+    the equality clause already matches for a real card whose printed_total makes
+    `number` itself the whole `NNN/MMM` — never a prefix over an unrelated number, since
+    `bare` is followed by a literal `/`, not a wildcard alone.
+
+    DIGITS FOLLOWED BY LETTERS ALSO WIDEN NOW (R5-5, round-6 Opus delta review,
+    2026-09-25). `_ZERO_PAD_SHAPE` (digits, then 0-2 letters) replaces the old
+    digits-only gate: `24a` dropped all 8 real matches for a card numbered `024a/219`
+    (Rengar) before this, because `_DIGITS_ONLY` refused the whole term at the length
+    check and this function never ran at all. `term.lstrip("0")` is unaffected by a
+    letter suffix — `"0024a".lstrip("0")` is `"24a"`, the same bare form either way.
+
     A SUPERSET, like every candidate source here: `match.match_query` (or `_match_rank`,
     for a single-term query) still decides."""
     out: Dict[str, str] = {}
-    if len(term) < 3 or not match._DIGITS_ONLY.match(term):
+    if len(term) < 3 or not _ZERO_PAD_SHAPE.match(term):
         return []
     bare = term.lstrip("0") or "0"
     for column in ("number_key", "number", "number_display"):
         for key, sku in conn.execute(
-            f"SELECT key, sku FROM cards WHERE LTRIM({column}, '0') = ?",  # noqa: S608
-            (bare,),
+            f"SELECT key, sku FROM cards WHERE LTRIM({column}, '0') = ? "  # noqa: S608
+            f"OR LTRIM({column}, '0') LIKE ?",
+            (bare, bare + "/%"),
         ):
             out.setdefault(str(key), sku)
     return list(out.items())
@@ -10410,8 +10431,17 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
     so every row it adds only ever WIDENS what candidates `match.match_query`, the decisive
     step, gets to see. It can never make an already-passing row disappear, and a union can
     only add rows, never remove one the base query already found.
+
+    DEDUPED ON THE FOLDED FORM, `lower=True` (R5-3, round-6 Opus delta review,
+    2026-09-25). `lower=False` here used to keep every distinct SPELLING as its own
+    term — harmless for a single case variant, but `ex EX Ex eX ob OB fl FL izard` burns
+    all 8 of `_SUPPLEMENTAL_TERM_CAP`'s slots on four case-folded PAIRS before `izard`,
+    the ninth distinct term, is ever reached: every source function folds case
+    internally anyway (`match.fold_text`/`match.compact_text`, or a digit-only check
+    that never sees a letter), so two spellings of the same word were always going to
+    widen identically — the cap should count DISTINCT MEANING, not distinct bytes.
     """
-    terms = _deduped_capped_terms(text)
+    terms = _deduped_capped_terms(text, lower=True)
     out: Dict[str, str] = {}
     for term in terms:
         for source in _SUPPLEMENTAL_SOURCES:
@@ -10651,8 +10681,20 @@ def do_search(query: str) -> dict:
                 # triggers should make impossible. Either way, a candidate this snapshot
                 # cannot see is not a result this snapshot can render.
                 continue
-            term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
-            # THE DECISIVE CHECK, S2 (UX-173 amended, the Opus review, 2026-09-25):
+            # THE DECISIVE CHECK RUNS FIRST, NOW (R5-1, BLOCKING, round-6 Opus delta
+            # review, 2026-09-25, on ce5a6168). `term_ranks` used to be computed for
+            # EVERY candidate before `match.match_query` ever ran — cheap while the
+            # candidate step was still narrow, but F2's UNION (round 5) can make most of
+            # the store a candidate for a query like `/NNN /NNN /NNN...` (every term
+            # widens on its own, no intersection narrows the union back down), so this
+            # loop was paying for up to 8 `_match_rank` calls on rows `match_query` was
+            # always going to reject anyway. Measured on the real-store copy: `/132 /298
+            # /166 /198 /219 /221 /1 /2` took 552-578ms for a 63-byte body — the decisive
+            # check rejects almost every candidate, so almost all of that time was
+            # `term_ranks` no result ever used. `term_ranks` is now computed ONLY when
+            # `matched` already is true (needed for `rank` below) or when `token_count
+            # == 1` (needed for the literal-number fallback two lines down, the one case
+            # where `term_ranks` decides `matched` rather than just `rank`).
             # `match.match_query` — THE SAME PORT `scripts/match-selftest.py` GROUP 1
             # PROVES AGAINST THE SHARED CASE TABLE — decides whether a candidate is a
             # real match. Before this, "does at least one term rank" was the only gate,
@@ -10680,6 +10722,9 @@ def do_search(query: str) -> dict:
             # still keeps green — SUBSTRING and NAME-PREFIX ranks no longer bypass
             # `match_query` on their own.
             matched = match.match_query(text, _card_match_fields(card))
+            term_ranks: List[int] = []
+            if matched or token_count == 1:
+                term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
             if not matched and token_count == 1:
                 # `terms[0]` — LOWERCASED, matching `term_ranks`'s own computation just
                 # above — never `text`, which still carries its original case and would

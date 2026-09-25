@@ -701,7 +701,11 @@ _POKEMON_NAMES = [
     "Lucario", "Porygon-Z", "Farfetch'd",
 ]
 _SUFFIXES = ["", "ex", "V", "VMAX", "VSTAR"]
-_SET_NAMES = ["Base Set", "Jungle", "Fossil", "Team Rocket", "Neo Genesis", "Obsidian Flames"]
+_SET_TOTALS = {
+    "Base Set": "102", "Jungle": "64", "Fossil": "62",
+    "Team Rocket": "82", "Neo Genesis": "111", "Obsidian Flames": "197",
+}
+_SET_NAMES = list(_SET_TOTALS)
 
 
 def _build_pokemon_store(n: int) -> None:
@@ -716,9 +720,17 @@ def _build_pokemon_store(n: int) -> None:
     common tokens here, the way they are on the owner's own store, so `hits` is genuinely
     large for the hostile cases this file re-measures against.
 
-    FOUR NAMED CARDS, for the R4/R5 case tables: `Charizard ex` (number `100/198`, so
-    `izard 100` has one card to find), `Ho-Oh ex` (for `ooh ex`), `Flabébé V` (for
-    `abebe v`) and a bare `Charizard` (so a query naming `ex` alone excludes it)."""
+    PRINTED_TOTAL VARIES BY SET (round-6 Opus delta review, 2026-09-25, this file's own
+    defect). A single fixed `"198"` for every card made `/198` a supplemental-widening
+    match for the WHOLE STORE — a degenerate case no real store has, since a real set's
+    total is one of a handful of real numbers, never one number shared by everything.
+    `_SET_TOTALS` gives each of the 6 sets its own real total.
+
+    FOUR NAMED CARDS, for the R4/R5/R6 case tables: `Charizard ex` (number `100`, set
+    Obsidian Flames — `izard 100` and R5-3's `ex EX Ex eX ob OB fl FL izard` both use
+    this card, the second through its own set name), `Ho-Oh ex` (for `ooh ex`),
+    `Flabébé V` (for `abebe v`) and a bare `Charizard` (so a query naming `ex` alone
+    excludes it)."""
     from store import Store, master
 
     with Store().write() as snapshot:
@@ -732,7 +744,7 @@ def _build_pokemon_store(n: int) -> None:
             sku = f"{'9' if i % 7 else '4'}{100000 + i}"
             inv.cards[f"{box}/{index}"] = master.Card(
                 box=box, index=index, name=name, number=number,
-                printed_total="198", set_hint=set_hint, sku=sku,
+                printed_total=_SET_TOTALS[set_hint], set_hint=set_hint, sku=sku,
             )
         extra = [
             ("Charizard ex", "100", "9500000"),
@@ -745,7 +757,7 @@ def _build_pokemon_store(n: int) -> None:
             index = j + 1
             inv.cards[f"{box}/{index}"] = master.Card(
                 box=box, index=index, name=name, number=number,
-                printed_total="198", set_hint="Obsidian Flames", sku=sku,
+                printed_total=_SET_TOTALS["Obsidian Flames"], set_hint="Obsidian Flames", sku=sku,
             )
 
 
@@ -824,6 +836,17 @@ def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
         # (nearly every numbered card) push this over the 0.5s bound where the other three
         # shapes above, none of them 3+ digit numbers, cannot see that regression at all.
         ("50 repeated '001' terms", ("001 " * 50).strip()),
+        # R5-1, BLOCKING, round-6 Opus delta review, 2026-09-25, on ce5a6168. F2's UNION
+        # (round 5) means a query of several `/NNN` terms can make most of the store a
+        # candidate — each term widens on its own, and nothing intersects the union back
+        # down. The rank loop used to compute `term_ranks` (up to 8 `_match_rank` calls)
+        # for EVERY such candidate BEFORE `match.match_query` ever ran, so almost all of
+        # that cost was spent on rows the decisive check was always going to reject.
+        # Measured on the owner's OWN real store (a read-only copy): 552-578ms for a
+        # 63-byte body. Fixed by running `match_query` first, computing `term_ranks` only
+        # for a matched row or a single-term query.
+        ("8 distinct '/NNN' terms", "/132 /298 /166 /198 /219 /221 /1 /2"),
+        ("a mixed digit/text hostile query", "/198 001 hooh izard ard eon ex v"),
     ):
         start = time.monotonic()
         cs.do_search(query)
@@ -831,7 +854,8 @@ def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
         check(
             took < 0.5,
             f"do_search over {label} took {took:.3f}s on a real-name 3,000-card store, "
-            "under the 0.5s bound (unbounded, round-5 review: 5.6-12.4s and 2.3-2.8s)",
+            "under the 0.5s bound (unbounded, round-5 review: 5.6-12.4s and 2.3-2.8s; "
+            "round-6 review, real-store copy: 552-578ms for the '/NNN' shape)",
         )
 
 
@@ -866,6 +890,208 @@ def case_do_search_union_never_drops_a_row_a_single_term_widens() -> None:
             f"do_search({query!r}) returns every SKU match_query accepts, and no other",
         )
         check(len(expected) > 0, f"{query!r} has at least one real match to prove the case means something")
+
+
+def case_do_search_zero_pad_matches_a_composed_number() -> None:
+    """R5-2, round-6 Opus delta review, 2026-09-25. `_fts_zero_pad_candidates_for_term`
+    compared `LTRIM(col, '0') = ?` against the WHOLE column — never matching a card whose
+    `number` column holds the COMPOSED form (`027/166`), because `LTRIM` only strips the
+    front of that whole string (`27/166`), never equal to a bare `27`. 2,919 of the
+    owner's 3,510 real cards keep `number` this way with an empty `number_key`. Measured:
+    `q=0027` dropped 3 of 4 real matches, `0217` 5 of 5, `0190` 3 of 3. Fixed by ALSO
+    matching `LTRIM(col, '0') LIKE bare || '/%'`.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        card = master.Card(box=1, index=1, name="Compound Number Card", number="027/166", sku="8800")
+        snapshot.inventory.cards["1/1"] = card
+
+    expected = _brute_force_matches("0027")
+    got = {g["sku"] for g in cs.do_search("0027")["groups"]}
+    equal(got, expected, "do_search('0027') finds every SKU match_query accepts, including the composed '027/166'")
+    check("8800" in got, "specifically, the composed-number card is found")
+
+
+def case_do_search_zero_pad_widens_a_digit_plus_letter_term() -> None:
+    """R5-5, round-6 Opus delta review, 2026-09-25. `_fts_zero_pad_candidates_for_term`
+    floored at `_DIGITS_ONLY` — refusing a term with a trailing letter outright, before
+    the function ever ran. `24a` dropped all 8 real matches for a card numbered
+    `024a/219` (Rengar). `_ZERO_PAD_SHAPE` (digits, then 0-2 letters) replaces the gate.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        card = master.Card(box=1, index=1, name="Rengar", number="024a/219", sku="9900")
+        snapshot.inventory.cards["1/1"] = card
+
+    expected = _brute_force_matches("24a")
+    got = {g["sku"] for g in cs.do_search("24a")["groups"]}
+    equal(got, expected, "do_search('24a') finds every SKU match_query accepts")
+    check("9900" in got, "specifically, the digit-plus-letter number card is found")
+
+
+def case_do_search_widening_dedupes_case_variants() -> None:
+    """R5-3, round-6 Opus delta review, 2026-09-25. `_fts_supplemental_candidates`
+    deduped terms CASE-SENSITIVELY: `ex`, `EX`, `Ex` and `eX` counted as 4 distinct terms,
+    burning 4 of `_SUPPLEMENTAL_TERM_CAP`'s 8 slots on the SAME word, spelled 4 ways —
+    every source function folds case internally anyway, so this never widened anything a
+    single lower-cased `ex` would not have. `ex EX Ex eX ob OB fl FL izard` — 8 raw
+    spellings of 4 distinct words, plus a 9th distinct word — returned 0 of 15 real
+    matches before this fix (the 8-slot cap filled on case variants alone, so `izard`,
+    the mid-word term the Charizard ex card needs, never got scanned). Fixed: dedupe on
+    the FOLDED (lower-cased) form.
+    """
+    fresh_home()
+    _build_pokemon_store(3000)
+    from server import capture_server as cs
+
+    query = "ex EX Ex eX ob OB fl FL izard"
+    expected = _brute_force_matches(query)
+    got = {g["sku"] for g in cs.do_search(query)["groups"]}
+    equal(got, expected, f"do_search({query!r}) finds every SKU match_query accepts")
+    check(len(expected) > 0, "the query has at least one real match to prove the case means something")
+
+
+_FUZZ_HAND_PICKED = [
+    "izard", "abebe", "ooh", "gonz", "zardex", "adlyduel", "etchd",
+    "izard ex", "ex izard", "ooh ex", "abebe v", "izard 100",
+    "charizard", "charizard ex", "pikachu", "eevee v", "gengar vmax",
+    "porygon z", "porygonz", "farfetchd", "farfetch'd", "ho oh", "hooh",
+    "flabebe", "flabébé", "flabébé v",
+    "100", "007", "0007", "013", "0013", "050", "0050", "054", "0054",
+    "24a", "024a", "0024a",
+    "/100", "/007", "/013", "/050",
+    "100/197", "007/197", "013/197",
+    "9500000", "9500001", "9500002", "9500003", "950",
+    "obsidian", "flames", "obsidian flames", "base set", "jungle",
+    "fossil", "team rocket", "neo genesis",
+    "ex ex ex", "EX Ex eX", "IZARD", "Izard", "iZaRd",
+    "izard v", "izard vmax", "izard vstar",
+    "pika", "eve", "gar", "ryu", "dra", "mew", "esp", "umb",
+    "1 1", "e e e", "001 001", "a b c d",
+    "not a real query at all zzzz",
+    "zzzzzzzzz",
+    "132/198", "166/198", "219/197", "221/197",
+    "9 ex", "izard 9", "izard ex 100",
+    "charizard ex obsidian flames", "obsidian flames ex",
+    "ex EX Ex eX ob OB fl FL izard",
+    "/132 /298 /166 /198 /219 /221 /1 /2",
+    "/198 001 hooh izard ard eon ex v",
+]
+_FUZZ_FLOOR = ["a", "e", "1", "0", "sc", "fl", "ob", "ex", "hi", "on"]  # the 1-2 char floor
+_FUZZ_CASE_35 = [",", "  ", " , "]  # case 35's own shape
+
+
+def _generate_fuzz_queries() -> List[str]:
+    """~300 SEEDED query shapes for the permanent fuzz (round-6 Opus delta review,
+    2026-09-25). Deterministic (`random.Random(20260925)`), so this list is the SAME
+    every run — a fuzz that reshuffles itself on every CI run cannot be reproduced when
+    it finds something. Mixes: every Pokemon name's own prefix and a mid-word fragment
+    (3-6 characters, reaching `_fts_substring_candidates_for_term`'s own floor), every
+    name with every suffix, case-scrambled spellings of a third of those (the exact shape
+    R5-3 found — several case variants of the same word), a number sweep (bare,
+    zero-padded, slash-prefixed, over every number 1-300 the fixture's own cards carry),
+    and two-term combinations pairing a name fragment with a suffix or a number.
+    """
+    import random
+
+    rng = random.Random(20260925)
+    out: List[str] = list(_FUZZ_HAND_PICKED) + list(_FUZZ_FLOOR) + list(_FUZZ_CASE_35)
+
+    for name in _POKEMON_NAMES:
+        folded = "".join(ch for ch in name.lower() if ch.isalpha())
+        out.append(folded[:4])
+        if len(folded) >= 6:
+            out.append(folded[1:6])
+        for suffix in _SUFFIXES:
+            if suffix:
+                out.append(f"{name} {suffix}")
+
+    def scramble(word: str) -> str:
+        return "".join(ch.upper() if rng.random() < 0.5 else ch.lower() for ch in word)
+
+    for name in _POKEMON_NAMES[:14]:
+        folded = "".join(ch for ch in name.lower() if ch.isalpha())
+        out.append(scramble(folded[:5]))
+
+    for n in range(1, 301, 12):
+        bare = str(n)
+        padded = bare.zfill(3)
+        out.append(bare)
+        out.append(padded)
+        out.append(f"/{padded}")
+
+    fragments = [name.lower()[:4] for name in _POKEMON_NAMES]
+    extras = ["ex", "v", "vmax", "vstar", "100", "013", "050"]
+    for _ in range(20):
+        out.append(f"{rng.choice(fragments)} {rng.choice(extras)}")
+
+    return out
+
+
+_FUZZ_QUERIES = _generate_fuzz_queries()
+# COMPOUNDS OF FLOOR TERMS, THE SAME ACCEPTED GAP (found by this fuzz itself, round-6).
+# `"1 1"`, `"e e e"` and `"a b c d"` are each built ENTIRELY from 1-character terms — a
+# single "e" already misses `match_query`'s own SUBSTRING-anywhere text rule (rule 7 has
+# no floor; `_fts_substring_candidates_for_term`'s floor is what R3 accepted, and it
+# floors at 3, not 1), and a single "1" already misses a pair-matched zero-padded number
+# no candidate source widens for a term this short. Three or four repeats of an
+# already-floor-exempt term inherit the exact same gap, not a new one.
+_FUZZ_ALLOW = set(_FUZZ_FLOOR) | set(_FUZZ_CASE_35) | {"1 1", "e e e", "a b c d"}
+
+
+def case_do_search_permanent_fuzz_agrees_with_match_query() -> None:
+    """PERMANENT FUZZ, round-6 Opus delta review, 2026-09-25. Every prior round's own
+    hand-picked cases proved only the ONE query shape each round happened to name — round
+    4's fixture hid R1/F2, round 5's fixture hid R5-1/R5-2/R5-3/R5-5. This case runs
+    `_generate_fuzz_queries`'s ~300 fixed, seeded query shapes (a mix of every kind the
+    case table above already covers, plus their case variants, number variants and
+    combinations) against a 400-card store, comparing `do_search`'s own answer to
+    `_brute_force_matches` (`match.match_query`, the decisive matcher, run directly
+    against every card) for EACH ONE. A smaller store than the timing cases use — this
+    case's own subject is CORRECTNESS, not speed, and 300 brute-force passes at 3,000
+    cards would cost minutes rather than tens of seconds.
+
+    Zero false positives are ever allowed. A missed row is allowed ONLY for a query in
+    `_FUZZ_ALLOW`: the 1-2 character floor terms (`_fts_substring_candidates_for_term`'s
+    own 3-character floor, the owner's accepted condition — R3, round 4) and case 35's
+    own shape (a bare comma or blank, which `do_search` refuses outright, matching
+    nothing by contract rather than by the matcher's own rules). Any other missed row, or
+    any false positive at all, fails the query and names it.
+    """
+    fresh_home()
+    _build_pokemon_store(400)
+    from server import capture_server as cs
+
+    allow = _FUZZ_ALLOW
+    false_positive_queries: List[str] = []
+    missed_queries: List[str] = []
+    for query in _FUZZ_QUERIES:
+        stripped = query.strip()
+        if not stripped:
+            continue  # `do_search` refuses a blank query by contract — not this case's subject.
+        expected = _brute_force_matches(query)
+        got = {g["sku"] for g in cs.do_search(query)["groups"]}
+        false_positives = got - expected
+        missed = expected - got
+        if false_positives:
+            false_positive_queries.append(f"{query!r}: {sorted(false_positives)}")
+        if missed and query not in allow:
+            missed_queries.append(f"{query!r}: missed {sorted(missed)}")
+    check(
+        not false_positive_queries,
+        f"0 false positives over {len(_FUZZ_QUERIES)} seeded queries: {false_positive_queries[:5]}",
+    )
+    check(
+        not missed_queries,
+        f"0 missed rows outside the allow set over {len(_FUZZ_QUERIES)} seeded queries: "
+        f"{missed_queries[:5]}",
+    )
 
 
 def case_do_search_still_refuses_an_unrelated_number() -> None:
@@ -905,6 +1131,10 @@ CASES = [
     case_deduped_capped_terms_dedupes_and_caps,
     case_do_search_hostile_repeated_terms_stay_fast_on_real_names,
     case_do_search_union_never_drops_a_row_a_single_term_widens,
+    case_do_search_zero_pad_matches_a_composed_number,
+    case_do_search_zero_pad_widens_a_digit_plus_letter_term,
+    case_do_search_widening_dedupes_case_variants,
+    case_do_search_permanent_fuzz_agrees_with_match_query,
     case_do_search_still_refuses_an_unrelated_number,
     case_do_search_runs_the_shared_case_table,
 ]
