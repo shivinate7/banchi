@@ -667,14 +667,19 @@ export function Popover({
      * this panel, never a DOM descendant of it. Read alone, `panel.current?.contains(target)`
      * calls that click OUTSIDE and closes the popover under the list that is still open (FilterBar's
      * own popover mode found this: opening a facet inside it closed the popover at once). Every
-     * layer that has joined `stack` (this file's own layering, above) is part of the CURRENT
-     * foreground regardless of DOM nesting, so a target inside any of them is never outside —
-     * the same idea `isTop` already reads `stack` for, applied to this check instead of z-index. */
-    const outside = (target: EventTarget | null) =>
-      target instanceof Node &&
-      panel.current?.contains(target) !== true &&
-      anchor.current?.contains(target) !== true &&
-      !stack.some((root) => root !== panel.current && root.contains(target))
+     * layer that has joined `stack` ABOVE this panel (this file's own layering, above) is part
+     * of the CURRENT foreground regardless of DOM nesting, so a target inside one of them is
+     * never outside — the same idea `isTop` already reads `stack` for.
+     * ONLY LAYERS ABOVE IT, NEVER BELOW (the PR 2 integration review). The first build counted
+     * every layer in the stack, so a popover opened inside a `Sheet` treated the whole Sheet as
+     * "inside" and never closed on a press elsewhere in it. */
+    const outside = (target: EventTarget | null) => {
+      if (!(target instanceof Node)) return false
+      if (panel.current?.contains(target) === true || anchor.current?.contains(target) === true) return false
+      const at = panel.current === null ? -1 : stack.indexOf(panel.current)
+      const above = at < 0 ? [] : stack.slice(at + 1)
+      return !above.some((root) => root.contains(target))
+    }
     const onDown = (event: PointerEvent) => {
       if (outside(event.target)) onClose()
     }

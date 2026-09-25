@@ -699,6 +699,25 @@ test('a confirm opened from inside an open sheet dims the sheet with its own scr
   await expect(sheet).toBeVisible()
 })
 
+/* F6, THE PR 2 INTEGRATION REVIEW: A POPOVER INSIDE A SHEET CLOSES ON A PRESS ELSEWHERE IN
+ * THAT SHEET. The popover's outside check counted every layer in the stack as inside, the Sheet
+ * beneath it too, so a press on the Sheet's own text left it open. Only layers above it count. */
+test('a popover inside a sheet closes on a press elsewhere in that sheet', async ({ page }) => {
+  const openSheet = page.locator('[data-kit-open="sheet"]')
+  await openSheet.scrollIntoViewIfNeeded()
+  await openSheet.click()
+  const sheet = page.locator('[data-bn-overlay="sheet"]')
+  await expect(sheet).toBeVisible()
+
+  await sheet.locator('[data-kit-open="popover-in-sheet"]').click()
+  const menu = page.locator('[data-bn-overlay="popover"]', { hasText: 'Set a hint' })
+  await expect(menu).toBeVisible()
+
+  await sheet.getByRole('heading', { name: 'The hint' }).click()
+  await expect(menu).toHaveCount(0)
+  await expect(sheet).toBeVisible()
+})
+
 test('a second modal over the first dims it with its own scrim, not the first modal\'s', async ({ page }) => {
   const opener = page.locator('[data-kit-open="layered"]')
   await opener.scrollIntoViewIfNeeded()

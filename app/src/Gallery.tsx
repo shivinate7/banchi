@@ -474,6 +474,8 @@ function OverlaySpecimens() {
   }
   const [second, setSecond] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
+  const [sheetPop, setSheetPop] = useState(false)
+  const sheetAnchor = useRef<HTMLButtonElement>(null)
   return (
     <div className="kit-grid">
       <Spec name="overlays" label="sheet, modal, confirm, popover, two layers" wide>
@@ -528,6 +530,18 @@ function OverlaySpecimens() {
               Delete while editing
             </Button>
           </div>
+          {/* A POPOVER OPENED INSIDE THIS SHEET closes on a press elsewhere in the sheet: only
+              layers ABOVE a popover count as inside it. `gallery.spec.ts` asserts it. */}
+          <div className="kit-row">
+            <Button ref={sheetAnchor} onClick={() => setSheetPop((v) => !v)} aria-haspopup="menu" aria-expanded={sheetPop} data-kit-open="popover-in-sheet">
+              Card actions
+            </Button>
+          </div>
+          <Popover open={sheetPop} onClose={() => setSheetPop(false)} anchor={sheetAnchor} label="Card actions">
+            <button type="button" className="bn-menu-item" onClick={() => setSheetPop(false)}>
+              <Icon name="tag" size={16} /> Set a hint
+            </button>
+          </Popover>
         </Sheet>
         <Modal open={modal} onClose={() => setModal(false)} title="One decision" footer={<Button onClick={() => setModal(false)}>Done</Button>}>
           <p className="bn-read">A modal stops the page for one decision.</p>
