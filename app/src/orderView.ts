@@ -138,49 +138,19 @@ export function passesHideUnknown(
 
 /* --------------------------------------------------------------------- the unnamed label */
 
-/** THE VIEWER'S CLOCK, NOT UTC — and the reason is the row this label sits in. The same row
- *  already draws the placed date through `toLocaleDateString` (`Orders.tsx`, the `placed`
- *  line), which reads the local clock. A UTC label beside a local date makes one row state
- *  two different days for one event, for every viewer west of UTC, for part of every day.
- *  Cross-timezone stability is the weaker claim here: one store is read by one hand, and the
- *  label's job is to tell two nameless rows apart, not to travel. */
-function shortDate(iso: string): string | null {
-  const at = new Date(iso)
-  if (Number.isNaN(at.getTime())) return null
-  const mm = String(at.getMonth() + 1).padStart(2, '0')
-  const dd = String(at.getDate()).padStart(2, '0')
-  const yy = String(at.getFullYear() % 100).padStart(2, '0')
-  return `${mm}-${dd}-${yy}`
-}
-
-/** The label a nameless buyer draws in the NAME slot — never a typed dot, never the order's
- *  full id (the owner's ruling, 2026-09-19). It reads `MM-DD-YY_XXXXX`: the group's own
- *  `latest` placed date, then the tail of an order id — the same two facts `BuyerRow` and
- *  `OrderPanel` already draw beside it, composed once here rather than three times.
+/** The label a nameless buyer draws in the NAME slot (UX-268): `Buyer on order …00012`, the tail
+ *  of the group's most recent order id, in the UI face. The old `MM-DD-YY_XXXXX` form (the owner's
+ *  ruling of 2026-09-19, D220) read as an order id. On the owner's store 0 of 834 orders have no
+ *  buyer name, because TCGplayer always sends one, so this label is for a pasted order. The full id
+ *  stays in the ORDER slot.
  *
- *  ONE ORDER IS READ, NOT AVERAGED. `orderBuyers.ts:groupBuyers` never merges two nameless
- *  orders into one group (each keys on its own order), so today a nameless `group.orders`
- *  is always length 1 and this question does not arise in practice. If that invariant ever
- *  changes, this reads `orders[0]` — the most recent by `placed_at`, the same order `latest`
- *  is computed across and the same one a NAMED group's own `name` is read off — rather than
- *  averaging or concatenating several dates and ids into one string nobody could parse back.
- *
- *  THE TAIL IS THE LAST 5 CHARACTERS of that order's id, or the whole id when it is shorter
- *  than 5 — never padded, never repeated, so a 3-character id draws as itself rather than as
- *  a 5-character lie. This is a SHORT LABEL, not the id: the full id stays in the ORDER slot
- *  (`OrderPanel`'s own `ORDER <number>` / `<n> ORDERS`), never here.
- *
- *  `null` when there is neither a date nor an id to draw from — a group this bare has nothing
- *  this label can say, and an empty string is `BuyerRow`'s and `OrderPanel`'s own cue to fall
- *  back further (nothing here invents a placeholder date or id). */
+ *  ONE ORDER IS READ, NOT AVERAGED: `groupBuyers` never merges two nameless orders into one group,
+ *  so `orders[0]` is the only order. THE TAIL IS THE LAST 5 CHARACTERS of its id, or the whole id
+ *  when it is shorter. */
 export function unnamedBuyerLabel(group: BuyerGroup): string {
-  const order = group.orders[0]
-  const id = order?.number ?? group.number ?? ''
-  const tail = id.length > 5 ? id.slice(-5) : id
-  const date = group.latest === null ? null : shortDate(group.latest)
-  if (date === null) return tail
-  if (tail === '') return date
-  return `${date}_${tail}`
+  const id = group.orders[0]?.number ?? group.number ?? ''
+  if (id === '') return 'Buyer with no name'
+  return `Buyer on order ${id.length > 5 ? `…${id.slice(-5)}` : id}`
 }
 
 /** What a buyer is called on screen: the feed's own name, or the unnamed label. */

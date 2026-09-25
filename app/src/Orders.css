@@ -175,7 +175,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-panel-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .orders-panel-name,
 .orders-walk-title { font-size: var(--bn-fs-xl); overflow-wrap: anywhere; }
-.orders-panel-name.bn-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-lg); }
 .orders-panel-order,
 .orders-walk-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-buyer-order-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bn-ink-2); }

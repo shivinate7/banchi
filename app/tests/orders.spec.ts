@@ -1674,39 +1674,24 @@ test('an open order under Ready in the row draws its status LABEL, never the ord
   await expect(row).not.toContainText(SECOND_ORDER)
 })
 
-test('a nameless order groups on its own, drawing the composed date_id label and never the full id', async ({ page }) => {
+test('a nameless order groups on its own, as "Buyer on order" and the tail of its id, never the full id (UX-268)', async ({ page }) => {
   const nameless = order({ buyer: null })
   await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  /* `placed_at` is `2026-08-29T10:00:00+00:00` and the id's last 5 characters are `006AC`
-     (the fixture's own default, `routeFixtures.ts:order`). `unnamedBuyerLabel` reads the
-     LOCAL clock, so this typed date is safe only because the browser's zone is pinned to
-     `America/Chicago` in `playwright.config.ts` and 10:00 UTC is 05:00 there, the same
-     calendar day. The margin is ten hours: a pinned zone further behind UTC than that would
-     move this date, and the case below derives its own expectation in the browser instead of
-     relying on the margin. */
+  /* The fixture's id ends `006AC` (`routeFixtures.ts:order`). The label is words, in the UI face,
+     so it never reads as an order id. */
   const row = page.locator('.orders-index-row').first()
-  await expect(row).toContainText('08-29-26_006AC')
+  await expect(row.locator('.orders-index-number')).toHaveText('Buyer on order …006AC')
   await expect(row).not.toContainText(ORDER_NUMBER)
+  const face = await row.locator('.orders-index-number').evaluate((el) => getComputedStyle(el).fontFamily)
+  expect(face).not.toContain('JetBrains')
 })
 
-test('two unnamed buyers with different placed dates draw different name-slot labels, neither the full id', async ({
-  page,
-}) => {
+test('two unnamed buyers draw two different labels, neither the full id', async ({ page }) => {
   const firstNumber = 'AAAA1111-0000F4-00001'
   const secondNumber = 'BBBB2222-0000F4-00002'
-  const first = order({
-    key: `TCGplayer:${firstNumber}`,
-    number: firstNumber,
-    buyer: null,
-    placed_at: '2026-07-01T00:00:00+00:00',
-  })
-  const second = order({
-    key: `TCGplayer:${secondNumber}`,
-    number: secondNumber,
-    buyer: null,
-    placed_at: '2026-07-15T00:00:00+00:00',
-  })
+  const first = order({ key: `TCGplayer:${firstNumber}`, number: firstNumber, buyer: null, placed_at: '2026-07-01T00:00:00+00:00' })
+  const second = order({ key: `TCGplayer:${secondNumber}`, number: secondNumber, buyer: null, placed_at: '2026-07-15T00:00:00+00:00' })
   await open(page, {
     orders: payloadOf(
       [first, second],
@@ -1716,40 +1701,9 @@ test('two unnamed buyers with different placed dates draw different name-slot la
       ],
     ),
   })
-
-  /* Default sort is newest first, and both fixtures share the default Ready-to-ship status
-     (D209), so the newer of the two (07-15) leads.
-
-     THE EXPECTED DATE IS DERIVED, NOT TYPED. The label reads the LOCAL clock, because the
-     same row draws its placed date through `toLocaleDateString` and one row may not state
-     two different days for one event. A typed `07-15-26` would therefore pass only in a
-     zone at or east of UTC, and these fixtures sit at midnight. Compose the expectation the
-     way the product composes it, so this case asserts the FORMAT and the DISTINCTNESS
-     rather than the runner's timezone.
-
-     AND IT IS DERIVED IN THE BROWSER, NOT IN NODE. `playwright.config.ts` pins the browser to
-     `America/Chicago` on purpose, so a person sees their own zone. Node ran in a different
-     one on CI, computed `07-15` and failed against a page that correctly drew `07-14-26`
-     beside its own `placed Jul 14`. The two dates on the row agreeing is the whole point of
-     the fix, so the expectation is computed where the product computes it. */
-  const localLabel = (iso: string): Promise<string> =>
-    page.evaluate((value: string) => {
-      const at = new Date(value)
-      const mm = String(at.getMonth() + 1).padStart(2, '0')
-      const dd = String(at.getDate()).padStart(2, '0')
-      const yy = String(at.getFullYear() % 100).padStart(2, '0')
-      return `${mm}-${dd}-${yy}`
-    }, iso)
-  const rows = page.locator('.orders-index-row')
-  await expect(rows).toHaveCount(2)
-  const texts = await rows.allTextContents()
-  expect(texts[0]).toContain(`${await localLabel('2026-07-15T00:00:00+00:00')}_00002`)
-  expect(texts[1]).toContain(`${await localLabel('2026-07-01T00:00:00+00:00')}_00001`)
-  expect(texts[0]).not.toEqual(texts[1])
-  for (const text of texts) {
-    expect(text).not.toContain(firstNumber)
-    expect(text).not.toContain(secondNumber)
-  }
+  /* Newest first, so the 07-15 order leads. */
+  const names = page.locator('.orders-index-number')
+  await expect(names).toHaveText(['Buyer on order …00002', 'Buyer on order …00001'])
 })
 
 test('a buyer with two open orders walks both at once — one selection, one plan, both cards', async ({ page }) => {
@@ -2403,7 +2357,7 @@ test('the search finds a nameless buyer by the label its row draws', async ({ pa
   const label = (await page.locator('.orders-index-row', { hasNotText: 'Ada' }).locator('.orders-index-number').textContent()) ?? ''
   expect(label).not.toBe('')
   const search = page.locator('.bn-filterbar-search .search-field-input')
-  for (const typed of [label, label.slice(0, 8), 'a2ffc195 256158']) {
+  for (const typed of [label, '00012', 'a2ffc195 256158']) {
     await search.fill(typed)
     await expect(page.locator('.orders-index-row'), typed).toHaveCount(1)
     await expect(page.locator('.orders-index-row')).not.toContainText('Ada')

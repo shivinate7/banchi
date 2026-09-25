@@ -3396,7 +3396,7 @@ function BuyerRow({
   return (
     <button ref={ref} type="button" className="orders-index-row" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
       <span className="orders-index-main">
-        <span className={`orders-index-number${group.name === null ? ' bn-mono' : ''}`}>{buyerLabel(group)}</span>
+        <span className="orders-index-number">{buyerLabel(group)}</span>
         {status === 'ready' && group.orders.length < 2 ? null : (
           <span className="orders-index-meta">
             {status === 'ready' ? null : (
@@ -3445,7 +3445,7 @@ function OrderPanel({
     <div className="orders-panel">
       <div className="orders-panel-top">
         <div className="orders-panel-text">
-          <h2 className={`orders-panel-name${group.name === null ? ' bn-mono' : ''}`}>{buyerLabel(group)}</h2>
+          <h2 className="orders-panel-name">{buyerLabel(group)}</h2>
           <p className="orders-panel-order">
             {single === null ? (
               `${group.orders.length} orders`

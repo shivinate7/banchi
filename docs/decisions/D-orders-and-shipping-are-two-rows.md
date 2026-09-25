@@ -70,15 +70,16 @@ own "Add orders" sheet. The panel's `Manage` keeps only that buyer's own orders.
   A sort press re-sorts at once (FLT-01, D-a-press-reorders-and-nothing-else-moves).
 - **The stand-down backlog** (D203) names its cutoff, its span and every order TCGplayer still
   calls Ready to ship. The first cutoff it offers closes none of them.
+- **A buyer with no name reads `Buyer on order …00012`**, in the UI face (UX-268). D220 said:
+  "The name slot now reads `MM-DD-YY_XXXXX`." That form read as an order id. On the owner's
+  store, 0 of 834 orders have no buyer name (measured 2026-09-24, read-only). The label is for a
+  pasted order.
 
 `app/tests/orders.spec.ts` and `app/tests/order-walk.spec.ts` assert each part. They check
 the widths 1440, 820, 720 and 390.
 
 ### What is still open
 
-- D220 also says the unnamed label reads `MM-DD-YY_XXXXX`, in the mono face, on the owner's
-  ruling of 2026-09-19. UX-268 finds that it reads as an order id. It is unchanged until the
-  owner rules.
 - The Details table (the market reading and the listing counts) left the Orders card pane, per
   the held-orders cut list. The owner once asked for that parity on this screen. Confirm.
 - CLAUDE.md's hub note changes in the docs-sweep lane, not here.
