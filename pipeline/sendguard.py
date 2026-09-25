@@ -229,6 +229,8 @@ REFUSED_LIVE_MOVED = "live_moved"      # TCGplayer's price is not the one the sc
 REFUSED_NOT_SAVED = "not_saved"        # the saved price is not the one the button named
 REFUSED_BELOW_FLOOR = "below_floor"    # under the store's floor, the mark-down door's rule
 REFUSED_NOT_IN_SEND = "not_in_send"    # the button named a card this press does not price
+REFUSED_MOVE_UNNAMED = "move_unnamed"  # a listing row would move live copies the button did not name
+REFUSED_MOVE_COUNT = "move_count"      # the button named another count of live copies than TCGplayer holds
 
 
 @dataclass(frozen=True)
@@ -241,11 +243,12 @@ class PriceNote:
     price: Optional[str] = None
     live: Optional[str] = None
     shown: Optional[str] = None
+    copies: int = 0
 
     def as_dict(self) -> dict:
         return {
             "sku": self.sku, "name": self.name, "why": self.why,
-            "price": self.price, "live": self.live, "shown": self.shown,
+            "price": self.price, "live": self.live, "shown": self.shown, "copies": self.copies,
         }
 
 
@@ -316,13 +319,85 @@ def price_changes(
     return changes, left, refused
 
 
-def price_report(changes: Sequence[PriceChange], left=(), refused=()) -> dict:
-    """The JSON object `cli/cmd_emit.py` prints for the price-only rows, and the ones it did not
-    write. `server/send_routes.py` reads it."""
+@dataclass(frozen=True)
+class LiveMove:
+    """Live copies of a card that a LISTING row moves to its price (the owner's ruling,
+    2026-09-24, round 7): a new copy of a card already live carries Banchi's stored price, and
+    TCGplayer lists every copy of one SKU at one price, so the live copies move with it."""
+
+    sku: str
+    name: str
+    copies: int
+    price: str
+    was: Optional[str]
+
+    def as_dict(self) -> dict:
+        return {"sku": self.sku, "name": self.name, "copies": self.copies, "price": self.price, "was": self.was}
+
+
+def live_moves(
+    going: Mapping[str, tuple],
+    named: Mapping[str, tuple],
+    live: Mapping[str, int],
+    prices: Mapping[str, Optional[str]],
+    floor=None,
+) -> tuple:
+    """`(moves, refused)`: the live copies this press's LISTING rows move, and any the button did
+    not name.
+
+    `going` is SKU -> (name, the row's price) for every row that adds a copy. A row moves live
+    copies when TCGplayer holds some and shows another price. The button names each move it
+    drew with its price and its count (`named`, SKU -> (price, copies)), off the same newest
+    live export the worklist carries. A move the button did not name, or named at another price,
+    REFUSES the press with the live figure as data, so the screen can say "TCGplayer shows $X
+    now" and send again. So does a move named at another count of live copies (round 8, R7-3).
+
+    A MOVE UNDER THE STORE'S FLOOR (`floor`, `policy.threshold`) IS REFUSED `below_floor`, as
+    data, and never offered back (round 8, R7-1): the rule S1 gave a price-only row.
+
+    A LIVE ROW WITH COPIES AND NO PRICE IS A MOVE, from no price to the row's (round 8, R7-4).
+    Whether TCGplayer's real export can hold one is not known, and naming it is the safe side.
+    """
+    moves: List[LiveMove] = []
+    refused: List[PriceNote] = []
+    for sku in sorted(going):
+        name, price = going[sku]
+        price = tcgcsv.format_price(price)
+        held = int(live.get(sku, 0))
+        now = prices.get(sku)
+        if held <= 0 or now == price:
+            continue
+        if floor is not None and Decimal(price) < Decimal(str(floor)):
+            refused.append(
+                PriceNote(sku, str(name or ""), REFUSED_BELOW_FLOOR, price=price, live=now, copies=held)
+            )
+            continue
+        told_price, told_copies = named.get(sku, (None, None))
+        if told_price is None or tcgcsv.format_price(told_price) != price:
+            refused.append(
+                PriceNote(sku, str(name or ""), REFUSED_MOVE_UNNAMED, price=price, live=now,
+                          shown=None if told_price is None else tcgcsv.format_price(told_price),
+                          copies=held)
+            )
+            continue
+        if told_copies is None or int(told_copies) != held:
+            refused.append(
+                PriceNote(sku, str(name or ""), REFUSED_MOVE_COUNT, price=price, live=now,
+                          shown=None if told_copies is None else str(int(told_copies)), copies=held)
+            )
+            continue
+        moves.append(LiveMove(sku=sku, name=str(name or ""), copies=held, price=price, was=now))
+    return moves, refused
+
+
+def price_report(changes: Sequence[PriceChange], left=(), refused=(), moves=()) -> dict:
+    """The JSON object `cli/cmd_emit.py` prints for the price-only rows, the ones it did not
+    write, and the live copies its listing rows move. `server/send_routes.py` reads it."""
     return {
         "send_prices": {
             "rows": [change.as_dict() for change in changes],
             "left": [note.as_dict() for note in left],
             "refused": [note.as_dict() for note in refused],
+            "moves": [move.as_dict() for move in moves],
         }
     }

@@ -28,7 +28,7 @@ import { Button, Icon, Money, Notice, Refusal, Retry } from './kit'
 import { clockTime } from './dates'
 import { describeFailure, dismissSendWarning, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
-import type { PriceChange, SendSummary, SendTrim } from './types'
+import type { LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
 import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
 import './SendCard.css'
 
@@ -104,6 +104,107 @@ function TrimList({ trimmed }: { readonly trimmed: readonly SendTrim[] }) {
           </li>
         ))}
         {trimmed.length > 6 ? <li className="send-more">and {trimmed.length - 6} more</li> : null}
+      </ul>
+    </Notice>
+  )
+}
+
+/** The live copies a press moves, as words and figures: "2 live copies move to $19.99", or "to
+ *  new prices" where they move to more than one (the owner's ruling, round 7). */
+function MovesPhrase({ moves }: { readonly moves: readonly { copies: number; price: string }[] }) {
+  const copies = moves.reduce((total, move) => total + move.copies, 0)
+  const prices = new Set(moves.map((move) => Number(move.price)))
+  const head = `${plural(copies, 'live copy moves', 'live copies move')} to `
+  return prices.size === 1 ? (
+    <>
+      {head}
+      <Money value={Number(moves[0]?.price)} />
+    </>
+  ) : (
+    <>{`${head}new prices`}</>
+  )
+}
+
+/** The refused rows a press can send again, named (round 7, R6-1): a price whose live figure
+ *  moved since the screen read it, and live copies the button did not say would move. Any other
+ *  refused row is not offered: the press is refused whole. */
+function confirmable(failure: Failure | null): RefusedPrice[] {
+  if (failure === null || failure.code !== 'price_refused') return []
+  const refused = ((failure.data as { refused?: RefusedPrice[] } | undefined)?.refused ?? []).filter(Boolean)
+  /* A MOVE UNDER THE FLOOR, A PRICE NOT SAVED, A CARD NOT IN THE SEND: never offered (R7-1). */
+  const offered = new Set<RefusedPrice['why']>(['live_moved', 'move_unnamed', 'move_count'])
+  if (refused.length === 0 || refused.some((row) => !offered.has(row.why))) return []
+  return refused
+}
+
+/** "TCGplayer shows $22.03 now. Send $30.00?" per refused row, and one press that sends again
+ *  with the live price named. The server refuses again if TCGplayer moved again. */
+function ResendPrices({
+  rows,
+  busy,
+  onSend,
+}: {
+  readonly rows: readonly RefusedPrice[]
+  readonly busy: boolean
+  readonly onSend: () => void
+}) {
+  const one = rows.length === 1 ? rows[0] : undefined
+  return (
+    <Notice
+      tone="warn"
+      compact
+      className="send-failure send-resend"
+      title="TCGplayer's price is not the one this list showed."
+      action={
+        <Button size="sm" busy={busy} disabled={busy} onClick={onSend}>
+          {one !== undefined && one.price !== null ? (
+            <>
+              Send <Money value={Number(one.price)} />
+            </>
+          ) : (
+            'Send these prices'
+          )}
+        </Button>
+      }
+    >
+      <ul className="send-names">
+        {rows.map((row) => (
+          <li key={`${row.sku}-${row.why}`}>
+            <span className="send-name">{row.name || row.sku}</span>
+            <span className="send-figure">
+              {row.why === 'live_moved' ? 'TCGplayer shows ' : `${plural(row.copies, 'live copy', 'live copies')} at `}
+              {row.live === null ? 'no price' : <Money value={Number(row.live)} />}
+              {row.why === 'live_moved' ? ' now. Send ' : ' move to '}
+              {row.price === null ? 'this price' : <Money value={Number(row.price)} />}
+              {row.why === 'live_moved' ? '?' : '.'}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Notice>
+  )
+}
+
+/** EVERY LIVE COPY A PRESS MOVES, BEFORE THE PRESS, when they move to more than one price (the
+ *  owner's ruling names the copies AND their price; round 8, R7-2). One price fits the button's
+ *  own words; more than one is listed here, card by card, the way the guard's trims are listed
+ *  after a press. */
+function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
+  if (new Set(moves.map((move) => Number(move.price))).size < 2) return null
+  return (
+    <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
+      <ul className="send-names">
+        {moves.map((move) => (
+          <li key={move.sku}>
+            <span className="send-name">{move.name || move.sku}</span>
+            <span className="send-figure">
+              {`${plural(move.copies, 'live copy', 'live copies')}, `}
+              {move.was === null ? 'no price' : <Money value={Number(move.was)} />}
+              {' to '}
+              <Money value={Number(move.price)} />
+            </span>
+          </li>
+        ))}
       </ul>
     </Notice>
   )
@@ -359,6 +460,7 @@ export function SendCard({
   runs,
   copies,
   priceChanges = [],
+  liveMoves = [],
   settled,
   saveFailed,
   quantities,
@@ -371,6 +473,10 @@ export function SendCard({
   /** Cards already live whose typed price this press changes (the mixed send). The server
    *  decides against a fresh read; this is the worklist's count, for the button's words. */
   readonly priceChanges?: readonly PriceChange[]
+  /** Live copies this press's listing rows move to their stored price (the owner's ruling,
+   *  round 7), off the same fresh read. The button names them, and the server refuses a move it
+   *  was not told of. */
+  readonly liveMoves?: readonly LiveMove[]
   /** True when every price typed on the screen is saved. A press waits for it. */
   readonly settled: boolean
   /** True when the last save failed. A press refuses rather than sending old prices. */
@@ -392,6 +498,12 @@ export function SendCard({
   /* A TAKE BACK OR A DISMISS THAT FAILED IS ITS OWN LINE, never the press's failure: that one
      offers "Try again", which SENDS, and says the copies are back on the list. */
   const [undoFailure, setUndoFailure] = useState<{ title: string; failure: Failure } | null>(null)
+  /* WHAT THE OWNER CONFIRMED AFTER A REFUSAL (round 7, R6-1): the live price each named price
+     is now measured against, and each move of live copies they agreed to. Spent by a send. */
+  const [confirmed, setConfirmed] = useState<{ was: Record<string, string | null>; moves: Record<string, LiveMove> }>({
+    was: {},
+    moves: {},
+  })
 
   /* THE PRESS WAITS FOR THE SAVE RATHER THAN RACING IT: the server writes the file from the
      prices on disk, so a press with a save in flight would send the price before the last one
@@ -408,9 +520,17 @@ export function SendCard({
     setPhase(download ? 'downloading' : 'sending')
     void (async () => {
       try {
-        const answer = await sendCopies(runs, { download, splitThreshold: download && split, quantities: quantities(), prices: priceChanges })
+        const prices = priceChanges.map((change) =>
+          change.sku in confirmed.was ? { ...change, was: confirmed.was[change.sku] ?? null } : change,
+        )
+        const moves = [
+          ...liveMoves.filter((move) => !(move.sku in confirmed.moves)),
+          ...Object.values(confirmed.moves),
+        ]
+        const answer = await sendCopies(runs, { download, splitThreshold: download && split, quantities: quantities(), prices, moves })
         setSent(answer.send)
         setFailure(null)
+        setConfirmed({ was: {}, moves: {} })
         onSent()
       } catch (err) {
         const failed = describeFailure(err)
@@ -429,13 +549,30 @@ export function SendCard({
         void refreshLive()
       }
     })()
-  }, [phase, settled, saveFailed, intent, runs, split, quantities, priceChanges, onSent])
+  }, [phase, settled, saveFailed, intent, runs, split, quantities, priceChanges, liveMoves, confirmed, onSent])
 
   const press = (next: 'send' | 'download') => {
     setIntent(next)
     setFailure(null)
     setPhase('waiting')
   }
+
+  /* ONE PRESS SENDS AGAIN WITH WHAT THE OWNER NOW SEES NAMED: each refused price against the
+     live price shown, and each refused move of live copies as a move the button said. */
+  const resend = (rows: readonly RefusedPrice[]) => {
+    setConfirmed((held) => {
+      const next = { was: { ...held.was }, moves: { ...held.moves } }
+      for (const row of rows) {
+        if (row.why === 'live_moved') next.was[row.sku] = row.live
+        /* A MOVE THE BUTTON DID NOT NAME, OR NAMED AT ANOTHER COUNT: named now at TCGplayer's own
+           count of live copies (round 8, R7-3). */
+        else if (row.price !== null) next.moves[row.sku] = { sku: row.sku, name: row.name, copies: row.copies, price: row.price, was: row.live }
+      }
+      return next
+    })
+    press(intent)
+  }
+  const offered = confirmable(failure)
 
   /* THE NEWEST RECEIPT IS WHAT THE CARD STANDS ON, unless this visit's own press is one the
      status read has not caught up with yet. The server lists receipts newest PRESS first; a stamp
@@ -467,11 +604,20 @@ export function SendCard({
       ? 'Saving your prices…'
       : phase === 'sending' || running
         ? 'Checking TCGplayer, then sending…'
-        : priceChanges.length > 0
-          ? `Send ${carried(copies ?? 0, priceChanges.length)}`
-          : copies !== null && copies > 0
-            ? `Send ${plural(copies, 'copy', 'copies')} to TCGplayer`
-            : 'Send to TCGplayer'
+        : liveMoves.length > 0
+          ? /* THE LIVE COPIES THE PRESS MOVES ARE NAMED ON IT (the owner's ruling, round 7):
+               "Send 1 copy, 2 live copies move to $19.99". */
+            (
+              <>
+                {`Send ${carried(copies ?? 0, priceChanges.length)}, `}
+                <MovesPhrase moves={liveMoves} />
+              </>
+            )
+          : priceChanges.length > 0
+            ? `Send ${carried(copies ?? 0, priceChanges.length)}`
+            : copies !== null && copies > 0
+              ? `Send ${plural(copies, 'copy', 'copies')} to TCGplayer`
+              : 'Send to TCGplayer'
 
   const takeBack = async (stamp: string) => {
     setTakingBack(true)
@@ -558,7 +704,11 @@ export function SendCard({
         </div>
       )}
 
-      {failure === null ? null : RETRYABLE.has(failure.code) ? (
+      <MovesList moves={liveMoves} />
+
+      {offered.length > 0 ? (
+        <ResendPrices rows={offered} busy={busy} onSend={() => resend(offered)} />
+      ) : failure === null ? null : RETRYABLE.has(failure.code) ? (
         <Retry
           compact
           className="send-failure"

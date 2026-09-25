@@ -333,6 +333,9 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #                      card that adds no copy and whose
                                    #                      price the screen NAMED in F. A
                                    #                      price F does not name never rides.
+                                   #                      A listing row that moves live
+                                   #                      copies to its price refuses unless
+                                   #                      F names that move (round 7).
                                    #                      A listing file
                                    #                      may mix both (the owner's ruling,
                                    #                      2026-09-24). The send press passes

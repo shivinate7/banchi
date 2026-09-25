@@ -326,50 +326,68 @@ class PriceRefused(Exception):
     """`--reprice-live` was asked for in a shape this press cannot honour. A sentence."""
 
 
-def _named_prices(path) -> dict:
-    """SKU -> (price, the live price the screen showed), off the `--reprice-live` file.
+def _named_prices(path) -> tuple:
+    """`(prices, moves)` off the `--reprice-live` file. `prices` is SKU -> (price, the live price
+    the screen showed); `moves` is SKU -> the price the button said live copies move to.
 
     THE SCREEN'S OWN LIST (round 6, B1 and B2): the SKUs the owner typed a price for on the
-    worklist, the price the button counted, and the live price the screen drew beside it. A
-    file that is not that list is a refusal, never an empty list.
+    worklist, the price the button counted, and the live price the screen drew beside it. Since
+    round 7 it also names every live copy a listing row moves (the owner's ruling, R6-3). A
+    plain list is the round-6 shape: prices, and no move named. A file that is not that shape
+    is a refusal, never an empty list.
     """
     import json
 
     try:
-        rows = json.loads(Path(path).read_text(encoding="utf-8"))
-        return {
+        said = json.loads(Path(path).read_text(encoding="utf-8"))
+        if isinstance(said, list):
+            said = {"prices": said, "moves": []}
+        prices = {
             str(row["sku"]): (str(row["price"]), None if row.get("was") in (None, "") else str(row["was"]))
-            for row in rows
+            for row in said.get("prices") or []
         }
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+        moves = {
+            str(row["sku"]): (
+                str(row["price"]),
+                None if row.get("copies") in (None, "") else int(row["copies"]),
+            )
+            for row in said.get("moves") or []
+        }
+        return prices, moves
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         raise PriceRefused(f"the named prices could not be read: {exc}") from None
 
 
-def _price_changes(args, guarded, candidates, adding, floor, say):
-    """`(changes, left)`: the price-only rows this press writes, and the named prices it leaves
-    out, or `([], [])` when it asked for none (`--reprice-live`).
+def _price_changes(args, guarded, candidates, going, floor, say):
+    """`(changes, left, moves)`: the price-only rows this press writes, the named prices it
+    leaves out, and the live copies its listing rows move, or empties when it asked for none
+    (`--reprice-live`).
 
     `candidates` is SKU -> (name, the plan's price) for every SKU this press prices and adds
-    NO copy of, and `adding` the SKUs it adds a copy of. ONLY A SKU THE SCREEN NAMED CAN BECOME
+    NO copy of, and `going` the same for every SKU it adds a copy of. A listing row that would
+    move live copies the button did not name refuses the press (`sendguard.live_moves`, the
+    owner's ruling of round 7). ONLY A SKU THE SCREEN NAMED CAN BECOME
     A ROW (`pipeline/sendguard.py:price_changes`). The live figures come off the same export
     the double-send guard read, so the two halves of one press never disagree about what
     TCGplayer holds. A refusal prints its JSON line first, so the route can name each card.
     """
     if not getattr(args, "reprice_live", None):
-        return [], []
+        return [], [], []
     if guarded is None:
         raise PriceRefused(
             "--reprice-live needs --live-guard: a price change is only ever measured against "
             "what TCGplayer holds right now"
         )
-    named = _named_prices(args.reprice_live)
+    named, told = _named_prices(args.reprice_live)
     try:
         prices = sendguard.live_prices(tcgcsv.read_export(Path(args.live_guard)).rows)
     except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
         raise PriceRefused(f"the live export's prices could not be read: {exc}") from None
     changes, left, refused = sendguard.price_changes(
-        named, candidates, guarded["live"], prices, floor, adding
+        named, candidates, guarded["live"], prices, floor, set(going)
     )
+    moves, unnamed = sendguard.live_moves(going, told, guarded["live"], prices, floor)
+    refused = list(refused) + list(unnamed)
     if refused:
         import json
 
@@ -378,12 +396,12 @@ def _price_changes(args, guarded, candidates, adding, floor, say):
             "a price the button named cannot be sent as it stands: "
             + ", ".join(f"{note.sku} ({note.why})" for note in refused)
         )
-    return changes, left
+    return changes, left, moves
 
 
-def _say_prices(changes, left, args, say) -> None:
-    """Name every price-only row and every named price left out, then print the one JSON line
-    the route reads."""
+def _say_prices(changes, left, moves, args, say) -> None:
+    """Name every price-only row, every named price left out and every live copy a listing row
+    moves, then print the one JSON line the route reads."""
     if not getattr(args, "reprice_live", None):
         return
     import json
@@ -397,7 +415,10 @@ def _say_prices(changes, left, args, say) -> None:
         say(f"{'':<16} ...and {len(changes) - 8} more")
     for note in left[:8]:
         say(f"{'':<16} left out: {note.sku} {note.name} — {note.why}")
-    say(json.dumps(sendguard.price_report(changes, left), sort_keys=True))
+    for move in moves[:8]:
+        was = f"${move.was}" if move.was is not None else "no price"
+        say(f"{'':<16} moves: {move.copies} live {move.sku} {move.name} — {was} to ${move.price}")
+    say(json.dumps(sendguard.price_report(changes, left, (), moves), sort_keys=True))
 
 
 def _record_prices(writable, changes, run) -> None:
@@ -938,7 +959,7 @@ def run(args, say) -> int:
         # prices and adds no copy of, already live, whose typed price differs from the live one.
         # Built here, off the same `priced` mapping the listing rows use, so a price-only row
         # and a listing row can never carry two prices for one card.
-        changes, left = _price_changes(
+        changes, left, moves = _price_changes(
             args,
             guarded,
             {
@@ -948,9 +969,9 @@ def run(args, say) -> int:
                 if resolved.matches[sku].add_to_quantity == 0
             },
             {
-                sku
+                sku: (resolved.matches[sku].name, price)
                 for by_game in priced.values()
-                for sku in by_game
+                for sku, price in by_game.items()
                 if resolved.matches[sku].add_to_quantity > 0
             },
             pricing.check_threshold(policy["threshold"]),
@@ -1028,7 +1049,7 @@ def run(args, say) -> int:
         for match in at_cap[:8]:
             say(f"{'':<16} {match.sku} — {match.nothing_to_add}")
     _say_quantities(_quantities_for(args), resolved.matches, say)
-    _say_prices(changes, left, args, say)
+    _say_prices(changes, left, moves, args, say)
 
     # ---------------------------------------------------------- pushed, and the audit trail
     #
@@ -1452,7 +1473,7 @@ def run_merged(args, say) -> int:
     # plan's own row with `add_to_quantity` 0, so `merge.import_rows` writes it as Add to
     # Quantity 0 at the plan's price, with no second code path.
     try:
-        changes, left = _price_changes(
+        changes, left, moves = _price_changes(
             args,
             guarded,
             {
@@ -1460,7 +1481,11 @@ def run_merged(args, say) -> int:
                 for row in merged_plan.skus
                 if row.match.add_to_quantity == 0
             },
-            {row.sku for row in merged_plan.skus if row.match.add_to_quantity > 0},
+            {
+                row.sku: (row.match.name, row.price)
+                for row in merged_plan.skus
+                if row.match.add_to_quantity > 0
+            },
             pricing.check_threshold(book.policy_for()["threshold"]),
             say,
         )
@@ -1511,7 +1536,7 @@ def run_merged(args, say) -> int:
     _say_quantities(
         _quantities_for(args), {row.sku: row.match for row in merged_plan.skus}, say
     )
-    _say_prices(changes, left, args, say)
+    _say_prices(changes, left, moves, args, say)
 
     by_game = {None: rows}
     if args.split_games:

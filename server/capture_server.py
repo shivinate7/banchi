@@ -12887,10 +12887,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
     def _json(self, status: HTTPStatus, payload) -> None:
         self._send(status, json.dumps(payload).encode("utf-8") + b"\n", "application/json")
 
-    def _fail(self, status: HTTPStatus, code: str, message: str) -> None:
+    def _fail(self, status: HTTPStatus, code: str, message: str, data=None) -> None:
         """Every error says what happened and what to do next — DESIGN.md's copy rule
-        reaches here, because step 7 shows these strings to a person."""
-        self._json(status, {"error": {"code": code, "message": message}})
+        reaches here, because step 7 shows these strings to a person. `data` is what a screen
+        can act on beside the sentence, when a refusal carries any (round 7)."""
+        error = {"code": code, "message": message}
+        if data is not None:
+            error["data"] = data
+        self._json(status, {"error": error})
 
     # ------------------------------------------------------------------------ input
 
@@ -12973,7 +12977,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # because this file imports it and the reverse import would be a cycle. One
             # `except` clause is the whole of that seam; every refusal it carries already
             # holds the status and the code it wants to be answered with.
-            self._fail(exc.status, exc.code, str(exc))
+            self._fail(exc.status, exc.code, str(exc), getattr(exc, "data", None))
         except shipping_routes.ShippingRefusal as exc:
             # The shipping module's own exception type, for the identical reason one line
             # up: it cannot import `BadRequest` from here because this file imports IT, and

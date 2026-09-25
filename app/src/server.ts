@@ -1,5 +1,6 @@
 import type {
   AnswerResult,
+  LiveMove,
   PriceChange,
   CorrectResult,
   CodeExportResult,
@@ -249,11 +250,16 @@ export class ServerError extends Error {
    *  is the case where nothing was sent. */
   readonly status: number
 
-  constructor(code: string, message: string, status: number) {
+  /** What a screen can act on beside the sentence, when the refusal carries any (round 7):
+   *  a send's refused rows, so it can offer to send again with the live price named. */
+  readonly data: unknown
+
+  constructor(code: string, message: string, status: number, data?: unknown) {
     super(message)
     this.name = 'ServerError'
     this.code = code
     this.status = status
+    this.data = data
   }
 }
 
@@ -266,6 +272,8 @@ export type Failure = {
    *  server was not reached, it failed inside, or it was busy. `refusal` is a "no" that the
    *  same press will get again. Optional, so a failure a screen builds by hand still types. */
   kind?: 'refusal' | 'retry'
+  /** What the refusal carries beside its sentence, when it carries any (round 7). */
+  data?: unknown
 }
 
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
@@ -305,7 +313,7 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
  * "finish the job" by wiring this into it.
  */
 export function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status) }
+  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), data: err.data }
   const detail = err instanceof Error ? err.message : String(err)
   return {
     kind: 'refusal',
@@ -552,13 +560,13 @@ function parseJson(text: string): unknown {
  * the operator as "undefined is not an object". Returns null and lets the caller fall back
  * to the status line instead.
  */
-function errorEnvelope(body: unknown): { code: string; message: string } | null {
+function errorEnvelope(body: unknown): { code: string; message: string; data?: unknown } | null {
   if (typeof body !== 'object' || body === null) return null
   const wrapped: unknown = (body as { error?: unknown }).error
   if (typeof wrapped !== 'object' || wrapped === null) return null
-  const { code, message } = wrapped as { code?: unknown; message?: unknown }
+  const { code, message, data } = wrapped as { code?: unknown; message?: unknown; data?: unknown }
   if (typeof code !== 'string' || typeof message !== 'string') return null
-  return { code, message }
+  return { code, message, data }
 }
 
 /* WHICH PROCESS IS ANSWERING, observed on traffic the app is already making (D73).
@@ -747,7 +755,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
 
   if (!response.ok) {
     const named = errorEnvelope(body)
-    if (named !== null) throw new ServerError(named.code, named.message, response.status)
+    if (named !== null) throw new ServerError(named.code, named.message, response.status, named.data)
     /* Not from this server, then — a proxy, or a dev-server 404 from a misconfigured base
      * URL. The status line is all there is, so quote it with the URL that produced it
      * rather than inventing an explanation for a response nobody in this repo wrote. */
@@ -2392,6 +2400,8 @@ export async function sendCopies(
     quantities?: Record<string, number>
     /** The price changes the button named. Only these may ride the send (round 6). */
     prices?: readonly PriceChange[]
+    /** The live copies the button said listing rows move (round 7). */
+    moves?: readonly LiveMove[]
   } = {},
 ): Promise<SendAnswer> {
   return (await request('/pipeline/send', {
@@ -2403,6 +2413,9 @@ export async function sendCopies(
       ...(options.download && options.splitThreshold ? { split_threshold: true } : {}),
       ...quantitiesClaim(options.quantities),
       ...(options.prices !== undefined && options.prices.length > 0 ? { prices: options.prices } : {}),
+      ...(options.moves !== undefined && options.moves.length > 0
+        ? { moves: options.moves.map((move) => ({ sku: move.sku, price: move.price, copies: move.copies })) }
+        : {}),
     }),
   })) as SendAnswer
 }
