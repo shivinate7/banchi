@@ -29,6 +29,7 @@ contradict a settled decision on purpose. The owner weighs that.
 | --- | --- |
 | `CONSOLIDATED.md` | The merged findings (UX ids), the grade matrix, the ten themes, the decisions in question, and the gaps |
 | `RULINGS.md` | The owner's rulings from the interview, and the orchestrator's notes |
+| `LANES.md` | The lane plan, both rounds merged, with the wave-2 file scopes and the iconography pointer |
 | `coherence.md` | Lens 1: one concept, one name, one count (COH) |
 | `loop.md` | Lens 2: the daily loop, walked end to end (LOOP) |
 | `visual.md` | Lens 3: the visual system, and a read-only look at the live app (VIS) |
