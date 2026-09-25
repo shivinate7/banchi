@@ -10160,6 +10160,33 @@ _LEADING_SLASH_DIGITS = re.compile(r"^/([0-9]+)$")
 _SUPPLEMENTAL_TERM_CAP = 8
 
 
+def _deduped_capped_terms(text: str, *, lower: bool = False) -> List[str]:
+    """A query's terms, deduped (first occurrence kept) and capped at
+    `_SUPPLEMENTAL_TERM_CAP` distinct terms — the ONE place this happens, shared by the
+    candidate-widening step (`_fts_supplemental_candidates`) and `do_search`'s own rank
+    loop below (F1, round-5 Opus delta review, 2026-09-25, on 65b8f39d). `lower=True` for
+    the rank loop, matching its own pre-existing case fold (`_match_rank`'s literal
+    number-fallback check compares against a lower-cased set); the widening step never
+    lower-cased its terms before this fix either, and every source function folds case
+    itself (`match.fold_text`/`match.compact_text`, or a digit-only check that does not
+    care), so changing that behavior here was never needed and would only be a second,
+    unrequested change riding along with this one.
+
+    THE RANK LOOP HAD ITS OWN, SEPARATE, UNDEDUPED LIST. `do_search`'s
+    `terms = [term.lower() for term in text.split()]` ran `_match_rank` once per RAW term
+    per candidate — a repeated term was never folded, the identical defect R1 fixed for the
+    candidate step, still live one function over. `("1 " * 100)` (100 repeated terms)
+    measured 5.6-12.4s at 3,000 cards and 19.9s at 10,000 on a REAL-NAME fixture (round-4's
+    own `f"Bench Card {i}"` tests never matched enough candidates to notice this loop's
+    own cost). A single shared function, called from both places, is what keeps the two
+    from drifting apart again — the widening step already had this fix; the rank loop
+    just never got it."""
+    terms = text.split()
+    if lower:
+        terms = [term.lower() for term in terms]
+    return list(dict.fromkeys(terms))[:_SUPPLEMENTAL_TERM_CAP]
+
+
 def _fts_slash_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
     """Card `(key, sku)` rows for ONE term naming the SECOND half of a collector number
     alone (S2, UX-173 amended): `/132` for a card stored as `054/132`. FTS5 has no "ends
@@ -10352,51 +10379,45 @@ _SUPPLEMENTAL_SOURCES = (
 
 def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
     """Every extra candidate the base FTS5 query (`_fts_query`, above) cannot reach on its
-    own, from all four widenings, DEDUPED AND INTERSECTED ACROSS TERMS (R1, BLOCKING,
-    round-4 Opus review, 2026-09-25).
+    own, from all four widenings, DEDUPED AND CAPPED ACROSS TERMS (R1, BLOCKING, round-4
+    Opus review, 2026-09-25), UNIONED — NEVER INTERSECTED (F2, round-5 Opus delta review,
+    2026-09-25, correcting this function's own first version).
 
-    THE DEFECT, MEASURED: `("a " * 100).strip()` — 100 REPEATED terms — took 5.8s at 3,000
-    cards, because each of the (undeduplicated) 100 terms ran its own O(store) scan and the
-    results were UNIONED, never intersected against each other or against the query's own
-    AND semantics. `("001 " * 50).strip()` took 1.5s for the same reason, compounded by the
-    zero-pad widening's own prefix bug (fixed separately, in `_fts_zero_pad_candidates_
-    for_term`'s own docstring).
+    THE ORIGINAL DEFECT, MEASURED: `("a " * 100).strip()` — 100 REPEATED terms — took 5.8s
+    at 3,000 cards, because each of the (undeduplicated) 100 terms ran its own O(store) scan
+    and the results were unioned with no bound on how many terms could run one. `("001 " *
+    50).strip()` took 1.5s for the same reason, compounded by the zero-pad widening's own
+    prefix bug (fixed separately, in `_fts_zero_pad_candidates_for_term`'s own docstring).
 
-    THREE THINGS FIX IT, TOGETHER:
+    TWO THINGS FIX THE COST, TOGETHER — NEITHER OF THEM IS THE INTERSECTION:
       DEDUPE     `dict.fromkeys(text.split())` — a term seen twice is scanned once.
                  100 copies of `a` become the one distinct term `a`.
       CAP        `_SUPPLEMENTAL_TERM_CAP` bounds how many DISTINCT terms even reach these
                  scans, so a query of many distinct words cannot multiply the cost either.
-      INTERSECT  a query of two or more terms requires the STORE'S candidate for EACH term
-                 to agree before either term's widening contributes a row — narrowing what
-                 a hostile multi-term query can make this step return, the same AND
-                 `match.match_query`'s own `_cover` requires of a real match.
 
-    INTERSECTING NEVER DROPS A REAL MATCH. This function is additive to the base FTS `hits`
-    dict in `do_search`, which already applies its own correct AND across every term via
-    ONE combined `MATCH` expression — unaffected by anything here. A row this function's
-    own intersection excludes (because term B produced no supplemental candidate for it,
-    say a SKU term that only the base FTS query's own SKU-prefix rule reaches) is a row the
-    base query already found on its own, or a row `match.match_query` was never going to
-    accept in the first place — this function only ever WIDENS what already-passing rows
-    the decisive step gets to see, never the final answer.
+    INTERSECTING TERMS WAS WRONG, AND IS DELETED (F2). The first version of this function
+    required the store's own candidate for EVERY term to agree before any term's widening
+    contributed a row — on the false claim that this "never drops a real match", because
+    the base FTS query's own combined `MATCH` expression already applies a correct AND. It
+    does not: the base query and this function read DIFFERENT things. `izard ex` found 20
+    rows before the intersection existed, 0 after — `izard` (a mid-word fragment) has no
+    supplemental candidate for `ex` (the base FTS query already covers `ex` as an ordinary
+    token, so `_fts_supplemental_candidates_for_term` never has to), and the intersection of
+    "everything `izard` widened" with "nothing `ex` widened" is empty. A fuzz found 64 of
+    300 two-term queries dropped this way (`ooh ex`, `abebe v`, `izard 100`, `izard v`
+    among them). A UNION of what each term's widenings separately find is correct: this
+    function is additive to the base FTS `hits` dict, which already carries its own AND —
+    so every row it adds only ever WIDENS what candidates `match.match_query`, the decisive
+    step, gets to see. It can never make an already-passing row disappear, and a union can
+    only add rows, never remove one the base query already found.
     """
-    terms = list(dict.fromkeys(text.split()))[:_SUPPLEMENTAL_TERM_CAP]
-    if not terms:
-        return []
-    per_term: List[Dict[str, str]] = []
+    terms = _deduped_capped_terms(text)
+    out: Dict[str, str] = {}
     for term in terms:
-        one: Dict[str, str] = {}
         for source in _SUPPLEMENTAL_SOURCES:
             for key, sku in source(conn, term):
-                one[key] = sku
-        per_term.append(one)
-    common = set(per_term[0])
-    for other in per_term[1:]:
-        common &= set(other)
-        if not common:
-            return []
-    return [(key, per_term[0][key]) for key in common]
+                out.setdefault(key, sku)
+    return list(out.items())
 
 
 def _card_match_fields(card: master.Card) -> "match.MatchFields":
@@ -10582,11 +10603,12 @@ def do_search(query: str) -> dict:
             # (`/132`), one that only reaches a real token once a hyphen or an apostrophe
             # is folded out (`hooh`, `farfetchd`), a 3+ digit query missing MORE leading
             # zeros than it typed (`934` for a card stored as `0934`), or a MID-WORD
-            # fragment (`izard` for `Charizard`). `_fts_supplemental_candidates` dedupes,
-            # bounds and — for a multi-term query — intersects across terms before ever
-            # reaching here; see its own docstring for the defect that made that
-            # necessary. A superset, like the base query already was;
-            # `match.match_query`/`_match_rank` below still decide.
+            # fragment (`izard` for `Charizard`). `_fts_supplemental_candidates` dedupes
+            # and bounds terms, then UNIONS each term's own widened candidates (F2,
+            # round-5 Opus delta review, 2026-09-25 — an earlier version intersected
+            # across terms, which dropped a real match whenever only one term needed a
+            # widening; see the function's own docstring). A superset, like the base
+            # query already was; `match.match_query`/`_match_rank` below still decide.
             for key, sku in _fts_supplemental_candidates(conn, text):
                 hits.setdefault(key, sku)
         finally:
@@ -10609,7 +10631,18 @@ def do_search(query: str) -> dict:
         # BEST (lowest) rank among the terms that match wins — order-independent, which is
         # what "eiscue 044" and "044 eiscue" both need to return the identical list. A
         # single-term query degrades to exactly the old call (`terms == [needle]`).
-        terms = [term.lower() for term in text.split()]
+        #
+        # DEDUPED AND CAPPED THROUGH THE SAME `_deduped_capped_terms` HELPER
+        # `_fts_supplemental_candidates` uses (F1, round-5 Opus delta review, 2026-09-25,
+        # on 65b8f39d). This loop ran `_match_rank` once per RAW term per candidate, and a
+        # repeated term was never folded — the same defect R1 fixed for the candidate
+        # step, still live here. `("1 "*100)` (100 repeated terms) measured 5.6-12.4s at
+        # 3,000 cards and 19.9s at 10,000, because every candidate paid for 100 calls to
+        # `_match_rank` instead of 1. `token_count` keeps the RAW (pre-dedupe) token count
+        # for the single-term fallback below — "how many words did the operator type",
+        # never "how many distinct ones".
+        token_count = len(text.split())
+        terms = _deduped_capped_terms(text, lower=True)
         for key, sku in hits.items():
             card = inventory.cards.get(key)
             if card is None:
@@ -10647,7 +10680,7 @@ def do_search(query: str) -> dict:
             # still keeps green — SUBSTRING and NAME-PREFIX ranks no longer bypass
             # `match_query` on their own.
             matched = match.match_query(text, _card_match_fields(card))
-            if not matched and len(terms) == 1:
+            if not matched and token_count == 1:
                 # `terms[0]` — LOWERCASED, matching `term_ranks`'s own computation just
                 # above — never `text`, which still carries its original case and would
                 # never equal the lowercased number set `_match_rank`'s literal check

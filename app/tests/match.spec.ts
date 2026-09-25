@@ -42,17 +42,27 @@ for (const [at, one] of CASES.entries()) {
  * same card, so both implementations of the one matcher are held to the same shape of
  * proof. Un-memoized, `cover` tries the single-token AND the pair branch at every position,
  * and each branch recurses into the rest of the tokens: the same position is solved again
- * from scratch by every path that reaches it, growing like Fibonacci. A bound generous
- * enough to survive a slow CI runner, nowhere near the un-memoized cost, so a regression
- * here fails LOUD rather than merely slow. */
-test('cover stays fast on 27 repeated tokens (memo regression)', () => {
+ * from scratch by every path that reaches it, growing like Fibonacci.
+ *
+ * TIGHTENED, F4 (round-5 Opus delta review, 2026-09-25): the review's own complaint was
+ * that a 1000ms bound never goes red on a fast runner — a memoized pass here measures
+ * 60-80ms, and CI has plenty of room to still pass at 1000ms even with the memo gone,
+ * just slower. `cover` is a module-private function with no exported hook to count its
+ * own calls without changing production code for a test's sake, so the fix is the
+ * ALTERNATIVE the review names: a MUCH LARGER hostile query (60 repeated tokens, not 27),
+ * which keeps the MEMOIZED cost linear and still fast (measured under 40ms), while the
+ * UN-MEMOIZED cost grows exponentially from there — 27 tokens alone measured 4.5s
+ * un-memoized; 60 is far beyond what any un-memoized run finishes before a reasonable
+ * timeout. A 150ms bound is generous against the memoized cost and nowhere near reachable
+ * without the memo, on a slow CI runner or a fast one alike. */
+test('cover stays fast on 60 repeated tokens (memo regression)', () => {
   const fields: MatchFields = { numbers: ['132/132'] }
-  const query = '132 '.repeat(27) + '/132 /999'
+  const query = '132 '.repeat(60) + '/132 /999'
   const start = Date.now()
   const result = matchQuery(query, fields)
   const took = Date.now() - start
-  expect(result, "27 repeated '132' tokens plus two unmatched ones do not cover").toBe(false)
-  expect(took, `cover took ${took}ms, over the 1000ms bound (un-memoized: seconds)`).toBeLessThan(1000)
+  expect(result, "60 repeated '132' tokens plus two unmatched ones do not cover").toBe(false)
+  expect(took, `cover took ${took}ms, over the 150ms bound (un-memoized: never finishes in a reasonable time at this size)`).toBeLessThan(150)
   /* filterByQuery threads the same memo per row, never across rows — proven by running the
    * hostile query over several rows and staying fast in total, not only once. */
   const rows = Array.from({ length: 5 }, () => fields)
@@ -60,5 +70,5 @@ test('cover stays fast on 27 repeated tokens (memo regression)', () => {
   const matched = filterByQuery(rows, query, (row) => row)
   const filterTook = Date.now() - filterStart
   expect(matched.length).toBe(0)
-  expect(filterTook, `filterByQuery over 5 rows took ${filterTook}ms`).toBeLessThan(1000)
+  expect(filterTook, `filterByQuery over 5 rows took ${filterTook}ms`).toBeLessThan(150)
 })

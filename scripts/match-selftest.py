@@ -305,6 +305,32 @@ def case_do_search_finds_a_number_with_more_leading_zeros_than_typed() -> None:
             f"do_search({query!r}) does not find the unrelated card stored as 1934",
         )
 
+    # AN EQUALITY CHECK, NEVER A PREFIX ONE (R1, round-4 Opus review, 2026-09-25;
+    # regression-checked again, round-5). `LTRIM(col, '0') LIKE '1%'` (the original bug,
+    # for a query of `001`) matched nearly every numbered card in the store — any stored
+    # number starting with `1` once its own zeros are stripped, not only the one the
+    # query names. Checked directly against the CANDIDATE function, not through
+    # `do_search`'s own decisive `match.match_query` check, which already refuses this
+    # false positive downstream either way (see `case_do_search_hostile_repeated_terms_
+    # stay_fast_on_real_names`'s own `("001 " * 50)` timing case for what an over-broad
+    # candidate set actually costs — extra work, not a wrong final answer).
+    with Store().write() as snapshot:
+        decoy154 = master.Card(box=1, index=3, name="Decoy 154", number="154", sku="9002")
+        snapshot.inventory.cards["1/3"] = decoy154
+    from store import db, files
+
+    conn = db.connect(files.inventory_dir())
+    try:
+        cands = dict(cs._fts_zero_pad_candidates_for_term(conn, "001"))
+    finally:
+        conn.close()
+    check(
+        "1/3" not in cands,
+        "_fts_zero_pad_candidates_for_term('001') does not offer a card numbered 154 as "
+        "a candidate (LTRIM('154','0')='154', never equal to LTRIM('001','0')='1' — a "
+        "prefix check would wrongly offer it, since '154' starts with '1')",
+    )
+
 
 def case_do_search_finds_a_whole_number_second_half() -> None:
     """F2, round-3 Opus review, 2026-09-25. `_fts_slash_candidates` scanned only
@@ -668,6 +694,180 @@ def case_do_search_hostile_multiterm_query_stays_fast() -> None:
         )
 
 
+_POKEMON_NAMES = [
+    "Pikachu", "Eevee", "Charizard", "Blastoise", "Venusaur", "Gengar",
+    "Snorlax", "Gyarados", "Dragonite", "Mewtwo", "Espeon", "Umbreon",
+    "Flareon", "Sylveon", "Ho-Oh", "Lugia", "Rayquaza", "Garchomp",
+    "Lucario", "Porygon-Z", "Farfetch'd",
+]
+_SUFFIXES = ["", "ex", "V", "VMAX", "VSTAR"]
+_SET_NAMES = ["Base Set", "Jungle", "Fossil", "Team Rocket", "Neo Genesis", "Obsidian Flames"]
+
+
+def _build_pokemon_store(n: int) -> None:
+    """A synthetic store shaped like the owner's real one (F1/F2, round-5 Opus delta
+    review, 2026-09-25) — real Pokemon-shaped names with a suffix (`ex`, `V`, `VMAX`,
+    `VSTAR`), a real set name, a zero-padded number, and a SKU where ONE DIGIT PREFIXES
+    MOST of them (`9`, the rest `4`), never the placeholder `f"Bench Card {i}"` fixture
+    round 4's own tests used. That placeholder name shares no token with any real query —
+    `_match_rank`/`match.match_query` reject every candidate near-instantly, so a hostile
+    query's `hits` dict stayed small and the round-4 review's own tests measured a cost
+    the round-5 review's REAL names do not share. `izard`, `ex`, `1`, `e` and `100` are all
+    common tokens here, the way they are on the owner's own store, so `hits` is genuinely
+    large for the hostile cases this file re-measures against.
+
+    FOUR NAMED CARDS, for the R4/R5 case tables: `Charizard ex` (number `100/198`, so
+    `izard 100` has one card to find), `Ho-Oh ex` (for `ooh ex`), `Flabébé V` (for
+    `abebe v`) and a bare `Charizard` (so a query naming `ex` alone excludes it)."""
+    from store import Store, master
+
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        for i in range(n):
+            box = 1 + i // 400
+            index = 1 + i % 400
+            name = f"{_POKEMON_NAMES[i % len(_POKEMON_NAMES)]} {_SUFFIXES[i % len(_SUFFIXES)]}".strip()
+            number = str(1 + i % 300).zfill(3)
+            set_hint = _SET_NAMES[i % len(_SET_NAMES)]
+            sku = f"{'9' if i % 7 else '4'}{100000 + i}"
+            inv.cards[f"{box}/{index}"] = master.Card(
+                box=box, index=index, name=name, number=number,
+                printed_total="198", set_hint=set_hint, sku=sku,
+            )
+        extra = [
+            ("Charizard ex", "100", "9500000"),
+            ("Ho-Oh ex", "007", "9500001"),
+            ("Flabébé V", "013", "9500002"),
+            ("Charizard", "050", "9500003"),
+        ]
+        for j, (name, number, sku) in enumerate(extra):
+            box = 1 + n // 400 + 1
+            index = j + 1
+            inv.cards[f"{box}/{index}"] = master.Card(
+                box=box, index=index, name=name, number=number,
+                printed_total="198", set_hint="Obsidian Flames", sku=sku,
+            )
+
+
+def _brute_force_matches(text: str) -> set:
+    """Every SKU `match.match_query` accepts, read directly off the live snapshot —
+    the ground truth `do_search`'s own candidate steps (FTS5 plus the four widenings)
+    are only ever narrowing toward. Cards with no SKU are excluded, matching `do_search`'s
+    own SKU-grouped answer shape."""
+    from store import Store
+    from server import capture_server as cs, match
+
+    inventory = Store().read().inventory
+    found = set()
+    for card in inventory.cards.values():
+        if card.sku and match.match_query(text, cs._card_match_fields(card)):
+            found.add(str(card.sku).strip())
+    return found
+
+
+def case_deduped_capped_terms_dedupes_and_caps() -> None:
+    """F1, round-5 Opus delta review, 2026-09-25. `_deduped_capped_terms` is the ONE
+    shared place both `_fts_supplemental_candidates` and `do_search`'s rank loop get their
+    term list from — a direct, deterministic check on the function itself, rather than
+    only a timing bound on its callers, so a mutation that removes the dedupe or the cap
+    is caught exactly, not just "sometimes, on a slow enough case".
+    """
+    fresh_home()
+    from server import capture_server as cs
+
+    equal(
+        cs._deduped_capped_terms("a a a b b c"), ["a", "b", "c"],
+        "a repeated term is scanned once, first-seen order kept",
+    )
+    nine = " ".join(f"w{i}" for i in range(9))
+    equal(
+        cs._deduped_capped_terms(nine), [f"w{i}" for i in range(8)],
+        "9 distinct terms cap at 8 (_SUPPLEMENTAL_TERM_CAP), the 9th dropped",
+    )
+    equal(
+        cs._deduped_capped_terms("Ex EX ex", lower=True), ["ex"],
+        "lower=True (the rank loop's own case) folds case before deduping",
+    )
+    equal(
+        cs._deduped_capped_terms("Ex EX ex", lower=False), ["Ex", "EX", "ex"],
+        "lower=False (the widening step's own case, unchanged by this fix) keeps case, "
+        "so 3 differently-cased spellings of the same word are 3 distinct terms here — "
+        "each source function folds case itself",
+    )
+
+
+def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
+    """F1, BLOCKING, round-5 Opus delta review, 2026-09-25, on 65b8f39d. The rank loop in
+    `do_search` — `terms = [term.lower() for term in text.split()]` — was never deduped:
+    `_match_rank` ran once per REPEATED term per candidate, not once per DISTINCT term.
+    Measured on a real-name fixture (round-4's `f"Bench Card {i}"` fixture never hit this
+    path, because no query ever matched more than a handful of candidates against it):
+    `("1 " * 100)` took 5.6-12.4s at 3,000 cards and 19.9s at 10,000; `("e " * 100)` took
+    2.3-2.8s. Deduping and capping `terms` the same way `_fts_supplemental_candidates`
+    already dedupes and caps the extra-candidate step — `token_count` keeps the raw count
+    for the single-term fallback alone — took the 100x case down to 492ms in the review's
+    own measurement. Bound here is looser (500ms), generous for a slower CI runner.
+    """
+    fresh_home()
+    _build_pokemon_store(3000)
+    from server import capture_server as cs
+
+    for label, query in (
+        ("100 repeated '1' terms", ("1 " * 100).strip()),
+        ("100 repeated 'e' terms", ("e " * 100).strip()),
+        ("66 repeated 'ex' terms", ("ex " * 66).strip()),
+        # ALSO CATCHES THE ZERO-PAD PREFIX REGRESSION (R1, round-4; re-checked round-5):
+        # `_fts_zero_pad_candidates_for_term`'s comparison must be an EQUALITY, never a
+        # `LIKE` prefix. A 3+ digit repeated term is what reaches that function at all (it
+        # floors at 3 characters). Measured on this fixture: 0.136s with the equality fix,
+        # 0.573s with the prefix bug put back — the extra candidates a prefix match finds
+        # (nearly every numbered card) push this over the 0.5s bound where the other three
+        # shapes above, none of them 3+ digit numbers, cannot see that regression at all.
+        ("50 repeated '001' terms", ("001 " * 50).strip()),
+    ):
+        start = time.monotonic()
+        cs.do_search(query)
+        took = time.monotonic() - start
+        check(
+            took < 0.5,
+            f"do_search over {label} took {took:.3f}s on a real-name 3,000-card store, "
+            "under the 0.5s bound (unbounded, round-5 review: 5.6-12.4s and 2.3-2.8s)",
+        )
+
+
+def case_do_search_union_never_drops_a_row_a_single_term_widens() -> None:
+    """F2, REGRESSION, round-5 Opus delta review, 2026-09-25, on 65b8f39d.
+    `_fts_supplemental_candidates`'s first version INTERSECTED across terms: a query of two
+    or more terms required the store's own candidate for EVERY term to agree before either
+    term's widening contributed a row. That is wrong whenever only ONE term needs a
+    widening — `izard ex` found 20 rows before the intersection existed, 0 after, because
+    `izard` (a mid-word fragment) has a supplemental candidate but `ex` (an ordinary token
+    the base FTS query already covers on its own) never needs one, so the intersection of
+    "what `izard` widened" with "nothing, because `ex` needed no widening" is empty. A
+    fuzz found 64 of 300 two-term queries dropped this way. Fixed by a UNION of what each
+    term's widenings separately find — the base FTS `hits` dict already carries the real
+    AND across terms via one combined `MATCH` expression, so this function only ever adds
+    rows, never removes one the base query already found.
+
+    Checked against the BRUTE-FORCE answer (`_brute_force_matches`, every SKU
+    `match.match_query` itself accepts), not only against one named SKU — the review's own
+    complaint was about DROPPED rows, and a case naming only the SKU it expects would not
+    have caught the other 63 the fuzz found either.
+    """
+    fresh_home()
+    _build_pokemon_store(3000)
+    from server import capture_server as cs
+
+    for query in ("izard ex", "ex izard", "ooh ex", "abebe v", "izard 100"):
+        expected = _brute_force_matches(query)
+        got = {g["sku"] for g in cs.do_search(query)["groups"]}
+        equal(
+            got, expected,
+            f"do_search({query!r}) returns every SKU match_query accepts, and no other",
+        )
+        check(len(expected) > 0, f"{query!r} has at least one real match to prove the case means something")
+
+
 def case_do_search_still_refuses_an_unrelated_number() -> None:
     """The widened FTS5 candidate query must not turn into a false positive end to end —
     the same rule 4 guarantee as group 2, proved through the real index this time."""
@@ -702,6 +902,9 @@ CASES = [
     case_do_search_refuses_a_query_past_the_length_cap,
     case_do_search_measures_the_length_cap_after_nfkc,
     case_do_search_hostile_multiterm_query_stays_fast,
+    case_deduped_capped_terms_dedupes_and_caps,
+    case_do_search_hostile_repeated_terms_stay_fast_on_real_names,
+    case_do_search_union_never_drops_a_row_a_single_term_widens,
     case_do_search_still_refuses_an_unrelated_number,
     case_do_search_runs_the_shared_case_table,
 ]
