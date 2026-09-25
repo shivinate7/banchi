@@ -601,3 +601,14 @@ only the wrapper.
   many header actions) in `kit-adoption-allow.json`, keyed to the lane that owns the screen.
   `#/product` goes to the `b-pricing` lane. The Fulfiller is exempt. A wave-2 lane is done only
   when its own entries leave every offender list. Each lane's own done check says so.
+- The kit-tighten lane's own input: Orders forces `FilterBar`'s compact mode in `Orders.css`
+  today, a stopgap. The kit lane makes one-line-plus-popover the `FilterBar` default, and
+  deletes that override.
+  Measured on Orders: the filter bar shrinks from 70px to 34px at 1440, and from 190px to
+  42px at 720. It shrinks from 140px to 42px at 390.
+- Orders, once kit-icons merges: "Add orders" and "Cards to pull" become small square
+  `IconButton`s on the same line as the one-line filter bar. This is recorded as planned in
+  `D-orders-and-shipping-are-two-rows`.
+- `search-server`, which owns `server/`: `reconcile-backlog` must refuse a cutoff after today,
+  from the Orders review. The screen already disables that press. The server is the second
+  guard.
