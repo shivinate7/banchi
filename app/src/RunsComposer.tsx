@@ -351,6 +351,7 @@ export function RunsComposer({
   onStarted,
 }: Props) {
   const dialog = useRef<HTMLDivElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
   const [stage, setStage] = useState<StageKey>('select')
 
   /* ONE READING FOR THE PRESS. `RunSend` carries one `crop` and one `maxEdge`, so this is a
@@ -460,7 +461,7 @@ export function RunsComposer({
 
   /* Dialog chrome: focus lands inside on open, stays inside under Tab, and goes back to the
      button that opened it on close. Escape closes. */
-  useOverlayFocus(dialog, open, close)
+  useOverlayFocus(dialog, open, close, false, scrim)
 
   /* ------------------------------------------------------------------- the stage 1 pickers */
   useEffect(() => {
@@ -763,7 +764,7 @@ export function RunsComposer({
      centres on the page column rather than the viewport and the scrim never reaches the nav. */
   return createPortal(
     <>
-      <div className="bn-scrim" onClick={close} />
+      <div ref={scrim} className="bn-scrim" onClick={close} />
       <div
         ref={dialog}
         className="bn-dialog runs-composer"

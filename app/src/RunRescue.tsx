@@ -55,6 +55,7 @@ export function RunRescue({
   const [result, setResult] = useState<RescueResult | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const sheet = useRef<HTMLElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
 
   const send = useCallback(
     async (write: boolean) => {
@@ -95,13 +96,13 @@ export function RunRescue({
     void send(false)
   }, [open, send])
 
-  useOverlayFocus(sheet, open, onClose, busy)
+  useOverlayFocus(sheet, open, onClose, busy, scrim)
 
   const applyable = result !== null && result.ok && !result.wrote && result.already_rescued === null && result.counts.rebound > 0
 
   return createPortal(
     <>
-      {open ? <div className="bn-scrim" onClick={onClose} /> : null}
+      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
       <aside
         ref={sheet}
         className="bn-sheet rescue-sheet"

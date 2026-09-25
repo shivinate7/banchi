@@ -339,3 +339,34 @@ test('no typed interpunct reaches the reconcile sheet', async ({ page }) => {
   expect(text).not.toMatch(/[·•]/)
 })
 
+
+/* F3, THE PR 2 INTEGRATION REVIEW: THIS SHEET'S SCRIM COVERS THE RUNS SHEET IT WAS OPENED FROM.
+ * Review opens Runs in a kit `Sheet`, and this sheet opens from there. Its scrim used to keep the
+ * stylesheet's static z-index, under the Runs sheet, so about 580px of Runs stayed bright and
+ * pressable behind an `aria-modal` sheet. The scrim is registered with the overlay stack now,
+ * one step under this sheet and above Runs. A press on the part of Runs this sheet does not cover
+ * lands on the scrim (and closes this sheet), never on Runs. */
+test('the reconcile sheet dims the Runs sheet it was opened from, and a press there never reaches it', async ({ page }) => {
+  await open(page)
+  const runs = await page.locator('.review-runs-sheet').boundingBox()
+  const sheet = await panel(page).boundingBox()
+  expect(runs, 'the Runs sheet is on screen under this one').not.toBeNull()
+  expect(sheet).not.toBeNull()
+  const x = runs!.x + 20
+  const y = runs!.y + runs!.height / 2
+  expect(x, 'a strip of the Runs sheet this sheet does not cover').toBeLessThan(sheet!.x)
+
+  const hit = await page.evaluate(([px, py]) => {
+    const el = document.elementFromPoint(px, py)
+    return {
+      inRuns: el?.closest('.review-runs-sheet') !== null,
+      scrim: el?.classList.contains('bn-scrim') ?? false,
+    }
+  }, [x, y] as const)
+  expect(hit.inRuns, 'the press reaches the Runs sheet behind a modal').toBe(false)
+  expect(hit.scrim, 'the dim layer covers the Runs sheet').toBe(true)
+
+  await page.mouse.click(x, y)
+  await expect(panel(page)).toBeHidden()
+  await expect(page.locator('.review-runs-sheet')).toBeVisible()
+})

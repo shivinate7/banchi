@@ -2806,6 +2806,7 @@ function QueueRefresh({
   const [refused, setRefused] = useState<number | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const sheet = useRef<HTMLElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
 
   const send = useCallback(
     async (write: boolean) => {
@@ -2854,7 +2855,7 @@ function QueueRefresh({
 
   /* Focus lands inside on open, stays inside under Tab, and returns to the header button on
      close; Escape closes unless a read or a write is in flight. */
-  useOverlayFocus(sheet, open, onClose, busy)
+  useOverlayFocus(sheet, open, onClose, busy, scrim)
 
   /* The press that writes exists only while there is a preview to have read and nothing has
      been written yet. A refusal takes it away too: the write would refuse identically, and
@@ -2865,7 +2866,7 @@ function QueueRefresh({
      and a fixed sheet inside it would hang off the column. */
   return createPortal(
     <>
-      {open ? <div className="bn-scrim" onClick={onClose} /> : null}
+      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
       <aside
         ref={sheet}
         className="bn-sheet review-recheck"

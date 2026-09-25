@@ -33,6 +33,9 @@ export function useOverlayFocus(
   /** True while this overlay has a request in flight. Escape does nothing while it is set.
    *  Optional: an overlay that cannot be mid-request passes nothing and behaves as before. */
   hold = false,
+  /** The sheet's own scrim. Registered with the stack, so it sits one step under this sheet and
+   *  ABOVE any layer this sheet was opened from, and dims it (F3, PR 2 integration review). */
+  scrim?: RefObject<HTMLElement | null>,
 ): void {
   /* Land inside on open; hand focus back on close. Keyed on `open` alone so a changed
      `onClose` identity mid-open cannot yank focus back to the opener. */
@@ -66,5 +69,5 @@ export function useOverlayFocus(
   const escape = useRef(() => {
     if (!holdNow.current) closeNow.current()
   })
-  useOverlayLayer(node, { active: open, onEscape: escape.current })
+  useOverlayLayer(node, { active: open, onEscape: escape.current, scrim })
 }
