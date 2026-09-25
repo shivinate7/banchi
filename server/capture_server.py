@@ -8209,8 +8209,8 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "sku_unchanged",
-                f"This card already lists as that. If the listing is right, confirm it "
-                f"(§8.2) — POST /inventory/{box}/{index}/confirm.",
+                f"{join.said_place(snapshot.inventory, box, index)} already lists as that. "
+                f"If the listing is right, press \u201cThe listing is right\u201d instead.",
             )
 
         # identity-follows-sku.md §4.2: "upsert the chosen row, then bind_sku
@@ -8464,7 +8464,8 @@ def do_confirm_identity(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.NOT_FOUND,
                 "card_not_found",
-                f"No card at box {box}, card {index}. This route confirms a card that "
+                f"No card at that place in {join.said_place(snapshot.inventory, box)}. "
+                f"This route confirms a card that "
                 f"exists; it never creates one.",
             )
         if card.state in master.TERMINAL_STATES:
@@ -8577,7 +8578,8 @@ def _reverse_confirm(box: int, index: int) -> dict:
             raise BadRequest(
                 HTTPStatus.NOT_FOUND,
                 "card_not_found",
-                f"No card at box {box}, card {index}. This route reverses a confirm "
+                f"No card at that place in {join.said_place(snapshot.inventory, box)}. "
+                f"This route reverses a confirm "
                 f"written onto a card that exists; it never creates one.",
             )
         if getattr(card, "bound_by", None) != "confirm":

@@ -587,6 +587,13 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
     search('')
   }
 
+  /* The toast names the place the way the screen draws it: the card row's own label, read as a
+     sentence. A row with no place (a pooled card) gets no place in the toast at all. */
+  const withPlace = (row: InventoryCard, rest: string): string => {
+    const label = row.label ?? card.label
+    return label ? `${sayPlace(label)} — ${rest}` : rest.charAt(0).toUpperCase() + rest.slice(1)
+  }
+
   const runUndo = (atBox: number, atIndex: number) => {
     void undoCorrectAnswer(atBox, atIndex)
       .then((result) => {
@@ -601,7 +608,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
           kind: 'ok',
           icon: 'undo',
           title: 'Correction undone',
-          body: `Box ${atBox}, Card ${atIndex} — back to ${result.sku}`,
+          body: withPlace(result.card, `back to ${result.sku}`),
         })
       })
       .catch((err: unknown) => {
@@ -654,7 +661,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
           kind: 'ok',
           icon: 'undo',
           title: 'Confirmation undone',
-          body: `Box ${atBox}, Card ${atIndex} — back to the camera's read.`,
+          body: withPlace(result.card, "back to the camera's read."),
         })
       })
       .catch((err: unknown) => {

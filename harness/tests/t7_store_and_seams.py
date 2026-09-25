@@ -21097,6 +21097,48 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
             "a schema-11 store from main gains send_claims at 12 and keeps its skus row",
         )
 
+    # --- a store the UX branch stamped 11 has `send_claims` and no `skus` ----------------
+    # The UX branch took 11 for `send_claims` before the merge moved it to 12. Its stamp says
+    # 11, and it is not main's 11. It must still get `skus`, the views and
+    # `cards.identity_source`, or the first card write fails on the missing column.
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        store_path = str(files.inventory_dir() / "store.sqlite")
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        try:
+            conn.execute("DROP VIEW IF EXISTS sku_products")
+            conn.execute("DROP VIEW IF EXISTS sku_printings")
+            conn.execute("DROP TABLE IF EXISTS skus")
+            conn.execute("ALTER TABLE cards DROP COLUMN identity_source")
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '11')")
+        finally:
+            conn.close()
+        stamp, tables, _views, columns, _rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns),
+            (("11",), False, True, False),
+            "the fixture really is the UX branch's schema-11 store: send_claims and no skus",
+        )
+        Store().read()
+        stamp, tables, views, columns, _rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
+             {"sku_products", "sku_printings"} <= views),
+            (("12",), True, True, True, True),
+            "the UX branch's schema-11 store reaches 12 with skus, both views and "
+            "cards.identity_source",
+        )
+        try:
+            capture_server.do_capture(capture_payload(1))
+            wrote = None
+        except Exception as exc:  # the failure this case exists for is a sqlite error
+            wrote = f"{type(exc).__name__}: {exc}"
+        checks.equal(wrote, None, "and a card write on that store works")
+        checks.equal(
+            sorted(Store().read().inventory.cards), ["1/1", "1/2"],
+            "and both cards are in the store",
+        )
+
 
 def check_send_review_r8(checks: Checks) -> None:
     """Round 8: the review of round 7 (R7-1, R7-3, R7-4), each red first on the round-7 build

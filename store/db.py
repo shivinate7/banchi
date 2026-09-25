@@ -502,6 +502,10 @@ def _upgrade(
             if stored < 11:
                 _add_skus(conn)              # LANE 0, identity-follows-sku.md
             if stored < 12:
+                # A store stamped 11 by the UX branch has `send_claims` and no `skus`. Its
+                # stamp reads as main's 11, so `_add_skus` runs here again. It is idempotent,
+                # so main's 11 loses nothing.
+                _add_skus(conn)
                 _add_send_claims(conn)       # D-one-press-sends-and-makes-live
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",

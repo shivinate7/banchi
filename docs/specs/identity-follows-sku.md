@@ -603,6 +603,14 @@ falls to `sku_unknown`.
    count is then one probe. The new card fields otherwise live in the payload and need no
    column. FTS is unchanged (5.2). The DDL runs inside `_upgrade`'s one transaction, the shape
    D213 used for version 8.
+   **Two branches took version 11 (merge of 2026-09-24).** The UX branch used 11 for
+   `send_claims`, and that step is now version 12. A store stamped 11 by the UX branch has
+   `send_claims` and no `skus`. Its stamp reads as this lane's 11, so `_upgrade` skipped
+   `_add_skus`. The store then reached 12 with no `skus`, no views and no
+   `cards.identity_source`, and the first card write failed. The fix runs `_add_skus` again
+   in the version-12 step, before `_add_send_claims`. `_add_skus` is idempotent, so a store
+   at this lane's 11 loses nothing. T7's `check_schema_eleven_then_twelve` builds all three
+   older shapes: 10, this lane's 11, and the UX branch's 11.
 2. **Fill the table (lane 0): `skus adopt --write`.** Section 3.2.
 3. **The press (lane 2): `./pkmnscan cards identity --write`.** It previews by default. It never
    runs at open time, for D213's reason: its answer depends on what the table holds, and that
