@@ -3010,8 +3010,9 @@ COMPONENTS = [
             },
             "price-postings-recovery.py": {
                 "does": "read-only measurement against the owner's real "
-                        "inventory/store.sqlite (opened `mode=ro`, never `store.db`, no "
-                        "`pkmnscan` command run): how much price HISTORY survives before "
+                        "inventory/store.sqlite (opened through `store/db.py:open_read_only`, "
+                        "never `store.db.connect`, no `pkmnscan` command run): how much price "
+                        "HISTORY survives before "
                         "`price_postings` existed to record it. Counts `pushed` events and "
                         "how many name a price (always 0 — the payload has no such field). "
                         "Walks `inventory/markdowns/*/` and counts a folder as APPLIED only "
