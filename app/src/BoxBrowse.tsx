@@ -1887,6 +1887,10 @@ export function BoxBrowse({
           onChange: setQuery,
           loading,
           failure: searchFailure,
+          /* N5: `SearchField`'s own default, "Card name, number or SKU", cut to "Card na" in
+             the rail's own narrow column at 720 and 820 — a raw clip, no ellipsis, off the
+             native `placeholder` attribute. Shorter here, where the column is narrowest. */
+          placeholder: 'Search',
         }}
         count={{ shown: reachableCount, total: boxRecords.length, noun: { one: 'box', many: 'boxes' } }}
         beside={

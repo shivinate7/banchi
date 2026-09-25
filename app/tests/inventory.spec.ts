@@ -6555,6 +6555,38 @@ async function facetOptions(page: Page, facet: 'Game' | 'Set' | 'Rarity'): Promi
   return texts
 }
 
+test('N5 — the search placeholder fits the rail column at 720 and 820', async ({ page }) => {
+  /* Measured with a canvas rather than `scrollWidth`: an EMPTY native `<input>` does not track
+   * placeholder overflow in its own scroll metrics, so the only reliable read of "does this
+   * text fit" is measuring it in the field's own font, the same way the browser lays it out. */
+  const fitsColumn = () =>
+    page.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>(
+        '.browse-filterbar input[type="search"], .browse-filterbar .search-field input',
+      )
+      if (input === null) return null
+      const style = getComputedStyle(input)
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (ctx === null) return null
+      ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+      const textWidth = ctx.measureText(input.placeholder).width
+      const available = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      return { textWidth, available, placeholder: input.placeholder }
+    })
+
+  for (const width of [720, 820]) {
+    await page.setViewportSize({ width, height: 900 })
+    await open(page)
+    const fit = await fitsColumn()
+    expect(fit, `no search field found to measure at ${width}`).not.toBeNull()
+    expect(
+      (fit?.textWidth ?? Infinity) <= (fit?.available ?? 0),
+      `"${fit?.placeholder}" (${fit?.textWidth}px) does not fit the field (${fit?.available}px) at ${width}`,
+    ).toBe(true)
+  }
+})
+
 test('D213 — filtering by game narrows the walk, and the menu is built off the store, not a hardcoded list', async ({
   page,
 }) => {
