@@ -8074,7 +8074,7 @@ COMPONENTS = [
                                                 "D61's third answer drawn as the pile that needs "
                                                 "a person.",
                                         "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94",
-                                                        "D218", "D-ship-lanes-collapse"]},
+                                                        "D218", "D221", "D-ship-lanes-collapse"]},
             "src/OrdersWalkPane.tsx": {"does": "`docs/specs/order-walk-plan.md` §13, \"Orders "
                                            "is inventory's screen with orders in the rail\": "
                                            "replaces `OrdersWalk.tsx` whole, not adapted. There "
@@ -8121,7 +8121,8 @@ COMPONENTS = [
                                          "unjudged lane is drawn as an answer rather than as a "
                                          "fault, because D61's third lane is a deliberate "
                                          "abstention and not a failure to route.",
-                                 "governed_by": ["D40", "D50", "D61", "D69", "D117", "D218"]},
+                                 "governed_by": ["D40", "D50", "D61", "D69", "D117", "D218",
+                                                 "D-ship-lanes-collapse"]},
             "src/Revenue.tsx": {"does": "`#/revenue` (Sales): the gross-revenue "
                                         "retrospective. AN ELEVENTH NAV ROW ON PURPOSE — tried "
                                         "off-nav on 2026-09-19, reversed the same day on the "

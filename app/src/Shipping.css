@@ -232,7 +232,10 @@
 }
 /* A COLLAPSED LANE IS RECESSED, NEVER FADED. The count is the figure this screen exists to
    show; dropping it to the lightest ink took it to 2.4:1 in light. The fold is carried by the
-   chevron, the "folded away" line and the ground — not by making the number hard to read. */
+   chevron and the ground — not by making the number hard to read. A folded lane draws no
+   sentence beneath the chip: the count is already there, and on a phone, where every lane
+   opens folded (D-ship-lanes-collapse), three lanes repeating "N orders folded away" was the
+   exact repeated-sentence shape TXT-01 exists to catch. */
 .shipping-chip[aria-pressed='false'] { background: var(--bn-surface-2); box-shadow: none; }
 .shipping-chip[aria-pressed='false'] .shipping-chip-count { color: var(--bn-ink-2); }
 .shipping-chip[aria-pressed='false']:hover { background: var(--bn-surface); }
@@ -292,8 +295,7 @@
 .shipping-stamp .bn-icon { color: var(--bn-accent); }
 .shipping-pull { display: inline-flex; align-items: center; gap: 5px; font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-accent); white-space: nowrap; }
 .shipping-pull-done { color: var(--bn-ok); }
-.shipping-lane-empty,
-.shipping-lane-hidden {
+.shipping-lane-empty {
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
   padding: var(--bn-4);

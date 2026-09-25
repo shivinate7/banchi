@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 
 import { readUpload } from './csvUpload'
-import { Button, EmptyState, Icon, Notice, OrderLink, type IconName } from './kit'
+import { Button, EmptyState, Icon, Money, Notice, OrderLink, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
 import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl } from './server'
@@ -104,9 +104,11 @@ function reasonSentenceOf(row: ShippingRow): string | null {
   return REASON_SAYS[row.reason]
 }
 
-/** The figures, with every ABSENT figure drawing nothing at all. A missing number is never
- *  rendered as `0`: the router abstains precisely because a figure is absent, and `0.0000
- *  oz/item` under "no usable weight" would undo that in the one place the operator looks.
+/** The weight and item-count figures, with every ABSENT figure drawing nothing at all. A
+ *  missing number is never rendered as `0`: the router abstains precisely because a figure is
+ *  absent, and `0.0000 oz/item` under "no usable weight" would undo that in the one place the
+ *  operator looks. `row.value` is drawn separately, through the kit's `Money` (D221/R2-money),
+ *  because it is money and this array is plain strings.
  *
  *  THE WEIGHT DRAWS ONLY WHERE IT IS EVIDENCE (TXT-04). `cards_only` and `value_at_threshold`
  *  are the two reasons a lane's own rule already explains (see `LANE_OWN_REASON`); the ratio
@@ -116,7 +118,6 @@ function reasonSentenceOf(row: ShippingRow): string | null {
  *  stays, rounded to what a person reads rather than the module's four decimal places. */
 function figuresOf(row: ShippingRow): string[] {
   const parts: string[] = []
-  if (row.value !== null) parts.push(`$${row.value}`)
   if (row.weight_per_item_oz !== null && (row.reason === 'non_card_signal' || row.reason === 'sub_single_weight')) {
     parts.push(`${Number(row.weight_per_item_oz).toFixed(2)} oz each`)
   }
@@ -579,17 +580,18 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 <Icon name={on ? 'chevronUp' : 'chevronDown'} size={14} className="shipping-chip-chev" />
               </button>
 
-              {!on ? (
-                <p className="shipping-lane-hidden" id={`shipping-lane-${lane}`}>
-                  {rows.length} order{rows.length === 1 ? '' : 's'} folded away
-                </p>
-              ) : rows.length === 0 ? (
-                <p className="shipping-lane-empty" id={`shipping-lane-${lane}`}>
-                  No orders in this lane.
-                </p>
-              ) : (
-                <ol className="shipping-list" id={`shipping-lane-${lane}`}>
-                  {rows.map((row, at) => {
+              {/* THE ID IS ALWAYS HERE, so `aria-controls` above always resolves — only its
+                  content is conditional. A FOLDED LANE DRAWS NO SENTENCE (fixed alongside
+                  D-ship-lanes-collapse): the chip's own count already says how many, and on a
+                  phone, where every lane opens folded, three lanes repeating "N orders folded
+                  away" was the exact repeated-sentence shape TXT-01 exists to catch — restating
+                  a figure the chip already shows, three times over. */}
+              <div id={`shipping-lane-${lane}`}>
+                {!on ? null : rows.length === 0 ? (
+                  <p className="shipping-lane-empty">No orders in this lane.</p>
+                ) : (
+                  <ol className="shipping-list">
+                    {rows.map((row, at) => {
                     const quality = qualityOf(row)
                     const figures = figuresOf(row)
                     const known = ledger.get(row.order) ?? null
@@ -615,9 +617,16 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                           )}
                         </div>
                         {sentence === null ? null : <p className="shipping-says">{sentence}</p>}
-                        {figures.length === 0 ? null : (
+                        {row.value === null && figures.length === 0 ? null : (
                           <div className="shipping-row-meta">
                             <span className="shipping-figures">
+                              {/* D221/R2-money: a dollar figure is drawn only through the kit's
+                                  `Money`, never a hand-rolled `$${...}` template. */}
+                              {row.value === null ? null : (
+                                <span className="shipping-figure">
+                                  <Money value={Number(row.value)} />
+                                </span>
+                              )}
                               {figures.map((figure) => (
                                 <span key={figure} className="shipping-figure">
                                   {figure}
@@ -645,8 +654,9 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                       </li>
                     )
                   })}
-                </ol>
-              )}
+                  </ol>
+                )}
+              </div>
             </section>
           )
         })}

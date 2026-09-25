@@ -71,9 +71,6 @@
       "R2-class": "orders",
       "R2-date": "orders"
     },
-    "app/src/OrdersShipStage.tsx": {
-      "R2-money": "shipping"
-    },
     "app/src/OrdersWalkPane.tsx": {
       "R2-class": "orders"
     },
