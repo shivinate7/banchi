@@ -1,13 +1,12 @@
 /* THE ONE FILTER BAR (`kit/filters.tsx`). `--bn-*` tokens only.
 
-   THE BAR ASKS ITS OWN WIDTH, NOT THE WINDOW'S (a container query). Inventory's rail is
-   268-300px wide on a 1440px desk, and a viewport test would lay five controls out in it. Below
-   480px of BAR the wide row hides and one "Filters" trigger opens a sheet. At 480px three facet
-   triggers still share a row, each wide enough for its label and a short value. A phone's page
-   column (390 less its gutters) is under it; a 720 or 820 window's column is over it. */
+   ONE LINE, AT EVERY WIDTH (the owner, 2026-09-24, D-one-filter-control): search, then one
+   "Filters" trigger with a count badge. There is no wide inline row any more — every facet, the
+   sort and the hide toggle live behind the trigger, in a `Popover` on a desk or a `Sheet` on a
+   phone (`compact`, `kit/filters.tsx`). No container query decides this file's own layout any
+   more; the caller decides the overlay kind once, from what it already knows. */
 
 .bn-filterbar {
-  container: bn-filterbar / inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--bn-2);
@@ -34,37 +33,15 @@
 .bn-filterbar-search { flex: 1 1 auto; min-width: 0; }
 .bn-filterbar-beside { flex: none; display: flex; align-items: center; }
 
-.bn-filterbar-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--bn-2);
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-/* EVERY FACET TRIGGER IS ONE WIDTH (the orchestrator's call on the owner's gripe, "the filters
-   aren't even the same widths"). One grid row of equal `1fr` tracks: sized to its content, a
-   grid makes every `1fr` track as wide as the WIDEST item needs, so the three triggers take the
-   width of the widest one. Squeezed, the tracks shrink together and a value ellipsizes. Each
-   trigger already holds its widest value from the first paint (`PickTrigger`'s sizer), so a
-   pick moves no width (D118). The cap keeps one long set name from widening all three. */
-.bn-filterbar-row > .bn-filterchips {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.bn-filterbar-row > .bn-filterchips > .bn-fchip { min-width: 0; max-width: 280px; }
-.bn-filterbar-row > .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; min-width: 0; max-width: none; }
-
 /* ONE CLEAR-ALL: the count line's. `FilterChips`' own is not drawn inside a bar, in the row or in
    the sheet, so there are never two side by side, and its reserved slot leaves no blank band. */
 .bn-filterbar .bn-filterchips-clear,
 .bn-filterbar-sheet-body .bn-filterchips-clear { display: none; }
 
-.bn-filterbar-compact { display: none; }
+/* ALWAYS VISIBLE (D-one-filter-control): the trigger sits beside the search in
+   `.bn-filterbar-controls`'s own flex-wrap row. It wraps to its own line only where the search
+   already needed to, the same as any other flex item — no rule of its own decides that. */
+.bn-filterbar-compact { display: block; }
 
 /* ---- HideToggle: quiet, one bar height ------------------------------------------------------- */
 /* The same field edge, surface and height as a pick trigger beside it (`--bn-control-h`: 34px on
@@ -160,6 +137,16 @@
    its own size beside the key instead of stacking full width with it. */
 .bn-filterbar-sheet-body .bn-sort > .bn-pick { flex: 1; min-width: 0; max-width: none; justify-content: flex-start; }
 
+/* ---- The popover variant of the compact trigger (`compact="popover"`, the default) ----------- */
+/* `.bn-menu`'s own padding (`var(--bn-1)`, 4px) is sized for a list of menu items, not a column
+   of field-height controls — the sheet gives its body room through the Sheet's own frame, which
+   a popover does not have, so this panel gives itself the room instead. */
+.bn-menu.bn-filterbar-popover {
+  min-width: 260px;
+  max-width: min(340px, calc(100vw - 16px));
+  padding: var(--bn-3);
+}
+
 /* ---- The match highlight (`kit/highlight.tsx`) ------------------------------------------------ */
 .bn-highlight {
   padding: 0 1px;
@@ -169,10 +156,3 @@
   font-weight: 700;
 }
 :root[data-theme='dark'] .bn-highlight { background: var(--bn-accent-tint-2); }
-
-/* ---- A narrow bar: the row hides, the compact trigger and its sheet take over ----------------- */
-@container bn-filterbar (max-width: 479px) {
-  .bn-filterbar-row { display: none; }
-  .bn-filterbar-compact { display: block; }
-  .bn-filterbar-lead { flex-basis: 100%; min-width: 0; max-width: none; }
-}

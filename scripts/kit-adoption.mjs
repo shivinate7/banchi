@@ -65,6 +65,22 @@
  *                            `iconOnly` JSX attribute (the kit's own `Button` prop, read by
  *                            presence, never by its value) — the kit has `IconButton` for
  *                            this now, with a required label and a tooltip.
+ *                R2-header-actions
+ *                            the owner's tighten ruling, 2026-09-24 ("i question whether they
+ *                            deserve all that real estate... egregious"): a `<Page>` or
+ *                            `<PageHeader>`'s `actions` prop holding MORE THAN ONE worded
+ *                            `<Button>` (not `iconOnly`, not an `<IconButton>`, real visible
+ *                            text by R2-icon-only-button's own `isIconLike`/`aggregate`
+ *                            reader). A `<Button>` inside a `Sheet`/`Modal`/`Popover`/
+ *                            `ConfirmSheet` reached from the header is not counted — it opens a
+ *                            dialog, which is not the header row itself.
+ *                R2-filter-row
+ *                            the same ruling: a screen that renders `SearchField` beside a
+ *                            facet control (`Select`, `FilterChips`, `SortControl`,
+ *                            `HideToggle`) with no `FilterBar` anywhere in the file hand-built
+ *                            the row `FilterBar` exists to be. FILE-LEVEL, not per-element: it
+ *                            answers "does this file's toolbar go through FilterBar at all",
+ *                            not "is this exact SearchField beside that exact Select".
  *
  * THE EXCEPTIONS ARE A SHRINKING OFFENDER LIST, NEVER A PINNED COUNT (the owner's ruling on Q3,
  * 2026-09-23). `scripts/kit-adoption-allow.json`'s `static` block is file -> rule -> lane: the
@@ -115,6 +131,12 @@
  *         NumberFormat: a relative date ("3 days ago") is a date format R2-date does not see.
  *       - a date method called by a bracket (`d['toLocaleDateString']()`).
  *       - `role="searchbox"` (or `role="search"`) on an element: only `<input>` is read.
+ *       - R2-header-actions: a custom component that renders a `<Button>` inside itself
+ *         (`<SendButton/>`) is not resolved — only a literal `<Button>` in the `actions` JSX is
+ *         counted. A `<Menu>`/trigger pattern already reads as one control either way.
+ *       - R2-filter-row: a facet built as a bare `<Chip>` row rather than through
+ *         `FilterChips`/`Select` is not seen — the rule reads the kit's own facet tag names,
+ *         not "any control that behaves like a facet".
  *       - a role or an input type given by a spread (`<div {...props}>`, `<input {...p}>`):
  *         only a named attribute is read.
  *
@@ -195,6 +217,42 @@ export const RULES = {
   'R2-date': 'a hand-rolled date format outside app/src/dates.ts',
   'R2-money': 'a hand-rolled $ amount outside app/src/money.ts (use the kit\'s Money, or money() from money.ts)',
   'R2-icon-only-button': 'a hand-rolled icon-only control outside the kit (use IconButton)',
+  'R2-header-actions': 'more than one worded <Button> in a <Page>/<PageHeader> actions slot (the rest must be IconButtons or a More menu)',
+  'R2-filter-row': 'a hand-built filter row (a SearchField beside a facet control) that does not go through the kit FilterBar',
+}
+
+/** R2-header-actions: the tags whose `actions` prop draws a page header (`Page.tsx`'s and
+ *  `kit/index.tsx`'s `PageHeader`, both `<div className="bn-head-actions">{actions}</div>`).
+ *  A `<Button>` inside is opaque once it is inside one of these: a dialog opened FROM the
+ *  header is not a second header, so its own buttons (Save/Cancel) are not counted. */
+export const HEADER_TAGS = ['Page', 'PageHeader']
+const OVERLAY_TAGS = new Set(['Sheet', 'Modal', 'Popover', 'ConfirmSheet'])
+/** R2-filter-row: the kit's own facet controls. A screen assembling any of these beside a
+ *  `SearchField`, without a `FilterBar` anywhere in the file, hand-built the row FilterBar
+ *  already is. */
+export const FACET_TAGS = ['Select', 'FilterChips', 'SortControl', 'HideToggle']
+
+/** R2-header-actions: how many `<Button>` elements inside `node` read as a WORDED press — not
+ *  `iconOnly` (attribute or spread), and whose visible content is not purely an icon (reuse
+ *  R2-icon-only-button's own `isIconLike`/`aggregate`: 'other' means real words are there).
+ *  `<IconButton>` is a different tag and is never counted. A node inside an OVERLAY_TAGS
+ *  container is not walked into: its buttons belong to the dialog it opens, not the header. */
+function countWordedButtons(node, sf) {
+  let count = 0
+  const visit = (n) => {
+    if (ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n)) {
+      const opening = ts.isJsxElement(n) ? n.openingElement : n
+      const tag = opening.tagName.getText(sf)
+      if (OVERLAY_TAGS.has(tag)) return
+      if (tag === 'Button' && ts.isJsxElement(n)) {
+        const iconOnly = attr(opening, 'iconOnly') !== undefined || hasSpreadIconOnly(opening)
+        if (!iconOnly && aggregate(n.children.map((k) => isIconLike(k, sf))) === 'other') count += 1
+      }
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(node)
+  return count
 }
 
 /** The class names only the kit may write. A token equal to one of these is reserved. */
@@ -656,8 +714,15 @@ function scanFile(rel, sf) {
     if (HOME[rule] === rel) return
     if (rule === 'R2-class' && SPECIMEN_FILES.includes(rel)) return
     if (rule === 'R2-icon-only-button' && (SPECIMEN_FILES.includes(rel) || FULFILLER_FILES.includes(rel))) return
+    if (rule === 'R2-filter-row' && SPECIMEN_FILES.includes(rel)) return
     hits.push({ rule, line: lineOf(sf, node), detail })
   }
+  /* R2-filter-row is a FILE-LEVEL question (does this file's own toolbar go through FilterBar
+   *  at all?), read once: every tag the file renders, anywhere. A `<SearchField>` beside a
+   *  facet control with no `<FilterBar>` tag anywhere in the file is a bar FilterBar was built
+   *  to replace, assembled by hand instead. */
+  const fileTags = new Set(jsxTags(sf))
+  const handBuiltFilterRow = fileTags.has('SearchField') && FACET_TAGS.some((t) => fileTags.has(t)) && !fileTags.has('FilterBar')
   const visit = (n) => {
     if (ts.isJsxAttribute(n)) {
       const name = n.name.getText(sf)
@@ -673,6 +738,16 @@ function scanFile(rel, sf) {
       if (tag === 'select') add('R2-select', n, '<select>')
       if (tag === 'dialog') add('R2-dialog', n, '<dialog>')
       if (tag === 'Button' && hasSpreadIconOnly(n)) add('R2-icon-only-button', n, 'iconOnly (spread)')
+      if (HEADER_TAGS.includes(tag)) {
+        const actions = attr(n, 'actions')
+        if (actions && actions.initializer) {
+          const count = countWordedButtons(actions.initializer, sf)
+          if (count > 1) add('R2-header-actions', n, `${count} worded <Button> presses in one <${tag}> (cap is 1)`)
+        }
+      }
+      if (tag === 'SearchField' && handBuiltFilterRow) {
+        add('R2-filter-row', n, `<SearchField> beside a facet control (${FACET_TAGS.filter((t) => fileTags.has(t)).join(', ')}), with no <FilterBar> in the file`)
+      }
       /* Clause (b), the self-closing shape: `<button aria-label="Close" />` has no children at
          all, so the `JsxElement` visitor below never sees it — this is the one blank-by-
          construction case that reader cannot reach. */
@@ -1388,6 +1463,39 @@ function selfTest() {
     rule('export const S = () => <Button icon="eye">Reveal</Button>\n', 'R2-icon-only-button') === 1 &&
     rule('export const S = () => <Button icon="eyeOff">Hide</Button>\n', 'R2-icon-only-button') === 1 &&
     rule('export const S = () => <Button icon="eraser">Clear</Button>\n', 'R2-icon-only-button') === 1)
+
+  /* R2-header-actions (the tighten ruling, 2026-09-24): at most one worded <Button> in a
+     <Page>/<PageHeader> actions slot. */
+  add('two worded <Button>s in <Page actions> is red (R2-header-actions)', () =>
+    rule('export const S = () => <Page actions={<><Button>Save</Button><Button>Cancel</Button></>} />\n', 'R2-header-actions') === 1)
+  add('two worded <Button>s in <PageHeader actions> is red too', () =>
+    rule('export const S = () => <PageHeader actions={<><Button>Save</Button><Button>Cancel</Button></>} />\n', 'R2-header-actions') === 1)
+  add('one worded <Button> plus an <IconButton> in actions is green', () =>
+    rule('export const S = () => <Page actions={<><Button>Save</Button><IconButton icon="x" label="Close" /></>} />\n', 'R2-header-actions') === 0)
+  add('one worded <Button> alone in actions is green', () =>
+    rule('export const S = () => <Page actions={<Button variant="primary">Send</Button>} />\n', 'R2-header-actions') === 0)
+  add('two icon-only <Button>s in actions is green: neither is worded', () =>
+    rule('export const S = () => <Page actions={<><Button icon="x" iconOnly>Close</Button><IconButton icon="y" label="Sort" /></>} />\n', 'R2-header-actions') === 0)
+  add('worded Buttons inside a Sheet reached from the header are not counted (opaque overlay)', () =>
+    rule('export const S = () => <Page actions={<><Button>Save</Button><Sheet><Button>Confirm</Button><Button>Cancel</Button></Sheet></>} />\n', 'R2-header-actions') === 0)
+  add('a screen with no actions prop at all is green', () => rule('export const S = () => <Page title="X" />\n', 'R2-header-actions') === 0)
+
+  /* R2-filter-row (the same ruling): a hand-built SearchField-plus-facet row with no FilterBar
+     in the file at all — FILE-LEVEL, so it does not matter how far apart the two tags sit. */
+  add('SearchField beside a Select with no FilterBar in the file is red (R2-filter-row)', () =>
+    rule('export const S = () => <><SearchField /><Select /></>\n', 'R2-filter-row') === 1)
+  add('SearchField beside FilterChips with no FilterBar is red', () =>
+    rule('export const S = () => <><SearchField /><FilterChips /></>\n', 'R2-filter-row') === 1)
+  add('SearchField and a Select, both inside a FilterBar tag, is green', () =>
+    rule('export const S = () => <FilterBar><SearchField /><Select /></FilterBar>\n', 'R2-filter-row') === 0)
+  add('SearchField and a Select elsewhere in a file that also renders FilterBar is green: the file has adopted it', () =>
+    rule('export const S = () => <><FilterBar /><SearchField /><Select /></>\n', 'R2-filter-row') === 0)
+  add('a bare SearchField with no facet control beside it is green', () => rule('export const S = () => <SearchField />\n', 'R2-filter-row') === 0)
+  add('a bare Select with no SearchField is green: nothing to combine into a bar', () => rule('export const S = () => <Select />\n', 'R2-filter-row') === 0)
+  add('Gallery.tsx is exempt from R2-filter-row (the specimen sheet demos each piece separately)', () => {
+    const r = outcome(tree({ 'app/src/Gallery.tsx': 'export const G = () => <><SearchField /><Select /></>\n' }))
+    return !has(r.unlisted, 'app/src/Gallery.tsx', 'R2-filter-row')
+  })
 
   /* ONLY SHRINKS (F3): the growth read against the merge-base. */
   const base = { static: { 'app/src/A.tsx': { R1: 'home', 'R2-class': 'home' } }, runtime: { '/': { page: 'home' } } }

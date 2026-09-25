@@ -5748,10 +5748,13 @@ COMPONENTS = [
                                             "`SearchField` into one toolbar. It draws \"N of M\" by "
                                             "construction and names every narrowing in it (the "
                                             "picks, the search, the hide toggle), with the one "
-                                            "clear-all. Every facet trigger in one bar is one width. "
-                                            "It opens a popover in a wide bar and one sheet behind a "
-                                            "single trigger in a narrow one, by the bar's own width. "
-                                            "A slot beside the search takes a screen's own control, "
+                                            "clear-all. ONE LINE AT EVERY WIDTH (the owner, "
+                                            "2026-09-24, amending D-one-filter-control): search "
+                                            "plus one \"Filters\" trigger, never a wide inline row. "
+                                            "`compact` (default `'popover'`) picks the overlay the "
+                                            "trigger opens: a floating `Popover`, or `'sheet'` for "
+                                            "the kit's `Sheet` (the inventory lane's own call on a "
+                                            "phone). A slot beside the search takes a screen's own control, "
                                             "and the search takes `useSearch`'s busy and failure "
                                             "states. Also the quiet `HideToggle` (one shape for "
                                             "\"Hide sold\" / \"Hide never-seen\" / \"Holding\", "
@@ -5760,12 +5763,12 @@ COMPONENTS = [
                                             "per-column first direction, re-sorting at once, "
                                             "FLT-01).",
                                     "governed_by": ["D118", "D132", "D209", "D-one-filter-control"]},
-            "src/kit/filters.css": {"does": "the filter bar's styles. A container query on the "
-                                            "bar's own width: below 480px of bar (a phone column, "
-                                            "Inventory's rail) the wide row hides and the compact "
-                                            "trigger and its sheet take over — both trees are always "
-                                            "mounted, CSS alone decides which is visible. The facet "
-                                            "triggers share one grid track width.",
+            "src/kit/filters.css": {"does": "the filter bar's styles. One line at every width "
+                                            "(amending D-one-filter-control, 2026-09-24): no "
+                                            "container query decides the layout any more — the "
+                                            "compact trigger is always shown, and its overlay "
+                                            "(`.bn-menu.bn-filterbar-popover`, or the kit's own "
+                                            "`Sheet` styling) is picked by the `compact` prop.",
                                     "governed_by": ["D50", "D118", "D195", "D-one-filter-control",
                                                      "D-icon-buttons"]},
             "src/kit/filters.specimens.tsx": {"does": "`FilterBar` (full width, and in a 280px "
