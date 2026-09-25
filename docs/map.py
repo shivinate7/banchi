@@ -6044,7 +6044,7 @@ COMPONENTS = [
                                             "`open` state is true rather than taking one, and on "
                                             "the same `useOverlayLayer` stack every other layer "
                                             "here joins — which the file it replaced never did.",
-                                    "governed_by": ["D94", "D95", "D118", "D-icon-buttons"]},
+                                    "governed_by": ["D94", "D95", "D118", "D128", "D-icon-buttons"]},
             "src/kit/dialog.css": {"does": "`Dialog`'s own inner rhythm — the sheet's width, the "
                                            "head padding, the lightbox's 44px circular Close and "
                                            "its backdrop blur. The panels themselves are the "

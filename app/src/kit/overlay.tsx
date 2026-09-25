@@ -192,12 +192,16 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
     }
   }, [ref, active, scrim])
 
+  /* BOTH ARE LAYOUT EFFECTS, SO A LAYER THAT IS PAINTED ALREADY HEARS ITS KEYS (D128, applied
+     here at the PR 2 integration). As passive effects they attached after paint, so an Escape
+     pressed the moment a Sheet drew was lost, and the Sheet stayed open (`filters.spec.ts`'s
+     compact-overlay case, once, under the full suite's load). */
   const escape = useRef(onEscape)
-  useEffect(() => {
+  useLayoutEffect(() => {
     escape.current = onEscape
   })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = ref.current
     if (!active || root === null) return
     const onKey = (event: KeyboardEvent) => {
