@@ -1594,7 +1594,7 @@ test('no typed middle dot or bullet reaches the capture screen', async ({ page }
   // ("armed" / "no frames yet") both read from `motionDiag === null`.
   await page.getByRole('button', { name: /Trigger/ }).click()
   await page.getByRole('button', { name: 'motion', exact: true }).click()
-  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
   await page.keyboard.press('Escape')
 
   const view = page.locator('.bn-view')

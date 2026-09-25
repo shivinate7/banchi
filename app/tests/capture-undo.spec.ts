@@ -975,7 +975,7 @@ async function armMotion(page: Page): Promise<void> {
   await page.getByRole('button', { name: /Trigger/ }).click()
   await page.getByRole('button', { name: 'motion', exact: true }).click()
   await page.keyboard.press('Escape')
-  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
 }
 
 function pauseplay(page: Page) {
@@ -994,7 +994,7 @@ test('the pause button switches motion off, and the manual key fires while it is
   await expect(pauseplay(page)).toHaveAccessibleName(/Resume motion/)
   // `switchTrigger('manual')` is the same call the track's own `key` cell makes — the machine
   // string is `manual:c`, not a name this button invented.
-  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
 
   // C is disarmed in motion mode and live in manual (map.py's own rule); firing it for real
   // is the proof that pausing switched the mode rather than only redrawing the button.
@@ -1008,12 +1008,12 @@ test('the play button switches motion back on, and the manual key stops firing a
   const wire = await open(page)
   await armMotion(page)
   await pauseplay(page).click()
-  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
 
   await pauseplay(page).click()
   await expect(pauseplay(page)).toHaveClass(/is-running/)
   await expect(pauseplay(page)).toHaveAccessibleName(/Pause motion/)
-  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
 
   await page.keyboard.press('c')
   // Asserted against something that DOES change on a real fire (the odometer's own count),
@@ -1026,9 +1026,9 @@ test('Space is the same toggle, and does nothing while typing', async ({ page })
   await open(page)
   await armMotion(page)
   await page.keyboard.press(' ')
-  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
   await page.keyboard.press(' ')
-  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
 
   // Typing a space into the Box field's own entry must type a space, not toggle the trigger.
   await page.keyboard.press('b')
@@ -1036,7 +1036,7 @@ test('Space is the same toggle, and does nothing while typing', async ({ page })
   await entry.fill('New')
   await entry.press(' ')
   await expect(entry).toHaveValue('New ')
-  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
   await page.keyboard.press('Escape')
 })
 

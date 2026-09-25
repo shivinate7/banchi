@@ -275,7 +275,7 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   await page.goto('/#/capture')
 
   // Before anything: manual mode, machine string says so, no HUD anywhere.
-  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
   await expect(hud(page)).toHaveCount(0)
 
   // Arm motion. The trigger is a one-line field in the session group now (pass D,
@@ -286,7 +286,7 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   // rather than rendering zeros that look like a working machine seeing nothing).
   await page.getByRole('button', { name: /Trigger/ }).click()
   await page.getByRole('button', { name: 'motion', exact: true }).click()
-  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
   /* ARMED, AND THE SCREEN SAYS SO WITH NOTHING OPENED. The disclosure's summary is the
      readout's public face now, and it carries the machine's state: no camera is open, so it
      reads `armed` and `no frames yet` — two facts, separated by a CSS dot rather than a typed
@@ -441,7 +441,7 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   // follows the control. The key trigger is back, the HUD is gone, the cell released.
   await page.getByRole('button', { name: /Trigger/ }).click()
   await page.getByRole('button', { name: 'key', exact: true }).click()
-  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
   await expect(hud(page)).toHaveCount(0)
 })
 

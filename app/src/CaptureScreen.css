@@ -234,7 +234,6 @@
   white-space: nowrap;
 }
 .capture-sub-alert { color: var(--bn-warn); }
-.capture-trigger { font-family: var(--bn-font-mono); }
 
 /* The box row is the run's own row: twice the height, the value as the payload. */
 .capture-row-lg {

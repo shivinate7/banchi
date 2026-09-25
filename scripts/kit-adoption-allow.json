@@ -13,10 +13,6 @@
       "R1": "fulfillment",
       "R2-class": "fulfillment"
     },
-    "app/src/Gallery.tsx": {
-      "R2-search": "kit-frame",
-      "R2-money": "kit-frame"
-    },
     "app/src/LiveReconcile.tsx": {
       "R2-dialog": "review",
       "R2-class": "review"
@@ -69,9 +65,6 @@
       "R2-dialog": "review",
       "R2-select": "review",
       "R2-class": "review"
-    },
-    "app/src/RunsStage.tsx": {
-      "R2-date": "review"
     },
     "app/src/SendCard.tsx": {
       "R2-icon-only-button": "icons"

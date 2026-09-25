@@ -3654,7 +3654,9 @@ export function CaptureScreen() {
                       : boxTop !== undefined
                         ? boxTop.sealed
                           ? 'Sealed'
-                          : `Next index ${boxTop.next ?? '?'}`
+                          : /* The box picker's own words for this fact, "next 43" (see its trail
+                               below): never "index", a pipeline noun (D196). */
+                            `Next ${boxTop.next ?? '?'}`
                         : boxOffer !== null
                           ? 'New box'
                           : ''}
@@ -4530,15 +4532,11 @@ export function CaptureScreen() {
                   <span className="capture-list-part">
                     {triggerMode === 'motion' ? 'the machine fires it' : `${CAPTURE_KEY_LABEL} fires it`}
                   </span>
-                  {/* UX-082 (copy): visually and to a screen reader this is `bn-sr` either
-                      way, so it never spoke on top of "Manual"/"Motion" above — it is read
-                      here for `motion-live.spec.ts` and `capture-claims.spec.ts`, which tell
-                      manual from motion apart by this exact machine string, not by the human
-                      label the two share one word between. `aria-hidden` keeps it out of the
-                      accessible name a screen reader would otherwise get twice. */}
-                  <span className="bn-sr capture-trigger" aria-hidden="true">
-                    {captureTrigger.name}
-                  </span>
+                  {/* THE MACHINE STRING IS AN ATTRIBUTE, NEVER TEXT (D196): `motion-live.spec.ts`,
+                      `capture-undo.spec.ts` and `capture-claims.spec.ts` tell manual from motion
+                      apart by `data-trigger`, and nothing a person or a screen reader gets reads
+                      "manual:c". The human label is "Manual"/"Motion" above. */}
+                  <span className="capture-trigger" data-trigger={captureTrigger.name} hidden />
                 </>
               }
               onClose={closeField}
@@ -4578,11 +4576,8 @@ export function CaptureScreen() {
               right={
                 <span className={triggerMode === 'manual' ? 'capture-val' : 'capture-val is-armed'}>
                   {triggerMode === 'manual' ? 'Manual' : 'Motion'}
-                  {/* Same as the open field's own copy above: hidden from a screen reader,
-                      read by `motion-live.spec.ts` and `capture-claims.spec.ts`. */}
-                  <em className="bn-sr capture-trigger" aria-hidden="true">
-                    {captureTrigger.name}
-                  </em>
+                  {/* Same as the open field's own marker above: an attribute, never text. */}
+                  <span className="capture-trigger" data-trigger={captureTrigger.name} hidden />
                 </span>
               }
               onToggle={() => toggleField('trigger')}
