@@ -985,7 +985,11 @@ function walkTo(buyerKey: string): void {
   const hash = window.location.hash
   const at = hash.indexOf('?')
   const query = new URLSearchParams(at === -1 ? '' : hash.slice(at + 1))
-  if (query.get(WALK_PARAM) === '1') {
+  /* ONLY WHERE WALK MODE DRAWS ANYTHING: under 1000px of column. A desk selection writes no
+     `walk=1`, so a link copied at the desk does not open walk mode on a phone (review, round 3).
+     The column is read once, at the press, the same edge `Orders.css` asks. */
+  const column = document.querySelector('.orders-body')?.getBoundingClientRect().width ?? 0
+  if (query.get(WALK_PARAM) === '1' || column >= 1000) {
     patchViewQuery({ [BUYER_PARAM]: buyerKey, [ORDER_PARAM]: null })
     return
   }
@@ -2679,16 +2683,17 @@ function PullStage({
      the row, or the walk, out from under the hand. */
   /* Keyed by buyer, holding whether it led as Ready to ship when it left, so it keeps its place
      in the sort too (a finished buyer has no open order left to say so). */
+  /* TAKEN IN THE RENDER THAT SEES THE BUYER FINISH (React's "adjust state during render"), never in
+     an effect: an effect let one committed render drop the buyer from the list, move the selection
+     to the next buyer and ask for that buyer's walk (the re-review's race, round 3). */
   const [finished, setFinished] = useState<ReadonlyMap<string, boolean>>(new Map())
-  const openBefore = useRef<ReadonlyMap<string, boolean> | null>(null)
-  useEffect(() => {
-    const now = new Map(allGroups.filter((group) => group.open.length > 0).map((group) => [group.key, groupIsReadyToShip(group)] as const))
-    const before = openBefore.current
-    openBefore.current = now
-    if (before === null) return
-    const left = [...before].filter(([key]) => !now.has(key))
-    if (left.length > 0) setFinished((prev) => new Map([...prev, ...left]))
-  }, [allGroups])
+  const [seenGroups, setSeenGroups] = useState(allGroups)
+  if (seenGroups !== allGroups) {
+    const openNow = new Set(allGroups.filter((group) => group.open.length > 0).map((group) => group.key))
+    const left = seenGroups.filter((group) => group.open.length > 0 && !openNow.has(group.key))
+    setSeenGroups(allGroups)
+    if (left.length > 0) setFinished((prev) => new Map([...prev, ...left.map((group) => [group.key, groupIsReadyToShip(group)] as const)]))
+  }
   const readyOf = (group: BuyerGroup) => finished.get(group.key) ?? groupIsReadyToShip(group)
 
   const feedStatuses = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
@@ -3018,7 +3023,7 @@ function PullStage({
       value={picked}
       onChange={setPicked}
       count={{ shown: shownGroups.length, total: base.length, noun: { one: 'buyer', many: 'buyers' } }}
-      search={{ query, onChange: setQuery, placeholder: 'Search buyers or order numbers', label: 'Search buyers' }}
+      search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search buyers' }}
       sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
       hide={unknownCount === 0 && !hideUnknown ? undefined : { checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown cards', count: unknownCount }}
     />

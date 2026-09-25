@@ -3157,13 +3157,14 @@ test('Manage says once what each stand-down press does, in words, with no code o
 test('the last sale leaves the buyer on screen, says all sold, and points to Shipping', async ({ page }) => {
   /* The second read answers the order closed: the ledger has every copy. The buyer must not
      vanish from under the hand (FLT-22), and the walk says what is next. */
-  let readCalls = 0
+  /* THE ANSWER CHANGES WITH THE PULL, not with the read count: the screen reads more than once on mount. */
+  let pulled = false
   await open(page, {
-    orders: () =>
-      readCalls++ === 0
-        ? oneOpenOrder()
-        : payloadOf([order({ recorded: 1, open: false })], []),
-    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+    orders: () => (pulled ? payloadOf([order({ recorded: 1, open: false })], []) : oneOpenOrder()),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
     walkPlan: volcanionPlan(),
   })
   await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
@@ -3288,3 +3289,42 @@ for (const [width, height] of [
     await expect(bar.getByRole('button', { name: /^Show/ })).toBeHidden()
   })
 }
+
+/* ------------------------------------------------------------ the finished-buyer race (review round 3) */
+
+test('finishing a buyer never asks for another buyer\'s walk, and draws no card to sell', async ({ page }) => {
+  /* THE RACE THE RE-REVIEW FOUND: on the last sale the selection moved for one render to the
+     first buyer shown, which asked for that buyer's plan. The hold took the selection back, and
+     the old answer then landed: another buyer's card, with an active Mark sold, under a buyer
+     with 0 cards to pick. */
+  let pulled = false
+  const second = secondBuyerPayload()
+  const nora = second.payload.orders.find((one) => one.key === secondBuyerKey)!
+  const adaDone = payloadOf([order({ recorded: 1, open: false }), nora], [second.resolved])
+  await open(page, {
+    orders: () => (pulled ? adaDone : second.payload),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+    walkPlan: volcanionPlan(),
+  })
+  const asked: string[][] = []
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    const keys = (route.request().postDataJSON() as { keys?: string[] }).keys ?? []
+    asked.push(keys)
+    const plan = keys.includes(secondBuyerKey) ? sunrisePlan() : keys.length === 0 ? walkPlanOf([]) : volcanionPlan()
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
+  })
+
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  await expect(page.locator('.orders-card-pane')).toContainText('Volcanion')
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).first().click()
+  await expect(page.locator('.orders-walk-done')).toContainText('All 1 sold.')
+
+  /* A window long enough for the stray plan to have been asked for and to have landed. */
+  await page.waitForTimeout(600)
+  expect(asked.filter((keys) => keys.includes(secondBuyerKey))).toEqual([])
+  await expect(page.locator('.orders-card-pane')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Mark sold/ })).toHaveCount(0)
+})

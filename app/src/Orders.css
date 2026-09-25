@@ -261,7 +261,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-index-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 /* A NAME WRAPS, never an ellipsis: "Buyer on order …00012" cut to "Buyer on order …0…" named
    nobody (review, UX-268). */
-.orders-index-number { font-size: var(--bn-fs-md); font-weight: 600; overflow-wrap: anywhere; }
+.orders-index-number { font-size: var(--bn-fs-md); font-weight: 600; overflow-wrap: break-word; }
 .orders-index-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .orders-index-count { flex: none; }
 .orders-index-figure { font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -275,7 +275,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-panel-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-3); }
 .orders-panel-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .orders-panel-name,
-.orders-walk-title { font-size: var(--bn-fs-xl); overflow-wrap: anywhere; }
+.orders-walk-title { font-size: var(--bn-fs-xl); overflow-wrap: break-word; }
 .orders-panel-order,
 .orders-walk-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-buyer-order-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bn-ink-2); }

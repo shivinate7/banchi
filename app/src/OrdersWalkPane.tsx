@@ -193,6 +193,10 @@ export function useOrderWalk({
   readonly onUndo: WalkUndoFn
 }) {
   const keysSig = useMemo(() => [...walkedKeys].sort().join(' '), [walkedKeys])
+  /* THE KEY SET WALKED NOW. An answer for any other set is dropped, whenever it lands: a stale
+     answer drew another buyer's card with an active Mark sold (the re-review, round 3). */
+  const currentSig = useRef(keysSig)
+  currentSig.current = keysSig
   const [plan, setPlan] = useState<WalkPlan | null>(null)
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -213,15 +217,17 @@ export function useOrderWalk({
     }
     setLoading(true)
     setFailure(null)
+    const asked = keysSig
+    const current = () => live.current && currentSig.current === asked
     walkPlan([...walkedKeys])
       .then((got) => {
-        if (live.current) setPlan(got)
+        if (current()) setPlan(got)
       })
       .catch((err) => {
-        if (live.current) setFailure(describeFailure(err))
+        if (current()) setFailure(describeFailure(err))
       })
       .finally(() => {
-        if (live.current) setLoading(false)
+        if (current()) setLoading(false)
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keysSig])
