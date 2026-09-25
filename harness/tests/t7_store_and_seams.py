@@ -1142,7 +1142,8 @@ def check_store(checks: Checks) -> None:
 
 def check_set_and_rarity(checks: Checks) -> None:
     """D213: the schema migration
-    (`store/db.py:_add_set_columns`) and the backfill (`cli/cmd_cards.py`'s `variants`).
+    (`store/db.py:_add_set_columns`) and the backfill, which is `cards identity --write`
+    since identity-follows-sku.md retired `cards variants` (§4.2).
 
     THE MIGRATION HALF: an old store, stamped 7, gains `set_name` and `rarity` with every
     row preserved and the 99 `UNL` rows swept to `Unleashed` in the same pass — built by
@@ -1150,13 +1151,15 @@ def check_set_and_rarity(checks: Checks) -> None:
     `store/db.py`'s own docstring for `_add_search_index` argues an upgrade must be additive
     against.
 
-    THE BACKFILL HALF: a SKU that resolves against the export on disk gets a real set and
-    rarity; a SKU that resolves to nothing keeps a null set and its own record — never
-    guessed, never dropped, over `./pkmnscan cards variants --write`'s own code path rather
-    than a re-implementation of it.
+    THE BACKFILL HALF: `./pkmnscan cards variants --write` refuses, names `cards identity`,
+    and writes nothing. That is the arm a restored direct `card.set_name = ...` turns red.
+    Then the replacement, over its own code path: `skus adopt`'s fill, then
+    `./pkmnscan cards identity --write`. A SKU the table holds gets a real set and rarity
+    through `bind_sku`. A SKU the table lacks keeps a null set and its own record — never
+    guessed, never dropped.
     """
     checks.note("")
-    checks.note("SET + RARITY — store/db.py schema 8, cli/cmd_cards.py `variants`")
+    checks.note("SET + RARITY — store/db.py schema 8, cli/cmd_cards.py `identity`")
 
     # ---------------------------------------------------------------- the migration itself
     with isolated_home():
@@ -1231,11 +1234,13 @@ def check_set_and_rarity(checks: Checks) -> None:
     with isolated_home() as home:
         exports = home / "inventory" / ".exports" / "riftbound"
         exports.mkdir(parents=True)
-        (exports / "export.csv").write_text(
+        # A STAMPED NAME, `_keep_export`'s own shape: `skus adopt` skips a file whose name
+        # carries no stamp (pipeline/skus.py:stamp_of), and the old `export.csv` has none.
+        (exports / "export-tcgplayer-20260901-120000-0123abcd.csv").write_text(
             "TCGplayer Id,Product Line,Set Name,Product Name,Number,Rarity,Condition,"
             "TCG Market Price,Total Quantity\r\n"
             "CR-VEN-001,Riftbound League of Legends Trading Card Game,Vendetta,"
-            "Mind Rune (R03a),R03a,Showcase,Near Mint Foil,1.00,0\r\n",
+            "Mind Rune,R03a,Showcase,Near Mint Foil,1.00,0\r\n",
             encoding="utf-8",
         )
         with Store().write() as snapshot:
@@ -1257,26 +1262,48 @@ def check_set_and_rarity(checks: Checks) -> None:
             card2.state = master.IDENTIFIED
 
         class Args:
-            def __init__(self, write: bool):
-                self.cards_action = "variants"
+            def __init__(self, action: str, write: bool):
+                self.cards_action = action
                 self.write = write
 
         say_lines: List[str] = []
-        cmd_cards.run(Args(write=True), say_lines.append)
+        code = cmd_cards.run(Args("variants", write=True), say_lines.append)
+        checks.equal(code, 2, "`cards variants --write` is retired, and refuses with exit 2")
+        checks.ok(
+            any("cards identity" in line for line in say_lines),
+            "and its one line names `cards identity`, the press that replaced it",
+            f"said: {say_lines!r}",
+        )
+        retired = Store().read().inventory.cards[resolvable_key]
+        checks.equal(
+            (retired.set_name, retired.rarity),
+            (None, None),
+            "and it writes nothing — no card field is assigned outside the one writer "
+            "(identity-follows-sku.md §4.1)",
+        )
+
+        with Store().write() as snapshot:
+            sku_pipeline.fill(snapshot.skus, snapshot.inventory.events)
+        say_lines = []
+        code = cmd_cards.run(Args("identity", write=True), say_lines.append)
+        checks.equal(code, 0, "`cards identity --write` runs over the same store")
 
         after_inv = Store().read().inventory
         resolved = after_inv.cards[resolvable_key]
         checks.equal(
-            (resolved.set_name, resolved.rarity),
-            ("Vendetta", "Showcase"),
-            "the backfill resolves a real SKU against the export on disk",
+            (resolved.set_name, resolved.rarity, resolved.identity_source, resolved.bound_by),
+            ("Vendetta", "Showcase", master.IDENTITY_SKU, "migration"),
+            "the replacement fills a real SKU's set and rarity from the SKU table, through "
+            "bind_sku",
         )
         ghost = after_inv.cards[unresolvable_key]
         checks.ok(
-            ghost.set_name is None and ghost.rarity is None and ghost.sku == "CR-GHOST-999",
-            "and a SKU that resolves to nothing keeps a null set and its own record — "
+            ghost.set_name is None and ghost.rarity is None and ghost.sku == "CR-GHOST-999"
+            and ghost.identity_source != master.IDENTITY_SKU,
+            "and a SKU the table lacks keeps a null set and its own record — "
             "never guessed and never dropped",
-            f"card: sku={ghost.sku!r} set_name={ghost.set_name!r}",
+            f"card: sku={ghost.sku!r} set_name={ghost.set_name!r} "
+            f"identity_source={ghost.identity_source!r}",
         )
 
     # ------------------------------------------------------- the real collision, on the wire

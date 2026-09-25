@@ -357,15 +357,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cards_variants = cards_sub.add_parser(
         "variants",
-        help="backfill `set` and `rarity` from whatever export each card's game already "
-        "has on disk (D213). Previews by "
-        "default. Never guesses: a SKU that resolves to nothing keeps a null set.",
+        help="RETIRED into `cards identity --write`. Prints one line, writes nothing, "
+        "and exits 2.",
     )
-    cards_variants.add_argument(
-        "--write",
-        action="store_true",
-        help="apply the backfill. Without it nothing is written.",
-    )
+    # KEPT so an operator who types the old `--write` reaches the one line that names the
+    # replacement, rather than an argparse error that names nothing.
+    cards_variants.add_argument("--write", action="store_true", help=argparse.SUPPRESS)
 
     # ----------------------------------------------------------------------------- join
     joined = sub.add_parser("join", help="resolve against the export. Free, re-runnable.")

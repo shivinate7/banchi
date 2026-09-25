@@ -329,14 +329,10 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
 ./pkmnscan cards    contradictions / sku-names
                                    # RETIRED into `cards identity` (owner's ruling, "Merge
                                    #   them"). Each prints one line naming it and exits.
-./pkmnscan cards    variants [--write]
-                                   # backfill `set`/`rarity` from whatever export a card's own
-                                   #   game already has on disk. Governed by
-                                   #   D213.
-                                   #   Previews by default.
-                                   #   Never guesses: a SKU that resolves to nothing keeps a
-                                   #   null set. Re-runnable — a card already carrying a set
-                                   #   is left alone.
+./pkmnscan cards    variants
+                                   # RETIRED into `cards identity --write`, which fills
+                                   #   `set`/`rarity` from the SKU table through `bind_sku`.
+                                   #   It prints one line, writes nothing, and exits 2.
 ./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
                                    #   Previews. Newest-wins. Names the holds it replaces.
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view.

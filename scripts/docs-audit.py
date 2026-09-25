@@ -4218,18 +4218,13 @@ def check_import_layering(report: Report) -> None:
 # can reach — the same six the spec's own text names for this row.
 _IDENTITY_WRITERS_ROOTS = ("server", "store", "pipeline", "cli", "codes", "scripts")
 
-# Two sites this row finds and does NOT fix: `cli/cmd_cards.py:_variants` still writes
-# `set_name`/`rarity` on a card directly, though identity-follows-sku.md §4.2's own plan
-# table calls that path "retired" once `cards identity --write` exists (§7, lane 2). Fixing
-# it is lane 2's fence (§11's build plan: lane 2 owns `cli/cmd_cards.py`), not lane 7's, and
-# `harness/tests/t7_store_and_seams.py` asserts its exact output today. `UNSCOPED_WALK_
-# ALLOWED`'s own idiom: an entry here is a debt this row can SEE, never one it hides, and the
-# ratchet below cannot silently grow.
-IDENTITY_WRITERS_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
-    ("cli/cmd_cards.py", "_variants", "set_name"),
-    ("cli/cmd_cards.py", "_variants", "rarity"),
-})
-IDENTITY_WRITERS_ALLOWED_EXPECTED = 2
+# EMPTY, AND PINNED AT ZERO. The two entries lane 7 pinned here were
+# `cli/cmd_cards.py:_variants`'s direct `set_name`/`rarity` writes. That press is now a
+# stub that refuses and names `cards identity --write` (identity-follows-sku.md §4.2:
+# "retired"), so the list is empty. `UNSCOPED_WALK_ALLOWED`'s own idiom: an entry here is a
+# debt this row can SEE, never one it hides, and the ratchet below cannot silently grow.
+IDENTITY_WRITERS_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset()
+IDENTITY_WRITERS_ALLOWED_EXPECTED = 0
 
 
 def _identity_field_assignments(
@@ -4305,8 +4300,8 @@ def check_identity_writers(report: Report) -> None:
 
     ONLY A `card.<field>` ASSIGNMENT COUNTS — see `_identity_field_assignments`'s own
     docstring for the heuristic and what it cannot see. `IDENTITY_WRITERS_ALLOWED` above is
-    a SEPARATE, RATCHETED exception list, `UNSCOPED_WALK_ALLOWED`'s own idiom, for two sites
-    this row finds and does not fix — see that constant's own comment for why.
+    a SEPARATE, RATCHETED exception list, `UNSCOPED_WALK_ALLOWED`'s own idiom. It is empty
+    and pinned at zero since `cards variants` retired — see that constant's own comment.
 
     TRUSTED ONLY ONCE IT GOES RED ON THE DEFECT IT GUARDS (owner's rule): a planted
     `card.name = "whatever"` inside `cli/cmd_cards.py`'s `_audit` function is how this row

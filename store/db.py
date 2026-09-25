@@ -114,10 +114,10 @@ PHOTOS_RELOCATED = "photos_relocated"
 # `set_name` and `rarity` to `cards` and sweeps the 99 `UNL` rows from 2026-08-29 to
 # `Unleashed` — the DDL and the sweep, which cost nothing to run on every open. Filling the
 # two new columns for cards the store already holds is a SEPARATE, re-runnable step
-# (`./pkmnscan cards variants --write`), never bound to a schema version: it resolves a SKU
-# against whatever export happens to be on disk, which can change from one run to the next,
-# and a migration that ran once at open time could never re-answer a card whose export
-# arrived later.
+# (`./pkmnscan cards identity --write` since identity-follows-sku.md, which retired
+# `cards variants`), never bound to a schema version: its answer depends on what the `skus`
+# table holds, which grows from one run to the next, and a migration that ran once at open
+# time could never re-answer a card whose export arrived later.
 #
 # NINE, FOR D219 (`docs/specs/revenue-plan.md` §4). `_add_price_history`
 # adds `price_history` and `price_history_sources` — the same purely-additive shape
@@ -1175,7 +1175,7 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
     ADDITIVE LIKE `_add_search_index`'s TWO COLUMNS: the `ALTER`s are guarded by
     `PRAGMA table_info` so a re-run after a crash is a no-op, and nothing existing is READ to
     decide what to write — both columns default to NULL and stay NULL until
-    `./pkmnscan cards variants --write` or the next identification fills them.
+    `./pkmnscan cards identity --write` or the next `bind_sku` fills them.
     `_add_search_index`'s own case for why the CID is here rather than derived per read
     applies unchanged: `_copies_out` and `do_search` are both O(cards) already, and a facet
     computed by joining an export on every request would be the same defect this schema
@@ -1186,9 +1186,10 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
     `inventory/.exports/<game>/` happens to hold, and an export is exactly the kind of thing
     that ages in (D166) or is fetched for the first time between two opens of this store; a
     migration bound to `SCHEMA_VERSION` runs once, ever, and could never re-answer a card
-    whose export arrived a week later. `./pkmnscan cards variants` is the re-runnable
-    counterpart — the same shape `photos`/`prices adopt` already use for a fact this store
-    can only partially answer the day it is asked.
+    whose export arrived a week later. `./pkmnscan cards identity --write` is the
+    re-runnable counterpart now (it retired `cards variants`, identity-follows-sku.md §4.2)
+    — the same shape `photos`/`prices adopt` already use for a fact this store can only
+    partially answer the day it is asked.
 
     THE 99 `UNL` ROWS ARE SWEPT HERE, though, because that IS a one-time, unconditional
     rewrite with no data outside this file to consult: `_SET_HINT_SWEEP` is a closed table

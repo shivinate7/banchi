@@ -714,7 +714,7 @@ CHECKS = (
                    "survive the same fixture. This module's one caller "
                    "(`cli/cmd_cards.py:checks`) is exercised nowhere else — "
                    "harness/tests/t7_store_and_seams.py drives cli/cmd_cards.py through "
-                   "cards_action='variants' alone, never 'checks'.",
+                   "cards_action='variants' and 'identity' alone, never 'checks'.",
         "needs": ("python3",),
         "writes": "nothing — every fixture is a literal CardRecord, never a store on disk.",
         "commit_path": False,

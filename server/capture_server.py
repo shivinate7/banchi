@@ -10053,7 +10053,7 @@ def do_search(query: str) -> dict:
                 # above stays exactly as it was — a screen still needs the fallback
                 # for the card no export has ever priced. `set`/`rarity` are `None`
                 # on every card identified before this pair existed, until
-                # `./pkmnscan cards variants --write` or the next identification
+                # `./pkmnscan cards identity --write` or the next `bind_sku`
                 # fills them.
                 "set": _agreed(card.set_name for card in copies),
                 "rarity": _agreed(card.rarity for card in copies),

@@ -18,8 +18,7 @@ actually folded in before the newer one changed it. Processing files newest-firs
 land on the correct final row, silently — the newer file would insert clean and the older
 file would refuse as `STALE`, never surfacing that the two ever disagreed. `_ordered_files`
 sorts ascending by `stamp_of` for exactly this reason, `pipeline/readings.py:_run_readings`'s
-own `sorted(entry.iterdir())` and `cli/cmd_cards.py:export_for`'s own
-`sorted(directory.glob("*.csv"))` applied to files carrying a stamp instead of a name.
+own `sorted(entry.iterdir())`, applied to files carrying a stamp instead of a name.
 
 THE STAMP IS THE FILE'S OWN NAME, NEVER ITS MTIME. `server/pipeline_routes.py:_keep_export`
 touches a reused file's mtime on every hit and leaves its name alone; `pipeline/

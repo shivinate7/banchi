@@ -623,7 +623,7 @@ falls to `sku_unknown`.
    - For each held card that is sold (10): report only (ruling 3). The report lists it. D252
      refuses to correct a departed card (`card_departed`), and the sale went out under the SKU.
    - Re-runnable. The press skips a card already bound. It also skips a card whose SKU moved
-     between the preview and the write, the in-lock re-check `cards variants` already makes.
+     between the preview and the write, the in-lock re-check `cards photos` already makes.
 4. **Answering a held card.** Section 8.
 
 ### 7.4 The replay, before any write
