@@ -287,6 +287,7 @@ import os
 import re
 import signal
 import socket
+import sqlite3
 import sys
 import unicodedata
 import concurrent.futures
@@ -10107,7 +10108,7 @@ def _fts_pair_alternatives(left: str, right: str) -> Optional[str]:
 _LEADING_SLASH_DIGITS = re.compile(r"^/([0-9]+)$")
 
 
-def _fts_slash_candidates(conn: "sqlite3.Connection", text: str) -> List[Tuple[str, str]]:
+def _fts_slash_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
     """Card `(key, sku)` rows for a query naming the SECOND half of a collector number
     alone (S2, UX-173 amended): `/132` for a card stored as `054/132`. FTS5 has no "ends
     with" — `tokenchars '/-'` keeps the composed number ONE token, so a prefix search from
@@ -10131,7 +10132,7 @@ def _fts_slash_candidates(conn: "sqlite3.Connection", text: str) -> List[Tuple[s
     return list(out.items())
 
 
-def _fts_fold_candidates(conn: "sqlite3.Connection", text: str) -> List[Tuple[str, str]]:
+def _fts_fold_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
     """Card `(key, sku)` rows a hyphen or an apostrophe hides from FTS5's own prefix search
     (S2, UX-173 amended): `tokenchars '/-'` keeps a hyphenated word ONE token exactly as
     written (`Ho-Oh` indexes as `ho-oh`, not `hooh`), and an apostrophe is an ordinary
