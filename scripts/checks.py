@@ -952,6 +952,47 @@ CHECKS = (
         "governed_by": ("D63", "D172", "D213", "D253"),
     },
     {
+        "target": "identity-cli-selftest",
+        "runs": "python3 scripts/identity-cli-selftest.py",
+        "asserts": "the CLI writers (cli/cmd_emit.py, cli/cmd_identify.py, cli/cmd_join.py, "
+                   "cli/cmd_reconcile.py, docs/specs/identity-follows-sku.md §4.2 lane 3b), "
+                   "over a real throwaway store and the real CLI dispatch "
+                   "(cli.__main__.main) for the wiring, and a bare in-memory Inventory/Skus "
+                   "pair for record_identification's narrowed write. `pkmnscan join` then "
+                   "`pkmnscan emit` over a fresh store whose skus table starts empty: the "
+                   "bind succeeds only because cmd_emit upserts the matched row before "
+                   "calling bind_sku, in the same transaction bind_sku's own docstring "
+                   "requires. The bound card's identity (name/number/printed_total/rarity/"
+                   "set_name/condition) equals the skus table's row, bound_by is 'join', and "
+                   "the row itself is now in the table. A re-identification of an "
+                   "already-bound card (cli/cmd_identify.py:_read_disputes_for, exercised "
+                   "directly) leaves the bound identity untouched and writes only read_name/"
+                   "read_number/read_printed_total, with read_disputes computed against the "
+                   "SKU row's own raw payload — True on a disputing read, False on an "
+                   "agreeing one, None on an unbound card. `pkmnscan join --export` and "
+                   "`pkmnscan reconcile --live` each fold EVERY row of the fixture export "
+                   "into the skus table, including a SKU no card in the run matched — never "
+                   "only pipeline/join.py:Catalog's D137-narrowed or matched rows. A "
+                   "two-game merged emit (Pokemon plus Riftbound, no --split-games) resolves "
+                   "each SKU's number_strategy and product_line off its OWN game and binds "
+                   "every card of the send. REVIEW FINDING, HIGH, on commit 1b5c90e5: a card "
+                   "re-identified between join and emit, disputing the row join already "
+                   "matched, is withheld before anything is written for it — absent from "
+                   "import.csv, no pushed count, no posting, no set_state, the card "
+                   "byte-for-byte untouched — and routed to review under D253's "
+                   "routing.NAME_DISPUTED, with JoinReport.ok's own closure invariant "
+                   "(cards_in vs cards_out) kept rather than tripped.",
+        "needs": ("python3",),
+        "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
+                  "repointed for the whole run, so the operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
+                               "skus-selftest and identity-store-selftest.",
+        "gates": True,
+        "governed_by": ("D25", "D36", "D63", "D64", "D87", "D104", "D137", "D166", "D172",
+                         "D213", "D253"),
+    },
+    {
         "target": "janitor-selftest",
         "runs": "bash scripts/janitor-selftest.sh",
         "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
