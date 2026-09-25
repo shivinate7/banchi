@@ -1543,59 +1543,6 @@ class TooManyRaces(RuntimeError):
     """
 
 
-# THE ONE `SQLITE_READONLY_*` REASON THIS FUNCTION MAY SWALLOW. Every other one is a real
-# permission or state problem on the MAIN file — `_ROLLBACK` (a stale `-journal` it cannot
-# clear), `_DBMOVED` (the file was renamed or deleted out from under an open handle),
-# `_DIRECTORY` (a legacy rollback journal, not WAL, needs a journal directory it cannot
-# write) and bare `SQLITE_READONLY` (an ordinary write refused) — and `open_read_only`
-# raises on every one of them, by not naming them here.
-_WAL_INDEX_INIT_ERRORNAME = "SQLITE_READONLY_CANTINIT"
-
-# THE MESSAGE FALLBACK, for a Python built without `sqlite_errorcode`/`sqlite_errorname`
-# (below 3.11 — see `_is_wal_index_init_failure`'s own docstring). Both measured directly,
-# same fixture, different SQLite build: "unable to open database file" (SQLITE_CANTOPEN) on
-# this Mac's SQLite 3.54.0, "attempt to write a readonly database"
-# (SQLITE_READONLY_CANTINIT) on CI's Linux SQLite 3.45.1.
-_WAL_INDEX_INIT_MESSAGES = (
-    "unable to open database file",
-    "attempt to write a readonly database",
-)
-
-
-def _is_wal_index_init_failure(exc: sqlite3.OperationalError) -> bool:
-    """Whether `exc` means "the plain `mode=ro` open could not initialise the WAL index" —
-    the one condition `open_read_only`'s immutable fallback exists for — and never a real
-    corruption or a permission error on the main file.
-
-    KEYED ON THE ERROR CODE WHEN THIS PYTHON EXPOSES ONE, NOT ON THE MESSAGE. PR #463's CI
-    is what found this: the SAME fixture (a read-only directory over a cold WAL store) raised
-    "unable to open database file" (`SQLITE_CANTOPEN`) on this Mac's SQLite 3.54.0, and
-    `open_read_only` fell back correctly — but on CI's Linux SQLite 3.45.1 it raised "attempt
-    to write a readonly database" (`SQLITE_READONLY_CANTINIT`) instead, a message the old
-    check never named, so the door raised on exactly the state it exists to handle. The
-    MEANING is identical on both builds — SQLite's own docs for `SQLITE_READONLY_CANTINIT`:
-    "cannot obtain a read lock on the wal-index because the shared-memory file could not be
-    created due to lack of write permission" — only the reported code differs. `sqlite3`'s
-    `Error.sqlite_errorcode`/`sqlite_errorname` (Python 3.11+) report that code directly;
-    this checks `sqlite_errorname` first and falls back to a message match only when it is
-    absent, exactly the two Pythons the fleet actually runs (this repo's CI pins 3.11; a
-    worktree may still carry 3.9).
-
-    `SQLITE_CANTOPEN`'S WHOLE FAMILY COUNTS, WITHOUT NARROWING TO ONE VARIANT: for a
-    `mode=ro` connection to a main file that `db_path.is_file()` already proved exists, ANY
-    `SQLITE_CANTOPEN_*` reason can only mean a SIDE file it needed could not be created or
-    opened — there is no other file left for it to mean. `SQLITE_READONLY_CANTINIT` is the
-    one specific `SQLITE_READONLY_*` reason that means the same thing; see the module-level
-    comment above this function for every other reason in that family, and why each one is
-    left OUT and reaches `raise`.
-    """
-    name = getattr(exc, "sqlite_errorname", None)
-    if name is not None:
-        return name.startswith("SQLITE_CANTOPEN") or name == _WAL_INDEX_INIT_ERRORNAME
-    message = str(exc)
-    return any(needle in message for needle in _WAL_INDEX_INIT_MESSAGES)
-
-
 def open_read_only(db_path: Path) -> sqlite3.Connection:
     """The one read-only door onto a store file. It never migrates, and it sees every commit.
 
@@ -1618,12 +1565,25 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     It only refuses when the store has no side files at all: a cold, fully-checkpointed
     store, or a fresh `.backup` copy (the backup API folds committed WAL pages into the
     copy's own main file). In that one state every commit is already IN the main file, so
-    `immutable=1` is exact, and it is the only case this function falls back to it. WHICH
-    ERROR IT RAISES FOR THAT STATE IS BUILD-DEPENDENT, MEASURED AS TWO DIFFERENT ONES ON THE
-    SAME FIXTURE: "unable to open database file" (`SQLITE_CANTOPEN`) on this Mac's SQLite
-    3.54.0, "attempt to write a readonly database" (`SQLITE_READONLY_CANTINIT`) on CI's
-    Linux SQLite 3.45.1 — see `_is_wal_index_init_failure`, above, for which of either family
-    counts and why.
+    `immutable=1` is exact, and it is the only case this function falls back to it.
+
+    THE FALLBACK IS KEYED ON WHAT MAKES `immutable=1` SAFE, NEVER ON WHICH ERROR THE PLAIN
+    OPEN RAISED. PR #463's CI is what forced this: the identical fixture (a cold store, a
+    directory denied the write permission SQLite needs to create `-shm`) raised "unable to
+    open database file" (`SQLITE_CANTOPEN`) on this Mac's SQLite 3.54.0, but "attempt to
+    write a readonly database" on CI's Linux SQLite 3.45.1 — and neither guess at THAT
+    build's own error code held either: its real `sqlite_errorname` was neither
+    `SQLITE_CANTOPEN_*` nor `SQLITE_READONLY_CANTINIT`, the two this function tried naming
+    in turn. A build's wording, and even its own result code, for "I could not set up to
+    read the WAL" is not a fact this function can enumerate in advance. What IS a fact,
+    checkable directly: `immutable=1` reads the main file exactly as it stands, so it is
+    correct precisely when the main file ALREADY holds every commit — which is exactly what
+    an absent or empty `-wal` says. So ANY `sqlite3.OperationalError` from the plain open is
+    read as "could not set up to read the WAL" and falls back, UNLESS `-wal` already holds
+    real content: a live, uncheckpointed commit the main file does not yet have, which
+    `immutable=1` would silently miss. In that one case the plain open's own refusal — a
+    permission error, a genuine lock conflict, whatever it was — is the true answer, and is
+    raised rather than swallowed.
 
     `sqlite3.connect(...)` ITSELF NEVER RAISES THAT ERROR — IT IS LAZY. SQLite does not touch
     the file, the WAL or the side files until the first statement runs, so a bare `connect()`
@@ -1631,7 +1591,10 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     this function that only called `connect()` and returned would never see the failure it
     means to catch, and would hand every caller a connection that raises on its first real
     query instead. `PRAGMA schema_version` is the first statement here, for exactly that
-    reason: the cheapest read that forces the open, on any store, schema or none.
+    reason: the cheapest read that forces the open, on any store, schema or none. THE
+    IMMUTABLE CONNECTION GETS THE SAME FORCED OPEN, for the opposite reason: a genuinely
+    corrupt or unreadable main file must raise HERE, never be handed back as a connection
+    that looks fine until its first real query.
 
     THE FALLBACK REOPENS ITS OWN CHECK, BECAUSE THE FIRST CHECK IS THE FAILED OPEN ABOVE, AND
     TIME PASSES BETWEEN A FAILED OPEN AND THE NEXT ONE. A commit landing in that gap creates
@@ -1653,13 +1616,14 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     waiter loop on principle, and raises `TooManyRaces` by name if a commit somehow keeps
     landing in this exact gap on every attempt, rather than spinning forever.
 
-    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves the store half.
-    `check_open_read_only_race` forces the gap deterministically, by monkeypatching
-    `sqlite3.connect` to land a commit the instant this function asks for the `immutable=1`
-    connection, and proves it is caught rather than served stale.
-    `check_open_read_only_wal_index_init` proves `_is_wal_index_init_failure` reads BOTH
-    builds' shapes — a synthetic `SQLITE_CANTOPEN` and a synthetic `SQLITE_READONLY_CANTINIT`
-    — off one machine, since this repo has no second SQLite build to raise the real thing on.
+    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves the store half, and
+    records the plain open's own `sqlite_errorname`/message in its pass line, so CI's own log
+    names the real code the next time a build disagrees. `check_open_read_only_race` forces
+    the gap deterministically, by monkeypatching `sqlite3.connect` to land a commit the
+    instant this function asks for the `immutable=1` connection, and proves it is caught
+    rather than served stale. `check_open_read_only_wal_present_never_falls_back` proves the
+    other half: a plain-open failure while `-wal` genuinely holds a commit is raised, never
+    swallowed, whatever shape that failure takes.
     """
     if not db_path.is_file():
         raise FileNotFoundError(f"no store at {db_path}")
@@ -1669,11 +1633,23 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
         try:
             conn.execute("PRAGMA schema_version")  # forces the lazy open now, not later
             return conn
-        except sqlite3.OperationalError as exc:
+        except sqlite3.OperationalError:
             conn.close()
-            if not _is_wal_index_init_failure(exc):
+            if wal.is_file() and wal.stat().st_size > 0:
+                # `-wal` genuinely holds a commit the main file does not yet have, so
+                # `immutable=1` would be exact only by accident. Whatever this refusal
+                # means — a real permission problem, a lock conflict, anything — it is not
+                # this function's to swallow. THE SHAPE OF THE ERROR NEVER MATTERS HERE,
+                # only the WAL's own state does — see the docstring's own account of why
+                # naming build-specific error codes was tried twice and failed twice.
                 raise
         conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        try:
+            conn.execute("PRAGMA schema_version")  # forces THIS open too — a genuinely
+            # corrupt or unreadable main file raises HERE, never handed back as a connection.
+        except sqlite3.OperationalError:
+            conn.close()
+            raise
         if not (wal.is_file() and wal.stat().st_size > 0):
             return conn
         # THE GAP FIRED: a commit landed between the failed plain open above and this

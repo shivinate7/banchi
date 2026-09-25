@@ -1508,12 +1508,30 @@ def check_open_read_only(checks: Checks) -> None:
         for side in ("-wal", "-shm"):
             Path(f"{target}{side}").unlink(missing_ok=True)
         with _no_new_files_in(directory):
+            # PROBE THE PLAIN OPEN'S OWN REFUSAL FIRST, SEPARATELY, SO THE PASS LINE BELOW
+            # NAMES THE REAL BUILD'S CODE — this is the harness's own answer to guessing a
+            # build's error code twice and being wrong twice (PR #463): never guess again,
+            # measure and print it. `open_read_only` below makes its own, separate attempt
+            # right after — same file, same permission state, so the shape it sees is the
+            # same one this probe just recorded.
+            probe = sqlite3.connect(f"file:{target}?mode=ro", uri=True)
+            errorname: Optional[str] = None
+            errormessage: Optional[str] = None
+            try:
+                probe.execute("PRAGMA schema_version")
+            except sqlite3.OperationalError as exc:
+                errorname = getattr(exc, "sqlite_errorname", None)
+                errormessage = str(exc)
+            finally:
+                probe.close()
+
             cold = db.open_read_only(target)
             checks.equal(
                 cold.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
                 ("seen",),
                 "and the door still opens a WAL store with no side files, and reads the "
-                "commit from the main file",
+                "commit from the main file — this build's plain open refused with "
+                f"sqlite_errorname={errorname!r} message={errormessage!r}",
             )
             cold.close()
             checks.ok(
@@ -1619,124 +1637,103 @@ def check_open_read_only_race(checks: Checks) -> None:
                 holder.close()
 
 
-def check_open_read_only_wal_index_init(checks: Checks) -> None:
-    """`store/db.py:_is_wal_index_init_failure` reads BOTH builds' shapes for the plain
-    `mode=ro` open's own refusal on a cold WAL store — `SQLITE_CANTOPEN` (this Mac's SQLite
-    3.54.0) and `SQLITE_READONLY_CANTINIT` (CI's Linux SQLite 3.45.1, the exact failure PR
-    #463 found: `open_read_only` raised instead of falling back, because the old check
-    matched only the first one's message). SYNTHETIC, because this checkout has no second
-    SQLite build to raise the real thing on — `check_open_read_only_race`'s own reason for
-    monkeypatching rather than threading.
+def check_open_read_only_wal_present_never_falls_back(checks: Checks) -> None:
+    """`open_read_only`'s fallback is keyed on what makes `immutable=1` SAFE — an absent or
+    empty `-wal` — never on which error the plain open raised (PR #463: two builds raised
+    two different codes for the identical fixture, and naming each one in turn was tried
+    twice and was wrong twice). This proves the other half of that rule: a plain-open
+    failure while `-wal` genuinely holds a commit the main file does not yet have is RAISED,
+    never swallowed, whatever shape the failure takes — falling back there would silently
+    serve a stale snapshot.
+
+    FORCED DETERMINISTICALLY, no thread: `sqlite3.connect` is monkeypatched so the plain
+    `mode=ro` open's own forced statement raises, while a real `holder` connection —
+    `check_open_read_only`'s own trick — keeps a genuine, uncheckpointed commit stranded in
+    `-wal` throughout.
     """
     checks.note("")
-    checks.note("READ-ONLY DOOR — which build's refusal falls back, and which does not")
-
-    def synthetic(message: str, errorname: Optional[str]) -> sqlite3.OperationalError:
-        exc = sqlite3.OperationalError(message)
-        if errorname is not None:
-            exc.sqlite_errorcode = 1  # any int — only `sqlite_errorname` is read
-            exc.sqlite_errorname = errorname
-        return exc
-
-    checks.ok(
-        db._is_wal_index_init_failure(
-            synthetic("unable to open database file", "SQLITE_CANTOPEN")
-        ),
-        "SQLITE_CANTOPEN, named by code, falls back — this Mac's own shape",
-    )
-    checks.ok(
-        db._is_wal_index_init_failure(
-            synthetic("attempt to write a readonly database", "SQLITE_READONLY_CANTINIT")
-        ),
-        "SQLITE_READONLY_CANTINIT, named by code, falls back — CI's Linux shape, PR #463",
-    )
-    checks.ok(
-        not db._is_wal_index_init_failure(
-            synthetic("attempt to write a readonly database", "SQLITE_READONLY_DBMOVED")
-        ),
-        "a DIFFERENT SQLITE_READONLY_* reason, named by code, is never swallowed — a real "
-        "state problem on the main file, not a WAL-index init failure",
-    )
-    checks.ok(
-        not db._is_wal_index_init_failure(
-            synthetic("attempt to write a readonly database", "SQLITE_READONLY")
-        ),
-        "and neither is the bare SQLITE_READONLY code",
-    )
-    checks.ok(
-        db._is_wal_index_init_failure(synthetic("unable to open database file", None)),
-        "with no code attribute (below Python 3.11), the message fallback still catches "
-        "this Mac's own shape",
-    )
-    checks.ok(
-        db._is_wal_index_init_failure(
-            synthetic("attempt to write a readonly database", None)
-        ),
-        "and CI's own shape too, by message alone",
-    )
-    checks.ok(
-        not db._is_wal_index_init_failure(synthetic("disk I/O error", None)),
-        "and an unrelated message, with no code attribute, is never swallowed",
-    )
-
-    checks.note("")
-    checks.note("READ-ONLY DOOR — the door itself falls back on the READONLY shape end to end")
+    checks.note("READ-ONLY DOOR — a real WAL is never traded for a stale immutable snapshot")
     with isolated_home():
         directory = files.inventory_dir()
         directory.mkdir(parents=True, exist_ok=True)
         db.connect(directory).close()
         target = db.path(directory)
 
+        # A REAL commit stranded in the WAL — `check_open_read_only`'s own recipe: `holder`
+        # keeps a read snapshot open so nothing auto-checkpoints `writer`'s commit away.
+        holder = sqlite3.connect(str(target), isolation_level=None)
+        holder.execute("BEGIN")
+        holder.execute("SELECT count(*) FROM meta").fetchone()
         writer = sqlite3.connect(str(target), isolation_level=None)
-        writer.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('door', 'seen')")
+        writer.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('door', 'stranded')")
         writer.close()
 
-        # THE COLD STATE, `check_open_read_only`'s own recipe: checkpointed into the main
-        # file, no side files — this test does not need the plain `mode=ro` attempt to
-        # fail for a REAL reason, only to raise the shape below, so the store itself need
-        # not even be cold for `_FakePlainOpen` to matter — it is, to keep this fixture
-        # honest about what `target` looks like on disk.
-        folder = sqlite3.connect(str(target), isolation_level=None)
-        folder.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        folder.close()
-        for side in ("-wal", "-shm"):
-            Path(f"{target}{side}").unlink(missing_ok=True)
-
-        real_connect = sqlite3.connect
-
-        class _FakePlainOpen:
-            """Stands in for the plain `mode=ro` connection long enough to raise the
-            READONLY shape on its first statement — exactly where `open_read_only` forces
-            the lazy open (its own docstring: `sqlite3.connect` itself never raises this).
-            """
-
-            def execute(self, *_args, **_kwargs):
-                raise synthetic(
-                    "attempt to write a readonly database", "SQLITE_READONLY_CANTINIT"
-                )
-
-            def close(self) -> None:
-                pass
-
-        def readonly_shaped_connect(database, *args, **kwargs):
-            if "immutable=1" not in str(database) and "mode=ro" in str(database):
-                return _FakePlainOpen()
-            return real_connect(database, *args, **kwargs)
-
-        sqlite3.connect = readonly_shaped_connect
         try:
-            door = db.open_read_only(target)
-        finally:
-            sqlite3.connect = real_connect
+            checks.ok(
+                Path(f"{target}-wal").stat().st_size > 0,
+                "the fixture really left a commit in the WAL before the plain open is even "
+                "asked to fail",
+            )
 
-        checks.equal(
-            door.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
-            ("seen",),
-            "the door falls back to immutable=1 on the READONLY shape too, and still reads "
-            "the commit from the main file — never raises on the exact state it exists to "
-            "handle (PR #463, CI's Linux SQLite 3.45.1)",
+            real_connect = sqlite3.connect
+
+            class _AlwaysFailsPlainOpen:
+                """Stands in for the plain `mode=ro` connection and refuses its forced
+                statement outright — the SHAPE of the refusal is deliberately generic
+                (`disk I/O error`, no `sqlite_errorname` at all), because this property
+                must hold whatever a real build's own refusal looks like."""
+
+                def execute(self, *_args, **_kwargs):
+                    raise sqlite3.OperationalError("disk I/O error")
+
+                def close(self) -> None:
+                    pass
+
+            def failing_plain_connect(database, *args, **kwargs):
+                if "immutable=1" not in str(database) and "mode=ro" in str(database):
+                    return _AlwaysFailsPlainOpen()
+                return real_connect(database, *args, **kwargs)
+
+            sqlite3.connect = failing_plain_connect
+            try:
+                checks.raises(
+                    sqlite3.OperationalError,
+                    lambda: db.open_read_only(target),
+                    "a plain-open failure while the WAL genuinely holds a commit raises, "
+                    "never falls back to a stale immutable snapshot",
+                )
+            finally:
+                sqlite3.connect = real_connect
+        finally:
+            holder.execute("ROLLBACK")
+            holder.close()
+
+
+def check_open_read_only_corrupt_main_file(checks: Checks) -> None:
+    """The immutable fallback forces ITS OWN open too (`PRAGMA schema_version`, the same
+    reason the plain open forces its own), so a genuinely corrupt or unreadable main file
+    raises there and is never handed back as a connection that looks fine until its first
+    real query — `open_read_only` never falls back a second time to paper over a bad file.
+    """
+    checks.note("")
+    checks.note("READ-ONLY DOOR — a corrupt main file is refused, never served")
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        target = db.path(directory)
+        target.write_bytes(b"not a sqlite database, not even close")
+        # `sqlite3.DatabaseError`, THE BROADER CLASS, NOT `OperationalError`: "file is not a
+        # database" is SQLite's own `SQLITE_NOTADB`, and Python's sqlite3 module raises it as
+        # a plain `DatabaseError` rather than the narrower `OperationalError` subclass the
+        # cold-store refusal above raises. `open_read_only` only ever catches
+        # `OperationalError`, so this one was never going to be caught either way — this
+        # proves that, rather than assuming it.
+        checks.raises(
+            sqlite3.DatabaseError,
+            lambda: db.open_read_only(target),
+            "a garbage main file raises rather than returning a connection — corruption is "
+            "never mistaken for the cold-store state the fallback exists for",
         )
-        door.close()
 
 
 def check_store_of_record(checks: Checks) -> None:
@@ -36493,7 +36490,8 @@ def run() -> Result:
     check_set_and_rarity(checks)
     check_open_read_only(checks)
     check_open_read_only_race(checks)
-    check_open_read_only_wal_index_init(checks)
+    check_open_read_only_wal_present_never_falls_back(checks)
+    check_open_read_only_corrupt_main_file(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
     check_server_routes(checks)
