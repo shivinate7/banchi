@@ -3,6 +3,12 @@ import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { settleMotion } from './motionSettled'
 
+/** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
+ *  own constant, copied rather than imported (that file's is private): a PNG would need a
+ *  Buffer, and this only has to load. */
+const PHOTO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>'
+
 import type {
   InventoryCard,
   Listing,
@@ -2098,6 +2104,40 @@ test('at 390, the buyer picker is reachable through the chip and its bottom shee
   await expect(page.locator('.browse-boxchip-text')).toContainText('Bob')
 })
 
+/* THE "CHOOSE A BUYER" SHEET IS THE KIT'S OWN `Dialog` NOW (round 5, promoted from
+ * `InventoryOverlay.tsx` in round 4) — this file never asserted its overlay contract (Escape,
+ * the focus trap, focus returning to the chip that opened it) at all, on either the old
+ * component or the new one. `gallery.spec.ts` proves the kit's `Sheet`/`Modal`/`Popover` this
+ * way already; `Dialog` (no title, no owned Close — every caller draws its own head) had no
+ * equivalent anywhere, and the review that found the gap is right that a screen-level case
+ * belongs here rather than only in the kit's own specimen sheet.
+ * MUTATION-PROVEN: `.bak` a copy of `kit/overlay.tsx`, delete the `useReturnFocus()` call
+ * inside `Dialog`, rerun this case — it fails on the final `toBeFocused()` assertion, since
+ * nothing then returns focus to the chip. Restored from the `.bak` afterward, never
+ * `git checkout`. */
+test('the "Choose a buyer" sheet traps focus, closes on Escape, and gives focus back to the chip', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { orders: threeBuyerPayload() })
+
+  const chip = page.locator('.browse-boxchip')
+  await chip.focus()
+  await chip.press('Enter')
+  const sheet = page.locator('[data-bn-overlay="bottom"]')
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toHaveAttribute('aria-modal', 'true')
+  await expect.poll(() => sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab')
+    const inside = await sheet.evaluate((el) => el.contains(document.activeElement))
+    expect(inside, `Tab ${i + 1} left the sheet`).toBe(true)
+  }
+
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+  await expect(chip).toBeFocused()
+})
+
 /* THE AMENDED BRIEF'S OWN CASE: the sheet is the RAIL, not the buyer list alone. Before this
  * fix the sheet's markup was a second, hand-kept copy of `searchSlot`/`selectBar`/`ordersList`
  * that left `railWalkPanel` (the selected buyer's own walk — `OrderPanel` plus `WalkList`'s
@@ -2715,6 +2755,33 @@ test('Manage opens a sheet carrying the fetch/paste well, the status picker and 
   await expect(sheet).toContainText('Shipped')
 })
 
+/* THE SAME GAP AS "CHOOSE A BUYER" ABOVE, on the `Dialog` this sheet is built from too.
+ * MUTATION-PROVEN the same way: `.bak` `kit/overlay.tsx`, delete `Dialog`'s
+ * `useReturnFocus()` call, rerun — the final `toBeFocused()` assertion fails since focus
+ * never returns to `.browse-manage`. Restored from the `.bak`, never `git checkout`. */
+test('the Manage sheet traps focus, closes on Escape, and gives focus back to the Manage control', async ({ page }) => {
+  const owing = terminalOwingOrder()
+  await open(page, { orders: payloadOf([owing, order()], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
+
+  const manage = page.locator('main.orders .browse-manage').first()
+  await manage.focus()
+  await manage.press('Enter')
+  const sheet = page.locator('[data-bn-overlay="sheet"].orders-manage-sheet')
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toHaveAttribute('aria-modal', 'true')
+  await expect.poll(() => sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab')
+    const inside = await sheet.evaluate((el) => el.contains(document.activeElement))
+    expect(inside, `Tab ${i + 1} left the sheet`).toBe(true)
+  }
+
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+  await expect(manage).toBeFocused()
+})
+
 test('the selected buyer\'s own orders stay reachable in Manage for stand-down, close-line and declare-kind', async ({ page }) => {
   const shortLine = line({ reason: 'no_copies_on_hand', owed: 1, wanted: 1, picks: [] })
   await open(page, { orders: payloadOf([order()], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [shortLine] }]) })
@@ -2763,6 +2830,47 @@ test('the walk pane is inventory\'s own card pane: the same header, photo, copie
      left out by name (§13's override): retire, move and re-shoot are Inventory-only. */
   await expect(pane.getByRole('button', { name: 'Card actions' })).toHaveCount(0)
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
+})
+
+/* THE LIGHTBOX IS `OrdersWalkPane.tsx`'s OWN `Overlay` (kind="lightbox") — the kit's `Dialog`
+ * now (round 4/5). No spec on this screen ever opened it or asserted its overlay contract.
+ * `IconButton`'s own focus (round 4's lightbox Close swap) is the thing to trap here: one
+ * control, so the Tab trap is trivial by construction, and that is the point — proving it
+ * stays inside even with nothing else to land on.
+ * MUTATION-PROVEN the same way as the two cases above: `.bak` `kit/overlay.tsx`, delete
+ * `Dialog`'s `useReturnFocus()` call, rerun — the final `toBeFocused()` assertion fails.
+ * Restored from the `.bak`, never `git checkout`. */
+test('the lightbox traps focus, closes on Escape, and gives focus back to the photo frame', async ({ page }) => {
+  /* A REAL IMAGE, NOT A 404 (`inventory.spec.ts`'s own `PHOTO_SVG`): `PhotoPanel` swaps to its
+     "photo missing" branch — no zoom button at all — once the `<img>` fires `onError`, which a
+     404 stub does. The photo button this case needs to press only exists while the photo
+     actually loads. */
+  await page.route(/\/photo\/(by-card\/[0-9a-f]+|\d+\/\d+)/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG })
+  })
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard() },
+  })
+
+  const frame = page.locator('.orders-walk-card .bn-photo, .orders-walk-card .browse-photo-frame').first()
+  await frame.focus()
+  await frame.press('Enter')
+  const lightbox = page.locator('[data-bn-overlay="lightbox"]')
+  await expect(lightbox).toBeVisible()
+  await expect(lightbox).toHaveAttribute('aria-modal', 'true')
+  await expect.poll(() => lightbox.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('Tab')
+    const inside = await lightbox.evaluate((el) => el.contains(document.activeElement))
+    expect(inside, `Tab ${i + 1} left the lightbox`).toBe(true)
+  }
+
+  await page.keyboard.press('Escape')
+  await expect(lightbox).toHaveCount(0)
+  await expect(frame).toBeFocused()
 })
 
 /* ---------------------------------------------------------- market and listings parity ---- */
