@@ -20,11 +20,11 @@ import './RunRescue.css'
  * nothing here reads it. */
 
 const REASON_COPY: Record<NonNullable<RescueResult['reason']>, string> = {
-  not_stranded: 'This run’s drawer is live again — there is nothing here to rebind.',
+  not_stranded: 'This run’s box is back, so there is nothing to rebind.',
   no_identifications: 'This run has no card readings to rebind.',
-  none_on_shelf: 'None of this run’s cards are still on a shelf — they have already left the store.',
-  spread_across_boxes: 'This run’s cards are now spread across more than one drawer, so nothing was rebound.',
-  digest_ambiguous_on_disk: 'Two photographs on the shelf could match the same card, so nothing was rebound.',
+  none_on_shelf: 'None of this run’s cards are in a box now. They have left the store.',
+  spread_across_boxes: 'This run’s cards are now in more than one box, so nothing was rebound.',
+  digest_ambiguous_on_disk: 'Two photographs could match the same card, so nothing was rebound.',
   digest_twice_in_run: 'Two records in this run point at the same photograph, so nothing was rebound.',
 }
 
@@ -33,7 +33,7 @@ function reasonSentence(reason: RescueResult['reason']): string {
 }
 
 function destinationLabel(destination: RescueResult['destination']): string {
-  if (destination === null) return 'another drawer'
+  if (destination === null) return 'another box'
   const named = destination.box_name?.trim()
   return named ? `${named} (Box ${destination.box})` : `Box ${destination.box}`
 }
@@ -128,15 +128,14 @@ export function RunRescue({
 
         <div className="rescue-sheet-body">
           <p className="rescue-sheet-says">
-            The drawer this run was over has since been deleted and its number given to another
-            drawer. If this run’s cards are sitting somewhere else on a shelf, they can be
-            re-addressed there — as a new run. <strong>This run is never changed.</strong>
+            This run’s box was deleted. If its cards are now in another box, they can be found
+            there as a new run. <strong>This run is never changed.</strong>
           </p>
 
           {!busy ? null : (
             <p className="rescue-sheet-status" role="status">
               <span className="bn-dot bn-dot-accent" />
-              {result === null ? 'Looking for these cards on a shelf…' : 'Rebinding…'}
+              {result === null ? 'Looking for these cards in your boxes…' : 'Rebinding…'}
             </p>
           )}
 
@@ -173,7 +172,7 @@ export function RunRescue({
           ) : (
             <>
               <div className="rescue-sheet-figures">
-                <Stat value={result.counts.rebound} label="Found on a shelf" />
+                <Stat value={result.counts.rebound} label="Found in a box" />
                 <Stat value={result.counts.not_on_shelf} label="Left the store" />
                 {result.counts.ambiguous > 0 ? <Stat value={result.counts.ambiguous} label="Could not be told apart" /> : null}
               </div>

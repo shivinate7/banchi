@@ -2455,6 +2455,23 @@ export type RunSummary = {
     cost_usd?: number
     cost_backfilled?: boolean
   }
+  /** What stopped the automatic match, while the run still waits for one (flow interview, Q4).
+   *  Null when nothing did. Optional because an older server sends no key. */
+  match_problem?: RunMatchProblem | null
+}
+
+/** One reason the automatic match could not run. `step` says whether the catalogue fetch or the
+ *  match itself refused. `message` is the server's own sentence, drawn behind a disclosure. */
+export type RunMatchProblem = { code: string; message: string; step: 'fetch' | 'join' }
+
+/** `POST /pipeline/runs/<name>/match`. `ran` is false when the run was not waiting for a match,
+ *  a match was already running, or a problem stands and no retry was asked. */
+export type RunMatchAnswer = {
+  ran: boolean
+  ok?: boolean
+  reason?: 'not_waiting' | 'problem_stands' | 'running'
+  problem?: RunMatchProblem
+  summary: RunSummary
 }
 
 export type RunDetail = RunSummary & {
@@ -3985,4 +4002,101 @@ export type ValueTable = {
    *  figure — a store-wide chip count no row list is needed to draw, matching the fields
    *  `do_pipeline_value_page`'s `totals` block carries. */
   totals: { cards: number; valued: number; value: string; under_cutoff: number; at_or_over: number }
+}
+
+/* ============================================================ the one press (send to live)
+ *
+ * `server/send_routes.py`, `D-one-press-sends-and-makes-live`. One press reads what is live,
+ * writes the listing file behind the double-send guard, sends it and makes it live. */
+
+/** Where one send stands. `server/send_routes.py:state_of` is the one rule. `sending` is a press
+ *  still running; `unknown` is one TCGplayer did not confirm, whose copies are held until the
+ *  live check past the wait. */
+export type SendState = 'sending' | 'unknown' | 'written' | 'waiting' | 'checked' | 'short' | 'failed' | 'taken_back'
+
+/** One card the double-send guard held back: TCGplayer already held `live` of `on_hand`. */
+export type SendTrim = {
+  sku: string
+  name: string
+  live: number
+  on_hand: number
+  would: number
+  goes: number
+}
+
+export type SendSummary = {
+  stamp: string
+  kind: 'send' | 'download'
+  state: SendState
+  at: string
+  copies: number
+  /** Price-only rows (Add to Quantity 0): cards already live whose typed price this send
+   *  changed. The mixed send, the owner's ruling of 2026-09-24. */
+  prices: number
+  /** What the check past the wait found of those prices. `live` is TCGplayer's price then. */
+  price_check: {
+    expected: number
+    matched: number
+    missing: { sku: string; name: string; price: string; live: string | null }[]
+    /** Cards with no copy live at the check: sold out, so there is no price to show. Settled. */
+    gone?: { sku: string; name: string }[]
+  } | null
+  /** Price changes the button named that the press left out, and why (round 6). */
+  prices_left: { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }[]
+  /** True when the upload may still wait in TCGplayer's Staged list, including a press that
+   *  died mid-push with no `unknown` (round 6). The Staged warning reads this. */
+  staged: boolean
+  rows: number
+  published_at: string | null
+  check_after: string | null
+  checked_at: string | null
+  check: {
+    export: string
+    found: number
+    expected: number
+    missing: { sku: string; name: string; sent: number; found: number }[]
+  } | null
+  trimmed: SendTrim[]
+  trimmed_copies: number
+  accepted: number | null
+  /** Rows TCGplayer's own count turned away. The screen never says more went live than it took. */
+  turned_away: number
+  failure: { code: string; message: string } | null
+  /** Why the outcome is not known. `staged` is true when the upload may still wait in
+   *  TCGplayer's Staged list, where a person could publish it by hand. */
+  unknown: { stage: string; upload_id: string | null; staged: boolean; file: string | null; at: string } | null
+  /** The send's cards are held out of every other send (a press running, or an unknown one). */
+  held: boolean
+  /** Copies "Take them back" would return now. 0 until a live check has run past the wait. */
+  takeable: number
+  /** When taking these back becomes possible, while a check past the wait has not run yet. */
+  take_back_after: string | null
+  files: string[]
+  taken_back_at: string | null
+  /** What a TAKEN-BACK receipt still warns about, until the owner dismisses it: `staged`, an
+   *  upload that may still wait in TCGplayer's Staged list; `old_file`, a downloaded file still
+   *  on the Mac. Either, published or uploaded now, would list the copies twice. */
+  warning: 'staged' | 'old_file' | 'rolled_back' | null
+}
+
+/** One price change the screen names to a send: the price the button counts, and the live
+ *  price the row drew beside it. The server sends no price it was not named (round 6). */
+export type PriceChange = { sku: string; price: string; was: string | null }
+
+/** `GET /pipeline/sends`. `due` is the one bit the timer and the visit check both read. */
+export type SendsStatus = {
+  sends: SendSummary[]
+  unconfirmed: { copies: number; stamps: string[] }
+  due: boolean
+  check_at: string | null
+  now: string
+}
+
+export type SendAnswer = { send: SendSummary; console: string }
+
+export type LiveCheckAnswer = {
+  ran: boolean
+  check_at?: string | null
+  export?: string
+  checked: SendSummary[]
 }

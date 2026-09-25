@@ -368,12 +368,12 @@ test('the sheet states the two things the operator must not get wrong', async ({
      `Add to Quantity`-is-0 mechanism sentence is gone from the sheet's own words (it is still
      true and still in `docs/specs/stale-listings.md` §2), so this only asserts the guarantee
      that remains on screen. */
-  await expect(sheet(page)).toContainText('Nothing is deleted at TCGplayer')
+  await expect(sheet(page)).toContainText('Deletes nothing')
 
   /* THE PROXY, WHERE IT IS ACTED ON. The store cannot say how long a listing has been live —
      `Listing` has no first-listed stamp — so what is ranked is how long the card has been
      owned. A screen that stopped saying so would be one that quietly started lying. */
-  await expect(page.locator('.markdown-caveat')).toContainText('owned')
+  await expect(page.locator('.markdown-caveat')).toContainText('photographed')
 })
 
 test('picking the export previews, and the preview asks for no write', async ({ page }) => {

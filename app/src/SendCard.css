@@ -1,0 +1,146 @@
+/* The send card (`SendCard.tsx`): one press from priced to live. It sits inside Pricing's send
+   bar, which owns the stickiness and the page edge; this sheet owns only the card's own rows. */
+
+.send-card {
+  display: grid;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+
+/* The press and its two quiet doors on one line where they fit, wrapping as a unit. The primary
+   press comes first so a phone's first line is always the send. */
+.send-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+}
+
+.send-press {
+  flex: 0 1 auto;
+}
+
+/* The download door, opened: the split option and the write press, then the files it wrote. */
+.send-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2) var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+}
+
+.send-files {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--bn-1);
+}
+
+/* The Staged warning under a checked receipt's sentence (F3): the notice's own body text. */
+.send-staged {
+  margin: var(--bn-1) 0 0;
+}
+
+/* A card list under a notice: the name reads first, the figure beside it in the reading face. */
+.send-names {
+  display: grid;
+  gap: var(--bn-0-5);
+  margin: var(--bn-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.send-names li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  min-width: 0;
+}
+
+.send-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.send-figure {
+  flex: none;
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.send-more {
+  color: var(--bn-ink-3);
+}
+
+/* ON A PHONE ONLY THE PRESS STAYS ON THE FIRST LINE (UX-007). The two quiet doors take the
+   whole width beneath it, so the send is never pushed off the line by its siblings. */
+.send-short {
+  display: none;
+}
+
+/* THE TAKEN-BACK WARNING'S FOLD (round 5). Above a phone it is not drawn: the sentence and its
+   warning both show, as they always did. */
+.send-fold {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .send-press {
+    flex: 1 1 100%;
+  }
+  .send-long {
+    display: none;
+  }
+  .send-short {
+    display: inline;
+  }
+
+  /* ON A PHONE A TAKEN-BACK WARNING IS ONE LINE: its own imperative, a press that opens the rest,
+     and Dismiss on the same row. Two of them no longer stand half the screen high in the sticky
+     bar. Opened, the warning's full sentence shows under the line. */
+  .send-fold-wide {
+    display: none;
+  }
+  .send-fold {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bn-1);
+    max-width: 100%;
+    /* A THUMB PRESSES IT: the 40px floor at every pointer. */
+    min-height: var(--bn-control-h-lg);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+  }
+  .send-fold-line {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .send-taken-back .bn-notice-text {
+    grid-column: 2;
+  }
+  .send-taken-back .bn-notice-action {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .send-taken-back .bn-notice-title {
+    display: block;
+    margin-right: 0;
+  }
+  .send-taken-back:not(.send-fold-open) .bn-notice-body {
+    display: none;
+  }
+  .send-taken-back.send-fold-open .bn-notice-body {
+    display: block;
+  }
+}

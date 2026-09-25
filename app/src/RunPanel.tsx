@@ -7,6 +7,7 @@ import {
   getRun,
   getRuns,
   getTcgSets,
+  matchRun,
   runStep,
   type Failure,
 } from './server'
@@ -19,9 +20,10 @@ import { RunFiles } from './RunFiles'
 import { RunRescue } from './RunRescue'
 import { FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
-import { COMMANDS, StageBar, StagePill, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
+import { COMMANDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
 import { boxOf, runBoxLabel } from './runScope'
 import { money, roundsToNothing } from './money'
+import { matchWaiting } from './autoMatch'
 import './RunPanel.css'
 
 export { runningFor }
@@ -77,9 +79,9 @@ function capitalize(word: string): string {
 
 const TITLES: Record<Command, string> = {
   identify: 'Identify',
-  join: 'Join',
-  emit: 'Emit',
-  reconcile: 'Reconcile',
+  join: 'Match',
+  emit: 'Price and send',
+  reconcile: 'Compare',
 }
 
 function count(value: number | null | undefined): string {
@@ -372,6 +374,26 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
     idleMs: IDLE_POLL_MS,
   })
 
+  /* THE MATCH RUNS BY ITSELF WHEN A READING FINISHES (flow interview, Q4). Every run this
+     screen sees waiting for a match is matched once, with nobody pressing (`autoMatch.ts`). A
+     problem comes back recorded on the run and is its next step. */
+  useEffect(() => {
+    void (async () => {
+      if (!(await matchWaiting(runs))) return
+      await loadRuns()
+      if (openRun !== null) setDetail(await getRun(openRun))
+    })()
+  }, [runs, loadRuns, openRun])
+
+  const retryMatch = () =>
+    guard('join', async () => {
+      if (openRun === null) return
+      const answer = await matchRun(openRun, true)
+      setDetail(await getRun(openRun))
+      await loadRuns()
+      if (answer.ok) toast({ kind: 'ok', title: 'Matched', body: 'The next step is on the run.', ttlMs: 4000 })
+    })
+
   const firstReload = useRef(true)
   useEffect(() => {
     if (firstReload.current) {
@@ -641,23 +663,21 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         if (st === 'done')
           return detail.counts.cards_in === undefined
             ? 'Collected'
-            : `${count(detail.counts.cards_in)} photographs read by the model`
-        return 'Reads every photograph with the model'
+            : `${count(detail.counts.cards_in)} cards read`
+        return 'Reads each card from its photo'
       case 'join':
         if (st === 'done')
-          return `${count(detail.counts.skus)} SKUs, ${count(detail.counts.queued_main)} to review and ${count(
-            detail.counts.queued_parked,
-          )} parked`
-        if (st === 'current') return 'Resolve each card against a TCGplayer export'
+          return `${count(detail.counts.skus)} products, ${count(detail.counts.queued_main)} to review`
+        if (st === 'current') return 'Matches each card to its TCGplayer product'
         return 'After identify'
       case 'emit':
-        if (st === 'done') return 'Import files written'
-        if (st === 'current') return 'Price the SKUs and write the import files — on Pricing'
+        if (st === 'done') return 'File written'
+        if (st === 'current') return 'On Pricing'
         return 'After join'
       case 'reconcile':
-        if (st === 'done') return 'Reconciled against Export From Staged'
-        if (st === 'current') return 'Compare what TCGplayer staged with what emit wrote'
-        return 'After emit'
+        if (st === 'done') return 'Compared with what TCGplayer took'
+        if (st === 'current') return 'Compare with what TCGplayer took'
+        return 'After the file'
       default:
         return ''
     }
@@ -783,11 +803,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
               <EmptyState
                 icon={failure === null && runs.length === 0 ? 'zap' : 'play'}
                 title={failure === null && runs.length === 0 ? 'Identify a box first' : 'Pick a run'}
-                body={
-                  failure === null && runs.length === 0
-                    ? 'Join, emit and reconcile all work on a run, and the first one starts with a paid identification.'
-                    : 'Join, emit and reconcile act on the run you pick from the list.'
-                }
+                body={failure === null && runs.length === 0 ? 'Identifying costs money. Matching and pricing do not.' : undefined}
               />
             </div>
           )
@@ -831,42 +847,13 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
               </div>
             </header>
 
-            <ol className="runs-stepper" aria-label="The four steps">
-              {COMMANDS.map((cmd, i) => {
-                const st = stepState(cmd)
-                return (
-                  <li key={cmd} className={`runs-stepper-item runs-stepper-${st}`}>
-                    <button
-                      type="button"
-                      className="runs-stepper-btn"
-                      aria-current={st === 'current' || st === 'live' ? 'step' : undefined}
-                      onClick={() => setOpenStep(cmd)}
-                    >
-                      <span className="runs-stepper-track" />
-                      <span className="runs-stepper-label">
-                        <span className="runs-stepper-n">
-                          {st === 'done' ? (
-                            <Icon name="check" size={11} strokeWidth={2.5} />
-                          ) : st === 'live' ? (
-                            <span className="bn-dot bn-dot-live" />
-                          ) : (
-                            i + 1
-                          )}
-                        </span>
-                        {TITLES[cmd]}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ol>
 
             {troubleFor(['detail'])}
 
             {!detail.joined ? null : (
               <div className="runs-figures">
                 <Stat value={count(detail.counts.cards_in)} label="Cards in" />
-                <Stat value={count(detail.counts.skus)} label="SKUs" />
+                <Stat value={count(detail.counts.skus)} label="Products" />
                 <Stat
                   value={
                     <a
@@ -891,34 +878,9 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   }
                   label="Parked"
                 />
-                {/* A ghost: the Emit step below holds this route-out as its action. */}
-                <a className="bn-btn bn-btn-ghost runs-price-btn" href={pricingHref}>
-                  Price {count(detail.counts.skus)} SKUs
-                  <Icon name="arrowRight" size={16} />
-                </a>
               </div>
             )}
 
-            {/* THE ONE-PRESS CORRECTION, AND THE STEP THAT MAKES IT REAL.
-              *
-              * A whole stack sorted under the wrong rarity is one press to fix on
-              * `#/inventory`, and that press ON ITS OWN CHANGES NOTHING HERE:
-              * `cli/resolve.py` reads the claim off the RUN record with no store fallback
-              * (D86's posture, deliberately — the run is the record of what the sidecars
-              * said when identify ran), so a join over the old run reads the old claim.
-              * The re-identify is what rewrites it, and it is free: the identification
-              * cache is keyed on the photograph and the claim is never sent to the model.
-              *
-              * Drawn on every joined run rather than on a reason count, because the
-              * operator who needs it is the one looking at a queue they think is wrong,
-              * and a hint that appears only when the machine already agrees is no hint. */}
-            {!detail.joined ? null : (
-              <p className="runs-note runs-correction">
-                Queued a whole stack under the wrong rarity? Fix it on <a href="#/inventory">Inventory</a> → Manage
-                box → Rarity, then press <strong>Identify</strong> and <strong>Join</strong> again here —
-                correcting the box alone changes nothing. It costs nothing.
-              </p>
-            )}
 
             <div className="runs-steps">
               {/* -------------------------------------------------------------- identify */}
@@ -964,7 +926,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   </p>
                 ) : null}
                 {detail.console.trim() === '' ? (
-                  <p className="runs-step-lede">Nothing was captured here — this run was started from a terminal.</p>
+                  <p className="runs-step-lede">No log for this run.</p>
                 ) : (
                   <LogWell text={detail.console} label="What Identify printed" />
                 )}
@@ -976,12 +938,12 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 title={TITLES.join}
                 state={stepState('join')}
                 summary={summaryOf('join')}
-                cost={<Pill className="runs-cost-pill"><span>Free</span><span>re-runnable</span></Pill>}
+                cost={<Pill className="runs-cost-pill">Free</Pill>}
                 open={openStep === 'join'}
                 onToggle={() => toggleStep('join')}
               >
                 <p className="runs-step-lede">
-                  Resolves each card against a TCGplayer export and writes the queues and the pricing questions.
+                  Fixed a rarity on Inventory? Identify and match again. Both are free for cards already read.
                 </p>
                 {scopeInfo !== null && scopeSentence !== null ? (
                   <p className="run-scope-says">
@@ -1034,6 +996,23 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                   <Notice tone="warn" code={scopeInfo.reason ?? undefined}>
                     {scopeInfo.message}
                   </Notice>
+                ) : null}
+
+                {/* THE AUTOMATIC MATCH'S PROBLEM IS THE RUN'S NEXT STEP (Q4): one sentence, the
+                    server's own words behind the disclosure, and one door. */}
+                {detail.phase === 'join' && detail.match_problem != null ? (
+                  <Notice
+                    tone="warn"
+                    className="run-match-problem"
+                    title={matchProblemTitle(detail.match_problem.code)}
+                    code={detail.match_problem.code}
+                    detail={detail.match_problem.message}
+                    action={
+                      <Button size="sm" icon="refresh" busy={busy === 'join'} disabled={busy !== null} onClick={() => void retryMatch()}>
+                        Try again
+                      </Button>
+                    }
+                  />
                 ) : null}
 
                 <div className="run-actions">
@@ -1257,10 +1236,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
 
                 {result('join')}
 
-                <p className="run-step-fine">
-                  Preview writes nothing — it walks the ladder and says what it would queue. One export file per
-                  game; fetching needs a TCGplayer session.
-                </p>
+
               </StepCard>
 
               {/* ------------------------------------------------------------------ emit */}
@@ -1269,30 +1245,18 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 title={TITLES.emit}
                 state={stepState('emit')}
                 summary={summaryOf('emit')}
-                cost={<Pill className="runs-cost-pill"><span>Free</span><span>re-runnable</span></Pill>}
+                cost={<Pill className="runs-cost-pill">Free</Pill>}
                 open={openStep === 'emit'}
                 onToggle={() => toggleStep('emit')}
               >
-                <p className="runs-step-lede">
-                  Prices, holds and the sub-threshold answer are set on Pricing, and the same screen writes the
-                  import files. Emit refuses while a sub-threshold price is unanswered.
-                </p>
+
                 <div className="run-actions">
                   <a className="bn-btn bn-btn-primary" href={pricingHref}>
                     <Icon name="tag" size={16} />
-                    Price and emit this run
+                    Price and send on Pricing
                     <Icon name="arrowRight" size={16} />
                   </a>
                 </div>
-                {/* The per-run rule/basis editor is gone with the file it wrote: the answer is one
-                    document for the whole store (D86), and Pricing is the press that writes it. */}
-                <p className="run-step-fine">
-                  The pricing rule and basis are one answer for the whole store now. They are set on{' '}
-                  <a className="run-fine-link" href={pricingHref}>
-                    Pricing
-                  </a>
-                  , not in this run.
-                </p>
                 {result('emit')}
               </StepCard>
 
@@ -1302,17 +1266,14 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 title={TITLES.reconcile}
                 state={stepState('reconcile')}
                 summary={summaryOf('reconcile')}
-                cost={<Pill className="runs-cost-pill"><span>Free</span><span>re-runnable</span></Pill>}
+                cost={<Pill className="runs-cost-pill">Free</Pill>}
                 open={openStep === 'reconcile'}
                 onToggle={() => toggleStep('reconcile')}
               >
-                <p className="runs-step-lede">
-                  After Import to Staged on TCGplayer, download its Export From Staged and compare it with what emit
-                  wrote. Quantities move; nothing is marked sold.
-                </p>
+                <p className="runs-step-lede">For a file you uploaded by hand: compare it with what TCGplayer took.</p>
                 <div className="run-actions">
                   <FileButton
-                    label="Compare with Export From Staged…"
+                    label="Choose the file TCGplayer gave back…"
                     disabled={busy !== null}
                     busy={busy === 'staged'}
                     onFiles={(files) => void compareStaged(files)}
@@ -1323,9 +1284,12 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
               </StepCard>
             </div>
 
-            <div className="runs-detail-files">
+            {/* THE RUN'S OWN FILES, CLOSED (UX-020). They are the record, not the job: the owner
+                opens them to check a run, never to do the next step. */}
+            <details className="runs-detail-files">
+              <summary>Files</summary>
               <RunFiles run={detail.run} files={detail.files} only="run" />
-            </div>
+            </details>
           </div>
         )}
       </section>

@@ -44,6 +44,47 @@ const RUN = '2026-08-30-box7-01'
 
 type Wire = { method: string; path: string; body: unknown }
 
+/** `GET /pipeline/sends` for a store that has sent nothing. */
+const SENDS_NONE = { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }
+
+/** One send receipt as `server/send_routes.py:_summary` shapes it. */
+function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    stamp: '20260924-120000',
+    kind: 'send',
+    state: 'waiting',
+    at: '2026-09-24T12:00:00+00:00',
+    copies: 3,
+    prices: 0,
+    price_check: null,
+    rows: 2,
+    published_at: '2026-09-24T12:00:05+00:00',
+    check_after: '2026-09-24T12:15:05+00:00',
+    checked_at: null,
+    check: null,
+    trimmed: [],
+    trimmed_copies: 0,
+    accepted: 2,
+    turned_away: 0,
+    failure: null,
+    unknown: null,
+    held: false,
+    takeable: 0,
+    take_back_after: null,
+    files: ['import.csv'],
+    taken_back_at: null,
+    warning: null,
+    prices_left: [],
+    ...over,
+    /* THE SERVER SAYS `staged` WHENEVER `unknown.staged` DOES (`_maybe_staged`), and also for a
+       press that died mid-push with no `unknown` (round 6, S2). A case names it only for that. */
+    staged: over.staged ?? Boolean((over.unknown as { staged?: boolean } | null | undefined)?.staged),
+  }
+}
+
+const sendPress = (page: Page) => page.getByRole('button', { name: /^Send (\d+ cop(y|ies) )?to TCGplayer$/ })
+const sendPosts = (wire: Wire[]) => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/send')
+
 /** One SKU in the shape `cli/cmd_join.py:_pricing_table` writes — every field, not the handful
  *  a given case reads. A partial fixture here does not fail partially: the row reads
  *  `row['Number']` and `positions[0]`, so a record missing either takes the screen down and
@@ -182,9 +223,62 @@ async function open(
      *  to render through exactly this window, asserting a completed empty answer during a
      *  request that had not finished. */
     pricingDelayMs?: number
+    /** What `POST /pipeline/send` answers, as a function of the body the card sent — the one
+     *  press (`D-one-press-sends-and-makes-live`). `status` other than 200 answers the server's
+     *  refusal envelope with `code`. Default: a send that went live. */
+    send?: (body: Record<string, unknown>) => { status: number; body?: unknown; code?: string }
+    /** What `GET /pipeline/sends` answers, as a function of what the page has already sent (the
+     *  wire so far). A function and not a queue: the page may read the status more than once on
+     *  arrival, and a queue would hand the second read an answer meant for later. Default:
+     *  nothing sent, nothing due. */
+    sends?: (wire: Wire[]) => unknown
+    /** What `POST /pipeline/live-check` answers. Default: ran, nothing to confirm. */
+    liveCheck?: (body: Record<string, unknown>) => unknown
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
+
+  /* THE ONE PRESS AND ITS STATUS, stubbed so no case can reach the server that would reach
+     TCGplayer. Every body lands in `wire`, which is what the cases assert against. */
+  await page.route(/\/pipeline\/sends$/, async (route) => {
+    const next = options.sends?.(wire) ?? SENDS_NONE
+    wire.push({ method: 'GET', path: '/pipeline/sends', body: null })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(next) })
+  })
+  await page.route(/\/pipeline\/sends\/[^/]+\/take-back$/, async (route) => {
+    wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ send: sendSummary({ kind: 'download', state: 'taken_back' }), moved: 4 }),
+    })
+  })
+  await page.route(/\/pipeline\/sends\/[^/]+\/dismiss$/, async (route) => {
+    wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ send: sendSummary({ state: 'taken_back' }) }) })
+  })
+  await page.route(/\/pipeline\/send$/, async (route) => {
+    const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
+    wire.push({ method: 'POST', path: '/pipeline/send', body })
+    const answer: { status: number; body?: unknown; code?: string } = (
+      options.send ?? (() => ({ status: 200, body: { send: sendSummary(), console: '' } }))
+    )(body)
+    await route.fulfill({
+      status: answer.status,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        answer.status === 200
+          ? answer.body
+          : { error: { code: answer.code ?? 'refused', message: 'The server said no.' } },
+      ),
+    })
+  })
+  await page.route(/\/pipeline\/live-check$/, async (route) => {
+    const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
+    wire.push({ method: 'POST', path: '/pipeline/live-check', body })
+    const answer = (options.liveCheck ?? (() => ({ ran: true, checked: [] })))(body)
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
+  })
 
   /* THE RUN'S OWN DETAIL, for the files and the phase. Note the ORDER of these route
      registrations matters: this pattern must be registered BEFORE the bare
@@ -1065,76 +1159,549 @@ test('"Nothing loaded." never renders under the skeleton, and waits for the fetc
   await expect(page.getByText('Nothing loaded.')).toBeVisible({ timeout: 3000 })
 })
 
-test('typing a price then pressing emit saves before it sends', async ({ page }) => {
+test('typing a price then pressing Send saves before it sends', async ({ page }) => {
   const wire = await open(page)
 
   await field(page).fill('19.99')
-  await page.getByRole('button', { name: 'Write the import file' }).click()
+  await sendPress(page).click()
 
-  await expect.poll(() => wire.filter((r) => r.method === 'POST').length).toBe(1)
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
 
   /* THE WRITE RACE, ASSERTED AS AN ORDER. The click blurs the field, which commits and calls
-     `setDoc`; the handler then runs in the SAME event with the OLD document in its closure,
-     so a POST fired there would emit against the file as it was before the last answer. The
-     press raises `waiting` instead and the send waits for the save loop to go quiet. */
-  const order = wire.filter((r) => r.method === 'PUT' || r.method === 'POST').map((r) => r.method)
+     `setDoc`; a send fired in the same event would write the file from the prices as they were
+     before the last answer. The press waits for the save loop to go quiet. */
+  const order = wire
+    .filter((r) => r.method === 'PUT' || (r.method === 'POST' && r.path === '/pipeline/send'))
+    .map((r) => r.method)
   expect(order).toEqual(['PUT', 'POST'])
+  /* ONE PRESS, CONFIRMED: the body carries `confirm` and the runs, and nothing that would stop
+     at the file. */
+  expect(sendPosts(wire)[0]?.body).toMatchObject({ runs: [RUN], confirm: true })
+  expect(sendPosts(wire)[0]?.body).not.toHaveProperty('download')
 })
 
-test('the press cannot be made twice into two emits', async ({ page }) => {
-  const wire = await open(page)
+test('one press sends and makes live, and says when the check comes', async ({ page }) => {
+  const wire = await open(page, { sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary()] } : SENDS_NONE) })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
 
-  await page.getByRole('button', { name: 'Write the import file' }).click()
-  await expect.poll(() => wire.filter((r) => r.method === 'POST').length).toBe(1)
-
-  /* THE SECOND PRESS HAS NOWHERE TO LAND. Once the run has emitted, the control that writes
-     is ABSENT — replaced by a sentence and a quieter `Write them again` which arms rather
-     than fires. Asserted as the absence rather than as a disabled attribute, because a
-     disabled button is one attribute away from pressable and that attribute is what a later
-     refactor drops. Clicking a vanished locator is what this case used to do, and it waited
-     out the full timeout proving nothing. */
-  await expect(page.getByRole('button', { name: 'Write the import file' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Write them again' })).toBeVisible()
-  expect(wire.filter((r) => r.method === 'POST')).toHaveLength(1)
+  /* THE CARD STANDS ON THE RECEIPT: live now, and when Banchi looks again. No second press
+     exists to make it live (the owner's ruling: one press). */
+  await expect(page.locator('.send-standing')).toContainText('3 copies went live at')
+  await expect(page.locator('.send-standing')).toContainText('Banchi checks TCGplayer again after')
+  await expect(page.getByRole('button', { name: /live$/i }).filter({ hasText: /^Put/ })).toHaveCount(0)
+  expect(sendPosts(wire)).toHaveLength(1)
 })
 
-test('an already-emitted run takes two presses, and the first is not it', async ({ page }) => {
-  const wire = await open(page, { emitted: true })
-
-  /* ABSENT, NOT DISABLED. A second emit used to overwrite the good CSV with a header-only
-     file and blank the manifest, after which `reconcile` refused a run that had emitted
-     perfectly. D54 fixed the command; this stops the press being made by momentum. */
-  await expect(page.getByRole('button', { name: 'Write the import file' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Write them again' }).click()
-  expect(wire.filter((r) => r.method === 'POST')).toHaveLength(0)
-
-  await page.getByRole('button', { name: 'Write again' }).click()
-  await expect.poll(() => wire.filter((r) => r.method === 'POST').length).toBe(1)
+test('what the double-send guard held back is named, card by card', async ({ page }) => {
+  const trimmed = sendSummary({
+    trimmed: [{ sku: '8608459', name: 'Dunsparce', live: 2, on_hand: 3, would: 3, goes: 1 }],
+    trimmed_copies: 2,
+  })
+  const wire = await open(page, {
+    send: () => ({ status: 200, body: { send: trimmed, console: '' } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [trimmed] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const held = page.locator('.send-trimmed')
+  await expect(held).toContainText('2 copies held back: TCGplayer already had them.')
+  await expect(held).toContainText('Dunsparce')
+  await expect(held).toContainText('2 of 3 already live')
 })
 
-test('an import file is offered as a download, which is the gap Gate B left open', async ({
+/* ROUND 5, THE MIXED SEND (the owner's ruling, 2026-09-24: "Allow mixed"). One press lists new
+   copies and reprices cards already live. A price change is a row this press adds no copy of,
+   already live, whose TYPED price is not the live one. A rule price never counts, and a typed
+   price TCGplayer already shows is no change. The press says both, apart. */
+test('r6: a mixed press counts only the prices typed on this list, and names them', async ({ page }) => {
+  const mixed = sendSummary({ copies: 3, prices: 1, rows: 2 })
+  const wire = await open(page, {
+    skus: [
+      sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 2,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '9.99' },
+        listing: { pushed: 2, staged: 0, live: 2 },
+      }),
+      sku({
+        sku: '8608659',
+        name: 'Wattrel',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 1,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        snap: { market: '4.10', direct_low: null, low: '3.90', low_with_shipping: '4.90', now: '4.00' },
+        listing: { pushed: 1, staged: 0, live: 1 },
+      }),
+      sku({
+        sku: '8608959',
+        name: 'Kled',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 1,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        snap: { market: '6.00', direct_low: null, low: '5.50', low_with_shipping: '6.50', now: '7.00' },
+        listing: { pushed: 1, staged: 0, live: 1 },
+      }),
+    ],
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      /* Dunsparce typed over its live price: a change. Wattrel typed AT its live price: none.
+         Kled carries no typed price, so the rule's figure never reaches its live listing. */
+      overrides: { '8608459': '12.50', '8608659': '4.00' },
+    },
+    send: () => ({ status: 200, body: { send: mixed, console: '' } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [mixed] } : SENDS_NONE),
+  })
+  /* ROUND 6 (B1, B2): A PRICE THE CORPUS HOLDS IS NOT ONE THE OWNER TYPED HERE. The stored
+     12.50 may be a Live tab preset or a mark-down never sent; the button does not count it, so
+     no send carries it. */
+  await expect(page.getByRole('button', { name: 'Send 3 copies to TCGplayer' })).toBeVisible()
+  const dunsparce = page.getByLabel('Price for Dunsparce')
+  await dunsparce.fill('13.00')
+  await dunsparce.press('Tab')
+  const press = page.getByRole('button', { name: 'Send 3 copies and 1 price change' })
+  await expect(press).toBeVisible()
+  await press.click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  /* THE PRESS NAMES THE PRICE IT COUNTED, AND THE LIVE PRICE THE ROW DREW: the server sends no
+     other price row, and refuses this one if TCGplayer's price moved since. */
+  expect(sendPosts(wire)[0]?.body).toMatchObject({ prices: [{ sku: '8608459', price: '13.00', was: '9.99' }] })
+  await expect(page.locator('.send-standing')).toContainText('3 copies and 1 price change went live at')
+})
+
+/* ROUND 6, S4: A ROLLBACK'S ANSWER IS NOT PROOF. A press TCGplayer turned away and Banchi rolled
+   back offers no Try again, and keeps "check the Staged list" until the owner dismisses it. */
+test('r6: a rolled-back send offers no retry and keeps the Staged check until dismissed', async ({ page }) => {
+  const rolled = sendSummary({
+    stamp: '20260924-120000-cccccc',
+    state: 'failed',
+    published_at: null,
+    taken_back_at: '2026-09-24T12:00:09+00:00',
+    failure: { code: 'send_rolled_back', message: 'rolled back' },
+    warning: 'rolled_back',
+  })
+  const wire = await open(page, {
+    send: () => ({ status: 409, code: 'send_rolled_back' }),
+    sends: (seen) =>
+      seen.some((r) => r.path.endsWith('/dismiss'))
+        ? { ...SENDS_NONE, sends: [{ ...rolled, warning: null }] }
+        : sendPosts(seen).length > 0
+          ? { ...SENDS_NONE, sends: [rolled] }
+          : SENDS_NONE,
+  })
+  await sendPress(page).click()
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('Check the Staged list before you send again.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  const warned = page.locator('.send-taken-back')
+  await expect(warned).toContainText('Upload rolled back at')
+  await expect(warned).toContainText('Check the Staged list')
+  await warned.getByRole('button', { name: 'Dismiss' }).click()
+  await expect.poll(() => wire.filter((r) => r.path.endsWith('/dismiss')).length).toBe(1)
+  await expect(page.locator('.send-taken-back')).toHaveCount(0)
+})
+
+/* ROUND 6, S2: A PRESS THAT DIED MID-PUSH HAS NO `unknown`, and its upload may still wait in
+   Staged. The card reads the server's `staged`, never `unknown` alone. */
+test('r6: a send that stopped mid-push names the Staged list', async ({ page }) => {
+  const crashed = sendSummary({ state: 'unknown', published_at: null, held: true, unknown: null, staged: true })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [crashed] }) })
+  await expect(page.locator('.send-unknown')).toContainText('may still wait in TCGplayer’s Staged list')
+})
+
+/* ROUND 5: TWO PRESSES IN ONE SECOND. A stamp is the second, then a random tail, so the card
+   compared stamps and stood on its own older press whenever the newer one drew the smaller
+   tail. The server lists receipts newest PRESS first, and the card stands on that. */
+test('r5: two presses in one second: the card stands on the newest press, not the larger stamp', async ({ page }) => {
+  const mine = sendSummary({ stamp: '20260924-120000-ffffff', copies: 3 })
+  const later = sendSummary({ stamp: '20260924-120000-000000', copies: 5 })
+  const wire = await open(page, {
+    send: () => ({ status: 200, body: { send: mine, console: '' } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [later, mine] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect(page.locator('.send-standing')).toContainText('5 copies went live at')
+})
+
+/* ROUND 5: AT 390 WIDE, TWO TAKEN-BACK WARNINGS STOOD HALF THE SCREEN HIGH IN THE STICKY BAR.
+   Each folds to one line: the warning's own imperative, a press that opens the rest, and
+   Dismiss. It never folds away: only Dismiss takes it off the card (round 4). */
+test('r5: at 390 two taken-back warnings fold to one line each, and stay until Dismiss', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const staged = sendSummary({
+    stamp: '20260924-120000-aaaaaa',
+    state: 'taken_back',
+    taken_back_at: '2026-09-24T12:20:00+00:00',
+    unknown: { stage: 'publish', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' },
+    warning: 'staged',
+  })
+  const file = sendSummary({
+    stamp: '20260924-110000-bbbbbb',
+    kind: 'download',
+    state: 'taken_back',
+    taken_back_at: '2026-09-24T12:21:00+00:00',
+    warning: 'old_file',
+  })
+  const wire = await open(page, {
+    sends: (seen) =>
+      seen.some((r) => r.path.endsWith('/dismiss'))
+        ? { ...SENDS_NONE, sends: [{ ...staged, warning: null }, file] }
+        : { ...SENDS_NONE, sends: [staged, file] },
+  })
+  const warned = page.locator('.send-taken-back')
+  await expect(warned).toHaveCount(2)
+  for (const index of [0, 1]) {
+    const box = await warned.nth(index).boundingBox()
+    /* ONE LINE: the 40px press it opens by, and the notice's own padding. */
+    expect(box?.height ?? 999).toBeLessThanOrEqual(72)
+    await expect(warned.nth(index).locator('.bn-notice-body')).toBeHidden()
+  }
+  await expect(warned.nth(0).locator('.send-fold')).toHaveText('Do not publish the upload.')
+  await expect(warned.nth(1).locator('.send-fold')).toHaveText('Do not upload the old file.')
+  /* THE LINE IS READ WHOLE, never cut to an ellipsis: it is the warning while folded. */
+  const cut = await page.locator('.send-fold-line').evaluateAll((lines) => lines.filter((line) => line.scrollWidth > line.clientWidth).length)
+  expect(cut).toBe(0)
+
+  const fold = warned.nth(0).locator('.send-fold')
+  await fold.click()
+  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  await expect(warned.nth(0).locator('.bn-notice-body')).toBeVisible()
+  await expect(warned.nth(0).locator('.bn-notice-body')).toContainText('Do not publish it there.')
+  await fold.click()
+  await expect(warned.nth(0).locator('.bn-notice-body')).toBeHidden()
+  await expect(warned).toHaveCount(2)
+
+  await warned.nth(0).getByRole('button', { name: 'Dismiss' }).click()
+  await expect.poll(() => wire.filter((r) => r.path.endsWith('/dismiss')).length).toBe(1)
+  await expect(page.locator('.send-taken-back')).toHaveCount(1)
+})
+
+test('a live check that cannot run refuses the send, says why, and offers Try again', async ({ page }) => {
+  let presses = 0
+  const wire = await open(page, {
+    send: () => {
+      presses += 1
+      return presses === 1
+        ? { status: 502, code: 'live_check_failed' }
+        : { status: 200, body: { send: sendSummary(), console: '' } }
+    },
+  })
+  await sendPress(page).click()
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('Banchi could not read what is live at TCGplayer, so nothing was sent.')
+  /* THE SERVER'S OWN TEXT IS BEHIND "What the server said", never the title (D196). */
+  await expect(refusal.locator('summary')).toHaveText('What the server said')
+
+  await refusal.getByRole('button', { name: 'Try again' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(2)
+  await expect(page.locator('.send-failure')).toHaveCount(0)
+})
+
+test('a send with nothing left to add is a refusal, and offers no retry', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'nothing_to_send' }) })
+  await sendPress(page).click()
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('Nothing to send. Every copy on this list is already at TCGplayer or held back.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+})
+
+test('Download the file instead writes the file, and its copies are named until they are found', async ({
   page,
 }) => {
-  await open(page)
-  await page.getByRole('button', { name: 'Write the import file' }).click()
+  const written = sendSummary({
+    kind: 'download',
+    state: 'written',
+    published_at: null,
+    check_after: '2026-09-24T12:17:00+00:00',
+    take_back_after: '2026-09-24T12:17:00+00:00',
+    copies: 4,
+  })
+  /* PAST THE WAIT, THE CHECK FOUND NONE OF THEM: now, and only now, they can come back. */
+  const unfound = sendSummary({
+    ...written,
+    state: 'short',
+    take_back_after: null,
+    takeable: 4,
+    checked_at: '2026-09-24T12:18:00+00:00',
+    check: { export: 'live.csv', found: 0, expected: 4, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 4, found: 0 }] },
+  })
+  let checked = false
+  const wire = await open(page, {
+    send: (body) => ({ status: 200, body: { send: { ...written, files: body.split_threshold ? ['import-listed.csv', 'import-subthreshold.csv'] : ['import.csv'] }, console: '' } }),
+    sends: (seen) =>
+      seen.some((r) => r.path.endsWith('/take-back'))
+        ? SENDS_NONE
+        : sendPosts(seen).length > 0
+          ? { ...SENDS_NONE, sends: [checked ? unfound : written], unconfirmed: { copies: 4, stamps: [written.stamp] } }
+          : SENDS_NONE,
+  })
 
-  /* docs/GATES.md, on what Gate B did not close: emit's import files existed only as
-     filenames in terminal output the owner never saw. This is the link that closes it —
-     RELOCATED HERE FROM `run-panel.spec.ts` on 2026-08-30 with the press that writes them
-     (D54), because the gap was never "the file must be at address X"; it was that the press
-     and the receipt were in different places. */
-  /* THE RECEIPT IS A DIALOG NOW, opened from the bar's own `N files` button and from the
-     toast the write raises. Which is where the link LIVES, not whether it exists: the press
-     and the receipt are still one gesture apart, which is what the gap was about. */
-  await page.getByRole('button', { name: /files$/ }).click()
-  const file = page.locator('.run-file-import')
-  await expect(file).toBeVisible()
-  await expect(file).toContainText('import-listed.csv')
-  await expect(file).toHaveAttribute('download', 'import-listed.csv')
-  expect(await file.getAttribute('href')).toContain('/pipeline/runs/')
+  /* THE SPLIT LIVES BEHIND THE DOOR, NOT BESIDE THE SEND (the Send-menu ruling). */
+  await expect(page.getByLabel('Split in two files at the cut-off')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Download the file instead' }).click()
+  await expect(page.getByLabel('Split in two files at the cut-off')).toBeVisible()
+  await page.getByRole('button', { name: 'Write the file' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect(sendPosts(wire)[0]?.body).toMatchObject({ runs: [RUN], download: true })
+  expect(sendPosts(wire)[0]?.body).not.toHaveProperty('confirm')
 
-  /* AND THE ERRAND THAT FOLLOWS, named beside the files it is done with. */
-  await expect(page.locator('.pricing-ship-receipt')).toContainText('Export From Staged')
+  const file = page.locator('.send-files a')
+  await expect(file).toHaveAttribute('download', 'import.csv')
+  expect(await file.getAttribute('href')).toContain('/pipeline/sends/20260924-120000/file?name=import.csv')
+
+  /* Q8: WRITTEN, NOT CONFIRMED — AND NO WAY BACK UNTIL A CHECK HAS RUN PAST THE WAIT (the
+     owner's ruling, 2026-09-24). The card says when it will be safe instead. */
+  const unconfirmed = page.locator('.send-unconfirmed')
+  await expect(unconfirmed).toContainText('4 copies written, not confirmed at TCGplayer')
+  await expect(unconfirmed).toContainText('You can take them back after')
+  await expect(page.getByRole('button', { name: /^Take .* back$/ })).toHaveCount(0)
+
+  checked = true
+  await page.getByRole('button', { name: 'Check what is live' }).click()
+  const back = page.locator('.send-short-check')
+  await expect(back).toContainText('0 of 4 found at TCGplayer')
+  await back.getByRole('button', { name: 'Take 4 copies back' }).click()
+  await expect.poll(() => wire.filter((r) => r.path.endsWith('/take-back')).length).toBe(1)
+  await expect(page.locator('.send-short-check')).toHaveCount(0)
+})
+
+test('a send TCGplayer did not confirm is held, names the upload waiting, and offers no second send', async ({
+  page,
+}) => {
+  const unknown = sendSummary({
+    state: 'unknown',
+    published_at: null,
+    held: true,
+    take_back_after: '2026-09-24T12:17:00+00:00',
+    check_after: '2026-09-24T12:17:00+00:00',
+    unknown: { stage: 'rollback', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' },
+  })
+  const wire = await open(page, {
+    send: () => ({ status: 409, code: 'send_unknown' }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [unknown] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('TCGplayer did not confirm this send. Do not send these copies again.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  const held = page.locator('.send-unknown')
+  await expect(held).toContainText('TCGplayer has not confirmed 3 copies.')
+  await expect(held).toContainText('may still wait in TCGplayer’s Staged list')
+  await expect(held).toContainText('stay out of every send')
+  await expect(page.getByRole('button', { name: /^Take .* back$/ })).toHaveCount(0)
+})
+
+test('an unconfirmed send whose upload may wait in Staged keeps saying so after the check, beside Take back', async ({
+  page,
+}) => {
+  /* THE ROUND-2 REVIEW, F3. Past the wait the check found none of the copies, so they can come
+     back. The upload TCGplayer never confirmed may still wait in its Staged list: taking the
+     copies back and then publishing that upload by hand would list them twice. The warning
+     stays for as long as the receipt is drawn. */
+  const staged = { stage: 'publish', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' }
+  const short = sendSummary({
+    state: 'short',
+    published_at: null,
+    held: false,
+    takeable: 3,
+    checked_at: '2026-09-24T12:18:00+00:00',
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+    unknown: staged,
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
+  const card = page.locator('.send-short-check')
+  await expect(card).toContainText('0 of 3 found at TCGplayer')
+  await expect(card).toContainText('may still wait in TCGplayer’s Staged list')
+  await expect(card).toContainText('Do not publish it there')
+  await expect(card.getByRole('button', { name: 'Take 3 copies back' })).toBeVisible()
+})
+
+test('an unconfirmed send the check found whole still names the upload that may wait in Staged', async ({ page }) => {
+  /* NOTHING HERE CAN SAY THE UPLOAD LEFT STAGED: the copies found live may be that upload, or a
+     hand upload of the same file. The warning outlives the check (F3). Checked moments ago, so
+     the card still draws it. */
+  const found = sendSummary({
+    state: 'checked',
+    published_at: null,
+    checked_at: new Date().toISOString(),
+    check: { export: 'live.csv', found: 3, expected: 3, missing: [] },
+    unknown: { stage: 'publish', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [found] }) })
+  const card = page.locator('.send-standing')
+  await expect(card).toContainText('3 of 3 found at TCGplayer')
+  await expect(card).toContainText('may still wait in TCGplayer’s Staged list')
+})
+
+/* THE ROUND-3 REVIEW, H2: THE WARNING OUTLIVES TAKE BACK. Right after it the copies are on the
+   list again, so the old upload published by hand, or the old file uploaded, would list them
+   twice. The round-3 card drew no taken-back receipt at all, so the warning went at the one
+   moment it matters most. It stays until the owner dismisses it. */
+for (const [kind, warning, said] of [
+  ['send', 'staged', 'may still wait in TCGplayer’s Staged list. Do not publish it there.'],
+  ['download', 'old_file', 'Do not upload the file written at'],
+] as const) {
+  test(`a taken-back ${kind} keeps its warning until the owner dismisses it`, async ({ page }) => {
+    const staged = kind === 'send' ? { stage: 'publish', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' } : null
+    const short = sendSummary({
+      kind,
+      state: 'short',
+      published_at: null,
+      takeable: 3,
+      checked_at: '2026-09-24T12:18:00+00:00',
+      check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+      unknown: staged,
+    })
+    const taken = sendSummary({ ...short, state: 'taken_back', takeable: 0, taken_back_at: '2026-09-24T12:20:00+00:00', warning })
+    const wire = await open(page, {
+      sends: (seen) =>
+        seen.some((r) => r.path.endsWith('/dismiss'))
+          ? { ...SENDS_NONE, sends: [{ ...taken, warning: null }] }
+          : seen.some((r) => r.path.endsWith('/take-back'))
+            ? { ...SENDS_NONE, sends: [taken] }
+            : { ...SENDS_NONE, sends: [short] },
+    })
+    await page.locator('.send-short-check').getByRole('button', { name: 'Take 3 copies back' }).click()
+    await expect.poll(() => wire.filter((r) => r.path.endsWith('/take-back')).length).toBe(1)
+    const warned = page.locator('.send-taken-back')
+    await expect(warned).toContainText('Copies taken back at')
+    await expect(warned).toContainText(said)
+    await warned.getByRole('button', { name: 'Dismiss' }).click()
+    await expect.poll(() => wire.filter((r) => r.path.endsWith('/dismiss')).length).toBe(1)
+    await expect(page.locator('.send-taken-back')).toHaveCount(0)
+  })
+}
+
+test('a Take back that fails says so, and never offers a retry that would send', async ({ page }) => {
+  /* THE ROUND-3 CARD PUT A FAILED TAKE BACK IN THE PRESS'S OWN FAILURE LINE: it read "the copies
+     are back on the list", and a network failure there offered "Try again", which sends. */
+  const short = sendSummary({
+    state: 'short',
+    takeable: 3,
+    checked_at: '2026-09-24T12:18:00+00:00',
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+  })
+  const wire = await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
+  await page.route(/\/pipeline\/sends\/[^/]+\/take-back$/, (route) => route.abort())
+  await page.locator('.send-short-check').getByRole('button', { name: 'Take 3 copies back' }).click()
+  const failed = page.locator('.send-undo-failure')
+  await expect(failed).toContainText('Banchi could not take these copies back.')
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  await expect(page.locator('.send-card')).not.toContainText('the copies are back on the list')
+  expect(sendPosts(wire)).toHaveLength(0)
+})
+
+test('a send that stopped partway is held, says so, and leaves every press on', async ({ page }) => {
+  /* THE ROUND-2 REVIEW, F1: a failure after the receipt used to leave it "sending", with both
+     buttons off for as long as the server lived. Now it is unknown, and nothing is stuck. */
+  const stopped = sendSummary({
+    state: 'unknown',
+    published_at: null,
+    held: true,
+    accepted: null,
+    take_back_after: '2026-09-24T12:17:00+00:00',
+    check_after: '2026-09-24T12:17:00+00:00',
+    unknown: { stage: 'deciding', upload_id: null, staged: false, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' },
+  })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [stopped] }) })
+  const held = page.locator('.send-unknown')
+  await expect(held).toContainText('Banchi stopped partway through this send.')
+  await expect(held).toContainText('stay out of every send')
+  await expect(sendPress(page)).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Check what is live' })).toBeEnabled()
+})
+
+test('a press over cards a price change holds is refused by name, with no retry', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'price_change_held' }) })
+  await sendPress(page).click()
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('Some of these cards wait on a price change TCGplayer has not confirmed, so nothing was sent.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+})
+
+test('a press over held cards is refused by name, with no retry', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'send_held' }) })
+  await sendPress(page).click()
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('Some of these cards wait on a send TCGplayer has not confirmed, so nothing was sent.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+})
+
+test('TCGplayer took fewer rows than were sent, and the card never says more went live', async ({ page }) => {
+  const partial = sendSummary({ accepted: 1, rows: 2, turned_away: 1 })
+  await open(page, {
+    send: () => ({ status: 200, body: { send: partial, console: '' } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [partial] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  const card = page.locator('.send-turned-away')
+  await expect(card).toContainText('TCGplayer took 1 of 2 cards.')
+  await expect(page.locator('.send-card')).not.toContainText('3 copies went live')
+})
+
+test('a dropped connection reads the receipt: a press still running shows, and no second press is offered', async ({
+  page,
+}) => {
+  const running = sendSummary({ state: 'sending', published_at: null, check_after: null, held: true })
+  const wire = await open(page, {
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [running] } : SENDS_NONE),
+  })
+  /* THE PRESS'S OWN ANSWER NEVER ARRIVES: the connection drops while the server still sends. */
+  await page.route(/\/pipeline\/send$/, async (route) => {
+    wire.push({ method: 'POST', path: '/pipeline/send', body: route.request().postDataJSON() })
+    await route.abort('connectionreset')
+  })
+  await sendPress(page).click()
+  await expect(page.locator('.send-sending')).toContainText('Sending 3 copies to TCGplayer.')
+  await expect(page.locator('.send-failure')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  await expect(page.locator('.send-press')).toBeDisabled()
+  expect(sendPosts(wire)).toHaveLength(1)
+})
+
+test('a check that is due runs on the visit, with no press', async ({ page }) => {
+  const wire = await open(page, {
+    sends: (seen) => (seen.some((r) => r.path === '/pipeline/live-check') ? SENDS_NONE : { ...SENDS_NONE, due: true }),
+  })
+  /* THE CLOSED-APP HALF OF Q3: the wait ended while nobody was here, so arriving is the cue. */
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/live-check').length).toBe(1)
+  expect(wire.find((r) => r.path === '/pipeline/live-check')?.body).toEqual({})
+})
+
+test('the wait ends while the page is open, and the check runs with no refresh', async ({ page }) => {
+  /* THE SERVER SAYS THE CHECK IS DUE FOUR SECONDS FROM ITS OWN NOW. Until the page asks again
+     after that, nothing is due; the timer is what asks again. Timed from the FIRST read, so the
+     time the page takes to load cannot eat into the window. */
+  const soon = { ...SENDS_NONE, now: '2026-09-24T12:00:00+00:00', check_at: '2026-09-24T12:00:04+00:00' }
+  let first = 0
+  const wire = await open(page, {
+    sends: (seen) => {
+      if (first === 0) first = Date.now()
+      if (seen.some((r) => r.path === '/pipeline/live-check')) return SENDS_NONE
+      return Date.now() - first < 4000 ? soon : { ...SENDS_NONE, due: true }
+    },
+  })
+  expect(wire.filter((r) => r.path === '/pipeline/live-check')).toHaveLength(0)
+  /* THE OPEN-APP HALF: one timer, measured on the server's clock, and no reload. */
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/live-check').length, { timeout: 12000 }).toBe(1)
+})
+
+test('Check what is live is a manual press that always runs', async ({ page }) => {
+  const wire = await open(page)
+  await page.getByRole('button', { name: 'Check what is live' }).click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/live-check').length).toBe(1)
+  expect(wire.find((r) => r.path === '/pipeline/live-check')?.body).toEqual({ force: true })
 })
 
 test('tabbing across a suggested row writes nothing', async ({ page }) => {
@@ -1375,7 +1942,8 @@ test('the solid accent fill is spent on the one thing to do, and never on a row'
     }
   })
   expect(filled.rows).toBe(0)
-  expect(filled.buttons).toEqual(['Write the import file'])
+  expect(filled.buttons).toHaveLength(1)
+  expect(filled.buttons[0]).toMatch(/^Send (\d+ cop(y|ies) )?to TCGplayer$/)
 })
 
 test('every control that answers a row is on the row, with nothing to open first', async ({
@@ -2630,11 +3198,9 @@ test('no row draws through the ship bar, at either of the bar heights', async ({
      inside it — so the second state this case is about is a second SURFACE rather than a
      second height: the bar still owns its own pixels, and the receipt owns the ones it
      covers. A row answering for a point inside either is the same fault it always was. */
-  await page.getByRole('button', { name: 'Write the import file' }).click()
-  await page.getByRole('button', { name: /files$/ }).click()
-  await expect(page.locator('.pricing-ship-receipt')).toBeVisible()
+  await page.getByRole('button', { name: 'Download the file instead' }).click()
+  await expect(page.locator('.send-download')).toBeVisible()
   expect(await rowsShowingThrough(page, '.pricing-ship')).toBe(0)
-  expect(await rowsShowingThrough(page, '.pricing-ship-receipt')).toBe(0)
 })
 
 test('the bar publishes its measured height, so the panels above it clear the real one', async ({
@@ -2672,8 +3238,8 @@ test('the bar publishes its measured height, so the panels above it clear the re
      the one that still changes it with no press and no navigation behind it: the bar gains a
      row when a write leaves a receipt to link to. A one-shot measurement at mount reports
      green through that exactly as it did through the old one. */
-  await page.getByRole('button', { name: 'Write the import file' }).click()
-  await expect(page.getByRole('button', { name: /files$/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Download the file instead' }).click()
+  await expect(page.locator('.send-download')).toBeVisible()
   await expect
     .poll(async () => {
       const seen = await agrees()
@@ -2690,8 +3256,8 @@ test('an open reading covers no ship-bar control and no row draws through it', a
   /* THE WORST CASE, BUILT DELIBERATELY: the fullest bar under the tallest panel. The bar
      gains its receipt link once a write has landed, which is the state where its controls sit
      closest to the panel's edge. */
-  await page.getByRole('button', { name: 'Write the import file' }).click()
-  await expect(page.getByRole('button', { name: /files$/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Download the file instead' }).click()
+  await expect(page.locator('.send-download')).toBeVisible()
 
   await pin(page)
   await expect(panelOf(page)).toBeVisible()
@@ -3078,23 +3644,20 @@ test('the cap is what can go, and the row says the runs disagree with it', async
   )
 })
 
-test('a send of several runs offers one file, and a send of one offers the per-run emit', async ({
+test('a send of several runs is one press over every run, with nothing beside it', async ({
   page,
 }) => {
-  await open(page, { worklist: SPAN })
+  const wire = await open(page, { worklist: SPAN })
 
-  /* ONE PRESS FOR THE SEND, because the CAP has to be re-derived across it: pressing the
-     per-run button twice IS the over-push above. Measured from an identical cleared ledger,
-     three separate emits over three real runs wrote two SKUs past the cap of four and one
-     merged emit wrote none. */
-  await expect(page.getByRole('button', { name: 'Write one import file' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Ship this run' })).toHaveCount(0)
-
-  /* AND THE CHECKBOX THE OWNER ASKED FOR, defaulting to everything: "i can hit a checkmark to
-     export just the valuable cards ... otherwise it defaults to all". */
-  const only = page.getByRole('checkbox', { name: /above the cut-off/ })
-  await expect(only).toBeVisible()
-  await expect(only).not.toBeChecked()
+  /* ONE BAR, ONE PRESS, whatever the number of runs: the server writes one file over the union
+     (D86) behind the double-send guard. The Send-menu ruling took the caps and the listed-only
+     filter off the press, so none of them is drawn here. */
+  await expect(page.getByRole('region', { name: 'Send to TCGplayer' })).toHaveCount(1)
+  await expect(page.getByRole('checkbox', { name: /above the cut-off/ })).toHaveCount(0)
+  await expect(page.getByLabel('Copies to keep live at TCGplayer')).toHaveCount(0)
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect((sendPosts(wire)[0]?.body as Record<string, unknown>).runs).toEqual(SPAN.runs.map((row) => row.run))
 })
 
 /* ================================================ the cap, asked for per send (2026-09-07, D7)
@@ -3112,98 +3675,6 @@ test('a send of several runs offers one file, and a send of one offers the per-r
  * A blank field must OMIT the key rather than send a zero or a null. `pipeline_routes.py`
  * refuses `cap: 0` by name — *"A cap of 0 would send nothing"* — so a screen that spelled "no
  * cap" as a number would turn the ordinary press into a refusal. */
-
-test('a blank cap sends no cap at all, and the key is absent rather than empty', async ({
-  page,
-}) => {
-  const wire = await open(page, { worklist: SPAN })
-
-  await page.getByRole('button', { name: 'Write one import file' }).click()
-  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/emit').length).toBe(1)
-
-  const body = wire.find((r) => r.path === '/pipeline/emit')?.body as Record<string, unknown>
-  /* `in`, NOT a value comparison. `cap: undefined` disappears through `JSON.stringify` and
-     would read as absent to any assertion on the value, so the only test that can tell a
-     dropped key from a sent one is whether the key is there at all. */
-  expect('cap' in body).toBe(false)
-  expect(body.listed_only).toBe(false)
-
-  /* AND THE BAR SAYS SO, which is the half a body assertion cannot reach. The sentence about
-     spending a cap once across the send is a claim about a figure, and with none asked for it
-     would be describing a bound the press does not apply. */
-  await expect(page.locator('.pricing-ship-says')).toContainText('every copy TCGplayer does not')
-})
-
-test('a figure typed into the cap rides the send, and the bar names what it now does', async ({
-  page,
-}) => {
-  const wire = await open(page, { worklist: SPAN })
-
-  await page.getByLabel('Copies to keep live at TCGplayer').fill('2')
-  /* THE SENTENCE FOLLOWS THE FIELD, before anything is pressed — the operator learns what the
-     figure MEANS at the moment they type it rather than from a receipt afterwards. */
-  await expect(page.locator('.pricing-ship-says')).toContainText('spent once across the send')
-
-  await page.getByRole('button', { name: 'Write one import file' }).click()
-  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/emit').length).toBe(1)
-  expect((wire.find((r) => r.path === '/pipeline/emit')?.body as Record<string, unknown>).cap).toBe(2)
-})
-
-test('a send of ONE carries the cap too, which is the asymmetry the route refuses', async ({
-  page,
-}) => {
-  /* THE PER-RUN STEP'S OWN COMMENT IS THE ARGUMENT: *"a screen that could ask for a split on a
-     send of three and not on a send of one would be answering a question about how many runs
-     are open."* A cap is that same kind of answer, so `POST /pipeline/runs/<n>/emit` takes it
-     through the same parser and one `capField` is rendered in both bars. This case is what
-     stops the two drifting — the merged one above could go on passing while this one silently
-     sent no cap at all. */
-  const wire = await open(page, { skus: [sku()] })
-  await expect(page.getByRole('region', { name: 'Ship this run' })).toHaveCount(1)
-
-  await page.getByLabel('Copies to keep live at TCGplayer').fill('3')
-  await page.getByRole('button', { name: 'Write the import file' }).click()
-
-  const emits = () => wire.filter((r) => r.method === 'POST' && r.path.endsWith('/emit'))
-  await expect.poll(() => emits().length).toBe(1)
-  expect((emits()[0]?.body as Record<string, unknown>).cap).toBe(3)
-})
-
-test('typing in the cap does not reach the row keys, which own bare letters here', async ({
-  page,
-}) => {
-  /* THE SCREEN TAKES UNMODIFIED LETTERS ON A ROW — `D` snap, `H` hold, `T` history, `P` photo,
-     `U` undo — so a second text field on it is a place those could fire. The price field
-     earned that check by having its alphabet closed to `[0-9.]` (D49); this one is closed to
-     digits, and what needs asserting is that the SHELL yields while it has focus rather than
-     that the regex works, which the case above covers. A hold fired from a keystroke meant for
-     the cap would write an answer the operator never gave. */
-  const wire = await open(page, { worklist: SPAN })
-
-  const cap = page.getByLabel('Copies to keep live at TCGplayer')
-  await cap.focus()
-  await page.keyboard.type('h4u')
-  await expect(cap).toHaveValue('4')
-  /* NOTHING WAS WRITTEN. `H` on a row opens the hold editor and `U` undoes an answer; either
-     firing from here is a write the operator did not make, and both would be invisible in the
-     field's own value. */
-  expect(wire.filter((r) => r.method === 'PUT')).toEqual([])
-})
-
-test('the cap field takes digits and nothing else, so a send cannot carry a word', async ({
-  page,
-}) => {
-  await open(page, { worklist: SPAN })
-
-  /* THE FIELD'S ALPHABET IS CLOSED, the price field's own rule (D49) applied to the one other
-     number this screen composes into a request. It reaches a child process's argv — the route
-     integer-checks it for exactly that reason — and a control that accepted `2; rm` would be
-     leaning on the far side of the wire to be the only reader. */
-  const cap = page.getByLabel('Copies to keep live at TCGplayer')
-  await cap.fill('2')
-  await cap.pressSequentially('x9')
-  await expect(cap).toHaveValue('29')
-})
 
 test('the standing policy is on the multi-run landing, and one press writes it once', async ({
   page,
@@ -3232,8 +3703,6 @@ test('the standing policy is on the multi-run landing, and one press writes it o
      change): it says what the merge dedupes or what the cap does, never ready/not-ready —
      that account lives once on the headline's `.pricing-verdict`, computed over the same
      union of every run on screen regardless of which bar is showing. */
-  const region = page.getByRole('region', { name: 'Ship these runs' })
-  await expect(region.locator('.pricing-ready')).toBeVisible()
   await expect(page.locator('.pricing-verdict')).toBeVisible()
 
   /* THE CONTROL IS THE CUT-OFF FIELD, AND THE FLOOR PRESS IT REPLACED IS RETIRED (D98). Main
@@ -3253,17 +3722,6 @@ test('the standing policy is on the multi-run landing, and one press writes it o
   expect(wire.filter((r) => r.method === 'PUT').map((r) => r.path)).toEqual(['/pricing'])
   expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.40' })
   expect(sentPolicy(wire).threshold).toBe('0.40')
-})
-
-test('the per-run emit is what a send of one offers, so the pair is not one press hiding', async ({
-  page,
-}) => {
-  /* THE OTHER HALF, AS ITS OWN CASE. Calling `open` twice in one test re-registers every route
-     on the same page and the two fixtures then race; the pair only means anything if both
-     halves actually run. */
-  await open(page, { skus: [sku()] })
-  await expect(page.getByRole('region', { name: 'Ship this run' })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Write one import file' })).toHaveCount(0)
 })
 
 test('an undo returns the card to what it was, including to having no answer', async ({
@@ -3533,30 +3991,28 @@ test('a figure typed on a row rides the send keyed by that SKU, the deck counts 
      before deciding to press. */
   await expect(page.locator('.pricing-verdict-out')).toContainText(`${copiesBefore - 1} cop`)
   await expect(page.locator('.pricing-verdict-byhand')).toContainText('1 card at a quantity you typed')
-  await expect(page.locator('.pricing-ship-byhand')).toContainText('1 by hand')
 
-  await page.getByRole('button', { name: 'Write one import file' }).click()
-  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/emit').length).toBe(1)
-  const body = wire.find((r) => r.path === '/pipeline/emit')?.body as Record<string, unknown>
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const body = sendPosts(wire)[0]?.body as Record<string, unknown>
   expect(body.quantities).toEqual({ '9191210': 2 })
 
-  /* SPENT BY THE WRITE. A figure that survived the press would send the same copies again on
+  /* SPENT BY THE SEND. A figure that survived the press would send the same copies again on
      the next one, on top of what went. */
   await expect(field).toHaveValue('')
-  await expect(page.locator('.pricing-ship-byhand')).toHaveCount(0)
 })
 
 test('a blank Qty on every row sends no quantities key at all', async ({ page }) => {
   const wire = await open(page, { worklist: SPAN })
-  await page.getByRole('button', { name: 'Write one import file' }).click()
-  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/emit').length).toBe(1)
-  const body = wire.find((r) => r.path === '/pipeline/emit')?.body as Record<string, unknown>
-  /* `in`, for the reason the cap's own case gives: a dropped key and a sent-empty key read the
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const body = sendPosts(wire)[0]?.body as Record<string, unknown>
+  /* `in`, for the reason the cap's own case gave: a dropped key and a sent-empty key read the
      same to a value assertion, and only the first is the ordinary press. */
   expect('quantities' in body).toBe(false)
 })
 
-test('a figure past what can go is clamped on the way out, 0 takes the row out of the count, Escape clears one row and the chip clears every row', async ({
+test('a figure past what can go is clamped on the way out, 0 takes the row out of the count, and Escape clears one row', async ({
   page,
 }) => {
   await open(page, { worklist: SPAN })
@@ -3580,17 +4036,8 @@ test('a figure past what can go is clamped on the way out, 0 takes the row out o
   await leblanc.focus()
   await leblanc.press('Escape')
   await expect(leblanc).toHaveValue('')
-  await expect(page.locator('.pricing-ship-byhand')).toHaveCount(0)
   await expect(page.locator('.pricing-verdict-out')).toContainText(`${rowsBefore} row`)
-
-  /* THE CHIP IS THE WAY BACK FOR THE WHOLE SEND. */
-  await leblanc.fill('1')
-  await dunsparce.fill('2')
-  await expect(page.locator('.pricing-ship-byhand')).toContainText('2 by hand')
-  await page.locator('.pricing-ship-byhand').click()
-  await expect(leblanc).toHaveValue('')
   await expect(dunsparce).toHaveValue('')
-  await expect(page.locator('.pricing-ship-byhand')).toHaveCount(0)
 })
 
 test('typing in a Qty field does not reach the row keys either', async ({ page }) => {

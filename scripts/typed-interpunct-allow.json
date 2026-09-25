@@ -50,12 +50,6 @@
         "Gallery: well · rule",
         "Gallery: with icon · mono · outline"
       ]
-    },
-    "app/src/RunsComposer.tsx": {
-      "lane": "b-runs",
-      "interpunct": [
-        "selectionLine: ·"
-      ]
     }
   }
 }

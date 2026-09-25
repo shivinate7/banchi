@@ -325,6 +325,17 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   --listed-only      above-threshold rows only
                                    #   --split-threshold  import-listed.csv / import-subthreshold.csv
                                    #   --split-games      one file per game
+                                   #   --live-guard FILE  trim each row so TCGplayer never
+                                   #                      holds more copies than are here
+                                   #   --reprice-live F   with --live-guard: a PRICE-ONLY row
+                                   #                      (Add to Quantity 0) for each live
+                                   #                      card that adds no copy and whose
+                                   #                      price the screen NAMED in F. A
+                                   #                      price F does not name never rides.
+                                   #                      A listing file
+                                   #                      may mix both (the owner's ruling,
+                                   #                      2026-09-24). The send press passes
+                                   #                      both flags.
 ./pkmnscan cards    name             # a card's stable name and photograph location (D172).
                                    #   Free, read-only. Never calls `db.connect`, which would
                                    #   perform the migration it previews.
@@ -496,7 +507,7 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-155<!-- derived:app_src_file_count --> files under `app/src`: none read the
+159<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
 310<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.

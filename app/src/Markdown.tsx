@@ -9,7 +9,7 @@ import {
   markdownFileUrl,
   markdownListings,
   publishMarkdown,
-  pushMarkdown,
+  sendMarkdown,
   rollbackMarkdown,
   type Failure,
 } from './server'
@@ -22,6 +22,7 @@ import type {
   MarkdownSummary,
 } from './types'
 import { Button, Icon, Notice } from './kit'
+import { clockTime } from './dates'
 import { toast } from './kit/toast'
 import { DropZone, FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
@@ -392,14 +393,18 @@ export function Markdown({
     setSending('push')
     setFailure(null)
     try {
-      const answer = await pushMarkdown(stamp)
-      setPushed(answer.pushed)
+      /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the server reads what is live,
+         pushes this file and makes it live. A failed publish is rolled back server-side, so
+         the only states this screen can land in are "live" and "nothing changed". */
+      const answer = await sendMarkdown(stamp)
+      setPushed(answer.published)
+      refresh()
     } catch (caught) {
       setFailure(describeFailure(caught))
     } finally {
       setSending(null)
     }
-  }, [stamp])
+  }, [refresh, stamp])
 
   /** Discard the staged upload — the undo for a push, and only before it is published.
    *
@@ -577,13 +582,7 @@ export function Markdown({
         </header>
 
         <div className="markdown-body">
-          <p className="markdown-says">
-            Reads your live <strong>My Pricing</strong> export and proposes a lower price for
-            listings that have not sold.
-          </p>
-          <p className="markdown-says">
-            <strong>Nothing is deleted at TCGplayer; the upload edits the live listing in place.</strong>
-          </p>
+          <p className="markdown-says">Edits live listings. Deletes nothing.</p>
 
           {/* THE SUBSTITUTION, NAMED WHERE THE OPERATOR READS IT — and it is a substitution
               only where the store has no sighting for the row. `reconcile --live --write`
@@ -591,16 +590,16 @@ export function Markdown({
               the report the run prints counts both clocks and says which it used. Claiming the
               proxy unconditionally became a lie of its own the moment some rows had a real
               one, which is D100's rule pointed the other way. */}
-          <p className="markdown-caveat">
-            <Icon name="clock" size={14} />
+          <details className="markdown-caveat">
+            <summary>
+              <Icon name="clock" size={14} /> How a listing's age is dated
+            </summary>
             <span>
-              This ranks on how long the <strong>listing</strong> has been live, from the first
-              export seen holding it. A SKU no export has caught yet falls back to how long the
-              card has been <strong>owned</strong> — a floor on the real age, never the age
-              itself. Run <code>reconcile --live</code> to give more rows a true one; the report
-              says which clock dated each.
+              From the first time TCGplayer showed the listing live. Where that is not known yet,
+              from when the card was photographed. <a href="#/runs">Check what is live</a> dates
+              more of them.
             </span>
-          </p>
+          </details>
 
           <section className="markdown-step" aria-labelledby="markdown-ask">
             <h3 className="bn-section-title bn-dotline" id="markdown-ask">
@@ -700,27 +699,6 @@ export function Markdown({
                 hand should not have to fetch again, and a dead cookie must not be a dead end:
                 every refusal here is a sentence, and the zone below is what it leaves them. */}
             <div className="markdown-row">
-              <Button
-                variant="primary"
-                icon="download"
-                busy={fetching}
-                disabled={busy || fetching}
-                onClick={() => void fetchLive()}
-              >
-                {fetching ? 'Asking TCGplayer…' : 'Fetch my live listings'}
-              </Button>
-              <span className="markdown-hint">
-                or drop a{' '}
-                <a
-                  className="markdown-out"
-                  href="https://store.tcgplayer.com/admin/pricing"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  My Pricing
-                </a>{' '}
-                export below.
-              </span>
             </div>
             {fetched === null ? null : (
               <Notice
@@ -875,8 +853,7 @@ export function Markdown({
                           the same argument D104 makes for keeping the upload door open beside
                           the fetch. */}
                       <Notice tone="ok" title="Ready to send">
-                        <code className="bn-code">Add to Quantity</code> is 0 on every row —
-                        price-only, no copies move.
+                        Price changes only. No copies move.
                       </Notice>
                       <div className="markdown-row">
                         <a className="bn-btn" href={markdownFileUrl(stamp, IMPORT)} download={IMPORT}>
@@ -886,19 +863,14 @@ export function Markdown({
                         {pushed === null ? (
                           <Button
                             variant="primary"
-                            icon="upload"
+                            icon="send"
                             busy={sending === 'push'}
                             disabled={busy}
                             onClick={push}
                           >
-                            Push to staged
+                            {sending === 'push' ? 'Checking TCGplayer, then sending…' : 'Send these prices to TCGplayer'}
                           </Button>
                         ) : null}
-                        <span className="markdown-hint">
-                          {pushed === null
-                            ? 'Staged is private — no buyer sees it.'
-                            : null}
-                        </span>
                       </div>
                     </>
                   ) : null}
@@ -927,7 +899,7 @@ export function Markdown({
                   {pushed.published_at ? (
                     <Notice tone="ok" title="Live at TCGplayer">
                       {pushed.accepted} price{pushed.accepted === 1 ? '' : 's'} moved live at{' '}
-                      {pushed.published_at}. <strong>Reconcile the store</strong> on Runs.
+                      {clockTime(pushed.published_at)}. Banchi checks TCGplayer again after the wait.
                     </Notice>
                   ) : (
                     <>
@@ -1071,6 +1043,17 @@ export function Markdown({
           <Button variant="ghost" onClick={onClose}>
             {wroteImport ? 'Done' : 'Not now'}
           </Button>
+          {survey === null ? (
+            <Button
+              variant="primary"
+              icon="download"
+              busy={fetching}
+              disabled={busy || fetching}
+              onClick={() => void fetchLive()}
+            >
+              {fetching ? 'Asking TCGplayer…' : 'Fetch my live listings'}
+            </Button>
+          ) : null}
           {nextPress === 'worklist' ? (
             <Button
               variant="primary"

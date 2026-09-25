@@ -382,7 +382,8 @@ COMPONENTS = [
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
                                             "D87", "D100", "D145", "D172", "D180", "D189", "D210",
                                             "D213", "D219", "D239", "D242",
-                                            "D-a-box-is-shown-by-its-name"],
+                                            "D-a-box-is-shown-by-its-name",
+                                            "D-one-press-sends-and-makes-live"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -676,8 +677,8 @@ COMPONENTS = [
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58",
-                                            "D59", "D86", "D99", "D172", "D213", "D243",
-                                            "D253"], "tested_by": ["T7"]},
+                                            "D59", "D86", "D88", "D99", "D172", "D174", "D213",
+                                            "D243", "D253"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
@@ -1406,6 +1407,18 @@ COMPONENTS = [
                                              "D48", "D56", "D58", "D65", "D76", "D145", "D165",
                                              "D172", "D174", "D180"],
                              "tested_by": ["T7"]},
+            "sendguard.py": {"does": "THE DOUBLE-SEND GUARD. After a send, live at TCGplayer "
+                                     "plus Add to Quantity may never pass the copies on hand, "
+                                     "per SKU. It reads the fresh live export and the shelf, "
+                                     "never the store's listing bookkeeping, so a wrong "
+                                     "`pushed` cannot open it. On hand is the store's unsold "
+                                     "copies of the SKU union this send's matched positions. "
+                                     "It only ever takes copies OUT of a file. Pure: "
+                                     "`cli/cmd_emit.py --live-guard` supplies the inputs and "
+                                     "prints one JSON line of trims.",
+                             "governed_by": ["D7", "D59", "D87", "D100",
+                                             "D-one-press-sends-and-makes-live"],
+                             "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and any cap the send asked for spent ONCE "
                                  "over that union. There is NO standing cap since D7 was "
@@ -1768,6 +1781,19 @@ COMPONENTS = [
             # `_run_box` answers None for one. The cache cannot stand in for either: an entry
             # is written AFTER collection, so two presses racing both see an empty cache and
             # both pay.
+            "sendclaims.py": {"does": "the `send_claims` table — D174's claim shape over a send "
+                                      "to TCGplayer. One row per press, holding the SKUs it "
+                                      "adds (0 for a price file). `cli/cmd_emit.py` checks every "
+                                      "live claim and writes its own INSIDE the store write that "
+                                      "counts the copies sent, so two presses cannot both decide "
+                                      "first, whatever process each came from. A claim is ALSO "
+                                      "THE HOLD: a send whose outcome is unknown keeps its row, "
+                                      "and every later send is refused over its SKUs until the "
+                                      "live check past the wait releases it. A dead holder is "
+                                      "reported, never acted on. Schema 11.",
+                              "governed_by": ["D174", "D88", "D192",
+                                              "D-one-press-sends-and-makes-live"],
+                              "tested_by": ["T7"]},
             "submissions.py": {"does": "the `submissions` table — one row per press, holding the "
                                        "position keys that press is about to pay to read. "
                                        "`claim_or_refuse` is the guard and it is ONE ACT: it "
@@ -1884,8 +1910,9 @@ COMPONENTS = [
                                    "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189", "D191", "D219", "D243"],
+                           "governed_by": ["D13", "D53", "D63", "D88", "D134", "D145", "D174",
+                                           "D189", "D191", "D219", "D243",
+                                           "D-one-press-sends-and-makes-live"],
                            "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
@@ -1901,8 +1928,9 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D166", "D172",
-                                      "D174", "D189", "D192", "D213", "D219", "D243"],
+                      "governed_by": ["D20", "D26", "D86", "D88", "D134", "D140", "D145", "D166",
+                                      "D172", "D174", "D189", "D192", "D213", "D219", "D243",
+                                      "D-one-press-sends-and-makes-live"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -3272,8 +3300,8 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D28", "D58", "D62", "D76", "D79", "D83",
                                 "D86", "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D165", "D167", "D168", "D174", "D189", "D192",
-                                "D193", "D203", "D210", "D225", "D227", "D236",
-                                "D252"],
+                                "D193", "D203", "D210", "D225", "D227", "D236", "D252",
+                                "D-one-press-sends-and-makes-live"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -4969,7 +4997,8 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D168", "D172", "D174", "D183", "D189", "D191",
                                 "D192", "D193", "D203", "D212", "D213", "D219", "D225", "D227",
-                                "D252", "D-a-box-is-shown-by-its-name", "D-no-git-no-live-port"],
+                                "D252", "D-a-box-is-shown-by-its-name", "D-no-git-no-live-port",
+                                "D-one-press-sends-and-makes-live"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -4994,12 +5023,39 @@ COMPONENTS = [
                                       "what their server reads and what urlencode alone "
                                       "cannot express. `_check` runs their own validators — "
                                       "price 0.01-200000, integer quantity — plus D100's "
-                                      "invariant that AddToQuantity is 0 on every row, before "
-                                      "a transaction is opened, so a bad file is a refusal "
-                                      "with nothing sent. THE PUSH IS MEASURED; movetolive is "
-                                      "read and has never been called from here.",
+                                      "invariant that AddToQuantity is 0 on every row of a "
+                                      "price file, before a transaction is opened, so a bad "
+                                      "file is a refusal with nothing sent. A LISTING file "
+                                      "(`listing=True`, the send press only) may add 0 or more "
+                                      "copies and never fewer; whether that door should exist "
+                                      "is the owner's open question. THE PUSH IS MEASURED; "
+                                      "movetolive is read and has never been called from here.",
                                "governed_by": ["D13", "D16", "D64", "D87", "D100", "D103",
-                                               "D104", "D106"],
+                                               "D104", "D106", "D-one-press-sends-and-makes-live"],
+                               "tested_by": ["T7"]},
+            "send_routes.py": {"does": "THE ONE PRESS that sends listings to TCGplayer and makes "
+                                       "them live, and the checks around it. One press at a "
+                                       "time in the server, refused by name. In order: fetch "
+                                       "the live export (a failure refuses the whole press), "
+                                       "`reconcile --live --write`, `emit --live-guard` into the "
+                                       "press's OWN directory with a store claim on its SKUs "
+                                       "(`store/sendclaims.py`), push, publish. Copies go back "
+                                       "on the list ONLY when no upload was opened or TCGplayer "
+                                       "answered the rollback; an unclear publish, a slow "
+                                       "answer or a refused rollback is UNKNOWN, holds its SKUs "
+                                       "and is resolved by the live check past the wait. Take "
+                                       "them back is offered only after that check, for the "
+                                       "copies it did not find. Receipts live under "
+                                       "`inventory/sends/<stamp>/`, written before the first "
+                                       "byte leaves. Also the live check (runs only when a "
+                                       "request asks; no timer here; one rise confirms one "
+                                       "receipt) and the mark-down's one press. Never called "
+                                       "against the real portal: T7 proves every path on a "
+                                       "loopback one with slow, partial, 5xx and "
+                                       "rollback-refused modes.",
+                               "governed_by": ["D33", "D54", "D86", "D87", "D99", "D100", "D104",
+                                               "D105", "D106", "D174",
+                                               "D-one-press-sends-and-makes-live"],
                                "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "
@@ -5937,7 +5993,8 @@ COMPONENTS = [
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
                                               "D225", "D227", "D236", "D252",
-                                              "D-no-git-no-live-port"]},
+                                              "D-no-git-no-live-port",
+                                              "D-one-press-sends-and-makes-live"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6030,7 +6087,8 @@ COMPONENTS = [
                                              "D113", "D114", "D115", "D116", "D132", "D134", "D142",
                                              "D145", "D147", "D156", "D159", "D165", "D166", "D168",
                                              "D172", "D174", "D180", "D183", "D193", "D212", "D213",
-                                             "D225", "D227", "D236", "D252"]},
+                                             "D225", "D227", "D236", "D252",
+                                             "D-one-press-sends-and-makes-live"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -7022,7 +7080,7 @@ COMPONENTS = [
                                           "identifying` and both were wrong together — which is "
                                           "the argument for one reader rather than a defence of "
                                           "it: there was one place to fix, and it was not here.",
-                                  "governed_by": ["D33", "D39", "D48", "D56", "D94"]},
+                                  "governed_by": ["D33", "D39", "D48", "D56", "D94", "D194"]},
             "src/RunsComposer.tsx": {"does": "THE IDENTIFY COMPOSER: the one press in this product "
                                              "that spends money, as a staged dialog — which "
                                              "boxes, how each is read, what it costs, and a "
@@ -7075,6 +7133,41 @@ COMPONENTS = [
                                         "be grepped, and a summary is the second vocabulary that "
                                         "rule exists to refuse.",
                                 "governed_by": ["D33", "D39", "D94"]},
+            "src/SendCard.tsx": {"does": "THE SEND CARD on Pricing's send bar: one press from "
+                                         "priced to live (D-one-press-sends-and-makes-live). The "
+                                         "press waits for the screen's own save, then one request "
+                                         "reads what is live, writes the file behind the "
+                                         "double-send guard, sends it and makes it live. It draws "
+                                         "what the guard held back by card, a refusal with Try "
+                                         "again when the live read cannot run, the download door "
+                                         "with the split behind it, copies written and not "
+                                         "confirmed with Take them back, and the check after the "
+                                         "lag. No pipeline word reaches the screen (D196).",
+                                 "governed_by": ["D86", "D99", "D105", "D106", "D118", "D196",
+                                                 "D-notice-detail",
+                                                 "D-one-press-sends-and-makes-live"]},
+            "src/SendCard.css": {"does": "the send card's own rows: the press and its two quiet "
+                                         "doors on one line that wraps as a unit, the download "
+                                         "door, and the card lists under a notice. On a phone "
+                                         "the press takes the whole first line (UX-007).",
+                                 "governed_by": ["D117", "D118", "D-one-press-sends-and-makes-live"]},
+            "src/liveCheck.ts": {"does": "WHEN THE LIVE CHECK AFTER A SEND RUNS (the owner's Q3 "
+                                         "ruling). A visit to Pricing or Home reads the send "
+                                         "status and runs a due check at once; otherwise one "
+                                         "module-level timer waits for the moment the next check "
+                                         "is due, measured on the server's clock, and outlives "
+                                         "the screen that started it. No server job runs "
+                                         "unattended. A failed automatic check waits for the "
+                                         "next visit rather than retrying.",
+                                 "governed_by": ["D106", "D-one-press-sends-and-makes-live"]},
+            "src/autoMatch.ts": {"does": "MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the "
+                                         "owner's Q4 ruling). `#/runs` and Home hand it the runs "
+                                         "they read; every run waiting for its match is asked "
+                                         "once per sitting (`matchRun`). A run whose match "
+                                         "stopped carries `match_problem` and is skipped: only "
+                                         "the door's own press asks again. No server job runs "
+                                         "unattended.",
+                                 "governed_by": ["D65", "D-one-press-sends-and-makes-live"]},
             "src/RunsDrop.tsx": {"does": "the file controls, as controls that look like the "
                                          "product: a native file input cannot be styled to sit "
                                          "beside a kit button, so the input is visually hidden "
@@ -7174,7 +7267,7 @@ COMPONENTS = [
                                          "on is OWNERSHIP age.",
                                  "governed_by": ["D7", "D9", "D13", "D33", "D49", "D64", "D86",
                                                  "D87", "D94", "D95", "D100", "D103", "D104",
-                                                 "D105"],
+                                                 "D105", "D-one-press-sends-and-makes-live"],
                                  # `app/tests/markdown.spec.ts` is the check the hard rule says
                                  # does not otherwise exist — it runs under `make design-check`,
                                  # not at turn end, so it is named here in prose rather than in
@@ -7257,7 +7350,8 @@ COMPONENTS = [
                                                 "D78", "D79", "D85", "D86", "D89", "D98", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
                                                 "D115", "D117", "D118", "D125", "D156", "D159",
-                                                "D168", "D172", "D208", "D210", "D218"]},
+                                                "D168", "D172", "D208", "D210", "D218",
+                                                "D-one-press-sends-and-makes-live"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
                                             "header (D168). The operator's "
                                             "own ask - \"after several emits a lot of pricing "
@@ -7812,7 +7906,8 @@ COMPONENTS = [
                                 # condition is read from; D63 is the two-map ledger behind it;
                                 # D114 is the no-status-vocabulary rule the `open`-keyed join
                                 # obeys instead of reading `status`.
-                                "governed_by": ["D63", "D69", "D114", "D121", "D202"]},
+                                "governed_by": ["D63", "D69", "D114", "D121", "D198", "D202",
+                                                "D-one-press-sends-and-makes-live"]},
             "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
                                             "`captured_at` by a 30-minute gap, and the ribbon "
                                             "geometry Home's foot draws from them. The unit is a "
@@ -8688,7 +8783,8 @@ COMPONENTS = [
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
-                                "D124", "D125", "D134", "D174", "D192", "D-palette-go-to", "D-a-box-is-shown-by-its-name"]},
+                                "D124", "D125", "D134", "D174", "D192", "D-palette-go-to", "D-a-box-is-shown-by-its-name",
+                                "D-one-press-sends-and-makes-live"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -8916,7 +9012,8 @@ COMPONENTS = [
                                                "press is scoped to the filter rather than to "
                                                "the whole survey (D62). Not a harness test.",
                                                "governed_by": ["D28", "D54", "D62", "D99", "D100",
-                                                               "D101", "D103", "D107", "D218"]},
+                                                               "D101", "D103", "D107", "D218",
+                                                               "D-one-press-sends-and-makes-live"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "
@@ -8943,7 +9040,8 @@ COMPONENTS = [
                                                       "D51", "D54", "D56", "D57", "D58", "D59",
                                                       "D62", "D68", "D78", "D79", "D85", "D86",
                                                       "D92", "D98", "D99", "D103", "D115", "D117",
-                                                      "D118", "D156", "D168", "D208", "D218"]},
+                                                      "D118", "D156", "D168", "D196", "D208",
+                                                      "D218", "D-one-press-sends-and-makes-live"]},
             "tests/revenue.spec.ts": {
                 "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
                         "states, every column's sort and its reverse, the search field, the "

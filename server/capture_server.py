@@ -85,6 +85,19 @@
                                            price-only import CSV. Every row it writes carries
                                            `Add to Quantity` 0, so it cannot move a quantity
     GET    /pipeline/markdowns/<stamp>/file    the worklist to edit, and the import to upload
+    POST   /pipeline/markdowns/<stamp>/send    reads what is live, then that push and that
+                                               publish, in one press
+    POST   /pipeline/send                  THE ONE PRESS for listings: reads what is live,
+                                           writes the file behind the double-send guard, sends
+                                           it and makes it live. `download` stops at the file
+    GET    /pipeline/sends                 every send's receipt, what is written and not
+                                           confirmed, and whether the live check is due
+    POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
+    POST   /pipeline/sends/<stamp>/dismiss     the owner has read a taken-back receipt's
+                                               warning, so the card stops drawing it
+    GET    /pipeline/sends/<stamp>/file    the file one send wrote, for the download door
+    POST   /pipeline/live-check            reads what is live and confirms the sends that are
+                                           due. Runs only when a request asks
 
 The first five are build-order step 5 in `docs/GATES.md`. The sixth is the capture app's
 undo, and it lives here rather than in the app because deleting a record, a sidecar, a
@@ -318,6 +331,10 @@ from store import orders as order_store  # noqa: E402
 # under both, and the sys.path line above is what makes it work under the first.
 from server import codes_routes  # noqa: E402
 from server import pipeline_routes  # noqa: E402
+# The one press that sends to TCGplayer and makes copies live, and the live check after it
+# (`D-one-press-sends-and-makes-live`). Its own module for `tcg_import.py`'s reason: it can
+# change what buyers see, so its promises are written once, beside it.
+from server import send_routes  # noqa: E402
 # The shipping seam, below the line for the same reason and by the same rule (D61). It opens
 # no socket and holds no key, but it does hold a buyer's ADDRESS in memory for half an hour,
 # which is its own boundary worth keeping in one file rather than inlined here.
@@ -629,6 +646,9 @@ _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # D165's rescue, offered from a screen. Matched before `_RUN_STEP_RE` for `_RUN_EXPORT_RE`'s
 # own reason: `rescue` is `[a-z]+` too, and the more specific pattern has to read first.
 _RUN_RESCUE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/rescue$")
+# THE AUTOMATIC MATCH (flow interview, Q4). Before `_RUN_STEP_RE` for `_RUN_EXPORT_RE`'s
+# reason: `match` is `[a-z]+` as well.
+_RUN_MATCH_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/match$")
 # The price history for ONE SKU, named on the query string (D62). Matched before the
 # run-item and step patterns for the same reason the two above are: the more specific
 # path reads first. `history` would otherwise be eaten by `_RUN_STEP_RE`, whose
@@ -672,6 +692,15 @@ _MARKDOWN_PUBLISH_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/pub
 # The undo for a push, and only before it is published. Narrower than the portal's own
 # control on purpose: `clearstagedinventory` empties the whole staged channel and takes no id.
 _MARKDOWN_ROLLBACK_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/rollback$")
+# ONE PRESS, `D-one-press-sends-and-makes-live`: the live read, the push and the publish of one
+# mark-down. The two routes above stay, and this one calls them in order.
+_MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$")
+# A written file's copies back on the list (the owner's Q8 ruling). A send stamp, the same shape.
+# THE SHAPE IS `send_routes.STAMP_SHAPE`, never a copy of it: a copy typed here missed the random
+# tail every press has written since round 2, and matched no new receipt.
+_SEND_TAKE_BACK_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/take-back$")
+_SEND_DISMISS_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/dismiss$")
+_SEND_FILE_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/file$")
 # The lens (D103): every live listing this survey saw, and the two readings over one of them.
 # Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
 # — the document holding the export row is what says what the card is, so the address names a
@@ -13259,6 +13288,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # Every markdown this store has written (D100). Reads the directory and holds
                 # nothing, the way `/pipeline/runs` does.
                 return self._json(HTTPStatus.OK, pipeline_routes.do_markdowns())
+            if path == "/pipeline/sends":
+                # Every send's receipt, what is written and not confirmed, and whether the
+                # live check is due. Reads a directory; opens no socket.
+                return self._json(HTTPStatus.OK, send_routes.do_sends())
             match = _MARKDOWN_TABLE_RE.match(path)
             if match:
                 # THE LENS'S INPUT (D103): every live listing the survey saw, refused ones
@@ -13284,6 +13317,17 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_markdown_trends(match.group(1), asked),
+                )
+            match = _SEND_FILE_RE.match(path)
+            if match:
+                # "Download the file instead": the file one send wrote, forced as a download.
+                wanted = parse_qs(parsed.query, keep_blank_values=True).get("name") or [""]
+                blob = send_routes.do_send_file(match.group(1), wanted[0])
+                return self._send(
+                    HTTPStatus.OK,
+                    blob,
+                    "text/csv",
+                    (("Content-Disposition", f'attachment; filename="{wanted[0]}"'),),
                 )
             match = _MARKDOWN_FILE_RE.match(path)
             if match:
@@ -13641,6 +13685,34 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_markdown_list(self._body())
                 )
+            if path == "/pipeline/send":
+                # THE ONE PRESS (`D-one-press-sends-and-makes-live`): reads what is live,
+                # writes the listing file behind the double-send guard, pushes it and makes it
+                # live. Refuses without `confirm`, and refuses whole when the live read fails.
+                # `download: true` stops after the file.
+                return self._json(HTTPStatus.OK, send_routes.do_send(self._body()))
+            if path == "/pipeline/live-check":
+                # THE CHECK AFTER THE LAG. Runs only when a request asks: the screen's timer or
+                # its next visit. No timer runs here (the owner's Q3 ruling).
+                return self._json(HTTPStatus.OK, send_routes.do_live_check(self._body()))
+            match = _SEND_TAKE_BACK_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, send_routes.do_take_back(match.group(1), self._body())
+                )
+            match = _SEND_DISMISS_RE.match(path)
+            if match:
+                # The owner has read a taken-back receipt's warning. Changes nothing else.
+                return self._json(
+                    HTTPStatus.OK, send_routes.do_dismiss(match.group(1), self._body())
+                )
+            match = _MARKDOWN_SEND_RE.match(path)
+            if match:
+                # **CHANGES WHAT BUYERS PAY, IN ONE PRESS.** Reads what is live first, then the
+                # push and the publish below, in order. A failed publish rolls the push back.
+                return self._json(
+                    HTTPStatus.OK, send_routes.do_markdown_send(match.group(1), self._body())
+                )
             match = _MARKDOWN_PUSH_RE.match(path)
             if match:
                 # INTO STAGED, WHICH NO BUYER CAN SEE. Refuses without `confirm`, and pushes
@@ -13747,6 +13819,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_run_rescue(match.group(1), self._body()),
+                )
+            # Q4's automatic match, before `_RUN_STEP_RE` for the same reason as the two above.
+            match = _RUN_MATCH_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_run_match(match.group(1), self._body()),
                 )
             match = _RUN_STEP_RE.match(path)
             if match:

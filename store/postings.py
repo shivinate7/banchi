@@ -36,7 +36,8 @@ file the press went on to write to disk — `emit`'s `pushed` gate and `reprice 
 `--write` gate are also this module's gate, because a proposal an operator edited and
 discarded, or a run that refused before a single byte was written, was never posted and is
 not this table's business to remember. `source` names which press wrote the row (`emit`,
-`emit-merged`, `reprice`), `run` names which run or worklist decided it, and `replaced`
+`emit-merged`, `reprice`, and `emit-price` for a send's price-only row on a live card, which
+carries the live price it replaced), `run` names which run or worklist decided it, and `replaced`
 carries the price this posting is known to have superseded when the caller already has that
 value in hand — `reprice apply` always does (the worklist's own `was` column); `emit` does
 not track a prior asking price at all, so its rows carry `replaced=None` rather than a
