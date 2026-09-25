@@ -66,7 +66,11 @@
  * deletes its own entries in the same commit. An entry covers every occurrence of that rule in
  * that file. It is a per-file debt, never a count.
  *
- * ONLY SHRINKS, AND THAT IS CHECKED. The stale-entry rule stops an entry outliving its debt, but
+ * ONLY SHRINKS, AND THAT IS CHECKED, BY THE ONE SHARED HELPER. The merge-base read and the growth
+ * rules below live in `scripts/only_shrinks.py`, which `scripts/docs-audit.py`'s offender-list
+ * rows import. This file cannot import Python, so it runs the helper as a command (`onlyShrinks`)
+ * and keeps only what is its own: which keys a block holds, and the rule ids its source defines.
+ * The stale-entry rule stops an entry outliving its debt, but
  * it cannot stop a branch ADDING an entry to excuse a new screen. So the check also reads the
  * allow list as it stood at the merge-base with `origin/main` (`git merge-base HEAD origin/main`,
  * then `git show <base>:scripts/kit-adoption-allow.json`: two plain reads, so D18 holds) and
@@ -117,11 +121,12 @@
  *
  * NEVER WRITES (D18). The self-test builds its fixtures as in-memory maps of path -> source. Its
  * one read of the disk is the only-shrinks case that reads the committed list and rules at HEAD with
- * `git merge-base` and `git show`, which write nothing.
+ * `git merge-base` and `git show`, through `scripts/only_shrinks.py`, which write nothing.
  */
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -616,7 +621,9 @@ function pairs(block) {
   return out
 }
 
-/** ONLY SHRINKS, WITH ONE EXCEPTION (the orchestrator's call, option b, 2026-09-23). Every key
+/** THE RULES ARE `scripts/only_shrinks.py:growth`'s, run as a command, never a copy here. This
+ *  turns each key into one `(rule, identity)` pair and maps the answer back.
+ *  ONLY SHRINKS, WITH ONE EXCEPTION (the orchestrator's call, option b, 2026-09-23). Every key
  *  `head` holds in `static` or `runtime` that `base` did not is growth. Growth is REFUSED for a
  *  rule that exists at the merge-base, and ALLOWED only for a rule born on this branch: a new
  *  rule finds offenders nobody could have listed before it existed. `baseRules` is
@@ -632,34 +639,67 @@ function pairs(block) {
  *  Returns `{ refused, allowed }`, each a list of `{ block, key, rule, why }`, or null. */
 export function growth(base, head, baseRules = { static: null, runtime: null }, headRules = { static: null, runtime: null }) {
   if (base === null) return null
-  const missing = []
-  let unread = null
-  for (const block of ['static', 'runtime']) {
-    const before = baseRules?.[block] ?? null
-    const now = headRules?.[block] ?? null
-    if (before === null) unread = unread ?? `the merge-base's ${block} rule definitions could not be read`
-    else if (now === null) unread = unread ?? `HEAD's ${block} rule definitions could not be read`
-    else for (const rule of before) if (!now.has(rule)) missing.push(rule)
-  }
-  const blocked = missing.length > 0
-    ? `${missing.map((r) => `"${r}"`).join(', ')}, defined at the merge-base, ${missing.length > 1 ? 'are' : 'is'} missing at HEAD (removed or renamed), so no growth is allowed`
-    : unread === null ? null : `${unread}, so no rule can be shown to be new`
-  const refused = []
-  const allowed = []
-  for (const block of ['static', 'runtime']) {
-    const before = pairs(base?.[block])
-    const known = baseRules?.[block] ?? null
-    for (const [key, rule] of pairs(head?.[block])) {
-      if (before.has(key)) continue
-      if (blocked !== null) refused.push({ block, key, rule, why: blocked })
-      else if (!known.has(rule)) {
-        allowed.push({ block, key, rule, why: `rule "${rule}" is not defined at the merge-base, so it was born on this branch and its first offenders may be listed` })
-      } else {
-        refused.push({ block, key, rule, why: `rule "${rule}" exists at the merge-base, and a rule that exists only shrinks` })
-      }
+  /* Each key becomes one `(rule, identity)` pair, both prefixed by its block, so the two blocks
+     never share a rule id. A block whose rules could not be read makes the whole set null. */
+  const asPairs = (list) => {
+    const out = []
+    for (const block of ['static', 'runtime']) {
+      for (const [key, rule] of pairs(list?.[block])) out.push([`${block}:${rule}`, `${block}:${key}`])
     }
+    return out
   }
-  return { refused, allowed }
+  const asRules = (sets) => {
+    if (['static', 'runtime'].some((block) => (sets?.[block] ?? null) === null)) return null
+    return ['static', 'runtime'].flatMap((block) => [...sets[block]].map((rule) => `${block}:${rule}`))
+  }
+  const answer = onlyShrinks(['growth'], {
+    base: asPairs(base),
+    head: asPairs(head),
+    base_rules: asRules(baseRules),
+    head_rules: asRules(headRules),
+  })
+  const back = (g) => {
+    const cut = g.identity.indexOf(':')
+    return { block: g.identity.slice(0, cut), key: g.identity.slice(cut + 1), rule: g.rule.slice(g.rule.indexOf(':') + 1), why: g.why }
+  }
+  /* FAILS CLOSED when the helper cannot RUN (no python3, a crash, a refused request): no
+     growth can be shown to be allowed. `allowAtBase` marks the same case `broken`, and
+     `compareWithBase` refuses there too, so a missing python3 never reads as "no list at the
+     merge-base". Fail open stays only for the reasons the helper itself reports. */
+  if (answer === null) return refuseAll(HELPER_DOWN)
+  return { refused: answer.refused.map(back), allowed: answer.allowed.map(back) }
+}
+
+const HELPER_DOWN = 'scripts/only_shrinks.py could not run, so no growth is allowed'
+
+/** One refusal that stands for the whole list: growth that cannot be computed is refused. */
+function refuseAll(why) {
+  return { refused: [{ block: 'static', key: '(the whole list)', rule: '', why }], allowed: [] }
+}
+
+/** Growth against the merge-base, or null to fail open. Null ONLY for a reason the helper
+ *  reported (no merge-base, no list at the merge-base, a list there that is not JSON). A helper
+ *  that could not run refuses all growth. */
+function compareWithBase(atBase, allow, headRules) {
+  if (atBase.broken) return refuseAll(atBase.reason)
+  return growth(atBase.allow, allow, atBase.rules, headRules)
+}
+
+/** `scripts/only_shrinks.py`, THE ONE HELPER for every shrinking list's only-shrinks rules
+ *  (D-ratchets-become-offender-lists). This file cannot import Python, so it runs the helper
+ *  as a command, with `input` as JSON on stdin, and reads JSON back. Null when it cannot run. */
+function onlyShrinks(args, input = null) {
+  try {
+    const out = execFileSync('python3', [path.join(ROOT, 'scripts', 'only_shrinks.py'), ...args], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      input: input === null ? '' : JSON.stringify(input),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    return JSON.parse(out)
+  } catch {
+    return null
+  }
 }
 
 /** The rule ids defined at HEAD: RULES in this file, and the spec's PER_ROUTE and SHELL_WIDE as
@@ -706,37 +746,15 @@ const SELF_FILE = 'scripts/kit-adoption.mjs'
  *  or the reason there is none. Plain reads (`git merge-base`, `git show`), so nothing is
  *  written (D18). */
 function allowAtBase(reference = 'origin/main') {
-  const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
-  let base
-  try {
-    base = git('merge-base', 'HEAD', reference)
-  } catch {
-    return { allow: null, reason: `no merge-base between HEAD and ${reference} (no git, no ${reference}, or no shared history)` }
-  }
-  let text
-  try {
-    text = git('show', `${base}:${ALLOW_FILE}`)
-  } catch {
-    return { allow: null, reason: `${ALLOW_FILE} does not exist at the merge-base ${base.slice(0, 8)}, so this branch gives it its birth and every entry is new` }
-  }
-  let allow
-  try {
-    allow = JSON.parse(text)
-  } catch (err) {
-    return { allow: null, reason: `${ALLOW_FILE} at the merge-base ${base.slice(0, 8)} is not JSON (${err.message})` }
-  }
-  const idsAt = (file, shape) => {
-    try {
-      return definedIds(git('show', `${base}:${file}`), shape)
-    } catch {
-      return null
-    }
-  }
+  const at = onlyShrinks(['base', '--path', ALLOW_FILE, '--reference', reference, '--also', SELF_FILE, '--also', SPEC_FILE])
+  if (at === null) return { allow: null, reason: HELPER_DOWN, broken: true }
+  if (at.document === null) return { allow: null, reason: at.reason }
+  const idsAt = (file, shape) => (at.files[file] == null ? null : definedIds(at.files[file], shape))
   const rules = {
     static: idsAt(SELF_FILE, { objectName: 'RULES' }),
     runtime: idsAt(SPEC_FILE, { arrayNames: ['PER_ROUTE', 'SHELL_WIDE'] }),
   }
-  return { allow, base, rules }
+  return { allow: at.document, base: at.base, rules }
 }
 
 /* ---- the real tree ------------------------------------------------------------------------- */
@@ -788,20 +806,20 @@ function run() {
     )
   }
   const atBase = allowAtBase()
-  const grown = growth(atBase.allow, allow, atBase.rules, rulesAtHead())
+  const grown = compareWithBase(atBase, allow, rulesAtHead())
   if (grown === null) {
     console.log(`kit-adoption: only-shrinks not compared: ${atBase.reason}. Failing open.`)
   } else {
     for (const g of grown.allowed) {
       console.log(
         `kit-adoption: ${ALLOW_FILE}: ${g.block} gained "${g.key}", ALLOWED by rule ${g.rule}: ${g.why} ` +
-          `(merge-base ${atBase.base.slice(0, 8)}).`,
+          `(merge-base ${(atBase.base ?? 'unread').slice(0, 8)}).`,
       )
     }
     for (const g of grown.refused) {
       console.error(
         `kit-adoption: ${ALLOW_FILE}: ${g.block} gained "${g.key}", which the merge-base ` +
-          `${atBase.base.slice(0, 8)} with origin/main does not hold. Refused: ${g.why}. Fix the ` +
+          `${(atBase.base ?? 'unread').slice(0, 8)} with origin/main does not hold. Refused: ${g.why}. Fix the ` +
           `screen instead of excusing it.`,
       )
     }
@@ -1067,21 +1085,21 @@ function selfTest() {
     head.static['app/src/C.tsx'] = { 'R2-cash': 'x' }
     const headRules = { static: new Set([...baseRules.static].filter((r) => r !== 'R2-money').concat('R2-cash')), runtime: baseRules.runtime }
     const g = growth(b, head, baseRules, headRules)
-    return g.allowed.length === 0 && g.refused.length === 2 && g.refused.every((r) => /R2-money/.test(r.why) && /missing at HEAD/.test(r.why))
+    return g.allowed.length === 0 && g.refused.length === 2 && g.refused.every((r) => /"static:R2-money"/.test(r.why) && /missing at HEAD/.test(r.why))
   })
   add('removing a runtime assertion (keys) refuses growth for a born static rule too', () => {
     const head = clone(base)
     head.static['app/src/B.tsx'] = { 'R2-new': 'x' }
     const headRules = { static: new Set([...baseRules.static, 'R2-new']), runtime: new Set([...baseRules.runtime].filter((a) => a !== 'keys')) }
     const g = growth(base, head, baseRules, headRules)
-    return g.allowed.length === 0 && g.refused.length === 1 && /"keys"/.test(g.refused[0].why)
+    return g.allowed.length === 0 && g.refused.length === 1 && /"runtime:keys"/.test(g.refused[0].why)
   })
   add('a rule definition the merge-base or HEAD read could not parse excuses nothing: growth is refused', () => {
     const head = clone(base)
     head.static['app/src/B.tsx'] = { 'R2-new': 'x' }
     const g = growth(base, head, { static: null, runtime: null }, baseRules)
     const h = growth(base, head, baseRules, { static: baseRules.static, runtime: null })
-    return g.refused.length === 1 && /could not be read/.test(g.refused[0].why) && h.refused.length === 1 && /HEAD's runtime/.test(h.refused[0].why)
+    return g.refused.length === 1 && /could not be read/.test(g.refused[0].why) && h.refused.length === 1 && /HEAD could not be read/.test(h.refused[0].why)
   })
   add('a removed key is the list shrinking, so green; a changed lane is not growth', () => {
     const head = clone(base)
@@ -1092,6 +1110,23 @@ function selfTest() {
     return g.refused.length === 0 && g.allowed.length === 0
   })
   add('no allow list at the merge-base fails open (null), never a silent pass', () => growth(null, base) === null)
+  add('with no python3 on PATH the helper cannot run, and ALL growth is refused, never failed open', () => {
+    const saved = process.env.PATH
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-adoption-nopython-'))
+    process.env.PATH = empty
+    let at
+    let viaGrowth
+    try {
+      at = allowAtBase('HEAD')
+      viaGrowth = growth(base, clone(base), baseRules, baseRules)
+    } finally {
+      process.env.PATH = saved
+      fs.rmSync(empty, { recursive: true, force: true })
+    }
+    const grown = compareWithBase(at, base, baseRules)
+    return at.broken === true && grown !== null && grown.refused.length === 1 &&
+      /could not run/.test(grown.refused[0].why) && viaGrowth.refused.length === 1
+  })
   add('the git read sees its subject: the committed list and both rule definitions at HEAD', () => {
     const at = allowAtBase('HEAD')
     if (at.allow === null) throw new Error(`nothing to read: ${at.reason}`)
