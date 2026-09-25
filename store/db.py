@@ -1531,41 +1531,137 @@ def _open(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+# `open_read_only`'s own bound on its retry — see the function's own docstring for why 3
+# and never a bare `while True`. Every real race measured closes on its second attempt.
+OPEN_READ_ONLY_MAX_ATTEMPTS = 3
+
+
+class TooManyRaces(RuntimeError):
+    """`open_read_only` hit `OPEN_READ_ONLY_MAX_ATTEMPTS` without a clean open — see its
+    own docstring. Not a `sqlite3` exception, so a caller can tell this refusal apart from
+    a genuine database error.
+    """
+
+
 def open_read_only(db_path: Path) -> sqlite3.Connection:
     """The one read-only door onto a store file. It never migrates, and it sees every commit.
 
     NOT `connect`. `connect` always runs `_ensure_schema`, so a preview that opened the store
     through it would PERFORM the migration it claims to preview. Every reader that must not
     migrate opens here instead: `cli/cmd_cards.py`'s previews, `scripts/identity-replay.py`,
-    `scripts/d240-tolerance-fit.py` and `scripts/cid-selftest.py`.
+    `scripts/d240-tolerance-fit.py`, `scripts/cid-selftest.py`, `scripts/status.py`'s store
+    census and `scripts/price-postings-recovery.py` — the last two used to open a bare
+    `mode=ro` connection directly, which fails on exactly the cold, fully-committed state
+    this door exists to read (see the paragraph below).
 
     `mode=ro` ALWAYS. SQLite refuses every write through this connection, and the database
     file is never changed.
 
-    `immutable=1` ONLY WHEN THE WAL IS EMPTY OR ABSENT. `_open` above puts the store in WAL
-    mode. A commit lands in `store.sqlite-wal` first. It reaches the main file only at a
-    checkpoint, and a checkpoint runs when the last connection closes. `immutable=1` tells
-    SQLite the file cannot change, so SQLite never reads the WAL, and every commit not yet
-    checkpointed is invisible. While any other connection is open (a live capture server,
-    or an open `Store.read()` snapshot), an always-immutable door read a store older than
-    its last commit. Measured: `cards identity --write` found 0 SKUs in a `skus` table that
-    a committed fill had just written, and bound nothing. T7 failed on CI for this reason.
+    PLAIN `mode=ro` IS TRIED FIRST, ALWAYS, BECAUSE IT IS ALREADY CORRECT WHENEVER IT OPENS.
+    `_open` above puts the store in WAL mode. A commit lands in `store.sqlite-wal` first. It
+    reaches the main file only at a checkpoint, and a checkpoint runs when the last connection
+    closes. Plain `mode=ro` reads the WAL through the `-shm` index a live writer already
+    keeps, so it sees every commit, checkpointed or not, and it creates no file of its own.
+    It only refuses when the store has no side files at all: a cold, fully-checkpointed
+    store, or a fresh `.backup` copy (the backup API folds committed WAL pages into the
+    copy's own main file). In that one state every commit is already IN the main file, so
+    `immutable=1` is exact, and it is the only case this function falls back to it.
 
-    Plain `mode=ro` reads the WAL through the `-shm` index a live writer already keeps, so
-    it creates no file there. It cannot open a WAL store that has no side files at all
-    ("unable to open database file", measured on SQLite 3.54). In that state every commit
-    is already in the main file, so `immutable=1` is exact, and it writes nothing. A
-    `.backup` copy is that state too: the backup API copies committed WAL pages into the
-    copy's own main file.
+    THE FALLBACK IS KEYED ON WHAT MAKES `immutable=1` SAFE, NEVER ON WHICH ERROR THE PLAIN
+    OPEN RAISED. PR #463's CI is what forced this: the identical fixture (a cold store, a
+    directory denied the write permission SQLite needs to create `-shm`) raised "unable to
+    open database file" (`SQLITE_CANTOPEN`) on this Mac's SQLite 3.54.0, but "attempt to
+    write a readonly database" on CI's Linux SQLite 3.45.1 — and neither guess at THAT
+    build's own error code held either: its real `sqlite_errorname` was neither
+    `SQLITE_CANTOPEN_*` nor `SQLITE_READONLY_CANTINIT`, the two this function tried naming
+    in turn. A build's wording, and even its own result code, for "I could not set up to
+    read the WAL" is not a fact this function can enumerate in advance. What IS a fact,
+    checkable directly: `immutable=1` reads the main file exactly as it stands, so it is
+    correct precisely when the main file ALREADY holds every commit — which is exactly what
+    an absent or empty `-wal` says. So ANY `sqlite3.OperationalError` from the plain open is
+    read as "could not set up to read the WAL" and falls back, UNLESS `-wal` already holds
+    real content: a live, uncheckpointed commit the main file does not yet have, which
+    `immutable=1` would silently miss. In that one case the plain open's own refusal — a
+    permission error, a genuine lock conflict, whatever it was — is the true answer, and is
+    raised rather than swallowed.
 
-    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves both halves.
+    `sqlite3.connect(...)` ITSELF NEVER RAISES THAT ERROR — IT IS LAZY. SQLite does not touch
+    the file, the WAL or the side files until the first statement runs, so a bare `connect()`
+    on a store with no side files SUCCEEDS and only the first read on it fails. A version of
+    this function that only called `connect()` and returned would never see the failure it
+    means to catch, and would hand every caller a connection that raises on its first real
+    query instead. `PRAGMA schema_version` is the first statement here, for exactly that
+    reason: the cheapest read that forces the open, on any store, schema or none. THE
+    IMMUTABLE CONNECTION GETS THE SAME FORCED OPEN, for the opposite reason: a genuinely
+    corrupt or unreadable main file must raise HERE, never be handed back as a connection
+    that looks fine until its first real query.
+
+    THE FALLBACK REOPENS ITS OWN CHECK, BECAUSE THE FIRST CHECK IS THE FAILED OPEN ABOVE, AND
+    TIME PASSES BETWEEN A FAILED OPEN AND THE NEXT ONE. A commit landing in that gap creates
+    `store.sqlite-wal` where a moment ago there was none, and an `immutable=1` connection
+    opened after that never rereads it — SQLite's own docs for `immutable`: a file that
+    changes under an immutable connection "might return incorrect query results and/or
+    SQLITE_CORRUPT errors". Measured before this closed: `cards identity --write` found 0
+    SKUs in a `skus` table a committed fill had just written, and bound nothing. T7 failed on
+    CI for this reason. So the fallback re-checks the WAL immediately AFTER opening
+    `immutable=1`, not before: if a commit reached it after all, that immutable snapshot is
+    exactly the stale one this whole function exists to refuse, so it is closed and the
+    plain `mode=ro` open is tried again — which now succeeds, because the commit that raced
+    it left side files behind for it to read.
+
+    THE RETRY IS BOUNDED AT `OPEN_READ_ONLY_MAX_ATTEMPTS`, NEVER A BARE `while True`. Every
+    real race closes on its second attempt — the retry's own plain `mode=ro` open succeeds
+    because the commit that raced it left side files behind. A bound that low would still
+    self-terminate in every case measured; it stays a stated bound rather than an unbounded
+    waiter loop on principle, and raises `TooManyRaces` by name if a commit somehow keeps
+    landing in this exact gap on every attempt, rather than spinning forever.
+
+    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves the store half, and
+    records the plain open's own `sqlite_errorname`/message in its pass line, so CI's own log
+    names the real code the next time a build disagrees. `check_open_read_only_race` forces
+    the gap deterministically, by monkeypatching `sqlite3.connect` to land a commit the
+    instant this function asks for the `immutable=1` connection, and proves it is caught
+    rather than served stale. `check_open_read_only_wal_present_never_falls_back` proves the
+    other half: a plain-open failure while `-wal` genuinely holds a commit is raised, never
+    swallowed, whatever shape that failure takes.
     """
     if not db_path.is_file():
         raise FileNotFoundError(f"no store at {db_path}")
     wal = Path(f"{db_path}-wal")
-    if wal.is_file() and wal.stat().st_size > 0:
-        return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    return sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+    for _attempt in range(OPEN_READ_ONLY_MAX_ATTEMPTS):
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            conn.execute("PRAGMA schema_version")  # forces the lazy open now, not later
+            return conn
+        except sqlite3.OperationalError:
+            conn.close()
+            if wal.is_file() and wal.stat().st_size > 0:
+                # `-wal` genuinely holds a commit the main file does not yet have, so
+                # `immutable=1` would be exact only by accident. Whatever this refusal
+                # means — a real permission problem, a lock conflict, anything — it is not
+                # this function's to swallow. THE SHAPE OF THE ERROR NEVER MATTERS HERE,
+                # only the WAL's own state does — see the docstring's own account of why
+                # naming build-specific error codes was tried twice and failed twice.
+                raise
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        try:
+            conn.execute("PRAGMA schema_version")  # forces THIS open too — a genuinely
+            # corrupt or unreadable main file raises HERE, never handed back as a connection.
+        except sqlite3.OperationalError:
+            conn.close()
+            raise
+        if not (wal.is_file() and wal.stat().st_size > 0):
+            return conn
+        # THE GAP FIRED: a commit landed between the failed plain open above and this
+        # immutable one. Side files exist now, so the retry's plain `mode=ro` open succeeds
+        # and reads the commit correctly — never trust the immutable connection we just made.
+        conn.close()
+    raise TooManyRaces(
+        f"open_read_only({db_path}): a commit landed in the immutable-fallback gap on "
+        f"every one of {OPEN_READ_ONLY_MAX_ATTEMPTS} attempts. Every measured real race "
+        f"closes on its second attempt, so this means either a pathological write rate or "
+        f"a bug in the retry itself — refusing rather than looping forever."
+    )
 
 
 def connect(directory: Path, *, locked: bool = False) -> sqlite3.Connection:

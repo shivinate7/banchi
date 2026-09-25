@@ -47,6 +47,7 @@ from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 WIDTH = 76
 LABEL = 15  # column where values start, so the left rail reads as a column
@@ -176,6 +177,14 @@ SOURCES = (
         "why": "the tracked hooks `make hooks` installs — read by hooks() below. A glob "
                "since D42: the opsec pre-commit gained two siblings guarding main, and an "
                "entry naming one of three would report an armed clone while two were gone",
+    },
+    {
+        "path": "store/db.py",
+        "kind": "defs",
+        "requires": ("open_read_only",),
+        "why": "the one read-only door onto store.sqlite — used by store() below so this "
+               "report never migrates the store and always sees the last commit, WAL or not "
+               "(PR #461). Stdlib-only, so this import needs no `make venv`.",
     },
     {
         "path": "inventory",
@@ -1105,7 +1114,13 @@ def store() -> List[str]:
     two of them look identical from a directory listing: a database, a legacy store nobody
     has opened on the new code yet (the next open migrates it), and a legacy file sitting
     BESIDE a database — which nothing reads, and which a person will otherwise trust.
-    Stdlib sqlite3, no project import, the same rule as everything else in this file.
+
+    Opens through `store/db.py:open_read_only` (PR #461), not a bare `mode=ro`: a plain
+    `mode=ro` open refuses "unable to open database file" on a store whose WAL has been
+    checkpointed away and its side files removed — cold, correct data, the exact state this
+    section exists to describe. `store.db` is stdlib-only, so the import costs nothing a
+    cold clone does not already have, and it is declared in SOURCES below so a rename fails
+    the audit instead of silently taking this block down.
     """
     out = []
     for name, absent in (("inventory", "nothing captured yet"), ("runs", "no identify run yet")):
@@ -1120,9 +1135,9 @@ def store() -> List[str]:
                   if (directory / n).is_file()]
         if database.is_file():
             try:
-                import sqlite3
+                from store import db
 
-                conn = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+                conn = db.open_read_only(database)
                 cards = conn.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
                 boxes = conn.execute("SELECT COUNT(*) FROM boxes").fetchone()[0]
                 conn.close()

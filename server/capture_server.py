@@ -6428,11 +6428,25 @@ def _answer_target(
     return card, holders, offering, governing, chosen, offered_condition
 
 
-# How many catalog rows one lookup may return. Nine because `app/src/ReviewQueue.tsx` keys
-# candidates on the digits and stops at `MAX_KEYED_CANDIDATES = 9`; a tenth row would draw a
-# blank chip and be mouse-only, which is the trap `docs/DESIGN.md` records for that screen.
-# The count is reported alongside so a truncated search says so rather than looking complete.
-CATALOG_LOOKUP_LIMIT = 9
+# HOW MANY CATALOG ROWS ONE LOOKUP MAY RETURN ON THE WIRE — an EGREGIOUS-count ceiling,
+# not the keyboard's own limit. Until 2026-09-24 this was 9, the same number
+# `app/src/ReviewQueue.tsx`'s `MAX_KEYED_CANDIDATES` keys the digits to, and the two were
+# one constant doing two jobs: `GET /review/4/383/catalog?q=Calm%20Rune` found 16 rows and
+# returned 9, silently, with no way to reach the other 7. The owner's ruling: "the search
+# shouldn't cut off i should see all rows that matched unless it's an egregious amount ...
+# or a 'show 10 more' etc." The keyboard limit stays 9 — `MAX_KEYED_CANDIDATES` is
+# untouched, a tenth row is still mouse-only — but that is a CLIENT fact about a phone's
+# ten digit keys, never a reason to drop the eleventh row on the wire. `CatalogPanel` shows
+# nine at a time and reveals ten more per press, over rows this route already sent.
+#
+# MEASURED, THE SAME WAY `WIDEN_BY_CLAIM_LIMIT` IS: the widest real group one folded name
+# reaches in this game's committed catalogue is 16 (`Calm Rune`, Near-Mint-scoped, six
+# Runes tie it). 200 is generous headroom over that for a genuinely broad query — a bare
+# rarity or set word with no name term narrows to every row that condition-scoped set
+# stocks — and it is the point past which "show 10 more" twenty times is not a search
+# result any more, it is the whole catalogue. `found` always reports the true total and
+# `truncated` says whether this ceiling bit, so a truncated search still looks like one.
+CATALOG_EGREGIOUS_LIMIT = 200
 
 
 def _near_mint_conditions(game: str) -> Set[str]:
@@ -6629,7 +6643,7 @@ def _split_catalog_query(
     return " ".join(name_terms), frozenset(set_folds), frozenset(rarity_folds)
 
 
-def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
+def _catalog_matches(catalog, game: str, query: str, card=None) -> List[dict]:
     """Catalog rows a human might mean by `query`, best first.
 
     THE MATCH IS DELIBERATELY LOOSE IN BOTH DIRECTIONS, and that is what makes it useful for
@@ -6655,6 +6669,17 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
     scoped row is a candidate before the filter narrows it to that set — a query that is
     ENTIRELY a printing word browses the printing, which is the defect's own fix rather than
     an empty list.
+
+    THE CARD'S OWN CAPTURE CLAIMS RANK AHEAD OF THE TEXT MATCH (D23 job (c),
+    `join.claim_matches`/`join.rank_by_claims` — the SAME function
+    `pipeline/join.py:join_batch` calls for the queue's own suggestions, so a claim is
+    scored once). THE CLAIM HAS TO GO FIRST, NOT SECOND: a claimed printing's own catalogue
+    name often carries a qualifier the text rank alone would bury — `Calm Rune (R02a)`
+    scores worse than the plain `Calm Rune` against an identical query, although it is
+    exactly the row a `Showcase` claim names. Ranking by text quality first would keep
+    doing precisely what the owner's report was about. A blank claim on every axis leaves
+    every row scoring zero, so the text rank decides exactly as it always did — this is
+    additive over the ordinary search, not a replacement for it.
     """
     name_query, set_folds, rarity_folds = _split_catalog_query(query, catalog)
     wanted = join.name_index_key(name_query)
@@ -6664,7 +6689,7 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
     # string rather than as `R02` alone).
     number = join.number_index_key(name_query)
     conditions = _near_mint_conditions(game)
-    scored: List[Tuple[int, str, dict]] = []
+    scored: List[Tuple[int, int, str, dict]] = []
     # `Catalog.from_export` has already filtered `export.rows` to this game's product
     # line, so walking them here cannot reach another game's rows. There is no
     # every-row accessor on `Catalog` and this deliberately does not add one: the
@@ -6699,9 +6724,9 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
             rank = 3  # the read carries more than the title does
         else:
             continue
-        scored.append((rank, name, row))
-    scored.sort(key=lambda item: (item[0], item[1]))
-    return [_catalog_row(row) for _rank, _name, row in scored]
+        scored.append((-join.claim_matches(row, card), rank, name, row))
+    scored.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [_catalog_row(row) for _claim, _rank, _name, row in scored]
 
 
 def _catalog_row(row) -> dict:
@@ -7027,16 +7052,16 @@ def do_review_catalog(box: int, index: int, query: str) -> dict:
             "found": 0,
             "truncated": False,
         }
-    matches = _catalog_matches(catalog, game, term)
+    matches = _catalog_matches(catalog, game, term, card)
     return {
         "box": box,
         "index": index,
         "game": game,
         "query": term,
         "searched": bool(query.strip()),
-        "rows": matches[:CATALOG_LOOKUP_LIMIT],
+        "rows": matches[:CATALOG_EGREGIOUS_LIMIT],
         "found": len(matches),
-        "truncated": len(matches) > CATALOG_LOOKUP_LIMIT,
+        "truncated": len(matches) > CATALOG_EGREGIOUS_LIMIT,
     }
 
 

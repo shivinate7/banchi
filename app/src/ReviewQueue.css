@@ -571,7 +571,7 @@
 .review-tag-name { background: var(--bn-surface-3); color: var(--bn-ink-2); }
 .review-tag-number { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line); color: var(--bn-ink-3); }
 .review-candidate-price {
-  font-family: var(--bn-font-display);
+  font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xl);
   font-weight: 800;
   font-variant-numeric: tabular-nums;

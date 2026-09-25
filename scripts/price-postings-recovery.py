@@ -2,9 +2,14 @@
 """How much price HISTORY can be recovered from what already survives, read-only, against
 the owner's real store (D243).
 
-READ-ONLY BY CONSTRUCTION. This opens `inventory/store.sqlite` with `sqlite3.connect(...,
-uri=True)` in mode `ro` — a connection SQLite itself refuses to write through — and it never
-imports `store.db`, so it can never call `_ensure_schema`'s migration path either. It reads
+READ-ONLY BY CONSTRUCTION. This opens `inventory/store.sqlite` through
+`store/db.py:open_read_only` — a connection SQLite itself refuses to write through, and the
+one door that never runs `_ensure_schema`'s migration path (PR #461). It used to open its own
+bare `mode=ro` connection instead, on the theory that avoiding `store.db` entirely was the
+safer way to guarantee no migration ever ran — but a bare `mode=ro` open refuses "unable to
+open database file" on a store whose WAL has been checkpointed away and its side files
+removed, which is a normal, cold, fully-committed store, not a damaged one. `open_read_only`
+gives the same read-only, non-migrating guarantee without that failure. It reads
 `inventory/markdowns/*/receipt.txt` and `.../import.csv` as plain files, never through
 `cli/cmd_reprice.py`, and it runs no `pkmnscan` command of any kind.
 
@@ -28,10 +33,14 @@ import sqlite3
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from store import db  # noqa: E402
+
 
 def _ro_connect(db_path: Path) -> sqlite3.Connection:
-    uri = f"file:{db_path}?mode=ro"
-    return sqlite3.connect(uri, uri=True)
+    return db.open_read_only(db_path)
 
 
 def count_pushed_events(conn: sqlite3.Connection) -> tuple:
