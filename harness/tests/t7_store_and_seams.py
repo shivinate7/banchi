@@ -207,7 +207,7 @@ from decimal import Decimal
 from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -1422,6 +1422,92 @@ def check_open_read_only(checks: Checks) -> None:
             not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
             "and opening it cold created no side file",
         )
+
+
+def check_open_read_only_race(checks: Checks) -> None:
+    """`open_read_only` checks the WAL, then opens, in two steps — and a commit that lands
+    between them sends it down the `immutable=1` path anyway, then misses that exact commit.
+    SQLite's own docs for `immutable`: a file that changes under an immutable connection
+    "might return incorrect query results and/or SQLITE_CORRUPT errors".
+
+    FORCED DETERMINISTICALLY, NO THREAD AND NO SLEEP. `sqlite3.connect` is monkeypatched to
+    land a commit the instant `open_read_only` asks for the `immutable=1` connection — the
+    race landing on purpose, every run, in the exact gap between the failed plain `mode=ro`
+    open and the immutable fallback, rather than the small chance a real thread interleaving
+    would give it.
+
+    THE COMMIT MUST STAY IN THE WAL, NOT AUTO-CHECKPOINT AWAY ON ITS OWN WRITER'S CLOSE — a
+    plain "open, write, close" with nothing else holding the file open lets SQLite checkpoint
+    it into the main file right there, which would prove nothing: an `immutable=1` open right
+    after would read it from the main file regardless, race or no race. `check_open_read_only`
+    above already holds the WAL open the same way — a `holder` connection with a `SELECT`
+    inside an open transaction — for exactly this reason, and this reuses it.
+    """
+    checks.note("")
+    checks.note("READ-ONLY DOOR RACE — a commit lands between the check and the open")
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        db.connect(directory).close()
+        target = db.path(directory)
+
+        # THE COLD STATE, `check_open_read_only`'s own recipe: no side files, so
+        # `open_read_only`'s plain `mode=ro` attempt is guaranteed to refuse and reach the
+        # immutable fallback this test targets.
+        folder = sqlite3.connect(str(target), isolation_level=None)
+        folder.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        folder.close()
+        for side in ("-wal", "-shm"):
+            Path(f"{target}{side}").unlink(missing_ok=True)
+
+        real_connect = sqlite3.connect
+        fired = {"n": 0}
+        state: Dict[str, Optional[sqlite3.Connection]] = {"holder": None}
+
+        def racing_connect(database, *args, **kwargs):
+            if fired["n"] == 0 and "immutable=1" in str(database):
+                fired["n"] += 1
+                # A live connection that keeps a read snapshot open through the rest of
+                # this test — the thing that stops the writer's own close from
+                # auto-checkpointing its commit into the main file. Closed in `finally`
+                # below, never leaked.
+                holder = real_connect(str(target), isolation_level=None)
+                holder.execute("BEGIN")
+                holder.execute("SELECT count(*) FROM meta").fetchone()
+                state["holder"] = holder
+                writer = real_connect(str(target), isolation_level=None)
+                writer.execute(
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES ('race', 'landed')"
+                )
+                writer.close()
+            return real_connect(database, *args, **kwargs)
+
+        sqlite3.connect = racing_connect
+        try:
+            door = db.open_read_only(target)
+        finally:
+            sqlite3.connect = real_connect
+
+        try:
+            checks.equal(fired["n"], 1, "the race actually fired once, at the immutable open")
+            checks.ok(
+                Path(f"{target}-wal").stat().st_size > 0,
+                "and the fixture really left the commit stranded in the WAL, unchecked "
+                "against a version that never reaches the immutable branch at all",
+            )
+            checks.equal(
+                door.execute("SELECT value FROM meta WHERE key = 'race'").fetchone(),
+                ("landed",),
+                "a commit landing between the failed plain open and the immutable fallback "
+                "is still seen, never served from a stale immutable connection that missed "
+                "it",
+            )
+            door.close()
+        finally:
+            holder = state["holder"]
+            if holder is not None:
+                holder.execute("ROLLBACK")
+                holder.close()
 
 
 def check_store_of_record(checks: Checks) -> None:
@@ -32813,6 +32899,7 @@ def run() -> Result:
     check_store(checks)
     check_set_and_rarity(checks)
     check_open_read_only(checks)
+    check_open_read_only_race(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
     check_server_routes(checks)

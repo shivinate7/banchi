@@ -1510,35 +1510,70 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     NOT `connect`. `connect` always runs `_ensure_schema`, so a preview that opened the store
     through it would PERFORM the migration it claims to preview. Every reader that must not
     migrate opens here instead: `cli/cmd_cards.py`'s previews, `scripts/identity-replay.py`,
-    `scripts/d240-tolerance-fit.py` and `scripts/cid-selftest.py`.
+    `scripts/d240-tolerance-fit.py`, `scripts/cid-selftest.py`, `scripts/status.py`'s store
+    census and `scripts/price-postings-recovery.py` — the last two used to open a bare
+    `mode=ro` connection directly, which fails on exactly the cold, fully-committed state
+    this door exists to read (see the paragraph below).
 
     `mode=ro` ALWAYS. SQLite refuses every write through this connection, and the database
     file is never changed.
 
-    `immutable=1` ONLY WHEN THE WAL IS EMPTY OR ABSENT. `_open` above puts the store in WAL
-    mode. A commit lands in `store.sqlite-wal` first. It reaches the main file only at a
-    checkpoint, and a checkpoint runs when the last connection closes. `immutable=1` tells
-    SQLite the file cannot change, so SQLite never reads the WAL, and every commit not yet
-    checkpointed is invisible. While any other connection is open (a live capture server,
-    or an open `Store.read()` snapshot), an always-immutable door read a store older than
-    its last commit. Measured: `cards identity --write` found 0 SKUs in a `skus` table that
-    a committed fill had just written, and bound nothing. T7 failed on CI for this reason.
+    PLAIN `mode=ro` IS TRIED FIRST, ALWAYS, BECAUSE IT IS ALREADY CORRECT WHENEVER IT OPENS.
+    `_open` above puts the store in WAL mode. A commit lands in `store.sqlite-wal` first. It
+    reaches the main file only at a checkpoint, and a checkpoint runs when the last connection
+    closes. Plain `mode=ro` reads the WAL through the `-shm` index a live writer already
+    keeps, so it sees every commit, checkpointed or not, and it creates no file of its own.
+    It only refuses — "unable to open database file", measured on SQLite 3.54 — when the
+    store has no side files at all: a cold, fully-checkpointed store, or a fresh `.backup`
+    copy (the backup API folds committed WAL pages into the copy's own main file). In that
+    one state every commit is already IN the main file, so `immutable=1` is exact, and it is
+    the only case this function falls back to it.
 
-    Plain `mode=ro` reads the WAL through the `-shm` index a live writer already keeps, so
-    it creates no file there. It cannot open a WAL store that has no side files at all
-    ("unable to open database file", measured on SQLite 3.54). In that state every commit
-    is already in the main file, so `immutable=1` is exact, and it writes nothing. A
-    `.backup` copy is that state too: the backup API copies committed WAL pages into the
-    copy's own main file.
+    `sqlite3.connect(...)` ITSELF NEVER RAISES THAT ERROR — IT IS LAZY. SQLite does not touch
+    the file, the WAL or the side files until the first statement runs, so a bare `connect()`
+    on a store with no side files SUCCEEDS and only the first read on it fails. A version of
+    this function that only called `connect()` and returned would never see the failure it
+    means to catch, and would hand every caller a connection that raises on its first real
+    query instead. `PRAGMA schema_version` is the first statement here, for exactly that
+    reason: the cheapest read that forces the open, on any store, schema or none.
 
-    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves both halves.
+    THE FALLBACK REOPENS ITS OWN CHECK, BECAUSE THE FIRST CHECK IS THE FAILED OPEN ABOVE, AND
+    TIME PASSES BETWEEN A FAILED OPEN AND THE NEXT ONE. A commit landing in that gap creates
+    `store.sqlite-wal` where a moment ago there was none, and an `immutable=1` connection
+    opened after that never rereads it — SQLite's own docs for `immutable`: a file that
+    changes under an immutable connection "might return incorrect query results and/or
+    SQLITE_CORRUPT errors". Measured before this closed: `cards identity --write` found 0
+    SKUs in a `skus` table a committed fill had just written, and bound nothing. T7 failed on
+    CI for this reason. So the fallback re-checks the WAL immediately AFTER opening
+    `immutable=1`, not before: if a commit reached it after all, that immutable snapshot is
+    exactly the stale one this whole function exists to refuse, so it is closed and the
+    plain `mode=ro` open is tried again — which now succeeds, because the commit that raced
+    it left side files behind for it to read.
+
+    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves the store half.
+    `check_open_read_only_race` forces the gap deterministically, by monkeypatching
+    `sqlite3.connect` to land a commit the instant this function asks for the `immutable=1`
+    connection, and proves it is caught rather than served stale.
     """
     if not db_path.is_file():
         raise FileNotFoundError(f"no store at {db_path}")
     wal = Path(f"{db_path}-wal")
-    if wal.is_file() and wal.stat().st_size > 0:
-        return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    return sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+    while True:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            conn.execute("PRAGMA schema_version")  # forces the lazy open now, not later
+            return conn
+        except sqlite3.OperationalError as exc:
+            conn.close()
+            if "unable to open database file" not in str(exc):
+                raise
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        if not (wal.is_file() and wal.stat().st_size > 0):
+            return conn
+        # THE GAP FIRED: a commit landed between the failed plain open above and this
+        # immutable one. Side files exist now, so the retry's plain `mode=ro` open succeeds
+        # and reads the commit correctly — never trust the immutable connection we just made.
+        conn.close()
 
 
 def connect(directory: Path, *, locked: bool = False) -> sqlite3.Connection:
