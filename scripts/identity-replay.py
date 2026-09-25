@@ -7,6 +7,9 @@ touches the copy it is given.
     sqlite3 /path/to/store.sqlite ".backup /tmp/copy.sqlite"
     python3 scripts/identity-replay.py --store /tmp/copy.sqlite
 
+Put `inventory/.exports/` and `inventory/.live/` beside the `.backup` copy too. 41 listing-only
+SKUs are only in `.live/`. Without them, the SKU-IN-TABLE check fails.
+
 READ-ONLY, `store/db.py:open_read_only` — the same door `cli/cmd_cards.py:_read_only` opens, so this
 never calls `db.connect` and never performs the schema migration a preview must not perform.
 Cached exports under `inventory/.exports/` are read too (only by `pipeline/identity_binding`'s
