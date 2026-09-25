@@ -105,13 +105,20 @@ make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line sp
                     #   component DRAWS it, and the expression that decides whether it is
                     #   drawn. A renderer — writes nothing, gates nothing, derived every run.
                     #   READ IT BEFORE BRIEFING A SCREEN CHANGE.
-make map-fix        # THE ONE GENERATOR (D18, amended). Adds the decision ids a file cites
-                    #   to its `governed_by` in docs/map.py — the answer `make docs-audit`'s
-                    #   `repo map` row already computes, imported from that row rather than
-                    #   reimplemented. IT GATES NOTHING and is on no hook. Run it when the row
-                    #   refuses you; the row is still what says you are right. Previews.
+make map-fix        # THE ONE GENERATOR INTO A DOC (D18, amended). Adds the decision ids a
+                    #   file cites to its `governed_by` in docs/map.py — the answer
+                    #   `make docs-audit`'s `repo map` row already computes, imported from that
+                    #   row rather than reimplemented. IT GATES NOTHING and is on no hook. Run it
+                    #   when the row refuses you; the row is still what says you are right.
+                    #   Previews.
                     #   ARGS=--write applies. It only ever ADDS. `make map-fix-selftest`
                     #   proves it, deliberately NOT in `make check`.
+make offenders-prune # a generator that only DELETES (D18). It removes the stale entries from
+                    #   the two offender lists (`scripts/ste-offenders.json`,
+                    #   `scripts/typed-interpunct-allow.json`). It re-keys a listed file that
+                    #   git's rename detection says moved. It never adds an entry. It reads
+                    #   with the rows' own functions. Previews. ARGS=--write applies. On no
+                    #   hook. `make offenders-prune-selftest` proves it, NOT in `make check`.
 make harness        # all TEN verification tests (T1-T9 and T11); the Stop hook runs it at
                     #   turn end. RECOUNT from harness/run.py's TESTS list. THERE IS NO T10:
                     #   that id belongs to the shelved IMB encoder (DEBT26), and this repo

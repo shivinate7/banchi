@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest offenders-prune offenders-prune-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -61,9 +61,13 @@ help:
 	@echo "  make harness      T1-T8 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
 	@echo "  make map-fix      add the ids a file cites to its governed_by in docs/map.py."
-	@echo "                    THE ONE GENERATOR: it writes and gates nothing (D18)."
+	@echo "                    THE ONE GENERATOR INTO A DOC: it gates nothing (D18)."
 	@echo "                    Previews. ARGS=--write applies. ARGS=--selftest proves it."
 	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
+	@echo "  make offenders-prune  delete stale entries from the two offender lists, and"
+	@echo "                    re-key a renamed file. Never adds one. Gates nothing (D18)."
+	@echo "                    Previews. ARGS=--write applies."
+	@echo "  make offenders-prune-selftest  that pruner, in memory and in a throwaway repo."
 	@echo "  make text-density  on-demand cut table over the text checks' own seeded screens"
 	@echo "                    (D-text-shape-checks). Never a gate. ARGS=\"--route '#/x'\"."
 	@echo "  make orient       which component renders the thing, and what selects it."
@@ -505,7 +509,7 @@ docs-audit:
 	status=$$?; \
 	if [ $$status -eq 1 ]; then exit 1; fi
 
-# THE ONE GENERATOR IN THIS REPO, AND IT GATES NOTHING (D18, amended 2026-09-17). It adds
+# THE ONE GENERATOR INTO A DOC, AND IT GATES NOTHING (D18, amended 2026-09-17). It adds
 # the decision ids a file cites to that file's `governed_by` in docs/map.py — the answer
 # `make docs-audit`'s `repo map` row already computes to decide the commit. It imports that
 # row's own `cited_decisions()` rather than reimplementing it, so the two cannot disagree.
@@ -522,6 +526,21 @@ map-fix:
 
 map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
+
+# A DELETING GENERATOR, AND IT GATES NOTHING (D18; D-ratchets-become-offender-lists). It deletes
+# the STALE entries from the two shrinking offender lists, scripts/ste-offenders.json and
+# scripts/typed-interpunct-allow.json, and re-keys a file that git's rename detection says
+# moved. It never adds an entry. It reads with the rows' own functions, imported, so the two
+# cannot disagree about what is stale. Previews. ARGS=--write applies.
+#
+# NOT A PREREQUISITE OF ANYTHING, never wired to a hook, and its self-test is not in
+# `make check`, on `map-fix`'s precedent above: the rows that read these lists already run on
+# every commit.
+offenders-prune:
+	@python3 scripts/offenders-prune.py $(ARGS)
+
+offenders-prune-selftest:
+	@python3 scripts/offenders-prune.py --selftest
 
 # THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D194): a
 # REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one

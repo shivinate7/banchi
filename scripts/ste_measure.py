@@ -15,8 +15,10 @@ WHAT AN OFFENDER IS. One SENTENCE that breaks one rule, named by a hash of its o
 `offender_identity`). Two semicolons in one sentence are one STE006 offender. The same
 sentence written twice in one file is two offenders, and its entry is listed twice. An edit
 that changes the sentence changes its identity, so a sentence cannot be reworded and stay
-excused. A reflow cannot move it: whitespace is collapsed first. Code spans and decision ids
-are folded before the hash, so a claim that turns a slug into a number moves nothing.
+excused. A reflow cannot move it: whitespace is collapsed first, and a code span that
+crosses a line break is hidden over the joined paragraph, never line by line
+(`join_code_span_breaks`). Code spans and decision ids are folded before the hash, so an edit
+inside a code span, or a claim that turns a slug into a number, moves nothing.
 
 THE RULER IS STILL PRINTED, AND GATES NOTHING. Errors per thousand words, over a PLAIN word
 count (`text.split()`, matching `wc -w`), per bucket and repo-wide. It is the ruler
@@ -294,10 +296,85 @@ def fold(text: str) -> str:
     return " ".join(_DECISION_ID.sub(DECISION_FOLD, text).split())
 
 
+_COMMENT = re.compile(r"<!--.*?-->")
+
+
+def _line_content(ste_lint, raw: str) -> str:
+    """One source line as the linter's `segment_markdown` reads it before it picks a kind:
+    HTML comments removed, right side stripped, a blockquote marker taken off."""
+    content = _COMMENT.sub("", raw.rstrip("\n")).rstrip()
+    quote = ste_lint.BLOCKQUOTE.match(content)
+    return quote.group(1) if quote else content
+
+
+def join_code_span_breaks(text: str, mode: str = "descriptive") -> str:
+    """`text`, with every line break that falls INSIDE a code span removed: the lines a code
+    span runs across are joined into one line, with one space where each break was.
+
+    WHY. The vendored linter masks a code span one LINE at a time (`ste_lint.Masker`, whose
+    inline-code pattern stops at a newline). A span that crosses a line break is therefore
+    read as prose on one layout and hidden on another. Its words count toward STE001, a
+    semicolon inside it is an STE006 finding, and the sentence's hash reads its text. So a
+    reflow that moved a break into or out of such a span changed the findings and the
+    identity of a sentence whose prose did not change (the review of
+    D-ratchets-become-offender-lists measured 518 such lines in 95 files).
+
+    WHAT IT JOINS, AND NOTHING ELSE. Within one prose or list paragraph, as the linter's own
+    `segment_markdown` groups it, a break sits inside a code span when the backticks before
+    it are odd in number and a later backtick in the paragraph closes the span. That is the
+    linter's own pairing rule (a backtick opens, the next one closes) applied to the joined
+    paragraph instead of to each line. The first line of a joined run is kept whole. Each
+    later line gives only its body, the text the linter would read, so a blockquote marker or
+    an indent does not land inside the span. A break outside every code span is left alone,
+    so a file with no such span comes back unchanged.
+
+    Every caller that feeds the linter reads the SAME joined text (`measure`), so a finding's
+    line and column, the exemption recognisers' line, and the sentence `_Sentences` locates
+    all agree with each other.
+    """
+    ste_lint = load_ste_lint()
+    lines = text.splitlines()
+    paragraphs, _, _ = ste_lint.segment_markdown(lines, mode)
+    # line number (1-indexed) -> the line numbers joined onto its end, in order.
+    joins: Dict[int, List[int]] = {}
+    for paragraph in paragraphs:
+        if paragraph.kind not in ("prose", "list") or len(paragraph.segments) < 2:
+            continue
+        linenos = [seg.lineno for seg in paragraph.segments]
+        ticks = [_line_content(ste_lint, lines[n - 1]).count("`") for n in linenos]
+        remaining = sum(ticks)
+        seen = 0
+        head = linenos[0]
+        for index, lineno in enumerate(linenos[:-1]):
+            seen += ticks[index]
+            remaining -= ticks[index]
+            if seen % 2 == 1 and remaining > 0:
+                joins.setdefault(head, []).append(linenos[index + 1])
+            else:
+                head = linenos[index + 1]
+    if not joins:
+        return text
+
+    joined_away = {n for tail in joins.values() for n in tail}
+    out: List[str] = []
+    for lineno, raw in enumerate(lines, start=1):
+        if lineno in joined_away:
+            continue
+        if lineno in joins:
+            bodies = [_line_content(ste_lint, lines[n - 1]).lstrip() for n in joins[lineno]]
+            raw = " ".join([raw.rstrip()] + bodies)
+        out.append(raw)
+    return "\n".join(out) + ("\n" if text.endswith("\n") else "")
+
+
 def offender_identity(sentence: str) -> str:
     """The hash half of an offender's key. `sentence` is the linter's masked text, so a code
     span reads as `CODE` (`ste_lint.strip_placeholders`) and an edit inside one moves
-    nothing: the prose is the subject."""
+    nothing: the prose is the subject.
+
+    THE CODE SPANS ARE HIDDEN OVER THE JOINED PARAGRAPH, NOT PER LINE. `measure` hands the
+    linter `join_code_span_breaks(text)`, so a span that crossed a line break in the source is
+    one placeholder here too, exactly as if it sat on one line."""
     ste_lint = load_ste_lint()
     folded = fold(ste_lint.strip_placeholders(sentence))
     return hashlib.sha1(folded.encode("utf-8")).hexdigest()[:IDENTITY_HEX]
@@ -434,6 +511,11 @@ def measure(paths: Sequence[Tuple[str, str]]) -> Measurement:
         words_by_bucket[bucket] = words_by_bucket.get(bucket, 0) + words
         words_by_bucket[REPO_BUCKET] = words_by_bucket.get(REPO_BUCKET, 0) + words
 
+        # THE LINTER READS THE JOINED TEXT, and so does everything below that turns a finding
+        # into a sentence, so a code span across a line break is hidden exactly as one on a
+        # single line (`join_code_span_breaks`). The word count above keeps the file as
+        # written: joining changes no whitespace-separated token.
+        text = join_code_span_breaks(text, mode)
         lines = text.splitlines()
         kept: List[Finding] = []
         for raw in linter.check_text(relpath, text):

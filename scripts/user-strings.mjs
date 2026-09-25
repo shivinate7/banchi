@@ -66,7 +66,9 @@
  *     concatenation into a `const`, then returned and interpolated by reference elsewhere) —
  *     the same data-flow gap the header names, one call shape narrower.
  *
- * Prints one JSON array to stdout: `[{file, line, text}, …]`, file relative to the repo root.
+ * Prints one JSON array to stdout: `[{file, line, text, scope}, …]`, file relative to the repo
+ * root. `scope` is the nearest named function, class or binding around the string (see
+ * `scopeOf`).
  * Never writes. `--self-test` is not here — the auditor's own `--self-test` drives this
  * script by shelling out to it over synthetic fixtures, the same split
  * `scripts/screenshot.mjs` and `scripts/docs-audit.py` already keep.
@@ -139,6 +141,32 @@ function literalsIn(expr) {
   return []
 }
 
+/** The name of the nearest NAMED declaration around `node`: a function, a method, a class,
+ *  a `const X = () => …` binding (a component or helper written as an arrow), or a
+ *  module-level `const X = …` (a table). A local variable inside a function is NOT a scope,
+ *  so renaming one moves nothing. Anonymous callbacks are passed through to the name around
+ *  them. `(module)` when nothing names it. `typed interpunct` keys an entry by this and the text together, so a listed bare
+ *  separator such as `·` excuses that string in that one function, never the same string
+ *  typed anywhere else in the file. A line number would do the same job and rot on the next
+ *  edit above it. */
+function scopeOf(node) {
+  for (let cur = node.parent; cur; cur = cur.parent) {
+    if (
+      (ts.isFunctionDeclaration(cur) || ts.isClassDeclaration(cur) || ts.isMethodDeclaration(cur)) &&
+      cur.name
+    ) {
+      return cur.name.getText()
+    }
+    if (ts.isVariableDeclaration(cur) && ts.isIdentifier(cur.name)) {
+      const init = cur.initializer
+      const isFunction = init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))
+      const atModule = cur.parent?.parent && ts.isSourceFile(cur.parent.parent.parent)
+      if (isFunction || atModule) return cur.name.text
+    }
+  }
+  return '(module)'
+}
+
 function walkFile(file, text) {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const hits = []
@@ -147,7 +175,7 @@ function walkFile(file, text) {
   function push(node, raw) {
     const trimmed = raw.replace(/\s+/g, ' ').trim()
     if (trimmed === '') return
-    hits.push({ line: lineOf(node.getStart(sf)), text: trimmed })
+    hits.push({ line: lineOf(node.getStart(sf)), text: trimmed, scope: scopeOf(node) })
   }
 
   function collectObjectStrings(node) {
@@ -228,7 +256,12 @@ function extract(srcDir, rootDir) {
   for (const file of files) {
     const text = fs.readFileSync(file, 'utf8')
     for (const hit of walkFile(file, text)) {
-      out.push({ file: path.relative(rootDir, file).split(path.sep).join('/'), line: hit.line, text: hit.text })
+      out.push({
+        file: path.relative(rootDir, file).split(path.sep).join('/'),
+        line: hit.line,
+        text: hit.text,
+        scope: hit.scope,
+      })
     }
   }
   return out

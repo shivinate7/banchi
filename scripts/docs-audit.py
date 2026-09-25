@@ -414,7 +414,22 @@ def _walk(root: Path, suffixes: Tuple[str, ...]) -> List[Path]:
 
 
 def markdown_files() -> List[Path]:
-    return _walk(ROOT, (".md",))
+    """Every TRACKED markdown file: the index in staged mode, `git ls-files` otherwise.
+
+    A file git does not track is no part of the repo's prose, so a scratch `.md` left in the
+    worktree never fails a row. Before this, the worktree walk read it, and a scratch file
+    with one semicolon failed `ste offenders` by hand while the pre-commit hook, which reads
+    the index, passed. A file that is tracked but deleted from disk is not read either: the
+    walk never finds it. With no git answer at all (not a checkout, or git missing), it
+    falls back to the walk and reads every file it finds, which is the older behaviour.
+    """
+    found = _walk(ROOT, (".md",))
+    if _INDEX_PATHS is not None:
+        return found
+    tracked = _nul_list("ls-files", "-z")
+    if not tracked:
+        return found
+    return [path for path in found if rel(path) in tracked]
 
 
 def python_files() -> List[Path]:
@@ -13267,13 +13282,25 @@ def _typed_interpunct_hits(strings: List[Dict[str, object]]) -> List[Finding]:
     return hits
 
 
+def typed_interpunct_entry(item: Dict[str, object]) -> str:
+    """One list entry: `"<scope>: <string>"`.
+
+    THE SCOPE IS PART OF THE KEY, so one entry excuses one string in one named function
+    (`scripts/user-strings.mjs:scopeOf`: the nearest function, class, arrow binding or
+    module-level constant). Keyed by the string alone, a bare separator such as `·` excused
+    that string ANYWHERE in the file: remove the listed `.join(' · ')` and type a new one in
+    another component, and the row stayed green. A line number would pin the place more
+    tightly, and would rot on the next edit above it."""
+    return f"{item.get('scope') or '(module)'}: {item['text']}"
+
+
 def _typed_interpunct_found(strings: List[Dict[str, object]]) -> Dict[str, Dict[str, List[str]]]:
-    """file -> {TYPED_INTERPUNCT_RULE: [every offending string, once per occurrence]}."""
+    """file -> {TYPED_INTERPUNCT_RULE: [every offending entry, once per occurrence]}."""
     found: Dict[str, Dict[str, List[str]]] = {}
     for item in strings:
-        text = str(item["text"])
-        if _INTERPUNCT_RE.search(text):
-            found.setdefault(str(item["file"]), {}).setdefault(TYPED_INTERPUNCT_RULE, []).append(text)
+        if _INTERPUNCT_RE.search(str(item["text"])):
+            found.setdefault(str(item["file"]), {}).setdefault(TYPED_INTERPUNCT_RULE, []).append(
+                typed_interpunct_entry(item))
     return {file: {rule: sorted(texts) for rule, texts in per.items()} for file, per in found.items()}
 
 
@@ -13294,8 +13321,8 @@ def check_typed_interpunct(report: Report) -> None:
     each.
 
     A RULE, AND A SHRINKING LIST, NEVER A COUNT. Every typed dot is a finding unless
-    `scripts/typed-interpunct-allow.json` names that exact string in that file, once per
-    occurrence. A listed entry that matches nothing is a finding too (stale: delete it). An
+    `scripts/typed-interpunct-allow.json` names that exact string in that file and in that
+    named function (`typed_interpunct_entry`), once per occurrence. A listed entry that matches nothing is a finding too (stale: delete it). An
     entry the list at the merge-base did not hold is refused (growth). See the section header.
     """
     strings = _run_user_strings(list(TYPED_INTERPUNCT_EXTRACT_ARGS))
@@ -13333,7 +13360,8 @@ def check_typed_interpunct(report: Report) -> None:
     unlisted, stale = _offender_diff(found, listed)
     for file, _rule, text in unlisted:
         lines = sorted({str(item["line"]) for item in strings
-                        if str(item["file"]) == file and str(item["text"]) == text}, key=int)
+                        if str(item["file"]) == file and typed_interpunct_entry(item) == text},
+                       key=int)
         findings.append(Finding(
             f"{file}:{lines[0]}" if len(lines) == 1 else file,
             f"types a dot where a person reads it, and {allow_rel} does not list it: {text!r}"
@@ -13410,8 +13438,8 @@ def check_ste_offenders(report: Report) -> None:
     `scripts/ste-offenders.json` names it (D226; D-ratchets-become-offender-lists).
 
     READS THE WHOLE TRACKED MARKDOWN TREE EVERY RUN, staged or not — `markdown_files()`
-    already resolves to the committed INDEX under `--staged`, so this is the tree the commit
-    will carry. The list's subject is the corpus, not the files one commit touches: a stale
+    resolves to the committed INDEX under `--staged` and to `git ls-files` otherwise, so this
+    is the tree the commit will carry and a scratch file git does not track is never read. The list's subject is the corpus, not the files one commit touches: a stale
     entry in a file the commit did not touch is still stale.
 
     THE LIST'S `rules` MUST BE THE LINTER'S OWN ERROR CODES (`ste_measure.error_codes`), read
@@ -20542,6 +20570,42 @@ def self_test() -> int:
                "carries no interpunct character, so it is not a HIT — the widening reads every "
                "`.join(<literal>)` separator, and the character test is what decides a finding")
 
+        # ONE ENTRY EXCUSES ONE STRING IN ONE NAMED FUNCTION. The review's probe: a listed bare
+        # `·` join removed from one component, and a new one typed in another, stayed green
+        # while the key was the string alone.
+        def scoped(body: str) -> Dict[str, Dict[str, List[str]]]:
+            scope_dir = fixture_dir / "scoped"
+            scope_dir.mkdir(exist_ok=True)
+            (scope_dir / "Two.tsx").write_text(body)
+            got = _run_user_strings(["--dir", str(scope_dir), *TYPED_INTERPUNCT_EXTRACT_ARGS])
+            return _typed_interpunct_found(got or [])
+
+        two_components = (
+            "export function First(p: { a: string[] }) {\n"
+            "  return <p>{p.a.join(' · ')}</p>\n"
+            "}\n"
+            "export function Second(p: { a: string[] }) {\n"
+            "  return <p>{p.a.join(', ')}</p>\n"
+            "}\n"
+            "const helper = (a: string[]) => a.join(' · ')\n"
+        )
+        before = scoped(two_components)
+        ok(before == {"Two.tsx": {TYPED_INTERPUNCT_RULE: ["First: ·", "helper: ·"]}},
+           "each typed dot is keyed by the named function around it: a component, or an "
+           "arrow bound to a name", f"{before}")
+        moved_dot = scoped(two_components.replace("join(' · ')}</p>", "join(', ')}</p>", 1)
+                           .replace("join(', ')}</p>\n}\nconst", "join(' · ')}</p>\n}\nconst"))
+        unlisted, stale = _offender_diff(moved_dot, before)
+        ok(unlisted == [("Two.tsx", TYPED_INTERPUNCT_RULE, "Second: ·")]
+           and stale == [("Two.tsx", TYPED_INTERPUNCT_RULE, "First: ·")],
+           "RED: the listed dot removed from one component and the same bare `·` typed in "
+           "another is a NEW offender and a stale entry, not a pass", f"{unlisted} {stale}")
+        ok(_offender_diff(scoped(two_components.replace("First(p", "First(q")
+                                 .replace("p.a.join(' · ')", "q.a.join(' · ')")), before)
+           == ([], []),
+           "an edit elsewhere in the same function moves nothing: the key is the function's "
+           "name, never a line")
+
     # THE SHRINKING LIST'S OWN ARITHMETIC (D-ratchets-become-offender-lists), in memory: plain
     # dicts in, findings out, no file read and none written (D18). Each arm below is one of the
     # three failures the list exists for, or one of the two things it must let through.
@@ -20674,6 +20738,23 @@ def self_test() -> int:
         ok(not ste_measure._via(_finding("STE001", 1, 1, excerpt="via"), []),
            "the class is scoped to STE007 only, the same guard `VS Code` uses")
 
+        print("\nmarkdown_files: the tracked tree only, so a scratch file fails no row")
+        # Patched through `globals()`, never a `global` statement: this function may read
+        # both names earlier, and a `global` after a use is a syntax error.
+        here = globals()
+        saved_walk, saved_nul = here["_walk"], here["_nul_list"]
+        try:
+            here["_walk"] = lambda root, suffixes: [ROOT / "docs" / "kept.md", ROOT / "scratch.md"]
+            here["_nul_list"] = lambda *args: {"docs/kept.md", "README.md"}
+            ok(markdown_files() == [ROOT / "docs" / "kept.md"],
+               "RED before the fix: an untracked scratch .md in the worktree is not read",
+               f"{markdown_files()}")
+            here["_nul_list"] = lambda *args: set()
+            ok(markdown_files() == [ROOT / "docs" / "kept.md", ROOT / "scratch.md"],
+               "with no git answer it falls back to the walk and reads every file it finds")
+        finally:
+            here["_walk"], here["_nul_list"] = saved_walk, saved_nul
+
         print("\nste offenders: a sentence's identity survives what is not an edit to its prose")
 
         def _only(text):
@@ -20691,6 +20772,46 @@ def self_test() -> int:
         ok(_keys("The press writes `a` file; the row reads it back.\n")
            == _keys("The press writes `another` file; the row reads it back.\n"),
            "an edit inside a code span keeps its identity — the prose is the subject")
+
+        # A CODE SPAN THAT CROSSES A LINE BREAK. The linter masks one line at a time, so
+        # before `join_code_span_breaks` such a span read as prose on one layout and as code
+        # on the other. The review's own probe split `make down` over two lines in README.md.
+        span_one_line = "The press runs `make down` first; the row reads it back.\n"
+        span_layouts = {
+            "the span split over two lines": "The press runs `make\ndown` first; the row reads it back.\n",
+            "the span split and the sentence wrapped after it":
+                "The press runs `make\ndown` first;\nthe row reads it back.\n",
+            "the span split inside a blockquote":
+                "> The press runs `make\n> down` first; the row reads it back.\n",
+            "the span split inside a list item":
+                "- The press runs `make\n  down` first; the row reads it back.\n",
+        }
+        ok(len(_only(span_one_line)) == 1, "the one-line layout names one offender",
+           f"{_only(span_one_line)}")
+        for label, layout in span_layouts.items():
+            ok(_keys(layout) == _keys(span_one_line),
+               f"a reflow INTO a code span keeps the sentence listed ({label})",
+               f"{_keys(layout)} != {_keys(span_one_line)}")
+            ok(_keys(span_one_line) == _keys(layout),
+               f"the reflow back OUT of the span keeps it listed too ({label})")
+        ok(_keys("The press runs `make\nup` first; the row reads it back.\n")
+           == _keys(span_one_line),
+           "an edit inside a code span that crosses a line break keeps the identity")
+        ok(_only("The press runs `a;\nb` first and the row reads it back.\n") == []
+           and _only("The press runs `a; b` first and the row reads it back.\n") == [],
+           "a semicolon INSIDE a code span that crosses a line break is code, not an "
+           "offender — on both layouts, so the reflow neither adds nor removes a finding")
+        long_code = " ".join(f"w{i}" for i in range(20))
+        long_prose = "Here the press runs " + "`" + long_code + "`" + " and then it writes the row."
+        ok(_keys(long_prose.replace("w9 ", "w9\n") + "\n") == _keys(long_prose + "\n"),
+           "a span's words count as one on both layouts, so a sentence-length finding does "
+           "not appear or vanish with the break")
+        ok(ste_measure.join_code_span_breaks("Plain `code` here.\nNext line; more.\n")
+           == "Plain `code` here.\nNext line; more.\n",
+           "a file with no span across a break comes back byte for byte")
+        ok(ste_measure.join_code_span_breaks("An odd ` backtick\nnever closes.\n")
+           == "An odd ` backtick\nnever closes.\n",
+           "a backtick nothing closes joins nothing — the linter's own pairing rule")
         # BUILT FROM PARTS, never spelled: a citation-shaped token in this file is read as a
         # citation by `repo map` and `decision index`, and these two name no real entry.
         slug, number = "D" + "-a-slug", "D" + "257"
