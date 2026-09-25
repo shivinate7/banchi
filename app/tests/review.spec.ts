@@ -547,6 +547,36 @@ test('a digit answers the card and the answer stays reversible', async ({ page }
   await expect(receipt.first()).toBeVisible()
 })
 
+/* UX-205: a write the server cannot restore (`restores_to: null`, never an object) used to
+ * write NO receipt at all — `remember` ran only when `canTakeBack` was true. Six of nine
+ * answers in one real session drew nothing on screen. The receipt is unconditional now; only
+ * its Undo control depends on `restores_to`. */
+test('a write with no restores_to still gets a receipt, with no Undo on it', async ({ page }) => {
+  const sent = await open(page)
+  await page.route(/\/answer$/, async (route) => {
+    const request = route.request()
+    sent.push({ method: request.method(), url: request.url(), body: request.postDataJSON() })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ position: '2/14', cleared: true, restores_to: null }),
+    })
+  })
+
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBe(1)
+
+  const receipt = page.locator('.review-note[role="status"]')
+  await expect(receipt.first()).toBeVisible()
+  await expect(receipt.first()).toContainText('Answered as')
+  await expect(receipt.getByRole('button', { name: 'Undo' })).toHaveCount(0)
+
+  // The session list carries the same receipt, and the same absence of Undo.
+  await page.locator('.review-queue-toggle').click()
+  await expect(page.locator('.review-session-row')).toHaveCount(1)
+  await expect(page.locator('.review-session-row').getByRole('button', { name: 'Undo' })).toHaveCount(0)
+})
+
 test('only the newest answer keeps a tray, and the rest are a rail three deep', async ({
   page,
 }) => {

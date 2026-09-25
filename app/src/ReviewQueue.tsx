@@ -661,6 +661,10 @@ type Receipt = {
   /** Which session counter this write moved, so an undo can move it back. */
   counts: 'answered' | 'closed'
   reverse: (box: number, index: number) => Promise<unknown>
+  /** UX-205: every write gets a receipt. Not every write is reversible — `canTakeBack`'s
+   *  `restores_to` check is real, and a card the server cannot restore keeps its receipt
+   *  with the Undo control simply left off it. */
+  undoable: boolean
 }
 
 type Refusal = { failure: Failure; at: string | null }
@@ -861,7 +865,9 @@ export function ReviewQueue() {
           setRows((prev) => (prev === null ? prev : prev.filter((held) => held.entry.position !== position)))
           count('closed', 1)
           const reversible = how.kind === 'stand_down' || (result as { restores_to?: unknown } | null)?.restores_to != null
-          if (!reversible) return
+          /* UX-205: the receipt is unconditional. Only the Undo control depends on
+             `reversible` — a stand-down is always reversible; a retirement is only when the
+             server hands back a `restores_to`. */
           remember({
             key: position,
             reverse: how.kind === 'stand_down' ? undoStandDown : undoRetire,
@@ -871,6 +877,7 @@ export function ReviewQueue() {
             at,
             said: how.kind === 'stand_down' ? 'Stood down' : 'Retired',
             counts: 'closed',
+            undoable: reversible,
           })
         })
         .catch((err: unknown) => {
@@ -912,7 +919,10 @@ export function ReviewQueue() {
           if (kept.length > 0) restore(kept)
           if (kept.length === 0) count('answered', 1)
 
-          if (kept.length === 0 && canTakeBack(result as AnswerResult)) {
+          /* UX-205: the receipt is unconditional — every write it advances gets one, so the
+             session list is never silently short of what the operator did. Only Undo depends
+             on `canTakeBack`. */
+          if (kept.length === 0) {
             remember({
               key: position,
               reverse: undoAnswer,
@@ -922,6 +932,7 @@ export function ReviewQueue() {
               at,
               said: `Answered as ${candidate.condition}`,
               counts: 'answered',
+              undoable: canTakeBack(result as AnswerResult),
             })
           }
 
@@ -1049,8 +1060,11 @@ export function ReviewQueue() {
         setRows((prev) => (prev === null ? prev : prev.filter((row) => !clearedRow(row))))
         count('answered', new Set(dropped.map((row) => row.entry.position)).size)
 
+        /* UX-205: the receipt is unconditional, as it is for a single answer above. Undo
+           still needs EVERY member reversible — a partial undo would leave the group split
+           between two states with no way to tell which is which. */
         const reversible = result.results.every((member) => member.restores_to !== null)
-        if (reversible && dropped.length > 0) {
+        if (dropped.length > 0) {
           remember({
             key: result.answered.join('+'),
             reverse: undoAnswer,
@@ -1065,6 +1079,7 @@ export function ReviewQueue() {
             at,
             said: `Answered all ${result.count} together`,
             counts: 'answered',
+            undoable: reversible,
           })
         }
 
@@ -1550,9 +1565,11 @@ function Tray({
             <span className="review-receipt-label">{receipt.label}</span>
           </span>
           <span className="bn-receipt-bar" aria-hidden="true" />
-          <Button size="sm" icon="undo" kbd={UNDO_KEY_LABEL} onClick={() => onUndo(receipt)} disabled={disabled}>
-            Undo
-          </Button>
+          {!receipt.undoable ? null : (
+            <Button size="sm" icon="undo" kbd={UNDO_KEY_LABEL} onClick={() => onUndo(receipt)} disabled={disabled}>
+              Undo
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -1592,9 +1609,11 @@ function SessionList({ receipts, onUndo, disabled, limit }: { receipts: readonly
             <span className="review-session-said">{receipt.said}</span>
             <span className="review-session-label">{receipt.label}</span>
           </span>
-          <Button size="sm" variant="ghost" icon="undo" kbd={at === 0 ? UNDO_KEY_LABEL : undefined} onClick={() => onUndo(receipt)} disabled={disabled}>
-            Undo
-          </Button>
+          {!receipt.undoable ? null : (
+            <Button size="sm" variant="ghost" icon="undo" kbd={at === 0 ? UNDO_KEY_LABEL : undefined} onClick={() => onUndo(receipt)} disabled={disabled}>
+              Undo
+            </Button>
+          )}
         </li>
       ))}
       {hidden > 0 ? (
