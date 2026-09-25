@@ -285,6 +285,38 @@ def case_do_search_finds_a_whole_number_second_half() -> None:
     check("8800" in skus, "do_search('/221') finds a card whose whole number is 023/221")
 
 
+def case_do_search_never_returns_a_row_the_shared_matcher_rejects() -> None:
+    """F3, round-3 Opus review, 2026-09-25. `q=#8926367` returned an unrelated card
+    whose SKU is exactly `8926367`, and `match.match_query('#8926367', ...)` says
+    False for that same card — 95 `#`-prefixed queries did this against the owner's
+    store. `_fts_query_variants` strips a leading `#` to widen the FTS5 candidate
+    step (S2's own fix for `#54`), and `_match_rank`'s SUBSTRING pass folds `#8926367`
+    to `8926367` too and finds it inside the SKU field as a bare substring — but
+    `match.py:_sku_match` requires the RAW token to be `_SKU_SHAPE` (`^[0-9]{3,}$`),
+    which `#8926367` is not, so the shared matcher correctly refuses it.
+    `_match_rank`'s substring/prefix ranks are no longer enough to accept a row on
+    their own; only its literal EXACT-NUMBER check still can, for the one shape
+    `match.py` structurally cannot express (a code card's own redemption code).
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        card = master.Card(
+            box=1, index=1, name="Heimerdinger, Inventor", number="3", printed_total="25",
+            sku="8926367",
+        )
+        snapshot.inventory.cards["1/1"] = card
+
+    skus = [g["sku"] for g in cs.do_search("#8926367")["groups"]]
+    check(
+        "8926367" not in skus,
+        "do_search('#8926367') does not find a card whose SKU merely CONTAINS "
+        "8926367 once the # is folded away — match_query itself refuses this row",
+    )
+
+
 def case_do_search_finds_a_hyphenated_name() -> None:
     """`heimerdinger-inventor` found nothing against `Heimerdinger, Inventor`, because the
     literal hyphenated token is not one the FTS5 index holds — the comma splits the field
@@ -496,6 +528,7 @@ CASES = [
     case_match_query_stays_fast_on_repeated_tokens,
     case_do_search_finds_a_padded_number_typed_without_its_zeros,
     case_do_search_finds_a_whole_number_second_half,
+    case_do_search_never_returns_a_row_the_shared_matcher_rejects,
     case_do_search_finds_a_hyphenated_name,
     case_do_search_multiword_never_500s_next_to_a_widened_word,
     case_do_search_refuses_a_query_past_the_length_cap,

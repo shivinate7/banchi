@@ -10421,21 +10421,39 @@ def do_search(query: str) -> dict:
             term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
             # THE DECISIVE CHECK, S2 (UX-173 amended, the Opus review, 2026-09-25):
             # `match.match_query` — THE SAME PORT `scripts/match-selftest.py` GROUP 1
-            # PROVES AGAINST THE SHARED CASE TABLE — now actually decides whether a
-            # candidate is a real match, for a MULTI-TERM query. Before this, "does at
-            # least one term rank" was the only gate, which is exactly wrong once the
-            # candidate step above can surface a row on ONE term alone (`swsh` for
-            # `swsh050`, `akali` for `Akali, Deadly Duelist`): a query of `akali zed`
-            # would have wrongly accepted a card that only ever matched `akali`, with
-            # `zed` found nowhere. For a SINGLE-TERM query, `term_ranks` alone is ALSO
-            # kept as a fallback — the literal, shape-less exact-string check inside
-            # `_match_rank` (a code card's own redemption code, `_is_number_shape`
-            # refuses that shape outright) has no equivalent in `match.py`, because no
-            # case in the shared table has ever needed one; T7's own
-            # `check_code_ledger`'s own "the dispute lookup is GET /search" case is what
-            # this fallback keeps green.
-            matched = bool(term_ranks) if len(terms) == 1 else False
-            if not matched and not match.match_query(text, _card_match_fields(card)):
+            # PROVES AGAINST THE SHARED CASE TABLE — decides whether a candidate is a
+            # real match. Before this, "does at least one term rank" was the only gate,
+            # which is exactly wrong once the candidate step above can surface a row on
+            # ONE term alone (`swsh` for `swsh050`, `akali` for `Akali, Deadly Duelist`):
+            # a query of `akali zed` would have wrongly accepted a card that only ever
+            # matched `akali`, with `zed` found nowhere.
+            #
+            # THE FALLBACK IS NARROWED TO THE ONE CARVE-OUT IT WAS FOR (F3, round-3 Opus
+            # review, 2026-09-25). It used to be "any single-term rank at all", which
+            # let `_match_rank`'s SUBSTRING pass — a bare `query in field.lower()`, no
+            # shape check — stand in for `match.py`'s own, stricter rules whenever they
+            # disagreed. Measured: `#8926367` folds to `8926367` and is a SUBSTRING of a
+            # card whose SKU IS `8926367`, so `_match_rank` ranked it — but
+            # `match._sku_match` requires the RAW token itself to be `_SKU_SHAPE`
+            # (`^[0-9]{3,}$`), which `#8926367` is not (the `#` is still on it), so
+            # `match_query` correctly refused the same row. `do_search` returned a row
+            # the shared matcher rejects, for 95 different `#`-prefixed queries against
+            # the owner's store. Only `_match_rank`'s LITERAL, case-folded EXACT NUMBER
+            # check survives as a fallback now — the one piece with no `match.py`
+            # equivalent, because a code card's own redemption code is not a
+            # collector-number shape `_is_number_shape` will ever accept, and no case in
+            # the shared table has ever needed one. T7's own `check_code_ledger`
+            # ("the dispute lookup is GET /search") is what this narrower fallback
+            # still keeps green — SUBSTRING and NAME-PREFIX ranks no longer bypass
+            # `match_query` on their own.
+            matched = match.match_query(text, _card_match_fields(card))
+            if not matched and len(terms) == 1:
+                # `terms[0]` — LOWERCASED, matching `term_ranks`'s own computation just
+                # above — never `text`, which still carries its original case and would
+                # never equal the lowercased number set `_match_rank`'s literal check
+                # compares against.
+                matched = _RANK_EXACT_NUMBER in term_ranks
+            if not matched:
                 continue
             rank = min(term_ranks) if term_ranks else _RANK_SUBSTRING
             sku = str(sku).strip() if sku else ""
