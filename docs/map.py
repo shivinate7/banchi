@@ -8549,7 +8549,15 @@ COMPONENTS = [
                         "delegates to it rather than keeping its own narrower copy, which asked "
                         "`main` for its OWN animations and so could not see a staggered row "
                         "under it at all. Not a harness test; `make design-check` runs the specs "
-                        "that import it.",
+                        "that import it. ALSO `outsideThePanel`/`whatMoved`/`settled` — D118's "
+                        "own panel-exclusion sweep, moved here from two byte-identical copies in "
+                        "`inventory.spec.ts` and `confirm-identity.spec.ts` rather than kept as "
+                        "two. `settled` closes a DIFFERENT race than `settleMotion` above: the "
+                        "box rail's section-fold chevron rotates in on MOUNT, so it can finish "
+                        "before either spec's `open()` ever calls `settleMotion`, or still be "
+                        "mid-rotation a tick after `open()` returns — `settled` reads the sweep "
+                        "twice 75ms apart and waits for agreement, which `settleMotion`'s "
+                        "start-to-finish wait cannot do for an animation it was never watching.",
                 "governed_by": ["D16", "D50", "D118"]},
             "tests/nav.spec.ts": {
                 "does": "the shell's keyboard, and the first test this app has had of the strip "
@@ -8929,9 +8937,9 @@ COMPONENTS = [
                         "`POST /inventory/2/1/confirm` with an EMPTY body (never a `sku`), "
                         "asserts the receipt toast and its Undo, and reads the undo's own "
                         "`{\"undo\": true}` body. Second case: the D118 sweep this control's "
-                        "own review round required — `inventory.spec.ts`'s own "
-                        "`outsideThePanel`/`whatMoved` shape, duplicated rather than imported "
-                        "for the same reason `correct-answer.spec.ts` gives — asserts the press "
+                        "own review round required — `whatMoved`/`settled` imported from "
+                        "`./motionSettled`, `inventory.spec.ts`'s own shared copy since the two "
+                        "specs' versions were byte-identical — asserts the press "
                         "moves nothing outside `.browse-card` and changes neither the "
                         "document's scroll height nor its scroll position. EVERY ROUTE IS "
                         "STUBBED, the same rule: no write ever reaches a real store.",
