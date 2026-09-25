@@ -2076,8 +2076,11 @@ export function BoxBrowse({
             ) : null}
 
             {onShelf.length === 0 || onHideSold === undefined ? null : (
+              /* UX-254 (owner's ruling, 2026-09-24: "maybe in stock only should be the toggle
+                 name?"): the words, never the meaning — checked still folds a departed copy
+                 away, on by default (`storedHideSold`), and the count is still what it hides. */
               <HideToggle checked={hideSold} count={hiddenBySold} className="browse-hidesold" onChange={() => onHideSold()}>
-                Hide sold
+                In stock only
               </HideToggle>
             )}
 

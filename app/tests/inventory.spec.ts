@@ -6129,6 +6129,26 @@ test('UX-181 — the row the walk stands on survives its own sale while sold is 
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2'])
 })
 
+test('UX-254 — the fold toggle is "In stock only", on by default, counting what left', async ({
+  page,
+}) => {
+  /* The owner's own wording, 2026-09-24: "maybe in stock only should be the toggle name?".
+   * The meaning is unchanged — checked still folds a departed copy off the shelf — only the
+   * words on it, and this asserts them rather than the class alone every other case reads. */
+  await open(page, BOXES, STORE, () => PRICING, SALE, { hideSold: null })
+  await expandAll(page)
+
+  const toggle = page.getByRole('button', { name: /^In stock only/ })
+  await expect(toggle).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Hide sold/ })).toHaveCount(0)
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  // Eiscue (sold) and Mantine (retired) are the fixture's own two departed cards (D89's own
+  // reason there are two): the count is what the fold hides, not every departed row that ever
+  // sat on this shelf — `D132 — the Hide sold chip counts...` proves that distinction; this
+  // just reads the same figure under the new name.
+  await expect(toggle.locator('.bn-hidetoggle-count')).toHaveText('2')
+})
+
 test('D132 — the Hide sold chip counts what the fold actually hides, not every departed row on the shelf', async ({ page }) => {
   /* THE OVERCOUNT (owner's screenshot, box WB1 R2): `departedHere` counted every departed row
      on the shelf, but `visible` keeps the row the walk stands on (D119) whatever its state — so
