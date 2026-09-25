@@ -66,6 +66,8 @@ is rather than as coverage of everything below.
 
 from __future__ import annotations
 
+import bisect
+
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from typing import (
@@ -719,10 +721,19 @@ class Card:
     # survives a re-record, and this must not be settable by one. It is issued once, at the
     # birth of the record, by `record_capture`.
     cid: Optional[str] = None
+    # THE CARD'S ORDER KEY IN ITS BOX (D265, the owner's ruling "A key on each card"). Where
+    # it stands, apart from `index`, which never moves. A number: a placement between two
+    # cards takes one between their keys. None only on a record built outside the store
+    # (a test, a v1 parse), which reads as its index (`order_key`).
+    order: Optional[float] = None
 
     @property
     def key(self) -> str:
         return position_key(self.box, self.index)
+
+    @property
+    def order_key(self) -> float:
+        return self.order if self.order is not None else self.index
 
     @property
     def days_in_state(self) -> Optional[int]:
@@ -874,9 +885,9 @@ def check_sections(sections) -> Tuple[int, ...]:
     D10's amended entry accepts the risk of and asks to be made visible.
     """
     try:
-        out = tuple(int(v) for v in sections)
-    except (TypeError, ValueError):
-        raise BadSections(f"{sections!r} is not a list of integers") from None
+        out = tuple(as_order(v) for v in sections)
+    except BadSections:
+        raise BadSections(f"{sections!r} is not a list of numbers") from None
     if not out:
         # UNDECLARED, and legal. An empty layout is what every box migrated from v1 carries
         # and what a new box starts with, and `pipeline/join.py:Position` renders it as ONE
@@ -886,124 +897,81 @@ def check_sections(sections) -> Tuple[int, ...]:
         # the plastic does not have. Nothing here changed with it, which is the point — this
         # module never knew the size and still does not.
         return out
-    if out[0] != 1:
-        raise BadSections(f"the first section starts at index 1, not {out[0]}")
+    # THE FIRST DIVIDER IS THE FRONT OF THE BOX. It is 1 on every box nothing was placed into
+    # before its first card; a section placed in front of card 1 starts below 1 (D265).
+    if not 0 < out[0] <= 1:
+        raise BadSections(f"the first section starts at the front of the box, not {out[0]}")
     if list(out) != sorted(out):
         raise BadSections(f"{list(out)} is not sorted")
     if len(set(out)) != len(out):
         raise BadSections(f"{list(out)} repeats an index — two dividers in one slot")
-    if out[0] < 1:
-        raise BadSections("indices are 1-based")
     return out
 
 
-# A run of stored indices, `(lo, hi)`, inclusive; `hi` is None for the open run at the back,
-# where the next capture lands.
-Run = Tuple[int, Optional[int]]
+def divider_key(value) -> str:
+    """The string a section name is keyed by: the divider's order key. An integer-valued key
+    reads `31`, as every divider stored before the order key did, so no name is re-keyed."""
+    value = float(value)
+    return str(int(value)) if value.is_integer() else repr(value)
+
+
+def as_order(value) -> float:
+    """An order key or a divider, as the number it is. Refuses what is not a number."""
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        raise BadSections(f"{value!r} is not a number") from None
+    if out != out or out in (float("inf"), float("-inf")):
+        raise BadSections(f"{value!r} is not a finite number")
+    return int(out) if out.is_integer() else out
+
+
+# THE SMALLEST GAP A PLACEMENT MAY LEAVE BETWEEN TWO KEYS. Below it the box is re-spaced
+# (`Inventory._respace`), which writes every card in it once. A 64-bit float halves one gap
+# about forty times before this, so a re-space is rare, and it is named here rather than
+# discovered as two cards that compare equal.
+KEY_EPSILON = 1e-6
 
 
 @dataclass(frozen=True)
 class BoxOrder:
-    """Where each stored index stands in its box: its ORDER, 1 at the far back (D265).
+    """Where each card stands in its box: its ORDER KEY, read off the cards (D265).
 
-    THE STORED INDEX NEVER MOVES (D10, D58), and until the box map it was also the order: a
-    card only ever arrived at the back. A section that lands between two others needs an order
-    apart from the index. This is that order, kept on the BOX as runs of indices in physical
-    order, never on the cards. So a placement or a reorder writes one box record and no card.
+    THE OWNER'S RULING, 2026-09-25, on the form: "A key on each card". So each card carries
+    `Card.order`, a number apart from its stored index, and this is the box's cards' keys
+    gathered for one read. `pairs` is `(index, key)` for every record in the box.
 
-    `runs` IS EMPTY FOR A BOX NOTHING HAS EVER BEEN PLACED INTO, and then the order IS the
-    index. Every store written before this reads exactly as before, with no migration.
-    Otherwise the runs cover every index from 1 up exactly once, and the last run is open
-    (`hi` None): the next capture's index is in it, so it lands at the back, as it always did.
+    A KEY IS A FRACTION, AND A NEW ONE IS ITS INDEX. Every card stored before the key has
+    key == index (the schema 13 migration), and a capture into such a box takes its index
+    again. So a box nothing was ever placed into is the identity, and every stored divider
+    and every label reads as before. A placement takes numbers between two neighbours'
+    keys and writes only the cards it moves.
 
-    A BOX'S DIVIDERS ARE IN ORDER SPACE (`Box.sections`). With no runs that is index space,
-    so every layout already stored is already valid. `pipeline/join.py:BoxView` hands
-    `Position` orders instead of indices, and the one label formula is unchanged.
+    `identity` is the fast path: every reader skips the mapping for such a box.
     """
 
-    runs: Tuple[Run, ...] = ()
+    pairs: Tuple[Tuple[int, float], ...] = ()
+
+    def _map(self) -> Dict[int, float]:
+        cached = self.__dict__.get("_by_index")
+        if cached is None:
+            cached = {int(i): k for i, k in self.pairs}
+            object.__setattr__(self, "_by_index", cached)
+        return cached
 
     @property
     def identity(self) -> bool:
-        return not self.runs
+        return all(float(k) == float(i) for i, k in self.pairs)
 
-    def of(self, index: int) -> int:
-        """The order of one stored index."""
+    def of(self, index: int):
+        """The order key of one stored index. An index with no record is its own number."""
         index = int(index)
-        if not self.runs:
-            return index
-        offset = 0
-        for lo, hi in self.runs:
-            if index >= lo and (hi is None or index <= hi):
-                return offset + index - lo + 1
-            if hi is not None:
-                offset += hi - lo + 1
-        raise BadPosition(f"index {index} is in no run of this box's order {list(self.runs)}")
+        return self._map().get(index, index)
 
-    def index_at(self, order: int) -> int:
-        """The stored index at one order. `of` run backwards."""
-        order = int(order)
-        if not self.runs:
-            return order
-        offset = 0
-        for lo, hi in self.runs:
-            length = None if hi is None else hi - lo + 1
-            if length is None or order <= offset + length:
-                return lo + order - offset - 1
-            offset += length
-        raise BadPosition(f"order {order} is past this box's order {list(self.runs)}")
-
-    def sort_key(self, index: int) -> int:
-        return self.of(index)
-
-    def expand(self, high: int) -> List[int]:
-        """Every index up to `high`, in order. The open run stops at `high`."""
-        out: List[int] = []
-        for lo, hi in self.runs or ((1, None),):
-            top = high if hi is None else hi
-            out.extend(range(lo, top + 1))
-        return out
-
-    def without_index(self, index: int) -> "BoxOrder":
-        """This order after a mid-box delete removed `index` and slid every higher index
-        down one (D10 ruling 1). Each card keeps its place; only the numbers close up."""
-        if not self.runs:
-            return self
-        index = int(index)
-        out: List[Run] = []
-        for lo, hi in self.runs:
-            if hi is not None and hi < index:
-                out.append((lo, hi))
-            elif lo > index:
-                out.append((lo - 1, None if hi is None else hi - 1))
-            elif hi is None:
-                out.append((lo, None))
-            elif hi > lo:
-                out.append((lo, hi - 1))
-        return BoxOrder.from_runs(out)
-
-    @staticmethod
-    def from_runs(runs: Sequence[Run]) -> "BoxOrder":
-        """Merge touching runs; an order that is the index again comes back empty."""
-        merged: List[List[Optional[int]]] = []
-        for lo, hi in runs:
-            if merged and merged[-1][1] is not None and merged[-1][1] + 1 == lo:
-                merged[-1][1] = hi
-            else:
-                merged.append([lo, hi])
-        cleaned = tuple((int(lo), None if hi is None else int(hi)) for lo, hi in merged)
-        return BoxOrder() if cleaned in ((), ((1, None),)) else BoxOrder(cleaned)
-
-    @staticmethod
-    def from_sequence(indices: Sequence[int], tail: int) -> "BoxOrder":
-        """The order that lists `indices` first, then every index from `tail` up.
-
-        `indices` and `range(tail, ...)` together must cover 1.. exactly once. Adjacent
-        indices merge into one run, and an order that is the index again comes back empty.
-        """
-        return BoxOrder.from_runs(
-            [(int(at), int(at)) for at in indices] + [(int(tail), None)]
-        )
+    @property
+    def top(self) -> float:
+        """The highest key in the box, or 0 for an empty one."""
+        return max((float(k) for _, k in self.pairs), default=0.0)
 
 
 @dataclass
@@ -1070,10 +1038,6 @@ class Box:
     # (`Inventory.move_sections`, D264) carries a moved section's name to the divider it opens
     # at the destination. The plain card move (`move_cards`) carries no divider and no name.
     section_names: Dict[str, str] = field(default_factory=dict)
-    # THE BOX'S ORDER, AS RUNS OF STORED INDICES IN PHYSICAL ORDER (D265), or empty when the
-    # order is the index. `BoxOrder` carries the argument. `sections` above and the keys of
-    # `section_names` are in this order's space.
-    order: List[List[Optional[int]]] = field(default_factory=list)
     state: str = BOX_OPEN
     capacity: Optional[int] = None
     created_at: Optional[str] = None
@@ -1095,9 +1059,6 @@ class Box:
         screen (`open_section`) or typed as a whole layout in the dividers editor.
         """
         return check_sections(self.sections)
-
-    def ordering(self) -> BoxOrder:
-        return BoxOrder(tuple((int(lo), None if hi is None else int(hi)) for lo, hi in self.order))
 
 
 @dataclass
@@ -1653,6 +1614,11 @@ def _card_columns(card: "Card") -> Dict[str, object]:
         # turns the column from inert to live, so the residue count (§4.3) is one indexed
         # probe rather than a walk the day a later lane reads it.
         "identity_source": card.identity_source,
+        # THE ORDER KEY (D265), so a box's order is one indexed read. A record with none reads
+        # as its index, which is the key the schema 13 migration gives every such card.
+        "ord": float(card.order) if card.order is not None else (
+            float(int_or_none(card.index)) if int_or_none(card.index) is not None else None
+        ),
     }
 
 
@@ -1917,133 +1883,225 @@ class Inventory:
             (_as_position_int(card.index, f"index of card {card.key}"), card.key, card)
             for card in self.cards.where(box=box)
         ]
-        # IN THE BOX'S ORDER (D265), which is index order until something is placed into it.
+        # IN THE BOX'S ORDER (D265): by each card's own order key.
+        out.sort(key=lambda row: (row[2].order_key, row[0]))
+        return out
+
+    # ------------------------------------------------------------ the order key (D265)
+
+    def box_order(self, box) -> BoxOrder:
+        """Every record's order key in `box`, read off two indexed columns."""
+        box = _as_position_int(box, "box")
+        pairs = []
+        for _key, (raw_index, raw_ord) in self.cards.select(("idx", "ord"), box=box):
+            if raw_index is None:
+                continue
+            index = int(raw_index)
+            pairs.append((index, as_order(raw_ord) if raw_ord is not None else index))
+        return BoxOrder(tuple(sorted(pairs)))
+
+    def next_key(self, box) -> float:
+        """The key the next card captured into `box` takes: one past the highest, the back."""
+        return float(int(self.box_order(box).top) + 1)
+
+    def _birth_key(self, box, index: int) -> float:
+        """A new record's key: its own index in a box nothing was placed into, so such a box
+        stays the identity; otherwise the back of the box."""
         order = self.box_order(box)
-        out.sort(key=lambda row: order.of(row[0]))
-        return out
-
-    def section_runs(self, box) -> List[Tuple[int, List[int]]]:
-        """`(divider order, indices in order)` for each section, over the slots the box has
-        reached (D264). A departed record keeps its slot and is listed; a divider past the
-        last slot lists nothing. An undeclared box is one section at order 1."""
-        entry = self.box(box)
-        order = entry.ordering() if entry is not None else BoxOrder()
-        dividers = list(entry.layout() if entry is not None else ()) or [1]
-        seq = order.expand(self.next_index(box) - 1)
-        out: List[Tuple[int, List[int]]] = []
-        for at, start in enumerate(dividers):
-            end = dividers[at + 1] if at + 1 < len(dividers) else len(seq) + 1
-            out.append((start, seq[start - 1:end - 1]))
-        return out
-
-    def place_sections(
-        self,
-        box,
-        to_box,
-        chosen: Sequence[int],
-        before: Optional[int],
-        block: Sequence[int],
-        sizes: Sequence[int],
-        seq_to: Sequence[int],
-    ) -> Dict[str, object]:
-        """Rewrite both boxes' dividers, names and order for a section move (D264, D265).
-
-        A CROSS-BOX MOVE CALLS THIS AFTER ITS CARDS HAVE MOVED: `block` is the destination's
-        fresh indices in order, and `seq_to` is the destination's order as it stood before
-        they arrived. A reorder in one box passes the moved slots as `block` and the box's
-        whole order as `seq_to`. `chosen` is the ordinals that moved, `sizes` how many slots
-        of the block each fills, and `before` the destination ordinal they land in front of,
-        or None for the near end. Writes no card.
-
-        EVERY SECTION KEEPS ITS DIVIDER AND ITS NAME. The source loses the dividers; the
-        destination gains them at the offsets the sections had inside the block.
-        """
-        src = self.ensure_box(box)
-        dst = self.ensure_box(to_box)
-        same = src.box == dst.box
-        src_layout = list(src.layout()) or [1]
-        src_names = dict(src.section_names)
-        moved_names = [src_names.get(str(int(src_layout[j - 1]))) for j in chosen]
-        count = len(block)
-
-        if same:
-            dst_names = src_names
-            moved_slots = set(block)
-            ahead = [0]
-            for at in seq_to:
-                ahead.append(ahead[-1] + (1 if at in moved_slots else 0))
-
-            def gone_before(d: int) -> int:
-                """How many moved slots stand in front of order `d`."""
-                return ahead[min(d - 1, len(seq_to))]
-
-            rest = [at for at in seq_to if at not in moved_slots]
-            if before is None:
-                gap = len(rest) + 1
-            else:
-                target = src_layout[before - 1]
-                gap = target - gone_before(target)
-            new_seq = rest[: gap - 1] + list(block) + rest[gap - 1:]
-            removed = {src_layout[j - 1] for j in chosen}
-            kept = [d for d in src_layout if d not in removed]
-
-            def shifted(d: int) -> int:
-                v = d - gone_before(d)
-                return v + count if v >= gap else v
-        else:
-            dst_names = dict(dst.section_names)
-            dst_layout = list(dst.layout()) or ([1] if seq_to else [])
-            gap = len(seq_to) + 1 if before is None else dst_layout[before - 1]
-            new_seq = list(seq_to[: gap - 1]) + list(block) + list(seq_to[gap - 1:])
-            kept = dst_layout
-
-            def shifted(d: int) -> int:
-                return d + count if d >= gap else d
-
-        new_dst: Dict[int, Optional[str]] = {shifted(d): dst_names.get(str(int(d))) for d in kept}
-        landed: List[int] = []
-        offset = 0
-        for size, name in zip(sizes, moved_names):
-            new_dst[gap + offset] = name
-            landed.append(gap + offset)
-            offset += size
-        layout = sorted(new_dst)
-        dst_before = list(dst.sections)
-        dst.sections = layout
-        dst.section_names = {str(d): n for d, n in new_dst.items() if n}
-        tail = self.next_index(dst.box)
-        dst.order = [list(r) for r in BoxOrder.from_sequence(new_seq, tail).runs]
-
-        if not same:
-            # The source loses its dividers, and their names go with them. A source whose
-            # first divider left re-anchors the next one at the front: there is no card
-            # before the front of a box.
-            gone = {src_layout[j - 1] for j in chosen}
-            left = [d for d in src_layout if d not in gone]
-            names = {str(d): src_names[str(d)] for d in left if str(d) in src_names}
-            if left and left[0] != 1:
-                if str(left[0]) in names:
-                    names["1"] = names.pop(str(left[0]))
-                left[0] = 1
-            keep = len(left) > 1 or bool(names)
-            src.sections = left if keep else []
-            src.section_names = names if keep else {}
-            check_sections(src.sections)
-        check_sections(dst.sections)
-        return {
-            "landed": [layout.index(d) + 1 for d in landed],
-            "sections_from": dst_before,
-            "sections_to": layout,
-        }
+        if order.identity and all(int(i) < int(index) for i, _ in order.pairs):
+            return float(index)
+        return float(int(order.top) + 1)
 
     def _on_hand(self, box, index) -> bool:
         card = self.cards.get(position_key(box, index))
         return card is not None and card.state not in TERMINAL_STATES
 
-    def box_order(self, box) -> BoxOrder:
-        """The box's order (D265). The identity for a box never placed into or unknown."""
-        entry = self.boxes.get(str(_as_position_int(box, "box")))
-        return entry.ordering() if entry is not None else BoxOrder()
+    def layout_of(self, box, exclude: Sequence[int] = ()) -> List[Dict[str, object]]:
+        """The box as sections: `{"div": key, "name": str|None, "slots": [index...]}`, in
+        order. A slot is every record, departed ones too. `exclude` leaves those records out
+        (the cards a placement is moving). An undeclared box holding cards is one section."""
+        entry = self.box(box)
+        names = dict(entry.section_names) if entry is not None else {}
+        skip = {int(i) for i in exclude}
+        records = sorted(
+            (float(card.order_key), int(card.index))
+            for card in self.cards.where(box=_as_position_int(box, "box"))
+            if int(card.index) not in skip
+        )
+        dividers = [float(d) for d in (entry.layout() if entry is not None else ())]
+        if not dividers and records:
+            dividers = [min(1.0, records[0][0])]
+        sections = [{"div": d, "name": names.get(divider_key(d)), "slots": []} for d in dividers]
+        for key, index in records:
+            at = max(0, bisect.bisect_right(dividers, key) - 1)
+            sections[at]["slots"].append(index)
+        return sections
+
+    def _key_of(self, box, index) -> float:
+        return float(self.cards[position_key(box, index)].order_key)
+
+    def _write_layout(self, box, sections: Sequence[Dict[str, object]]) -> None:
+        entry = self.ensure_box(box)
+        layout = [as_order(sec["div"]) for sec in sections]
+        check_sections(layout)
+        entry.sections = layout
+        entry.section_names = {
+            divider_key(sec["div"]): str(sec["name"]) for sec in sections if sec.get("name")
+        }
+
+    def _respace(self, box) -> None:
+        """Give every card in `box` a whole-number key again, in the order it stands, and
+        every divider the key of its first card. The one write that touches cards a
+        placement did not move, and only when a gap has been split too fine (`KEY_EPSILON`)."""
+        sections = self.layout_of(box)
+        at = 0
+        for sec in sections:
+            at += 1
+            sec["div"] = at
+            for n, index in enumerate(sec["slots"]):
+                if n:
+                    at += 1
+                self.cards[position_key(box, index)].order = float(at)
+        if sections:
+            sections[0]["div"] = min(1, sections[0]["div"])
+        self._write_layout(box, sections)
+        self._log("box_respaced", None, box=int(box))
+
+    def place(
+        self,
+        box,
+        items: Sequence[Tuple[str, object]],
+        target: Tuple[str, Optional[int]],
+    ) -> List[int]:
+        """Place arriving cards, and the dividers that travel with them, into `box` (D264).
+
+        `items` is what arrives, in order: `("div", name)` for a section's divider and
+        `("card", index)` for a record ALREADY IN `box` (a card moved in, or one moving
+        within the box). `target` is the gap:
+
+          ("before", j)       in front of section j's divider, so between two sections
+          ("end", None)       after the last card in the box, before any empty section after it
+          ("card", index)     in front of that card, inside its section
+          ("section_end", j)  after the last card of section j, inside it
+
+        ONLY THE ARRIVING CARDS TAKE NEW KEYS, each one between its new neighbours' keys, so
+        no other card in the box is written. The dividers are rewritten on the box record.
+        Returns the ordinals the arriving dividers now have. Raises `BadSections` for a gap
+        the box does not have.
+        """
+        for _ in range(2):
+            placed = self._try_place(box, items, target)
+            if placed is not None:
+                return placed
+            self._respace(box)
+        raise BadSections("the gap stayed too narrow after the box was re-spaced")
+
+    def _try_place(self, box, items, target) -> Optional[List[int]]:
+        arriving = [int(v) for kind, v in items if kind == "card"]
+        sections = self.layout_of(box, exclude=arriving)
+        kind, at = target
+        key = lambda i: self._key_of(box, i)  # noqa: E731
+        slots_below = lambda v: [key(i) for sec in sections for i in sec["slots"] if key(i) < v]  # noqa: E731
+        divs_below = lambda v: [float(sec["div"]) for sec in sections if float(sec["div"]) < v]  # noqa: E731
+        insert_at = len(sections)
+        take_div: Optional[int] = None
+        if kind == "before" and not any(what == "div" for what, _ in items):
+            raise BadSections("cards without a divider go in front of a card or at a section's end")
+        if kind == "end":
+            last = max((n for n, sec in enumerate(sections) if sec["slots"]), default=-1)
+            if last + 1 < len(sections):
+                kind, at = "before", last + 2
+            else:
+                lo = max([key(i) for sec in sections for i in sec["slots"]] + [0.0])
+                if sections:
+                    lo = max(lo, float(sections[-1]["div"]))
+                hi = None
+        if kind == "before":
+            if not (at is not None and 1 <= at <= len(sections)):
+                raise BadSections(f"there is no section {at} to put them in front of")
+            div = float(sections[at - 1]["div"])
+            lo = max(slots_below(div) + divs_below(div) + [0.0])
+            hi = div
+            insert_at = at - 1
+        elif kind == "section_end":
+            if not (at is not None and 1 <= at <= len(sections)):
+                raise BadSections(f"there is no section {at}")
+            sec = sections[at - 1]
+            lo = max([key(i) for i in sec["slots"]] + [float(sec["div"])])
+            hi = float(sections[at]["div"]) if at < len(sections) else None
+            insert_at = at
+        elif kind == "card":
+            owner = next((n for n, sec in enumerate(sections) if int(at) in sec["slots"]), None)
+            if owner is None:
+                raise BadSections("that card is not in this box, or it is moving")
+            mine = key(int(at))
+            hi = mine
+            div = float(sections[owner]["div"])
+            if div >= mine:
+                lo = max(slots_below(div) + divs_below(div) + [0.0])
+                take_div = owner
+            else:
+                lo = max([key(i) for i in sections[owner]["slots"] if key(i) < mine] + [div])
+            insert_at = owner + 1
+        elif kind != "end":
+            raise BadSections(f"{kind!r} is not a gap")
+
+        # One position per card, and one per divider that no card stands behind.
+        positions: List[Tuple[str, object]] = []
+        for n, (what, value) in enumerate(items):
+            if what == "card":
+                positions.append(("card", value))
+            elif n + 1 >= len(items) or items[n + 1][0] == "div":
+                positions.append(("empty", value))
+        count = len(positions)
+        if hi is None:
+            base = float(int(lo) + 1)
+            keys = [base + n for n in range(count)]
+        else:
+            step = (hi - lo) / (count + 1)
+            if step < KEY_EPSILON:
+                return None
+            keys = [lo + step * (n + 1) for n in range(count)]
+
+        new_sections: List[Dict[str, object]] = []
+        at_pos = 0
+        current: Optional[Dict[str, object]] = None
+        for n, (what, value) in enumerate(items):
+            if what == "div":
+                current = {"div": None, "name": value, "slots": []}
+                new_sections.append(current)
+                if n + 1 >= len(items) or items[n + 1][0] == "div":
+                    current["div"] = keys[at_pos]
+                    at_pos += 1
+                continue
+            index = int(value)
+            self.cards[position_key(box, index)].order = keys[at_pos]
+            if current is not None and current["div"] is None:
+                current["div"] = keys[at_pos]
+            if current is not None:
+                current["slots"].append(index)
+            at_pos += 1
+        if take_div is not None:
+            sections[take_div]["div"] = keys[0]
+        merged = sections[:insert_at] + new_sections + sections[insert_at:]
+        self._write_layout(box, merged)
+        return [merged.index(sec) + 1 for sec in new_sections]
+
+    def drop_sections(self, box, ordinals: Sequence[int]) -> None:
+        """Take sections' dividers and names out of `box` (their cards have left or are
+        about to be placed). If the first section goes, the next divider moves to the front."""
+        sections = self.layout_of(box)
+        gone = {int(j) - 1 for j in ordinals}
+        front = sections[0]["div"] if sections else 1
+        kept = [sec for n, sec in enumerate(sections) if n not in gone]
+        if kept and 0 in gone:
+            kept[0]["div"] = front
+        entry = self.ensure_box(box)
+        if len(kept) <= 1 and not (kept and kept[0].get("name")):
+            entry.sections = []
+            entry.section_names = {}
+            return
+        self._write_layout(box, kept)
 
     def newest_captured(self, limit: int) -> List[Tuple[str, int, int, Optional[str]]]:
         """`(key, box, index, cid)` of the `limit` most recently captured cards, newest
@@ -2182,6 +2240,8 @@ class Inventory:
             card.captured_at = card.captured_at or now()
             card.state = card.state or CAPTURED
             card.state_at = card.state_at or card.captured_at
+            if card.order is None:
+                card.order = self._birth_key(card.box, card.index)
             self.cards[card.key] = card
             self._log(CAPTURED, card.key, photo=card.photo, cid=card.cid)
             return card
@@ -2819,7 +2879,10 @@ class Inventory:
                 "was mutated outside the lock."
             )
 
-        transplant = replace(card, box=to_box, index=new_index, photo=None)
+        # AT THE BACK OF THE DESTINATION (D265): a later `place` gives it its real key.
+        transplant = replace(
+            card, box=to_box, index=new_index, photo=None, order=self.next_key(to_box)
+        )
         self.cards[new_key] = transplant
 
         card.state = MOVED
@@ -3256,14 +3319,14 @@ class Inventory:
         if len(old_layout) == len(new_layout):
             moved: Dict[str, str] = {}
             for was, now in zip(old_layout, new_layout):
-                name = held.get(str(int(was)))
+                name = held.get(divider_key(was))
                 if name:
-                    moved[str(int(now))] = name
+                    moved[divider_key(now)] = name
             entry.section_names = moved
         else:
             entry.section_names = {
                 key: name for key, name in held.items()
-                if name and any(str(int(at)) == key for at in new_layout)
+                if name and any(divider_key(at) == key for at in new_layout)
             }
         entry.sections = list(layout)
         self._log(
@@ -3289,7 +3352,7 @@ class Inventory:
             return {}
         out: Dict[int, str] = {}
         for ordinal, start in enumerate(layout, start=1):
-            name = entry.section_names.get(str(int(start)))
+            name = entry.section_names.get(divider_key(start))
             if isinstance(name, str) and name.strip():
                 out[ordinal] = name
         return out
@@ -3320,7 +3383,7 @@ class Inventory:
                     f"section {at} does not exist: {self.box_title(entry.box)} has "
                     f"{len(layout)} section{'s' if len(layout) != 1 else ''}"
                 )
-            key = str(int(layout[at - 1]))
+            key = divider_key(layout[at - 1])
             wanted = None if name is None or not str(name).strip() else str(name).strip()
             if wanted is None:
                 held.pop(key, None)
@@ -3373,8 +3436,8 @@ class Inventory:
                 f"{self.box_title(entry.box)} is sealed, so it takes no more cards — and a section with "
                 f"no cards to come is a divider in front of nothing. Re-open the box first."
             )
-        # IN ORDER SPACE (D265): the divider goes where the next card's ORDER is, the back.
-        at = entry.ordering().of(self.next_index(entry.box))
+        # IN KEY SPACE (D265): the divider goes where the next card's KEY is, the back.
+        at = self.next_key(entry.box)
         layout = list(entry.layout()) or [1]
         last = layout[-1]
         if last == at:
@@ -3578,6 +3641,8 @@ class Inventory:
             # LANE 0's inert column (identity-follows-sku.md §3.1), filled by `_card_columns`
             # above as of lane 1 — matching `store/db.py:TABLES["cards"]`.
             "identity_source",
+            # D265: the order key, REAL in `store/db.py`.
+            "ord",
         ),
     )
     BOXES = TableSpec(

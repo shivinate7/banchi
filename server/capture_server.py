@@ -641,6 +641,7 @@ _BOX_LISTINGS_RELEASE_RE = re.compile(r"^/boxes/(\d+)/listings/release$")
 _BOX_SECTIONS_RE = re.compile(r"^/boxes/(\d+)/sections$")
 # The box map (D264): move touching sections as objects.
 _BOX_SECTIONS_MOVE_RE = re.compile(r"^/boxes/(\d+)/sections/move$")
+_BOX_CARDS_MOVE_RE = re.compile(r"^/boxes/(\d+)/cards/move$")
 # D89's pair: the free count of what a reclaim would delete, and the reclaim itself.
 _BOX_PHOTOS_RE = re.compile(r"^/boxes/(\d+)/photos$")
 _BOX_PHOTOS_RECLAIM_RE = re.compile(r"^/boxes/(\d+)/photos/reclaim$")
@@ -4796,11 +4797,6 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         # ----------------------------------------------------------------- the records
         del inventory.cards[key]
         review_deleted, parked_deleted, cache_deleted = _drop_from_stores(snapshot, key)
-        # THE BOX'S ORDER CLOSES UP WITH THE INDICES (D265): every card keeps its place.
-        registered = inventory.box(box)
-        if registered is not None and registered.order:
-            shifted = registered.ordering().without_index(int(index))
-            registered.order = [list(run) for run in shifted.runs]
 
         for at, old_key, other in movers:
             new_index = at - 1
@@ -4808,6 +4804,10 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
             del inventory.cards[old_key]
             other.box = int(box)
             other.index = new_index
+            # A KEY THAT WAS ITS INDEX SLIDES WITH IT (D265), so a box nothing was placed
+            # into stays the identity. A placed card keeps its key, and so its place.
+            if other.order is None or float(other.order) == float(at):
+                other.order = float(new_index)
             # DERIVED FROM THE CARD'S NAME AND THEREFORE UNCHANGED BY THE SHIFT. It was
             # re-derived from `(box, new_index)` here, fresh rather than string-edited, to
             # keep a stale absolute path from another machine's store from surviving a
@@ -5202,13 +5202,15 @@ def do_move_cards(box: int, payload: dict) -> dict:
 
 # ---------------------------------------------------------------- the box map (D264, D265)
 #
-# A SECTION IS AN OBJECT THAT MOVES WHOLE. One press moves one or more touching sections, with
-# their dividers and names, to a gap in front of any section of a box (the same box reorders
-# it) or to the near end. A merge is every section of a box; a split is the sections from one
-# to the last, into a new box. ONE `Store.write()` per press, so a refusal part way through
-# writes nothing. Each card crosses through `_move_one`, so every guard a single move has (a
-# live paid reading, a card that already left) holds here too, and the queues and the cache
-# follow each card by the same code.
+# A SECTION IS AN OBJECT THAT MOVES WHOLE, AND A CARD OR A RANGE MOVES BY ITSELF. One press
+# moves touching sections (with their dividers and names), or one card or a range of cards
+# from one section, to a gap in a box: the same box reorders. ONE `Store.write()` per press,
+# so a refusal part way through writes nothing. Each card that crosses boxes goes through
+# `_move_one`, so every guard a single move has (a live paid reading, a card that already
+# left) holds here too, and the queues and the cache follow each card by the same code.
+#
+# EACH MOVED CARD TAKES A NEW ORDER KEY BETWEEN ITS NEW NEIGHBOURS' KEYS (D265, the owner's
+# ruling "A key on each card"), in the same write. `Inventory.place` is the one placement.
 #
 # THE RECEIPT IS THE PHYSICAL INSTRUCTION, in the owner's orientation: card 1 is at the far
 # back, and a section's cards stand on the near side of its divider (`docs/specs/box-map.md`
@@ -5218,6 +5220,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
 SECTIONS_MOVED = "sections_moved"
 SECTIONS_MOVE_UNDONE = "sections_move_undone"
 MOVE_SECTIONS_FIELDS = ("first", "last", "to_box", "new_box", "before", "aim")
+MOVE_RANGE_FIELDS = ("indices", "to_box", "before_card", "section_end", "aim")
 UNDO_SECTIONS_FIELDS = ("move",)
 
 
@@ -5258,6 +5261,19 @@ def _landmarks(
     return (named[0] if named else None, named[-1] if named else None, count)
 
 
+def _card_name(inventory: master.Inventory, box: int, index: int) -> Optional[str]:
+    card = inventory.cards.get(master.position_key(box, index))
+    return card.name if card is not None and isinstance(card.name, str) and card.name else None
+
+
+def _find_words(first: Optional[str], last: Optional[str], count: int, what: str) -> str:
+    if first and last and first != last:
+        return f"{what}. Its first card is {first}. Its last card is {last}."
+    if first:
+        return f"{what}. Its first card is {first}."
+    return f"{what}."
+
+
 def _section_move_receipt(
     names: Dict[int, str],
     src_title: str,
@@ -5268,7 +5284,7 @@ def _section_move_receipt(
     dst_empty: bool,
     renumbered: List[str],
 ) -> dict:
-    """The physical instruction for one press: a heading and numbered steps (box-map.md 5.4).
+    """The physical instruction for a section move: a heading and numbered steps (5.4).
 
     "Behind" and "in front of" are never used alone. The steps say "on your side" and "on the
     far side", because card 1 is at the far back of a box."""
@@ -5289,13 +5305,7 @@ def _section_move_receipt(
     front = chosen[0] == 1
     if front:
         what = f"the {_plural(count, 'card')} at the far back"
-    steps = []
-    if first and last and first != last:
-        steps.append(f"In {src_title}, find {what}. Its first card is {first}. Its last card is {last}.")
-    elif first:
-        steps.append(f"In {src_title}, find {what}. Its first card is {first}.")
-    else:
-        steps.append(f"In {src_title}, find {what}.")
+    steps = [_find_words(first, last, count, f"In {src_title}, find {what}")]
     dividers = "that divider" if len(chosen) == 1 else f"those {len(chosen)} dividers"
     if front:
         steps.append(
@@ -5323,11 +5333,11 @@ def _section_move_receipt(
     return {"heading": heading, "steps": steps, "renumbered": renumbered}
 
 
-def _section_idents(spans: Sequence[Tuple[int, List[int]]]) -> Dict[str, int]:
-    """A section's identity (its first slot's index) to its ordinal, for the renumber lines."""
+def _section_idents(sections: Sequence[Dict[str, object]]) -> Dict[str, int]:
+    """A section's identity (its first slot's index, or its divider) to its ordinal."""
     return {
-        (str(run[0]) if run else f"at{start}"): ordinal
-        for ordinal, (start, run) in enumerate(spans, start=1)
+        (str(sec["slots"][0]) if sec["slots"] else f"at{sec['div']}"): ordinal
+        for ordinal, sec in enumerate(sections, start=1)
     }
 
 
@@ -5346,14 +5356,101 @@ def _renumbered(
     return lines
 
 
-def _box_state(entry: Optional[master.Box]) -> Optional[dict]:
+def _box_state(inventory: master.Inventory, box: int) -> Optional[dict]:
+    """What undo puts back for one box: its dividers, their names, and every card's key."""
+    entry = inventory.box(box)
     if entry is None:
         return None
     return {
         "sections": list(entry.sections),
         "section_names": dict(entry.section_names),
-        "order": [list(run) for run in entry.order],
+        "keys": {key: card.order for _, key, card in inventory.records_in(box)},
     }
+
+
+def _aim_or_refuse(
+    inventory: master.Inventory, box: int, indices: Sequence[int], aim, title: str
+) -> None:
+    """The write carries what the screen saw: the count and the first and last card's name."""
+    if aim is None:
+        return
+    cids = [inventory.cards[master.position_key(box, at)].cid for at in indices]
+    seen = {"count": len(indices), "first": cids[0] if cids else None, "last": cids[-1] if cids else None}
+    if not isinstance(aim, dict) or any(aim.get(k) != v for k, v in seen.items()):
+        raise BadRequest(
+            HTTPStatus.CONFLICT, "section_changed",
+            f"{title} changed since the map was drawn, so nothing was moved. "
+            f"Look at the map again and move it once more.",
+        )
+
+
+def _cross(
+    snapshot, inventory: master.Inventory, box: int, indices: Sequence[int], to_box: int
+) -> Tuple[List[int], List[List[object]]]:
+    """Move each card to `to_box` through `_move_one`. Returns the new indices, in order, and
+    what undo needs for each: `[old key, new key, state, state_at, photo]`."""
+    block: List[int] = []
+    pairs: List[List[object]] = []
+    for at in indices:
+        key = master.position_key(box, at)
+        card = inventory.cards[key]
+        kept: List[object] = [key, None, card.state, card.state_at, card.photo]
+        moved = _move_one(snapshot, inventory, key, box, at, to_box)
+        kept[1] = moved["to"]
+        block.append(int(moved["new_index"]))
+        pairs.append(kept)
+    return block, pairs
+
+
+def _record_move(
+    inventory: master.Inventory,
+    *,
+    kind: str,
+    box: int,
+    to_box: int,
+    created: Optional[int],
+    moved: int,
+    undo: dict,
+    receipt: dict,
+    landed: List[int],
+) -> dict:
+    move_id = uuid.uuid4().hex[:12]
+    after = {str(int(box)): _box_digest(inventory, box)}
+    if int(to_box) != int(box):
+        after[str(int(to_box))] = _box_digest(inventory, to_box)
+    inventory._log(
+        SECTIONS_MOVED, None, move=move_id, kind=kind, box=int(box), to_box=int(to_box),
+        created=created, moved=moved, undo=undo, after=after,
+    )
+    rows = [_box_row(inventory, box)]
+    if int(to_box) != int(box):
+        rows.append(_box_row(inventory, to_box))
+    return {
+        "move": move_id,
+        "box": int(box),
+        "to_box": int(to_box),
+        "created": created,
+        "moved": moved,
+        "landed": landed,
+        "receipt": receipt,
+        "boxes": rows,
+    }
+
+
+def _destination(inventory: master.Inventory, payload: dict, box: int) -> Tuple[int, Optional[int]]:
+    """`(to_box, created)`: the box named, or a new one when `new_box` is true."""
+    if payload.get("new_box") is True:
+        to_box = inventory.next_box_number()
+        inventory.ensure_box(to_box)
+        return to_box, to_box
+    to_box = _require_to_box(payload)
+    dst = inventory.box(to_box)
+    if dst is not None and dst.closed and int(to_box) != int(box):
+        raise BadRequest(
+            HTTPStatus.CONFLICT, "box_closed",
+            f"{inventory.box_title(to_box)} is sealed, so it takes no more cards. Open it first.",
+        )
+    return to_box, None
 
 
 def do_move_sections(box: int, payload: dict) -> dict:
@@ -5375,62 +5472,41 @@ def do_move_sections(box: int, payload: dict) -> dict:
             HTTPStatus.BAD_REQUEST, "sections_invalid",
             "Send the first and last section to move, and the gap, as whole numbers.",
         ) from None
-    new_box = payload.get("new_box") is True
-    aim = payload.get("aim")
-    if not new_box and payload.get("to_box") is None:
+    if payload.get("new_box") is not True and payload.get("to_box") is None:
         raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a box to move them into.")
 
     with Store().write() as snapshot:
         inventory = snapshot.inventory
-        entry = inventory.box(box)
-        if entry is None:
+        if inventory.box(box) is None:
             raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", "That box does not exist.")
         src_title = inventory.box_title(box)
-        spans = inventory.section_runs(box)
-        if not (1 <= first <= last <= len(spans)):
+        sections = inventory.layout_of(box)
+        if not (1 <= first <= last <= len(sections)):
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST, "sections_invalid",
-                f"{src_title} has {_plural(len(spans), 'section')}. Choose sections that exist.",
+                f"{src_title} has {_plural(len(sections), 'section')}. Choose sections that exist.",
             )
         chosen = list(range(first, last + 1))
-        slots = [at for j in chosen for at in spans[j - 1][1]]
+        slots = [at for j in chosen for at in sections[j - 1]["slots"]]
         on_hand = [at for at in slots if inventory._on_hand(box, at)]
         if not on_hand:
             raise BadRequest(
                 HTTPStatus.CONFLICT, "section_empty",
                 f"That section of {src_title} holds no cards, so there is nothing to move.",
             )
-        if aim is not None:
-            cids = [inventory.cards[master.position_key(box, at)].cid for at in on_hand]
-            seen = {"count": len(on_hand), "first": cids[0], "last": cids[-1]}
-            if not isinstance(aim, dict) or any(aim.get(k) != v for k, v in seen.items()):
-                raise BadRequest(
-                    HTTPStatus.CONFLICT, "section_changed",
-                    f"{src_title} changed since the map was drawn, so nothing was moved. "
-                    f"Look at the map again and move it once more.",
-                )
-
-        created = None
-        if new_box:
-            to_box = inventory.next_box_number()
-            inventory.ensure_box(to_box)
-            created = to_box
-        else:
-            to_box = _require_to_box(payload)
+        _aim_or_refuse(inventory, box, on_hand, payload.get("aim"), src_title)
+        to_box, created = _destination(inventory, payload, box)
         same = int(to_box) == int(box)
-        dst = inventory.box(to_box)
-        if dst is not None and dst.closed and not same:
-            raise BadRequest(
-                HTTPStatus.CONFLICT, "box_closed",
-                f"{inventory.box_title(to_box)} is sealed, so it takes no more cards. Open it first.",
-            )
-        dst_spans = inventory.section_runs(to_box)
-        if before is not None and not (1 <= before <= len(dst_spans)):
+        dst_sections = sections if same else inventory.layout_of(to_box)
+        if before is not None and not (1 <= before <= len(dst_sections)):
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST, "before_invalid",
                 f"{inventory.box_title(to_box)} has no Section {before} to put them in front of.",
             )
-        if same and (before is not None and first <= before <= last + 1 or before is None and last == len(spans)):
+        if same and (
+            (before is not None and first <= before <= last + 1)
+            or (before is None and last == len(sections))
+        ):
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST, "before_invalid",
                 "The sections are already there. Choose another gap.",
@@ -5442,70 +5518,177 @@ def do_move_sections(box: int, payload: dict) -> dict:
         landmarks = _landmarks(inventory, box, slots)
         target = None if before is None else (before, dst_names.get(before))
         dst_empty = not same and not any(
-            inventory._on_hand(to_box, at) for _, run in dst_spans for at in run
+            inventory._on_hand(to_box, at) for sec in dst_sections for at in sec["slots"]
         )
-        was_src = {k: v for k, v in _section_idents(spans).items() if not (first <= v <= last)}
-        was_dst = {} if same else _section_idents(dst_spans)
-        undo_src = _box_state(entry)
-        undo_dst = None if same else _box_state(dst)
+        was_src = {k: v for k, v in _section_idents(sections).items() if not first <= v <= last}
+        was_dst = {} if same else _section_idents(dst_sections)
+        undo = {
+            "src": _box_state(inventory, box),
+            "dst": None if same else _box_state(inventory, to_box),
+            "pairs": [],
+        }
 
-        pairs: List[List[object]] = []
+        names = [sections[j - 1]["name"] for j in chosen]
         if same:
-            seq = inventory.box_order(box).expand(inventory.next_index(box) - 1)
-            sizes = [len(spans[j - 1][1]) for j in chosen]
-            placed = inventory.place_sections(box, box, chosen, before, slots, sizes, seq)
+            items = []
+            for j, name in zip(chosen, names):
+                items.append(("div", name))
+                items += [("card", at) for at in sections[j - 1]["slots"]]
+            inventory.drop_sections(box, chosen)
+            gap = ("end", None) if before is None else (
+                "before", before - sum(1 for j in chosen if j < before)
+            )
+            landed = inventory.place(box, items, gap)
         else:
-            seq_to = inventory.box_order(to_box).expand(inventory.next_index(to_box) - 1)
-            sizes = [
-                sum(1 for at in spans[j - 1][1] if inventory._on_hand(box, at)) for j in chosen
-            ]
-            block = []
-            for at in on_hand:
-                key = master.position_key(box, at)
-                card = inventory.cards[key]
-                kept = [key, None, card.state, card.state_at, card.photo]
-                moved = _move_one(snapshot, inventory, key, box, at, to_box)
-                kept[1] = moved["to"]
-                block.append(moved["new_index"])
-                pairs.append(kept)
-            placed = inventory.place_sections(box, to_box, chosen, before, block, sizes, seq_to)
+            block, undo["pairs"] = _cross(snapshot, inventory, box, on_hand, to_box)
+            arrived = iter(block)
+            items = []
+            for j, name in zip(chosen, names):
+                items.append(("div", name))
+                items += [
+                    ("card", next(arrived))
+                    for at in sections[j - 1]["slots"]
+                    if at in set(on_hand)
+                ]
+            inventory.drop_sections(box, chosen)
+            landed = inventory.place(
+                to_box, items, ("end", None) if before is None else ("before", before)
+            )
 
-        now_src = _section_idents(inventory.section_runs(box))
-        renumbered = _renumbered(src_title, src_names, was_src, now_src)
+        renumbered = _renumbered(
+            src_title, src_names, was_src, _section_idents(inventory.layout_of(box))
+        )
         if not same:
             renumbered += _renumbered(
-                dst_title, dst_names, was_dst, _section_idents(inventory.section_runs(to_box))
+                dst_title, dst_names, was_dst, _section_idents(inventory.layout_of(to_box))
             )
         receipt = _section_move_receipt(
             src_names, src_title, dst_title, chosen, landmarks, target, dst_empty, renumbered
         )
-        move_id = uuid.uuid4().hex[:12]
-        after = {str(int(box)): _box_digest(inventory, box)}
-        if not same:
-            after[str(int(to_box))] = _box_digest(inventory, to_box)
-        inventory._log(
-            SECTIONS_MOVED, None, move=move_id, box=int(box), to_box=int(to_box),
-            first=first, last=last, before=before, created=created, moved=landmarks[2],
-            undo={"src": undo_src, "dst": undo_dst, "pairs": pairs}, after=after,
+        return _record_move(
+            inventory, kind="sections", box=box, to_box=to_box, created=created,
+            moved=landmarks[2], undo=undo, receipt=receipt, landed=landed,
         )
-        rows = [_box_row(inventory, box)]
-        if not same:
-            rows.append(_box_row(inventory, to_box))
 
-    return {
-        "move": move_id,
-        "box": int(box),
-        "to_box": int(to_box),
-        "created": created,
-        "moved": landmarks[2],
-        "landed": placed["landed"],
-        "receipt": receipt,
-        "boxes": rows,
-    }
+
+def do_move_range(box: int, payload: dict) -> dict:
+    """`POST /boxes/<box>/cards/move`: one card, or a range of cards from one section (D264).
+
+    `indices` are the stored indices of the cards, in the order they stand, all in one
+    section. The gap is `before_card` (a card's index in `to_box`: the cards go on its far
+    side, into its section) or `section_end` (an ordinal of `to_box`: after that section's
+    last card). No divider moves. `aim` is the screen's `{"count", "first", "last"}`.
+    """
+    _reject_unknown(payload, MOVE_RANGE_FIELDS)
+    raw = payload.get("indices")
+    try:
+        indices = [int(v) for v in raw] if isinstance(raw, list) and raw else None
+        before_card = None if payload.get("before_card") is None else int(payload["before_card"])
+        section_end = None if payload.get("section_end") is None else int(payload["section_end"])
+    except (TypeError, ValueError):
+        indices = None
+    if indices is None or (before_card is None) == (section_end is None):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST, "range_invalid",
+            "Send the cards to move, and one gap: a card to go in front of, or a section's end.",
+        )
+    if payload.get("to_box") is None:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a box to move them into.")
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if inventory.box(box) is None:
+            raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", "That box does not exist.")
+        src_title = inventory.box_title(box)
+        sections = inventory.layout_of(box)
+        owner = next(
+            (n for n, sec in enumerate(sections, 1) if set(indices) <= set(sec["slots"])), None
+        )
+        if owner is None or any(not inventory._on_hand(box, at) for at in indices):
+            raise BadRequest(
+                HTTPStatus.CONFLICT, "range_invalid",
+                f"Those cards are not all on hand in one section of {src_title}. "
+                f"Look at the map again.",
+            )
+        order = {at: n for n, at in enumerate(sections[owner - 1]["slots"])}
+        indices = sorted(indices, key=order.get)
+        _aim_or_refuse(inventory, box, indices, payload.get("aim"), src_title)
+        to_box, _ = _destination(inventory, payload, box)
+        same = int(to_box) == int(box)
+        if same and before_card in indices:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "before_invalid",
+                "The cards cannot go in front of one of themselves. Choose another gap.",
+            )
+        dst_title = inventory.box_title(to_box)
+        dst_sections = sections if same else inventory.layout_of(to_box)
+        dst_names = inventory.section_names_for(to_box)
+        if before_card is not None:
+            if not inventory._on_hand(to_box, before_card) and inventory.cards.get(
+                master.position_key(to_box, before_card)
+            ) is None:
+                raise BadRequest(
+                    HTTPStatus.BAD_REQUEST, "before_invalid",
+                    f"{dst_title} has no such card to put them in front of.",
+                )
+            gap = ("card", before_card)
+            there = _card_name(inventory, to_box, before_card)
+            put = (
+                f"In {dst_title}, find {there}. Put them just on the far side of it, in the same order."
+                if there
+                else f"In {dst_title}, find the card the map shows. Put them just on the far side of it, in the same order."
+            )
+        else:
+            if not 1 <= section_end <= len(dst_sections):
+                raise BadRequest(
+                    HTTPStatus.BAD_REQUEST, "before_invalid",
+                    f"{dst_title} has no Section {section_end}.",
+                )
+            gap = ("section_end", section_end)
+            standing = [
+                at for at in dst_sections[section_end - 1]["slots"]
+                if inventory._on_hand(to_box, at) and at not in indices
+            ]
+            last = _card_name(inventory, to_box, standing[-1]) if standing else None
+            if last:
+                put = f"In {dst_title}, find {last}. Put them just on your side of it, in the same order."
+            else:
+                put = (
+                    f"In {dst_title}, find {_divider_words(dst_names, section_end)}. "
+                    f"Put them just on your side of it, in the same order."
+                )
+        first, last_name, count = _landmarks(inventory, box, indices)
+        heading = (
+            f"Move {_plural(count, 'card')} in {src_title}."
+            if same
+            else f"Move {_plural(count, 'card')} from {src_title} to {dst_title}."
+        )
+        steps = [
+            _find_words(first, last_name, count, f"In {src_title}, Section {owner}, find "
+                        f"{'the card' if count == 1 else f'the {count} cards'} the map shows"),
+            f"Take out {'that card' if count == 1 else f'those {count} cards'}, and no divider.",
+            put,
+        ]
+        undo = {
+            "src": _box_state(inventory, box),
+            "dst": None if same else _box_state(inventory, to_box),
+            "pairs": [],
+        }
+        if same:
+            items = [("card", at) for at in indices]
+        else:
+            block, undo["pairs"] = _cross(snapshot, inventory, box, indices, to_box)
+            items = [("card", at) for at in block]
+        inventory.place(to_box, items, gap)
+        receipt = {"heading": heading, "steps": steps, "renumbered": []}
+        return _record_move(
+            inventory, kind="cards", box=box, to_box=to_box, created=None,
+            moved=count, undo=undo, receipt=receipt, landed=[],
+        )
 
 
 def do_undo_section_move(payload: dict) -> dict:
-    """`POST /boxes/sections/undo`: put a section move back exactly (D264).
+    """`POST /boxes/sections/undo`: put a section or card move back exactly (D264).
 
     ALLOWED ONLY WHILE NEITHER BOX HAS CHANGED SINCE THE MOVE. Both boxes' records are hashed
     and compared with the hashes the move wrote. A capture, a sale, a rename or another move
@@ -5533,7 +5716,7 @@ def do_undo_section_move(payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT, "box_changed_since",
                     f"{inventory.box_title(int(number))} has changed since that move, so it "
-                    f"cannot be put back exactly. Move the section back instead.",
+                    f"cannot be put back exactly. Move it back instead.",
                 )
         for tomb_key, new_key, state, state_at, photo in undo.get("pairs") or []:
             arrived = inventory.cards[new_key]
@@ -5558,11 +5741,15 @@ def do_undo_section_move(payload: dict) -> dict:
             if cached is not None:
                 snapshot.cache.entries[tomb_key] = cached
         for number, saved in ((box, undo.get("src")), (to_box, undo.get("dst"))):
-            if saved:
-                target = inventory.ensure_box(number)
-                target.sections = list(saved["sections"])
-                target.section_names = dict(saved["section_names"])
-                target.order = [list(run) for run in saved["order"]]
+            if not saved:
+                continue
+            target = inventory.ensure_box(number)
+            target.sections = list(saved["sections"])
+            target.section_names = dict(saved["section_names"])
+            for key, value in (saved.get("keys") or {}).items():
+                card = inventory.cards.get(key)
+                if card is not None:
+                    card.order = value
         created = found.get("created")
         if created is not None and not inventory.cards.where(box=int(created)):
             del inventory.boxes[str(int(created))]
@@ -10731,7 +10918,7 @@ def _section_spans(
         section = position_of(index).section
         per_section[section] = per_section.get(section, 0) + 1
 
-    mapped = position_of(order.index_at(1)).layout
+    mapped = position_of(occupied[0] if occupied else 1).layout
 
     spans: List[dict] = []
     seen: Set[int] = set()
@@ -14859,6 +15046,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _BOX_SECTIONS_MOVE_RE.match(path)
             if match:
                 body = do_move_sections(int(match.group(1)), self._body())
+                return self._json(HTTPStatus.OK, body)
+            match = _BOX_CARDS_MOVE_RE.match(path)
+            if match:
+                body = do_move_range(int(match.group(1)), self._body())
                 return self._json(HTTPStatus.OK, body)
             if path == "/boxes/sections/undo":
                 return self._json(HTTPStatus.OK, do_undo_section_move(self._body()))

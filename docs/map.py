@@ -2056,9 +2056,9 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D20", "D26", "D86", "D88", "D134", "D140", "D145", "D166",
-                                      "D172", "D174", "D189", "D192", "D213", "D219", "D243",
-                                      "D273"],
+                      "governed_by": ["D20", "D26", "D58", "D86", "D88", "D134", "D140", "D145",
+                                      "D166", "D172", "D174", "D189", "D192", "D213", "D219",
+                                      "D243", "D265", "D273"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "

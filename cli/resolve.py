@@ -601,7 +601,7 @@ def box_views(
             # The label says the box's name (D259), read at the same
             # moment as the layout, so the report and the screen spell one address.
             name=entry.name if entry is not None else None,
-            order=entry.ordering() if entry is not None else master.BoxOrder(),
+            order=inventory.box_order(number),
         )
     return views
 

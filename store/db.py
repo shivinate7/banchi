@@ -153,7 +153,12 @@ PHOTOS_RELOCATED = "photos_relocated"
 # (`store/sendclaims.py`). Purely additive, `_add_submissions`'s case exactly: a table nothing
 # older has, so there is nothing to backfill, and an empty claim table is the correct state
 # for an upgraded store because a claim protects a press that is happening NOW.
-SCHEMA_VERSION = 12
+#
+# THIRTEEN, FOR THE ORDER KEY (D265, the owner's ruling "A key on each card"). `_add_card_order`
+# adds `cards.ord`, a REAL, and gives every card the key its index already is, in the column
+# and in the payload. So every box reads in today's order, and every stored divider (an index)
+# is already a key. Idempotent: a card that has a key keeps it.
+SCHEMA_VERSION = 13
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -191,6 +196,8 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         # (`evidence`) — inert until a later lane's `Inventory.bind_sku` writes it. See
         # `_add_skus`'s comment above `SCHEMA_VERSION`.
         "identity_source",
+        # D265: the card's order key in its box. REAL, see `_REAL`.
+        "ord",
     ),
     "boxes": ("box", "bid", "name", "state"),
     "listings": ("condition", "pushed", "staged", "live"),
@@ -231,6 +238,10 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         "grade", "printing", "first_seen", "last_seen", "source",
     ),
 }
+
+# Columns stored as REAL. `ord`, the order key (D265), is a fraction, and TEXT affinity would
+# store it as a string and sort `10.0` before `9.0`.
+_REAL = {"ord"}
 
 _INTEGER = {
     "box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid", "at", "skus",
@@ -307,7 +318,8 @@ def legacy_present(directory: Path) -> List[str]:
 
 def _ddl(table: str, columns: Sequence[str]) -> str:
     typed = ", ".join(
-        f"{name} {'INTEGER' if name in _INTEGER else 'TEXT'}" for name in columns
+        f"{name} {'INTEGER' if name in _INTEGER else 'REAL' if name in _REAL else 'TEXT'}"
+        for name in columns
     )
     if table == "queues":
         return (
@@ -507,6 +519,8 @@ def _upgrade(
                 # so main's 11 loses nothing.
                 _add_skus(conn)
                 _add_send_claims(conn)       # D273
+            if stored < 13:
+                _add_card_order(conn)        # D265, the order key
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1183,6 +1197,31 @@ def _add_search_index(conn: sqlite3.Connection) -> None:
 # `pipeline/setnames.py:resolve` already folds the two together for MATCHING; this closes the
 # gap for DISPLAY, so a filter drawn on the stored value does not split one drawer into two.
 _SET_HINT_SWEEP = {"UNL": "Unleashed"}
+
+
+def _add_card_order(conn: sqlite3.Connection) -> None:
+    """Schema 13: `cards.ord`, every card's order key in its box (D265).
+
+    THE OWNER'S RULING, 2026-09-25: "A key on each card". The key is a number apart from the
+    stored index, which never moves (D10, D58). A placement between two cards takes a key
+    between theirs.
+
+    EVERY EXISTING CARD GETS THE KEY ITS INDEX ALREADY IS, in the column and in the payload,
+    so today's order is the order and no label moves. The stored dividers are indices, and so
+    they are keys already: no box record is rewritten. A card that already has a key keeps it,
+    so a second run is a no-op.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+    if "ord" not in columns:
+        conn.execute("ALTER TABLE cards ADD COLUMN ord REAL")
+    conn.execute(
+        "UPDATE cards SET payload = json_set(payload, '$.order', CAST(idx AS REAL)) "
+        "WHERE idx IS NOT NULL AND json_extract(payload, '$.order') IS NULL"
+    )
+    conn.execute(
+        "UPDATE cards SET ord = CAST(json_extract(payload, '$.order') AS REAL) "
+        "WHERE ord IS NULL AND json_extract(payload, '$.order') IS NOT NULL"
+    )
 
 
 def _add_set_columns(conn: sqlite3.Connection) -> None:

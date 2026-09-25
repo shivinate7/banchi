@@ -65,6 +65,7 @@ has already failed to decide.
 from __future__ import annotations
 
 import bisect
+import math
 import re
 import unicodedata
 from collections import OrderedDict
@@ -329,7 +330,9 @@ class Position:
         every box that has grown into its own dividers.
         """
         ahead = bisect.bisect_left(self._occ or (), start)
-        unfilled = max(0, start - 1 - self.high_water)
+        # `ceil` keeps this a count of slots when the box's keys are fractions (D265). For a
+        # whole-number key it is `start - 1 - high_water`, exactly as before.
+        unfilled = max(0, math.ceil(start - self.high_water) - 1)
         return ahead + unfilled + 1
 
     @property
@@ -479,7 +482,7 @@ def box_view(inventory, box) -> Tuple[str, "BoxView"]:
             occupied=tuple(sorted(on_hand)),
             departed=tuple(sorted(gone)),
             name=title,
-            order=entry.ordering() if entry is not None else master.BoxOrder(),
+            order=inventory.box_order(number),
         )
     except Exception:  # noqa: BLE001 — a refusal must not raise a second error
         view = BoxView(name=title)
@@ -634,7 +637,7 @@ class BoxView:
         return cached
 
     def at(self, box: int, index: int) -> "Position":
-        if self.order.identity:
+        if self.order.identity or self.occupied is None:
             return Position(
                 int(box), int(index), self.sections, self.occupied, self.departed,
                 box_name=self.name,
@@ -675,14 +678,17 @@ def divider_index(
     there will hold one card.
     """
     if ordinal <= 1:
-        return 1
+        # The front of the box: 1, or below it where a section was placed in front of card
+        # 1 (D265, the order key).
+        return min([1] + [v for v in (occupied[:1] or ()) ] + [v for v in (departed[:1] or ())])
     if ordinal <= len(occupied):
         return int(occupied[ordinal - 1])
     high = max(
         int(occupied[-1]) if occupied else 0,
         int(departed[-1]) if departed else 0,
     )
-    return high + (ordinal - len(occupied))
+    # `int` keeps a planned divider on the whole-number keys a capture takes (D265).
+    return int(high) + (ordinal - len(occupied))
 
 
 def departed_label(box_name: str, section: Optional[int], card: int) -> str:

@@ -21073,7 +21073,10 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
             conn.close()
         return stamp, tables, views, columns, skus_rows
 
-    checks.equal(db.SCHEMA_VERSION, 12, "the current schema is 12: skus at 11, send_claims at 12")
+    checks.equal(
+        db.SCHEMA_VERSION, 13,
+        "the current schema is 13: skus at 11, send_claims at 12, the order key at 13 (D265)",
+    )
 
     # --- a store at 10 has neither table -------------------------------------------------
     with isolated_home():
@@ -21100,7 +21103,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         checks.equal(
             (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
              {"sku_products", "sku_printings"} <= views),
-            (("12",), True, True, True, True),
+            ((str(db.SCHEMA_VERSION),), True, True, True, True),
             "a schema-10 store passes through 11 and then 12, and gains both tables",
         )
         checks.equal(
@@ -21131,7 +21134,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         stamp, tables, _views, _columns, rows = shape(store_path)
         checks.equal(
             (stamp, "send_claims" in tables, rows),
-            (("12",), True, 1),
+            ((str(db.SCHEMA_VERSION),), True, 1),
             "a schema-11 store from main gains send_claims at 12 and keeps its skus row",
         )
 
@@ -21162,7 +21165,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         checks.equal(
             (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
              {"sku_products", "sku_printings"} <= views),
-            (("12",), True, True, True, True),
+            ((str(db.SCHEMA_VERSION),), True, True, True, True),
             "the UX branch's schema-11 store reaches 12 with skus, both views and "
             "cards.identity_source",
         )

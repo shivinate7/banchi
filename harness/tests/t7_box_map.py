@@ -315,8 +315,210 @@ def check_section_moves(checks: Checks) -> None:
             "a mid-box delete in a box with an order keeps every other card in its place",
         )
 
-    order = master.BoxOrder.from_sequence(list(range(1, 10)), 10)
-    checks.ok(order.identity, "an order that is the index is stored as nothing: no migration")
 
 
-CHECKS = (check_box_map_safety, check_section_moves)
+def _keys(box: int) -> dict:
+    """`index -> order key` for every record in the box."""
+    inv = Store().read().inventory
+    return {card.index: card.order for _, _, card in inv.records_in(box)}
+
+
+def _changed(before: dict, after: dict) -> List[int]:
+    return sorted(i for i in after if i in before and before[i] != after[i])
+
+
+def check_order_key_migration(checks: Checks) -> None:
+    """Schema 13 (D265, "A key on each card"): every card gets the key its index already is.
+
+    Red before `_add_card_order` existed: the column was missing and every payload had no key.
+    """
+    import sqlite3
+
+    from store import db, files
+
+    checks.note("")
+    checks.note("BOX MAP — the order key migration, schema 12 to 13 (D265)")
+    with isolated_home():
+        _shelf()
+        labels_before = [_label(1, f"o{i}") for i in range(1, 10)]
+        directory = files.inventory_dir()
+        conn = sqlite3.connect(str(db.path(directory)))
+        conn.execute("ALTER TABLE cards DROP COLUMN ord")
+        conn.execute("UPDATE cards SET payload = json_remove(payload, '$.order')")
+        conn.execute("UPDATE meta SET value = '12' WHERE key = 'schema'")
+        conn.commit()
+        conn.close()
+
+        inv = Store().read().inventory
+        checks.equal(
+            {card.index: card.order for _, _, card in inv.records_in(1)},
+            {i: float(i) for i in range(1, 10)},
+            "every card's key is its index after the upgrade: today's order, unchanged",
+        )
+        conn = sqlite3.connect(str(db.path(directory)))
+        column = conn.execute("SELECT count(*) FROM cards WHERE ord = idx").fetchone()[0]
+        stamp = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()[0]
+        conn.close()
+        checks.equal((column, stamp), (13, "13"), "the column is filled too, and the file is stamped 13")
+        checks.equal(
+            [_label(1, f"o{i}") for i in range(1, 10)], labels_before,
+            "no label moves: D58's counted numbers are exactly what they were",
+        )
+
+        # IDEMPOTENT: a key a card already has is kept when the step runs again.
+        capture_server.do_move_sections(1, {"first": 3, "to_box": 1, "before": 1})
+        placed = _keys(1)
+        conn = sqlite3.connect(str(db.path(directory)))
+        conn.execute("UPDATE meta SET value = '12' WHERE key = 'schema'")
+        conn.commit()
+        conn.close()
+        checks.equal(_keys(1), placed, "a second upgrade keeps every key a card already has")
+
+
+def check_per_card_order(checks: Checks) -> None:
+    """Each kind of move writes the key of each moved card, and no other card (D265)."""
+    checks.note("")
+    checks.note("BOX MAP — per-card order keys after each kind of move (D265)")
+
+    with isolated_home():
+        _shelf()
+        src, dst = _keys(1), _keys(2)
+        capture_server.do_move_sections(1, {"first": 2, "to_box": 2, "before": 2})
+        after_dst = _keys(2)
+        checks.equal(_changed(dst, after_dst), [], "a section move into a box writes no card already there")
+        checks.equal(_keys(1), src, "and no key in the box it left: the tombstones keep theirs")
+        arrived = sorted(i for i in after_dst if i not in dst)
+        keys = [after_dst[i] for i in arrived]
+        checks.ok(
+            len(arrived) == 4 and all(dst[2] < k < dst[3] for k in keys) and keys == sorted(keys),
+            "the four cards that arrived take keys between Singles' last card and Promos' first, in order",
+            str(after_dst),
+        )
+
+    with isolated_home():
+        _shelf()
+        before = _keys(1)
+        capture_server.do_move_sections(1, {"first": 3, "to_box": 1, "before": 2})
+        checks.equal(
+            _changed(before, _keys(1)), [8, 9],
+            "a reorder writes the keys of the moved section's cards and of no other card",
+        )
+        checks.equal(
+            _walk(1), ["o1", "o2", "o3", "o8", "o9", "o4", "o5", "o6", "o7"],
+            "and the walk reads them where they were put",
+        )
+
+    with isolated_home():
+        _shelf()
+        dst = _keys(2)
+        capture_server.do_move_sections(1, {"first": 1, "last": 3, "to_box": 2})
+        checks.equal(_changed(dst, _keys(2)), [], "a merge writes no card the destination already held")
+        body = None
+
+    with isolated_home():
+        _shelf()
+        body = capture_server.do_move_sections(1, {"first": 2, "last": 3, "new_box": True})
+        keys = _keys(body["created"])
+        checks.equal(
+            sorted(keys.values()), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "a split into a new box gives its cards whole-number keys from 1",
+        )
+
+
+def check_card_moves(checks: Checks) -> None:
+    """The next slice (owner, 2026-09-25): one card or a range, before any card or at any
+    section's end, in the same one write, with the same receipt and the same undo.
+
+    Red before `do_move_range` existed: the route answered nothing.
+    """
+    checks.note("")
+    checks.note("BOX MAP — single cards and ranges (D264, the next slice)")
+
+    with isolated_home():
+        _shelf()
+        before = {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)}
+        dst = _keys(2)
+        body = capture_server.do_move_range(
+            1, {"indices": [5, 6], "to_box": 2, "before_card": 2}
+        )
+        checks.equal(
+            _walk(2), ["m1", "o5", "o6", "m2", "m3", "m4"],
+            "a range lands in front of the card named, in order",
+        )
+        checks.equal(_changed(dst, _keys(2)), [], "and no card already in that box is written")
+        checks.equal(
+            _sections(2), [("Singles", 4), ("Promos", 2)],
+            "the range joins that card's section, and no divider moves",
+        )
+        checks.equal(_sections(1), [("Commons", 3), ("Uncommons", 2), ("Rares", 2)], "and the source keeps its dividers")
+        checks.ok(
+            body["receipt"]["heading"] == "Move 2 cards from Origins to Mixed."
+            and "find m2. Put them just on the far side of it" in body["receipt"]["steps"][2],
+            "the receipt is the physical instruction",
+            str(body["receipt"]),
+        )
+        capture_server.do_undo_section_move({"move": body["move"]})
+        checks.equal(
+            {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)}, before,
+            "undo puts a card move back exactly",
+        )
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [9], "to_box": 1, "before_card": 1})
+        checks.equal(_walk(1)[0], "o9", "one card moves to the far back of its own box")
+        checks.equal(
+            _sections(1), [("Commons", 4), ("Uncommons", 4), ("Rares", 1)],
+            "and it joins section 1: the front divider moves with it",
+        )
+        capture_server.do_move_range(1, {"indices": [2], "to_box": 1, "before_card": 4})
+        checks.equal(
+            _walk(1), ["o9", "o1", "o3", "o2", "o4", "o5", "o6", "o7", "o8"],
+            "in front of the first card of a section, the card joins THAT section",
+        )
+        checks.equal(
+            [n for n, _ in _sections(1)], ["Commons", "Uncommons", "Rares"],
+            "and every section keeps its name",
+        )
+        checks.equal(_sections(1)[1], ("Uncommons", 5), "the card counts in Uncommons now")
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [1, 2], "to_box": 2, "section_end": 1})
+        checks.equal(
+            _walk(2), ["m1", "m2", "o1", "o2", "m3", "m4"],
+            "a range dropped at a section's end lands after its last card, before the next divider",
+        )
+        capture_server.do_put_box(2, {"state": master.BOX_CLOSED})
+        refusal(
+            checks, lambda: capture_server.do_move_range(1, {"indices": [3], "to_box": 2, "section_end": 1}),
+            "box_closed", "a sealed box refuses a card too",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_range(
+                1, {"indices": [3], "to_box": 1, "section_end": 3,
+                    "aim": {"count": 1, "first": "x", "last": "x"}},
+            ),
+            "section_changed", "a stale aim refuses a card move",
+        )
+
+    with isolated_home():
+        _shelf()
+        # Each press halves the same gap, in front of card 2, until it is too narrow.
+        for n in range(30):
+            capture_server.do_move_range(1, {"indices": [8 + n % 2], "to_box": 1, "before_card": 2})
+        checks.equal(
+            _walk(1), ["o1", "o8", "o9", "o2", "o3", "o4", "o5", "o6", "o7"],
+            "one gap split thirty times still orders the box: a re-space keeps every card in place",
+        )
+        checks.ok(
+            bool(Store().named_events("box_respaced")),
+            "and the re-space is on the record, the one write that touches cards it did not move",
+        )
+
+
+CHECKS = (
+    check_box_map_safety, check_section_moves, check_order_key_migration,
+    check_per_card_order, check_card_moves,
+)

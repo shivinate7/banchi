@@ -55,8 +55,7 @@ The shape of the key is not decided. The builder brings options to the owner wit
 
 ### What is built
 
-BUILT on `ux/boxmap`, 2026-09-25, as D-box-order-is-runs: runs of stored indices on the box
-record. The orchestrator's brief asked for the build before the owner's word on the form. So
-the form is a proposal until the owner rules on it in PR 3. T7's `check_section_moves` holds
-its two harness cases. An order that is the index is stored as nothing. A placement between two
-sections renumbers only the sections it should.
+BUILT on `ux/boxmap`, 2026-09-25. The owner answered the open question above on 2026-09-25:
+"A key on each card". D-a-key-on-each-card records the form (a fraction that starts at the
+index), the dividers, the migration and the moves. T7's `t7_box_map.py` holds the harness
+cases: the migration changes no label, and a placement writes only the cards it moves.
