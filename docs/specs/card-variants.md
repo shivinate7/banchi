@@ -135,3 +135,7 @@ rarity claim agrees with the Showcase rows, so they rank first. All three keep a
 
 No egregious case has been measured yet. `CATALOG_EGREGIOUS_LIMIT` is a generous bound, not a
 fitted one. Re-measure it the day a real query reaches it.
+
+An entry written before this change keeps its old, unranked suggestions until
+`pkmnscan queue refresh --write` runs over it. That press is D167's own mechanism, unchanged.
+It is a one-time step over the live store, on the owner's word, not part of this change.
