@@ -38,7 +38,15 @@ import { sayPlace } from './position'
 // D46's own picker, reused rather than forked — this file's own header rule: "added to
 // inventory and both screens get it, not a fork" (D252).
 import { CatalogPanel } from './ReviewQueue'
-import { correctAnswer, describeFailure, photoUrl, reviewCatalog, undoCorrectAnswer } from './server'
+import {
+  confirmIdentity,
+  correctAnswer,
+  describeFailure,
+  photoUrl,
+  reviewCatalog,
+  undoConfirmIdentity,
+  undoCorrectAnswer,
+} from './server'
 import type { CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload } from './types'
 import './CardHero.css'
 
@@ -151,6 +159,40 @@ function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
   }
 }
 
+/** identity-follows-sku.md §5.4/§8.1, the owner's ruling on Details' two identity lines
+ *  (2026-09-24, verbatim: "show listing name and/or hide when identical i dont think it's
+ *  an or situation") — the second of the two, "Read as": what the camera actually returned,
+ *  drawn only when `reading_differs` says it disputes what Card/Number already show. Gated
+ *  on `reading_differs`, NOT `read_disputes` — that field answers a different question, once,
+ *  at bind time; `reading_differs` is computed fresh off the card's current shown fields
+ *  (`server/capture_server.py:_listing_decoration`), which is what keeps this line from
+ *  repeating "Card:"/"Number:" word for word on a held card (the review-round defect).
+ *  Composed from the raw `read_number`/`read_printed_total` pair rather than a folded
+ *  `number_display` — this line is showing what the camera actually returned (D67 keeps the
+ *  glued-set-code fold for the identity's own number, never for the read), the same choice
+ *  `ReviewQueue.tsx`'s own read-facing rows make (`cardNumber.ts`'s header). */
+function readAsFact(card: InventoryCard): Detail | null {
+  if (card.reading_differs !== true) return null
+  const name = typeof card.read_name === 'string' && card.read_name.trim() !== '' ? card.read_name.trim() : null
+  const number = collectorNumber({ number: card.read_number, printed_total: card.read_printed_total })
+  const value = [name, number].filter((part): part is string => part !== null).join(' ')
+  return value === '' ? null : { label: 'Read as', value }
+}
+
+/** The first of Details' two identity lines, "Listed as" (§5.4/§8.1, the same 2026-09-24
+ *  ruling): the SKU's own catalog name and number, drawn only when `listing_differs` says
+ *  they disagree with what Card/Number already show — so the photo's reading and the
+ *  listing can be read side by side, right above the confirm press below. `card.listing` is
+ *  absent on a card with no SKU or a SKU the `skus` table does not (yet) hold; this function
+ *  draws nothing then either, matching `listing_differs`'s own false in that case. */
+function listedAsFact(card: InventoryCard): Detail | null {
+  if (card.listing_differs !== true || card.listing == null) return null
+  const name = card.listing.name.trim() !== '' ? card.listing.name.trim() : null
+  const number = collectorNumber({ number: card.listing.number, printed_total: card.listing.printed_total })
+  const value = [name, number].filter((part): part is string => part !== null).join(' ')
+  return value === '' ? null : { label: 'Listed as', value }
+}
+
 function listingFact(card: InventoryCard, listings: Readonly<Record<string, Listing>>): Detail {
   const sku = card.sku === null ? '' : card.sku.trim()
   if (sku === '') return { label: 'Listed', value: 'no SKU yet' }
@@ -192,12 +234,16 @@ export function factGroupsOf(
   market: MarketRead | undefined,
   listings: Readonly<Record<string, Listing>>,
 ): FactGroup[] {
+  const listedAs = listedAsFact(card)
+  const readAs = readAsFact(card)
   return [
     {
       title: 'Identity',
       facts: [
         { label: 'Card', value: nameOf(card) ?? 'not identified yet' },
         { label: 'Number', value: numberCell(card), kind: 'mono' },
+        ...(listedAs !== null ? [listedAs] : []),
+        ...(readAs !== null ? [readAs] : []),
         { label: 'Game', value: gameWord(card) ?? 'not recorded' },
         { label: 'Set hint', value: card.set_hint ?? 'none', kind: 'mono' },
       ],
@@ -450,19 +496,43 @@ export function CardDetailsSection({
  *  (`BoxBrowse.tsx`'s own `CardOps` menu is not reachable from here), while this one needs
  *  nothing `#/orders` cannot already do — the box and index alone.
  *
+ *  identity-follows-sku.md §8.1 ADDS A SECOND PRESS TO THIS SAME COMPONENT, "The listing is
+ *  right" — the sibling case a correction cannot answer: a HELD card
+ *  (`identity_source: 'read'`) whose SKU is already the right one and whose drawn name is
+ *  only the camera's. `#/inventory`-only exactly as the correction is, on the owner's own
+ *  ruling (D252, "Inventory only"): both controls live behind `CardDetailsSection`'s
+ *  `correctable` prop, so `#/orders` never renders this component's confirm press either. It
+ *  shares this component's SLOT rather than getting a second one (D118) and its own eligible
+ *  check is a NARROWING of `eligible` below — a card that cannot be corrected cannot be
+ *  confirmed either, and the reverse is not true.
+ *
  *  A SEPARATE PANEL EVERY WRITE ON THIS SCREEN TAKES: neither the header nor the details
- *  disclosure re-reads after a correction, because both are drawn from the `card` this
- *  component was HANDED, owned by `BoxBrowse.tsx`/`OrdersWalkPane.tsx` and not by this file.
- *  The receipt below still stands and its Undo still works — the write and the reversal are
- *  both real — the rest of the pane simply catches up the way every other write on this
- *  screen does, on the caller's own next read. */
+ *  disclosure re-reads after a correction or a confirm, because both are drawn from the
+ *  `card` this component was HANDED, owned by `BoxBrowse.tsx`/`OrdersWalkPane.tsx` and not by
+ *  this file. The receipt below still stands and its Undo still works — the write and the
+ *  reversal are both real — the rest of the pane simply catches up the way every other write
+ *  on this screen does, on the caller's own next read. */
 /** The identity this control believes the card carries RIGHT NOW — `card` if this control has
  *  written nothing, or the last write's own answer once it has. `screen-freshness.mjs`'s
  *  idiom 4 ("the response carries the new state"), and the real reason it exists: `card` is
  *  owned by `BoxBrowse.tsx`/`OrdersWalkPane.tsx` and does not move until their own next read,
  *  so without this a second press — or the small note below it — would work off what the
- *  card USED to be. */
-type Corrected = { sku: string; condition: string; name: string | null }
+ *  card USED to be. `identity_source` is the field a confirm changes without changing `sku`
+ *  at all, which is why it is carried here too: it is the only way this component can tell,
+ *  before the caller's own next read, that a card it just confirmed is no longer eligible for
+ *  a second confirm.
+ *
+ *  `via` IS WHY THE NOTE BELOW ONLY EVER DRAWS FOR A CORRECTION (D118). A correction's own
+ *  note is D252's shipped behaviour, unchanged. A confirm's own receipt is the toast alone —
+ *  `runConfirm` below already puts the same sentence there — because the note's own height
+ *  is exactly the "control becomes its own result" case D118 names, and unlike a correction
+ *  (which also opens a whole new catalog-search panel on `Wrong card?`, already the taller of
+ *  this component's states) a confirm has no other draw that would ever need more room than
+ *  the button it replaces. Drawing the note for it too would grow `.card-correction` on
+ *  every confirm with nothing else on the card panel ever needing that height, which is
+ *  measured screen shake and not a state this control has to draw twice — the toast already
+ *  carries it once. */
+type Written = { sku: string; condition: string; name: string | null; identity_source: string | null; via: 'correct' | 'confirm' }
 
 function ListingCorrection({ card }: { readonly card: InventoryCard }) {
   const [open, setOpen] = useState(false)
@@ -470,15 +540,31 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
   const [lookup, setLookup] = useState<CatalogLookup | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [written, setWritten] = useState<Corrected | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+  const [written, setWritten] = useState<Written | null>(null)
   const inflight = useRef(0)
 
   const sku = written?.sku ?? card.sku
   const name = written?.name ?? nameOf(card)
+  const identitySource = written?.identity_source ?? card.identity_source ?? null
 
   // The two refusals `POST /inventory/<box>/<index>/correct` would give this card anyway —
   // checked here so the control is never offered a press the server would only reject.
   const eligible = sku !== null && card.state === 'identified'
+
+  // WHETHER THE CONFIRM PRESS EXISTS AT ALL FOR THIS CARD, read off `card` — the prop this
+  // component was HANDED — and NEVER off `written` (D118). A card that arrived held
+  // (`identity_source: 'read'`) keeps this press in the `.bn-actions-stack` for this
+  // component's whole lifetime, so a successful confirm cannot shrink the stack by removing
+  // its own button: the slot's height is set once, by the card `BoxBrowse.tsx` handed this
+  // component, and a write inside this component never changes it again.
+  const confirmable = eligible && card.identity_source === 'read'
+
+  // §8.1's own third refusal, `already_confirmed`: once THIS component's own write (or the
+  // caller's next full read, which arrives as a new `card` prop and a fresh `confirmable`
+  // above) has bound the SKU, the button stays in place but goes inert rather than offering
+  // a press the server would only refuse.
+  const confirmDone = confirmable && identitySource !== 'read'
 
   const { box, index } = card
 
@@ -501,15 +587,28 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
     search('')
   }
 
+  /* The toast names the place the way the screen draws it: the card row's own label, read as a
+     sentence. A row with no place (a pooled card) gets no place in the toast at all. */
+  const withPlace = (row: InventoryCard, rest: string): string => {
+    const label = row.label ?? card.label
+    return label ? `${sayPlace(label)} — ${rest}` : rest.charAt(0).toUpperCase() + rest.slice(1)
+  }
+
   const runUndo = (atBox: number, atIndex: number) => {
     void undoCorrectAnswer(atBox, atIndex)
       .then((result) => {
-        setWritten({ sku: result.sku, condition: result.condition, name: nameOf(result.card) })
+        setWritten({
+          sku: result.sku,
+          condition: result.condition,
+          name: nameOf(result.card),
+          identity_source: result.card.identity_source ?? null,
+          via: 'correct',
+        })
         toast({
           kind: 'ok',
           icon: 'undo',
           title: 'Correction undone',
-          body: `Back to ${result.sku}`,
+          body: withPlace(result.card, `back to ${result.sku}`),
         })
       })
       .catch((err: unknown) => {
@@ -523,7 +622,13 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
     correctAnswer(box, index, row.sku)
       .then((result) => {
         setOpen(false)
-        setWritten({ sku: result.sku, condition: result.condition, name: nameOf(result.card) })
+        setWritten({
+          sku: result.sku,
+          condition: result.condition,
+          name: nameOf(result.card),
+          identity_source: result.card.identity_source ?? null,
+          via: 'correct',
+        })
         toast({
           kind: result.restores_to ? 'receipt' : 'status',
           icon: 'wand',
@@ -538,6 +643,58 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
       .finally(() => setBusy(false))
   }
 
+  // §8.1: "`{"undo": true}` returns the card to `identity_source = read`" — D28's shape,
+  // `runUndo` above's own twin. `do_confirm_identity` always captures a full snapshot before
+  // it writes, so a fresh confirm's own Undo is offered unconditionally below, unlike
+  // `choose`'s `result.restores_to` check — this route has no such field to be null.
+  const runUndoConfirm = (atBox: number, atIndex: number) => {
+    void undoConfirmIdentity(atBox, atIndex)
+      .then((result) => {
+        setWritten({
+          sku: result.sku,
+          condition: result.condition,
+          name: nameOf(result.card),
+          identity_source: result.card.identity_source ?? null,
+          via: 'confirm',
+        })
+        toast({
+          kind: 'ok',
+          icon: 'undo',
+          title: 'Confirmation undone',
+          body: withPlace(result.card, "back to the camera's read."),
+        })
+      })
+      .catch((err: unknown) => {
+        toast({ kind: 'refusal', title: 'The confirmation was not undone', body: describeFailure(err).message })
+      })
+  }
+
+  const runConfirm = () => {
+    if (confirmBusy) return
+    setConfirmBusy(true)
+    confirmIdentity(box, index)
+      .then((result) => {
+        setWritten({
+          sku: result.sku,
+          condition: result.condition,
+          name: nameOf(result.card),
+          identity_source: result.card.identity_source ?? null,
+          via: 'confirm',
+        })
+        toast({
+          kind: 'receipt',
+          icon: 'check',
+          title: 'Listing confirmed',
+          body: `${result.card.name ?? name ?? 'Card'} stays SKU ${result.sku}.`,
+          action: { label: 'Undo', onPress: () => runUndoConfirm(box, index) },
+        })
+      })
+      .catch((err: unknown) => {
+        toast({ kind: 'refusal', title: 'The listing was not confirmed', body: describeFailure(err).message })
+      })
+      .finally(() => setConfirmBusy(false))
+  }
+
   // THE SLOT KEEPS ITS HEIGHT WHEN THE CONTROL BECOMES ITS OWN RESULT (D118),
   // `.card-locations-action`'s own rule (app/src/CardLocations.css), reused rather than
   // invented: `.card-correction`'s CSS reserves `Wrong card?`'s own height always, so a press
@@ -548,18 +705,41 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
     <div className="card-correction">
       {!eligible ? null : (
         <>
-          {written !== null ? (
+          {written !== null && written.via === 'correct' ? (
             // WRITTEN, NOT `card` — the header and the Details panel above still show what
             // this component was handed until the caller's own next read; this line is the
             // one place on the pane that already knows what actually happened.
+            //
+            // CORRECTION ONLY (D118). A confirm's own receipt is the toast alone — see
+            // `Written.via`'s own comment above for why drawing this note for a confirm too
+            // would grow this reserved slot for no card panel ever needs.
             <p className="card-correction-note">
               Now {name ?? 'unnamed'}, SKU {sku}. The rest of this panel updates on the next reload.
             </p>
           ) : null}
           {!open ? (
-            <Button variant="quiet" size="sm" icon="search" onClick={openPanel}>
-              Wrong card?
-            </Button>
+            // `.bn-actions-stack` (D195, kit.css): the two presses share this component's
+            // one role — same variant, same size — so a sector holding both takes the
+            // stack's own equal-width column rather than each button its own intrinsic
+            // width, which is what `button-stack.spec.ts` finds and checks regardless of
+            // which wrapper class drew it.
+            <div className="bn-actions-stack">
+              {!confirmable ? null : (
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  icon="check"
+                  busy={confirmBusy}
+                  disabled={confirmDone}
+                  onClick={runConfirm}
+                >
+                  The listing is right
+                </Button>
+              )}
+              <Button variant="quiet" size="sm" icon="search" onClick={openPanel}>
+                Wrong card?
+              </Button>
+            </div>
           ) : (
             <div
               className="bn-panel card-correction-panel"

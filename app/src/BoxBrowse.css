@@ -406,7 +406,7 @@
 /* THE SLOT CELL IS AS WIDE AS THE STRING A DEPARTURE WILL PUT IN IT, NOT AS WIDE AS THE ONE IN
    IT NOW (D118). This column is `max-content`, and `departedSlot` (S5) is what BoxBrowse.tsx's
    ghost reserves — the row's OWN struck `#N`, unchanged in width by its own departure since
-   D-a-box-is-shown-by-its-name (2026-09-23) stopped drawing the store key there at all, except
+   D259 (2026-09-23) stopped drawing the store key there at all, except
    as that function's own fallback for a pre-ruling record with no label to read a number off:
    `B3 #96`, in the mono face, wider than any `#N` this box will ever show. Reserving that
    fallback UNCONDITIONALLY, the first build of this rule, made every ordinary row's ghost

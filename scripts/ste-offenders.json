@@ -1,5 +1,5 @@
 {
-  "_about": "THE SHRINKING OFFENDER LIST for `make docs-audit`'s `ste offenders` row (D226; D-ratchets-become-offender-lists, which retires D229's pinned per-file ratio). files: file -> lane (who owes the fix) and rule -> entries. An entry is `<hash> <label>`: the hash is the offending sentence's identity (scripts/ste_measure.py:offender_identity), the label is its first words for the person who rewrites it, and only the hash is compared. A sentence written twice is listed twice. A decision entry is keyed by its file tail (`docs/decisions/*-<slug>.md`), so a claim that numbers it moves nothing. The row FAILS on an offending sentence this list does not name, on an entry that matches nothing (stale: delete it), and on an entry the list at the merge-base with origin/main did not hold (growth), unless its rule is not in `rules` at the merge-base. A new file starts clean. A lane that rewrites a sentence deletes its entry in the same commit. `make offenders-prune` does that delete and never adds an entry. Never add an entry to excuse new prose. `rules` must equal the linter's ERROR-severity codes.",
+  "_about": "THE SHRINKING OFFENDER LIST for `make docs-audit`'s `ste offenders` row (D226; D280, which retires D229's pinned per-file ratio). files: file -> lane (who owes the fix) and rule -> entries. An entry is `<hash> <label>`: the hash is the offending sentence's identity (scripts/ste_measure.py:offender_identity), the label is its first words for the person who rewrites it, and only the hash is compared. A sentence written twice is listed twice. A decision entry is keyed by its file tail (`docs/decisions/*-<slug>.md`), so a claim that numbers it moves nothing. The row FAILS on an offending sentence this list does not name, on an entry that matches nothing (stale: delete it), and on an entry the list at the merge-base with origin/main did not hold (growth), unless its rule is not in `rules` at the merge-base. A new file starts clean. A lane that rewrites a sentence deletes its entry in the same commit. `make offenders-prune` does that delete and never adds an entry. Never add an entry to excuse new prose. `rules` must equal the linter's ERROR-severity codes.",
   "rules": [
     "STE001",
     "STE006",
@@ -224,7 +224,6 @@
         "349b0183fa This is the displacement guard the two-step exists to be, defeated by g…",
         "3557a3013a Every measurement above stands as evidence about the days it was taken…",
         "363dc530d3 The capture screen's is a fixed authored vocabulary in stack order, whe…",
-        "37f916e5d0 It is *not* the only reason sitting on a card the ladder resolved: `low…",
         "390913d7e6 So what is true is narrower and worse than a retirement: **the five ban…",
         "3ab4a2f04a **The icon set is 73 paths in `app/src/kit/Icon.tsx`**, on a 24-unit gr…",
         "3bab0ef8a1 Every contrast ratio is computed from the *rendered* colors rather than…",
@@ -368,7 +367,6 @@
         "f62e0fbb71 The listing-release control on the box header is an outline like every…",
         "f70ffb5134 If most of a queue is, the screen needs a real defer that records a rea…",
         "f76cfb5263 A longer answer grows the slot, and the sentence is never cut: a notice…",
-        "f87e54973d The pipeline defines fifteen strings and the screen labels FOURTEEN of…",
         "f9b6bb8091 What is in the tree instead is `.bn-page` (24px top, 32px sides, 64px f…",
         "fb8cc0507c A lower cap used to move a screen's whole gutter toward the middle of t…",
         "fb95577ea6 A finger that pressed twice, which is the ordinary response to a button…",

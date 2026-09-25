@@ -13,11 +13,15 @@
  * up as a machine string on screen rather than as a blank line.
  */
 
-/* The FOURTEEN, transcribed from the two modules that emit them: six from
+/* The FIFTEEN, transcribed from the two modules that emit them: six from
  * `pipeline/variant.py` (the D3 ladder's review reasons, including D23's
- * `rarity_claim_mismatch`) and EIGHT from `pipeline/routing.py` (v2 §5.4's routing reasons,
- * including D35's `number_unread_name_matched` and, since 2026-09-11, `name_disputed`). It
- * read "thirteen, six and seven" until that day, and "twelve, six and six" until
+ * `rarity_claim_mismatch`) and NINE from `pipeline/routing.py` (v2 §5.4's routing reasons,
+ * including D35's `number_unread_name_matched`, since 2026-09-11 `name_disputed`, and since
+ * identity-follows-sku.md §7.3 (lane 2) `listing_disputed` — opened directly by `./pkmnscan
+ * cards identity --write`, never by `routing.route()`, the same shape `no_market_data`
+ * already carries in this tuple). It
+ * read "fourteen, six and eight" until that lane landed, "thirteen, six and seven" before
+ * that, and "twelve, six and six" until
  * 2026-08-25, having been written before either of those two landed, and "fourteen, seven and
  * seven" until 2026-09-02, when D3's amendment retired `metadata_detection_disagreement` —
  * see `RETIRED_REASON_LABELS` below for where that one went. docs/DESIGN.md requires each on
@@ -81,6 +85,12 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
    * own destination, priced by hand on #/pricing. Kept because docs/DESIGN.md names
    * thirteen, and a map that quietly held twelve would be the drift this comment is about. */
   no_market_data: 'No market price',
+  /* identity-follows-sku.md §7.3, lane 2. Opened directly by `./pkmnscan cards identity
+   * --write` for a held, identified card — the read disputes the listing it is under, on
+   * name or on number, and nobody has looked. `#/review`'s own headline for it is longer
+   * ("Is the listing the right card?", `ReviewQueue.tsx`'s `QUESTIONS` map); this is the
+   * short sub-label the shared `reasonLabel()` draws beside the machine string. */
+  listing_disputed: 'The listing may be the wrong card',
 }
 
 /* CODES THE PIPELINE NO LONGER EMITS AND THE STORE STILL HOLDS. A separate map on purpose:

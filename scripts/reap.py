@@ -619,6 +619,57 @@ class Intent(NamedTuple):
     how: List[str]      # a sentence per resolved producer, for the refusal to quote
 
 
+# A run of any of these characters is a boundary between one shell segment and the next. Not
+# real shell grammar — reap.py never claims that, see the docstring above `_segments` — just
+# everywhere a NEW command word could start.
+_SEGMENT_DELIMS = ";\n&|(){}`"
+
+
+def _quote_aware_split(cmd: str, delimiters: str) -> List[str]:
+    """`cmd` cut at every unquoted character in `delimiters`, quoted text kept whole.
+
+    COPIED, NOT IMPORTED, from `scripts/shell_parse.py:split_segments`. That file's own header
+    explains why a shared piece is copied rather than re-derived when the copy cannot import
+    the original: "when one of these needs to change, change it THERE first and copy the
+    result back." This file's reason not to import is its own module docstring — `make
+    janitor-install` copies `reap.py` ALONE to `~/.claude/bin` so the kill guard covers every
+    project on the machine, and a copy that imported `scripts/shell_parse.py` would be broken
+    the moment it left this checkout. EXTENDED past the original's four delimiters (`;`, `|`,
+    `&&`, `\\n`) to the fuller set this file has always split on — `(`, `)`, `{`, `}`, a
+    backtick and a bare `&` — because a quoted one of any of them must not start a new segment
+    either. `2026-09-24`'s defect was `grep -nciE "process|pid|kill"`: the OLD regex-based
+    splitter could not see that the `|` characters sat inside a double-quoted pattern, so it
+    read `killall` out of an unrelated grep pattern three clauses later as a command word.
+    """
+    segments: List[str] = []
+    current: List[str] = []
+    quote = ""
+    index = 0
+    length = len(cmd)
+    while index < length:
+        char = cmd[index]
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = ""
+            index += 1
+            continue
+        if char in ("'", '"'):
+            quote = char
+            current.append(char)
+            index += 1
+            continue
+        if char in delimiters:
+            segments.append("".join(current))
+            current = []
+            index += 1
+            continue
+        current.append(char)
+        index += 1
+    segments.append("".join(current))
+    return segments
+
+
 def _segments(command: str) -> List[List[str]]:
     """The command as a list of argv-ish word lists, one per shell segment.
 
@@ -631,7 +682,7 @@ def _segments(command: str) -> List[List[str]]:
     """
     head = command.split("<<", 1)[0]
     words: List[List[str]] = []
-    for piece in re.split(r"[;\n&|(){}`]+|\$\(", head):
+    for piece in _quote_aware_split(head, _SEGMENT_DELIMS):
         piece = piece.strip()
         if not piece:
             continue

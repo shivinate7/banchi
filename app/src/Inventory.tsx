@@ -107,7 +107,7 @@ function refusalCode(err: unknown): string {
 export { reasonWord }
 
 /** WHO TAKES THE NUMBER (UX-190). A card counts the cards in its section (D58, amended by
- *  D-a-card-is-counted-in-its-section), so when one leaves, the card in front of it (toward the
+ *  D260), so when one leaves, the card in front of it (toward the
  *  owner, `neighbors.next`) takes its number, and every card after it steps down one. The rows
  *  hold still (FLT-22), so the receipt says it: `Tinkatink is now card 3.` Nothing when the card
  *  was the last of its section, when the store sent no neighbours, or for a pooled card. */
@@ -671,7 +671,7 @@ export function Inventory() {
     )
 
   return (
-    /* THE KIT'S PAGE (D-page-scaffold): the one h1 off the route, the one width and top gap. */
+    /* THE KIT'S PAGE (D275): the one h1 off the route, the one width and top gap. */
     <Page
       icon="box"
       /* SILENT WITH NO BOX: the empty state says "No boxes yet" once, not the lede too. */

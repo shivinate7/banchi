@@ -43,6 +43,7 @@ import type {
   MarkdownTable,
   PricingWorklist,
   Unreachable,
+  LiveMove,
   PricingSku,
   RunDetail,
   RunSummary,
@@ -443,6 +444,13 @@ function heldReason(value: WithheldRecord | 'unlisted'): string {
 }
 
 /** Where a section's answer is written: a property of the SECTION, not the row. */
+/** What TCGplayer holds of a row NOW: the newest live export on disk (`live_now`, round 7,
+ *  R6-1), or the join's own figures where no live export was ever fetched. */
+function liveOf(row: PricingSku): { copies: number; price: string | null } {
+  if (row.live_now) return { copies: row.live_now.copies, price: row.live_now.price }
+  return { copies: Math.max(row.live_before, row.listing?.live ?? 0), price: row.snap.now }
+}
+
 function targetOf(bucket: PricingSku['bucket']): 'overrides' | 'no_market_data' {
   return bucket === 'no_market_data' ? 'no_market_data' : 'overrides'
 }
@@ -852,11 +860,15 @@ export function Pricing() {
   const [push, setPush] = useState<'idle' | 'sending' | 'writing'>('idle')
   const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
   const [wroteUpload, setWroteUpload] = useState(false)
+  /* WHETHER THE FILE'S LINK WAS ON SCREEN WHEN THE PRESS BEGAN (round 9, R9-1). A link already
+     drawn stays through the press; one the press itself writes waits until it ends. Either way
+     nothing appears or vanishes beside the press while it runs (D118). */
+  const [linkHeld, setLinkHeld] = useState(false)
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
   /** The pricing corpus — one document for the store, and the authority (D86). */
   const [book, setBook] = useState<PricingCorpus | null>(null)
-  /* THE SEND OPTIONS LEFT THE SEND PRESS (the owner's Send-menu ruling, `D-one-press-sends-and-makes-live`):
+  /* THE SEND OPTIONS LEFT THE SEND PRESS (the owner's Send-menu ruling, `D273`):
      nothing sits beside Send. The split lives under "Download the file instead" inside `SendCard`,
      and where the per-send cap lives now is not ruled. */
   /* A NUMBER ON EACH CARD'S ROW, THIS PRESS ONLY (D7, amended 2026-09-11 on the operator's
@@ -1351,7 +1363,7 @@ export function Pricing() {
     const sending = push === 'sending'
     void (async () => {
       try {
-        /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the file is written, then the
+        /* ONE PRESS (`D273`, Q7): the file is written, then the
            server reads what is live, sends the file and makes it live. "Download the file
            instead" stops after the write. There is no press that puts the old prices back. */
         const result = await applyMarkdown(stamp, {
@@ -1524,13 +1536,14 @@ export function Pricing() {
       const typed = answerFor(row)
       if (typeof typed !== 'string') continue
       const addsNone = row.at_cap || askedFor(row.sku) === 0
-      const live = Math.max(row.live_before, row.listing?.live ?? 0)
-      if (!addsNone || live <= 0) continue
-      if (row.snap.now !== null && Number(typed) === Number(row.snap.now)) continue
-      out.push({ sku: row.sku, price: typed, was: row.snap.now })
+      const now = liveOf(row)
+      if (!addsNone || now.copies <= 0) continue
+      if (now.price !== null && Number(typed) === Number(now.price)) continue
+      out.push({ sku: row.sku, price: typed, was: now.price })
     }
     return out
   }, [rows, answerFor, askedFor, typedHere, source.kind])
+
 
   useEffect(() => {
     latestRows.current = rows
@@ -1615,6 +1628,32 @@ export function Pricing() {
     (sku: PricingSku): string => (sku.bucket === 'sub_threshold' ? cheapDigits() : ruleFigure(sku)),
     [cheapDigits, ruleFigure],
   )
+
+  /* THE LIVE COPIES A LISTING ROW MOVES (the owner's ruling, 2026-09-24, round 7). A new copy
+     of a card already live carries Banchi's stored price, and TCGplayer lists every copy of
+     one card at one price, so the live copies move with it. The button names each move and
+     its new price, against the same fresh read as a price change. A row whose price this
+     screen cannot draw (a custom rule) is left to the server, which refuses and names it. */
+  const liveMoves = useMemo(() => {
+    const out: LiveMove[] = []
+    if (source.kind !== 'run') return out
+    for (const row of rows) {
+      if (row.at_cap) continue
+      const asked = askedFor(row.sku)
+      const going = asked === undefined ? row.add_to_quantity : Math.min(asked, row.add_to_quantity)
+      if (going <= 0) continue
+      const standing = answerFor(row)
+      if (isWithheld(standing)) continue
+      const price = typeof standing === 'string' ? standing : suggestionFor(row)
+      const now = liveOf(row)
+      if (price === '' || now.copies <= 0) continue
+      /* A LIVE ROW WITH COPIES AND NO PRICE IS A MOVE TOO (round 8, R7-4): whether TCGplayer
+         can hold one is not known, and naming it is the safe side. */
+      if (now.price !== null && Number(price) === Number(now.price)) continue
+      out.push({ sku: row.sku, name: row.name, copies: now.copies, price, was: now.price })
+    }
+    return out
+  }, [rows, answerFor, askedFor, suggestionFor, source.kind])
 
   /** A preset writes `rule`/`basis` and NO override; it refills only the rows the operator has
    *  not set, and lights each one it moved. */
@@ -1864,6 +1903,13 @@ export function Pricing() {
       return { ...current, skus }
     })
     setUndo(rest)
+    /* AN UNDONE ANSWER WAS NOT TYPED THIS VISIT (round 7, R6-2): the earlier answer may be a
+       Live tab preset or a mark-down never sent, so it leaves the named prices. */
+    setTypedHere((held) => {
+      const next = new Set(held)
+      next.delete(top.sku)
+      return next
+    })
     // The field is uncontrolled, so its digits are corrected here the way Escape and a preset
     // already correct them: the restored answer, or the rule's suggestion where there was none.
     const row = rows.find((one) => one.sku === top.sku)
@@ -3728,7 +3774,7 @@ export function Pricing() {
         )
       ) : null}
 
-      {/* THE SEND BAR (`D-one-press-sends-and-makes-live`): sticky, in flow, one press. One
+      {/* THE SEND BAR (`D273`): sticky, in flow, one press. One
           bar for one run or many: the server writes ONE file over every run in the send (D86),
           behind the double-send guard, sends it and makes it live. Its options left the press
           (the Send-menu ruling), so the bar is the card and nothing beside it. */}
@@ -3738,6 +3784,7 @@ export function Pricing() {
             runs={loaded}
             copies={progress.outCopies}
             priceChanges={priceChanges}
+            liveMoves={liveMoves}
             settled={!dirty && !saving}
             saveFailed={saveFailed}
             quantities={quantitiesAsked}
@@ -3759,7 +3806,7 @@ export function Pricing() {
       {source.kind !== 'markdown' || stamp === null ? null : (
         <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Send these prices">
           <div className="pricing-ship-act">
-            {/* ONE PRESS SENDS AND MAKES LIVE (`D-one-press-sends-and-makes-live`, Q7). The
+            {/* ONE PRESS SENDS AND MAKES LIVE (`D273`, Q7). The
                 download is the second door, and nothing else sits beside the press. */}
             <Button
               variant="primary"
@@ -3768,22 +3815,35 @@ export function Pricing() {
               className="pricing-emit"
               busy={push === 'sending'}
               disabled={push !== 'idle' || pushable.length === 0}
-              onClick={() => setPush('sending')}
+              onClick={() => {
+                setLinkHeld(wroteUpload)
+                setPush('sending')
+              }}
             >
-              {push === 'sending'
-                ? 'Checking TCGplayer, then sending…'
-                : `Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
+              {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118): `busy` draws the
+                  spinner, and what it is doing is said to a screen reader beside it. */}
+              {`Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
             </Button>
+            <span className="bn-sr" role="status">
+              {push === 'sending' ? 'Checking TCGplayer, then sending…' : ''}
+            </span>
             <Button
               variant="quiet"
               icon="download"
               busy={push === 'writing'}
               disabled={push !== 'idle' || pushable.length === 0}
-              onClick={() => setPush('writing')}
+              onClick={() => {
+                setLinkHeld(wroteUpload)
+                setPush('writing')
+              }}
             >
               {push === 'writing' ? 'Writing…' : 'Download the file instead'}
             </Button>
-            {!wroteUpload ? null : (
+            {/* THE FILE'S LINK NEITHER APPEARS NOR VANISHES WHILE A PRESS RUNS (round 9, D118
+                and R9-1). The send writes the file first, and a link appearing beside the press
+                pushed it sideways under the finger; a link already drawn that vanished pushed it
+                back. A link on screen when the press began stays until it ends. */}
+            {!wroteUpload || (push !== 'idle' && !linkHeld) ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
                 <Icon name="download" size={16} />
                 import.csv

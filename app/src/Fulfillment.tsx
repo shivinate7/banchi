@@ -1568,7 +1568,7 @@ export function Fulfillment() {
                             )
                           }
                         >
-                          {/* THE BOX BY ITS NAME ALONE (D-a-box-is-shown-by-its-name): no number tile and no
+                          {/* THE BOX BY ITS NAME ALONE (D259): no number tile and no
                               "Box N", which is the store's key and not a label on the drawer. */}
                           <span className="ff-box-text">
                             <span className="fulfillment-say ff-box-name">{group.name ?? 'Unnamed box'}</span>

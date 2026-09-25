@@ -202,7 +202,7 @@ function copyDeparted(copy: SearchCopy): boolean {
   return isDeparted(copy.place)
 }
 
-/* A SHELF BY ITS NAME (D-a-box-is-shown-by-its-name): the owner ruled the box number an index the
+/* A SHELF BY ITS NAME (D259): the owner ruled the box number an index the
  * store keeps, never a label. Every box carries a stored name since the backfill, so `Box <n>`
  * is only the fallback for a registry the screen has not read yet, and it is the same string
  * the backfill stores for that box. */
@@ -372,7 +372,7 @@ function rowSlot(row: Row): string {
 }
 
 /** WHAT A DEPARTED ROW'S SLOT SAYS (the owner's ruling, 2026-09-23,
- *  D-a-box-is-shown-by-its-name): the server's departed label carries the number of the place
+ *  D259): the server's departed label carries the number of the place
  *  it left, and the row's own mark (`.is-departed`, struck through by the stylesheet) says it
  *  left, never a word or the store key. A label from before the ruling names no card, so the
  *  store key is the fallback.
@@ -839,7 +839,7 @@ export function BoxBrowse({
    * takes several picks at once, none waits on another, and none clears another. The
    * vocabulary and every count come off `GET /boxes`'s `facet_cells`, folded here with the
    * kit's `countFacets`, so a pick asks the server nothing. The picks live in the URL
-   * (D-view-state-in-url): a reload, a link and Back restore them. */
+   * (D285): a reload, a link and Back restore them. */
   const [facetCells, setCells] = useState<readonly FacetCell[]>(NO_CELLS)
   const facetDefs = useMemo(() => facetsOf(facetCells), [facetCells])
   const [facetValue, setFacetValue] = useFacetParams(facetDefs)
@@ -1059,7 +1059,7 @@ export function BoxBrowse({
 
   /* THE WALK, WITH SOLD FOLDED AWAY (D132), AT A MOMENT WHEN NO ROW IS UNDER THE HAND.
      NOTHING JUMPS (FLT-22, the owner's ruling of 2026-09-23,
-     D-a-press-reorders-and-nothing-else-moves): a row that was on hand when this box was opened stays drawn, in its place and
+     D263): a row that was on hand when this box was opened stays drawn, in its place and
      marked sold, until the next box load. D132 folded it "the moment the walk steps off it", and
      that moment is a press: the owner sold #1, pressed #2, and every row under #2 came up 32px
      at that click, so #2 slid from under the pointer. D118 wins over D132's timing. The fold
@@ -2415,7 +2415,7 @@ export function BoxBrowse({
 
       {rows === null && failure === null && !noBoxesYet ? (
         <div className="browse-body browse-body-loading">
-          {/* THE KIT'S LOADING SHAPE (D-page-scaffold): the rail's rows, then the card. */}
+          {/* THE KIT'S LOADING SHAPE (D275): the rail's rows, then the card. */}
           <Loading rows={6} label="Reading the inventory" />
           <Loading shape="cards" rows={1} label="Reading the card" />
         </div>

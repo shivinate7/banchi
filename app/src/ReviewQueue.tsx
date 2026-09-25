@@ -316,6 +316,10 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   number_unread_name_matched: 'Is this the row it matched?',
   name_disputed: 'Is this the right card at all?',
   no_market_data: 'Is this the card?',
+  /* `pipeline/routing.py:LISTING_DISPUTED` (identity-follows-sku.md §7.3, lane 2): a held
+   * card from `cards identity --write` — the read disputes the SKU it is bound to, and
+   * nobody has looked. `reasons.ts` carries the shorter sub-label under this headline. */
+  listing_disputed: 'Is the listing the right card?',
 }
 
 const RETIRED_HEADLINE = 'This question was retired.'
@@ -2307,7 +2311,8 @@ function Facts({ row }: { row: Row }) {
         ),
     },
     { label: 'Waiting', value: seenText(entry) },
-    { label: 'Position', value: entry.label },
+    // No `Position` fact: the photo caption already names the card's place, and the place
+    // shows once on this screen.
   ]
   return (
     <details className="review-details">
@@ -2436,7 +2441,7 @@ function AbsentPhoto({ title, detail, label, box, cid, place, children }: { titl
 
 /* The card's address, and the way back to it: this opens THE CARD on Inventory
  * (`#/inventory?box=<n>&card=<cid>`), not the box at its first card (LOC-12). The label names
- * the box by its name (D-a-box-is-shown-by-its-name), and its accessible name is the place as a
+ * the box by its name (D259), and its accessible name is the place as a
  * sentence (`Box 1, Section 3, Card 13`). A card with no box has no destination and draws the
  * plain caption; a card the server sent no name for opens its box.
  *

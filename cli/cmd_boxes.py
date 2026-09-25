@@ -1,6 +1,6 @@
 """`pkmnscan boxes names` — give every unnamed box its stored name. Previews by default.
 
-THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name): a box is shown by its name
+THE OWNER'S RULING, 2026-09-23 (D259): a box is shown by its name
 only, and the box number stays inside the store. A new box with no name gets a stored default
 name at creation (`store/master.py:Inventory.default_box_name`). This command is the one-time
 backfill for the boxes that were created before that rule: each gets `Box <number>`, today's

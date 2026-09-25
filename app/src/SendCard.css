@@ -144,3 +144,37 @@
     display: block;
   }
 }
+
+/* A REFUSED PRICE'S SENTENCE, AND A MOVE'S OLD AND NEW PRICE, ARE LONG (rounds 7 and 8): on a
+   narrow card each wraps under the card's name, and never squeezes the name out of its row or
+   runs past the card's edge. */
+.send-resend .send-names li,
+.send-moves .send-names li {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.send-resend .send-name,
+.send-moves .send-name {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+.send-resend .send-figure,
+.send-moves .send-figure {
+  flex: 1 1 auto;
+}
+.send-resend .send-figure {
+  color: inherit;
+}
+
+/* THE PRESS NAMES THE LIVE COPIES IT MOVES (round 7), and on a phone that sentence is wider
+   than the screen. It wraps inside the press rather than running past the card's edge. */
+@media (max-width: 767px) {
+  .send-press {
+    height: auto;
+    min-height: var(--btn-h);
+    padding-block: var(--bn-2);
+    white-space: normal;
+    line-height: var(--bn-lh-snug);
+    text-align: center;
+  }
+}

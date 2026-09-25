@@ -13,7 +13,7 @@ proves the sweep logic itself against a small fixture built in this file (the sa
 containment/misread pairs `pipeline/join.py`'s own `NAME_DISPUTE_SIMILARITY` comment already
 cites), including a mutation arm — the guard is trusted only once it has been seen to fail on
 the defect it guards (`CLAUDE.md`'s own rule). With `--store <path>`, it reads that store
-READ-ONLY (`mode=ro&immutable=1`, the same door `cli/cmd_sku_contradictions.py` uses) and
+READ-ONLY (`store/db.py:open_read_only`, the same door `cli/cmd_sku_contradictions.py` uses) and
 refuses outright if the path does not exist — it never silently measures nothing.
 
 WHAT IT MEASURES, WITH A REAL STORE. Three things, and none of them touches a network:
@@ -68,6 +68,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from pipeline import tcgcsv  # noqa: E402
+from store import db  # noqa: E402
 from pipeline.join import (  # noqa: E402
     NAME_DISPUTE_SIMILARITY,
     Catalog,
@@ -126,7 +127,7 @@ def _read_only(store_path: Path) -> sqlite3.Connection:
             f"no store at {store_path} — this script refuses to run against nothing "
             "rather than silently measuring an empty store"
         )
-    return sqlite3.connect(f"file:{store_path}?mode=ro&immutable=1", uri=True)
+    return db.open_read_only(store_path)
 
 
 def sku_contradiction_counts(conn: sqlite3.Connection) -> Dict[str, object]:

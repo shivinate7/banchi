@@ -1,6 +1,6 @@
 """The one press that sends copies to TCGplayer and makes them live, and the checks around it.
 
-THE OWNER'S RULINGS, 2026-09-23 AND 2026-09-24 (`D-one-press-sends-and-makes-live`):
+THE OWNER'S RULINGS, 2026-09-23 AND 2026-09-24 (`D273`):
 
   - Banchi sends the listing file itself. "Download the file instead" stays as a second door.
   - ONE PRESS sends AND makes live. It amends D106 (the push and the publish are two presses).
@@ -535,6 +535,7 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "staged": _maybe_staged(record),
         # THE PRICES THE SCREEN NAMED THAT THIS PRESS LEFT OUT, and why (round 6).
         "prices_left": record.get("prices_left") or [],
+        "moves": record.get("moves") or [],
         "held": stamp in held,
         "takeable": sum(offer.values()),
         "take_back_after": _iso(take_after) if waiting_to_take and take_after is not None else None,
@@ -839,7 +840,7 @@ def do_send(payload: dict) -> dict:
             f"At most {pipeline_routes.MAX_MERGED_RUNS} runs in one send.",
         )
     download = bool(payload.get("download"))
-    payload = dict(payload, prices=_named_prices(payload))
+    payload = dict(payload, prices=_named_prices(payload), moves=_named_moves(payload))
     if not download and not bool(payload.get("confirm")):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
@@ -895,12 +896,53 @@ def _named_prices(payload: dict) -> List[dict]:
     return out
 
 
+def _named_moves(payload: dict) -> List[dict]:
+    """The live copies the BUTTON said a listing row moves, validated: `[{sku, price}]`.
+
+    THE OWNER'S RULING, 2026-09-24 (round 7, R6-3): a new copy of a card already live carries
+    Banchi's stored price, and the button names every live copy that moves and its new price.
+    The server refuses a press that would move live copies the button did not name.
+    """
+    named = payload.get("moves")
+    if named is None:
+        return []
+    if not isinstance(named, list) or len(named) > pipeline_routes.MAX_QUANTITIES:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "moves_invalid",
+            f"`moves` must be a list of at most {pipeline_routes.MAX_QUANTITIES} {{sku, price}} "
+            f"objects.",
+        )
+    out: List[dict] = []
+    for row in named:
+        sku = str(row.get("sku") or "") if isinstance(row, dict) else ""
+        try:
+            price = tcgcsv.parse_price(str(row.get("price") or "")) if sku else None
+        except (ArithmeticError, ValueError):
+            price = None
+        copies = row.get("copies") if sku else None
+        # THE COUNT OF LIVE COPIES THE BUTTON SAID MOVE (round 8, R7-3): `emit` refuses when
+        # TCGplayer holds another count, so the button never names a count it did not draw.
+        counted = isinstance(copies, int) and not isinstance(copies, bool) and copies > 0
+        if not sku.isdigit() or price is None or price <= 0 or not counted:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "moves_invalid",
+                "Each named move needs a TCGplayer id, a price above zero and a count of live "
+                "copies.",
+            )
+        out.append({"sku": sku, "price": tcgcsv.format_price(price), "copies": int(copies)})
+    return out
+
+
 #: Each refused price, in the owner's words. `pipeline/sendguard.py` names the reasons.
 _PRICE_REFUSALS = {
     "live_moved": "TCGplayer shows {live} now, not the {shown} this list showed",
     "not_saved": "the saved price is not the {price} the button named",
     "below_floor": "{price} is under the store's floor",
     "not_in_send": "this send does not price that card",
+    "move_unnamed": "{copies} live cop{ies} at {live} would move to {price}, and the button did not say so",
+    "move_count": "TCGplayer holds {copies} live cop{ies}, and the button counted another number",
 }
 
 
@@ -913,15 +955,23 @@ def _price_refusal(console: str, step: str) -> Optional[PipelineRefusal]:
     parts = []
     for note in refused:
         sentence = _PRICE_REFUSALS.get(str(note.get("why")), "it cannot be sent as it stands")
+        if note.get("why") == "live_moved" and not note.get("shown"):
+            sentence = "TCGplayer shows {live} now, and this list showed no live price"
         money = {
             key: (f"${note[key]}" if note.get(key) else "no price")
             for key in ("live", "shown", "price")
         }
+        copies = int(note.get("copies") or 0)
+        money.update(copies=copies, ies="y" if copies == 1 else "ies")
         parts.append(f"{note.get('name') or note.get('sku')}: {sentence.format(**money)}")
+    # THE REFUSED ROWS TRAVEL AS DATA TOO (round 7, R6-1): `{sku, name, why, live, price,
+    # copies}` each, so the screen can say "TCGplayer shows $22.03 now. Send $30.00?" and send
+    # again with that live price named. The server still refuses if it moved again.
     return PipelineRefusal(
         HTTPStatus.CONFLICT,
         "price_refused",
         f"{'; '.join(parts)}. Nothing was {step}.",
+        data={"refused": [dict(note) for note in refused]},
     )
 
 
@@ -985,10 +1035,16 @@ def _write_and_send(
     # THE MIXED SEND (the owner's ruling, 2026-09-24: "Allow mixed"). ONLY A PRICE THE SCREEN
     # NAMED rides this press as a price-only row, Add to Quantity 0 (round 6, B1 and B2). A
     # press that names none passes no list, and no price row can be written.
-    if payload.get("prices"):
-        named = directory / NAMED_PRICES
-        named.write_text(json.dumps(payload["prices"], sort_keys=True), encoding="utf-8")
-        argv += ["--reprice-live", str(named)]
+    # EVERY PRESS PASSES THE LIST, EMPTY OR NOT (round 7): `emit` checks each listing row's
+    # move of live copies against it, so a press that names nothing still cannot move a live
+    # copy the button did not name.
+    named = directory / NAMED_PRICES
+    named.write_text(
+        json.dumps({"prices": payload.get("prices") or [], "moves": payload.get("moves") or []},
+                   sort_keys=True),
+        encoding="utf-8",
+    )
+    argv += ["--reprice-live", str(named)]
     if download and payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += pipeline_routes._quantity_flags(payload)
@@ -1053,6 +1109,8 @@ def _write_and_send(
                 for sku, price in _price_rows(path).items()
             },
             "prices_left": list(said_prices.get("left") or []),
+            # THE LIVE COPIES THIS PRESS'S LISTING ROWS MOVE, and to what price (round 7, R6-3).
+            "moves": list(said_prices.get("moves") or []),
             "names": names,
             "live_before": {sku: live_before.get(sku, 0) for sku in copies},
             "sold_before": _sold_by_sku(copies),
@@ -1858,6 +1916,17 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
             )
     if conflicts:
         other, shared = conflicts[0]
+        # A SEND THAT IS NOT RUNNING, WAITING ON THE CHECK, IS `send_held` (round 7, R6-4): the
+        # card read "already running" over a send that had stopped and only waits to be read.
+        waiting = _STAMP.match(other.stamp) and state_of(_read(sends_dir() / other.stamp)) == "unknown"
+        if waiting:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "send_held",
+                f"{len(shared)} of these cards are in a send whose result TCGplayer has not "
+                f"confirmed (started {other.started_at}). They stay out of every price change "
+                f"until Banchi checks what is live after the wait. Nothing was sent.",
+            )
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "send_in_progress",

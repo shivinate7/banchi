@@ -17,7 +17,7 @@ THE PORT IS PINNED WITH `PKMNSCAN_PORT`, TO A FREE SOCKET THE OS HANDS OUT. The 
 script ran, the derivation asked whether the directory was a LINKED WORKTREE. A
 `shutil.copytree` of this repo is not one, so the copy called itself the main checkout and
 claimed :8000, the owner's live capture server over their real store. Measured: `up` in the copy
-refused with ":8000 is already held". Since D-no-git-no-live-port (a copied tree never gets the
+refused with ":8000 is already held". Since D268 (a copied tree never gets the
 live port), only a `.git` DIRECTORY keeps :8000, so a copy with no `.git` takes a slot from its
 path. The pin stays: a slot can collide with another worktree's, and a free socket cannot.
 
@@ -26,6 +26,7 @@ commit. Same placement and same reason as `audit-self-test`, `githooks-selftest`
 `merge-selftest`, `janitor-selftest` and `verdict-selftest`.
 """
 
+import contextlib
 import json
 import os
 import shutil
@@ -40,6 +41,12 @@ from pathlib import Path
 from typing import Dict, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+# `port_split()` is a pure function over a real socket and `lsof` — tested directly, by
+# import, rather than through a copied tree and a running supervisor like everything else in
+# this file. It has no supervisor state to isolate. Aliased: this file already defines its
+# own module-level `serve()` (the CLI-invoking helper below), which would shadow the import.
+import serve as serve_module  # noqa: E402
 
 # What a copy needs to run a supervisor and a capture server. `app/` is NOT copied — the tree
 # gets a stub one, because a real `app/` means `node_modules` and a real `vite build`, which is
@@ -328,8 +335,65 @@ def supervisor_log(tree: Path) -> str:
         return ""
 
 
+def check_port_split() -> None:
+    """`serve.port_split()` — the 2026-09-23 incident (D43), read-only, D127.
+
+    TWO DISTINCT PROCESSES ON ONE PORT, ONE PER FAMILY, is what the incident measured: an
+    IPv4 `0.0.0.0` listener and a LATER IPv6 `::` listener (`IPV6_V6ONLY=1`, so it takes only
+    the IPv6 half rather than Task 1's own dual-stack fix) both bind successfully. This test
+    reproduces exactly that — a socket bound in this process, and a second bound by a child
+    process this test spawns and tears down — and asserts `port_split` calls it `"split"` and
+    names both pids. A single listener, bound the same way, must report `"ok"` with nothing
+    to print: the everyday case is not a warning.
+    """
+    print("\n  port_split — the 2026-09-23 incident: `localhost` may reach the wrong process")
+    v4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    v4.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    v4.bind(("0.0.0.0", 0))
+    v4.listen(1)
+    port = v4.getsockname()[1]
+    v6 = subprocess.Popen([  # noqa: S603
+        sys.executable, "-c",
+        "import socket, time\n"
+        "s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)\n"
+        "s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)\n"
+        f"s.bind(('::', {port}))\n"
+        "s.listen(1)\n"
+        "time.sleep(30)\n",
+    ])
+    try:
+        status, lines = "unknown", []
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            status, lines = serve_module.port_split(port)
+            if status == "split":
+                break
+            time.sleep(0.1)
+        check(status == "split", "two distinct processes on one port are reported SPLIT")
+        text = "\n".join(lines)
+        check(str(os.getpid()) in text, "naming this process's own pid (the IPv4 half)")
+        check(str(v6.pid) in text, "and the spawned process's pid (the IPv6 half)")
+        check("IPv4" in text and "IPv6" in text, "and which family each one holds")
+    finally:
+        v6.terminate()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            v6.wait(timeout=5)
+        v4.close()
+
+    lone = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    lone.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    lone.bind(("127.0.0.1", 0))
+    lone.listen(1)
+    try:
+        status, lines = serve_module.port_split(lone.getsockname()[1])
+        check(status == "ok" and not lines, "one listener alone is `ok` — nothing to warn about")
+    finally:
+        lone.close()
+
+
 def main() -> int:
     print("supervisor self-test — the build job, against a throwaway tree (D138)")
+    check_port_split()
     with tempfile.TemporaryDirectory() as tmp:
         where = Path(tmp)
         tree = build_tree(where)

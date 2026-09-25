@@ -3,7 +3,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { FilterFacet, FilterValue, SortOption, SortValue } from './data'
 
 /* A SCREEN'S FILTER, SORT, SEARCH AND HIDE STATE LIVES IN THE URL, ONE WAY, EVERYWHERE
- * (D-view-state-in-url, the owner's ruling 2026-09-23: "in the URL on every screen (link,
+ * (D285, the owner's ruling 2026-09-23: "in the URL on every screen (link,
  * bookmark and back restore the view)").
  *
  * FLT-11 found five different answers on seven screens: Sales kept everything in the URL,
