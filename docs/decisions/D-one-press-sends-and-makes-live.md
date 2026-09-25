@@ -101,6 +101,20 @@ deleted to lower a price, and the quantity is not a variable.
   owner did not type there never rides: not a Live tab preset, not `reprice apply --write`, not
   a price typed on an earlier visit. A rule price never reaches a live listing this way. The
   Live tab keeps its own mark-down press.
+- **A new copy of a card already live (the owner's ruling, 2026-09-24, round 7).** Its
+  listing row carries Banchi's stored price, as before, so a mark-down already made still sticks.
+  TCGplayer lists every copy of one card at one price, so the live copies move with it. The
+  button names every live copy that moves and its new price, for example "Send 1 copy, 2 live
+  copies move to $19.99". The press refuses a move the button did not name, and the receipt
+  records each move (`pipeline/sendguard.py:live_moves`). Round 8 added three rules. A move
+  under the store's floor is refused and never offered back. A move carries its count of live
+  copies, and a count that is not TCGplayer's is refused. A live row with copies and no price
+  is a move too. Moves to more than one price are listed card by card before the press.
+- **The live price the screen shows (round 7).** The worklist reads what TCGplayer holds off
+  the newest live export on disk. Every send and every check writes one. A price change and a
+  move are named against it. A refusal carries each refused row as data, so the card says
+  "TCGplayer shows $22.03 now. Send $30.00?", and one press sends again with that live price
+  named. The server still refuses if the price moved again.
 - **Each named price, checked against the fresh read.** Under the store's floor
   (`policy.threshold`, the mark-down door's `BELOW_FLOOR`): the press refuses and names it. The
   live price is not the one the screen drew: the press refuses and names it, so a price the
@@ -121,7 +135,8 @@ deleted to lower a price, and the quantity is not a variable.
   So a press that Banchi rolled back refuses with its own code, and it never offers a retry.
   It keeps "check the Staged list" until the owner dismisses it. A mark-down's rollback
   is recorded the same way, as not live. Its answers stay in the price file as the owner's
-  record, and they cannot ride a send, because only a named price does.
+  record. They never ride a send as a price-only row. A listing row for the same card carries
+  the stored price, and the button names the live copies it moves (below).
 - **A press that died mid-push** leaves a receipt in phase sending or publishing with no record
   of why. It reads as possibly staged, with the Staged warning.
 - **The send card** says what the press does in the owner's words: "Send 3 copies and 2 price

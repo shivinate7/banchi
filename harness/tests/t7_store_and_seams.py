@@ -17693,11 +17693,23 @@ def check_markdown_push(checks: Checks) -> None:
 
 
 def _live_export_bytes(quantities: Dict[str, int]) -> bytes:
-    """A live export (My Pricing shape) holding the seam rows at these `Total Quantity`s."""
+    """A live export (My Pricing shape) holding the seam rows at these `Total Quantity`s.
+
+    EACH ROW ASKS ITS OWN MARKET PRICE (round 8). The fixture's catalogue row carries
+    Articuno at 25.9900, the join's own figure, and a live row at a price the plan does not list
+    at is a move of live copies the button must name (`pipeline/sendguard.py:live_moves`). A
+    blank price is a move too (R7-4). The seam run lists at market, so a case about quantities
+    moves nothing; a case about prices uses `_live_export_priced`."""
     source = tcgcsv.read_export(FIXTURE_EXPORT)
     by_sku = source.by_sku()
     rows = [
-        dict(by_sku[sku], **{tcgcsv.LIVE_QUANTITY_COLUMN: str(quantity)})
+        dict(
+            by_sku[sku],
+            **{
+                tcgcsv.LIVE_QUANTITY_COLUMN: str(quantity),
+                tcgcsv.PRICE_COLUMN: str(by_sku[sku].get(tcgcsv.MARKET_PRICE_COLUMN) or ""),
+            },
+        )
         for sku, quantity in quantities.items()
     ]
     path = Path(tempfile.mkdtemp()) / "live.csv"
@@ -19361,7 +19373,7 @@ def check_send_review_r4(checks: Checks) -> None:
         send_routes.do_markdown_send(stamp, {"confirm": True})
         # THE MARK-DOWN WENT LIVE MOMENTS AGO. The listing send comes straight after it.
         portal["rows"].clear()
-        send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True, "moves": [{"sku": ARTICUNO_SKU, "price": "20.00", "copies": 1}]})
         rows = {row["ProductConditionId"]: row for row in portal["rows"]}
         checks.equal(
             (rows.get(ARTICUNO_SKU) or {}).get("MyPrice"),
@@ -19873,8 +19885,8 @@ def check_send_review_r6(checks: Checks) -> None:
         markdown = _markdown_dir(home, "20260924-130000", "19.99")
         checks.equal(
             _route_refusal(lambda: send_routes.do_markdown_send(markdown.name, {"confirm": True})),
-            "send_in_progress",
-            "P5: so a mark-down over the same card is refused until the check says what happened",
+            "send_held",
+            "P5: so a mark-down over the same card is refused as held, not running, until the check says what happened (round 7, R6-4)",
         )
         _age_receipt(send_routes._receipts()[0][0])
         send_routes.do_live_check({})
@@ -19967,6 +19979,229 @@ def check_send_review_r6(checks: Checks) -> None:
             (True, False, True),
             "B3: A MARK-DOWN ROLLED BACK IS RECORDED AS NOT LIVE, AND 'CHECK THE STAGED LIST'",
         )
+
+
+def check_send_review_r7(checks: Checks) -> None:
+    """Round 7: the review of round 6 (R6-1 to R6-4) and the owner's ruling on R6-3, each red
+    first on the round-6 build (9ee9b6e3).
+
+    THE OWNER'S RULING, 2026-09-24 (R6-3): a new copy of a card already live carries Banchi's
+    stored price, and TCGplayer lists every copy of one SKU at one price, so the live copies
+    move with it. The BUTTON names every live copy that moves and its new price, and the press
+    refuses a move it did not name. R6-1 (the orchestrator's call): the worklist names prices
+    against the newest live export on disk, and a refusal carries the live price as data, so
+    the screen can send again at the owner's price with the live price named.
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 7 — live copies that move are named; a refusal carries data")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def typed(sku, price):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value=price)
+        book.write()
+
+    def portal_rows(portal):
+        return {
+            row["ProductConditionId"]: (row["AddToQuantity"], row["MyPrice"]) for row in portal["rows"]
+        }
+
+    def refusal_of(fn):
+        try:
+            fn()
+        except pipeline_routes.PipelineRefusal as caught:
+            return caught
+        return None
+
+    # ------------- P11 (R6-3): a listing row moves live copies; the button must name the move
+    with _case(checks, "P11: live copies move"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        portal["rows"].clear()
+        typed(ARTICUNO_SKU, "19.99")
+        refused = refusal_of(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        ))
+        notes = ((getattr(refused, "data", None) or {}).get("refused")) or []
+        checks.equal(
+            (getattr(refused, "code", None), [(n["sku"], n["why"], n["live"], n["price"], n["copies"]) for n in notes]),
+            ("price_refused", [(ARTICUNO_SKU, "move_unnamed", "22.03", "19.99", 2)]),
+            "P11: A NEW COPY THAT WOULD MOVE TWO LIVE COPIES TO A PRICE THE BUTTON DID NOT NAME "
+            "IS REFUSED, and the refusal carries the live price and the new one as data",
+        )
+        checks.equal(portal["rows"], [], "P11: and TCGplayer receives no row")
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "moves": [{"sku": ARTICUNO_SKU, "price": "19.99", "copies": 2}]}
+        )["send"]
+        checks.equal(
+            (portal_rows(portal).get(ARTICUNO_SKU), [(m["sku"], m["copies"], m["price"], m["was"]) for m in sent["moves"]]),
+            (("1", "19.99"), [(ARTICUNO_SKU, 2, "19.99", "22.03")]),
+            "P11: NAMED, THE NEW COPY CARRIES THE STORED PRICE, and the receipt records the two "
+            "live copies it moves and from what",
+        )
+
+    # ------------- R6-1: a refused price carries the live price, and one press sends again
+    with _case(checks, "R6-1: send again at the live price"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        portal["rows"].clear()
+        typed(ARTICUNO_SKU, "30.00")
+        named = {"sku": ARTICUNO_SKU, "price": "30.00", "was": "25.99"}
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            status, body, _ = request(
+                port, "POST", "/pipeline/send",
+                payload={"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+                         "prices": [named]},
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+        error = json.loads(body or b"{}").get("error") or {}
+        notes = (error.get("data") or {}).get("refused") or []
+        checks.equal(
+            (status, error.get("code"), [(n["sku"], n["why"], n["live"], n["price"]) for n in notes]),
+            (409, "price_refused", [(ARTICUNO_SKU, "live_moved", "22.03", "30.00")]),
+            "R6-1: THE REFUSAL CARRIES {sku, live, price} AS DATA on the wire, so the screen can "
+            "say 'TCGplayer shows $22.03 now. Send $30.00?'",
+        )
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "prices": [dict(named, was="22.03")]}
+        )["send"]
+        checks.equal(
+            (portal_rows(portal), sent["prices"]),
+            ({ARTICUNO_SKU: ("0", "30.00")}, 1),
+            "R6-1: AND ONE PRESS WITH THE LIVE PRICE NAMED SENDS THE OWNER'S PRICE",
+        )
+
+    # ------------- R6-1: the worklist names what TCGplayer holds now, off the newest live export
+    with _case(checks, "R6-1: the worklist's live price"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        _age_receipt(send_routes._receipts()[0][0])
+        send_routes.do_live_check({})
+        work = pipeline_routes.do_pipeline_worklist([run_dir.name])
+        rows = {row["sku"]: row for row in work["skus"]}
+        live = rows.get(ARTICUNO_SKU, {}).get("live_now") or {}
+        checks.equal(
+            (live.get("price"), live.get("copies"), rows.get(ARTICUNO_SKU, {}).get("snap", {}).get("now")),
+            ("22.03", 3, "25.99"),
+            "R6-1: THE WORKLIST CARRIES TCGPLAYER'S PRICE FROM THE NEWEST LIVE EXPORT (22.03), not "
+            "only the join's (25.99)",
+        )
+
+
+def check_send_review_r8(checks: Checks) -> None:
+    """Round 8: the review of round 7 (R7-1, R7-3, R7-4), each red first on the round-7 build
+    (19c3bc3e). A move of live copies under the floor is refused and never offered back; a move
+    carries its count and the count must match; a live row with copies and no price moves."""
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 8 — a move's floor, its count, and a live row with no price")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def typed(sku, price):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value=price)
+        book.write()
+
+    def refusal_of(fn):
+        try:
+            fn()
+        except pipeline_routes.PipelineRefusal as caught:
+            return caught
+        return None
+
+    def notes(refused):
+        return [
+            (n["sku"], n["why"], n["live"], n["price"], n["copies"])
+            for n in ((getattr(refused, "data", None) or {}).get("refused") or [])
+        ]
+
+    def two_live(portal, run_dir, price):
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: price})
+        portal["rows"].clear()
+
+    # ------------- R7-1: a move of live copies under the floor is refused, and is data
+    with _case(checks, "R7-1: a move under the floor"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        two_live(portal, run_dir, "22.03")
+        typed(ARTICUNO_SKU, "0.05")
+        refused = refusal_of(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "moves": [{"sku": ARTICUNO_SKU, "price": "0.05", "copies": 2}]}
+        ))
+        checks.equal(
+            (getattr(refused, "code", None), notes(refused)),
+            ("price_refused", [(ARTICUNO_SKU, "below_floor", "22.03", "0.05", 2)]),
+            "R7-1: A NAMED MOVE THAT WOULD TAKE TWO LIVE COPIES UNDER THE FLOOR IS REFUSED "
+            "`below_floor`, as data",
+        )
+        checks.equal(portal["rows"], [], "R7-1: and TCGplayer receives no row")
+
+    # ------------- R7-3: the button's count of live copies must be TCGplayer's
+    with _case(checks, "R7-3: a move's count"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        two_live(portal, run_dir, "22.03")
+        typed(ARTICUNO_SKU, "19.99")
+        refused = refusal_of(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "moves": [{"sku": ARTICUNO_SKU, "price": "19.99", "copies": 1}]}
+        ))
+        checks.equal(
+            (getattr(refused, "code", None), notes(refused)),
+            ("price_refused", [(ARTICUNO_SKU, "move_count", "22.03", "19.99", 2)]),
+            "R7-3: A MOVE NAMED AT ONE LIVE COPY WHERE TCGPLAYER HOLDS TWO IS REFUSED, with "
+            "TCGplayer's count as data",
+        )
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "moves": [{"sku": ARTICUNO_SKU, "price": "19.99", "copies": 2}]}
+        )["send"]
+        checks.equal(
+            [(m["sku"], m["copies"]) for m in sent["moves"]],
+            [(ARTICUNO_SKU, 2)],
+            "R7-3: and named at TCGplayer's count, it sends",
+        )
+
+    # ------------- R7-4: a live row with copies and no price moves, and must be named
+    with _case(checks, "R7-4: a live row with no price"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        two_live(portal, run_dir, "")
+        typed(ARTICUNO_SKU, "19.99")
+        refused = refusal_of(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        ))
+        checks.equal(
+            (getattr(refused, "code", None), notes(refused)),
+            ("price_refused", [(ARTICUNO_SKU, "move_unnamed", None, "19.99", 2)]),
+            "R7-4: TWO LIVE COPIES WITH NO PRICE ARE A MOVE THE BUTTON MUST NAME, the safe side",
+        )
+        checks.equal(portal["rows"], [], "R7-4: and TCGplayer receives no row")
 
 
 def check_run_match(checks: Checks) -> None:
@@ -34692,6 +34927,8 @@ def run() -> Result:
     check_send_review_r4(checks)
     check_send_review_r5(checks)
     check_send_review_r6(checks)
+    check_send_review_r7(checks)
+    check_send_review_r8(checks)
     check_run_match(checks)
     check_publish_lag(checks)
     check_withholding(checks)

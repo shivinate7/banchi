@@ -133,3 +133,9 @@ examples and cited D149 by path. The guard caught all four before the commit.
 
 The row gates and writes nothing. `scripts/line-anchors-pin.py --pin` is the generator. It is
 on no target and no hook, and a person runs it on purpose (D18).
+
+### Superseded in part 2026-09-24 — `D-ratchets-become-offender-lists`
+
+**Clause C's pin is gone. The rule stays.** A citation still names a symbol, never a line. The owner's ruling was "convert both of the last pins". The `line anchor ratchet` row is now the `line anchor offenders` row. It fails on each anchor that `scripts/line-anchor-offenders.json` does not list, by file and by anchor as written. It also fails on a stale entry, and on growth over the list at the merge-base. A new file still starts clean, unless the anchor moved out of another file. Growth is counted over the whole list, so the total of each anchor never rises and the inflow stays shut. `scripts/line-anchors.json` and `scripts/line-anchors-pin.py` are deleted.
+
+**What is kept.** Clauses A and B, the `line anchor allowlist` row, the printed rot rate, and "leave nothing alone": every anchor is listed, resolving or not.

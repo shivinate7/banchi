@@ -114,8 +114,9 @@ make map-fix        # THE ONE GENERATOR INTO A DOC (D18, amended). Adds the deci
                     #   ARGS=--write applies. It only ever ADDS. `make map-fix-selftest`
                     #   proves it, deliberately NOT in `make check`.
 make offenders-prune # a generator that only DELETES (D18). It removes the stale entries from
-                    #   the two offender lists (`scripts/ste-offenders.json`,
-                    #   `scripts/typed-interpunct-allow.json`). It re-keys a listed file that
+                    #   the three offender lists (`scripts/ste-offenders.json`,
+                    #   `scripts/typed-interpunct-allow.json`,
+                    #   `scripts/line-anchor-offenders.json`). It re-keys a listed file that
                     #   git's rename detection says moved. It never adds an entry. It reads
                     #   with the rows' own functions. Previews. ARGS=--write applies. On no
                     #   hook. `make offenders-prune-selftest` proves it, NOT in `make check`.
@@ -332,6 +333,9 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #                      card that adds no copy and whose
                                    #                      price the screen NAMED in F. A
                                    #                      price F does not name never rides.
+                                   #                      A listing row that moves live
+                                   #                      copies to its price refuses unless
+                                   #                      F names that move (round 7).
                                    #                      A listing file
                                    #                      may mix both (the owner's ruling,
                                    #                      2026-09-24). The send press passes
@@ -883,7 +887,8 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   decision id, a section, or the `module.symbol` form the `paths` row verifies. That form
   takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line anchors`
   refuses a line past the file's end, and any anchor into a split-record stub. `line anchor
-  ratchet` is per file, in D229's shape. A file its pin has never seen is held to zero.
+  offenders` refuses an anchor that `scripts/line-anchor-offenders.json` does not list. That
+  list only shrinks. A new file starts clean, unless the anchor moved out of another file.
   `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt` that has
   stopped being true. The rot rate
   printed beside them is MEASURED and never gated. A citation pointing at a real line whose
