@@ -1470,6 +1470,36 @@ test('a card with no name and no SKU is a one-copy list, not a special case', as
      such a group exists: `a copy in another box is reached by pressing its position, and the walk goes there` below. */
 })
 
+test('a search that never returns this card gives a sentence, not an endless loader (B1)', async ({
+  page,
+}) => {
+  /* `GET /search` can settle without ever finding this row's group — a card the store cannot
+   * confirm any more, or (the review's own case) one FTS never indexed. `CopiesPanel` used to
+   * spin forever on that answer: `group === null && (loading || !settled)` stays true once
+   * `results` holds an answer for a DIFFERENT query than the one just asked, because `settled`
+   * never catches up. `aria-busy="true"` then never clears, which is what stopped three whole
+   * route sweeps at `#/inventory` (machine-words, text-shape, money-face). */
+  // The query comes back empty every time — `settled` (`results.query === handle`) never
+  // catches up, which is the exact shape the shared route-sweep fixture produces
+  // (`app/tests/shell.ts`'s generic `/search` stub echoes `query: ''` regardless of `q`).
+  const store: Store = { cards: STORE.cards, search: () => ({ query: '', groups: [] }) }
+  await open(page, BOXES, store)
+
+  // Card 1 is selected on arrival (SKU 8937370) — a named, SKUed card, so `CopiesPanel` takes
+  // the search branch rather than the no-SKU lone-copy branch `D119` already covers.
+  const panel = page.locator('.inventory-copies')
+  await expect(panel).toBeVisible()
+
+  // Long enough for the debounce (200ms) plus the stubbed fetch to land several times over.
+  await page.waitForTimeout(1500)
+
+  await expect(
+    panel.locator('[aria-busy="true"]'),
+    'the panel is still marked busy once the search has answered',
+  ).toHaveCount(0)
+  await expect(panel.locator('.inventory-looking')).toHaveCount(0)
+  await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
+})
 
 // -------------------------------------------- the sale is one press, and the row is the way back
 

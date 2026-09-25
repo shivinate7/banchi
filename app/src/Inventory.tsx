@@ -787,6 +787,21 @@ function CopiesPanel({
 
   const settled = results !== null && results.query === (handle ?? '')
 
+  /* B1: THE LOADER MUST GIVE UP. `settled` above asks whether the answer ON HAND matches the
+     query ON HAND — a strict check the D118 comment above needs to avoid flashing a stale
+     group. It says nothing about whether a fetch is actually running, so a query the server
+     never echoes back correctly (measured: the shared route-sweep fixture's `/search` stub
+     always answers `query: ''`) leaves `settled` false forever even after `loading` has gone
+     back to false — `group === null && (loading || !settled)` then never turns false, and the
+     kit's `aria-busy` `<Loading>` spins for good. `askedFor` remembers the handle a fetch was
+     actually LAUNCHED for; once `loading` returns to false for that same handle, the fetch is
+     over — settled or not — and there is nothing left to wait for. */
+  const askedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (loading) askedFor.current = handle
+  }, [loading, handle])
+  const gaveUp = !loading && askedFor.current === handle
+
   /* The copy the walk is pointing at, as the search knows it — or the lone copy when the
      search cannot reach it. */
   const lone = useMemo(() => (handle === null ? loneCopy(row) : null), [handle, row])
@@ -847,12 +862,14 @@ function CopiesPanel({
           y=79 to y=181 and back on an ~93ms answer. Draw it only when there is nothing to stand
           on — a fresh card on the walk (`group` is null because `row.key` is not in the still-
           old `results`) or the very first read. A re-read of the SAME card keeps its `group`
-          (found by key in the stale `results`) and the list stays put while the fetch runs. */}
-      {group === null && (loading || !settled) ? (
+          (found by key in the stale `results`) and the list stays put while the fetch runs.
+          `!gaveUp` rather than `loading || !settled` (B1): the fetch this handle asked for is
+          over the moment `loading` goes back to false, whether or not it ever settled. */}
+      {group === null && !gaveUp ? (
         <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
       ) : null}
 
-      {group === null && settled && !loading ? (
+      {group === null && gaveUp ? (
         <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
           That should not happen; a reload usually settles it.
         </Notice>
