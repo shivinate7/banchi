@@ -191,9 +191,11 @@ test.describe('the published demo draws what reviewers grade', () => {
 
   test('Inventory: a Game pick draws a count on every box', async ({ page }) => {
     await visit(page, 'Inventory')
-    // The native menu `BoxBrowse` draws today. When the shared filter control replaces it,
-    // this line follows it; the assertion below is what the case is about.
-    await page.locator('select[aria-label="Filter by game"]').first().selectOption({ index: 2 })
+    // The rail's FilterBar: the Filters press opens a popover, and Game is its first facet.
+    await page.locator('.browse-filterbar .bn-filterbar-trigger:visible').click()
+    await page.locator('.bn-filterbar-popover .bn-pick', { hasText: /^Game/ }).click()
+    await page.locator('.bn-pick-opt').nth(1).click()
+    await page.keyboard.press('Escape')
     const rows = page.locator('button:has-text("match")')
     await expect(rows.first()).toBeVisible()
     expect(await rows.count()).toBeGreaterThanOrEqual(4)

@@ -1740,6 +1740,20 @@ test("the owner's position treatment never reaches the Fulfiller", async ({ page
   await expect(view(page).locator('.card-locations-place-large')).not.toHaveCount(0)
 })
 
+test('N7 — the fold under a card says which box the rest are in by name, never the number', async ({
+  page,
+}) => {
+  /* `inBoxes` (`Fulfillment.tsx`) composed "in Box 4" straight off `copy.place.box` — a raw
+   * store number on the Fulfiller's own screen, the one persona D31 keeps the owner's every
+   * position-numbering convention off of. Eiscue's second copy is box 4; the fixture's own
+   * `searchAnswer` sends every `place.box_name` as `null` (unnamed), so a fixed box number
+   * gone from the text is what a fix here looks like. */
+  await openSearch(page, 'Eiscue', 2)
+  const where = view(page).locator('.ff-more-where')
+  await expect(where).toBeVisible()
+  await expect(where).not.toContainText('Box 4')
+  await expect(where).not.toContainText(/\bBox\b/)
+})
 
 test('the cards for sale are listed in box-walk order, and nothing else is listed', async ({
   page,

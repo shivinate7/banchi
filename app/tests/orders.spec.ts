@@ -3,6 +3,12 @@ import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { settleMotion } from './motionSettled'
 
+/** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
+ *  own constant, copied rather than imported (that file's is private): a PNG would need a
+ *  Buffer, and this only has to load. */
+const PHOTO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>'
+
 import type {
   InventoryCard,
   Listing,
@@ -2111,6 +2117,33 @@ test('at 390, the buyer picker is reachable through the chip and its bottom shee
   await expect(page.locator('.orders-buyerchip-text')).toContainText('Bob')
 })
 
+/* THE BUYER SHEET'S OVERLAY CONTRACT (inventory-r2's case, carried at the PR 2 integration).
+ * The orders lane made this sheet the kit's own `Sheet` and its trigger `.orders-buyerchip`, so
+ * the case now presses that chip. The contract it asserts is unchanged: the focus stays inside,
+ * Escape closes, and focus returns to the chip that opened it. */
+test('the buyer sheet traps focus, closes on Escape, and gives focus back to the chip', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { orders: threeBuyerPayload() })
+
+  const chip = page.locator('.orders-buyerchip')
+  await chip.focus()
+  await chip.press('Enter')
+  const sheet = page.locator('[data-bn-overlay].orders-buyers-sheet')
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toHaveAttribute('aria-modal', 'true')
+  await expect.poll(() => sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab')
+    const inside = await sheet.evaluate((el) => el.contains(document.activeElement))
+    expect(inside, `Tab ${i + 1} left the sheet`).toBe(true)
+  }
+
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+  await expect(chip).toBeFocused()
+})
+
 /* AT 390 THE WALK IS ON THE PAGE, under the card, never only inside a sheet. Ticking a second buyer
  * from the sheet widens the walk the page draws. */
 test('at 390, the walk rows are on the page, and a tick from the sheet widens them', async ({ page }) => {
@@ -2672,6 +2705,33 @@ test('Add orders opens the store sheet: the fetch/paste well, the status picker 
   const buyer = page.locator('.orders-manage-sheet')
   await expect(buyer.locator('.orders-manage-orders')).toBeVisible()
   await expect(buyer.locator('.orders-paste, .orders-backlog, .orders-reconcile')).toHaveCount(0)
+})
+
+/* THE MANAGE SHEET'S OVERLAY CONTRACT (inventory-r2's case, carried at the PR 2 integration).
+ * The orders lane made this sheet the kit's own `Sheet` and its trigger the `.orders-manage`
+ * icon button, so the case now presses that control. The contract it asserts is unchanged:
+ * the focus stays inside, Escape closes, and focus returns to the control that opened it. */
+test('the Manage sheet traps focus, closes on Escape, and gives focus back to the Manage control', async ({ page }) => {
+  const owing = terminalOwingOrder()
+  await open(page, { orders: payloadOf([owing, order()], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
+
+  const manage = page.locator('main.orders .orders-manage').first()
+  await manage.focus()
+  await manage.press('Enter')
+  const sheet = page.locator('[data-bn-overlay="sheet"].orders-manage-sheet')
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toHaveAttribute('aria-modal', 'true')
+  await expect.poll(() => sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab')
+    const inside = await sheet.evaluate((el) => el.contains(document.activeElement))
+    expect(inside, `Tab ${i + 1} left the sheet`).toBe(true)
+  }
+
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+  await expect(manage).toBeFocused()
 })
 
 test('the selected buyer\'s own orders stay reachable in Manage for stand-down, close-line and declare-kind', async ({ page }) => {
@@ -3381,4 +3441,42 @@ test('finishing a buyer never asks for another buyer\'s walk, and draws no card 
   expect(asked.filter((keys) => keys.includes(secondBuyerKey))).toEqual([])
   await expect(page.locator('.orders-card-pane')).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Mark sold/ })).toHaveCount(0)
+})
+
+/* THE LIGHTBOX IS `OrdersWalkPane.tsx`'s OWN `Overlay` (kind="lightbox"), which is the kit's
+ * `Dialog` now (inventory-r2, round 4/5). Carried over at the PR 2 integration from
+ * inventory-r2's case, with its selector moved to the orders lane's card pane
+ * (`.orders-card-pane .browse-photo-frame`). Its two sibling cases, for the buyer sheet and
+ * the Manage sheet, are carried above with their selectors moved the same way.
+ * MUTATION-PROVEN on inventory-r2: `.bak` `kit/overlay.tsx`, delete `Dialog`'s
+ * `useReturnFocus()` call, rerun, and the final `toBeFocused()` assertion fails. */
+test('the lightbox traps focus, closes on Escape, and gives focus back to the photo frame', async ({ page }) => {
+  /* A REAL IMAGE, NOT A 404: `PhotoPanel` swaps to its "photo missing" branch, with no zoom
+     button, once the `<img>` fires `onError`. */
+  await page.route(/\/photo\/(by-card\/[0-9a-f]+|\d+\/\d+)/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG })
+  })
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: volcanionPlan(),
+    inventoryCards: { '3/21': inventoryCard() },
+  })
+
+  const frame = page.locator('.orders-card-pane .browse-photo-frame').first()
+  await frame.focus()
+  await frame.press('Enter')
+  const lightbox = page.locator('[data-bn-overlay="lightbox"]')
+  await expect(lightbox).toBeVisible()
+  await expect(lightbox).toHaveAttribute('aria-modal', 'true')
+  await expect.poll(() => lightbox.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('Tab')
+    const inside = await lightbox.evaluate((el) => el.contains(document.activeElement))
+    expect(inside, `Tab ${i + 1} left the lightbox`).toBe(true)
+  }
+
+  await page.keyboard.press('Escape')
+  await expect(lightbox).toHaveCount(0)
+  await expect(frame).toBeFocused()
 })

@@ -77,13 +77,20 @@ test('the departed row shell is drawn', async ({ page }) => {
 test('the departed row says one state and offers no action', async ({ page }) => {
   const row = page.locator(DEPARTED_ROW)
 
-  /* ONE STATE WORD. The state cell holds up to three things — a `Viewing` marker, an order's
-     `Wanted` claim, and the state pill — and a departed copy has only the last of them. Counting
-     pills rather than reading text is what makes this fail if a marker starts appearing on a row
-     that has left the box, which is a claim about a card nobody can walk to. */
+  /* NO PILL (S2, round 2, `CardLocations.tsx`'s own comment on this span): a departed copy's
+     state pill was deleted outright, not merely hidden for the current row — the struck
+     figure `PositionLabel` draws is this row's own mark, in past tense
+     (`data-departed`/`aria-label="Was at …"`, `PositionLabel.tsx`), and pairing it with a
+     second, present-tense "Sold" pill said the same fact twice in two tenses. This case
+     asserted the pre-S2 pill until this round: `git show 0ebe59cf:app/src/CardLocations.tsx`
+     already carried the exclusion, so the code was already this way three rounds ago and the
+     case was simply never run against it (`gallery.spec.ts` was outside round 2's own
+     design-check scope) — not a regression this lane's own round 3-5 work introduced. */
   const pills = row.locator('.card-locations-state .bn-pill')
-  await expect(pills).toHaveCount(1)
-  await expect(pills).toHaveText('Sold')
+  await expect(pills).toHaveCount(0)
+  const mark = row.locator('.card-locations-label [data-departed="true"]').first()
+  await expect(mark).toHaveAttribute('data-departed', 'true')
+  await expect(mark).toHaveAttribute('aria-label', /^Was at /)
 
   /* AND NOTHING WHERE AN ACTION WOULD BE. `Mark sold` on a copy that is already gone is the
      press this component refuses to offer, and the state pill beside it has already said so —

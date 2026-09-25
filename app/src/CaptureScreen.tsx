@@ -19,7 +19,7 @@ import {
   undoCapture,
   updateCard,
 } from './server'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import { resolveSetHint } from './setHint'
 import type { HintVerdict, SetOption } from './setHint'
 import { manualTrigger } from './trigger'
@@ -2586,7 +2586,7 @@ export function CaptureScreen() {
         })
       } catch (err) {
         // CLOSED HERE TOO, NOT ONLY ON SUCCESS. The dialog is portalled over the whole page
-        // (`InventoryOverlay.tsx`), and `undoNote` renders under the footer behind it — a
+        // (kit/overlay.tsx's `Dialog`), and `undoNote` renders under the footer behind it — a
         // refusal left open behind its own dialog would satisfy no reader at all. The
         // paragraph is the same one `undoBack`'s refusal already uses, so a blocked press
         // reads exactly the way a blocked walk does.

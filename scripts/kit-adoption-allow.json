@@ -5,21 +5,6 @@
       "R2-icon-only-button": "icons"
     },
     "app/src/BoxBrowse.tsx": {
-      "R2-select": "inventory",
-      "R2-class": "inventory",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/BoxOps.tsx": {
-      "R2-select": "inventory",
-      "R2-class": "inventory",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/CardHero.tsx": {
-      "R2-date": "inventory",
-      "R2-money": "inventory",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/CardLocations.tsx": {
       "R2-icon-only-button": "icons"
     },
     "app/src/ClearPrices.tsx": {
@@ -37,15 +22,6 @@
     "app/src/Gallery.tsx": {
       "R2-search": "kit-frame",
       "R2-money": "kit-frame"
-    },
-    "app/src/Inventory.tsx": {
-      "R1": "inventory",
-      "R2-class": "inventory",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/InventoryOverlay.tsx": {
-      "R2-dialog": "inventory",
-      "R2-icon-only-button": "icons"
     },
     "app/src/LiveReconcile.tsx": {
       "R2-dialog": "b-runs",
@@ -123,9 +99,6 @@
     "app/src/ValueBands.tsx": {
       "R2-class": "b-pricing",
       "R2-money": "b-pricing"
-    },
-    "app/src/cardState.ts": {
-      "R2-date": "inventory"
     }
   },
   "runtime": {
@@ -155,11 +128,6 @@
       "page": "sales",
       "width": "sales",
       "top": "sales"
-    },
-    "/inventory": {
-      "page": "inventory",
-      "width": "inventory",
-      "top": "inventory"
     },
     "/fulfillment": {
       "page": "fulfillment"

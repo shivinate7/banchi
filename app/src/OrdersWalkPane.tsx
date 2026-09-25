@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
 import { forSale } from './cardState'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import { Icon, IconButton, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
