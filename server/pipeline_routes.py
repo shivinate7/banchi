@@ -361,10 +361,14 @@ class PipelineRefusal(Exception):
     is imported BY that file. The seam is one `except` clause at the dispatch site.
     """
 
-    def __init__(self, status: HTTPStatus, code: str, message: str):
+    def __init__(self, status: HTTPStatus, code: str, message: str, data: Optional[dict] = None):
         super().__init__(message)
         self.status = status
         self.code = code
+        #: WHAT A SCREEN CAN ACT ON, beside the sentence (round 7): the refused rows of a send,
+        #: so it can offer to send again at the owner's price with the live price shown. Most
+        #: refusals carry none.
+        self.data = data
 
 
 # ------------------------------------------------------------------------------- scoping
@@ -3025,6 +3029,19 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     )
     unreachable["reallocated"] = reallocated
 
+    # WHAT TCGPLAYER HOLDS NOW, OFF THE NEWEST LIVE EXPORT ON DISK (round 7, R6-1). Every send
+    # and every check writes one, so this is minutes old where the join's export can be days.
+    # The screen names a price change and a move of live copies against it, and the send
+    # refuses if TCGplayer moved again since.
+    live_name, live_now = _newest_live_listing()
+    for row in merged.values():
+        held = live_now.get(str(row.get("sku")))
+        row["live_now"] = (
+            None
+            if live_name is None
+            else {"export": live_name, "copies": held[1] if held else 0, "price": held[0] if held else None}
+        )
+
     return {
         "runs": summaries,
         "skus": list(merged.values()),
@@ -4178,6 +4195,43 @@ def _positive(value, field: str) -> int:
 #: `pipeline_routes.LIVE_DIR` / `pipeline_routes.LIVE_PREFIX`.
 LIVE_DIR = files.LIVE_DIRNAME
 LIVE_PREFIX = files.LIVE_PREFIX
+
+
+_NEWEST_LIVE: Dict[str, object] = {}
+
+
+def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str], int]]]:
+    """`(name, SKU -> (the asking price, live copies))` off the newest live export on disk, or
+    `(None, {})` when none was ever fetched. Read once per file: the name is the cache key, and a
+    fetch writes a new name (round 7, R6-1)."""
+    directory = files.inventory_dir() / LIVE_DIR
+    fetched = sorted(directory.glob(f"{LIVE_PREFIX}*.csv")) if directory.is_dir() else []
+    if not fetched:
+        return None, {}
+    newest = fetched[-1]
+    if _NEWEST_LIVE.get("name") != str(newest):
+        try:
+            rows = tcgcsv.read_export(newest).rows
+        except (tcgcsv.MalformedCsv, OSError):
+            return None, {}
+        listing: Dict[str, Tuple[Optional[str], int]] = {}
+        for row in rows:
+            sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+            if not sku:
+                continue
+            try:
+                price = tcgcsv.parse_price(str(row.get(tcgcsv.PRICE_COLUMN) or ""))
+            except ArithmeticError:
+                price = None
+            held = tcgcsv.parse_quantity(str(row.get(tcgcsv.LIVE_QUANTITY_COLUMN) or ""))
+            before = listing.get(sku, (None, 0))
+            listing[sku] = (
+                tcgcsv.format_price(price) if price is not None else before[0],
+                before[1] + max(0, held),
+            )
+        _NEWEST_LIVE.clear()
+        _NEWEST_LIVE.update({"name": str(newest), "listing": listing})
+    return newest.name, dict(_NEWEST_LIVE["listing"])  # type: ignore[arg-type]
 
 
 def do_live_export() -> dict:
