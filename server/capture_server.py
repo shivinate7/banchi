@@ -10180,6 +10180,45 @@ def _fts_slash_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str
     return list(out.items())
 
 
+def _fts_zero_pad_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
+    """Card `(key, sku)` rows for an ALL-DIGIT query term, ignoring how many leading zeros
+    the STORED number carries against how many the QUERY carries (F8, round-3 Opus review,
+    2026-09-25: "card numbers with or without leading zeros").
+
+    `_zero_padded_variant`'s FTS widening only covers a term of 1 OR 2 DIGITS — it pads to
+    `zfill(3)`, the width `store/numbers.py:join_key` always composes, so a query of `54`
+    correctly finds a card indexed as `054`. A term of 3 OR MORE DIGITS gets no such
+    widening: `q=934` never found a card whose number is the WIDER `0934` (a real printed
+    number on some games, not a `zfill(3)` artifact) — no FTS5 prefix search bridges a
+    3-digit term to a stored token with MORE leading zeros than that, because prefix
+    matching only ever adds characters after what was typed, never before it.
+
+    A PLAIN SQL SCAN, comparing both sides with their OWN leading zeros stripped
+    (`LTRIM(col, '0')`) — the same rule `match.py:_drop_leading_zeros` already applies
+    once a candidate reaches the rank step; this only gets the candidate there. Symmetric
+    by construction: `LTRIM` strips zeros off BOTH the stored column and the query term,
+    so a query typed WITH its own extra leading zeros (`0934` finding a card stored as
+    `934`) is covered by the same comparison, not a second one. `LTRIM` trims only from
+    the FRONT of the string, so `054/132`'s own `/132` half is untouched — this widening
+    is about the FIRST number alone, exactly where a leading zero can ever sit.
+
+    A SUPERSET, like every candidate source here: `match.match_query` (or `_match_rank`,
+    for a single-term query) still decides."""
+    out: Dict[str, str] = {}
+    for term in text.split():
+        if len(term) < 3 or not match._DIGITS_ONLY.match(term):
+            continue
+        bare = term.lstrip("0") or "0"
+        pattern = bare + "%"
+        for column in ("number_key", "number", "number_display"):
+            for key, sku in conn.execute(
+                f"SELECT key, sku FROM cards WHERE LTRIM({column}, '0') LIKE ?",  # noqa: S608
+                (pattern,),
+            ):
+                out.setdefault(str(key), sku)
+    return list(out.items())
+
+
 def _fts_fold_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
     """Card `(key, sku)` rows a hyphen or an apostrophe hides from FTS5's own prefix search
     (S2, UX-173 amended): `tokenchars '/-'` keeps a hyphenated word ONE token exactly as
@@ -10393,15 +10432,19 @@ def do_search(query: str) -> dict:
                 (match_expr,),
             ):
                 hits.setdefault(str(key), sku)
-            # TWO MORE CANDIDATE SOURCES, UNIONED (S2, UX-173 amended): FTS5's own prefix
-            # index cannot answer a query naming the SECOND half of a number alone
-            # (`/132`), or one that only reaches a real token once a hyphen or an
-            # apostrophe is folded out (`hooh`, `farfetchd`) — see each function's own
-            # docstring. Both are supersets exactly the way the FTS step already was;
-            # `match.match_query`/`_match_rank` below still decide.
+            # THREE MORE CANDIDATE SOURCES, UNIONED (S2, UX-173 amended; F8, round-3 Opus
+            # review, 2026-09-25): FTS5's own prefix index cannot answer a query naming
+            # the SECOND half of a number alone (`/132`), one that only reaches a real
+            # token once a hyphen or an apostrophe is folded out (`hooh`, `farfetchd`),
+            # or a 3+ digit query missing MORE leading zeros than it typed (`934` for a
+            # card stored as `0934`) — see each function's own docstring. All three are
+            # supersets exactly the way the FTS step already was; `match.match_query`/
+            # `_match_rank` below still decide.
             for key, sku in _fts_slash_candidates(conn, text):
                 hits.setdefault(key, sku)
             for key, sku in _fts_fold_candidates(conn, text):
+                hits.setdefault(key, sku)
+            for key, sku in _fts_zero_pad_candidates(conn, text):
                 hits.setdefault(key, sku)
         finally:
             conn.close()

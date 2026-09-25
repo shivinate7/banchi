@@ -277,6 +277,35 @@ def case_do_search_finds_a_padded_number_typed_without_its_zeros() -> None:
         check("9999" in skus, f"do_search({query!r}) finds the card stored as 054/132")
 
 
+def case_do_search_finds_a_number_with_more_leading_zeros_than_typed() -> None:
+    """F8, round-3 Opus review, 2026-09-25: "card numbers with or without leading zeros"
+    (the owner's own ruling). `_zero_padded_variant`'s FTS widening only covers a term of
+    1 or 2 digits — it pads to `zfill(3)`, the width `store/numbers.py:join_key` always
+    composes — so a 3+ digit query got no widening at all. `q=934` found nothing for a
+    card whose number is the WIDER `0934`, a real printed number on some games rather
+    than a `zfill(3)` artifact. Symmetric: `q=0934` must also find a card stored as the
+    bare `934`, and `q=934` must still refuse an unrelated card stored as `1934` — never
+    a substring, the same rule 4 the padded-number case above already protects.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        card = master.Card(box=1, index=1, name="Big Number Card", number="0934", sku="7700")
+        decoy = master.Card(box=1, index=2, name="Unrelated", number="1934", sku="9001")
+        snapshot.inventory.cards["1/1"] = card
+        snapshot.inventory.cards["1/2"] = decoy
+
+    for query in ("934", "0934"):
+        skus = [g["sku"] for g in cs.do_search(query)["groups"]]
+        check("7700" in skus, f"do_search({query!r}) finds the card stored as 0934")
+        check(
+            "9001" not in skus,
+            f"do_search({query!r}) does not find the unrelated card stored as 1934",
+        )
+
+
 def case_do_search_finds_a_whole_number_second_half() -> None:
     """F2, round-3 Opus review, 2026-09-25. `_fts_slash_candidates` scanned only
     `cards.number_key`, which is EMPTY when either half is missing —
@@ -548,6 +577,7 @@ CASES = [
     case_match_query_stays_fast_on_repeated_tokens,
     case_do_search_finds_a_padded_number_typed_without_its_zeros,
     case_do_search_finds_a_whole_number_second_half,
+    case_do_search_finds_a_number_with_more_leading_zeros_than_typed,
     case_do_search_never_returns_a_row_the_shared_matcher_rejects,
     case_do_search_finds_a_hyphenated_name,
     case_do_search_multiword_never_500s_next_to_a_widened_word,
