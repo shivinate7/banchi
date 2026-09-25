@@ -4453,6 +4453,14 @@ def do_delete_card(box: int, index: int) -> dict:
         photo_deleted = _unlink(photo)
         sidecar_deleted = _unlink(sidecar)
         released = inventory.next_index(box)
+        # D58, THE R1D FIX: the app's own on-hand count of this box drifts from the moment
+        # of the LAST `GET /boxes` and never updates on a capture or an undo, so the screen
+        # cannot compute the counted number itself — it has to be told. Read inside the
+        # lock, like every other fact this route reports, on the box the deletion just
+        # changed. `_Places` is the one renderer the whole module counts cards through
+        # (D58's own class docstring), so this is the same number `place.box_total` answers
+        # for a capture, not a second arithmetic path that could drift from it.
+        on_hand = _Places(inventory).total(box)
 
         # LOGGED LAST, after every deletion this route performs, so the line describes work
         # that actually happened rather than work that was about to be attempted. It commits
@@ -4497,6 +4505,11 @@ def do_delete_card(box: int, index: int) -> dict:
         # position from this rather than decrementing its own counter, which would drift the
         # moment the other device (D13) captured into the same box.
         "next_index": released,
+        # D58's counted number, after this undo — the box's on-hand count. Read for the same
+        # reason `next_index` is: the app must redraw from the server's own answer rather
+        # than decrementing a number it holds itself, which would drift the moment another
+        # device (D13) touched the same box.
+        "on_hand": on_hand,
     }
 
 
@@ -4841,6 +4854,10 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
                     renumbered_from=old_key,
                 )
         released = inventory.next_index(box)
+        # D58, THE R1D FIX — see `do_delete_card`'s own note. A remove changes the box's
+        # on-hand count exactly as an undo does, and the app cannot derive it from what it
+        # already holds without drifting.
+        on_hand = _Places(inventory).total(box)
 
     return {
         "deleted": key,
@@ -4857,6 +4874,8 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         # The index this box hands out next. After a shift that is the old high-water
         # mark: the top slot emptied, so the box got one position shorter.
         "next_index": released,
+        # D58's counted number, after this remove.
+        "on_hand": on_hand,
     }
 
 

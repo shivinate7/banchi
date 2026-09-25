@@ -611,7 +611,7 @@ async function openWithBox(page: Page): Promise<string[]> {
   /* THE ROW NAMES THE BOX AND NO LONGER NUMBERS IT (D142), so this asserts
      the NAME the fixture gives box 3. It read `toContainText('3')` against a row that opened
      `Box 3`; the owner's instruction was that the number comes off this screen, and the name
-     is the stronger assertion anyway — `3` also matches a `next index 3`. */
+     is the stronger assertion anyway — `3` also matches a `next 3`. */
   await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('S key')
   return bodies
 }
@@ -1053,10 +1053,10 @@ test('the box list leads with the fullest box, and the number is last', async ({
      a typed number and the number is doing no job on any of them — which is the owner's
      instruction, *"i shouldn't even need to see box. numbers here"*, asserted at rest. */
   expect(await boxOptionText(page)).toEqual([
-    'Commons next index 41',
-    'Bulk next index 11',
-    'Epics next index 8',
-    'Slabs next index 4',
+    'Commons next 41',
+    'Bulk next 11',
+    'Epics next 8',
+    'Slabs next 4',
   ])
 })
 
@@ -1085,7 +1085,7 @@ test('the box picked last time leads, even when it is the emptiest', async ({ pa
 
   await page.keyboard.press('b')
   await expect(page.locator('.capture-opt').first()).toBeVisible()
-  expect((await boxOptionText(page))[0]).toBe('Slabs next index 4')
+  expect((await boxOptionText(page))[0]).toBe('Slabs next 4')
 })
 
 test('the setup survives a reload, and the in-flight capture id is not on the device', async ({
@@ -1155,7 +1155,7 @@ test('a restored box that has been sealed since is let go of, by name', async ({
 
   /* AND THE REMEDY IS THE PRESS THEY WERE ABOUT TO MAKE: the field is open with focus in the
      entry, which is where `Pick a box` would have put them. */
-  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
+  await expect(page.getByLabel(/box.s name or number/i)).toBeFocused()
 })
 
 test('a restored box that is gone is let go of, and says so without naming a drawer', async ({
@@ -1165,7 +1165,7 @@ test('a restored box that is gone is let go of, and says so without naming a dra
 
   await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
   await expect(page.locator('.capture-refused').filter({ hasText: /not in the store/ })).toBeVisible()
-  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
+  await expect(page.getByLabel(/box.s name or number/i)).toBeFocused()
 })
 
 /* ============================================================================================
@@ -1206,7 +1206,7 @@ test('a restored box whose number now belongs to another drawer is let go of', a
   await expect(note).toContainText('Box 3')
   await expect(note).not.toContainText('Epics')
 
-  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
+  await expect(page.getByLabel(/box.s name or number/i)).toBeFocused()
 })
 
 test('a restored box the store still calls the same drawer is kept', async ({ page }) => {
@@ -1314,14 +1314,14 @@ test('a typed number puts the number back on the rows that answer it', async ({ 
 
   await page.keyboard.type('2')
   await expect(page.locator('.capture-opt')).toHaveCount(1)
-  expect(await boxOptionText(page)).toEqual(['Slabs Box 2 next index 4'])
+  expect(await boxOptionText(page)).toEqual(['Slabs Box 2 next 4'])
 
   /* AND A NAME SEARCH BRINGS NO NUMBER BACK, because none of those rows matched on one. The
      second row is the create-box offer, which every non-exact entry draws last. */
   await page.keyboard.press('Backspace')
   await page.keyboard.type('om')
   await expect(page.locator('.capture-opt')).toHaveCount(2)
-  expect(await boxOptionText(page)).toEqual(['Commons next index 41', 'om New'])
+  expect(await boxOptionText(page)).toEqual(['Commons next 41', 'om New'])
 })
 
 test('an unnamed box draws its number once, typed or not', async ({ page }) => {
@@ -1341,11 +1341,11 @@ test('an unnamed box draws its number once, typed or not', async ({ page }) => {
   await open(page, undefined, GAMES, UNNAMED)
   await page.keyboard.press('b')
   await expect(page.locator('.capture-opt')).toHaveCount(2)
-  expect(await boxOptionText(page)).toEqual(['Box 6 next index 11', 'Box 7 next index 4'])
+  expect(await boxOptionText(page)).toEqual(['Box 6 next 11', 'Box 7 next 4'])
 
   await page.keyboard.type('6')
   await expect(page.locator('.capture-opt')).toHaveCount(1)
-  expect(await boxOptionText(page)).toEqual(['Box 6 next index 11'])
+  expect(await boxOptionText(page)).toEqual(['Box 6 next 11'])
 })
 
 test('clearing the setup empties every claim, forgets the key, and can be undone', async ({
@@ -1440,9 +1440,12 @@ test('a game whose export needs a set hint says so, in all three states of the f
   /* THREE PLACES, BECAUSE THE OPERATOR MEETS THIS FIELD IN THREE STATES: the head while it
      is open, the meta beside the cursor, and the row once it is shut. The row is the one
      that matters at the rig — it is where the screen sits for every card of a sitting
-     nobody pressed H on, and `None` on its own reads as a choice that was made. */
+     nobody pressed H on, and `None` on its own reads as a choice that was made.
+     THE HEAD'S OWN META READS `Needed` NOW, NOT `Needed for this game` (TXT-33, density):
+     the closed row a few pixels away already says `Needed`, and the open head's meta had no
+     other job than repeating it in more words. */
   await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toContainText(
-    'Needed for this game',
+    'Needed',
   )
   await expect(hintMeta(page)).toHaveText(/needed/i)
   await expect(hintNote(page)).toContainText('needs one')
@@ -1599,4 +1602,106 @@ test('no typed middle dot or bullet reaches the capture screen', async ({ page }
   const text = await view.innerText()
   expect(text).not.toContain('·')
   expect(text).not.toContain('•')
+})
+
+/* The pause/play overlay's own cases moved to capture-undo.spec.ts: this file's own rule is
+   that the shutter is never pressed and no capture is ever taken, and proving the manual key
+   fires while paused means pressing it. See capture-undo.spec.ts's "pause/play" block. */
+
+/* ------------------------------------------------------------------------------------------
+ * UX-069 (D118): "PIN THE SHUTTER, so it keeps one fixed position whatever opens above it."
+ * Every setup field, opened in turn, against the shutter's own rect before and after.
+ * ------------------------------------------------------------------------------------------ */
+
+function shutter(page: Page) {
+  return page.getByRole('button', { name: 'Capture card', exact: true })
+}
+
+test('the shutter keeps one fixed position whatever field opens above it (D118)', async ({
+  page,
+}) => {
+  // Set hint fetches the game's export sets the moment it opens; unstubbed, that reaches
+  // the real capture server, which `shell.ts`'s seal refuses.
+  await routeSets(page, { game: 'pokemon', sets: [], aliases: {}, reason: null })
+  await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES)
+  const rigSummary = page.locator('.capture-rig-summary')
+  if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
+
+  const fields: readonly { key: string; label: string | RegExp }[] = [
+    { key: 'b', label: 'Box' },
+    { key: 'h', label: 'Set hint' },
+    { key: 'r', label: 'Rarity' },
+    { key: 'f', label: 'Finish' },
+    { key: 'g', label: 'Game' },
+    { key: 'v', label: 'Camera' },
+    { key: 'o', label: 'Rotation' },
+    { key: 't', label: 'Trigger' },
+  ]
+
+  // DOCUMENT-relative, not viewport-relative: opening a field low on the page (Set hint,
+  // Rarity, ... on a phone, order 5-6 behind the shutter's own order 2) can scroll it into
+  // view, and a scroll moves every element's VIEWPORT rect without moving anything in the
+  // page's own layout — the opposite of what D118 is about. `getBoundingClientRect().top +
+  // scrollY` is stable across a scroll; `boundingBox()` alone is not.
+  const docRect = () =>
+    shutter(page).evaluate((el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.left + window.scrollX, y: r.top + window.scrollY, width: r.width, height: r.height }
+    })
+
+  // Both widths the owner named: 1440 desktop, 390 phone — the shutter's own row reflows
+  // between them (D205's tab bar, the phone's single column), so each gets its own baseline.
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 })
+    const baseline = await docRect()
+
+    for (const field of fields) {
+      await page.keyboard.press(field.key)
+      await expect(page.locator('.capture-open').filter({ hasText: field.label })).toBeVisible()
+      const opened = await docRect()
+      expect(opened, `${width}px, ${field.label} open`).toEqual(baseline)
+      await page.keyboard.press('Escape')
+      await expect(page.locator('.capture-open')).toHaveCount(0)
+    }
+  }
+})
+
+/* ------------------------------------------------------------------------------------------
+ * UX-138: every field agrees on where focus goes when it opens — the body's own first
+ * control. Box and Set hint already focused their text entry; this is the fields that used to
+ * open with focus left on the body.
+ * ------------------------------------------------------------------------------------------ */
+
+test('every field puts focus on its own first control when it opens, not the body', async ({
+  page,
+}) => {
+  await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES)
+  const rigSummary = page.locator('.capture-rig-summary')
+  if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
+
+  const fields: readonly { key: string; label: string | RegExp }[] = [
+    { key: 'r', label: 'Rarity' },
+    { key: 'f', label: 'Finish' },
+    { key: 'g', label: 'Game' },
+    { key: 'v', label: 'Camera' },
+    { key: 'o', label: 'Rotation' },
+    { key: 't', label: 'Trigger' },
+  ]
+
+  for (const field of fields) {
+    await page.keyboard.press(field.key)
+    const body = page
+      .locator('.capture-open')
+      .filter({ hasText: field.label })
+      .locator('.capture-open-body')
+    await expect(body).toBeVisible()
+    // Focus is somewhere inside the open body, not on `document.body` (the pre-fix state)
+    // and not stuck on the row that opened it.
+    const focusedInBody = await body.evaluate(
+      (node) => node.contains(document.activeElement) && document.activeElement !== document.body,
+    )
+    expect(focusedInBody, `${field.label} focus`).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.capture-open')).toHaveCount(0)
+  }
 })

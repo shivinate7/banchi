@@ -6605,7 +6605,7 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145", "D153",
-                            "D164", "D170", "D172", "D218"]},
+                            "D164", "D170", "D172", "D196", "D218", "D-capture-always-asks"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -7318,9 +7318,8 @@ COMPONENTS = [
                                                  "exactly — one unconditional read on mount, no "
                                                  "more requests at all once the answer holds no "
                                                  "claims.",
-                                         "governed_by": ["D174", "D33", "D39",
-                                                         "D50", "D57", "D89", "D94", "D118",
-                                                         "D207"]},
+                                         "governed_by": ["D33", "D39", "D50", "D57", "D89", "D94",
+                                                         "D118", "D174", "D196", "D207"]},
             "src/SubmissionClaims.css": {"does": "that panel's own styles: the row's two columns "
                                                  "and nothing else — the kit supplies the panel, "
                                                  "the list, the pills and the buttons. The action "
@@ -8600,7 +8599,7 @@ COMPONENTS = [
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
                 "governed_by": ["D3", "D20", "D22", "D23", "D27", "D56", "D65", "D101", "D118",
-                                "D142", "D145", "D153", "D211", "D218"],
+                                "D142", "D145", "D153", "D205", "D211", "D218"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -8617,7 +8616,8 @@ COMPONENTS = [
                         "undoing exactly one, a row undoing that card AND everything after "
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
-                "governed_by": ["D10", "D41", "D58", "D67", "D101", "D118", "D164", "D196", "D218"],
+                "governed_by": ["D10", "D41", "D58", "D67", "D101", "D118", "D153", "D164", "D196",
+                                "D211", "D218"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "

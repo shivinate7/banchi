@@ -7,6 +7,7 @@ import type { SVGProps } from 'react'
 const PATHS = {
   camera: 'M4 8h3l2-3h6l2 3h3v11H4z M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   play: 'M6 4l14 8-14 8z',
+  pause: 'M7 4h4v16H7z M13 4h4v16h-4z',
   layers: 'M12 3l9 5-9 5-9-5z M3 13l9 5 9-5 M3 17l9 5 9-5',
   inbox: 'M3 13l3-8h12l3 8v6H3z M3 13h5l2 3h4l2-3h5',
   tag: 'M3 12V4h8l9 9-8 8z M7.5 8.5h.01',

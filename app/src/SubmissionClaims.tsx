@@ -5,6 +5,7 @@ import type { SubmissionClaim } from './types'
 import { usePoll } from './usePoll'
 import { Button, Notice, Pill } from './kit'
 import { toast } from './kit/toast'
+import { clockTime } from './dates'
 import './SubmissionClaims.css'
 
 /* WHAT IS HELD RIGHT NOW, AND THE ONE WAY OUT OF A STUCK CLAIM (D174).
@@ -36,9 +37,11 @@ import './SubmissionClaims.css'
  *  are banked — so this is deliberately slower and stops entirely when nothing is held. */
 const POLL_MS = 8000
 
+// R2-date: dates.ts is the one reader. clockTime()'s "—" for an unparseable stamp replaces
+// the raw wire string this used to fall back to — the same "no mechanism on screen" rule
+// (D196) applies to a malformed ISO string as much as to a decision id.
 function started(stamp: string): string {
-  const at = new Date(stamp)
-  return Number.isNaN(at.getTime()) ? stamp : at.toLocaleTimeString()
+  return clockTime(stamp)
 }
 
 function cardCount(n: number): string {
@@ -241,6 +244,7 @@ export function SubmissionClaims() {
                   <Button
                     variant="danger"
                     icon="unlock"
+                    words="irreversible"
                     onClick={() => void release(claim)}
                     disabled={releasing !== null}
                     busy={releasing === claim.receipt}
