@@ -85,11 +85,26 @@ _HYPHEN_BETWEEN_DIGITS = re.compile(r"([0-9])-(?=[0-9])")
 
 
 def fold_text(value: str) -> str:
-    """Rule 1: NFKC, NFKD, no combining marks, lower case, no apostrophes, every other run of
-    non-alphanumeric characters becomes one space, trimmed."""
+    """Rule 1: NFKC, NFKD, no Unicode marks, lower case, no apostrophes, every other run of
+    non-alphanumeric characters becomes one space, trimmed.
+
+    EVERY MARK, BY CATEGORY — NEVER `unicodedata.combining(ch)` (F7, round-3 Opus review,
+    2026-09-25, correcting D271's own earlier note). `kit/match.ts:foldText` deletes every
+    Unicode Mark character outright (`\\p{M}`), which covers all three mark categories —
+    Mn (non-spacing), Mc (SPACING combining), Me (enclosing). `unicodedata.combining(ch)`
+    answers a DIFFERENT question, a character's canonical combining class, which is zero
+    for a SPACING mark such as Devanagari's own vowel signs (U+093E is category Mc,
+    combining class 0) even though it is still a Mark by Unicode's own classification.
+    The old `combining(ch) != 0` test therefore left a ccc-0 mark in the string, where it
+    fell through to the loop below and became a WORD BREAK (a space) instead of vanishing
+    — `"a\\u093eb"` folded to `"a b"`, two words, where the browser folds the identical
+    string to `"ab"`, one. `unicodedata.category(ch)[0] == "M"` is the same test `\\p{M}`
+    performs (`Mn`/`Mc`/`Me` all start with `M`), so this now agrees with the browser on
+    every mark, spacing or not.
+    """
     value = unicodedata.normalize("NFKC", str(value))
     value = unicodedata.normalize("NFKD", value)
-    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    value = "".join(ch for ch in value if unicodedata.category(ch)[0] != "M")
     value = value.lower()
     value = _APOSTROPHES.sub("", value)
     out: List[str] = []

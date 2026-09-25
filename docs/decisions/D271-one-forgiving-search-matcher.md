@@ -87,13 +87,18 @@ under the `u` (Unicode) flag — the flag widens `\p{L}`, never `\d`. Python's b
 `_drop_leading_zeros`/`_number_shape_ok`) are now ASCII-only on purpose. It is the one place
 this file departs from Python's own Unicode-aware defaults.
 
-**A known, unfixed gap.** `kit/match.ts:foldText` deletes every Unicode Mark character
-outright (`\p{M}`), whatever its canonical combining class. `server/match.py:fold_text` only
-strips a mark with a NON-ZERO combining class — a real combining accent
-(`unicodedata.combining(ch) != 0`). A "ccc-0" mark has combining class zero, a SPACING mark
-such as a Devanagari vowel sign. That test does not remove it. A Mark character is never
-`str.isalnum()`, so it folds into a WORD BREAK on the Python side instead of vanishing. The
-browser would have kept the word joined. No case in the shared table has ever needed a ccc-0
-mark folded. Not chased: `unicodedata` alone cannot express `\p{M}`. The `regex` package
-would, and `requirements.txt` deliberately does not carry it. Fixing this is a dependency
-decision, not a bug fix.
+**The ccc-0 gap this entry once recorded was wrong (F7, round-3 Opus review, 2026-09-25).**
+The earlier text here said `unicodedata` alone could not express `kit/match.ts:foldText`'s
+`\p{M}` (every Unicode Mark, whatever its category) without the `regex` package. It called
+the gap a dependency decision rather than a bug. That premise was false.
+`unicodedata.category(ch)[0] == "M"` answers the SAME question `\p{M}` does. `Mn`
+(non-spacing), `Mc` (spacing) and `Me` (enclosing) all start with `M`. The stdlib alone is
+enough. The old code tested `unicodedata.combining(ch) != 0` instead, a canonical COMBINING
+CLASS. That class is zero for a SPACING mark such as a Devanagari vowel sign (U+093E,
+category Mc), even though it is still a Mark. A ccc-0 mark stayed in the string. It fell
+through to `fold_text`'s own "not alnum -> space" step. It became a WORD BREAK instead of
+vanishing: folding a letter, that mark, and another letter gave two words. The browser
+folded the identical string to one. `server/match.py:fold_text` now tests the category.
+The two implementations agree on every mark, spacing or not. `scripts/match-selftest.py`'s
+`case_match_fold_text_strips_every_mark_by_category` proves it, verified red on the old
+code and green on the new one.

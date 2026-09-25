@@ -5051,7 +5051,7 @@ COMPONENTS = [
                         "temp directory per case, so the operator's own store is never "
                         "opened. Pure Python plus the project's own packages, no network — "
                         "in `make check`, gated by D18 only because it writes a temp store.",
-                "governed_by": ["D166", "D213"],
+                "governed_by": ["D166", "D213", "D271"],
             },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----

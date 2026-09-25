@@ -9,8 +9,9 @@
  * THE RULES, IN ORDER. They are stated here, not only coded, so that any other search that
  * must agree with this one can be checked against them.
  *
- *  1. FOLD. A string is NFKC-normalized (full-width `５４` is `54`), then NFKD-normalized, its
- *     combining marks are removed, and it is lower-cased. Apostrophes (' ’ ʼ ` ´) are removed,
+ *  1. FOLD. A string is NFKC-normalized (full-width `５４` is `54`), then NFKD-normalized, every
+ *     Unicode MARK is removed (`\p{M}`: non-spacing, spacing and enclosing marks alike — not
+ *     only a combining accent), and it is lower-cased. Apostrophes (' ’ ʼ ` ´) are removed,
  *     so `Farfetch'd` is `farfetchd`. Every other run of characters that is not a letter or a
  *     digit becomes one space: `Ho-Oh ex` is `ho oh ex`, `Akali, Deadly` is `akali deadly`.
  *     The COMPACT form of a string is its fold with the spaces removed: `hoohex`.

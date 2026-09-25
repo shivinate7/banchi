@@ -186,6 +186,25 @@ def case_match_rank_folds_accents() -> None:
     check(rank is not None, "'flabebe' matches a card named Flabébé")
 
 
+def case_match_fold_text_strips_every_mark_by_category() -> None:
+    """F7, round-3 Opus review, 2026-09-25, correcting D271's own earlier note. A "ccc-0"
+    mark — canonical combining class zero, a SPACING mark such as Devanagari's own vowel
+    signs (U+093E, category Mc) — is still a Unicode MARK, and `kit/match.ts:foldText`
+    deletes every mark outright (`\\p{M}`, which covers Mn/Mc/Me alike). The old
+    `unicodedata.combining(ch) != 0` test answered a narrower question (a character's
+    canonical combining class) and left a ccc-0 mark in the string, where it became a
+    WORD BREAK instead of vanishing: `fold_text('a\\u093eb')` was `'a b'`, two words,
+    where the browser folds the identical string to `'ab'`, one.
+    """
+    from server import match
+
+    value = "aाb"
+    equal(
+        match.fold_text(value), "ab",
+        "a ccc-0 spacing mark (U+093E, category Mc) is stripped, not turned into a space",
+    )
+
+
 def case_match_query_stays_fast_on_repeated_tokens() -> None:
     """F1, BLOCKING (round-3 Opus review, 2026-09-25). `_cover` tried both the
     single-token and the pair branch at every position, and each branch recursed into
@@ -524,6 +543,7 @@ CASES = [
     case_match_rank_never_treats_a_number_as_a_bare_substring,
     case_match_rank_folds_a_hyphen_standing_for_the_slash,
     case_match_rank_folds_accents,
+    case_match_fold_text_strips_every_mark_by_category,
     case_match_digit_tests_are_ascii_only,
     case_match_query_stays_fast_on_repeated_tokens,
     case_do_search_finds_a_padded_number_typed_without_its_zeros,
