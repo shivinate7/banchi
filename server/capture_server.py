@@ -9887,10 +9887,20 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     # raw field is still here, and the display form joins it.
     shown = _number_display(card) or ""
 
-    # THE NUMBER FIELDS ARE COMPARED STRUCTURALLY, NOT AS SUBSTRINGS, so they are checked
-    # here and left OUT of the plain substring loop below — a bare `query in field.lower()`
-    # over `number`/`key`/`shown` is exactly the bug rule 4 forbids (`54` finding `154/200`).
+    # THE NUMBER FIELDS ARE COMPARED TWO WAYS, BOTH EXACT, NEITHER A BARE SUBSTRING — so
+    # both are checked here and the fields are left OUT of the plain substring loop below.
+    # FIRST, THE LITERAL STRING, CASE-FOLDED ONLY — this is what a code card's redemption
+    # code needs (C8, `codes/ledger.py`): `GXR-7Q?d-K3M-9TT` is not a collector number and
+    # `canonical_number` folds it into a shape `_is_number_shape` refuses outright, so the
+    # structural check below would silently drop it. A card whose OWN number is typed back
+    # exactly must always match, whatever shape that number is.
     numbers = tuple(v for v in (number, key, shown) if v)
+    if query in {n.strip().lower() for n in numbers}:
+        return _RANK_EXACT_NUMBER
+    # SECOND, THE CANONICAL COLLECTOR-NUMBER FORM (UX-173) — a bare `query in field.lower()`
+    # over `number`/`key`/`shown` is exactly the bug rule 4 forbids (`54` finding `154/200`);
+    # `match._number_match` compares canonical forms instead, so a bare token only ever
+    # matches a number's own first part, and it folds a hyphen standing for the slash.
     number_parts = [match._number_parts(match.canonical_number(n)) for n in numbers]
     if match._number_match(query, number_parts):
         return _RANK_EXACT_NUMBER
