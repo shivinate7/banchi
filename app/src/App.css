@@ -531,7 +531,7 @@
   border-bottom: 0;
 }
 .bn-drawer .bn-overlay-title { display: flex; line-height: 0; }
-/* ONE SCROLLING LIST AND NO FIXED FOOT (D-drawer-foot-joins-the-list, amends D204). The body is
+/* ONE SCROLLING LIST AND NO FIXED FOOT (D266, amends D204). The body is
    the frame; the nav inside it is the one scroller, so every row, the old foot's included, passes
    under the thumb and none sits under a fixed block. */
 .bn-drawer .bn-overlay-body {
@@ -548,7 +548,7 @@
 /* A <button> wearing a nav row: the theme toggle. */
 button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 
-/* ---- the palette: "Go to" (D-palette-go-to) ------------------------------------------------------
+/* ---- the palette: "Go to" (D276) ------------------------------------------------------
    The kit's `Modal`, set at the top of the window where a typed list grows downward. */
 .bn-cmdk {
   top: 14vh;
@@ -946,7 +946,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
    (D204). Read `754px` and the row counts in the next block's own
    comment as a COSMETIC arithmetic, not a correctness one: `.bn-nav`'s `overflow-y: auto` plus
    its explicit `min-height: 0` (above, at the base rule) means the last row of the last group —
-   the old foot's rows since D-drawer-foot-joins-the-list — is always inside the nav's own
+   the old foot's rows since D266 — is always inside the nav's own
    scroll range, and no fixed block sits over any row, regardless of how many rows a future
    route adds. Nobody
    has to come back here and re-derive a THIRD step the day an eleventh row makes 40px rows

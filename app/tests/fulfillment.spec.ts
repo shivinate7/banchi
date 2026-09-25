@@ -1549,7 +1549,7 @@ async function cardRow(page: Page, name: string): Promise<Locator> {
 /** D218: the seam between `PlaceText`'s parts is CSS now (`.ff-place-elem::before`), which
  *  `allTextContents` never sees — generated content is not part of an element's `textContent`.
  *  `expected` keeps the server's own spelling, commas and all (the label has typed no dot since
- *  D-a-box-is-shown-by-its-name), because that is what a caller reads and what `aria-label`
+ *  D259), because that is what a caller reads and what `aria-label`
  *  would carry; this strips the same seam from it before comparing,
  *  so the assertion is about which PARTS are drawn and in what order, not about a character this
  *  component was told to stop typing. */
@@ -1790,7 +1790,7 @@ test('a card an open order owes is drawn as "Pick N" with every copy the store h
      opens on its own screen. D218: the seam is CSS now (`.ff-place-elem::before` /
      `.card-locations-place-large`'s own render), never part of `textContent`. */
   // `CardLocations`' own place text is the server's label, whole: box name, section, card within
-  // the section, joined by commas (D-a-box-is-shown-by-its-name). No separator dot is typed into
+  // the section, joined by commas (D259). No separator dot is typed into
   // it any more (D218), so none can reach the Fulfiller's screen.
   const placeLarge = card.locator('.card-locations-place-large')
   await expect(placeLarge).toHaveText('Box 3, Section 1, Card 7')

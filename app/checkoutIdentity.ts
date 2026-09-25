@@ -2,7 +2,7 @@ import type { Plugin } from 'vite'
 import { DEV_URL, checkoutRoot } from './devPort'
 
 // A SERVER THIS SUITE REUSES MUST SAY WHICH CHECKOUT IT SERVES
-// (D-a-claimed-slot-and-a-server-that-names-its-checkout).
+// (D261).
 //
 // THE INCIDENT, 2026-09-24. Two live worktrees hashed into one slot and both derived dev port
 // 5218. A lane in one of them ran `make design-check`. Playwright's `webServer` found 5218

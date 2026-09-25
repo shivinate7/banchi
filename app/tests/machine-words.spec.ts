@@ -14,7 +14,7 @@ import { injectMachineWord, scanMachineWords } from './machineWords'
  * owns the JSX-literal half (fast, runs on every commit, needs no browser); this file is the
  * half that reads what actually reaches the owner's screen — a server response relayed
  * verbatim, the demo's own fixture text, anything composed at runtime the AST walk cannot
- * trace — over `.bn-view`'s `innerText`, so a closed `<details>` (`D-notice-detail`'s new
+ * trace — over `.bn-view`'s `innerText`, so a closed `<details>` (`D269`'s new
  * home for a code or a path) contributes nothing, the same as it does to a person reading
  * the screen.
  *

@@ -393,7 +393,7 @@ export function Markdown({
     setSending('push')
     setFailure(null)
     try {
-      /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the server reads what is live,
+      /* ONE PRESS (`D273`, Q7): the server reads what is live,
          pushes this file and makes it live. A failed publish is rolled back server-side, so
          the only states this screen can land in are "live" and "nothing changed". */
       const answer = await sendMarkdown(stamp)
@@ -860,6 +860,9 @@ export function Markdown({
                           <Icon name="download" size={16} />
                           {IMPORT}
                         </a>
+                        <span className="bn-sr" role="status">
+                          {sending === 'push' ? 'Checking TCGplayer, then sending…' : ''}
+                        </span>
                         {pushed === null ? (
                           <Button
                             variant="primary"
@@ -868,7 +871,9 @@ export function Markdown({
                             disabled={busy}
                             onClick={push}
                           >
-                            {sending === 'push' ? 'Checking TCGplayer, then sending…' : 'Send these prices to TCGplayer'}
+                            {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118): `busy`
+                                draws the spinner, and what it is doing is said beside it. */}
+                            Send these prices to TCGplayer
                           </Button>
                         ) : null}
                       </div>

@@ -84,6 +84,23 @@ NUMBER_UNREAD_NAME_MATCHED = "number_unread_name_matched"
 # only other thing read off that photograph, so it is the only thing that can contradict it.
 NAME_DISPUTED = "name_disputed"
 
+# `docs/specs/identity-follows-sku.md` §7.3, lane 2: the migration's own review reason, for
+# a HELD card (`identity_source = read`, a SKU the read disputes on name or on number, §3.1)
+# that is IDENTIFIED rather than sold. `./pkmnscan cards identity --write` opens the entry
+# directly, through `store/queues.py:Queue.upsert` — never through `route()` above, which is
+# the join's own reasoning and has nothing to say about a card the migration is looking at
+# long after the join ran. Label on screen, `app/src/ReviewQueue.tsx`'s own `QUESTIONS` map
+# (§7.3's exact words): "Is the listing the right card?"
+#
+# IN `ROUTING_REASONS` BELOW, EVEN THOUGH `route()` NEVER EMITS IT. That tuple is read two
+# ways by `make docs-audit` (`reason codes`, `reason emissions`) as "every reason routing
+# can put on a card", not "every reason `route()` itself computes" — `NO_MARKET_DATA` right
+# above already sits in the tuple as a destination rather than a `route()` output, and this
+# is the same shape: a reason this MODULE owns, opened by a caller other than `route()`.
+# Its producer, for `reason emissions`' own AST walk, is `pipeline/
+# identity_binding.py:held_review_entry`, which loads this name to build the entry.
+LISTING_DISPUTED = "listing_disputed"
+
 # ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
 # `pipeline/variant.py:LADDER_REASONS`; together the two tuples are the whole vocabulary, and
 # the split is the same one docs/DESIGN.md credits each reason by.
@@ -102,6 +119,7 @@ ROUTING_REASONS = (
     NUMBER_UNREAD_NAME_MATCHED,
     NAME_DISPUTED,
     NO_MARKET_DATA,
+    LISTING_DISPUTED,
 )
 
 # Hard failures: no usable answer at all, so no price can be reasoned about. Always main,

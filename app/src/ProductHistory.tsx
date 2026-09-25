@@ -1,9 +1,9 @@
 /**
  * `#/product` — one product's own view: what it has been selling for, with the owner's own
- * sales marked on it (D227, D62, `D-product-view-hybrid`, `docs/specs/revenue-plan.md`
+ * sales marked on it (D227, D62, `D278`, `docs/specs/revenue-plan.md`
  * section 3).
  *
- * ONE VIEW, TWO FRAMES (`D-product-view-hybrid`, the owner's HYBRID ruling, 2026-09-23).
+ * ONE VIEW, TWO FRAMES (`D278`, the owner's HYBRID ruling, 2026-09-23).
  * `ProductHistoryView({ sku, onSwitchSku })` is the body — the chart, the legend, the
  * printings switch, the two tables — and it is drawn by both frames below:
  *   - `ProductHistory()`, the routed PAGE at `#/product?sku=`. The deep link, the bookmark,
@@ -37,7 +37,7 @@
  * `store/pricearchive.py` first and only reaches a live host when that table has never swept
  * this SKU, which its own docstring states plainly under `source`.
  *
- * THE TRAP THIS FILE ONCE HAD (`D-product-view-hybrid`, fixed first): leaving `#/product?sku=`
+ * THE TRAP THIS FILE ONCE HAD (`D278`, fixed first): leaving `#/product?sku=`
  * by ANY nav press put the owner back on an empty `#/product`. The `hashchange` listener set
  * `sku` to `''` for a hash it no longer owned, and the `writeSkuToHash` effect then rewrote the
  * hash the owner had just navigated TO back to `#/product`. Both functions below now check the
@@ -392,7 +392,7 @@ function useProductHistory(sku: string): {
   return { payload, orders, failure, loading }
 }
 
-/** THE SHARED BODY (`D-product-view-hybrid`). Everything the page and the sheet both draw:
+/** THE SHARED BODY (`D278`). Everything the page and the sheet both draw:
  *  the market chart per range, the legend, which printing this is, and the owner's own fills
  *  split at `history_begins`. Neither frame around it fetches or computes anything twice. */
 export function ProductHistoryView({ sku, onSwitchSku }: { readonly sku: string; readonly onSwitchSku: (sku: string) => void }) {

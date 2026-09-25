@@ -22,12 +22,26 @@ not tell us which ones anyway.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
+from typing import Tuple
 
 from cli import cmd_reprice, runs
 from pipeline import join, livecheck, tcgcsv
+from pipeline import skus as skus_walk
 from store import master
 from store.session import Store
+
+
+def _skus_stamp(source: dict) -> Tuple[int, str]:
+    """`(at, source)` for `pipeline/skus.py:apply_rows` — see `cli/cmd_emit.py`'s own copy
+    of this function for the full argument. Duplicated for the same reason `cli/cmd_join.py`
+    duplicates it: no file in this lane's fence is a shared home for it."""
+    name = Path(str(source["path"])).name
+    at = skus_walk.stamp_of(name)
+    if at is None:
+        at = int(datetime.fromisoformat(str(source["mtime"])).timestamp())
+    return at, name
 
 
 def _card_counts(inventory):
@@ -238,6 +252,15 @@ def run_live(args, say) -> int:
     # before the write opens, because it walks the markdown receipts on disk and the store
     # lock is not the place to do that.
     with store.write() as writable:
+        # THE SKU TABLE FILL (docs/specs/identity-follows-sku.md §3.2, item 3: "An export a
+        # person hands the CLI ... ./pkmnscan reconcile --live <file>"). EVERY ROW of
+        # `export.rows` — the whole file, already read unfiltered at the top of this
+        # function, unlike `pipeline/join.py:Catalog`'s per-game narrowing.
+        at, source_name = _skus_stamp(source)
+        skus_walk.apply_rows(
+            export.rows, at=at, source=source_name,
+            skus=writable.skus, events=writable.inventory.events,
+        )
         for row in settling:
             listing = writable.inventory.listings.get(row.sku)
             if listing is None:

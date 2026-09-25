@@ -115,7 +115,7 @@ def unclear(refusal: FetchRefusal) -> bool:
     """Might TCGplayer have done the work this refused write was asking for?
 
     THE ONE READING OF A FAILED WRITE, and a send's whole safety turns on it
-    (`D-one-press-sends-and-makes-live`, round 2). A CLEAR refusal — a 4xx, a redirect to the
+    (`D273`, round 2). A CLEAR refusal — a 4xx, a redirect to the
     login page, a redirect anywhere else — is a request the portal turned away before acting.
     An UNCLEAR one — no answer in time, a dropped connection, a 5xx, a 200 whose body is not
     JSON — is a request the portal may have carried out and then failed to report. A caller
@@ -296,7 +296,7 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
     them here turns "chunk 3 of 5 failed and now there is a half-written staged upload" into
     a refusal with nothing sent.
 
-    `listing` IS THE ONE DOOR FOR A FILE THAT ADDS COPIES (`D-one-press-sends-and-makes-live`),
+    `listing` IS THE ONE DOOR FOR A FILE THAT ADDS COPIES (`D273`),
     and it is a keyword so no existing caller can reach it by position. A price file keeps
     D100's zero rule exactly as it was. A listing row adds a whole number of copies, 0 or
     more: the listing file is written by `emit` behind the double-send guard
@@ -370,7 +370,7 @@ def push_to_staged(
 
     NOTHING A BUYER CAN SEE CHANGES HERE. Staged is the operator's own working copy; measured
     2026-09-06, a 100-row push moved 0 of 759 live prices and 0 live quantities. Publishing is
-    `move_to_live`, a second call. Since `D-one-press-sends-and-makes-live` one PRESS makes
+    `move_to_live`, a second call. Since `D273` one PRESS makes
     both calls, and they stay two calls so a failed publish can still roll this upload back.
     """
     _check(rows, listing=listing)

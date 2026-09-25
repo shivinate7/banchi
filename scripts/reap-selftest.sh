@@ -188,6 +188,41 @@ judge "$tmp/checkout" "ls -la"
 judge "$tmp/checkout" "echo 'remember: pkill -f is machine-wide'"
 [ $? -eq 0 ] && ok "the word in a string is not a kill" || bad "prose mentioning pkill was blocked"
 
+# --------------------------------------------------------- 2026-09-24: a pipe inside a quote
+# `_segments` used to split on every `|`, quoted or not, so a grep pattern with alternation
+# glued into an unrelated later clause read as a bare kill-word command. This is the exact
+# refused command from that defect report, plus the minimal cases under it.
+judge "$tmp/checkout" 'CS=~/Developer/claude-settings; grep -nciE "process|pid|kill" $CS/janitor/sweep.py; grep -nE "^def |process" $CS/janitor/sweep.py | head -30; echo ---; grep -nE "lsof|pgrep|killall|def .*kill" $CS/hooks/guard.py | head -20'
+[ $? -eq 0 ] && ok "a quoted pipe pattern is not read as a kill (the exact defect report)" \
+  || { bad "a grep whose quoted pattern names killall was blocked"
+       printf '%s\n' "$out" | sed 's/^/         /'; }
+
+# A kill word in the MIDDLE of a quoted alternation is the case that actually exercises the
+# bug: split on every `|` blindly, the FIRST and LAST words of the pattern come out still
+# glued to a quote character and miss `_KILL_WORDS`' exact match, but a middle word comes out
+# clean — which is exactly why `killall`, not `process` or `pid`, was what the report's guard
+# refused. `grep -E "kill|pid"` (the word at the END of the pattern) is proved wrong ABOVE by
+# the exact defect report; these three prove the word in the MIDDLE, one per kill word.
+judge "$tmp/checkout" 'grep -E "foo|kill|bar" file.py'
+[ $? -eq 0 ] && ok "kill in the middle of a quoted alternation is not a kill" \
+  || bad "grep -E \"foo|kill|bar\" was blocked"
+
+judge "$tmp/checkout" 'grep -E "foo|pkill|bar" file.py'
+[ $? -eq 0 ] && ok "pkill in the middle of a quoted alternation is not a kill" \
+  || bad "grep -E \"foo|pkill|bar\" was blocked"
+
+judge "$tmp/checkout" 'grep -E "foo|killall|bar" file.py'
+[ $? -eq 0 ] && ok "killall in the middle of a quoted alternation is not a kill" \
+  || bad "grep -E \"foo|killall|bar\" was blocked"
+
+judge "$tmp/checkout" "pkill -f $stranger_script | cat"
+status=$?
+case "$status:$out" in
+  2:*outside\ this\ checkout*) ok "a REAL unquoted pipe after a kill is still refused" ;;
+  *) bad "an unquoted pipe after a real pkill stopped being refused"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+
 judge "$tmp/checkout" "cat > note.sh <<'EOF'
 pkill -f $stranger_script
 EOF"

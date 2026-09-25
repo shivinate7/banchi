@@ -17,7 +17,7 @@ import './PositionBar.css'
 /* Where a card sits: its section, drawn as a ruler that marks the card, and the box's sections
  * on either side of it.
  *
- * THE OWNER'S RULING, 2026-09-23, AMENDS D155 (D-a-card-is-counted-in-its-section). The ruler
+ * THE OWNER'S RULING, 2026-09-23, AMENDS D155 (D260). The ruler
  * uses SECTION NUMBERS THROUGHOUT: its two ends are card 1 and the section's last card, the same
  * count the caption and the big numeral use. The box-wide bounds it wrote before were a second
  * scale on one instrument (LOC-04). It MARKS THE EXACT CARD: the card's own cell is filled and the

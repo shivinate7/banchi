@@ -702,7 +702,7 @@ test('an unknown route keeps the owner’s shell, and offers no door to the Fulf
 })
 
 /* ================================================================================================
-   ONE ROUTES ROW IS THE WHOLE REGISTRATION (the owner's durability rule, 2026-09-23; D-page-scaffold)
+   ONE ROUTES ROW IS THE WHOLE REGISTRATION (the owner's durability rule, 2026-09-23; D275)
    ================================================================================================
 
    "Say a new page in the sidebar gets built tomorrow, it should be able to autocall/inherit the
@@ -816,7 +816,7 @@ test('a throwaway row with a letter takes its drawn place in the ring, and its c
   await expect(page.getByText('A throwaway screen.')).toBeVisible()
 })
 
-/* ---- the palette is "Go to", and it finds cards (D-palette-go-to, amends D95) ------------------ */
+/* ---- the palette is "Go to", and it finds cards (D276, amends D95) ------------------ */
 
 test('the palette lists every screen, off-nav ones included, and finds a card', async ({ page }) => {
   await open(page, RING[0])

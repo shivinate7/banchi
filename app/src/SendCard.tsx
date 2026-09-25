@@ -1,4 +1,4 @@
-/* THE SEND CARD: ONE PRESS FROM PRICED TO LIVE (`D-one-press-sends-and-makes-live`).
+/* THE SEND CARD: ONE PRESS FROM PRICED TO LIVE (`D273`).
  *
  * Drawn inside Pricing's send bar. Everything the owner reads between "these are priced" and
  * "these are live" is here, in owner words:
@@ -57,7 +57,7 @@ const RETRYABLE = new Set(['live_check_failed', 'tcg_write_refused', 'tcg_write_
 const DROPPED = new Set(['unreachable', 'bad_response', 'origin_blocked'])
 
 /** One sentence for why a press was refused, in owner words. The server's own text sits behind
- *  "What the server said" (D196, D-notice-detail). */
+ *  "What the server said" (D196, D269). */
 function refusalTitle(code: string): string {
   switch (code) {
     case 'live_check_failed':
@@ -599,12 +599,14 @@ export function SendCard({
           : null
   const running = open.some((send) => send.state === 'sending')
   const busy = phase !== 'idle' || running
+  /* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118: a press changes what is on the
+     screen, never where the rest of it is). Its label named the live copies on two lines at a
+     phone width and became one short line under the finger, so the sticky bar shrank and the
+     press moved. `busy` draws the spinner on it; what the press is doing is said to a screen
+     reader beside it, in a status that takes no room. */
+  const doing = phase === 'waiting' ? 'Saving your prices…' : phase === 'sending' || running ? 'Checking TCGplayer, then sending…' : ''
   const label =
-    phase === 'waiting'
-      ? 'Saving your prices…'
-      : phase === 'sending' || running
-        ? 'Checking TCGplayer, then sending…'
-        : liveMoves.length > 0
+    liveMoves.length > 0
           ? /* THE LIVE COPIES THE PRESS MOVES ARE NAMED ON IT (the owner's ruling, round 7):
                "Send 1 copy, 2 live copies move to $19.99". */
             (
@@ -664,6 +666,9 @@ export function SendCard({
         >
           {label}
         </Button>
+        <span className="bn-sr" role="status">
+          {doing}
+        </span>
         <Button
           variant="quiet"
           icon="download"

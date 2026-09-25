@@ -130,10 +130,22 @@ def read(path: Path) -> str:
 
 
 def text_files(root: Path) -> List[Path]:
-    """Every tracked-looking text file under `root`, excluding the trees SKIP names."""
+    """Every tracked-looking text file under `root`, excluding the trees SKIP names.
+
+    A DOTTED DIRECTORY IS NOT SKIPPED FOR BEING DOTTED. `SKIP` names the trees to prune, the
+    same way `docs-audit.py`'s own `SKIP_DIRS` does — by name, never by a leading dot — and
+    until this line `dirs[:] = ... and not d.startswith(".")` pruned every one of them anyway,
+    `.claude/` included. `docs-audit.py`'s `decision ids` row DOES read `.claude/skills/`
+    (`markdown_files()`'s own `_walk` has no such filter), so a slug cited there survived a
+    claim commit unrewritten and `make check` refused PR #462's merge over the dangling
+    citation (commits 34c54259/eaef7ce7). `decision_id_code_haystack()` in that file is the reader whose
+    coverage this walk must be a superset of — proved in `scripts/claim-selftest.py`. `.git`,
+    `.venv`, `venv` and `.serve` stay excluded because they are named in `SKIP`, not because
+    they start with a dot.
+    """
     out: List[Path] = []
     for base, dirs, names in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP and not d.startswith("."))
+        dirs[:] = sorted(d for d in dirs if d not in SKIP)
         for name in sorted(names):
             path = Path(base) / name
             # A SYMLINK IS THE SAME FILE (D47, D135). `AGENTS.md -> CLAUDE.md` is tracked, and
