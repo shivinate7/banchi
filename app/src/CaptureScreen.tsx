@@ -40,7 +40,7 @@ import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
-import { Button, Icon, Kbd, Notice, Pill, Stat } from './kit'
+import { Button, Icon, Kbd, Notice, Page, Pill, Stat } from './kit'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
 import type { IconName, PillTone } from './kit'
@@ -949,30 +949,16 @@ export function CaptureScreen() {
   const [halt, setHalt] = useState<Halt | null>(null)
   const haltRef = useRef<HTMLElement>(null)
   /* Display only. When a halt lands the keyboard goes to Resume — `role="alert"` already
-   * speaks it; this is for the hands — and the halt's height is handed to the page as
-   * `--cap-halt-h`, so the viewfinder and the last capture shrink to stay whole above the
-   * fold instead of being pushed under it. Observed rather than measured once: opening
-   * "What the server said" grows the block. */
+   * speaks it; this is for the hands. The halt is an absolute overlay (CaptureScreen.css,
+   * D118), so it no longer needs to hand its height to the page for the stage to shrink
+   * around — it just needs to be scrolled into view, at any width, since nothing else moves
+   * to bring it there any more. */
   useEffect(() => {
     if (halt === null) return
     const node = haltRef.current
-    const page = node?.closest<HTMLElement>('.capture') ?? null
-    if (node === null || page === null) return
+    if (node === null) return
     node.querySelector<HTMLButtonElement>('.capture-resume')?.focus({ preventScroll: true })
-    /* On a phone the halt lands at the top of a page that is usually scrolled down to the
-     * shutter, so it is brought into view — `.capture-halt`'s scroll-margin keeps it clear of
-     * the top bar. On wider screens the two frames shrink instead (see --cap-halt-h). */
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      node.scrollIntoView({ block: 'start', behavior: 'smooth' })
-    }
-    const write = () => page.style.setProperty('--cap-halt-h', `${node.offsetHeight}px`)
-    write()
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(write)
-    observer?.observe(node)
-    return () => {
-      observer?.disconnect()
-      page.style.removeProperty('--cap-halt-h')
-    }
+    node.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [halt])
   const [busy, setBusy] = useState(false)
   // `position` is the rendered label of what was deleted, shown separately from `text` so it
@@ -1322,8 +1308,6 @@ export function CaptureScreen() {
     }
     return [...byNumber.values()].sort(handOrder(recency))
   }, [boxRecords, nextIndex, recency])
-
-  const boxes = useMemo(() => boxOptions.map((option) => option.box), [boxOptions])
 
   const nextForBox = box === null ? undefined : nextIndex[String(box)]
 
@@ -2614,7 +2598,10 @@ export function CaptureScreen() {
     key: string
     icon: IconName
     tone: 'plain' | 'warn'
-    text: string
+    /* NULL WHEN THE FIX BUTTON ALREADY SAYS IT (TXT-29/30, density): "Open the camera." and
+     * "Pick or name a box." repeated the button sitting right beside them and were cut. A
+     * blocker with no fix keeps its sentence — that is the only place this list speaks. */
+    text: string | null
     fix: { label: string; icon: IconName; onPress: () => void } | null
   }
 
@@ -2640,7 +2627,7 @@ export function CaptureScreen() {
         key: 'camera',
         icon: 'camera',
         tone: 'plain',
-        text: 'Open the camera.',
+        text: null,
         fix: { label: 'Open the camera', icon: 'camera', onPress: camera.retry },
       })
     } else if (!camera.ready) {
@@ -2664,7 +2651,7 @@ export function CaptureScreen() {
         key: 'box',
         icon: 'box',
         tone: 'plain',
-        text: 'Pick or name a box.',
+        text: null,
         fix: { label: 'Pick a box', icon: 'box', onPress: () => toggleField('box') },
       })
     }
@@ -2824,16 +2811,67 @@ export function CaptureScreen() {
       : null
   const rarityIsBlank = gameEntry === null || rarityClaim.length === 0
 
+  /* THE ODOMETER: this sitting's own count, on the kit's actions slot beside the title
+     (UX-048 — Page's own h1 stays reachable at every width, where the hand-rolled header it
+     replaces went to `display: none` at 390 with nothing left in its place). */
+  const odometer = (
+    <div className="capture-odo-wrap">
+      <div className="capture-odo" aria-label="This sitting">
+        <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
+        <span className="capture-odo-rule" aria-hidden="true" />
+        <Stat value={box === null ? '—' : String(nextForBox ?? 1)} label="next card" />
+        {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
+          <Pill tone="ok" icon="check" className="capture-odo-verdict">
+            no gaps
+          </Pill>
+        ) : (
+          <Pill tone="danger" icon="alert" className="capture-odo-verdict">
+            {runCount.gaps === 0 ? null : (
+              <span className="capture-list-part">{runCount.gaps} missing</span>
+            )}
+            {runCount.ids === runCount.shots ? null : (
+              <span className="capture-list-part">
+                {runCount.ids} ids of {runCount.shots}
+              </span>
+            )}
+          </Pill>
+        )}
+      </div>
+      {/* ALWAYS RENDERED, EVEN AT ONE DRAWER AND EVEN EMPTY — the line holds its own
+          height from a `min-height` in the sheet, so opening a second drawer adds a
+          figure and moves nothing (D118). A line that appeared on the first switch would
+          push the whole screen down at the exact moment the operator's hands are full. */}
+      <p className="capture-odo-split">
+        <span className="bn-sr">Where this sitting went: </span>
+        {runCount === null
+          ? null
+          : runCount.drawers.map((drawer) => (
+              <span
+                key={drawer.box}
+                className={
+                  drawer.box === box
+                    ? 'capture-odo-drawer is-here'
+                    : 'capture-odo-drawer'
+                }
+              >
+                Box {drawer.box} <b>{drawer.shots}</b>
+              </span>
+            ))}
+      </p>
+    </div>
+  )
+
   return (
-    <main className="capture bn-page" data-mode={triggerMode} data-live={camera.ready ? 'true' : 'false'}>
+    <Page className="capture" title="Capture" icon="camera" actions={odometer}>
       {/* Announces every record written, for anyone not looking at the screen. */}
       <div className="bn-sr" aria-live="polite">
         {last === undefined ? '' : `Recorded ${last.card.label}`}
       </div>
 
-      {/* THE HALT (spec 5.5): full width and first. A stopped run, the one number that
-          matters, and the one thing to press. The server's own sentence and its code are
-          kept verbatim behind a disclosure. */}
+      {/* THE HALT (spec 5.5): an overlay pinned over the top of the page (D118) — a stopped
+          run never moves the header or the shell under the operator's hand, it covers them
+          until Resume is pressed. The server's own sentence and its code are kept verbatim
+          behind a disclosure. */}
       {halt === null ? null : (
         <section className="capture-halt" role="alert" ref={haltRef}>
           <div className="capture-halt-main">
@@ -2913,72 +2951,6 @@ export function CaptureScreen() {
         </section>
       )}
 
-      {/* THE HEAD: the screen's name and the run's odometer, in the kit's register. The feed
-          lamp and the box sentence are the stage's, 60px lower, and are not drawn twice. */}
-      <header className="capture-head">
-        <div className="capture-head-text">
-          <h1 className="capture-title">
-            <Icon name="camera" size={20} />
-            Capture
-          </h1>
-        </div>
-        {/* THE ODOMETER IS THE SITTING'S, AND THE SPLIT UNDER IT IS WHERE THE SITTING WENT.
-            `index span` is still one drawer's — the current one — because two drawers do not
-            share an index space. See `runCount`. */}
-        <div className="capture-odo-wrap">
-          <div className="capture-odo" aria-label="This sitting">
-            <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
-            <span className="capture-odo-rule" aria-hidden="true" />
-            <Stat value={box === null ? '—' : String(nextForBox ?? 1)} label="next index" />
-            <span className="capture-odo-rule" aria-hidden="true" />
-            <Stat
-              value={
-                runCount === null || runCount.span === null
-                  ? '—'
-                  : `${runCount.span.low}–${runCount.span.high}`
-              }
-              label="index span"
-            />
-            {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
-              <Pill tone="ok" icon="check" className="capture-odo-verdict">
-                no gaps
-              </Pill>
-            ) : (
-              <Pill tone="danger" icon="alert" className="capture-odo-verdict">
-                {runCount.gaps === 0 ? null : (
-                  <span className="capture-list-part">{runCount.gaps} missing</span>
-                )}
-                {runCount.ids === runCount.shots ? null : (
-                  <span className="capture-list-part">
-                    {runCount.ids} ids of {runCount.shots}
-                  </span>
-                )}
-              </Pill>
-            )}
-          </div>
-          {/* ALWAYS RENDERED, EVEN AT ONE DRAWER AND EVEN EMPTY — the line holds its own
-              height from a `min-height` in the sheet, so opening a second drawer adds a
-              figure and moves nothing (D118). A line that appeared on the first switch would
-              push the whole screen down at the exact moment the operator's hands are full. */}
-          <p className="capture-odo-split" aria-label="Where this sitting went">
-            {runCount === null
-              ? null
-              : runCount.drawers.map((drawer) => (
-                  <span
-                    key={drawer.box}
-                    className={
-                      drawer.box === box
-                        ? 'capture-odo-drawer is-here'
-                        : 'capture-odo-drawer'
-                    }
-                  >
-                    Box {drawer.box} <b>{drawer.shots}</b>
-                  </span>
-                ))}
-          </p>
-        </div>
-      </header>
-
       <div className="capture-shell">
         {/* ============ THE VIEWFINDER: the hero, on a dark stage in either theme ============ */}
         <section className="capture-stage" aria-label="Viewfinder">
@@ -3042,7 +3014,6 @@ export function CaptureScreen() {
                         <span className="capture-frame-glyph" aria-hidden="true">
                           <Icon name="camera" size={26} />
                         </span>
-                        <p className="capture-frame-title">The camera is not open</p>
                         <Button variant="primary" icon="camera" onClick={camera.retry}>
                           Open the camera
                         </Button>
@@ -3164,9 +3135,7 @@ export function CaptureScreen() {
               </summary>
               <div className="capture-tuning-body">
                 {triggerMode === 'manual' ? (
-                  <p className="capture-quiet">
-                    Arm the motion trigger under Rig (T) and the machine's readout appears here.
-                  </p>
+                  <p className="capture-quiet">Trigger is off.</p>
                 ) : motionDiag === null ? (
                   <p className="capture-quiet">
                     Motion is armed but no frame has reached it yet. Open a camera and the readout
@@ -3345,8 +3314,11 @@ export function CaptureScreen() {
         </aside>
 
         {/* ============ THE RUN: the box, the shutter, the divider ============ */}
-        <section className="capture-card capture-card-run" aria-label="Run">
-          <p className="bn-label capture-card-label">Run</p>
+        {/* UX-080 (copy): this panel used to say "RUN", which is a pipeline job everywhere
+            else on this screen and on #/runs, #/pricing and #/inventory. "Shooting" names
+            what actually happens here — pick a box, fire the shutter, start a section. */}
+        <section className="capture-card capture-card-run" aria-label="Shooting">
+          <p className="bn-label capture-card-label">Shooting</p>
 
           {openField === 'box' ? (
             <OpenField
@@ -3354,7 +3326,8 @@ export function CaptureScreen() {
               label="Box"
               icon="box"
               size="lg"
-              meta={`${boxes.length} ${boxes.length === 1 ? 'box' : 'boxes'}`}
+              // TXT-32 (density): "4 boxes" counted what the list under it already shows.
+              meta={null}
               onClose={closeField}
             >
               <div className="capture-entry">
@@ -3412,7 +3385,12 @@ export function CaptureScreen() {
                        never doubles it. */
                     name={captureBoxLabel(option.box, option.name)}
                     sfx={boxNumberShown(option) ? ` Box ${option.box}` : null}
-                    trail={option.sealed ? 'Sealed' : `next index ${option.next ?? '?'}`}
+                    /* TXT-32 (density) asked for "#43" here; `#N` is reserved elsewhere in
+                       this file for the counted card number (D58, see `boxNextText` below),
+                       and reusing it for a box's own next-allocation index would recreate
+                       the exact cross-screen confusion that reservation exists to prevent.
+                       "next 43" keeps the cut without the collision — see PROGRESS.md. */
+                    trail={option.sealed ? 'Sealed' : `next ${option.next ?? '?'}`}
                     trailWord={option.sealed}
                     onPick={() => {
                       if (option.sealed) {
@@ -3436,11 +3414,15 @@ export function CaptureScreen() {
                   />
                 )}
               </div>
-              <p className="capture-opennote">
-                {boxMatchTotal > boxRows.length
-                  ? `${boxMatchTotal} boxes match; ${boxRows.length} shown. Narrow it, or press Enter to take the top row.`
-                  : 'Enter takes the top row. Anything new is created by name.'}
-              </p>
+              {/* TXT-32 (density): the general-case sentence ("Enter takes the top row.
+                  Anything new is created by name.") described what the list and the New row
+                  already show. Kept only where the list is narrowed and the top row is not
+                  the whole answer any more — that fact is not visible elsewhere. */}
+              {boxMatchTotal > boxRows.length ? (
+                <p className="capture-opennote">
+                  {`${boxMatchTotal} boxes match; ${boxRows.length} shown. Narrow it, or press Enter to take the top row.`}
+                </p>
+              ) : null}
               {/* THE NAME NUDGE, AT THE MOMENT A BRAND-NEW BOX IS BEING OFFERED — the walkthrough's
                   gap: nothing told the operator, typing a name in a hurry, that this exact string
                   is what every other screen (Home, the rail, the Fulfiller's list) shows verbatim
@@ -3514,7 +3496,9 @@ export function CaptureScreen() {
                   {blockers.map((blocker) => (
                     <li key={blocker.key} className="capture-block-row" data-tone={blocker.tone}>
                       <Icon name={blocker.icon} size={14} />
-                      <span className="capture-block-say">{blocker.text}</span>
+                      {blocker.text === null ? null : (
+                        <span className="capture-block-say">{blocker.text}</span>
+                      )}
                       {blocker.fix === null ? null : (
                         <Button
                           size="sm"
@@ -3618,15 +3602,13 @@ export function CaptureScreen() {
           {undoStack.length === 0 ? (
             <p className="capture-quiet capture-film-empty">
               <Icon name="film" size={14} />
-              {/* THE SECOND BRANCH IS BOTH FACTS AT ONCE, which is the only way to reach it:
-                  the stack falls back to the box's own newest when this sitting has no
-                  shots, so an empty strip with a box picked means this sitting is empty AND
-                  the box is. It read "Nothing in this box to undo yet", which was the box
-                  filter speaking — under a sitting-ordered stack a full box and an empty
-                  strip is a state that cannot happen. */}
-              {box === null
-                ? 'Pick a box to start.'
-                : 'Nothing to undo yet.'}
+              {/* ONE SENTENCE FOR BOTH CASES (TXT-30, density): "Pick a box to start." repeated
+                  the Box field a few rows up and was cut. The stack falls back to the box's
+                  own newest when this sitting has no shots, so an empty strip with a box
+                  picked means this sitting is empty AND the box is — the same sentence
+                  answers both, which used to be "Nothing in this box to undo yet" before a
+                  sitting-ordered stack made a full box and an empty strip impossible together. */}
+              Nothing to undo yet.
             </p>
           ) : (
             <ul className="capture-undo-list">
@@ -3779,7 +3761,9 @@ export function CaptureScreen() {
                  export cannot be fetched without one, this field is required in every sense
                  but the shutter's, and the head is where that belongs — the meta beside the
                  cursor reports what is TYPED, not what is asked for. */
-              meta={needsHint ? 'Needed for this game' : 'Optional'}
+              // TXT-33 (density): "Needed for this game" repeated "Needed", the same field's
+              // own closed-row value a few pixels away.
+              meta={needsHint ? 'Needed' : 'Optional'}
               onClose={closeField}
             >
               <form
@@ -4068,7 +4052,7 @@ export function CaptureScreen() {
                     </span>
                     <span className="capture-list-part">{camera.rotation}°</span>
                     <span className="capture-list-part">
-                      {triggerMode === 'manual' ? 'Key' : 'Motion'}
+                      {triggerMode === 'manual' ? 'Manual' : 'Motion'}
                     </span>
                   </span>
                 )}
@@ -4280,7 +4264,15 @@ export function CaptureScreen() {
                   <span className="capture-list-part">
                     {triggerMode === 'motion' ? 'the machine fires it' : `${CAPTURE_KEY_LABEL} fires it`}
                   </span>
-                  <span className="bn-sr capture-trigger">{captureTrigger.name}</span>
+                  {/* UX-082 (copy): visually and to a screen reader this is `bn-sr` either
+                      way, so it never spoke on top of "Manual"/"Motion" above — it is read
+                      here for `motion-live.spec.ts` and `capture-claims.spec.ts`, which tell
+                      manual from motion apart by this exact machine string, not by the human
+                      label the two share one word between. `aria-hidden` keeps it out of the
+                      accessible name a screen reader would otherwise get twice. */}
+                  <span className="bn-sr capture-trigger" aria-hidden="true">
+                    {captureTrigger.name}
+                  </span>
                 </>
               }
               onClose={closeField}
@@ -4319,8 +4311,10 @@ export function CaptureScreen() {
               icon={triggerIcon(triggerMode)}
               right={
                 <span className={triggerMode === 'manual' ? 'capture-val' : 'capture-val is-armed'}>
-                  {triggerMode === 'manual' ? 'Key' : 'Motion'}
-                  <em className="bn-sr capture-trigger">
+                  {triggerMode === 'manual' ? 'Manual' : 'Motion'}
+                  {/* Same as the open field's own copy above: hidden from a screen reader,
+                      read by `motion-live.spec.ts` and `capture-claims.spec.ts`. */}
+                  <em className="bn-sr capture-trigger" aria-hidden="true">
                     {captureTrigger.name}
                   </em>
                 </span>
@@ -4335,9 +4329,9 @@ export function CaptureScreen() {
               It reaches all three panels — the box in Run, the four claims in Stack, the game
               here — so there is no panel it BELONGS to, and the foot of the column is where a
               control that ends a sitting reads as ending one. The head was the alternative and
-              was refused: `.capture-head-text` is display:none under 767px, so the head is the
-              odometer alone on a phone and a reset button would be crowding the one row that is
-              already tight there.
+              was refused: the kit's own head actions row is the odometer alone on a phone
+              (Page wraps it full-width under the title), and a reset button would be crowding
+              the one row that is already tight there.
 
               QUIET, NOT DANGER. It destroys nothing — `docs/DESIGN.md` reserves red for acts
               that do — and the sentence under it names the store explicitly, because this is
@@ -4353,15 +4347,18 @@ export function CaptureScreen() {
             >
               Clear the setup
             </Button>
-            <p className="capture-opennote capture-clear-note">
-              {setupChosen
-                ? 'Resets the box, game, and claims. The camera, rotation, and store are untouched.'
-                : 'Nothing to clear.'}
-            </p>
+            {/* TXT-31 (density): "Nothing to clear." under a disabled button said nothing the
+                disabled state had not already said. The sentence now only earns its place
+                when there is something to explain. */}
+            {setupChosen ? (
+              <p className="capture-opennote capture-clear-note">
+                Resets the box, game, and claims. The camera, rotation, and store are untouched.
+              </p>
+            ) : null}
           </div>
         </section>
 
       </div>
-    </main>
+    </Page>
   )
 }

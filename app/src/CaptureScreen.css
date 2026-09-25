@@ -19,6 +19,9 @@
   /* The kit's horizontal inset, so the title's left edge lands where every other screen's
      does; the vertical inset stays compressed for the viewfinder's sake. */
   padding: var(--bn-3) var(--bn-7) var(--bn-4);
+  /* The halt overlay below positions against THIS box, never the viewport, so it lines up
+     under the rail regardless of width and needs no z-index fight with the shell (D118). */
+  position: relative;
 }
 
 /* ---- head: the screen's name on the left, the run's odometer on the right ----------------
@@ -115,12 +118,8 @@
    open picker scrolls the page rather than stretching the viewfinder. */
 .capture-stage { grid-area: stage; align-self: start; max-height: calc(100dvh - var(--cap-chrome)); height: 100%; }
 .capture-last { grid-area: last; align-self: start; max-height: calc(100dvh - var(--cap-chrome)); height: 100%; }
-/* Under a halt the two frames give up the halt's height rather than the fold. --cap-halt-h is
-   written by the halt's own ResizeObserver, so an opened disclosure shrinks them too. */
-.capture.bn-page:has(.capture-halt) .capture-stage,
-.capture.bn-page:has(.capture-halt) .capture-last {
-  max-height: calc(100dvh - var(--cap-chrome) - var(--cap-halt-h, 0px) - var(--cap-gap));
-}
+/* The halt is an absolute overlay (below), so it no longer takes room from the flow here —
+   the stage and the last frame keep their own height whether or not a halt is showing (D118). */
 .capture-film { grid-area: film; }
 
 /* ---- cards ------------------------------------------------------------------------------- */
@@ -247,7 +246,6 @@
   background: var(--bn-surface-2);
 }
 :root[data-theme='dark'] .capture-row-lg { background: var(--bn-surface-3); }
-.capture-row-lg:hover { background: var(--bn-line-strong); }
 .capture-row-lg .capture-k,
 .capture-row-lg .capture-row-icon,
 .capture-row-lg .capture-chev { grid-row: 1 / 3; }
@@ -278,6 +276,10 @@
 .capture-box-val.is-empty strong { color: var(--bn-accent); }
 .capture-row-lg:has(.is-empty) { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
 .capture-row-lg:has(.is-empty) .capture-row-icon { color: var(--bn-accent); }
+/* UX-137: declared AFTER `:has(.is-empty)` so an empty box still gets a visible hover
+   (same specificity, source order decides) — every other field row tints on hover, and the
+   large Box row did not, for the one case (no box chosen yet) an operator meets first. */
+.capture-row-lg:hover { background: var(--bn-line-strong); }
 
 /* ---- the one open field ----------------------------------------------------------------------- */
 .capture-open {
@@ -390,9 +392,15 @@
 .capture-controls { display: flex; flex-direction: column; gap: var(--bn-2); padding: 6px 0 0; }
 .capture-shutter { --btn-h: 52px; font-size: var(--bn-fs-lg); border-radius: var(--bn-r-lg); }
 .capture-shutter .bn-kbd { height: 22px; min-width: 22px; font-size: var(--bn-fs-sm); margin-left: var(--bn-2); }
-.capture-shutter:not(:disabled):hover { transform: translateY(-1px); }
-/* the dip is the press floor's; the shutter keeps its squeeze. */
-.capture-shutter:not(:disabled):active { transform: scale(0.99); }
+/* UX-136: the hover lift used to be `translateY(-1px)`, on the `transform` property base.css
+   deliberately leaves alone so its own press floor's `translate: 0 1px` (a DIFFERENT
+   property) can land the dip undisturbed. But `:hover` stays true while `:active` also
+   fires, and `transform` is one property — whichever rule wins the cascade replaces the
+   other's value outright — so a real press showed scale(0.99) with no translateY, not a
+   cancellation, but losing the emphasis was still the wrong fix for the wrong reason. The
+   real rule (D118, base.css): a screen's own emphasis is `transform: scale()`, never
+   `translateY`. The `:active` squeeze is `.bn-btn:active`'s own and needs no copy here. */
+.capture-shutter:not(:disabled):hover { transform: scale(1.01); }
 /* Everything standing in the way, as ONE block: a sunken well under the shutter holding one
    row per reason. A reason with a one-press way out carries the button on its own row, so the
    shortcut and the sentence are the same object rather than two competing ones — and a reason
@@ -984,8 +992,18 @@
   .capture-undo-drop { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); top: -8px; right: -8px; }
 }
 
-/* ---- the halt (spec 5.5): two lines and one button; the figures sit behind the disclosure ---- */
+/* ---- the halt (spec 5.5): two lines and one button; the figures sit behind the disclosure ----
+   AN OVERLAY, NOT A ROW (D118, UX-025): `position: absolute` against `.capture.bn-page` (set
+   `position: relative` above) takes it out of flow entirely, so the header and the shell under
+   it never move when a halt lands or clears — measured at 123px of drift before this. It covers
+   the top of the page instead, which is the correct read here: everything below is paused
+   anyway, and the one live control is Resume, inside this banner. */
 .capture-halt {
+  position: absolute;
+  top: var(--bn-3);
+  left: var(--bn-7);
+  right: var(--bn-7);
+  z-index: 5;
   display: flex;
   flex-direction: column;
   gap: var(--bn-2);
@@ -1192,12 +1210,12 @@
      pixels against a real render (`app/tests/phone.spec.ts`'s shutter case, at 390x667 with a
      34px safe-area inset) — the 356px this budget used to hard-code already carried a few
      pixels nobody had measured to the pixel. 298 is that gap closed plus a 1px margin for
-     subpixel rounding, confirmed clear at 667, 740 and 844. A halt above the stage takes its
-     own height out of the same budget, so a stopped run changes the size of something on
-     screen rather than only pushing the shutter down. */
+     subpixel rounding, confirmed clear at 667, 740 and 844. The halt is an absolute overlay
+     (D118) now, not a row, so it no longer takes its own height out of this budget — a
+     stopped run covers the stage rather than resizing it. */
   .capture-stage {
     order: 1;
-    height: clamp(260px, calc(100dvh - 298px - var(--bn-tabbar-h) - var(--cap-halt-h, 0px)), 560px);
+    height: clamp(260px, calc(100dvh - 298px - var(--bn-tabbar-h)), 560px);
     max-height: none;
     align-self: stretch;
   }
