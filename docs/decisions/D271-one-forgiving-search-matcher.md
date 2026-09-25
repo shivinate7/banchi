@@ -261,9 +261,11 @@ target, not a mid-word measurement at all. Real fragments the owner's own names 
 (R3, the owner's own accepted condition) is a floor on the CANDIDATE step. It is not a
 floor on `match_query`'s own rule 7, which has none at all. A 1-2 character text token
 matches as a substring ANYWHERE in a folded field, with no length minimum. `sc` measured on
-the real store: `match_query` accepts 47 cards, `do_search` returns 14, DROPPING 33. This
-is the floor's own known cost, accepted at the time R3 shipped, restated here in a real
-number rather than only in principle.
+the real store: `match_query` accepts 47 SKUs (195 CARDS — `do_search` groups by SKU, and
+a SKU count is never a card count, F6-7, round-7 Opus delta review, 2026-09-25, correcting
+this entry's own earlier unit error). `do_search` returns 14 SKUs (25 cards), DROPPING 33
+SKUs (170 cards). This is the floor's own known cost, accepted at the time R3 shipped,
+restated here in real numbers rather than only in principle.
 
 **DISCLOSURE: A 9TH OR LATER DISTINCT TERM IS NEVER WIDENED.**
 `_SUPPLEMENTAL_TERM_CAP = 8` bounds how many distinct terms reach the candidate-widening
@@ -276,10 +278,109 @@ file's own case table, nor the permanent fuzz, has ever needed a 9th distinct te
 widening to find a real card. The cap is sized against every query shape measured so
 far, not against zero cost.
 
+**ROUND 7, OPUS DELTA REVIEW, 2026-09-25, ON e76f6fc2.** Seven more findings, from the
+reviewer's own fuzz and mutation tools (`fz.py`, `mut.py`, in the scratchpad) run
+against a real-store copy. R5-1 through R5-5 held. Reverting any of them still turns
+the fuzz or a named case red.
+
+**F6-1 (real misses): LETTER-PREFIXED NUMBERS NEVER WIDENED.** `_ZERO_PAD_SHAPE` let
+only a digit-leading term through. `match.canonical_number` also drops zeros AFTER
+leading letters (`tg05` is `tg5`). The real store has 41 cards numbered `R01a`-`R06a`.
+`r1a` and `r4a` missed 2 of 2. `tg5`, `swsh22` and `swsh45` missed too. Fixed by reusing
+`match._drop_leading_zeros` and `match._number_shape_ok` directly (0-6 leading letters,
+1+ digits, 0-2 trailing letters). This is the SAME primitive `match.canonical_number`
+itself is built from, done in Python rather than SQL `LTRIM`, which cannot express a
+letter-aware strip at all.
+
+**F6-2: A 2-CHARACTER NUMBER TERM NOW WIDENS.** `6a` never reached the zero-pad rule. It
+inherited the mid-word TEXT floor (3 characters, R3), which was never about numbers. A
+number-shaped term is not a common substring the way a 1-2 character text fragment is.
+`match._number_shape_ok` plus a 2-character floor replaces the borrowed one.
+
+**F6-3 (BLOCKING, the owner's ruling: NOT accepted): FOUR WIDENINGS, FOUR SEPARATE SCANS PER TERM.** 8 distinct 3+ letter mid-word terms took 450-536ms p50, up to 860ms
+p95 on the real store. Each of the 4 widening sources ran its OWN `SELECT ... FROM
+cards` per term, up to 32 scans for one query. Fixed: `_fts_supplemental_candidates` now
+reads each card's row ONCE and checks every term's every widening rule against it before
+moving to the next row. Re-timed on a fresh real-store copy: the SAME 8-term mid-word
+shape now costs 77.8ms p50 / 87.3ms p95. A mutation reverting this fix (splitting the
+walk back into 4 SQL sources) measured 261.6ms p50 on the identical query, over 3x
+slower, confirming the fix is real, not query-shape luck.
+
+**F6-4: THE FIXTURE WAS TOO EASY.** `_build_pokemon_store` carried each real-store
+defect on exactly ONE named card. A mutation reverting the fix that card existed for
+could still pass the permanent fuzz, which never happened to query that one card. Fixed:
+six SEEDED number shapes (`random.Random(7)`, matching the reviewer's own tool). These
+are composed `NNN/MMM` numbers with an empty `number_key`, digit+letter numbers, three
+letter-prefixed forms (`RNNa`, `TGNN`, `SWSHNNN`), and cards with no `printed_total` at
+all. The permanent fuzz itself grew a SECOND generator, `_generate_card_sampled_
+queries`, which builds a query from a RANDOMLY CHOSEN CARD'S OWN fields. This mirrors
+the reviewer's `fz.py:gen_queries` exactly, rather than only a fixed word list. M2 and
+M4 now turn the fuzz itself red, not only the hand-written single-card cases.
+
+**F6-5: THE R5-1 TIMING ROW COULD NOT SEE ITS SUBJECT.** The old fixture gave every
+card the same `printed_total`. A `/NNN` query for any OTHER total matched almost
+nothing, never the "most of the store is a candidate" shape R5-1 was about. `_SET_
+TOTALS`'s six values (matching real Pokemon printed totals) mean a `/166`, `/198`,
+`/219` or `/221` term is now a real, broad candidate on about 1/6 of the store. This is
+the same shape the owner's own `/132 /298 /166 /198 /219 /221 /1 /2` query hit at
+552-578ms before R5-1. Reverting R5-1 (`if True:` in place of `if matched or token_count
+== 1:`) now measures a clean fail on this fixture too.
+
+**F6-6 (a guard that cries wolf): TIMING RED AT LOAD AVERAGE 16, NO DEFECT.** The
+timing-only cases went red on a busy CI runner with no code change at all. This
+session's OWN re-timing hit the same effect directly. The same query measured 264.0ms
+p50 / 353.4ms p95 while `make harness` ran concurrently in the background, and 77.8ms
+p50 / 87.3ms p95 once the machine was quiet. Wall time answers "how busy is the
+machine", never "how much work did this query do". Fixed: `_SEARCH_WORK_COUNTERS`
+(`match_rank_calls`, `match_query_calls`, `rows_walked`), reset before each query and
+read after. `rows_walked` proves F6-3's fix directly. It is 0 or exactly the store's own
+card count, NEVER a multiple of it. `match_rank_calls` proves R5-1's fix. It is bounded
+per query, measured at 11,416 calls under a reverted fix against 0 on the same query
+fixed. Wall time stays as a generous 5-second BACKSTOP, which still catches a genuine
+algorithmic regression outright, and never cries wolf over a busy machine alone.
+
+**F6-7: A SKU COUNT IS NOT A CARD COUNT.** R5-4's disclosure said `sc` drops "33 cards"
+on the real store. Those are 33 SKUs. `do_search` groups by SKU, and a SKU with several
+copies is several cards. Measured directly: `match_query` accepts 47 SKUs (195 cards).
+`do_search` returns 14 SKUs (25 cards), dropping 33 SKUs (170 cards). Corrected above,
+in place, with the count checked directly against a fresh real-store copy rather than
+carried forward.
+
+**RE-TIMED ON A FRESH REAL-STORE COPY, R7-FIXED CODE, MACHINE QUIET:**
+
+| Query shape | p50 / p95 | body |
+|---|---|---|
+| 1-char (`a`), floored | 166.1ms / 186.6ms | 351KB |
+| 2-char (`ab`), floored | 72.8ms / 84.2ms | 14KB |
+| Hostile 100×`1` | 231.1ms / 238.3ms | 12KB |
+| Hostile 100×`e` | 152.2ms / 158.4ms | 161KB |
+| Hostile 66×`ex` | 88.8ms / 92.2ms | 45KB |
+| Hostile 50×`001` | 71.7ms / 89.2ms | 12KB |
+| R6 hostile 8×`/NNN` | 177.8ms / 195.8ms | 63B |
+| R6 hostile mixed | 67.3ms / 70.8ms | 60B |
+| **R7 hostile 8×mid-word** | **77.8ms / 87.3ms** | 61B |
+| Bare number (`132`) | 68.6ms / 72.8ms | 12KB |
+| Floor `sc` | 84.2ms / 94.6ms | 44KB |
+| F6-1 letter-prefixed (`tg5`) | 46.9ms / 51.8ms | 31B |
+| F6-2 short number-shaped (`6a`) | 21.0ms / 21.9ms | 30B |
+
+Every shape stays under 240ms p95 on a quiet machine. The R7 hostile 8-term mid-word row
+is F6-3's own subject. It was previously 450-536ms p50, up to 860ms p95, unfixed. It is
+now the FASTEST of the hostile shapes measured, at 77.8ms p50.
+
+**MUTATION RESULTS, M1-M4, ON THE FINAL HEAD.** Each reverts one round-5/6/7 fix in
+isolation, confirmed red, then restored:
+
+| Mutation | Reverts | Result |
+|---|---|---|
+| M1 | R5-1 (decisive check before the rank loop) | 3 cases fail |
+| M2 | R5-2 (composed-number `/%` widening) | 5 cases fail, INCLUDING the fuzz |
+| M3 | R5-3 (case-folded widening dedupe) | 2 cases fail |
+| M4 | F6-1 (letter-prefixed number widening) | 2 cases fail, INCLUDING the fuzz |
+
 The rest of this entry, `harness/tests/t7_store_and_seams.py:check_search_fts5`'s own
 `midword` case, and `scripts/match-selftest.py`'s case 16 all now assert the FOUND
 direction. `docs/specs/store-scaling.md` item 8 and `docs/specs/store-scaling/
 08-search-fts5.md` keep their original text as the record of the earlier trade-off, each
 with a note pointing here. Item 8 is now marked SUPERSEDED on the mid-word point. The
 prefix-only design it argued for is not what shipped.
-

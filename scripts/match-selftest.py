@@ -321,14 +321,14 @@ def case_do_search_finds_a_number_with_more_leading_zeros_than_typed() -> None:
 
     conn = db.connect(files.inventory_dir())
     try:
-        cands = dict(cs._fts_zero_pad_candidates_for_term(conn, "001"))
+        cands = dict(cs._fts_supplemental_candidates(conn, "001"))
     finally:
         conn.close()
     check(
         "1/3" not in cands,
-        "_fts_zero_pad_candidates_for_term('001') does not offer a card numbered 154 as "
-        "a candidate (LTRIM('154','0')='154', never equal to LTRIM('001','0')='1' — a "
-        "prefix check would wrongly offer it, since '154' starts with '1')",
+        "the zero-pad widening does not offer a card numbered 154 as a candidate for "
+        "'001' (bare('154')='154', never equal to bare('001')='1' — a prefix check "
+        "would wrongly offer it, since '154' starts with '1')",
     )
 
 
@@ -429,21 +429,37 @@ def case_do_search_short_midword_terms_never_full_scan() -> None:
     """R3, round-4 Opus review, 2026-09-25 — the owner's own MID-WORD ruling qualified:
     "only if a measurement... says search stays fast". `q=a` measured a 582ms full-table
     scan at 3,000 cards: a 1-2 character fragment matches almost every row, buying nothing
-    but cost. `_fts_substring_candidates_for_term` now refuses anything under 3 characters
-    — asserted directly here, and by `case_do_search_hostile_multiterm_query_stays_fast`
-    against real wall-clock time.
+    but cost. The mid-word SUBSTRING rule still refuses anything under 3 characters
+    (F6-2, round-7 Opus delta review, 2026-09-25, only widened the SEPARATE number-shaped
+    rule's own floor to 2 — never this one, which is genuinely about free TEXT).
+
+    Checked functionally, against `_fts_supplemental_candidates` — the four widenings
+    merged into one row walk in round 7 (F6-3), so no single function is left to call
+    with `conn=None` and prove a length gate returns before any query runs. A card whose
+    name contains `ab` MID-WORD, but does not START with it (so the fold-prefix rule,
+    which has no length floor, does not also match it) proves the substring rule's own
+    floor still holds: the card is never offered as a candidate for `ab`.
     """
     fresh_home()
+    from store import Store, master
     from server import capture_server as cs
 
-    conn_check = cs._fts_substring_candidates_for_term
-    for term in ("a", "ab"):
-        check(
-            conn_check(None, term) == [],  # type: ignore[arg-type]
-            f"a {len(term)}-character term never reaches the substring scan at all "
-            "(no connection needed to prove it — the length gate returns before the "
-            "first query)",
-        )
+    with Store().write() as snapshot:
+        card = master.Card(box=1, index=1, name="Xabcdef", sku="7100")
+        snapshot.inventory.cards["1/1"] = card
+
+    from store import db, files
+
+    conn = db.connect(files.inventory_dir())
+    try:
+        candidates = dict(cs._fts_supplemental_candidates(conn, "ab"))
+    finally:
+        conn.close()
+    check(
+        "1/1" not in candidates,
+        "a 2-character term ('ab') never reaches the mid-word substring rule, even "
+        "though 'Xabcdef' contains it mid-word — the 3-character floor still holds",
+    )
 
 
 def case_do_search_finds_a_hyphenated_name() -> None:
@@ -661,9 +677,12 @@ def case_do_search_hostile_multiterm_query_stays_fast() -> None:
     5.8s at 3,000 cards, and `("001 " * 50).strip()` 1.5s — each of the (undeduplicated)
     terms ran its own O(store) scan, unioned rather than intersected. Both are at or under
     `_QUERY_LENGTH_CAP` (199 characters each), so the length cap alone never bounded this.
-    Asserted against a bound generous enough to survive a slower CI runner but nowhere
-    near the unbounded cost, on a store this case builds itself — 3,200 cards, never the
-    owner's own.
+
+    ASSERTED ON WORK DONE (rows_walked), NOT WALL TIME ALONE (F6-6, round-7 Opus delta
+    review, 2026-09-25 — see `case_do_search_hostile_repeated_terms_stay_fast_on_real_
+    names`'s own docstring for the "cry wolf" finding this answers). A generous wall-time
+    backstop stays, nowhere near the unbounded cost, on a store this case builds itself —
+    3,200 cards, never the owner's own.
     """
     fresh_home()
     from store import Store, master
@@ -680,17 +699,26 @@ def case_do_search_hostile_multiterm_query_stays_fast() -> None:
             )
             inv.cards[f"{box}/{idx}"] = card
 
+    n_cards = len(Store().read().inventory.cards)
     for label, query in (
         ("100 repeated 'a' terms", ("a " * 100).strip()),
         ("50 repeated '001' terms", ("001 " * 50).strip()),
     ):
+        cs._reset_search_work_counters()
         start = time.monotonic()
         cs.do_search(query)
         took = time.monotonic() - start
+        walked = cs._SEARCH_WORK_COUNTERS["rows_walked"]
         check(
-            took < 2.0,
+            walked in (0, n_cards),
+            f"{label}: rows_walked={walked} is 0 or exactly the store's {n_cards} "
+            "cards, never a multiple of it",
+        )
+        check(
+            took < 5.0,
             f"do_search over {label} took {took:.3f}s on a 3,200-card store, under the "
-            "2.0s bound (unbounded: 5.8s and 1.5s measured by the review)",
+            "5.0s backstop (unbounded: 5.8s and 1.5s measured by the review; the "
+            "rows_walked check above is this case's real assertion)",
         )
 
 
@@ -698,66 +726,100 @@ _POKEMON_NAMES = [
     "Pikachu", "Eevee", "Charizard", "Blastoise", "Venusaur", "Gengar",
     "Snorlax", "Gyarados", "Dragonite", "Mewtwo", "Espeon", "Umbreon",
     "Flareon", "Sylveon", "Ho-Oh", "Lugia", "Rayquaza", "Garchomp",
-    "Lucario", "Porygon-Z", "Farfetch'd",
+    "Lucario", "Porygon-Z", "Farfetch'd", "Rengar",
 ]
 _SUFFIXES = ["", "ex", "V", "VMAX", "VSTAR"]
-_SET_TOTALS = {
-    "Base Set": "102", "Jungle": "64", "Fossil": "62",
-    "Team Rocket": "82", "Neo Genesis": "111", "Obsidian Flames": "197",
-}
-_SET_NAMES = list(_SET_TOTALS)
+_SET_NAMES = ["Base Set", "Obsidian Flames", "Origins", "Jungle", "Fossil", ""]
+_SET_TOTALS = [102, 166, 198, 219, 221, 64]  # a SMALL, real-shaped set of totals
 
 
 def _build_pokemon_store(n: int) -> None:
     """A synthetic store shaped like the owner's real one (F1/F2, round-5 Opus delta
     review, 2026-09-25) — real Pokemon-shaped names with a suffix (`ex`, `V`, `VMAX`,
-    `VSTAR`), a real set name, a zero-padded number, and a SKU where ONE DIGIT PREFIXES
-    MOST of them (`9`, the rest `4`), never the placeholder `f"Bench Card {i}"` fixture
-    round 4's own tests used. That placeholder name shares no token with any real query —
-    `_match_rank`/`match.match_query` reject every candidate near-instantly, so a hostile
-    query's `hits` dict stayed small and the round-4 review's own tests measured a cost
-    the round-5 review's REAL names do not share. `izard`, `ex`, `1`, `e` and `100` are all
-    common tokens here, the way they are on the owner's own store, so `hits` is genuinely
-    large for the hostile cases this file re-measures against.
+    `VSTAR`), a real set name, and a SKU where ONE DIGIT PREFIXES MOST of them (`9`, the
+    rest `4`), never the placeholder `f"Bench Card {i}"` fixture round 4's own tests
+    used.
 
-    PRINTED_TOTAL VARIES BY SET (round-6 Opus delta review, 2026-09-25, this file's own
-    defect). A single fixed `"198"` for every card made `/198` a supplemental-widening
-    match for the WHOLE STORE — a degenerate case no real store has, since a real set's
-    total is one of a handful of real numbers, never one number shared by everything.
-    `_SET_TOTALS` gives each of the 6 sets its own real total.
+    SIX NUMBER SHAPES, SEEDED (round-7 Opus delta review, 2026-09-25, F6-4 — this file's
+    own fixture was "too easy": a single named card carried each real-store defect, so a
+    mutation reverting the fix it existed for could still pass the PERMANENT FUZZ, which
+    never happened to query that one card). `random.Random(7)`, matching the reviewer's
+    own fuzz harness (`fz.py`) exactly, so both tools measure the SAME store:
+      0,1,2  a COMPOSED number, `NNN/MMM`, `printed_total=None` (empty `number_key` —
+             R5-2's own real-store shape, most of the owner's 3,510 cards).
+      3      a bare number with its own `printed_total` (the old, easy shape).
+      4      a LETTER-SHAPED number: `NNNa/MMM`, `RNNa`, `TGNN` or `SWSHNNN` —
+             `printed_total=None`. `R01a`-`R06a`/`TG05`/`SWSH022`/`SWSH045`-style, F6-1's
+             own real-store finding.
+      5      a bare number, `printed_total=None` — no printed total to fall back on.
+    `_SET_TOTALS`'s SIX VALUES (matching real Pokemon printed totals) are also what
+    R5-1's own `/166 /198 /219 /221` hostile shapes need: with only six distinct totals
+    cycling across the WHOLE store, a `/NNN` term for one of them is a real, broad
+    candidate — the same shape the owner's own `/132 /298 /166 /198 /219 /221 /1 /2`
+    query hit at 552-578ms before R5-1 (F6-5). A UNIFORM total (this file's own earlier
+    defect, round 6) made every `/NNN` term match nearly nothing distinctly; a single
+    real total shared by 1/6 of the store is what a hostile query needs to be hostile.
 
     FOUR NAMED CARDS, for the R4/R5/R6 case tables: `Charizard ex` (number `100`, set
     Obsidian Flames — `izard 100` and R5-3's `ex EX Ex eX ob OB fl FL izard` both use
     this card, the second through its own set name), `Ho-Oh ex` (for `ooh ex`),
     `Flabébé V` (for `abebe v`) and a bare `Charizard` (so a query naming `ex` alone
     excludes it)."""
+    import random
+
     from store import Store, master
 
+    rng = random.Random(7)
     with Store().write() as snapshot:
         inv = snapshot.inventory
         for i in range(n):
             box = 1 + i // 400
             index = 1 + i % 400
             name = f"{_POKEMON_NAMES[i % len(_POKEMON_NAMES)]} {_SUFFIXES[i % len(_SUFFIXES)]}".strip()
-            number = str(1 + i % 300).zfill(3)
-            set_hint = _SET_NAMES[i % len(_SET_NAMES)]
+            shape = i % 6
+            n1 = 1 + rng.randrange(299)
+            tot = str(rng.choice(_SET_TOTALS))
+            p3 = str(n1).zfill(3)
+            if shape in (0, 1, 2):
+                number, printed_total = p3 + "/" + tot, None
+            elif shape == 3:
+                number, printed_total = p3, tot
+            elif shape == 4:
+                number, printed_total = rng.choice([
+                    p3 + "a/" + tot,
+                    "R" + str(n1 % 9).zfill(2) + "a",
+                    "TG" + str(n1 % 30).zfill(2),
+                    "SWSH" + p3,
+                ]), None
+            else:
+                number, printed_total = p3, None
+            set_hint = rng.choice(_SET_NAMES)
             sku = f"{'9' if i % 7 else '4'}{100000 + i}"
             inv.cards[f"{box}/{index}"] = master.Card(
                 box=box, index=index, name=name, number=number,
-                printed_total=_SET_TOTALS[set_hint], set_hint=set_hint, sku=sku,
+                printed_total=printed_total, set_hint=set_hint, sku=sku,
             )
         extra = [
-            ("Charizard ex", "100", "9500000"),
-            ("Ho-Oh ex", "007", "9500001"),
-            ("Flabébé V", "013", "9500002"),
-            ("Charizard", "050", "9500003"),
+            ("Charizard ex", "100", "197", "9500000"),
+            ("Ho-Oh ex", "007", "197", "9500001"),
+            ("Flabébé V", "013", "197", "9500002"),
+            ("Charizard", "050", "197", "9500003"),
+            # A LETTER-PREFIXED NUMBER, NAMED (F6-1/M4, round-7 Opus delta review,
+            # 2026-09-25). The random shape-4 cards above cover this shape too, but a
+            # STANDALONE fixed card guarantees the permanent fuzz always tests the
+            # STRIPPED `bare` form of it, deterministically — a randomly drawn shape-4
+            # card's own "bare" query is only isolated (not paired with a name term
+            # that could surface the row through a DIFFERENT widening instead) when the
+            # seeded RNG happens to land there, which round-7's own fixed seed does not
+            # reliably do.
+            ("Trainer Gallery Card", "TG03", None, "9500004"),
         ]
-        for j, (name, number, sku) in enumerate(extra):
+        for j, (name, number, printed_total, sku) in enumerate(extra):
             box = 1 + n // 400 + 1
             index = j + 1
             inv.cards[f"{box}/{index}"] = master.Card(
                 box=box, index=index, name=name, number=number,
-                printed_total=_SET_TOTALS["Obsidian Flames"], set_hint="Obsidian Flames", sku=sku,
+                printed_total=printed_total, set_hint="Obsidian Flames", sku=sku,
             )
 
 
@@ -809,53 +871,73 @@ def case_deduped_capped_terms_dedupes_and_caps() -> None:
 
 
 def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
-    """F1, BLOCKING, round-5 Opus delta review, 2026-09-25, on 65b8f39d. The rank loop in
-    `do_search` — `terms = [term.lower() for term in text.split()]` — was never deduped:
-    `_match_rank` ran once per REPEATED term per candidate, not once per DISTINCT term.
-    Measured on a real-name fixture (round-4's `f"Bench Card {i}"` fixture never hit this
-    path, because no query ever matched more than a handful of candidates against it):
-    `("1 " * 100)` took 5.6-12.4s at 3,000 cards and 19.9s at 10,000; `("e " * 100)` took
-    2.3-2.8s. Deduping and capping `terms` the same way `_fts_supplemental_candidates`
-    already dedupes and caps the extra-candidate step — `token_count` keeps the raw count
-    for the single-term fallback alone — took the 100x case down to 492ms in the review's
-    own measurement. Bound here is looser (500ms), generous for a slower CI runner.
+    """F1, BLOCKING, round-5 Opus delta review, 2026-09-25, on 65b8f39d — R5-1, round-6,
+    on ce5a6168. The rank loop in `do_search` used to compute `term_ranks` (up to 8
+    `_match_rank` calls) for EVERY candidate, for every REPEATED term, whether or not
+    `match.match_query` had already decided the candidate was real. Measured on a
+    real-name fixture (round-4's `f"Bench Card {i}"` fixture never hit this path, and
+    round-5's own uniform fixture never made a `/NNN` term broad): `("1 " * 100)` took
+    5.6-12.4s at 3,000 cards; the owner's OWN `/132 /298 /166 /198 /219 /221 /1 /2`, on a
+    read-only copy of the real store, took 552-578ms for a 63-byte body.
+
+    ASSERTED ON WORK DONE, NOT WALL TIME (F6-6, round-7 Opus delta review, 2026-09-25:
+    "a guard that goes red when nothing is wrong is spent"). The wall-time-only version
+    of this case went red at load average 16 with no code defect at all — a shared CI
+    runner answers "how busy is the machine", never "how much work did this query do".
+    `_SEARCH_WORK_COUNTERS`, reset before each query:
+      `rows_walked`     proves F6-3's own fix directly. `_fts_supplemental_candidates`
+                        used to run up to 32 separate O(store) scans for an 8-term
+                        query (4 sources × 8 terms); it is now ONE row walk for every
+                        term together, so this is either 0 (no widening needed at all)
+                        or exactly the store's own card count — NEVER a multiple of it.
+      `match_rank_calls` proves R5-1's own fix. Mutated (`if True:` in place of `if
+                        matched or token_count == 1:`) this measured 11,416 calls for
+                        the `/NNN` query alone, against 0 fixed — the bound below sits
+                        between the two, nowhere near either query's own legitimate
+                        match count for the other shapes.
+    Wall time stays as a generous BACKSTOP (5s, over 6x every number either review ever
+    measured even unfixed), which still catches a genuine algorithmic regression outright
+    — it just never cries wolf over a busy machine alone.
     """
     fresh_home()
     _build_pokemon_store(3000)
+    from store import Store
     from server import capture_server as cs
 
-    for label, query in (
-        ("100 repeated '1' terms", ("1 " * 100).strip()),
-        ("100 repeated 'e' terms", ("e " * 100).strip()),
-        ("66 repeated 'ex' terms", ("ex " * 66).strip()),
+    n_cards = len(Store().read().inventory.cards)
+
+    for label, query, rank_bound in (
+        ("100 repeated '1' terms", ("1 " * 100).strip(), 200),
+        ("100 repeated 'e' terms", ("e " * 100).strip(), n_cards * 2),
+        ("66 repeated 'ex' terms", ("ex " * 66).strip(), n_cards * 2),
         # ALSO CATCHES THE ZERO-PAD PREFIX REGRESSION (R1, round-4; re-checked round-5):
         # `_fts_zero_pad_candidates_for_term`'s comparison must be an EQUALITY, never a
-        # `LIKE` prefix. A 3+ digit repeated term is what reaches that function at all (it
-        # floors at 3 characters). Measured on this fixture: 0.136s with the equality fix,
-        # 0.573s with the prefix bug put back — the extra candidates a prefix match finds
-        # (nearly every numbered card) push this over the 0.5s bound where the other three
-        # shapes above, none of them 3+ digit numbers, cannot see that regression at all.
-        ("50 repeated '001' terms", ("001 " * 50).strip()),
-        # R5-1, BLOCKING, round-6 Opus delta review, 2026-09-25, on ce5a6168. F2's UNION
-        # (round 5) means a query of several `/NNN` terms can make most of the store a
-        # candidate — each term widens on its own, and nothing intersects the union back
-        # down. The rank loop used to compute `term_ranks` (up to 8 `_match_rank` calls)
-        # for EVERY such candidate BEFORE `match.match_query` ever ran, so almost all of
-        # that cost was spent on rows the decisive check was always going to reject.
-        # Measured on the owner's OWN real store (a read-only copy): 552-578ms for a
-        # 63-byte body. Fixed by running `match_query` first, computing `term_ranks` only
-        # for a matched row or a single-term query.
-        ("8 distinct '/NNN' terms", "/132 /298 /166 /198 /219 /221 /1 /2"),
-        ("a mixed digit/text hostile query", "/198 001 hooh izard ard eon ex v"),
+        # `LIKE` prefix. A 3+ digit repeated term is what reaches that rule at all.
+        ("50 repeated '001' terms", ("001 " * 50).strip(), 200),
+        ("8 distinct '/NNN' terms", "/132 /298 /166 /198 /219 /221 /1 /2", n_cards * 2),
+        ("a mixed digit/text hostile query", "/198 001 hooh izard ard eon ex v", n_cards * 2),
     ):
+        cs._reset_search_work_counters()
         start = time.monotonic()
         cs.do_search(query)
         took = time.monotonic() - start
+        counters = dict(cs._SEARCH_WORK_COUNTERS)
         check(
-            took < 0.5,
-            f"do_search over {label} took {took:.3f}s on a real-name 3,000-card store, "
-            "under the 0.5s bound (unbounded, round-5 review: 5.6-12.4s and 2.3-2.8s; "
-            "round-6 review, real-store copy: 552-578ms for the '/NNN' shape)",
+            counters["rows_walked"] in (0, n_cards),
+            f"{label}: rows_walked={counters['rows_walked']} is 0 or exactly the "
+            f"store's {n_cards} cards — never a multiple of it (F6-3, one walk for "
+            "every term together)",
+        )
+        check(
+            counters["match_rank_calls"] <= rank_bound,
+            f"{label}: match_rank_calls={counters['match_rank_calls']}, at or under "
+            f"{rank_bound} (R5-1: the rank loop only ranks a matched row, or a "
+            "single-term query)",
+        )
+        check(
+            took < 5.0,
+            f"{label} took {took:.3f}s, under the 5.0s backstop (a generous wall-clock "
+            "ceiling — the work-counter checks above are this case's real assertion)",
         )
 
 
@@ -982,6 +1064,11 @@ _FUZZ_HAND_PICKED = [
     "ex EX Ex eX ob OB fl FL izard",
     "/132 /298 /166 /198 /219 /221 /1 /2",
     "/198 001 hooh izard ard eon ex v",
+    # F6-1/M4: a letter-prefixed number (the fixed `TG03` extra card, above), its
+    # zeros stripped AFTER the letter (`match._drop_leading_zeros`, never a plain
+    # front-only strip). Standalone, so nothing else in the query could surface the
+    # row through a different widening.
+    "tg3", "TG3",
 ]
 _FUZZ_FLOOR = ["a", "e", "1", "0", "sc", "fl", "ob", "ex", "hi", "on"]  # the 1-2 char floor
 _FUZZ_CASE_35 = [",", "  ", " , "]  # case 35's own shape
@@ -1035,14 +1122,100 @@ def _generate_fuzz_queries() -> List[str]:
 
 
 _FUZZ_QUERIES = _generate_fuzz_queries()
-# COMPOUNDS OF FLOOR TERMS, THE SAME ACCEPTED GAP (found by this fuzz itself, round-6).
-# `"1 1"`, `"e e e"` and `"a b c d"` are each built ENTIRELY from 1-character terms — a
-# single "e" already misses `match_query`'s own SUBSTRING-anywhere text rule (rule 7 has
-# no floor; `_fts_substring_candidates_for_term`'s floor is what R3 accepted, and it
-# floors at 3, not 1), and a single "1" already misses a pair-matched zero-padded number
-# no candidate source widens for a term this short. Three or four repeats of an
-# already-floor-exempt term inherit the exact same gap, not a new one.
-_FUZZ_ALLOW = set(_FUZZ_FLOOR) | set(_FUZZ_CASE_35) | {"1 1", "e e e", "a b c d"}
+
+# CARD-SAMPLED QUERIES, F6-4 (round-7 Opus delta review, 2026-09-25). The static list
+# above is built from `_POKEMON_NAMES`/a number sweep — it never reads what the SEEDED
+# fixture actually put on any one card, so it cannot exercise a shape that only exists on
+# a randomly-placed card (a letter-PREFIXED number, `R01a`/`TG05`/`SWSH045` — F6-1's own
+# finding). M2 and M4 (reverting R5-2's `/%` widening and F6-1's letter-prefix widening)
+# turned only the single hand-written cases red, never this fuzz, because nothing in it
+# ever asked for THOSE specific cards. `_CUT_POINTS` mirrors the reviewer's own fuzz
+# harness (`fz.py`, in the scratchpad) query-shape distribution, sampling a RANDOM CARD
+# and building a query from ITS OWN number/name/SKU fields — number as typed, zero-bare,
+# re-zero-padded, `#`-prefixed, second-half-only, hyphenated, canonicalized (upper and
+# lower), a name substring or prefix, a SKU prefix, a repeated-token stress shape, a
+# set-hint-plus-number combination, and a case-scrambled name — so a shape unique to one
+# seeded card is queried by number, not by name.
+_CUT_POINTS = [.10, .18, .24, .28, .33, .37, .40, .43, .47, .50, .58, .63, .68, .74, .78, .82, .86, .90, .94]
+
+
+def _generate_card_sampled_queries(cards: list, k: int, seed: int) -> List[str]:
+    import bisect
+    import random
+
+    from server import match
+
+    rng = random.Random(seed)
+    out: List[str] = []
+    for _ in range(k):
+        card = rng.choice(cards)
+        num = str(card.number or "001")
+        parts = num.split("/")
+        first = parts[0]
+        second = parts[1] if len(parts) == 2 else ""
+        # LETTER-AWARE, MATCHING `match._drop_leading_zeros` (round-7 Opus delta review,
+        # 2026-09-25, F6-4 — a plain `.lstrip("0")` never strips a zero AFTER a leading
+        # letter, so it could never build a query exercising F6-1's own widening: `"R03a"
+        # .lstrip("0")` is `"R03a"` unchanged, never `"R3a"`. Without this, M4 (reverting
+        # F6-1's letter-prefix widening) passed this fuzz — the fuzz itself never asked
+        # the right question).
+        bare = match._drop_leading_zeros(first) or "0"
+        nm = match.compact_text(card.name or "x") or "x"
+        kind = bisect.bisect(_CUT_POINTS, rng.random())
+        if kind in (4, 5, 6, 7) and not second:
+            kind = 0
+        i3 = rng.randrange(max(1, len(nm) - 2))
+        i1 = rng.randrange(max(1, len(nm) - 1))
+        shapes = [
+            first, bare, "0" + first, "#" + first, "/" + second, bare + "/" + second,
+            first + "-" + second, bare + " " + second, match.canonical_number(first),
+            match.canonical_number(first).upper(), nm[i3:i3 + rng.randint(3, 6)],
+            nm[i1:i1 + rng.randint(1, 2)], (card.name or "x")[:rng.randint(2, 7)],
+            nm[i3:i3 + 4] + " " + rng.choice([first, bare, "ex", "v", "a", "sc"]),
+            str(card.sku or "123")[:rng.randint(3, 7)],
+            " ".join(rng.choice(["ex", "EX", "Ex", "v", "V", "ru", "rune", "e", "a"]) for _ in range(rng.randint(2, 10))),
+            (card.set_hint or "base")[1:6] + " " + first,
+            " ".join(match.fold_text(card.name or "x").split()[:rng.randint(1, 3)]) + " " + bare,
+            "".join(ch.upper() if rng.random() < 0.5 else ch for ch in nm[:5]),
+            " ".join(
+                rng.choice(["/" + str(rng.randint(1, 300)), str(rng.randint(1, 300)), "ex", nm[1:5]])
+                for _ in range(rng.randint(2, 11))
+            ),
+        ][kind].strip()
+        if shapes:
+            out.append(shapes)
+    return out
+# A FLOOR QUERY IS DETECTED, NOT LISTED (round-7 Opus delta review, 2026-09-25). Round
+# 6's version excused a fixed SET of literal strings — fine for a static query list, but
+# the card-sampled generator (F6-4) produces a different 1-2 character substring on
+# almost every run (`nm[i1:i1+1]`/`nm[i1:i1+2]`, kind 11), so a fixed set can never keep
+# up. Mirrors the reviewer's own `fz.py:floor_term` exactly: ANY token in the query that
+# is 1-2 characters and carries no digit is the SAME accepted gap `_FUZZ_FLOOR`'s own
+# entries name — a single such token already misses `match_query`'s own no-floor
+# SUBSTRING rule (rule 7), or a zero-pad rule no candidate source widens this short, and
+# a query built entirely or partly from repeats of one inherits the identical gap.
+_FUZZ_CASE_35_STRIPPED = {q.strip() for q in _FUZZ_CASE_35}
+
+
+# A REPEATED SHORT DIGIT TERM CAN PAIR-MATCH A ZERO-PADDED NUMBER NO SOURCE WIDENS
+# (round-6, still true here — `match_query`'s own PAIR rule joins two adjacent short
+# digit tokens into one canonical number, `"1 1"` reading as `"11"`, which can equal a
+# stored `"011"` once its zeros are stripped; no candidate source widens a term this
+# short to surface it). `fz.py:floor_term` excuses only a NON-digit 1-2 character token,
+# so this is a second, narrower gap it would not catch either — named here explicitly,
+# never folded into the general floor check.
+_FUZZ_ALLOW_LITERAL = {"1 1"}
+
+
+def _is_floor_query(query: str) -> bool:
+    from server import match
+
+    if query.strip() in _FUZZ_CASE_35_STRIPPED or query in _FUZZ_ALLOW_LITERAL:
+        return True
+    return any(
+        len(token) in (1, 2) and not match._has_digit(token)
+        for token in match.query_tokens(query)
+    )
 
 
 def case_do_search_permanent_fuzz_agrees_with_match_query() -> None:
@@ -1066,12 +1239,15 @@ def case_do_search_permanent_fuzz_agrees_with_match_query() -> None:
     """
     fresh_home()
     _build_pokemon_store(400)
+    from store import Store
     from server import capture_server as cs
 
-    allow = _FUZZ_ALLOW
+    cards = list(Store().read().inventory.cards.values())
+    all_queries = _FUZZ_QUERIES + _generate_card_sampled_queries(cards, 200, 20261001)
+
     false_positive_queries: List[str] = []
     missed_queries: List[str] = []
-    for query in _FUZZ_QUERIES:
+    for query in all_queries:
         stripped = query.strip()
         if not stripped:
             continue  # `do_search` refuses a blank query by contract — not this case's subject.
@@ -1081,15 +1257,15 @@ def case_do_search_permanent_fuzz_agrees_with_match_query() -> None:
         missed = expected - got
         if false_positives:
             false_positive_queries.append(f"{query!r}: {sorted(false_positives)}")
-        if missed and query not in allow:
+        if missed and not _is_floor_query(query):
             missed_queries.append(f"{query!r}: missed {sorted(missed)}")
     check(
         not false_positive_queries,
-        f"0 false positives over {len(_FUZZ_QUERIES)} seeded queries: {false_positive_queries[:5]}",
+        f"0 false positives over {len(all_queries)} seeded queries: {false_positive_queries[:5]}",
     )
     check(
         not missed_queries,
-        f"0 missed rows outside the allow set over {len(_FUZZ_QUERIES)} seeded queries: "
+        f"0 missed rows outside the allow set over {len(all_queries)} seeded queries: "
         f"{missed_queries[:5]}",
     )
 

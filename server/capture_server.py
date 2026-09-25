@@ -10159,6 +10159,24 @@ _LEADING_SLASH_DIGITS = re.compile(r"^/([0-9]+)$")
 # would refuse a legitimate long query for no gain.
 _SUPPLEMENTAL_TERM_CAP = 8
 
+# WORK COUNTERS, TEST-ONLY (F6-6, round-7 Opus delta review, 2026-09-25: "a guard that
+# goes red when nothing is wrong is spent"). The match-selftest timing cases asserted
+# wall-clock time alone, which goes red on a loaded CI runner (measured: load average 16)
+# with no code defect at all — the exact "cry wolf" this repo's own working agreement
+# already names. These three counters — a `_match_rank` call, a `match.match_query`
+# call, and a candidate row `_fts_supplemental_candidates` walks — are WORK DONE, never
+# wall time, so a test can assert "this query does at most N units of work" and stay
+# true regardless of what else the machine is doing. Reset with `_reset_search_work_
+# counters()` before a timed run; read as a plain dict afterward. Never read in
+# production code, and the increment itself is one dict lookup plus one addition, cheap
+# enough that leaving it always-on costs nothing worth removing it for.
+_SEARCH_WORK_COUNTERS = {"match_rank_calls": 0, "match_query_calls": 0, "rows_walked": 0}
+
+
+def _reset_search_work_counters() -> None:
+    for key in _SEARCH_WORK_COUNTERS:
+        _SEARCH_WORK_COUNTERS[key] = 0
+
 
 def _deduped_capped_terms(text: str, *, lower: bool = False) -> List[str]:
     """A query's terms, deduped (first occurrence kept) and capped at
@@ -10187,269 +10205,150 @@ def _deduped_capped_terms(text: str, *, lower: bool = False) -> List[str]:
     return list(dict.fromkeys(terms))[:_SUPPLEMENTAL_TERM_CAP]
 
 
-def _fts_slash_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows for ONE term naming the SECOND half of a collector number
-    alone (S2, UX-173 amended): `/132` for a card stored as `054/132`. FTS5 has no "ends
-    with" — `tokenchars '/-'` keeps the composed number ONE token, so a prefix search from
-    either end finds the FIRST half and never the second. A plain SQL suffix scan, matching
-    `match.py:_number_match`'s own leading-`/` rule — which already runs correctly once a
-    candidate reaches it; this only gets the candidate there. A SUPERSET, like every
-    candidate source here: `match.match_query` (or `_match_rank`, for a single-term query)
-    still decides.
-
-    TWO COLUMNS, NEVER ONE (F2, round-3 Opus review, 2026-09-25). `number_key`
-    (`store/master.py:_card_columns`, a genuine column, not JSON) is `join_key(number,
-    printed_total)` and is EMPTY when either half is missing — Riftbound keeps its whole
-    printed identifier in `number` alone (CLAUDE.md: "One Piece and Riftbound match the
-    printed identifier verbatim... Both carry denominator-less rows"), so a Riftbound card
-    stored as `023/221` has `number_key == ""` and `number == "023/221"`. Scanning only
-    `number_key` measured `q=/221` returning ZERO candidates for such a card, while
-    `match.match_query` itself correctly accepts it once given the chance — the row was
-    never missing from the CANDIDATE step's own promise, `_number_match`'s rule, only from
-    what this function was willing to look at.
-
-    ONE TERM, NOT THE WHOLE QUERY (R1, round-4 Opus review, 2026-09-25) — see
-    `_fts_supplemental_candidates` for why: dedup and cross-term intersection both need a
-    single term's own answer, never a whole-text scan repeated per term internally.
-    """
-    out: Dict[str, str] = {}
-    found = _LEADING_SLASH_DIGITS.match(term)
-    if not found:
-        return []
-    digits = found.group(1)
-    for suffix in {digits, digits.zfill(3)}:
-        pattern = f"%/{suffix}"
-        for key, sku in conn.execute(
-            "SELECT key, sku FROM cards WHERE number_key LIKE ? OR number LIKE ?",
-            (pattern, pattern),
-        ):
-            out.setdefault(str(key), sku)
-    return list(out.items())
-
-
-_ZERO_PAD_SHAPE = re.compile(r"^[0-9]+[A-Za-z]{0,2}$")
-
-
-def _fts_zero_pad_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows for ONE zero-pad-widenable term, ignoring how many leading
-    zeros the STORED number carries against how many the QUERY carries (F8, round-3 Opus
-    review, 2026-09-25: "card numbers with or without leading zeros").
-
-    `_zero_padded_variant`'s FTS widening only covers a term of 1 OR 2 DIGITS — it pads to
-    `zfill(3)`, the width `store/numbers.py:join_key` always composes, so a query of `54`
-    correctly finds a card indexed as `054`. A term of 3 OR MORE DIGITS gets no such
-    widening: `q=934` never found a card whose number is the WIDER `0934` (a real printed
-    number on some games, not a `zfill(3)` artifact) — no FTS5 prefix search bridges a
-    3-digit term to a stored token with MORE leading zeros than that, because prefix
-    matching only ever adds characters after what was typed, never before it.
-
-    AN EQUALITY CHECK, NEVER A PREFIX ONE (R1, round-4 Opus review, 2026-09-25, correcting
-    this function's own first version). The intended comparison is "the stored number,
-    zeros stripped, is what the query names, zeros stripped" — always an EXACT match once
-    both sides are stripped, never a prefix; a prefix was never needed for `934` finding
-    `0934` (`LTRIM` of both sides is already `934` = `934`) and it was the whole reason
-    `LTRIM(col, '0') LIKE '1%'` (query `001`) matched nearly every numbered card in the
-    store — any number starting with `1` at all, once its own zeros are stripped. `LTRIM`
-    trims only from the FRONT of the string, so `054/132`'s own `/132` half is untouched —
-    this widening is about the FIRST number alone, exactly where a leading zero can ever
-    sit. Symmetric by construction: `LTRIM` strips zeros off BOTH sides, so a query typed
-    WITH its own extra leading zeros (`0934` finding a card stored as `934`) is covered by
-    the same comparison, not a second one.
-
-    ALSO A `/%` PREFIX MATCH, NOT ONLY EQUALITY (R5-2, round-6 Opus delta review,
-    2026-09-25, on ce5a6168). `number_key` is empty for 2,919 of the owner's real 3,510
-    cards — `number` alone carries the composed form (`027/166`), and `LTRIM(column,
-    '0')` on that whole string only strips the FRONT of it (`27/166`), which never
-    equals a bare digit query (`0027` -> `27`). `q=0027` dropped 3 of 4 real matches,
-    `0217` 5 of 5, `0190` 3 of 3. The `LIKE bare || '/%'` clause matches the SAME cards
-    the equality clause already matches for a real card whose printed_total makes
-    `number` itself the whole `NNN/MMM` — never a prefix over an unrelated number, since
-    `bare` is followed by a literal `/`, not a wildcard alone.
-
-    DIGITS FOLLOWED BY LETTERS ALSO WIDEN NOW (R5-5, round-6 Opus delta review,
-    2026-09-25). `_ZERO_PAD_SHAPE` (digits, then 0-2 letters) replaces the old
-    digits-only gate: `24a` dropped all 8 real matches for a card numbered `024a/219`
-    (Rengar) before this, because `_DIGITS_ONLY` refused the whole term at the length
-    check and this function never ran at all. `term.lstrip("0")` is unaffected by a
-    letter suffix — `"0024a".lstrip("0")` is `"24a"`, the same bare form either way.
-
-    A SUPERSET, like every candidate source here: `match.match_query` (or `_match_rank`,
-    for a single-term query) still decides."""
-    out: Dict[str, str] = {}
-    if len(term) < 3 or not _ZERO_PAD_SHAPE.match(term):
-        return []
-    bare = term.lstrip("0") or "0"
-    for column in ("number_key", "number", "number_display"):
-        for key, sku in conn.execute(
-            f"SELECT key, sku FROM cards WHERE LTRIM({column}, '0') = ? "  # noqa: S608
-            f"OR LTRIM({column}, '0') LIKE ?",
-            (bare, bare + "/%"),
-        ):
-            out.setdefault(str(key), sku)
-    return list(out.items())
-
-
-def _fts_fold_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows for ONE term a hyphen or an apostrophe hides from FTS5's own
-    prefix search (S2, UX-173 amended): `tokenchars '/-'` keeps a hyphenated word ONE token
-    exactly as written (`Ho-Oh` indexes as `ho-oh`, not `hooh`), and an apostrophe is an
-    ordinary separator that SPLITS a word instead (`Farfetch'd` indexes as two tokens,
-    `farfetch` and `d`) — so neither direction ever lets a query typed with the punctuation
-    folded out (`hooh`, `farfetchd`) reach a candidate a real FTS5 prefix search would need.
-
-    A PLAIN SQL PREFIX SCAN, ANCHORED AT THE START (`folded_term + '%'`) over the real
-    `cards.name` column with a hyphen or apostrophe stripped and lower-cased — the exact
-    fold `match.py:compact_text` performs on the query side, so the two meet EXCEPT ON
-    ACCENTS (R5, round-4 Opus review, 2026-09-25, correcting this docstring's own earlier
-    claim). This SQL-side fold cannot strip an accent — there is no `unicodedata` inside
-    SQLite — so a name carrying one (`Flabébé`) never reaches this function; only
-    `_fts_substring_candidates_for_term`'s Python-side fold does that. Kept anyway,
-    prefix-anchored, as a cheap FIRST pass ahead of the substring scan: most of what this
-    function finds (a plain hyphen or apostrophe, no accent) never needs the more
-    expensive Python-side row walk at all.
-    """
-    out: Dict[str, str] = {}
-    if not match._has_letter(term):
-        return []
-    folded = match.compact_text(term)
-    if not folded:
-        return []
-    pattern = folded.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-    for key, sku in conn.execute(
-        "SELECT key, sku FROM cards WHERE "
-        "LOWER(REPLACE(REPLACE(REPLACE(name, '-', ''), CHAR(39), ''), CHAR(8217), '')) "
-        "LIKE ? ESCAPE '\\'",
-        (pattern,),
-    ):
-        out.setdefault(str(key), sku)
-    return list(out.items())
-
-
-def _fts_substring_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows for ONE MID-WORD fragment — `izard` finding a card named
-    `Charizard` (MID-WORD, the owner's ruling, 2026-09-25, verbatim: "Add mid-word
-    search"). D271's one matcher wins over store-scaling item 8's own prefix-only
-    trade-off. FTS5's own prefix index can never answer this shape (a token has to start
-    with what was typed), so a scan that is not anchored at the start is the only way in.
-
-    THREE OR MORE CHARACTERS ONLY (R3, round-4 Opus review, 2026-09-25 — the owner's own
-    ruling qualified: mid-word ships "only if a measurement... says search stays fast", and
-    `q=a` measured a 582ms full-table scan at 3,000 cards: a 1-2 character fragment matches
-    almost every row, so it buys nothing but cost. A real mid-word search — `izard`,
-    `abebe` — is never shorter than this in practice.
-
-    FOLDED IN PYTHON, NEVER IN SQL (R4, round-4 Opus review, 2026-09-25, replacing this
-    function's own first version, which compared a Python-folded QUERY against a RAW,
-    unfolded `name` column — so `abebe` never found `Flabébé`, `etchd` never found
-    `Farfetch'd`, `ooh` never found `Ho-Oh ex`: the accent, the apostrophe and the hyphen
-    were still on the STORED side of every comparison). `match.fold_text` is the one fold
-    both `match_query` and this function now use, so what the CANDIDATE step accepts is
-    exactly what the DECISIVE step (`match.match_query`, below) would also accept — no
-    third, slightly different fold to keep in step. SQLite has no `unicodedata`, so the
-    fold happens after the row lands in Python: this SELECTs only the four columns
-    `match_query`'s own "text" list reads (`_card_match_fields`: name, set_hint, note —
-    `note` via `json_extract`, not a real column), never a full `Card`, keeping the O(cards)
-    part of this cost to what store-scaling item 8 was always about (building 50,000
-    objects), not to the column count.
-    """
-    # ponytail: a full O(store) row walk per term, in Python. Measured at 10,000 cards
-    # (round-4 Opus review, 2026-09-25, R3 re-measurement, warm index, real HTTP): a real
-    # mid-word hit (`izard`, ~1/37 of rows) costs 249-260ms p50/p95, over
-    # `useSearch.ts`'s 200ms debounce. At 3,000 cards (the owner's live store holds about
-    # 3,450) it costs 73-76ms, well under bound — shipped on that measurement (D271). Ceiling
-    # is a store size somewhere between 3,000 and 10,000 cards. Upgrade path: an FTS5
-    # trigram index (`fts5(... tokenize='trigram'`), which can answer a mid-word LIKE with a
-    # real index instead of a table scan. That is a schema change and needs its own decision.
-    if len(term) < 3 or not match._has_letter(term):
-        return []
-    folded_term = match.fold_text(term)
-    compact_term = match.compact_text(term)
-    if not folded_term:
-        return []
-    out: Dict[str, str] = {}
-    for key, sku, name, set_hint, note in conn.execute(
-        "SELECT key, sku, name, set_hint, json_extract(payload, '$.note') FROM cards"
-    ):
-        for field in (name, set_hint, note):
-            if not field:
-                continue
-            # BOTH FORMS, MATCHING `match.py:_text_match`'S OWN TWO PATHS — never only
-            # the spaced fold (R4, round-4 Opus review, 2026-09-25). `fold_text` turns
-            # punctuation into a SPACE, not nothing: `"Ho-Oh ex"` folds to `"ho oh ex"`,
-            # three words, and `"ooh"` is not a substring of that (there is a space
-            # between the two `o`s). `match_query` itself falls back to the COMPACT form
-            # (spaces removed too) for exactly this shape — `"hoohex"` does contain
-            # `"ooh"` — and case 20 in the shared table (`"hooh"` must NOT find
-            # `"Hoothoot"`) is what keeps this fallback from crossing an unrelated word;
-            # it is `match.py`'s own rule, not a new one invented here.
-            if folded_term in match.fold_text(field) or (
-                compact_term and compact_term in match.compact_text(field)
-            ):
-                out.setdefault(str(key), sku)
-                break
-    return list(out.items())
-
-
-_SUPPLEMENTAL_SOURCES = (
-    _fts_slash_candidates_for_term,
-    _fts_zero_pad_candidates_for_term,
-    _fts_fold_candidates_for_term,
-    _fts_substring_candidates_for_term,
-)
+def _bare_number(value: Optional[str]) -> str:
+    """The stored side of a zero-pad comparison, lower-cased then stripped the same way
+    `match._drop_leading_zeros` strips a query term — LETTER-PREFIX AWARE (F6-1, round-7
+    Opus delta review, 2026-09-25). `match.canonical_number` already strips zeros AFTER
+    any leading letters, not only at the string's absolute front (`tg05` is `tg5`), but
+    the OLD zero-pad widening used SQL `LTRIM(col, '0')`, which strips from the front
+    ONLY — never touching a letter-prefixed number at all (`R01a` starts with `R`, so
+    `LTRIM` leaves it untouched). Reused directly, the one primitive this repo already
+    has for the leading-zero rule, rather than a second, SQL-shaped copy of it."""
+    return match._drop_leading_zeros(value.lower()) if value else ""
 
 
 def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
     """Every extra candidate the base FTS5 query (`_fts_query`, above) cannot reach on its
-    own, from all four widenings, DEDUPED AND CAPPED ACROSS TERMS (R1, BLOCKING, round-4
-    Opus review, 2026-09-25), UNIONED — NEVER INTERSECTED (F2, round-5 Opus delta review,
-    2026-09-25, correcting this function's own first version).
+    own — a SECOND half of a number alone (`/132`), a zero-pad mismatch (`934` for `0934`,
+    now letter-prefixed forms too — `tg5` for `tg05`), a hyphen or apostrophe FTS5 hides
+    (`hooh` for `Ho-Oh`), or a MID-WORD fragment (`izard` for `Charizard`) — DEDUPED AND
+    CAPPED ACROSS TERMS (R1, round-4), UNIONED NEVER INTERSECTED (F2, round-5), in ONE
+    ROW WALK FOR EVERY TERM TOGETHER (F6-3, round-7 Opus delta review, 2026-09-25,
+    BLOCKING BY THE OWNER'S OWN RULING: "NOT accepted").
 
-    THE ORIGINAL DEFECT, MEASURED: `("a " * 100).strip()` — 100 REPEATED terms — took 5.8s
-    at 3,000 cards, because each of the (undeduplicated) 100 terms ran its own O(store) scan
-    and the results were unioned with no bound on how many terms could run one. `("001 " *
-    50).strip()` took 1.5s for the same reason, compounded by the zero-pad widening's own
-    prefix bug (fixed separately, in `_fts_zero_pad_candidates_for_term`'s own docstring).
+    ONE WALK, NOT FOUR TIMES EIGHT (F6-3). The four widenings used to be four SEPARATE
+    functions, each its own `SELECT ... FROM cards` — a real O(store) scan apiece,
+    because none of them can use an index (a `LIKE` with a leading `%`, an `LTRIM` on
+    every row, or a Python fold no SQL can express). Up to 8 distinct terms times 4
+    sources is up to 32 full-table scans for ONE query. Measured on the owner's real
+    store: 8 distinct 3+ letter mid-word terms took 450-536ms p50, up to 860ms p95 — the
+    scan cost multiplying by TERM COUNT, exactly the shape `_SUPPLEMENTAL_TERM_CAP`
+    exists to bound, still uncapped because the WALK COUNT was never the thing capped.
+    This function now reads each card's row ONCE (`SELECT key, sku, number_key, number,
+    number_display, name, set_hint, note`) and checks every term's every widening rule
+    against that one row before moving to the next — the cap still bounds how many
+    DISTINCT terms are checked; it no longer multiplies the WALK count too.
 
-    TWO THINGS FIX THE COST, TOGETHER — NEITHER OF THEM IS THE INTERSECTION:
-      DEDUPE     `dict.fromkeys(text.split())` — a term seen twice is scanned once.
-                 100 copies of `a` become the one distinct term `a`.
-      CAP        `_SUPPLEMENTAL_TERM_CAP` bounds how many DISTINCT terms even reach these
-                 scans, so a query of many distinct words cannot multiply the cost either.
+    A 2-CHARACTER NUMBER-SHAPED TERM NOW WIDENS (F6-2, round-7 Opus delta review,
+    2026-09-25). The zero-pad rule's own floor used to be `len(term) < 3`, inherited
+    whole from the MID-WORD TEXT floor (R3) it was never about — R3's floor exists
+    because a 1-2 character TEXT fragment matches almost every row (`q=a` measured a
+    582ms full scan). A NUMBER-shaped term is not that: `6a` is already a specific
+    collector-number code, not a common substring. `match._number_shape_ok` plus a
+    2-character floor (`match._has_digit` requires at least one digit, so a bare 1-letter
+    term still never reaches this rule) replaces the borrowed floor.
 
-    INTERSECTING TERMS WAS WRONG, AND IS DELETED (F2). The first version of this function
-    required the store's own candidate for EVERY term to agree before any term's widening
-    contributed a row — on the false claim that this "never drops a real match", because
-    the base FTS query's own combined `MATCH` expression already applies a correct AND. It
-    does not: the base query and this function read DIFFERENT things. `izard ex` found 20
-    rows before the intersection existed, 0 after — `izard` (a mid-word fragment) has no
-    supplemental candidate for `ex` (the base FTS query already covers `ex` as an ordinary
-    token, so `_fts_supplemental_candidates_for_term` never has to), and the intersection of
-    "everything `izard` widened" with "nothing `ex` widened" is empty. A fuzz found 64 of
-    300 two-term queries dropped this way (`ooh ex`, `abebe v`, `izard 100`, `izard v`
-    among them). A UNION of what each term's widenings separately find is correct: this
-    function is additive to the base FTS `hits` dict, which already carries its own AND —
-    so every row it adds only ever WIDENS what candidates `match.match_query`, the decisive
-    step, gets to see. It can never make an already-passing row disappear, and a union can
-    only add rows, never remove one the base query already found.
+    DEDUPED ON THE FOLDED FORM, `lower=True` (R5-3, round-6). `lower=False` would let
+    `ex`, `EX`, `Ex` and `eX` burn 4 of the 8-term cap on the SAME word spelled 4 ways —
+    every rule below folds case itself, so the cap should count DISTINCT MEANING, never
+    distinct bytes.
 
-    DEDUPED ON THE FOLDED FORM, `lower=True` (R5-3, round-6 Opus delta review,
-    2026-09-25). `lower=False` here used to keep every distinct SPELLING as its own
-    term — harmless for a single case variant, but `ex EX Ex eX ob OB fl FL izard` burns
-    all 8 of `_SUPPLEMENTAL_TERM_CAP`'s slots on four case-folded PAIRS before `izard`,
-    the ninth distinct term, is ever reached: every source function folds case
-    internally anyway (`match.fold_text`/`match.compact_text`, or a digit-only check
-    that never sees a letter), so two spellings of the same word were always going to
-    widen identically — the cap should count DISTINCT MEANING, not distinct bytes.
+    UNION, NEVER INTERSECTION (F2, round-5). The first version of this function
+    INTERSECTED across terms — wrong whenever only one term needed a widening at all
+    (`izard ex` found 20 rows before the intersection existed, 0 after, because `ex`
+    never needed widening and the intersection of "what `izard` widened" with "nothing"
+    is empty). The base FTS `hits` dict already carries the real AND across every term
+    via one combined `MATCH` expression, so this function only ever WIDENS what
+    candidates the decisive step (`match.match_query`, in `do_search` below) gets to
+    see — it can never make an already-passing row disappear, and a union can only add
+    rows, never remove one the base query already found.
+
+    A SUPERSET, like every candidate source here has always been: `match.match_query`
+    (or `_match_rank`, for a single-term query) still decides which candidate is real.
     """
     terms = _deduped_capped_terms(text, lower=True)
-    out: Dict[str, str] = {}
+    if not terms:
+        return []
+
+    slash_suffixes: Dict[str, set] = {}
+    zero_pad_bare: Dict[str, str] = {}
+    fold_terms: Dict[str, str] = {}
+    substring_terms: Dict[str, Tuple[str, str]] = {}
     for term in terms:
-        for source in _SUPPLEMENTAL_SOURCES:
-            for key, sku in source(conn, term):
+        found = _LEADING_SLASH_DIGITS.match(term)
+        if found:
+            digits = found.group(1)
+            slash_suffixes[term] = {digits, digits.zfill(3)}
+        # F6-2: 2+ characters, at least one digit, and the same shape
+        # `match.canonical_number`'s own rule accepts (0-6 leading letters, 1+ digits,
+        # 0-2 trailing letters) — never the borrowed 3-character TEXT floor.
+        if len(term) >= 2 and match._has_digit(term) and match._number_shape_ok(term):
+            zero_pad_bare[term] = match._drop_leading_zeros(term)
+        if match._has_letter(term):
+            folded = match.compact_text(term)
+            if folded:
+                fold_terms[term] = folded
+        if len(term) >= 3 and match._has_letter(term):
+            folded_term = match.fold_text(term)
+            compact_term = match.compact_text(term)
+            if folded_term:
+                substring_terms[term] = (folded_term, compact_term)
+
+    if not (slash_suffixes or zero_pad_bare or fold_terms or substring_terms):
+        return []
+
+    out: Dict[str, str] = {}
+    for key, sku, number_key, number, number_display, name, set_hint, note in conn.execute(
+        "SELECT key, sku, number_key, number, number_display, name, set_hint, "
+        "json_extract(payload, '$.note') FROM cards"
+    ):
+        _SEARCH_WORK_COUNTERS["rows_walked"] += 1
+        key = str(key)
+        number_cols = (number_key, number, number_display)
+        compact_name = match.compact_text(name) if name else ""
+        folded_fields = None  # computed lazily, only if a substring term needs it
+
+        for term in terms:
+            matched = False
+
+            if term in slash_suffixes:
+                suffixes = slash_suffixes[term]
+                for column in number_cols:
+                    if column and any(column.endswith("/" + s) for s in suffixes):
+                        matched = True
+                        break
+
+            if not matched and term in zero_pad_bare:
+                bare = zero_pad_bare[term]
+                for column in number_cols:
+                    if not column:
+                        continue
+                    col_bare = _bare_number(column)
+                    if col_bare == bare or col_bare.startswith(bare + "/"):
+                        matched = True
+                        break
+
+            if not matched and term in fold_terms and compact_name and compact_name.startswith(fold_terms[term]):
+                matched = True
+
+            if not matched and term in substring_terms:
+                folded_term, compact_term = substring_terms[term]
+                if folded_fields is None:
+                    folded_fields = [
+                        (match.fold_text(field), match.compact_text(field))
+                        for field in (name, set_hint, note)
+                        if field
+                    ]
+                for folded_field, compact_field in folded_fields:
+                    if folded_term in folded_field or (compact_term and compact_term in compact_field):
+                        matched = True
+                        break
+
+            if matched:
                 out.setdefault(key, sku)
+                break  # this row is already a candidate — no need to check its other terms
+
     return list(out.items())
-
-
 def _card_match_fields(card: master.Card) -> "match.MatchFields":
     """This card, in the generic shape `server/match.py:match_query` takes — the same
     contract `app/src/kit/match.ts` speaks (S2, UX-173 amended). Built off the fields
@@ -10722,8 +10621,10 @@ def do_search(query: str) -> dict:
             # still keeps green — SUBSTRING and NAME-PREFIX ranks no longer bypass
             # `match_query` on their own.
             matched = match.match_query(text, _card_match_fields(card))
+            _SEARCH_WORK_COUNTERS["match_query_calls"] += 1
             term_ranks: List[int] = []
             if matched or token_count == 1:
+                _SEARCH_WORK_COUNTERS["match_rank_calls"] += len(terms)
                 term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
             if not matched and token_count == 1:
                 # `terms[0]` — LOWERCASED, matching `term_ranks`'s own computation just
