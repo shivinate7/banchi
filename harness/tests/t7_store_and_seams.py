@@ -36223,11 +36223,18 @@ _M_CARDS = [
     # A SECOND DRAWER HOLDING THE SAME TWO SKUS, for the shared-SKU rows (R7 F5).
     (4, 1, "Dunsparce", "120", "normal"),
     (4, 2, "Articuno", "161", None),
+    # TWO MORE NORMAL DUNSPARCE IN DRAWER 3, so one SKU has three copies on hand. The guard
+    # alone then leaves room past a cap, for the `--cap` rows (D7).
+    (3, 4, "Dunsparce", "120", "normal"),
+    (3, 5, "Dunsparce", "120", "normal"),
 ]
 _M_MIX = {_M_A: ""}
 _M_SUB = {_M_A: "", _M_D: "0.10"}
 _M_SUBALL = {_M_A: "0.05", _M_D: "0.10", _M_R: "0.12"}
-_M_LAYOUT = {"one": [[0, 1, 2]], "two": [[0, 2], [1]], "share": [[0, 1, 2], [3, 4]]}
+_M_LAYOUT = {
+    "one": [[0, 1, 2]], "two": [[0, 2], [1]], "share": [[0, 1, 2], [3, 4]],
+    "deep1": [[0, 1, 2, 5, 6]], "deep2": [[0, 2, 5], [1, 6]],
+}
 _M_NONE_NAMED = {"prices": [], "moves": []}
 
 # The reasons, as emit prints them, one per card.
@@ -36371,13 +36378,31 @@ def _m_cases() -> Dict[str, dict]:
     # R7 F5: A SKU SHARED BY TWO DRAWERS UNDER `--cap 1`, WITH THE GUARD. The reverse holo is
     # trimmed to nothing and the send is not empty: the trim is named as a trim, never as
     # "asked for none".
-    cases["share/two/cap1-guardall"] = {
-        "layout": "share", "market": _M_MIX, "flags": ["--cap", "1"],
+    # THE CAP IS 2, NOT 1, since the `--cap` fix below. TCGplayer holds 1 Dunsparce, so a cap
+    # of 1 leaves no room and the send is empty. This row is about the trim, not the cap.
+    cases["share/two/cap2-guardall"] = {
+        "layout": "share", "market": _M_MIX, "flags": ["--cap", "2"],
         "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
         "files": {"import.csv": [d_mix]},
         "says": [f"{_M_R} — {_M_LIVE}"], "never": [_M_ASKED0], "route": None,
         "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
     }
+    # `--cap N` WITH `--live-guard`: THE CAP COUNTS THE COPIES THE GUARD SAYS ARE LIVE (D7: "at
+    # most N copies LIVE"). Three Dunsparce are on hand, so the guard alone leaves room past the
+    # cap. Before the fix the cap read only the store and the join's export, both 0 here, and
+    # each row below sent one copy more than the cap allows. Below, at and over, on both paths.
+    for layout, runs_label in (("deep1", "one"), ("deep2", "two")):
+        for flag, cap, seen, want, said in (
+            ("below", "2", 1, [d_mix, r_mix], []),
+            ("at", "1", 1, [r_mix], [f"{_M_D} — 1 live, at the cap of 1"]),
+            ("over", "1", 2, [r_mix], [f"{_M_D} — 2 live, over the 1 this send asked for"]),
+        ):
+            cases[f"capguard/{runs_label}/{flag}"] = {
+                "layout": layout, "market": _M_MIX, "flags": ["--cap", cap],
+                "live": {_M_D: seen, _M_R: 0, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
+                "files": {"import.csv": want}, "says": said, "never": [_M_ASKED0], "route": None,
+                "home": {"line": "send 4 copies to TCGplayer", "behind": "1 card needs a price", "tile": "4 ready"},
+            }
     return cases
 
 

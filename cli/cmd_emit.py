@@ -480,6 +480,16 @@ def _apply_guard(guard, matches_by_sku, inventory):
         held[sku] = sendguard.on_hand(inventory.copies_on_hand(sku), inventory.cards, keys)
         rooms[sku] = sendguard.room(live.get(sku, 0), held[sku])
         for match in matches:
+            # THE GUARD'S READING IS A LIVE READING, SO `--cap` COUNTS IT (D7: "at most N
+            # copies LIVE"). The cap is spent against `copies_out`, which read the store and
+            # the join's export. A guard file that shows more live copies than either raised no
+            # bound, so `--cap 1` over one live copy sent one more. The larger reading wins, the
+            # only safe direction (`pipeline/merge.py:_merged_match` takes the same max).
+            seen = live.get(sku, 0)
+            if seen > match.copies_out:
+                match.held_out = seen
+            if seen > match.live_now:
+                match.live_out = seen
             if match.asked is None or match.asked > rooms[sku]:
                 match.asked = rooms[sku]
     return {"name": name, "live": live, "held": held, "rooms": rooms}
