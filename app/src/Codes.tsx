@@ -123,7 +123,7 @@ function laneOf(entry: CodeEntry): LaneFilter {
   return entry.premium ? 'premium' : 'bulk'
 }
 
-/** The box's name only (`D-a-box-is-shown-by-its-name`). A registry row that is absent or
+/** The box's name only (`D259`). A registry row that is absent or
  *  stale falls back to the number — the honest answer where there is genuinely no name to
  *  read, never a placeholder drawn over a fault that is not there. */
 function boxName(box: number, boxes: BoxRecord[] | null): string {
@@ -142,7 +142,7 @@ function boxLabel(box: BoxRecord): string {
 /* ---- sheet -----------------------------------------------------------------------------------
  * The kit's `Sheet` (`app/src/kit/overlay.tsx`) was seeded from this screen's own local one —
  * the portal, the focus return, the Escape handling and the scroll lock all moved there, plus
- * the overlay stack (D-one-page-width's sibling, UX-057/UX-090/UX-091) this local copy never
+ * the overlay stack (D272's sibling, UX-057/UX-090/UX-091) this local copy never
  * had. Each of the three sheets below stays mounted and toggles `open`, so the kit's own exit
  * animation runs instead of the panel disappearing the instant `sheet` changes. */
 

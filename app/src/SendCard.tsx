@@ -1,4 +1,4 @@
-/* THE SEND CARD: ONE PRESS FROM PRICED TO LIVE (`D-one-press-sends-and-makes-live`).
+/* THE SEND CARD: ONE PRESS FROM PRICED TO LIVE (`D273`).
  *
  * Drawn inside Pricing's send bar. Everything the owner reads between "these are priced" and
  * "these are live" is here, in owner words:
@@ -57,7 +57,7 @@ const RETRYABLE = new Set(['live_check_failed', 'tcg_write_refused', 'tcg_write_
 const DROPPED = new Set(['unreachable', 'bad_response', 'origin_blocked'])
 
 /** One sentence for why a press was refused, in owner words. The server's own text sits behind
- *  "What the server said" (D196, D-notice-detail). */
+ *  "What the server said" (D196, D269). */
 function refusalTitle(code: string): string {
   switch (code) {
     case 'live_check_failed':

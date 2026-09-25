@@ -1,4 +1,4 @@
-## D-view-state-in-url — A screen's filter, sort, search and hide state lives in the URL
+## D285 — A screen's filter, sort, search and hide state lives in the URL
 
 **The owner's ruling, 2026-09-23 (FLT-11).** Filter memory lives in the URL, on every screen.
 A link carries it. A bookmark carries it. Back restores it.

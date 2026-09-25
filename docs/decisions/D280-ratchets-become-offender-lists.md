@@ -1,6 +1,6 @@
-## D-ratchets-become-offender-lists — The typed-dot count and the prose ratio become lists of offenders, and no count is pinned
+## D280 — The typed-dot count and the prose ratio become lists of offenders, and no count is pinned
 
-**The rule.** On 2026-09-23 the owner retired D194's word ceiling, because he did not want to keep a "stagnant static pin". D-text-shape-checks carried out that ruling. On 2026-09-24 the owner extended the ruling to the two other pinned counts. This entry replaces both.
+**The rule.** On 2026-09-23 the owner retired D194's word ceiling, because he did not want to keep a "stagnant static pin". D284 carried out that ruling. On 2026-09-24 the owner extended the ruling to the two other pinned counts. This entry replaces both.
 
 - D218's typed-dot ratchet. `make docs-audit`'s `typed interpunct` row failed only when the COUNT of typed dots rose past a pinned number.
 - D229's per-file prose ratchet. `make docs-audit`'s `ste ratchet` row failed only when a file's error RATIO rose past its own pinned number. D229 amended D226, so the ratchet half of D226 goes too.

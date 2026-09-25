@@ -1026,7 +1026,7 @@ def print_where(root: Path = REPO_ROOT) -> None:
         # The same sentence `serve()` prints, for the same reason: a worktree's server over a
         # worktree's empty store looks exactly like the real one until a capture lands
         # somewhere that gets deleted with the branch. Gated on "not the primary checkout",
-        # so a copy with no `.git` says so too (D-no-git-no-live-port).
+        # so a copy with no `.git` says so too (D268).
         print(f"  WORKTREE  {root.name} — this is NOT the main checkout's store")
         print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")
 

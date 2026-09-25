@@ -270,7 +270,7 @@ export function standing(input: StandingInput): Standing | null {
   }
 
   /* 4b — priced and not sent. The send is one press on Pricing
-         (`D-one-press-sends-and-makes-live`), so this waits on the owner, not on the machine. */
+         (`D273`), so this waits on the owner, not on the machine. */
   if (readyCopies !== null && readyCopies > 0) {
     return {
       key: 'send',

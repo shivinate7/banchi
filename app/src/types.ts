@@ -4133,7 +4133,7 @@ export type ValueTable = {
 
 /* ============================================================ the one press (send to live)
  *
- * `server/send_routes.py`, `D-one-press-sends-and-makes-live`. One press reads what is live,
+ * `server/send_routes.py`, `D273`. One press reads what is live,
  * writes the listing file behind the double-send guard, sends it and makes it live. */
 
 /** Where one send stands. `server/send_routes.py:state_of` is the one rule. `sending` is a press

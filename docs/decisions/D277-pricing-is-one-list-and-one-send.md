@@ -1,4 +1,4 @@
-## D-pricing-is-one-list-and-one-send — Pricing shows every row with the rows that need the owner on top, one slim bar holds Send, and the value list moves to Inventory
+## D277 — Pricing shows every row with the rows that need the owner on top, one slim bar holds Send, and the value list moves to Inventory
 
 **The owner's rulings, 2026-09-23, in the Pricing re-interview.** The first round of the UX
 review held Pricing back for its own interview. A deliberation walked the screen, drew a

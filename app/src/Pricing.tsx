@@ -868,7 +868,7 @@ export function Pricing() {
   const [failure, setFailure] = useState<Failure | null>(null)
   /** The pricing corpus — one document for the store, and the authority (D86). */
   const [book, setBook] = useState<PricingCorpus | null>(null)
-  /* THE SEND OPTIONS LEFT THE SEND PRESS (the owner's Send-menu ruling, `D-one-press-sends-and-makes-live`):
+  /* THE SEND OPTIONS LEFT THE SEND PRESS (the owner's Send-menu ruling, `D273`):
      nothing sits beside Send. The split lives under "Download the file instead" inside `SendCard`,
      and where the per-send cap lives now is not ruled. */
   /* A NUMBER ON EACH CARD'S ROW, THIS PRESS ONLY (D7, amended 2026-09-11 on the operator's
@@ -1363,7 +1363,7 @@ export function Pricing() {
     const sending = push === 'sending'
     void (async () => {
       try {
-        /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the file is written, then the
+        /* ONE PRESS (`D273`, Q7): the file is written, then the
            server reads what is live, sends the file and makes it live. "Download the file
            instead" stops after the write. There is no press that puts the old prices back. */
         const result = await applyMarkdown(stamp, {
@@ -3774,7 +3774,7 @@ export function Pricing() {
         )
       ) : null}
 
-      {/* THE SEND BAR (`D-one-press-sends-and-makes-live`): sticky, in flow, one press. One
+      {/* THE SEND BAR (`D273`): sticky, in flow, one press. One
           bar for one run or many: the server writes ONE file over every run in the send (D86),
           behind the double-send guard, sends it and makes it live. Its options left the press
           (the Send-menu ruling), so the bar is the card and nothing beside it. */}
@@ -3806,7 +3806,7 @@ export function Pricing() {
       {source.kind !== 'markdown' || stamp === null ? null : (
         <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Send these prices">
           <div className="pricing-ship-act">
-            {/* ONE PRESS SENDS AND MAKES LIVE (`D-one-press-sends-and-makes-live`, Q7). The
+            {/* ONE PRESS SENDS AND MAKES LIVE (`D273`, Q7). The
                 download is the second door, and nothing else sits beside the press. */}
             <Button
               variant="primary"

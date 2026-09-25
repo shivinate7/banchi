@@ -1,4 +1,4 @@
-## D-product-view-hybrid — One product view, two frames, and the trap it had is fixed first
+## D278 — One product view, two frames, and the trap it had is fixed first
 
 **This amends D227 and D62.** The owner's ruling, 2026-09-23 interview: HYBRID. One product
 view. It opens as a sheet from every product name. `#/product?sku=` stays as the page and the
@@ -30,7 +30,7 @@ it. Neither duplicates its fetch or its layout:
 
 - `ProductHistory()` — the routed PAGE at `#/product?sku=`, adopting the kit's `Page`. Its own
   control is a name field (`SearchField` + `useSearch`, the forgiving matcher,
-  D-one-forgiving-search-matcher). The deep link is the door for someone who did not arrive
+  D271). The deep link is the door for someone who did not arrive
   from a product name already on screen.
 - `ProductSheet` — registered with `registerSheet('product', ProductSheet)` (`kit/sheets.ts`).
   So `openSheet('product', { sku })` — what every `ProductLink` press calls — opens this view

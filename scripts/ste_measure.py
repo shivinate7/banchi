@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The STE prose check's one measurer (D226, D-ratchets-become-offender-lists). Read by one
+"""The STE prose check's one measurer (D226, D280). Read by one
 caller: `scripts/docs-audit.py`'s `ste offenders` row (read-only, the commit path). The pinned
 per-file ratio this module used to feed (D229's ratchet) is retired. The row now compares the OFFENDERS this module names against `scripts/ste-offenders.json`, a
 shrinking list keyed by each offender's identity, never by a count.
@@ -259,7 +259,7 @@ EXEMPTIONS: Tuple[Exemption, ...] = (
 
 # ------------------------------------------------------------------ offender identity
 #
-# THE LIST IS KEYED BY WHAT OFFENDS, NEVER BY HOW MANY (D-ratchets-become-offender-lists). A
+# THE LIST IS KEYED BY WHAT OFFENDS, NEVER BY HOW MANY (D280). A
 # count per file let a new bad sentence hide behind an old one fixed in the same file. An
 # identity cannot: a new sentence has a new hash, and the list has no entry for it.
 
@@ -332,7 +332,7 @@ def join_span_breaks(text: str, mode: str = "descriptive") -> str:
     and `VS Code` exemptions match on the finding's own line. So a span that crossed a line
     break read one way on one layout and another way on the next. A reflow then changed the
     findings and the identity of a sentence whose prose did not change. The first review of
-    D-ratchets-become-offender-lists measured 518 such code-span lines in 95 files. The
+    D280 measured 518 such code-span lines in 95 files. The
     second found a citation's opening parenthesis and comma, then a break, in one decision
     entry's paragraph.
 

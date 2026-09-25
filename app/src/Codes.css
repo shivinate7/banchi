@@ -78,7 +78,7 @@
   background: var(--bn-surface-2);
 }
 .codes-fix-where { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-/* D-a-box-is-shown-by-its-name: one span, the name alone — no separator to draw. */
+/* D259: one span, the name alone — no separator to draw. */
 .codes-fix-box { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
 .codes-fix-n { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 .codes-fix-company { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }

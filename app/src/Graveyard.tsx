@@ -26,7 +26,7 @@ import './Graveyard.css'
  * itself: what the card was, how it left, when, and where. Nothing about pricing or an order
  * reads this screen; it is a ledger for looking, not a control.
  *
- * THE BOX SHOWS BY ITS NAME, NEVER ITS NUMBER (D-a-box-is-shown-by-its-name, superseding D68's
+ * THE BOX SHOWS BY ITS NAME, NEVER ITS NUMBER (D259, superseding D68's
  * "Box 3 · departed · B3 #96" form and the store-key exemption D92 gave it). The Where column
  * reads `row.box_name` straight off the payload; the "Moved to" text resolves the destination
  * through `getBoxes()`. Neither draws the store key any more.
@@ -50,7 +50,7 @@ function gameLabel(game: string | null): string | null {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-/** The box named in a `"box/index"` store key — `D-a-box-is-shown-by-its-name`: the number
+/** The box named in a `"box/index"` store key — `D259`: the number
  *  the key carries is never drawn, only the name it resolves to. A box the registry no longer
  *  has (deleted, or the list has not answered yet) falls back to "another box" rather than the
  *  number — the honest answer where there is genuinely no name to read. */
@@ -273,7 +273,7 @@ export function Graveyard() {
                     </td>
                     <td data-th="Where">
                       <span className="graveyard-where">
-                        {/* D-a-box-is-shown-by-its-name: the box shows by name only. No
+                        {/* D259: the box shows by name only. No
                             store key (D68's superseded "B3 #96" form) — a box with no
                             stored name yet is the honest "—" rather than the number. */}
                         <span className="graveyard-where-name">{row.box_name ?? <span className="bn-faint">—</span>}</span>

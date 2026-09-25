@@ -1,4 +1,4 @@
-## D-reasoning-is-not-screen-copy — A decision's argument is not screen copy, and a note about zero does not draw
+## D281 — A decision's argument is not screen copy, and a note about zero does not draw
 
 **The owner's rulings, 2026-09-23.** Seven decisions put part of their own argument on the
 owner's screen. The owner ruled on all seven.

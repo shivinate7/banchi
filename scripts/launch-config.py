@@ -31,7 +31,7 @@ THREE CALLERS, THREE APPETITES, AND THE DIFFERENCE IS DELIBERATE:
   make status          READS (`--check`). Never writes, and is what makes a hook that
                        failed open still visible.
 
-THE TWO WRITERS CLAIM FIRST (D-a-claimed-slot-and-a-server-that-names-its-checkout). A claim
+THE TWO WRITERS CLAIM FIRST (D261). A claim
 in `scripts/port-slots.py` can move a linked checkout off its hash slot. A file written
 before that claim names the hash port, which another checkout holds, and the Browser pane
 then reuses that checkout's server. `make port-slots-selftest` proves the order for both
@@ -181,7 +181,7 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
-    # THE CLAIM COMES FIRST (D-a-claimed-slot-and-a-server-that-names-its-checkout). A claim
+    # THE CLAIM COMES FIRST (D261). A claim
     # can move a linked checkout off its hash slot. A file written before the claim names the
     # hash port, and that port belongs to another checkout. The Browser pane then reuses THAT
     # tree's server and previews its code. So every writer of this file claims first: the

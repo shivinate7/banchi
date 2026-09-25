@@ -30,6 +30,27 @@ from typing import Tuple
 ROOT = Path(__file__).resolve().parent.parent
 CLAIMER = ROOT / "scripts" / "claim-ids.py"
 MERGER = ROOT / "scripts" / "merge-pr.py"
+DOCS_AUDIT = ROOT / "scripts" / "docs-audit.py"
+
+
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def claim_ids_module():
+    """`scripts/claim-ids.py`, imported, so `text_files` can be called directly against the
+    REAL repo tree — the coverage question below is about this checkout's own walk, not a
+    throwaway fixture's."""
+    return _load("claim_ids", CLAIMER)
+
+
+def docs_audit_module():
+    """`scripts/docs-audit.py`, imported. Safe: everything in it runs from `main()`, guarded
+    by `if __name__ == "__main__":`, so importing it only defines functions."""
+    return _load("docs_audit", DOCS_AUDIT)
 
 
 def merge_pr_module():
@@ -40,10 +61,7 @@ def merge_pr_module():
     request and no stub. Nothing drove this function before D143, which is the
     whole reason its precondition could sit seven lines out of place and look tested.
     """
-    spec = importlib.util.spec_from_file_location("merge_pr", MERGER)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return _load("merge_pr", MERGER)
 
 
 def drive_claim_half(repo: Path, branch: str, number: int = 99) -> Tuple[str, int]:
@@ -500,6 +518,69 @@ def main() -> int:
         print("\n  -- it is idempotent, because there is nothing left to find --")
         again = claim(work, "--porcelain")
         ok(again.strip() == "", "a second run claims nothing", again)
+
+        print("\n  -- a slug cited under a dotted directory (.claude/) is rewritten too --")
+        # `text_files` used to prune every directory starting with `.`, so a citation under
+        # `.claude/skills/<x>/SKILL.md` survived a claim commit unrewritten and `make
+        # check`'s `decision ids` row refused the merge over the dangling citation — PR
+        # #462, commits 34c54259/eaef7ce7. `docs-audit.py`'s
+        # `decision ids` row DOES read `.claude/skills/` (`markdown_files()` has no
+        # dot-directory filter at all), so the claimer's own walk has to be at least as wide.
+        dotdir = tmp / "dotdir"
+        dotdir.mkdir()
+        skilled = build(dotdir)
+        git(skilled, "checkout", "-q", "-b", "feature")
+        write(skilled, "docs/DECISIONS.md", DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
+        write(skilled, ".claude/skills/some-skill/SKILL.md",
+              f"Read {SD} before touching this.\n")
+        git(skilled, "add", "-A")
+        git(skilled, "commit", "-qm", "a slug cited under a dotted directory")
+
+        out = claim(skilled, "--porcelain")
+        ok(f"{SD}\t{D(3)}" in out,
+           "the slug is still found and allocated — this is not a `pending()` gap", out)
+
+        claim(skilled, "--write")
+        skill_body = (skilled / ".claude/skills/some-skill/SKILL.md").read_text(
+            encoding="utf-8")
+        ok(SD not in skill_body and D(3) in skill_body,
+           "`--write` rewrites the citation under `.claude/`, not only ones outside it",
+           skill_body)
+
+        print("\n  -- and the claimer's walk is a superset of the auditor's own --")
+        # NOT A FIXTURE QUESTION. `docs-audit.py`'s `decision_id_code_haystack()` and
+        # `markdown_files()` are the auditor's own functions, called here directly rather
+        # than retyped — the whole point is that this can never drift the way the dot-dir
+        # skip did, because it asks the auditor rather than assuming an answer beside it.
+        # Read against THIS repo's real tree (both modules compute `ROOT` from their own
+        # `__file__`), not a throwaway fixture, because that is the tree the merge gate
+        # actually reads.
+        audit = docs_audit_module()
+        claimer = claim_ids_module()
+        walked_by_claimer = {
+            str(p.relative_to(claimer.ROOT))
+            for p in claimer.text_files(claimer.ROOT)
+        }
+        # RESOLVED, NOT THE RAW PATH — a symlink and its target are the SAME FILE (D47,
+        # D135), and the claimer deliberately walks only the real one (see `text_files`'s
+        # own docstring): rewriting `CLAUDE.md` already rewrites what `AGENTS.md` shows,
+        # so `AGENTS.md` itself is not a gap even though the auditor's own walk (which does
+        # not dereference) lists it separately.
+        read_by_auditor = {
+            p.resolve()
+            for p in audit.markdown_files() + audit.decision_id_code_haystack()
+        }
+        walked_resolved = {
+            p.resolve() for p in claimer.text_files(claimer.ROOT)
+        }
+        missing = sorted(str(p) for p in read_by_auditor - walked_resolved)
+        ok(not missing,
+           "every file `decision ids`/`decision ids in code` reads is in the claimer's own "
+           "walk, once symlinks resolve to their real file — a file only the auditor sees "
+           "is a citation the claim commit cannot rewrite", "\n".join(missing))
+        ok(".claude/skills/text-density/SKILL.md" in walked_by_claimer,
+           "named concretely: the file whose citation broke PR #462's merge is in the set",
+           "")
 
         print("\n  -- one slug is not allowed to be eaten by another --")
         # One fixture slug is a PREFIX of the other. An unbounded substitution

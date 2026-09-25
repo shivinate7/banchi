@@ -188,7 +188,7 @@ const FULFILLMENT_KEYS: ScreenKeys = {
   rows: [{ keys: ['Esc'], does: 'Close the enlarged photograph' }],
 }
 
-/* THE ONE REGISTRATION POINT (D-page-scaffold). A new screen is one row here plus a view that
+/* THE ONE REGISTRATION POINT (D275). A new screen is one row here plus a view that
    returns `<Page>` from the kit. From this row alone it gets its nav row (`nav: true`), its
    "Go to" entry in the palette, its jump entry and its own keys in the keyboard sheet, its tab
    title, the page scaffold through `PageRouteContext`, and the sheet host. The nav, the ring, the
@@ -239,7 +239,7 @@ export const ROUTES: readonly Route[] = [
   { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside', keywords: 'component kit design system tokens' },
   /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D227). It is a deep link, not a destination
    * anyone browses to cold: a product name on another screen opens it, and so does the
-   * palette's "Go to" and its card search (D-palette-go-to). `OFF_NAV` below is what keeps
+   * palette's "Go to" and its card search (D276). `OFF_NAV` below is what keeps
    * this from reading as an omission to `route rosters` and `route census`. No hotkey: a route
    * with no nav entry earns no chord, per this file's own rule for `#/fulfillment` and
    * `#/gallery`. */
@@ -624,7 +624,7 @@ function NoSuchView({ path }: { path: string }) {
   )
 }
 
-/* ---- the palette: "Go to" (D-palette-go-to, amends D95) ------------------------------------
+/* ---- the palette: "Go to" (D276, amends D95) ------------------------------------
    IT SAYS WHAT IT DOES. It was labelled "Search" and found only screens, so a card name typed
    into it answered "Nothing matches" (UX-022). Now it is "Go to": every screen, the off-nav ones
    included (UX-003), and the cards the store holds, which open their product history. It is the
@@ -1249,7 +1249,7 @@ function TabBar({ path, drawerOpen, onMore }: { path: string; drawerOpen: boolea
 /* THE DRAWER IS THE KIT'S SHEET (UX-014), on its own left edge (kit.css carves the drawer out of
    the rise-from-the-bottom rule). So it is modal: focus moves in, stays in, and goes back to More
    when it closes, and Escape is the one stack's. ITS FOOT JOINED THE LIST
-   (D-drawer-foot-joins-the-list, amends D204): Cards to pull, the theme and the server line are the last rows of the one
+   (D266, amends D204): Cards to pull, the theme and the server line are the last rows of the one
    scrolling list, so no row ever sits under a fixed block. */
 function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void; server: ServerState }) {
   /* THE ONE PLACE IN THIS SHELL WHERE THE SIZE IS CHOSEN IN JS RATHER THAN IN A STYLESHEET, and
@@ -1464,7 +1464,7 @@ export function App() {
         ) : null}
         <div key={path} className="bn-view">
           {/* THE SCAFFOLD READS ITS ROUTE FROM HERE: a view that returns `<Page>` takes its h1
-              from the route's `title ?? label` with no prop (D-page-scaffold). */}
+              from the route's `title ?? label` with no prop (D275). */}
           <PageRouteContext.Provider value={route ?? null}>
             <RouteBoundary path={path}>{route === undefined ? <NoSuchView path={path} /> : <route.view />}</RouteBoundary>
           </PageRouteContext.Provider>

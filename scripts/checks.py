@@ -324,7 +324,7 @@ CHECKS = (
     {
         "target": "kit-adoption",
         "runs": "node scripts/kit-adoption.mjs",
-        "asserts": "Every screen inherits the page scaffold (D-page-scaffold). R1: every "
+        "asserts": "Every screen inherits the page scaffold (D275). R1: every "
                    "`ROUTES` view in app/src/App.tsx renders `<Page>` from the kit, directly "
                    "or through a screen component it renders, at any depth. R2: outside "
                    "app/src/kit/, no dialog role or native `<dialog>`, no search input "
@@ -1203,7 +1203,7 @@ CHECKS = (
                   "and capture servers running under them, all inside `mktemp -d`. The "
                   "capture port is PINNED with `PKMNSCAN_PORT` to a free socket rather than "
                   "derived: a copy with no `.git` takes a slot from its path "
-                  "(D-no-git-no-live-port), and a slot can collide with another worktree's "
+                  "(D268), and a slot can collide with another worktree's "
                   "where a free socket cannot.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
@@ -1397,8 +1397,8 @@ CHECKS = (
         "why_off_commit_path": "D18 — it writes, starts a Vite and a Playwright run, binds "
                                "ports and stops the processes it started.",
         "gates": True,
-        "governed_by": ("D18", "D43", "D-no-git-no-live-port",
-                        "D-a-claimed-slot-and-a-server-that-names-its-checkout"),
+        "governed_by": ("D18", "D43", "D268",
+                        "D261"),
     },
     {
         "target": "demo-determinism-selftest",
