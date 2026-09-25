@@ -344,6 +344,22 @@ test('a pick list is the kit panel, never the native menu, and it picks by keybo
   await expect(game).toBeFocused()
 })
 
+test('a disabled pick list does not open, by click or by keyboard', async ({ page }) => {
+  await open(page, 1440, 'light')
+  const disabledSet = page.locator('[data-specimen="Pick one"] .bn-pick:disabled')
+  await expect(disabledSet).toHaveCount(1)
+  await expect(disabledSet).toHaveCSS('cursor', 'not-allowed')
+
+  await disabledSet.click({ force: true })
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+
+  await disabledSet.focus()
+  await expect(disabledSet).not.toBeFocused()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Space')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+})
+
 test('filters combine in any order, and the count says what they hide', async ({ page }) => {
   await open(page, 1440, 'light')
   const bar = page.locator('[data-specimen="Filters"]')

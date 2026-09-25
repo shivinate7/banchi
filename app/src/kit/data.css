@@ -179,6 +179,9 @@
 .bn-pick:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
 .bn-pick:focus-visible { outline: none; border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
 .bn-pick[aria-expanded='true'] { border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
+/* Same disabled idiom `.bn-btn`/`.bn-chip` already carry (kit.css): dimmed, no hover/press
+   response. The cursor and the press-dip floors are base.css's own, off `button:disabled`. */
+.bn-pick:disabled { opacity: var(--bn-disabled); }
 .bn-pick-icon { flex: none; color: var(--bn-ink-3); }
 .bn-pick-label { flex: none; font-weight: 500; color: var(--bn-ink-3); }
 /* THE VALUE SLOT IS AS WIDE AS THE WIDEST VALUE IT CAN SHOW. Every possible value sits in the

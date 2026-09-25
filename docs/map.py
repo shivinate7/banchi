@@ -1717,7 +1717,7 @@ COMPONENTS = [
                                 "whole-box check asks what is PHYSICALLY in the box rather "
                                 "than what is sellable from it, which is what catches an "
                                 "unclaimed code and a code already reserved to another lot.",
-                        "governed_by": ["D14", "D24", "D70"], "tested_by": ["T8"]},
+                        "governed_by": ["D14", "D24", "D70", "D196"], "tested_by": ["T8"]},
             "scan.py": {"does": "read a capture directory into ledger entries, and apply "
                                 "them. The CORE, shared by `cli/cmd_scan.py` and "
                                 "`server/codes_routes.py` so the command and the screen can "
@@ -5972,8 +5972,8 @@ COMPONENTS = [
                                          "FilterChips and SortControl draw: Capture's option rows, "
                                          "in the kit's own panel, never the native OS menu, every "
                                          "facet usable in any order.",
-                                 "governed_by": ["D5", "D118", "D132", "D212", "D218", "D221",
-                                                 "D259"]},
+                                 "governed_by": ["D5", "D50", "D118", "D132", "D212", "D218",
+                                                 "D221", "D259"]},
             "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
                                          "in a filter bar (`--bn-control-h`) and one width floor "
                                          "and cap. Mono for machine strings only.",
@@ -6201,7 +6201,7 @@ COMPONENTS = [
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
                               "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172",
-                                              "D218"]},
+                                              "D218", "D259", "D272"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -6214,7 +6214,7 @@ COMPONENTS = [
                                       "store is empty (D43) so no disabled button renders for "
                                       "it to see even now that it does.",
                               "governed_by": ["D14", "D32", "D43", "D50", "D58", "D70", "D117",
-                                              "D218"]},
+                                              "D218", "D259"]},
             "src/App.css": {"does": "the shell's chrome: the sidebar and the rail it collapses "
                                     "to, the phone's top bar and its sheet, the bottom tab bar, "
                                     "the command palette, the which-key overlay, the "
@@ -7034,7 +7034,8 @@ COMPONENTS = [
                         "a departed record has no slot to count to, so `positionOf` and the "
                         "Where column both go through `storeKey.ts:storeKeyText` — `B9 #3`, "
                         "D68's own spelling — rather than composing `#{index}` by hand.",
-                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D218"],
+                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D218",
+                                "D259"],
             },
             "src/Graveyard.css": {
                 "does": "a smaller sheet than a working screen's, because this one has no "

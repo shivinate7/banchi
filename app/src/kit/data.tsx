@@ -813,6 +813,7 @@ function PickTrigger({
   sizer,
   icon,
   active,
+  disabled,
   onToggle,
   onKeyDown,
   className,
@@ -828,6 +829,9 @@ function PickTrigger({
   readonly sizer: readonly ReactNode[]
   readonly icon?: IconName
   readonly active: boolean
+  /** The native attribute: a disabled trigger cannot be clicked, focused, or reached by
+   *  keyboard, so `onToggle`/`onKeyDown` below never fire and the list cannot open. */
+  readonly disabled?: boolean
   readonly onToggle: () => void
   readonly onKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void
   readonly className?: string
@@ -841,6 +845,7 @@ function PickTrigger({
       aria-expanded={open}
       aria-controls={open ? `${id}-list` : undefined}
       data-active={active ? 'true' : undefined}
+      disabled={disabled}
       onClick={onToggle}
       onKeyDown={onKeyDown}
     >
@@ -878,6 +883,7 @@ export function Select<T extends string>({
   onChange,
   placeholder = 'Any',
   icon,
+  disabled,
   className,
 }: {
   readonly label: string
@@ -887,6 +893,9 @@ export function Select<T extends string>({
   readonly onChange: (next: T) => void
   readonly placeholder?: string
   readonly icon?: IconName
+  /** The trigger cannot be clicked or opened by keyboard while true (base.css's disabled
+   *  cursor and press floors, D50). */
+  readonly disabled?: boolean
   readonly className?: string
 }) {
   const id = useId().replace(/:/g, '')
@@ -905,11 +914,12 @@ export function Select<T extends string>({
         sizer={sizer}
         icon={icon}
         active={false}
+        disabled={disabled}
         onToggle={pick.toggle}
         onKeyDown={openOnArrow(pick.open, pick.toggle)}
         className={className}
       />
-      {pick.open ? (
+      {pick.open && !disabled ? (
         <PickPanel
           id={id}
           label={label}

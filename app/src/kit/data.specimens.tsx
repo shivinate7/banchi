@@ -180,6 +180,7 @@ export function DataSpecimens() {
       <Specimen name="Pick one">
         <Select label="Game" value={game} options={GAMES} onChange={setGame} />
         <Select label="Set" value={null} options={SETS} onChange={() => undefined} />
+        <Select label="Set" value={null} options={SETS} onChange={() => undefined} disabled placeholder="Not while busy" />
       </Specimen>
 
       <Specimen name="Filters">

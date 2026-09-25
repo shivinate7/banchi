@@ -61,6 +61,19 @@ its `B` sigil so that it reads apart from a count. Both put the box number on th
 
 - How a departed card from a box that was later deleted names its box. The record keeps the
   name it had. The composer must not read the name from a registry row that is gone.
+- **`#/graveyard`'s "Moved to" has the same gap, unfixed.** Found in the library lane's round
+  2, 2026-09-25. `server/capture_server.py`'s box-delete path freezes `box_name` onto the
+  `BURIED` history line at the moment a box is deleted. `do_graveyard` reads that frozen
+  value. So a departed card names the box it left, even after that box is gone.
+  `app/src/Graveyard.tsx` reads `row.box_name` straight off the payload. A MOVE carries no
+  such freeze. `store/master.py:Inventory.move_card` sets `card.moved_to` to the raw
+  destination key alone. `app/src/Graveyard.tsx`'s `movedToName()` resolves that key against
+  a LIVE `getBoxes()` fetch, at render time. Delete the destination box later, and the row
+  falls back to "another box" — correct code, over a fact the store never kept. The real fix
+  is a store change, matching what the burial path already does: capture the destination's
+  name at move time, into a new column beside `moved_to`. Then the read is a stored fact,
+  never a live join. That is a schema change, out of the library lane's fence. Filed here,
+  not fixed.
 
 ### What is built
 
