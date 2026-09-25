@@ -563,7 +563,38 @@ def check_delete_after_placement(checks: Checks) -> None:
         checks.ok(len(labels) == len(set(labels)), "and no two cards read one label", str(labels))
 
 
+def check_undo_keeps_paid_answers(checks: Checks) -> None:
+    """R3 review, item 2: undo is refused while a live paid reading holds a key it removes.
+
+    Red before the fix: the undo checked only the two boxes' hashes, deleted the transplant
+    the claim holds, and the paid answer would land on the tombstone's card.
+    """
+    from store import submissions as claims
+
+    checks.note("")
+    checks.note("BOX MAP R3 — undo and a live paid reading (D174, D262)")
+    with isolated_home():
+        _shelf()
+        body = capture_server.do_move_sections(1, {"first": 2, "to_box": 2})
+        arrived = sorted(i for i in _keys(2) if i > 4)
+        with Store().write() as snapshot:
+            snapshot.submissions.entries["r-undo"] = claims.Submission(
+                receipt="r-undo", pid=os.getpid(), started_at=master.now(),
+                keys=[master.position_key(2, arrived[0])], state=claims.STATE_LIVE,
+            )
+        refusal(
+            checks, lambda: capture_server.do_undo_section_move({"move": body["move"]}),
+            "card_being_read",
+            "undo refuses while a paid reading holds a card it would take away",
+        )
+        checks.equal(
+            len([i for i in _keys(2) if i > 4]), 4,
+            "and nothing was undone: the four cards are still there",
+        )
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
+    check_undo_keeps_paid_answers,
 )

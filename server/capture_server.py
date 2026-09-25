@@ -5726,6 +5726,18 @@ def do_undo_section_move(payload: dict) -> dict:
                     f"{inventory.box_title(int(number))} has changed since that move, so it "
                     f"cannot be put back exactly. Move it back instead.",
                 )
+        # A LIVE PAID READING KEEPS ITS CARD (D174, D262, the R3 review). Undo takes a moved
+        # card off its new key and gives it back its old one. A claim on either key would see
+        # its answer land on the wrong record, so the undo refuses, as the move itself does.
+        touched = [key for pair in undo.get("pairs") or [] for key in pair[:2]]
+        held = snapshot.submissions.overlap(touched)
+        if held:
+            runs_named = ", ".join(sub.run or sub.receipt for sub, _ in held)
+            raise BadRequest(
+                HTTPStatus.CONFLICT, "card_being_read",
+                f"A paid run ({runs_named}) is reading a card this undo would move back. "
+                f"Undo it after that reading lands. Nothing was put back.",
+            )
         for tomb_key, new_key, state, state_at, photo in undo.get("pairs") or []:
             arrived = inventory.cards[new_key]
             tomb = inventory.cards[tomb_key]
