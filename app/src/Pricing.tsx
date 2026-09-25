@@ -53,6 +53,7 @@ import type {
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
 import { isEditableTarget } from './keys'
 import { FLAT_KEY, subThresholdSkus } from './readiness'
+import { isWithheld, rowShare } from './standing'
 import { TrendCell, type TrendRead } from './PriceTrend'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
@@ -304,10 +305,6 @@ const HOLD_SHORT: Record<WithholdReason, string> = {
   bullish: 'Bullish',
   keeping: 'Keeping this one',
   next_batch: 'A later batch',
-}
-
-function isWithheld(value: unknown): value is WithheldRecord | 'unlisted' {
-  return value === 'unlisted' || (typeof value === 'object' && value !== null && 'withheld' in value)
 }
 
 function heldReason(value: WithheldRecord | 'unlisted'): string {
@@ -1079,12 +1076,13 @@ export function Pricing() {
         heldCount += 1
         continue
       }
-      /* A ROW WITH NO MARKET PRICE AND NO ANSWER IS NOT READY (Q3): the send leaves it out, so
-         its copies are counted under "needs a price" and never among the ready ones. */
-      if (row.bucket === 'no_market_data' && typeof standing !== 'string') continue
+      /* THE ONE ROW RULE HOME ALSO READS (`standing.ts:rowShare`): a row with no market price
+         and no answer is left out of the send, so it is never among the ready copies (Q3). */
+      const share = rowShare(row, standing)
+      if (share.needsPrice) continue
       const asked = askedFor(row.sku)
       if (asked !== undefined) byHand += 1
-      const going = asked === undefined ? row.add_to_quantity : Math.min(asked, row.add_to_quantity)
+      const going = asked === undefined ? share.ready : Math.min(asked, share.ready)
       if (going === 0) continue
       outRows += 1
       outCopies += going
@@ -1094,11 +1092,7 @@ export function Pricing() {
 
   /* ROWS WITH NO MARKET PRICE AND NO ANSWER: they stay on the list and stay out of a send (Q3,
      D49: a missing price is unknown, not low). Counted off the rows, which is what is drawn. */
-  const needsPrice = rows.filter((row) => {
-    if (row.bucket !== 'no_market_data' || row.at_cap) return false
-    const standing = answerFor(row)
-    return typeof standing !== 'string' && !isWithheld(standing)
-  }).length
+  const needsPrice = rows.filter((row) => rowShare(row, answerFor(row)).needsPrice).length
 
   /* THE MIXED SEND'S PRICE CHANGES (the owner's ruling, 2026-09-24: "Allow mixed"). A row this
      press adds no copy of, already live, whose TYPED price is not the live one. The server

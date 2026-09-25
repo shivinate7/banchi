@@ -2224,8 +2224,9 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
     # A PRICE OWED THAT NO LONGER BLOCKS THE SEND (D277 Q3, the delta review R3-2). A card with
     # no market price and no answer is left out of a send rather than refusing it, so
     # `blocking` no longer names it. The run still owes that price, and the screens must say
-    # so: Home counts this run as one to price, and never counts that copy as ready. Read off
-    # this run's own rows, because the corpus holds no entry for a card nobody answered.
+    # so. The sentence's shape is read by `app/src/standing.ts:LEFT_OUT_FOR_PRICE`, which keeps
+    # it apart from a reason that stops the whole run. Read off this run's own rows, because
+    # the corpus holds no entry for a card nobody answered.
     unpriced = (answers or {}).get("no_market_data") or {}
     held = (answers or {}).get("overrides") or {}
     waiting = sum(

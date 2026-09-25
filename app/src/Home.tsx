@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   getBoxes,
   getOrders,
+  getPricingCorpus,
   getPricingWorklist,
   getRecentCards,
   getRuns,
@@ -415,6 +416,7 @@ export function Home() {
   const runs = useLoad<RunSummary[]>(getRuns, runsRead)
   const orders = useLoad<OrdersPayload>(getOrders)
   const pricing = useLoad<PricingWorklist>(() => getPricingWorklist())
+  const book = useLoad(async () => (await getPricingCorpus()).corpus)
   /* A VISIT TO HOME RUNS A DUE LIVE CHECK (the owner's Q3 ruling): a send whose wait ended
      while the app was closed is checked here, by itself. */
   const liveCheck = useLiveCheck()
@@ -495,6 +497,8 @@ export function Home() {
     runs: runs.state === 'ready' ? runs.value : null,
     runsFailed: runs.state === 'failed',
     unconfirmed: liveCheck.status?.unconfirmed.copies ?? null,
+    book: book.state === 'ready' ? book.value : null,
+    bookFailed: book.state === 'failed',
   })
 
   /* Shipping: the export the hub last read, if one is in hand. */

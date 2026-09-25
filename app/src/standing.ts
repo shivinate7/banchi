@@ -1,5 +1,13 @@
 import type { IconName } from './kit'
-import type { OrdersPayload, PricingWorklist, RunSummary, ServerStatus } from './types'
+import type {
+  OrdersPayload,
+  PricingCorpus,
+  PricingSku,
+  PricingWorklist,
+  RunSummary,
+  ServerStatus,
+  WithheldRecord,
+} from './types'
 
 /* THE STANDING LINE — what the store is waiting on, ranked, as one sentence.
  *
@@ -71,7 +79,41 @@ export type StandingInput = {
   /** Copies written to a file and not yet found at TCGplayer (`GET /pipeline/sends`), or null
    *  where that was not read — the demo, an older server. Null never reads as zero. */
   readonly unconfirmed?: number | null
+  /** The store's pricing answers (`GET /pricing`), which the ready count reads per SKU. Null
+   *  while loading, like every reading above. */
+  readonly book?: PricingCorpus | null
+  readonly bookFailed?: boolean
 }
+
+/** A held or unlisted answer: the row stays back on purpose. */
+export function isWithheld(value: unknown): value is WithheldRecord | 'unlisted' {
+  return value === 'unlisted' || (typeof value === 'object' && value !== null && 'withheld' in value)
+}
+
+/** The answer the corpus holds for a row, read the way `#/pricing` reads it: a row with no
+ *  market price reads the `unknown` channel, every other row reads the rest. */
+export function corpusAnswer(book: PricingCorpus, row: Pick<PricingSku, 'sku' | 'bucket'>): unknown {
+  const answer = (book.skus ?? {})[row.sku]
+  if (answer === null || answer === undefined) return undefined
+  return (answer.channel === 'unknown') === (row.bucket === 'no_market_data') ? answer.value : undefined
+}
+
+/** THE BAR'S RULE FOR ONE ROW, AND HOME READS THE SAME ONE (the delta review, R4 F1). The
+ *  copies a send carries for this row, and whether the row owes a price. A row with no market
+ *  price and no answer is left out of the send and stays on the list (the owner's Q3 ruling),
+ *  so it owes a price and sends nothing. */
+export function rowShare(
+  row: Pick<PricingSku, 'bucket' | 'at_cap' | 'add_to_quantity'>,
+  answer: unknown,
+): { ready: number; needsPrice: boolean } {
+  if (row.at_cap || isWithheld(answer)) return { ready: 0, needsPrice: false }
+  if (row.bucket === 'no_market_data' && typeof answer !== 'string') return { ready: 0, needsPrice: true }
+  return { ready: row.add_to_quantity, needsPrice: false }
+}
+
+/** The `owes` reason `_run_owes` adds for a card left out of the send for want of a price. It
+ *  owes a price and does not block the run, so it never counts as a run that cannot be sent. */
+const LEFT_OUT_FOR_PRICE = / with no market price needs? a price$/
 
 /** THE ONE `owes` REASON THAT IS NOT A PRICE. `server/pipeline_routes.py:_run_owes` appends it
  *  to a joined run that has never written a file: the run waits on the SEND, and counting it
@@ -151,13 +193,28 @@ export function standing(input: StandingInput): Standing | null {
       ? null
       : orders.resolution.orders.reduce((sum, o) => sum + (openKeys.has(o.key) ? (o.outstanding ?? 0) : 0), 0)
   const owed = pricing === null ? null : runsOwingPrice(pricing.roster)
-  /* WHAT IS PRICED AND WAITS ON THE SEND: every unsent copy of an open run that owes no price. */
-  const readyCopies =
+  /* WHAT IS READY, AND WHAT OWES A PRICE: `#/pricing`'s bar rule, per SKU (R4 F1). A run with
+     one unpriced card still sends its priced ones, so the count is never per run. */
+  const book = input.book ?? null
+  let readyCopies: number | null = null
+  let needsPrice: number | null = null
+  if (pricing !== null && book !== null) {
+    readyCopies = 0
+    needsPrice = 0
+    for (const row of pricing.skus ?? []) {
+      const share = rowShare(row, corpusAnswer(book, row))
+      readyCopies += share.ready
+      if (share.needsPrice) needsPrice += 1
+    }
+  }
+  /* A run whose own reason stops the whole send (the cut-off price unset), apart from a card
+     left out for want of a price and from a run that only waits on the send. */
+  const blocked =
     pricing === null
       ? null
-      : pricing.roster
-          .filter((r) => r.open && r.owes.every((reason) => reason === NOT_YET_WRITTEN))
-          .reduce((sum, r) => sum + (r.unsent ?? 0), 0)
+      : pricing.roster.filter(
+          (r) => r.open && r.owes.some((reason) => reason !== NOT_YET_WRITTEN && !LEFT_OUT_FOR_PRICE.test(reason)),
+        ).length
   const unconfirmed = input.unconfirmed ?? null
   const live = runs === null ? null : runs.filter((r) => r.live)
 
@@ -246,21 +303,28 @@ export function standing(input: StandingInput): Standing | null {
     }
   }
 
-  /* 4 — runs that are joined and still owe a price. */
-  if (pricing === null) {
+  /* 4 — the pricing worklist: what is ready to send, and what owes a price. */
+  if (pricing === null || readyCopies === null || needsPrice === null || blocked === null) {
     return unknown(
       'pricing-unknown',
-      input.pricingFailed ? 'the pricing worklist did not answer.' : 'the pricing worklist is still loading.',
+      input.pricingFailed || input.bookFailed
+        ? 'the pricing worklist did not answer.'
+        : 'the pricing worklist is still loading.',
       problem,
     )
   }
-  if (owed !== null && owed > 0) {
+
+  /* 4a — ready copies wait on the send, which is one press on Pricing (`D273`). A card that
+         owes a price does not stop it (Q3), so it is named behind the line, never in front. */
+  if (readyCopies > 0) {
+    add(needsPrice, needsPrice === 1 ? 'card needs a price' : 'cards need a price', needsPrice > 0)
+    add(blocked, blocked === 1 ? 'run needs its cut-off price' : 'runs need their cut-off price', blocked > 0)
     return {
-      key: 'price',
+      key: 'send',
       tone: 'warn',
-      icon: 'tag',
+      icon: 'send',
       lead: 'Waiting on you',
-      say: [t(' — price '), n(owed), t(owed === 1 ? ' run before it can be sent.' : ' runs before they can be sent.')],
+      say: [t(' — send '), n(readyCopies), t(readyCopies === 1 ? ' copy to TCGplayer.' : ' copies to TCGplayer.')],
       href: '#/pricing',
       kbd: ',P',
       behind,
@@ -269,15 +333,17 @@ export function standing(input: StandingInput): Standing | null {
     }
   }
 
-  /* 4b — priced and not sent. The send is one press on Pricing
-         (`D273`), so this waits on the owner, not on the machine. */
-  if (readyCopies !== null && readyCopies > 0) {
+  /* 4b — nothing is ready, and a price is owed. */
+  if (needsPrice > 0 || blocked > 0) {
     return {
-      key: 'send',
+      key: 'price',
       tone: 'warn',
-      icon: 'send',
+      icon: 'tag',
       lead: 'Waiting on you',
-      say: [t(' — send '), n(readyCopies), t(readyCopies === 1 ? ' copy to TCGplayer.' : ' copies to TCGplayer.')],
+      say:
+        needsPrice > 0
+          ? [t(' — price '), n(needsPrice), t(needsPrice === 1 ? ' card.' : ' cards.')]
+          : [t(' — set the cut-off price for '), n(blocked), t(blocked === 1 ? ' run.' : ' runs.')],
       href: '#/pricing',
       kbd: ',P',
       behind,
