@@ -1440,6 +1440,8 @@ function selfTest() {
     rule('export const S = () => <Button icon="x">Preview</Button>\n', 'R2-icon-only-button') === 0)
   add('an <IconButton icon="x" label="Close" /> is green: the kit primitive itself is not a violation', () =>
     rule('export const S = () => <IconButton icon="x" label="Close" />\n', 'R2-icon-only-button') === 0)
+  add('an <IconButton icon="x" label="Open" href="#/y" target="_blank" rel="noreferrer" /> is green too: the anchor form is still the kit primitive', () =>
+    rule('export const S = () => <IconButton icon="x" label="Open" href="#/y" target="_blank" rel="noreferrer" />\n', 'R2-icon-only-button') === 0)
   add('a <button><Icon /></button> inside app/src/kit/ is green', () =>
     green(outcome(tree({ 'app/src/kit/Toast.tsx': 'export const T = () => <button onClick={f}><Icon name="x" /></button>\n' }))))
 

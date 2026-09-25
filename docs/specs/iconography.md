@@ -437,6 +437,8 @@ merges. This branch names them here. It does not edit files those lanes own.
 - `busy`, a spinner in the same footprint.
 - `badge`, a count.
 - An optional longer accessible `name`, apart from the tooltip `label` (UX-271).
+- An anchor form: `href` (plus `target`/`rel`) renders an `<a>` instead of a `<button>`, same
+  face, hit area, tooltip and accessible name (round 3, below).
 - A visual face of 28px in dense rows, at a hit area of 40px or more, every width.
 - The tooltip on hover, on keyboard focus, and on a touch long-press.
 - Seven kit controls moved onto it: overlay Close, the Toaster dismiss, the FacetChip clear,
@@ -541,3 +543,48 @@ has the built fix for each one:
   as permanent self-tests
 
 `app/tests/icon-button.spec.ts` is the new browser proof.
+
+## 6. Round 3: the anchor form
+
+**The cause: the kit had no icon-only link.** The Orders review (`ux/kit-tighten`, round 2)
+found "Cards to pull" reaching for `window.open` in an `onClick`. It opens `#/fulfillment` in
+a new tab. `IconButton` rendered only a `<button>`. So the screen could not reach for a kit
+link. A real `<a href>` gives middle-click for free. It also gives the browser's own
+right-click "Open link in new tab" and "Copy link". `window.open` gives none of these. A
+`<button onClick={() => window.open(...)}>` is a link wearing a button's clothes. The loss is
+exactly that gap.
+
+**The fix is a second form of the same primitive, not a second component.** `IconButton` now
+takes `href`, plus `target` and `rel`. When `href` is set, it renders an `<a>`, not a
+`<button>`. Both forms share the same `classes`. Both share the same inline face size
+(`FACE_PX[size]`). Both share the same `::before` 40px hit area, the same tooltip, and the
+same accessible name (`aria-label={name ?? label}`). `.bn-icon-btn` is a class selector, not a
+tag selector. One stylesheet rule already covers both elements. No `transform` sits anywhere
+in the hit area or the tooltip's own positioning. The round-2 centering rule carries over to
+the anchor untouched. It is keyed to a class, never to `button` or `a`. A native `<a href>` is
+already keyboard-operable. Enter activates it on its own. No keydown handler was added.
+
+`type`, `disabled` and the other button-only attributes in `IconButtonProps`' `rest` are only
+spread onto the `<button>` branch. They mean nothing on an `<a>`. The anchor form drops them
+silently, rather than letting them land as invalid DOM attributes.
+
+`app/tests/icon-button.spec.ts` proves it against `#/gallery`'s new "the anchor form" specimen:
+`IconButton icon="external" label="Cards to pull" href="#/fulfillment" target="_blank" rel=
+"noreferrer"`. It renders an `<a>` carrying the given `href`, `target` and `rel`. Keyboard
+Enter follows it, read as a `page.context().waitForEvent('page')` popup. Its face, hit area
+and tooltip match the `Retire` button specimen, exactly.
+
+**`scripts/kit-adoption.mjs`'s `R2-icon-only-button` already accepted this, with no code
+change.** The rule scans hand-rolled `<button>` and `<a role="button">` elements. It also
+scans the kit's own `<Button iconOnly>` and vocabulary-verb shapes. It never scans the
+`<IconButton>` tag itself. That tag is the sanctioned primitive, whatever props it carries.
+What changed is a self-test naming the anchor form by name. A later edit to the rule cannot
+start flagging it by accident:
+`<IconButton icon="x" label="Open" href="#/y" target="_blank" rel="noreferrer" />` is now
+asserted green, beside the existing bare-button case.
+
+**Orders.tsx is untouched.** `app/src/Orders.tsx`'s "Cards to pull" is already a hand-rolled
+`<a className="bn-btn orders-handoff" href="#/fulfillment" target="_blank" rel="noopener">`.
+It carries real visible text — "Cards to pull" between two icons. It is a real link already,
+and not icon-only. So `R2-icon-only-button` never reached it either way. It was not this
+round's subject. The primitive was missing, and this round built the primitive.
