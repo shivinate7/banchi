@@ -955,9 +955,9 @@ COMPONENTS = [
                                 "fetch started sending every play grade",
                         "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16",
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
-                                        "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
-                                        "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D162", "D213", "D218", "D253",
+                                        "D36", "D41", "D46", "D49", "D54", "D55", "D56", "D58",
+                                        "D59", "D63", "D64", "D65", "D67", "D68", "D71", "D76",
+                                        "D87", "D137", "D146", "D162", "D213", "D218", "D253",
                                         "D259",
                                         "D260"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
@@ -6807,8 +6807,8 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D137", "D162", "D167", "D172", "D194", "D218", "D252",
-                                "D253", "D259"],
+                                "D87", "D118", "D137", "D162", "D167", "D172", "D194", "D218",
+                                "D252", "D253", "D259"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -9165,25 +9165,28 @@ COMPONENTS = [
                         "`#/codes` and `#/graveyard`, which no existing spec seeded at all. The "
                         "three specs above now import from here rather than defining their own "
                         "(unchanged behaviour — all 112 of their cases still pass). Also exports "
-                        "one `seedPopulated*` function per one of six under-fixtured "
+                        "one `seedPopulated*` function per one of seven under-fixtured "
                         "routes (`#/runs`, `#/orders`, `#/shipping`, `#/codes`, `#/graveyard`, "
-                        "and `#/product` WITH a SKU, `PRODUCT_ROUTE`): each registers a "
-                        "`page.route` stub with real-shaped rows, registered AFTER "
-                        "`shell.ts:stubStore`'s own empty answer for the same path so the "
-                        "richer one wins (Playwright matches newest-first). Nothing in it is "
-                        "random. Read by `routeSweep.ts:sweepEveryRoute`, which registers "
-                        "every seed ONCE before its sweep — `copy-budget.spec.ts` read them "
-                        "first, before D194 was superseded.",
-                "governed_by": ["D20", "D83", "D134", "D194", "D284"],
+                        "`#/review` with a wide catalog answer (D46), and `#/product` WITH a "
+                        "SKU, `PRODUCT_ROUTE`): each registers a `page.route` stub with "
+                        "real-shaped rows, registered AFTER `shell.ts:stubStore`'s own empty "
+                        "answer for the same path so the richer one wins (Playwright matches "
+                        "newest-first). Nothing in it is random. Read by "
+                        "`routeSweep.ts:sweepEveryRoute`, which registers every seed ONCE "
+                        "before its sweep — `copy-budget.spec.ts` read them first, before "
+                        "D194 was superseded; `text-shape.spec.ts`, `machine-words.spec.ts` "
+                        "and `money-face.spec.ts` read them now, through the same one sweep.",
+                "governed_by": ["D20", "D23", "D46", "D83", "D134", "D194", "D284"],
                 "note": "CLOSED D194'S OWN NAMED GAP, and the argument still holds for its "
-                        "successors. Its ceilings on the five routes above were pinned "
-                        "against `stubStore`'s empty-ish answer — no run, no order, no "
-                        "export, no code, no departed record — so a sentence added to any of "
-                        "the five could grow in its POPULATED state without a check reading "
-                        "only the empty one ever seeing it. The owner's own alternative — pin "
-                        "against the live `:8000` store instead of a checked-in fixture — was "
-                        "rejected: order numbers, buyer names and run ids change daily on a "
-                        "real store, so nothing pinned against it would reproduce in CI.",
+                        "successors. Its ceilings on the routes above were pinned against "
+                        "`stubStore`'s empty-ish answer — no run, no order, no export, no "
+                        "code, no departed record, no wide catalog — so a sentence added to "
+                        "any of them could grow in its POPULATED state without a check "
+                        "reading only the empty one ever seeing it. The owner's own "
+                        "alternative — pin against the live `:8000` store instead of a "
+                        "checked-in fixture — was rejected: order numbers, buyer names and "
+                        "run ids change daily on a real store, so nothing pinned against it "
+                        "would reproduce in CI.",
             },
             "tests/orders.spec.ts": {"does": "the order screen in a browser: that the six-way "
                                              "counts render including the zeros, that a pick "
@@ -9593,7 +9596,7 @@ COMPONENTS = [
                 # an all-or-nothing worklist — two entries out of a hundred and one used to
                 # suppress it for the other ninety-nine.
                 "governed_by": ["D4", "D13", "D16", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D46", "D77", "D136", "D146", "D194", "D218"],
+                                "D41", "D46", "D77", "D118", "D136", "D146", "D194", "D218"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

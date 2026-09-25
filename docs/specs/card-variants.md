@@ -93,3 +93,49 @@ speculation.
 
 **Ordering.** 3b first. It is the smallest change and it alone takes `4/357` from fifteen rows to
 three. 3a second. 3c is measured after both, and may turn out to be nothing.
+
+
+### 3c amendment, 2026-09-24 — the real case exceeded nine, and the cap moved
+
+3a and 3b landed. They were not enough for `4/383`. A bare `Calm Rune` query still finds all
+sixteen of that name's rows. The card's claimed rarity, `Showcase`, is not typed into the query.
+It lives on the capture record. 3a's set and rarity words narrow nothing here. This is not a
+defect in 3a or 3b. It is the case 3c named and declined to build ahead of. That case is now
+measured.
+
+The owner's ruling on the cutoff itself, 2026-09-24, quoted verbatim:
+
+```
+the search shouldn't cut off i should see all rows that matched unless it's an egregious
+amount no? or a 'show 10 more' etc
+```
+
+**The fix, over two doors.** `pipeline/join.py:rank_by_claims` is D23's own amendment. It is a
+fourth job the rarity claim now does. It puts every claim-agreeing row in front of the rest.
+It runs before any cutoff.
+
+`server/capture_server.py:do_review_catalog` stops cutting the wire response at nine. It now
+sends every match up to `CATALOG_EGREGIOUS_LIMIT`. That ceiling is 200. It is measured against
+the widest real group this game's catalogue holds for one folded name: 16, `Calm Rune` itself.
+`found` and `truncated` still say the true total. They say whether that ceiling ever bit.
+
+`MAX_KEYED_CANDIDATES` stays 9. A row past the ninth is still a mouse-only press. That is a fact
+about ten fingers and ten keys. It is never a reason to drop a row on the wire.
+`app/src/ReviewQueue.tsx`'s `CatalogPanel` reveals ten more rows per press of "Show N more".
+Those rows are already on the wire. No press fetches a second time. D118 holds: a press adds
+rows below and moves nothing above it.
+
+**`4/383`, before and after.** `GET /review/4/383/catalog?q=Calm%20Rune` found 16 rows before
+this fix. It returned 9, in catalog order. The three `Calm Rune (R02a)` Showcase rows sat in the
+tail. Spiritforged was among them, SKU `9139842`. Past the ninth row, no digit could reach them.
+
+After this fix the same query still finds 16. It now returns all 16 on the wire. The card's own
+rarity claim agrees with the Showcase rows, so they rank first. All three keep a digit.
+`truncated` reads false. 16 sits under the 200-row ceiling.
+
+No egregious case has been measured yet. `CATALOG_EGREGIOUS_LIMIT` is a generous bound, not a
+fitted one. Re-measure it the day a real query reaches it.
+
+An entry written before this change keeps its old, unranked suggestions until
+`pkmnscan queue refresh --write` runs over it. That press is D167's own mechanism, unchanged.
+It is a one-time step over the live store, on the owner's word, not part of this change.
