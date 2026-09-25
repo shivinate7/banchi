@@ -251,6 +251,17 @@ Every facet count follows the OTHER active filters plus Hide sold. The order pic
 not matter: rarity before Hide sold gives the same count as the reverse. The client wiring
 (`app/src/server.ts`, `Inventory.tsx`, `BoxBrowse.tsx`) is the inventory lane's own build.
 
+**UX-263, 2026-09-25 (search-server lane, FLT-36).** `app/src/useSearch.ts:
+SEARCH_DEBOUNCE_MS` (200ms) called itself an unmeasured assumption. Measured against a
+throwaway store of 2,500 cards, the owner's own size. Twenty requests per query shape, a
+real loopback HTTP round trip, JSON encoding included. A name or a short prefix answered
+in 46ms on average, p95 48ms. A bare card number answered in 24ms. A query matching
+nothing answered in 1ms. Every shape lands well inside the 200ms wait, with margin to
+spare. KEPT at 200ms. The server is not why a fast typist would notice lag. A shorter
+wait would only ask it more often, for no gain in how soon a result appears. The one risk
+the code already named stays true either way a debounce is sized: a slow `Store.write()`
+lock, held by a running `./pkmnscan identify`.
+
 **~9–11 days of one session; fewer on the wall clock under `00-phases.md`'s layout**, which
 runs items 2–5 in parallel worktrees once the guard is in, and 6–8 in parallel once those
 four have merged. Items 1–4 are the floor — they fix every per-press cost and the two
