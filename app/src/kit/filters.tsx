@@ -193,7 +193,7 @@ export function FilterBar<K extends string = string>({
   }
 
   return (
-    <div className={['bn-filterbar', className].filter(Boolean).join(' ')} data-bn-filterbar>
+    <div className={['bn-filterbar', className].filter(Boolean).join(' ')} data-bn-filterbar data-compact={compact}>
       <div className="bn-filterbar-controls">
         {search === undefined && beside === undefined ? null : (
           <div className="bn-filterbar-lead">

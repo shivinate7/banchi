@@ -1313,7 +1313,7 @@ test('selecting a card shows every copy of it, each with both doors out of inven
   await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('1')
   // D218: pushed/staged/headroom are sibling spans now; the seam is CSS
   // (`.card-locations-counts > span::before`), never part of `textContent`.
-  await expect(page.locator('.card-locations-counts')).toHaveText('Pushed 0Staged 2Room for 1 more live')
+  await expect(page.locator('.card-locations-counts')).toHaveText('2 waiting to go liveRoom for 1 more live')
 
   /* AND THE CARD'S NAME IS DRAWN ONCE ON THIS SCREEN. This header carried an `<h3>` with the same
      name the band's first fact row prints a few hundred pixels above — invisible while the two
@@ -1416,7 +1416,7 @@ test('a copy sold here since the reading is drawn beside it, and headroom follow
      here and refuse a relist the shelf can support — the one-line bug the change would
      otherwise have left behind. */
   // D218: the seam is CSS now (`.card-locations-counts > span::before`), never `textContent`.
-  await expect(page.locator('.card-locations-counts')).toHaveText('Pushed 0Staged 2Room for 2 more live')
+  await expect(page.locator('.card-locations-counts')).toHaveText('2 waiting to go liveRoom for 2 more live')
 })
 
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {
@@ -2447,11 +2447,11 @@ test('the walk arrives with only the planted selection\'s section open, and the 
   await expect(page.locator('.browse-row')).toHaveCount(5)
   await expect(page.locator('.browse-row[aria-current="true"]')).toBeVisible()
 
-  const fold = page.getByRole('button', { name: /collapse all/ })
+  const fold = page.getByRole('button', { name: /collapse all/i })
   await expect(fold).toBeVisible()
   await fold.click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /expand all/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /expand all/i })).toBeVisible()
 
   /* And nothing is lost by shutting it: the selected card's copies, its photograph and its two
      doors out of inventory are all still drawn beside the list. Only its ROW is folded. */
@@ -2475,6 +2475,19 @@ test('the fold is presentation, never a filter — a step into a shut section op
      `Card 2` of section 2 and a digit no longer identifies it. Pyroar is index 5 and nothing
      else, so this pins the same row at least as tightly. */
   await expect(page.locator('.browse-row[aria-current="true"]')).toContainText('Pyroar')
+})
+
+test('UX-227 — the walk keeps the row it steps onto in view, down to the last card of a forty-card box', async ({ page }) => {
+  /* THE RAIL RAN PAST THE BOTTOM OF THE WINDOW AT REST: it is sticky, but under the page head its
+     window-tall height ended below the fold, and the list's last rows with it. A step to the end
+     of the box scrolled the list to its end and left the row out of sight. */
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=7' })
+  await expandAll(page)
+  await page.locator('.browse-list').focus()
+  await page.keyboard.press('End')
+  const current = page.locator('.browse-row[aria-current="true"]')
+  await expect(current).toBeInViewport({ ratio: 1 })
+  expect(await page.evaluate(() => window.scrollY)).toBe(0)
 })
 
 test('expand all opens every section and collapse all shuts them', async ({ page }) => {
@@ -3068,9 +3081,9 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   /* THE DELETE IS SET APART BY BEING SOMEWHERE ELSE AND BY BEING RED, which is the same
      statement the bordered bar made and is measured the same way: against an ordinary row, on
      screen, rather than against a class name. */
-  const bar = page.getByRole('button', { name: /^Delete box 2…/ })
+  const bar = page.getByRole('button', { name: /^Delete this box…/ })
   await expect(bar).toHaveCount(1)
-  await expect(bar).toHaveAttribute('aria-label', /^Delete box 2…, no undo$/)
+  await expect(bar).toHaveAttribute('aria-label', /^Delete this box…, no undo$/)
   const ordinary = await rows.first().evaluate((node) => window.getComputedStyle(node).color)
   const danger = await bar.evaluate((node) => window.getComputedStyle(node).color)
   expect(danger, 'the delete is drawn in the same ink as an ordinary operation').not.toBe(ordinary)
@@ -3656,17 +3669,17 @@ test('a registered box with no cards is still reachable, and can still be delete
   /* AND SELECTING IT REACHES THE OPERATIONS, which is the half that makes the cell worth
      having. Asserted through the delete specifically: it is the one this screen could not
      otherwise perform at all, and the one the owner went looking for. */
-  await expect(page.locator('.browse-empty')).toContainText('Nothing in box 6 yet')
+  await expect(page.locator('.browse-empty')).toContainText('Nothing in asdfkopas yet')
   await openBoxOps(page)
-  await expect(page.getByRole('button', { name: /^Delete box 6/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Delete this box/ })).toBeVisible()
 
   /* The claim editor is NOT offered, because it is the one control here that writes CARDS and
      there are none — `Set claims on all 0 cards in box 6` was a real string on this screen for
      as long as it took to notice. Absent rather than disabled, per docs/DESIGN.md. */
   await expect(page.getByRole('button', { name: /^Set claims/ })).toHaveCount(0)
 
-  await page.getByRole('button', { name: /^Delete box 6/ }).click()
-  await page.getByRole('button', { name: 'Delete box 6 permanently' }).click()
+  await page.getByRole('button', { name: /^Delete this box/ }).click()
+  await page.getByRole('button', { name: 'Delete this box permanently' }).click()
   const deleted = wire.find((sent) => sent.method === 'DELETE')
   expect(deleted?.path).toBe('/boxes/6')
 })
@@ -3714,11 +3727,11 @@ test('the whole-box delete takes two presses, and both of them name the box', as
      controls, so neither press can be made without the target on screen. That is what keeps
      this out of docs/DESIGN.md's ban on "are you sure" — the banned dialog's confirm says
      nothing about what it is confirming, and both of these say the box. */
-  await expect(page.getByRole('button', { name: /^Delete box 2/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Delete this box/ })).toBeVisible()
   expect(wire.filter((sent) => sent.method === 'DELETE')).toHaveLength(0)
 
-  await page.getByRole('button', { name: /^Delete box 2/ }).click()
-  const fire = page.getByRole('button', { name: 'Delete box 2 permanently' })
+  await page.getByRole('button', { name: /^Delete this box/ }).click()
+  const fire = page.getByRole('button', { name: 'Delete this box permanently' })
   await expect(fire).toBeVisible()
 
   /* STILL NOTHING SENT until the second press. A panel that opened and fired in one gesture
@@ -3744,7 +3757,7 @@ test('the whole-box delete takes two presses, and both of them name the box', as
 /** The same box, holding a listing. `listed` is what draws the release control, and no other
  *  fixture in this file is in that state — which is the point: most boxes never are. */
 const HELD_BOXES = {
-  boxes: [{ ...BOXES.boxes[0], listed: 3 }],
+  boxes: [{ ...BOXES.boxes[0], listed: 3 }, { ...BOXES.boxes[0], box: 7, name: 'ME01 spares', listed: 0 }],
 }
 
 test('a box with no listing hold is offered no release at all', async ({ page }) => {
@@ -3853,7 +3866,7 @@ test('a listing hold is named on the delete panel rather than discovered by pres
 }) => {
   await open(page, HELD_BOXES)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /^Delete box 2/ }).click()
+  await page.getByRole('button', { name: /^Delete this box/ }).click()
 
   /* D134: a listed copy is the only remaining ground for `box_not_empty_of_commitments` — a
      sold or retired record no longer blocks and is named as something that will be BURIED
@@ -3940,12 +3953,13 @@ test('the receipt repeats that the box is still held rather than implying succes
   await page.getByRole('button', { name: 'TCGplayer holds none of these — release' }).click()
 
   const receipt = page.locator('.boxops-receipt')
-  await expect(receipt).toContainText('Released 2 SKUs in box 2')
-  await expect(receipt).toContainText('3 staged')
+  /* BY NAME, NEVER BY NUMBER (D-a-box-is-shown-by-its-name), and the stage in words (D196). */
+  await expect(receipt).toContainText('Released 2 SKUs in ME01 commons')
+  await expect(receipt).toContainText('3 waiting to go live')
   /* The half that matters most on a partial release: the delete will go on refusing, and a
      receipt that only reported success would leave that looking like a broken gate. */
-  await expect(receipt).toContainText('Box 2 is still held')
-  await expect(receipt).toContainText('box 7')
+  await expect(receipt).toContainText('ME01 commons is still held')
+  await expect(receipt).toContainText('ME01 spares')
   /* Every SKU by name — the list that makes the claim checkable against TCGplayer afterwards. */
   await expect(receipt).toContainText('8937370')
   await expect(receipt).toContainText('8937200')
@@ -4027,7 +4041,7 @@ test('the box lives in the walk\'s column, and the run line lives in the header'
   await expect(page.locator('.browse-map').getByRole('button', { name: 'Manage' })).toBeVisible()
   await openBoxOps(page)
   await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Delete box/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Delete this box/ })).toBeVisible()
   await closeBoxOps(page)
 
   /* AND NOTHING ON THIS SCREEN CREATES A BOX (owner, 2026-08-26: "delete register a new box from
@@ -4191,7 +4205,7 @@ test('the ticked selection is handed to the runs screen, and never lost silently
      of the next run is stated on this screen, so a stale count here is a person pressing a link
      that says 1 card and arriving at a screen that says the whole box — or worse, the reverse. */
   await first.uncheck()
-  await expect(go).toContainText('Run box')
+  await expect(go).toContainText('Run this box')
 })
 
 /* D30's NEIGHBOURS, WHICH NOTHING IN THIS FILE HAD EVER RENDERED.

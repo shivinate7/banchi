@@ -855,7 +855,7 @@ function skuOrName(card: InventoryCard): string | null {
  *
  *  `primary` IS A SIZE, NOT A SHAPE, AS OF D119. It used to mean "the location card's form —
  *  the one solid button on the screen"; that card is gone, and its last caller is the phone's
- *  sticky action bar (`actionBar` below → `BoxBrowse`, rendered only under `max-width: 767px`).
+ *  sticky action bar (`actionBar` below → `BoxBrowse`, rendered only under `max-width: 639px`).
  *  So `primary` is phone-only from here, and what it decides is emphasis and control size —
  *  never whether a state is drawn at all. */
 function Action({

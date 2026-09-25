@@ -355,7 +355,7 @@
 }
 
 /* ---- the phone: thumb sizes ---- */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
   .boxops-op { min-height: 52px; }
   .boxops-back { height: var(--bn-control-h-lg); padding: 0 var(--bn-3) 0 var(--bn-2); }
   .boxops-chip { height: 40px; padding: 0 14px; }

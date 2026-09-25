@@ -3,7 +3,6 @@
   "app/src/BoxBrowse.tsx": { "index": "inventory" },
   "app/src/BoxOps.tsx": { "index": "inventory", "parked": "inventory" },
   "app/src/CaptureScreen.tsx": { "index": "capture" },
-  "app/src/CardLocations.tsx": { "pushed": "inventory", "staged": "inventory" },
   "app/src/Codes.tsx": { "index": "library" },
   "app/src/Markdown.tsx": { "staged": "b-pricing" },
   "app/src/Pricing.tsx": { "emit": "b-pricing", "pushed": "b-pricing" },

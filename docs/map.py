@@ -6698,7 +6698,7 @@ COMPONENTS = [
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
-                                "D132", "D134", "D218"],
+                                "D132", "D134", "D196", "D218", "D-a-box-is-shown-by-its-name"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -6931,7 +6931,8 @@ COMPONENTS = [
                                                       "D26", "D28", "D30", "D31", "D38", "D41",
                                                       "D45", "D58", "D67", "D68", "D71", "D92",
                                                       "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D218", "D-a-box-is-shown-by-its-name"]},
+                                                      "D181", "D196", "D218",
+                                                      "D-a-box-is-shown-by-its-name"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "

@@ -20,7 +20,7 @@
 @media (max-width: 1279px) {
   .browse-body { grid-template-columns: 268px minmax(0, 1fr); gap: var(--bn-4); }
 }
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   .browse-body { grid-template-columns: minmax(0, 1fr); }
   .browse-body > .browse-map { display: none; }
 }
@@ -29,7 +29,11 @@
 .browse-map {
   position: sticky;
   top: var(--bn-4);
-  max-height: calc(100vh - var(--bn-8));
+  /* THE RAIL FITS THE WINDOW AT REST (UX-227). It is sticky, but at rest it starts under the
+     page head, so a rail as tall as the window ran past its bottom and the list's last rows sat
+     under the fold. `--browse-rail-rest` is the rail's own top at rest, measured by
+     `BoxBrowse.tsx`. */
+  max-height: calc(100dvh - var(--browse-rail-rest, var(--bn-4)) - var(--bn-4));
   display: flex;
   flex-direction: column;
   gap: var(--bn-3);
@@ -102,7 +106,10 @@
   display: flex;
   flex-direction: column;
   padding: var(--bn-1);
-  max-height: 264px;
+  /* THREE AND A HALF BOXES, the half row saying the list scrolls (UX-206): the walk list below is
+     the thing the rail is for, and at 1440x900 it was a 183px window. Most recent first (D132),
+     so the box the hand wants is at the top. */
+  max-height: 164px;
   overflow-y: auto;
   flex: none;
 }
@@ -135,6 +142,14 @@
   color: var(--bn-ink-3);
 }
 .browse-hidesold { flex: none; }
+/* ONE TOOLBAR LINE (UX-269): in the walk's status line the toggle takes the line's own small
+   height and type, so `tick shown` no longer wraps alone onto a second row. */
+.browse-status .bn-hidetoggle {
+  height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-2);
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+}
 .browse-boxcell-mini { font-size: var(--bn-fs-xs); letter-spacing: 0; padding: 0 2px; overflow: hidden; }
 .browse-boxcell-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .browse-boxcell-name {
@@ -199,9 +214,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--bn-1) var(--bn-2);
+  gap: var(--bn-1);
   min-height: 34px;
-  padding: var(--bn-1) var(--bn-3) var(--bn-1) var(--bn-3);
+  padding: var(--bn-1) var(--bn-2);
   border-bottom: 1px solid var(--bn-line);
   font-size: var(--bn-fs-xs);
   color: var(--bn-ink-3);
@@ -453,18 +468,6 @@
 .browse-row[aria-current='true'] .browse-row-name { font-weight: 600; }
 .browse-row:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: -2px; }
 
-.browse-listkeys {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--bn-1) var(--bn-2);
-  padding: var(--bn-2) var(--bn-3);
-  border-top: 1px solid var(--bn-line);
-  font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-3);
-}
-.browse-listkeys span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
-.browse-listkeys .bn-kbd { height: 17px; min-width: 17px; font-size: var(--bn-fs-xs); }
 
 /* ---- the pane ---- */
 .browse-side {
@@ -506,6 +509,11 @@
 }
 .browse-hero-sub > span + span::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
 .browse-hero-number { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }
+/* The place beside the name, only where the pane is one column (UX-187). */
+.browse-hero-place { display: none; font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); }
+@container pane (max-width: 559px) {
+  .browse-hero-place { display: block; }
+}
 .browse-hero-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
 .browse-queuechip { text-decoration: none; }
 .browse-queuechip:hover { text-decoration: none; filter: brightness(0.95); }
@@ -706,7 +714,7 @@
 @container pane (max-width: 559px) {
   .browse-shot { max-width: 300px; }
 }
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   .browse-shot { max-width: none; align-items: center; }
   .browse-photo-frame,
   .browse-absent { width: auto; height: min(44vh, 420px); max-width: 100%; }
@@ -815,7 +823,6 @@
 }
 .browse-railsheet .browse-boxes { max-height: 224px; }
 .browse-railsheet .browse-list { max-height: 44vh; }
-.browse-railsheet .browse-listkeys { display: none; }
 
 .browse-actionbar {
   position: fixed;
@@ -867,7 +874,7 @@
    card above until that was deleted — where it is the icon-only ghost beside `Mark sold`. */
 .browse-actionbar-slot .bn-btn-ghost { display: none; }
 
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   .browse { padding-bottom: 64px; }
   /* the toast stack rises above the screen's own action bar */
   body:has(.browse-actionbar) .bn-toasts { bottom: calc(64px + 60px + env(safe-area-inset-bottom)); }
@@ -875,7 +882,7 @@
 
 /* ---- thumb sizes: 40px+ for anything a thumb presses, 44 for the two it presses most.
        A tablet is a thumb too, so this rides the pointer and not the width alone. ---- */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
   .browse-row { min-height: 44px; padding-top: 8px; padding-bottom: 8px; }
   .browse-row-name { font-size: var(--bn-fs-base); }
   .browse-sectfold { min-height: 44px; }
@@ -912,7 +919,7 @@
 
 /* THE THUMB FLOOR (D117). The walk's status line squeezes to 34px and carries `.browse-quiet`
    controls inside it. */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
   .browse-status { min-height: var(--bn-control-h-sm); }
   /* AN INLINE LINK INSIDE A SENTENCE IS STILL A TARGET (D117). The queued notice ends with
      `Open the review queue`, which is the only way out of a card the pipeline could not place —

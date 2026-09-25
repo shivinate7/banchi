@@ -509,7 +509,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
           kind: 'ok',
           icon: 'undo',
           title: 'Correction undone',
-          body: `Box ${atBox}, Card ${atIndex} — back to ${result.sku}`,
+          body: `Back to ${result.sku}`,
         })
       })
       .catch((err: unknown) => {

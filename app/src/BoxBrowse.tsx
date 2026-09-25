@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
-import { placePartsOf, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { placePartsOf, sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'
 import type {
   BoxRecord,
@@ -52,7 +52,7 @@ import {
 import { IDENTIFIED, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Kbd, Notice, PageHeader, Pill, countFacets, filterRows } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Notice, PageHeader, Pill, countFacets, filterRows } from './kit'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
@@ -506,8 +506,11 @@ function bringInto(target: HTMLElement, scroller: HTMLElement, mode: Bring): voi
   const box = scroller.getBoundingClientRect()
   const top = rect.top - (parseFloat(style.scrollMarginTop) || 0)
   const bottom = rect.bottom + (parseFloat(style.scrollMarginBottom) || 0)
-  const edge = box.top + scroller.clientTop
-  const foot = edge + scroller.clientHeight
+  /* THE PART OF THE SCROLLER A PERSON CAN SEE, not the whole of it (UX-227). The rail is sticky
+     and taller than the window below the page head until the page scrolls, so its list runs
+     past the bottom of the window. A row brought to the list's own foot was still out of view. */
+  const edge = Math.max(box.top + scroller.clientTop, 0)
+  const foot = Math.min(box.top + scroller.clientTop + scroller.clientHeight, window.innerHeight)
 
   if (mode === 'start' || top < edge) {
     scroller.scrollTop += top - edge
@@ -767,6 +770,13 @@ export function BoxBrowse({
   )
   const listRef = useRef<HTMLUListElement | null>(null)
   const mapRef = useRef<HTMLDivElement | null>(null)
+  /* The same node as state, so the rail's height effect runs when the rail mounts (it is not
+     drawn on the first render). */
+  const [mapEl, setMapEl] = useState<HTMLDivElement | null>(null)
+  const holdMap = useCallback((node: HTMLDivElement | null) => {
+    mapRef.current = node
+    setMapEl(node)
+  }, [])
   const boxesRef = useRef<HTMLDivElement | null>(null)
   const jumpRef = useRef<string | null>(null)
   const [jump, setJump] = useState<string | null>(null)
@@ -776,7 +786,7 @@ export function BoxBrowse({
 
   /* Layout state: the phone's rail sheet, the desktop rail's collapse, the box sheet, the
      photo lightbox, the details disclosure. */
-  const phone = useMediaQuery('(max-width: 767px)')
+  const phone = useMediaQuery('(max-width: 639px)')
   const [railOpen, setRailOpen] = useState(false)
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [manage, setManage] = useState(false)
@@ -1332,6 +1342,21 @@ export function BoxBrowse({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [visible, stepSelection])
 
+  /* THE RAIL'S TOP AT REST, for its height (BoxBrowse.css `.browse-map`, UX-227). Read off the
+     rail's parent, which is never sticky, so a resize while the page is scrolled reads the same
+     number as one at rest. */
+  useLayoutEffect(() => {
+    const map = mapEl
+    const body = map?.parentElement ?? null
+    if (map === null || body === null) return
+    const measure = () => {
+      map.style.setProperty('--browse-rail-rest', `${Math.round(body.getBoundingClientRect().top + window.scrollY)}px`)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [mapEl])
+
   /* Keep the selected row where it can be seen — within the rail, never by scrolling the page. */
   useEffect(() => {
     const current = listRef.current?.querySelector('[aria-current="true"]')
@@ -1798,7 +1823,7 @@ export function BoxBrowse({
   // ---------------------------------------------------------------------------- the rail
 
   const rail = (
-    <div className="browse-map" ref={mapRef}>
+    <div className="browse-map" ref={holdMap}>
       {/* THE KIT'S FILTER BAR (FLT-09): the search, the three facets in any order and the one
           count line. Hide sold stays on the walk's own bar, beside the rows it folds. The rail is narrow, so the facets sit behind one Filters
           press: a popover beside it on a desk, a sheet on a phone. */}
@@ -1979,9 +2004,8 @@ export function BoxBrowse({
             ) : (
               <button className="browse-quiet" type="button" onClick={toggleAllSections}>
                 <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
-                <span className="bn-facts">
-                  <span>{anyExpanded ? 'collapse all' : 'expand all'}</span> <span>{sections.length} sections</span>
-                </span>
+                {/* THE HEADERS BELOW ALREADY COUNT THE SECTIONS (cut list #11, UX-269). */}
+                {anyExpanded ? 'Collapse all' : 'Expand all'}
               </button>
             )}
 
@@ -2024,11 +2048,11 @@ export function BoxBrowse({
             <div className="browse-empty">
               <EmptyState
                 icon="box"
-                title={`Nothing in box ${shelfBox.box} yet`}
+                title={`Nothing in ${shelfLabel(shelfBox.box, shelfBox.name)} yet`}
                 body="Capture a card, or manage the box above."
                 actions={
                   <Button size="sm" icon="camera" onClick={() => (window.location.hash = '#/capture')}>
-                    Capture into box {shelfBox.box}
+                    Capture into this box
                   </Button>
                 }
               />
@@ -2218,19 +2242,8 @@ export function BoxBrowse({
             </ul>
           )}
 
-          <p className="browse-listkeys">
-            <span>
-              <Kbd>←</Kbd>
-              <Kbd>→</Kbd> card
-            </span>
-            <span>
-              <Kbd>PgUp</Kbd>
-              <Kbd>PgDn</Kbd> section
-            </span>
-            <span>
-              <Kbd>X</Kbd> tick
-            </span>
-          </p>
+          {/* NO KEY LEGEND UNDER THE LIST (UX-272, cut list #10): the ? sheet lists every key this
+              list takes (App.tsx INVENTORY_KEYS), and the legend cost the list a row. */}
         </div>
       )}
     </div>
@@ -2492,6 +2505,13 @@ export function BoxBrowse({
                               </span>
                             ))}
                         </p>
+                        {/* WHERE IT IS, BESIDE THE NAME, IN A ONE-COLUMN PANE (UX-187). At 390 and
+                            720 the copy row that says it sits under the photograph, below the
+                            fold. Drawn only where the pane is one column (BoxBrowse.css), so the
+                            wide pane does not say it twice. */}
+                        {positionLabel(panelRow.card) === null ? null : (
+                          <p className="browse-hero-place">{sayPlace(positionLabel(panelRow.card) ?? '')}</p>
+                        )}
                         <div className="browse-hero-chips">
                           {/* No `chooserActive` check needed here: while the chooser shows,
                               `panelRow` is null and this whole branch does not render, so

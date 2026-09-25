@@ -206,3 +206,9 @@
   .bn-filterbar-compact { display: block; }
   .bn-filterbar-lead { flex-basis: 100%; min-width: 0; max-width: none; }
 }
+/* A POPOVER BAR KEEPS ITS FILTERS PRESS ON THE SEARCH'S OWN LINE. It is a desk's narrow column
+   (Inventory's rail), where every line the bar takes is a line the list under it loses (UX-206).
+   The phone's sheet bar keeps the search on a line of its own. */
+@container bn-filterbar (max-width: 479px) {
+  .bn-filterbar[data-compact='popover'] .bn-filterbar-lead { flex: 1 1 0; }
+}

@@ -33,6 +33,7 @@ import { spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
 import { Button, Icon, Notice, Pill, Stat, type IconName } from './kit'
+import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
 import './BoxOps.css'
@@ -330,9 +331,10 @@ export function BoxIdentity({
   return (
     <div className="boxops-identity">
       <div className="boxops-identity-top">
+        {/* THE NAME ALONE (D-a-box-is-shown-by-its-name): the number is the store's key, never
+            drawn. An unnamed box has a stored default name since the locating lane. */}
         <div className="boxops-identity-text">
-          <span className="boxops-identity-num">Box {record.box}</span>
-          <h2 className="boxops-identity-name">{record.name ?? `Box ${record.box}`}</h2>
+          <h2 className="boxops-identity-name">{record.name ?? UNNAMED_BOX}</h2>
         </div>
         {actions}
       </div>
@@ -365,7 +367,7 @@ export function BoxIdentity({
         <div
           className="boxops-track"
           role="img"
-          aria-label={`Box ${record.box}, ${spans.length} ${spans.length === 1 ? 'section' : 'sections'}`}
+          aria-label={`${record.name ?? UNNAMED_BOX}, ${spans.length} ${spans.length === 1 ? 'section' : 'sections'}`}
         >
           {spans.map((span, i) => (
             <span
@@ -527,13 +529,11 @@ export function BoxOps({
   const others = boxes.filter((candidate) => candidate.box !== record.box)
 
   return (
-    <Overlay kind="sheet" label={`Manage box ${record.box}`} onClose={onClose} className="boxops-sheet">
+    <Overlay kind="sheet" label={`Manage ${record.name ?? UNNAMED_BOX}`} onClose={onClose} className="boxops-sheet">
       <header className="inv-sheet-head">
         <div className="inv-sheet-head-text">
-          <span className="bn-eyebrow bn-facts">
-            <span>Box {record.box}</span> <span>{sealed ? 'sealed' : 'open'}</span>
-          </span>
-          <h2 className="inv-sheet-title">{record.name ?? `Box ${record.box}`}</h2>
+          <span className="bn-eyebrow">{sealed ? 'Sealed box' : 'Open box'}</span>
+          <h2 className="inv-sheet-title">{record.name ?? UNNAMED_BOX}</h2>
         </div>
         <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
           Close
@@ -720,7 +720,7 @@ export function BoxOps({
             <section className="boxops-group boxops-group-danger">
               <h3 className="bn-label">Danger</h3>
               <div className="boxops-ops">
-                <ReleaseListings record={record} listings={listings} onChanged={onChanged} />
+                <ReleaseListings record={record} boxes={boxes} listings={listings} onChanged={onChanged} />
                 <ReclaimPhotos record={record} onChanged={onChanged} />
                 <DeleteBox record={record} onChanged={onChanged} onDeleted={onClose} />
               </div>
@@ -775,13 +775,10 @@ export function BoxOps({
                   {others.map((candidate) => {
                     // `<option>` renders plain text only, so the name and the sealed state
                     // fold into one parenthetical rather than a typed separator (D218).
-                    const extras = [candidate.name, candidate.state === CLOSED ? 'sealed' : null].filter(
-                      (part): part is string => Boolean(part),
-                    )
                     return (
                       <option key={candidate.box} value={String(candidate.box)}>
-                        Box {candidate.box}
-                        {extras.length > 0 ? ` (${extras.join(', ')})` : ''}
+                        {candidate.name ?? UNNAMED_BOX}
+                        {candidate.state === CLOSED ? ' (sealed)' : ''}
                       </option>
                     )
                   })}
@@ -1438,12 +1435,22 @@ function ListingLine({ row, at }: { row: BoxListingRow; at?: string | null }) {
 /* THE LISTING RELEASE — D34. Two steps and the first is free: opening the row fetches the plan,
  * and the button that asserts does not exist until that has answered. Draws nothing when there
  * is nothing to release. */
+/* A listing stage as the owner reads it, never the pipeline's word for it (D196). */
+function stageWords(stage: string): string {
+  if (stage === 'pushed') return 'sent'
+  if (stage === 'staged') return 'waiting to go live'
+  return stage
+}
+
 function ReleaseListings({
   record,
+  boxes = [],
   listings = NO_LISTINGS,
   onChanged,
 }: {
   record: BoxRecord
+  /** The registry, to name the other boxes that hold copies. */
+  boxes?: readonly BoxRecord[]
   listings?: Readonly<Record<string, Listing>>
   onChanged: () => void
 }) {
@@ -1500,20 +1507,20 @@ function ReleaseListings({
       <div className="boxops-receipt">
         <Notice
           tone="ok"
-          title={`Released ${count(receipt.released, 'SKU', 'SKUs')} in box ${receipt.box}${
-            gave.length === 0 ? '.' : `, giving up ${gave.map(([stage, n]) => `${n} ${stage}`).join(', ')}.`
+          title={`Released ${count(receipt.released, 'SKU', 'SKUs')} in ${record.name ?? UNNAMED_BOX}${
+            gave.length === 0 ? '.' : `, giving up ${gave.map(([stage, n]) => `${n} ${stageWords(stage)}`).join(', ')}.`
           }`}
         >
           Nothing was deleted — these are counts, and staging again re-establishes them.
           {receipt.frees_box ? null : (
             <>
               {' '}
-              <strong>Box {receipt.box} is still held.</strong>{' '}
+              <strong>{record.name ?? UNNAMED_BOX} is still held.</strong>{' '}
               {count(receipt.still_held.length, 'SKU', 'SKUs')} kept copies this box could not
               account for
               {receipt.also_in_boxes.length === 0
                 ? ''
-                : `, and ${receipt.also_in_boxes.map((b) => `box ${b}`).join(', ')} hold copies of them`}
+                : `, and ${receipt.also_in_boxes.map((b) => boxes.find((one) => one.box === b)?.name ?? 'another box').join(', ')} hold copies of them`}
               , so the delete will go on refusing.
             </>
           )}
@@ -1781,7 +1788,7 @@ function DeleteBox({
       toast({
         kind: 'ok',
         icon: 'trash',
-        title: `Box ${result.deleted_box} is gone. There is no undo.`,
+        title: `${record.name ?? UNNAMED_BOX} is gone. There is no undo.`,
         body: `${result.cards} ${result.cards === 1 ? 'card' : 'cards'} gone${
           result.buried > 0 ? ` — ${count(result.buried, 'departed record', 'departed records')} buried in the graveyard` : ''
         }, with ${result.photos} ${result.photos === 1 ? 'photograph' : 'photographs'} and ${result.sidecars} ${result.sidecars === 1 ? 'sidecar' : 'sidecars'}, and ${result.review_deleted} review, ${result.parked_deleted} parked and ${result.cache_deleted} cache ${result.cache_deleted === 1 ? 'entry' : 'entries'}.${
@@ -1803,7 +1810,7 @@ function DeleteBox({
       <Op
         icon="trash"
         danger
-        label={`Delete box ${record.box}…`}
+        label="Delete this box…"
         detail="no undo"
         busy={false}
         expanded={open}
@@ -1812,7 +1819,7 @@ function DeleteBox({
       {!open ? null : (
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
-            Deletes <strong>every record, photograph and sidecar</strong> in box {record.box}{' '}
+            Deletes <strong>every record, photograph and sidecar</strong> in {record.name ?? UNNAMED_BOX}{' '}
             — {count(record.cards, 'card', 'cards')}, plus its queue entries, id cache, and the
             box. <strong>No undo.</strong>
           </p>
@@ -1841,7 +1848,7 @@ function DeleteBox({
               Cancel
             </Button>
             <Button variant="danger-solid" icon="trash" busy={busy} onClick={() => void run()}>
-              Delete box {record.box} permanently
+              Delete this box permanently
             </Button>
           </div>
         </div>

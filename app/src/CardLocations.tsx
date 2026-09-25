@@ -440,9 +440,17 @@ function OwnerRows({
             Headroom is the honest form of the same fact. */}
         {listing ? (
           <p className="card-locations-counts">
-            <span>Pushed {group.listed.pushed}</span>
-            <span>Staged {group.listed.staged}</span>
-            <span>{headroom(group)}</span>
+            {/* THE LISTING'S STAGES IN WORDS, AND ONLY THE ONES THAT HOLD A COPY (UX-207, D196,
+                cut list #7): "Pushed 0 Staged 0" named the pipeline's two stages to the owner. */}
+            {group.listed.pushed + group.listed.staged + group.listed.live === 0 ? (
+              <span>Not listed yet</span>
+            ) : (
+              <>
+                {group.listed.pushed > 0 ? <span>{group.listed.pushed} sent to TCGplayer</span> : null}
+                {group.listed.staged > 0 ? <span>{group.listed.staged} waiting to go live</span> : null}
+                <span>{headroom(group)}</span>
+              </>
+            )}
           </p>
         ) : null}
       </header>

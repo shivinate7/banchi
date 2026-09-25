@@ -38,7 +38,7 @@
 
 .inventory-receipt-said { font-weight: 600; flex: 1 1 auto; }
 
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   /* a thumb presses this: the dialogs' Cancel */
   .inv-dialog-foot .bn-btn { --btn-h: var(--bn-control-h-lg); }
 }

@@ -60,7 +60,7 @@
    here would read as the panel's primary action, above the sales that are the actual work.
 
    NO HEIGHT OF ITS OWN. `.bn-chip` reads `--bn-control-h-sm`, which the token file raises to
-   40px under 767px and on any coarse pointer, so the thumb floor is met by the kit rather than
+   40px under 640px and on any coarse pointer, so the thumb floor is met by the kit rather than
    by a number typed here. `align-self: center` because the row's other cell is a heading on a
    baseline and a chip has no baseline worth sharing. */
 /* D218: `.bn-chip` is already `inline-flex; gap: 6px`, so the gap alone spaces the two spans
@@ -467,7 +467,7 @@
 /* A thumb presses the walk-to, AND the claim pill — it is a link to the order screen, not a
    badge, so it takes the same floor as the `Mark sold` button beside it (`Button size="sm"`
    is `--bn-control-h-sm`, which the phone tokens raise to 40px). 28px is a mouse size. */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
   .card-locations-owner .card-locations-goto { min-height: var(--bn-control-h-lg); padding-top: 4px; padding-bottom: 4px; }
   .card-locations-owner .card-locations-claim {
     height: var(--bn-control-h-sm);
