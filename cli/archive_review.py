@@ -203,15 +203,19 @@ def queue_entries(
 
     RETURNS `QueueBuild`, NOT A BARE LIST, since the review round (HIGH finding,
     2026-09-24): a card this function cannot build an entry for must be named, never
-    dropped where nothing reads it. Two things stop a match becoming an entry, and only one
-    of them is reported here:
+    dropped where nothing reads it. Two things stop a match becoming an entry, and BOTH
+    are reported here (identity-follows-sku.md lane 7 review: a card with no photograph
+    was still being dropped silently after the round above named the OTHER gap and left
+    this one — CLAUDE.md's own hard rule is "never drop a card without saying so", not
+    "never drop a card without saying so, once"):
 
-      no photograph        skipped silently, unchanged from before this fix. "A card
+      no photograph        collected into `unavailable`, same as the case below. "A card
                            reaching the queue carries its photograph" (this task's own
-                           rule) is a photo-store fact this module has no reason to
-                           report — a card is missing a photograph for the same reasons
-                           it is missing anything else about its own record, and nothing
-                           about an ARCHIVE refusal caused it.
+                           rule) is still true — this function still refuses to build an
+                           entry with none — but a card missing one is a card a human
+                           still needs told about, the same as one missing a reading:
+                           nothing about an ARCHIVE refusal caused the photo to be gone,
+                           and nothing about that changes the sweep's own duty to say so.
       no recorded reading  collected into `unavailable`, one `SkippedCard` per position.
                            `card_reading` answering `READING_UNAVAILABLE` (a SKU-bound card
                            whose `read_*` was never recorded) is a direct CONSEQUENCE of
@@ -226,7 +230,19 @@ def queue_entries(
     for match in sorted(matches, key=lambda m: (m.card.box, m.card.index)):
         card = match.card
         key = (card.box, card.index)
-        if key in seen or not card.photo:
+        if key in seen:
+            continue
+        if not card.photo:
+            seen.add(key)
+            unavailable.append(
+                SkippedCard(
+                    position=f"{card.box}/{card.index}",
+                    reason=(
+                        f"bound to SKU {card.sku} with no photograph on record — cannot "
+                        f"be queued without one to show beside its reading"
+                    ),
+                )
+            )
             continue
         # THE MODEL'S OWN READING, NEVER THE CATALOG IDENTITY — `cli/resolve.py:
         # card_reading` (identity-follows-sku.md §5.1, lane 4), the one place both rules

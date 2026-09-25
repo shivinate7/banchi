@@ -369,10 +369,11 @@ def _sweep(args, say) -> int:
                     "left exactly as they stand (D167)"
                 )
         # CLAUDE.md's own hard rule, "never drop a card without saying so" (review round,
-        # HIGH finding, 2026-09-24). A bound card matched this sweep's own refusal but
-        # carried no recorded reading (`archive_review.QueueBuild.unavailable`) — named
-        # BY POSITION in this press's own output, never folded into a bare count and never
-        # left for a reader to notice is missing.
+        # HIGH finding, 2026-09-24, widened lane 7). A bound card matched this sweep's own
+        # refusal but could not be queued — no recorded reading, or no photograph on record
+        # (`archive_review.QueueBuild.unavailable`) — named BY POSITION in this press's own
+        # output, never folded into a bare count and never left for a reader to notice is
+        # missing.
         if build.unavailable:
             say("")
             say(
