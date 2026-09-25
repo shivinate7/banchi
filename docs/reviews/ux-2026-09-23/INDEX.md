@@ -29,6 +29,15 @@ contradict a settled decision on purpose. The owner weighs that.
 | --- | --- |
 | `CONSOLIDATED.md` | The merged findings (UX ids), the grade matrix, the ten themes, the decisions in question, and the gaps |
 | `RULINGS.md` | The owner's rulings from the interview, and the orchestrator's notes |
+| `LANES.md` | The lane plan, both rounds merged, with the wave-2 file scopes and the iconography pointer |
+| `BUILD-BRIEF.md` | The shared brief every builder lane reads before it starts |
+| `REAL-TEST.md` | The owner's first real TCGplayer test, step by step, after the overhaul reaches main |
+| `STATE.md` | The orchestrating session's durable state: role, sources of truth, what merged, what remains, peers, lessons |
+| `boxmap-deliberation.md` | The box map's sizing estimate and the options each owner question weighed, beyond `docs/specs/box-map.md` |
+| `pricing-deliberation.md` | The Pricing re-interview's questions and the options weighed |
+| `product-deliberation.md` | The product-view hybrid deliberation |
+| `sales-directions.md` | The Sales redesign directions the owner picked between |
+| `flow-deliberation.md` | The capture-to-listing flow deliberation (Q1-Q8) |
 | `coherence.md` | Lens 1: one concept, one name, one count (COH) |
 | `loop.md` | Lens 2: the daily loop, walked end to end (LOOP) |
 | `visual.md` | Lens 3: the visual system, and a read-only look at the live app (VIS) |
@@ -40,6 +49,9 @@ contradict a settled decision on purpose. The owner weighs that.
 | `locating.md` | Lens 9: how fast the owner knows where a card is (LOC) |
 | `held-orders-review.md` | The held-screen pass on `#/orders` (HOR) |
 | `held-inventory-review.md` | The held-screen pass on `#/inventory` and `#/review` (HIR) |
+
+The icon map (the Opus planner's press-by-press table) is not copied here. The kit-icons lane
+lands it as `docs/specs/iconography.md`.
 
 ## Before you rank anything, read this
 
