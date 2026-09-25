@@ -1240,7 +1240,7 @@ export function Codes() {
                     title="Nothing matches"
                     body="No code matches those filters."
                     actions={
-                      <Button icon="x" onClick={clearFilters}>
+                      <Button icon="x" words="only-primary" onClick={clearFilters}>
                         Clear filters
                       </Button>
                     }
@@ -1345,7 +1345,7 @@ export function Codes() {
                           Show all {rows.length.toLocaleString()}
                         </Button>
                       ) : filtered ? (
-                        <Button size="sm" variant="ghost" icon="x" onClick={clearFilters}>
+                        <Button size="sm" variant="ghost" icon="x" words="only-primary" onClick={clearFilters}>
                           Clear filters
                         </Button>
                       ) : null}

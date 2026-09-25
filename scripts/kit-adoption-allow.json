@@ -34,7 +34,7 @@
       "R2-icon-only-button": "icons"
     },
     "app/src/Codes.tsx": {
-      "R2-icon-only-button": "library"
+      "R2-filter-row": "library"
     },
     "app/src/Fulfillment.tsx": {
       "R1": "fulfillment",
@@ -115,7 +115,8 @@
       "R2-class": "review",
       "R2-date": "review",
       "R2-money": "review",
-      "R2-icon-only-button": "icons"
+      "R2-icon-only-button": "icons",
+      "R2-header-actions": "review"
     },
     "app/src/RunPanel.tsx": {
       "R2-select": "b-runs",
@@ -130,7 +131,8 @@
     "app/src/Runs.tsx": {
       "R1": "b-runs",
       "R2-class": "b-runs",
-      "R2-icon-only-button": "icons"
+      "R2-icon-only-button": "icons",
+      "R2-header-actions": "b-runs"
     },
     "app/src/RunsComposer.tsx": {
       "R2-dialog": "b-runs",

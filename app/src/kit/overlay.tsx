@@ -559,8 +559,19 @@ export function Popover({
   }, [mounted, anchor])
   useEffect(() => {
     if (!live) return
+    /* A CONTROL INSIDE THE POPOVER THAT OPENS ITS OWN NESTED LAYER (a `Select`/`FilterChips`
+     * pick list, `PickPanel` in `kit/data.tsx`) portals to `document.body` too, as a SIBLING of
+     * this panel, never a DOM descendant of it. Read alone, `panel.current?.contains(target)`
+     * calls that click OUTSIDE and closes the popover under the list that is still open (FilterBar's
+     * own popover mode found this: opening a facet inside it closed the popover at once). Every
+     * layer that has joined `stack` (this file's own layering, above) is part of the CURRENT
+     * foreground regardless of DOM nesting, so a target inside any of them is never outside —
+     * the same idea `isTop` already reads `stack` for, applied to this check instead of z-index. */
     const outside = (target: EventTarget | null) =>
-      target instanceof Node && panel.current?.contains(target) !== true && anchor.current?.contains(target) !== true
+      target instanceof Node &&
+      panel.current?.contains(target) !== true &&
+      anchor.current?.contains(target) !== true &&
+      !stack.some((root) => root !== panel.current && root.contains(target))
     const onDown = (event: PointerEvent) => {
       if (outside(event.target)) onClose()
     }
