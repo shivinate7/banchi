@@ -731,9 +731,21 @@ function indexClaims(answers: ReadonlyMap<string, ResolvedOrder>): Claims {
   return out
 }
 
-/** The counts a line carries beside its reason, every part drawn including the zeros. */
+/** The counts a line carries beside its reason: only the parts above zero (UX-238). */
 function breakdownOf(line: ResolvedLine): string {
-  return [`${line.on_hand} on hand`, `${line.sold} sold`, `${line.retired} retired`, `${line.pooled} pooled`].join(', ')
+  const parts = [
+    [line.on_hand, 'on hand'],
+    [line.sold, 'sold'],
+    [line.retired, 'retired'],
+    [line.pooled, 'pooled'],
+  ] as const
+  const said = parts.filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
+  return said.length === 0 ? 'None on hand' : said.join(', ')
+}
+
+/** The marketplace's name as a person writes it: the feed may send it in lower case (UX-238). */
+function sourceName(source: string): string {
+  return source.trim().toLowerCase() === 'tcgplayer' ? 'TCGplayer' : source
 }
 
 /** How long ago, in the one relative format (`dates.ts`). */
@@ -2052,7 +2064,9 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const wellOf = (withFetch: boolean) => (
     <section className="orders-paste" aria-label="Add orders">
       <label className="bn-field">
-        <span className="bn-field-label">Paste the order as JSON</span>
+        <span className="bn-field-label" title={`Only the SKU, the count and the card's name leave this browser. An order with no source is stamped ${DEFAULT_ORDER_SOURCE}.`}>
+          Paste the order as JSON
+        </span>
         <textarea
           ref={pasteBox}
           className="bn-textarea bn-input-mono orders-paste-box"
@@ -2072,7 +2086,14 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         {/* The fetch is behind the same well as the paste: the same errand with the copying done
             for you, arriving at the ledger through the one door `orderPaste.ts` owns. */}
         {withFetch ? (
-          <Button icon="refresh" onClick={() => onFetch()} busy={busy === 'fetch'} disabled={busy !== null}>
+          <Button
+            variant="primary"
+            icon="refresh"
+            onClick={() => onFetch()}
+            busy={busy === 'fetch'}
+            disabled={busy !== null}
+            title="A repeat skips the orders already here."
+          >
             Fetch from TCGplayer
           </Button>
         ) : null}
@@ -2091,14 +2112,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             operator may never open, and the press works identically if they do not. */}
         {withFetch ? statusControl : null}
       </div>
-      {withFetch ? (
-        <p className="orders-paste-source">A repeat skips known orders.</p>
-      ) : null}
       {withFetch ? statusPanel : null}
-      <p className="orders-paste-source">
-        Only the SKU, the count and what the feed called the card leave this browser. An order that names no source is
-        stamped {DEFAULT_ORDER_SOURCE}.
-      </p>
       {pasteNote === null ? null : (
         <p className="orders-paste-note" role="status">
           <Icon name="info" size={14} />
@@ -3234,6 +3248,7 @@ function PullStage({
       >
         {selectedGroup === null ? null : (
           <div className="orders-manage-orders">
+            <StandDownLegend group={selectedGroup} answers={answers} />
             {selectedGroup.orders.map((order) => (
               <OrderDetail
                 key={order.key}
@@ -3256,6 +3271,38 @@ function PullStage({
         )}
       </Sheet>
     </div>
+  )
+}
+
+/* ============================================================ the stand-down legend */
+
+/** WHAT EACH STAND-DOWN PRESS MEANS, SAID ONCE PER SHEET (UX-240). Each stuck line used to carry
+ *  its own 80-word paragraph. Only the presses the buyer's lines actually offer are named. */
+function StandDownLegend({ group, answers }: { readonly group: BuyerGroup; readonly answers: ReadonlyMap<string, ResolvedOrder> }) {
+  const reasons = new Set<OrderLineReason>()
+  for (const order of group.orders) for (const line of answers.get(order.key)?.lines ?? []) reasons.add(line.reason)
+  const gone = reasons.has('no_copies_on_hand')
+  const byHand = reasons.has('sku_unseen') || reasons.has('not_a_single')
+  if (!gone && !byHand) return null
+  return (
+    <dl className="orders-manage-legend">
+      {gone ? (
+        <>
+          <dt>I already sent it</dt>
+          <dd>The copy left through a sale on Inventory. Nothing is marked sold twice.</dd>
+          <dt>It isn&apos;t shipping</dt>
+          <dd>Closes the line with no copy sent: a refund, a cancellation or a damaged card.</dd>
+        </>
+      ) : null}
+      {byHand ? (
+        <>
+          <dt>Sealed product</dt>
+          <dd>Marks the line as sealed product, not a single card.</dd>
+          <dt>I shipped these by hand</dt>
+          <dd>Counts copies this store never photographed. Nothing is marked sold.</dd>
+        </>
+      ) : null}
+    </dl>
   )
 }
 
@@ -3470,10 +3517,10 @@ function OrderDetail({
       )}
       <span className="orders-feed-word">
         {order.status === null ? (
-          order.source
+          sourceName(order.source)
         ) : (
           <>
-            {order.source} says <q>{order.status}</q>
+            {sourceName(order.source)} says <q>{order.status}</q>
           </>
         )}
       </span>
@@ -3676,15 +3723,6 @@ function LineStandDown({
             It isn&apos;t shipping
           </Button>
         </div>
-        <p className="orders-standdown-note">
-          {/* THE COUNTS ARE THE EVIDENCE and they are already on the breakdown row above, so this
-              says what each press MEANS rather than repeating them. */}
-          “I already sent it” records that the copy went out for this order but left through the
-          sale on <code>#/inventory</code>, so nothing counted it here — it adds to the order&apos;s
-          count and marks nothing sold, because it already is. “It isn’t shipping” closes this line
-          claiming no copy went at all — a refund, a cancellation, or a card retired damaged
-          {order.lines.length === 1 ? '' : ', leaving the order’s other lines alone'}.
-        </p>
       </div>
     )
   }
@@ -3736,11 +3774,6 @@ function LineStandDown({
           </Button>
         )}
       </div>
-      <p className="orders-standdown-note">
-        {sealed
-          ? 'Recorded as a sealed product picked by hand. Nothing is marked sold — there is no card here to sell.'
-          : 'Recorded as shipped from stock this store never photographed. Nothing is marked sold — there is no card here to sell.'}
-      </p>
     </div>
   )
 }
@@ -3856,7 +3889,11 @@ function OrderLineRow({
               />
             ) : null}
           </div>
-          <code className="orders-tag orders-line-reason">{line.reason}</code>
+          {/* THE REASON'S CODE, behind a disclosure (D196): the label above says it in words. */}
+          <details className="orders-line-code">
+            <summary>Code</summary>
+            <code>{line.reason}</code>
+          </details>
         </div>
       )}
 
@@ -4197,7 +4234,7 @@ function PickLine({
       {pick.held_by !== null ? (
         <span className="orders-pick-held">
           <Icon name="lock" size={13} />
-          Spoken for by <span className="bn-mono">{pick.held_by.order}</span>
+          Held for order <span className="bn-mono">{pick.held_by.order}</span>
         </span>
       ) : target === null ? (
         <span className="orders-pick-held">

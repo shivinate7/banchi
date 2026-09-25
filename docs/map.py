@@ -7746,7 +7746,7 @@ COMPONENTS = [
                                        "rather than offered twice.",
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D123", "D193",
-                                               "D195", "D203", "D221",
+                                               "D195", "D196", "D203", "D221",
                                                "D-orders-and-shipping-are-two-rows"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "

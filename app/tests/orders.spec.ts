@@ -3142,3 +3142,28 @@ test('short counts the copies that cannot be pulled, so owed less short is the w
   await expect(stats.nth(2).locator('.bn-stat-label')).toHaveText('short')
   await expect(stats.nth(2).locator('.bn-stat-value')).toHaveText('1')
 })
+
+/* ------------------------------------------------------------ the Manage sheet's words (UX-238, UX-240) */
+
+test('Manage says once what each stand-down press does, in words, with no code or path on show', async ({ page }) => {
+  /* TWO STUCK LINES. Each used to carry its own 80-word paragraph, a machine code and a path. */
+  const gone = (sku: string, name: string) =>
+    line({ sku, reason: 'no_copies_on_hand', owed: 1, wanted: 1, on_hand: 0, fulfilled: 0, outstanding: 1, picks: [], line: { ...line().line, sku, name } })
+  const lines = [gone(SKU, 'Volcanion'), gone('9197754', 'Sunrise')]
+  await open(page, {
+    orders: payloadOf(
+      [order({ source: 'tcgplayer', wanted: 2, lines: lines.map((one) => one.line) })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines }],
+    ),
+  })
+  await openManage(page)
+  const sheet = page.locator('.orders-manage-sheet')
+  await expect(sheet.getByRole('button', { name: /I already sent/ })).toHaveCount(2)
+  await expect(sheet.locator('.orders-manage-legend')).toHaveCount(1)
+  const text = await sheet.innerText()
+  expect(text).not.toContain('no_copies_on_hand')
+  expect(text).not.toContain('#/inventory')
+  expect(text).not.toContain('0 sold')
+  /* THE BRAND AS TCGplayer, whatever case the feed sent it in. */
+  expect(text).toContain('TCGplayer says')
+})

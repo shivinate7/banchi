@@ -293,6 +293,25 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   .orders-card-shot { max-width: 260px; }
 }
 
+/* ---- 40px hit areas at every width (UX-267) ------------------------------------------ */
+.orders-walkall,
+.orders-manage,
+.orders-walk-tools .bn-btn,
+.orders-card-action .bn-btn { min-height: var(--bn-control-h-lg); }
+
+/* ---- the stand-down legend, said once per sheet (UX-240) ------------------------------ */
+.orders-manage-legend {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--bn-1) var(--bn-3);
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-sm);
+}
+.orders-manage-legend dt { font-weight: 600; color: var(--bn-ink); }
+.orders-manage-legend dd { margin: 0; color: var(--bn-ink-2); }
+
 /* ---- the sheets ------------------------------------------------------------------- */
 .orders-manage-orders { display: flex; flex-direction: column; gap: var(--bn-4); }
 .orders-buyers-sheet .orders-index-row { min-height: var(--bn-control-h-lg); }
@@ -443,6 +462,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-reason-ok { background: var(--bn-ok-tint); }
 .orders-reason-ok > .bn-icon { color: var(--bn-ok); }
 .orders-reason .orders-tag { align-self: start; }
+/* The reason's code, behind a disclosure (D196): the label says it in words. */
+.orders-line-code { align-self: start; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.orders-line-code > summary { cursor: pointer; min-height: var(--bn-control-h); display: flex; align-items: center; }
+.orders-line-code code { font-family: var(--bn-font-mono); }
 .orders-line-says { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
 .orders-line-remedy { font-size: var(--bn-fs-md); color: var(--bn-ink-2); margin-top: 2px; max-width: 70ch; }
 .orders-line-breakdown { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin-top: var(--bn-1); font-variant-numeric: tabular-nums; }
@@ -487,7 +510,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   font-variant-numeric: tabular-nums;
 }
 .orders-standdown-row { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: center; }
-.orders-standdown-note { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); max-width: 70ch; }
 
 /* ---- the copy map: which drawers hold THIS card, densest first ------------------------- */
 .orders-map { display: flex; flex-direction: column; gap: var(--bn-2); }
