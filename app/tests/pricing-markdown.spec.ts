@@ -3,7 +3,7 @@ import { sealEveryTest } from './shell'
 
 import type { MarkdownSku } from '../src/types'
 
-/* `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103).
+/* `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103): the Live tab (D277, Q6).
  *
  * ITS OWN FILE, AND `pricing.spec.ts` IS NOT TOUCHED. That suite is the gate the source seam
  * was built against: the run path had to keep passing it UNEDITED through every commit of this
@@ -191,6 +191,17 @@ async function open(
     })
   })
 
+  /* THE LIVE TAB READS THE LIST OF READS (D277, Q6): it names the newest one on its line. */
+  await page.route(/\/pipeline\/markdowns$/, async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        markdowns: [{ stamp: STAMP, at: '2026-09-06T00:00:00.000+00:00', asked: { days: 7, percent: '10' }, source: null, skus: skus.length, files: [] }],
+      }),
+    }),
+  )
+
   await page.route(/\/pipeline\/runs$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
   )
@@ -219,18 +230,18 @@ test('the lens draws every live listing the survey saw, and no run-shaped cell e
      asks for and what `display: none` would not give. */
   await expect(page.locator('.pricing-thumb')).toHaveCount(0)
   await expect(page.locator('.pricing-qty')).toHaveCount(0)
-  await expect(page.locator('.pricing-caption-qty')).toHaveCount(0)
+  await expect(page.locator('.pricing-caption .pricing-col-qty')).toHaveCount(0)
 
-  /* AND THE GRID FOLLOWS, which is the half that a conditional render alone does not buy: the
-     caption and the rows share one template off the same `<section>`, so a cell removed from
-     one and not the other would shear every column after it. */
-  const cols = await page
-    .locator('.pricing-section')
-    .first()
-    .evaluate((node) => getComputedStyle(node).getPropertyValue('--pricing-cols').trim())
-  expect(cols.startsWith('36px')).toBe(false)
+  /* AND THE GRID FOLLOWS: the list says it holds no copies, and the caption and the rows share
+     one template, so a cell removed from one and not the other would shear every column. */
+  await expect(page.locator('.pricing-list')).toHaveAttribute('data-copies', 'none')
+  const [row, caption] = await Promise.all([
+    page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+    page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+  ])
+  expect(row).toBe(caption)
 
-  await expect(page.locator(`${VIEW} .pricing-caption-price`)).toHaveText('New price')
+  await expect(page.locator(`${VIEW} .pricing-caption .pricing-col-price`)).toHaveText('New price')
 })
 
 /* NO TYPED MIDDLE DOT OR BULLET REACHES THE LENS (D218). `Live listings, read <date>` and the
@@ -288,7 +299,7 @@ test('the trends press asks about the rows on screen, not about the whole survey
   })
 
   await page.getByRole('button', { name: /Not selling/ }).click()
-  await page.locator('.pricing-trend-btn').click()
+  await page.getByRole('button', { name: 'Load trends' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/trends')).length).toBeGreaterThan(0)
 
   const asked = wire
@@ -317,13 +328,9 @@ test('a raise is named on the row and sent, not refused', async ({ page }) => {
   await field.blur()
   await expect(page.locator('.pricing-state').first()).toHaveText('Above the live price')
 
-  /* THE DECK SAYS WHAT WILL HAPPEN, and this is the assertion that would have caught the copy
-     going stale: it promised a refusal that no longer exists. */
-  const deck = page.locator('.pricing-verdict')
-  await expect(deck).toContainText('priced above the live price')
-  await expect(deck).toContainText('sent as typed')
-  await expect(deck).not.toContainText('only lowers')
-  await expect(deck).not.toContainText('refuses the whole upload')
+  /* NO REFUSAL IS PROMISED ANYWHERE: the raise is sent as typed (D107). */
+  await expect(page.locator(VIEW)).not.toContainText('only lowers')
+  await expect(page.locator(VIEW)).not.toContainText('refuses the whole upload')
 
   await field.click()
   await field.fill('')
@@ -414,7 +421,7 @@ test('a refused write sends nothing and says so', async ({ page }) => {
   await field.blur()
   await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
 
-  await expect(page.locator('.pricing-ship-trouble')).toContainText('These prices could not be written, so nothing was sent.')
+  await expect(page.getByRole('region', { name: 'Send these prices' })).toContainText('These prices could not be written, so nothing was sent.')
   expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
 })
 
@@ -447,14 +454,14 @@ test('the cut-off is the run\'s own control, and on a lens it is spent by a pres
     counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
   })
 
-  await expect(page.getByRole('region', { name: 'The cut-off' })).toHaveCount(1)
-  /* AND NOT THE RUN'S OVERRIDE. An override belongs to one lot and a lens is not a lot — it is
-     the whole live book out of one export — so there is no run to pick and the control that
-     would offer one is not drawn (D101: never a control this door cannot honour). */
-  await expect(page.getByRole('button', { name: 'Pick a run' })).toHaveCount(0)
+  /* THE PRESS LIVES IN THE LIVE TAB'S ONE SHEET (D277, Q5 and Q6). No run's own cut-off is
+     offered here: a lens is not a lot, so there is no run to give one (D101). */
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'What to mark down' })
+  await expect(sheet.getByRole('button', { name: 'Give this run its own cut-off' })).toHaveCount(0)
 
-  const press = page.getByRole('button', { name: /under the line/ })
-  await expect(press).toContainText('Price 1 under the line')
+  const press = sheet.getByRole('button', { name: /at the cut-off/ })
+  await expect(press).toHaveText('Price 1 at the cut-off')
 
   /* ADDRESSED BY CARD AND NEVER BY INDEX: the cut-off MOVES a row between the sections, which
      is the whole point of the partition, so an index here would assert against wherever the
@@ -467,13 +474,14 @@ test('the cut-off is the run\'s own control, and on a lens it is spent by a pres
      untouched: a press that priced the whole book would be a bulk write nobody asked for. */
   await expect(cheap).toHaveValue('0.49')
   await expect(dear).toHaveValue('')
-  await expect(press).toContainText('Nothing under the line to price')
+  await expect(press).toHaveText('Price 0 at the cut-off')
+  await expect(press).toBeDisabled()
 
-  /* ONE ACT, ONE REVERSAL. The per-SKU undo stack is ten deep (D28), so a press moving ninety
-     rows could not be undone through it at all. */
-  await page.getByRole('button', { name: 'Undo' }).click()
+  /* ONE ACT, ONE REVERSAL, on the receipt. The per-SKU undo stack is ten deep (D28), so a press
+     moving ninety rows could not be undone through it at all. */
+  await sheet.getByRole('button', { name: 'Close' }).click()
+  await page.locator('.bn-toasts').getByRole('button', { name: 'Undo' }).click()
   await expect(cheap).toHaveValue('')
-  await expect(press).toContainText('Price 1 under the line')
 })
 
 test('an untouched lens field ghosts the price the listing is live at', async ({ page }) => {
@@ -506,7 +514,9 @@ test('a preset writes answers on a lens, and never the standing rule', async ({ 
     counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
   })
 
-  await page.getByRole('button', { name: 'Market −5%' }).click()
+  await page.getByRole('button', { name: 'Change' }).click()
+  await page.getByRole('dialog', { name: 'What to mark down' }).getByRole('button', { name: 'Market −5%' }).click()
+  await page.getByRole('dialog', { name: 'What to mark down' }).getByRole('button', { name: 'Close' }).click()
 
   /* BOTH ROWS TAKE THE PRESET'S OWN FIGURE — server-priced, so the client performs no
      arithmetic on money and the two doors cannot compute a different number for one card. */
@@ -523,8 +533,8 @@ test('a preset writes answers on a lens, and never the standing rule', async ({ 
   }
 
   /* ONE ACT, ONE REVERSAL — the per-SKU undo stack is ten deep (D28) and a press over a real
-     book moves hundreds. */
-  await page.getByRole('button', { name: 'Undo' }).click()
+     book moves hundreds. The receipt carries it. */
+  await page.locator('.bn-toasts').getByRole('button', { name: 'Undo' }).click()
   await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('')
   await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('')
 })
@@ -541,7 +551,9 @@ test('a preset leaves a row it cannot price, and says how many', async ({ page }
     counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
   })
 
-  await page.getByRole('button', { name: 'TCG Low −1%' }).click()
+  await page.getByRole('button', { name: 'Change' }).click()
+  await page.getByRole('dialog', { name: 'What to mark down' }).getByRole('button', { name: 'TCG Low −1%' }).click()
+  await page.getByRole('dialog', { name: 'What to mark down' }).getByRole('button', { name: 'Close' }).click()
   await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('1.90')
   await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('')
 })
@@ -591,7 +603,7 @@ test('the row and caption tracks agree at the table tier, and the price is not c
   await page.setViewportSize({ width: 1440, height: 900 })
   await open(page)
   await expect(page.locator(VIEW)).toBeVisible()
-  await expect(page.locator('.pricing-section')).toHaveAttribute('data-copies', 'none')
+  await expect(page.locator('.pricing-list')).toHaveAttribute('data-copies', 'none')
   await expect(page.locator('.pricing-thumb')).toHaveCount(0) // the absence this screen's own header states
 
   const [row, caption] = await Promise.all([
@@ -607,29 +619,21 @@ test('the row and caption tracks agree at the table tier, and the price is not c
   await legible(page, 'Price for Articuno')
 })
 
-test('the compact-tier price and actions land in their own tracks, not an implicit fourth column, at 700px (data-copies=none)', async ({
+test('at 700 the row and caption tracks still agree, and the price is not clipped (data-copies=none)', async ({
   page,
 }) => {
+  /* 700 IS THE OWNER'S HALF-SCREEN DESK (D197's 720 width, minus a scrollbar): the column is
+     under the 900px step, so Lowest and the trend leave the row, and both the caption and the
+     rows drop them together. */
   await page.setViewportSize({ width: 700, height: 900 })
   await open(page)
-  await expect(page.locator(VIEW)).toBeVisible()
-  await expect(page.locator('.pricing-section')).toHaveAttribute('data-copies', 'none')
-  await expect(page.locator('.pricing-caption')).toBeHidden() // the compact tier, confirmed
-
-  /* THE GEOMETRIC PROOF, MEASURED RATHER THAN GUESSED: the row's OWN width does not overflow
-     even when broken, because `minmax(0, 1fr)` (the id/facts column) absorbs the deficit by
-     shrinking — the defect is a GAP, not a scrollbar. Measured on origin/main's CSS before
-     this fix: the empty reserved 132px track plus the column-gap left 156px of dead space
-     between `.pricing-facts` and `.pricing-price`, against `column-gap: var(--bn-3)` (12px)
-     plus `.pricing-price`'s own `margin-left: var(--bn-2)` (8px) — 20px, measured with the
-     fix in place — the row asks for everywhere else. The floor is comfortably under 156px and
-     comfortably over the 20px the fix itself measures. */
-  const gap = await page.evaluate(() => {
-    const facts = document.querySelector('.pricing-facts')!.getBoundingClientRect()
-    const price = document.querySelector('.pricing-price')!.getBoundingClientRect()
-    return price.x - facts.right
-  })
-  expect(gap, `${gap}px of dead space sits between the facts column and the price field`).toBeLessThanOrEqual(24)
+  await expect(page.locator('.pricing-list')).toHaveAttribute('data-copies', 'none')
+  await expect(page.locator('.pricing-caption .pricing-col-low')).toBeHidden()
+  const [row, caption] = await Promise.all([
+    page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+    page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+  ])
+  expect(row, `row tracks "${row}" disagree with caption tracks "${caption}"`).toBe(caption)
 
   const field = page.getByRole('textbox', { name: 'Price for Articuno' })
   await field.click()
@@ -713,3 +717,80 @@ for (const width of [390, 820]) {
   })
 }
 
+
+/* THE LIVE TAB (D277, Q6): the Mark-down sheet is gone, and the lens is a tab on Pricing. */
+
+test('the Live tab with no read yet says so and offers the read, and nothing is fetched by itself', async ({ page }) => {
+  const wire: Wire[] = []
+  await page.route(/\/pipeline\/markdowns$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ markdowns: [] }) }),
+  )
+  await page.route(/\/pipeline\/live-export$/, async (route) => {
+    wire.push({ method: 'POST', path: '/pipeline/live-export', body: null })
+    await route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"tcg_cookie_missing","message":"No session."}}' })
+  })
+  await page.route(/\/pipeline\/runs$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
+  )
+  await page.goto('/#/pricing?live')
+  await expect(page.getByText('Nothing read from TCGplayer yet').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
+  /* THE READ IS A PRESS (D62's rule for anything that asks a remote host): opening the tab
+     asks TCGplayer for nothing. */
+  expect(wire).toHaveLength(0)
+  await page.getByRole('button', { name: 'Read what is live' }).first().click()
+  await expect(page.getByRole('dialog', { name: 'What to mark down' })).toBeVisible()
+  expect(wire).toHaveLength(0)
+})
+
+test('the Live tab opens the newest read, and its line says how the read was taken', async ({ page }) => {
+  await open(page)
+  await page.goto('/#/pricing?live')
+  /* THE TAB WITH NO STAMP LANDS ON THE NEWEST READ, which is the only one `open` lists. */
+  await expect(page).toHaveURL(new RegExp(`markdown=${STAMP}`))
+  await expect(page.locator('.pricing-rule-line')).toContainText('Not sold in 7 days, 10% under your asking price')
+})
+
+test('Read again keeps its words and its place while it reads', async ({ page }) => {
+  await page.route(/\/pipeline\/live-export$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"tcg_cookie_missing","message":"No session."}}' })
+  })
+  await open(page)
+  const press = page.getByRole('button', { name: 'Read again' })
+  const before = await press.boundingBox()
+  await press.click()
+  await expect(press).toHaveAttribute('data-busy', 'true')
+  await expect(press).toHaveText('Read again')
+  const during = await press.boundingBox()
+  for (const side of ['x', 'y', 'width', 'height'] as const) {
+    expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
+  }
+})
+
+test('the Live tab’s Download keeps its words and its place while it writes', async ({ page }) => {
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, exit_code: 0, wrote: true, console: 'wrote import.csv', stamp: STAMP, revision: 'rev-after' }),
+    })
+  })
+  await open(page)
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('')
+  await field.type('17.50')
+  await field.blur()
+  const press = page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: /^Download/ })
+  await expect(press).toBeEnabled()
+  const before = await press.boundingBox()
+  await press.click()
+  await expect(press).toHaveAttribute('data-busy', 'true')
+  await expect(press).not.toContainText('Writing')
+  const during = await press.boundingBox()
+  for (const side of ['x', 'y', 'width', 'height'] as const) {
+    expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
+  }
+})

@@ -327,7 +327,7 @@ function targetOf(bucket: PricingSku['bucket']): 'overrides' | 'no_market_data' 
 
 /** Why this run adds no row for this SKU, as a heading — or null for the ordinary row. */
 function groupOf(sku: PricingSku): string | null {
-  return sku.at_cap ? (sku.nothing_to_add ?? 'Nothing to add') : null
+  return sku.at_cap ? (sku.nothing_to_add ?? 'nothing to add this run') : null
 }
 
 type Undo = {
@@ -513,7 +513,11 @@ function PickRuns({
                   {label ?? row.run}
                   {label === null || day === null ? null : <span className="pricing-run-day">{day}</span>}
                 </span>
-                <span className="pricing-run-meta">{row.counts?.skus ?? '?'} SKUs</span>
+                <span className="pricing-run-meta">
+                  {/* THE DIRECTORY IS WHAT TELLS TWO RUNS OVER ONE BOX APART: drawn small (D56). */}
+                  {label === null ? null : <span className="pricing-run-id">{row.run}</span>}
+                  <span>{row.counts?.skus ?? '?'} SKUs</span>
+                </span>
               </span>
               {/* THREE STATES, NOT TWO (D156): a run that owes nothing and still holds unsent
                   copies is OPEN, and the chip says how many. */}
@@ -555,6 +559,7 @@ function LiveCount({ live, soldHere, age }: { live: number; soldHere: number | u
       }
     >
       {forSaleNow} live
+      {sold > 0 ? <span className="pricing-live-age"> ({live} when read, {sold} sold since)</span> : null}
     </span>
   )
 }
@@ -1064,6 +1069,7 @@ export function Pricing() {
     let closed = 0
     let outRows = 0
     let outCopies = 0
+    let byHand = 0
     for (const row of rows) {
       if (row.at_cap) {
         closed += 1
@@ -1074,12 +1080,13 @@ export function Pricing() {
         continue
       }
       const asked = askedFor(row.sku)
+      if (asked !== undefined) byHand += 1
       const going = asked === undefined ? row.add_to_quantity : Math.min(asked, row.add_to_quantity)
       if (going === 0) continue
       outRows += 1
       outCopies += going
     }
-    return { held: heldCount, closed, outRows, outCopies }
+    return { held: heldCount, closed, outRows, outCopies, byHand }
   }, [rows, answerFor, askedFor])
 
   const needsPrice = owes.find((one) => one.reason === 'no_market_data_unanswered')?.count ?? 0
@@ -1169,7 +1176,8 @@ export function Pricing() {
     const groups: { head: string; rows: MergedSku[] }[] = []
     if (needs.length > 0) groups.push({ head: 'Needs you', rows: needs })
     if (ready.length > 0) groups.push({ head: needs.length > 0 ? 'Ready' : '', rows: ready })
-    for (const [why, group] of closed) groups.push({ head: why.charAt(0).toUpperCase() + why.slice(1), rows: group })
+    /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
+    for (const [why, group] of closed) groups.push({ head: why, rows: group })
     return groups
   }, [arrival, rows, filterHeld, answerFor])
 
@@ -1691,7 +1699,10 @@ export function Pricing() {
       toast({
         kind: 'receipt',
         title: `${result.count} typed price${result.count === 1 ? '' : 's'} cleared`,
-        body: 'Those rows go back to the rule. Nothing at TCGplayer changed.',
+        body:
+          result.holds === 0
+            ? 'Those rows go back to the rule. Nothing at TCGplayer changed.'
+            : `Those rows go back to the rule. ${result.holds} held back on purpose ${result.holds === 1 ? 'was' : 'were'} left alone, and nothing at TCGplayer changed.`,
         action: {
           label: 'Undo',
           onPress: () => {
@@ -1949,6 +1960,7 @@ export function Pricing() {
   const summary = [
     `${progress.outCopies} ${progress.outCopies === 1 ? 'copy' : 'copies'} ready`,
     needsPrice > 0 ? `${needsPrice} ${needsPrice === 1 ? 'needs' : 'need'} a price` : null,
+    progress.byHand > 0 ? `${progress.byHand} at a quantity you typed` : null,
     progress.held > 0 ? `${progress.held} held` : null,
     progress.closed > 0 ? `${progress.closed} already at TCGplayer` : null,
   ].filter((part): part is string => part !== null)
@@ -2149,7 +2161,7 @@ export function Pricing() {
               <section className="pricing-group" key={group.head || 'ready'} aria-label={group.head || 'Ready'}>
                 {group.head === '' ? null : (
                   <h2 className="pricing-group-head">
-                    {group.head}
+                    <span className="pricing-group-why">{group.head}</span>
                     <span className="pricing-group-count">{group.rows.length}</span>
                   </h2>
                 )}
@@ -2287,11 +2299,12 @@ function fieldState(
   sku: MergedSku,
   standing: unknown,
   asking: string | null | undefined,
-): { text: string; tone: 'quiet' | 'ok' | 'warn' } | null {
+): { text: ReactNode; tone: 'quiet' | 'ok' | 'warn'; title?: string } | null {
   if (isWithheld(standing)) {
+    // The human label is drawn; the machine string it stands for travels in the title (D49).
     const reason = heldReason(standing)
     const label = (HOLD_SHORT as Record<string, string>)[reason] ?? ''
-    return label === '' ? null : { text: label, tone: 'quiet' }
+    return label === '' ? null : { text: label, tone: 'quiet', title: `withheld: ${reason}` }
   }
   if (asking !== undefined && asking !== null && typeof standing === 'string') {
     const now = Number(standing)
@@ -2299,7 +2312,14 @@ function fieldState(
     if (!Number.isNaN(now) && !Number.isNaN(was)) {
       if (now > was) return { text: 'Above the live price', tone: 'warn' }
       if (now === was) return { text: 'Unchanged', tone: 'quiet' }
-      return { text: 'Lower than live', tone: 'ok' }
+      return {
+        text: (
+          <>
+            Down from <Money value={was} />
+          </>
+        ),
+        tone: 'ok',
+      }
     }
   }
   if (sku.bucket === 'no_market_data' && typeof standing !== 'string') return { text: 'Needs a price', tone: 'warn' }
@@ -2507,7 +2527,9 @@ function PricingRow({
         {note !== null ? (
           <span className="pricing-state pricing-state-warn pricing-refusal">{note}</span>
         ) : state === null ? null : (
-          <span className={`pricing-state pricing-state-${state.tone}`}>{state.text}</span>
+          <span className={`pricing-state pricing-state-${state.tone}`} title={state.title}>
+            {state.text}
+          </span>
         )}
       </div>
 
@@ -2689,7 +2711,12 @@ function RuleSheet({
           </span>
         </div>
         {stranded === null ? null : (
-          <Notice tone="warn" compact title="Cards under the cut-off still list at a second, older price.">
+          <Notice tone="warn" compact title="Cards under the cut-off still list at a second, older price." className="pricing-stranded">
+            {Number.isFinite(Number(stranded)) ? (
+              <span>
+                That price is <Money value={Number(stranded)} />.{' '}
+              </span>
+            ) : null}
             <Button size="sm" variant="quiet" onClick={() => onCut(cut)}>
               Use the cut-off for both
             </Button>

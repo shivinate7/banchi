@@ -327,3 +327,27 @@ test('no typed interpunct reaches the reconcile sheet', async ({ page }) => {
   expect(text).not.toMatch(/[·•]/)
 })
 
+/* THE FETCH PRESS KEEPS ITS WORDS AND ITS BOX WHILE IT RUNS (D118, the busy-press list from
+   b-runs round 9). It read "Asking TCGplayer…" while busy, so it changed size under the finger.
+   Held open by a delayed stub and measured before and during. Nothing reaches TCGplayer. */
+test('the fetch press keeps its place and size while it runs', async ({ page }) => {
+  await page.route(/\/pipeline\/live-export$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'tcg_cookie_missing', message: 'No session.' } }),
+    })
+  })
+  await open(page)
+  const press = panel(page).getByRole('button', { name: 'Fetch my live listings' })
+  const before = await press.boundingBox()
+  await press.click()
+  await expect(press).toHaveAttribute('data-busy', 'true')
+  await expect(press).toHaveText('Fetch my live listings')
+  const during = await press.boundingBox()
+  for (const side of ['x', 'y', 'width', 'height'] as const) {
+    expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
+  }
+})
+
