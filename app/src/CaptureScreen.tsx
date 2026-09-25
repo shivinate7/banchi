@@ -101,6 +101,14 @@ const NO_CLAIM_LABEL = 'No claim'
  *  problem `box_closed` and `store_busy` are, just caught one layer later. `image_*` would
  *  mean the frame the camera handed the screen was not a usable photograph. */
 const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
+  server_busy: {
+    headline: 'Captures are paused — the server is answering too many requests right now.',
+    resume: 'Nothing was read or written. Wait a moment, then resume.',
+  },
+  origin_not_allowed: {
+    headline: 'Captures are paused — this page is not the one the server trusts to write.',
+    resume: 'Reload the page from the address the server expects, then resume.',
+  },
   box_closed: {
     headline: 'Captures are paused — that box was sealed just now.',
     resume: 'Pick a different box, or reopen this one from the Inventory screen, then resume.',
@@ -1430,6 +1438,17 @@ export function CaptureScreen() {
   }, [boxRecords, nextIndex, recency])
 
   const nextForBox = box === null ? undefined : nextIndex[String(box)]
+
+  /* THE COUNTED NUMBER THE NEXT CARD GETS (D58, D92) — not `nextForBox`. `next_index` is
+   * the STORED slot's high-water mark (`store/master.py:next_index`, "not count+1, which
+   * agrees only while the set is dense") — it climbs and never comes back down, even past
+   * a sold, retired or moved card. D58's counted number does come back down: sell card 17
+   * and the next card becomes 17. `on_hand + 1` is that number, because a freshly
+   * captured card always lands after every card the box currently holds. `onHand` reads
+   * null for a box this screen knows about only from `/status` (D142's own gap, not yet
+   * in the registry) — the count is never guessed there. */
+  const boxOnHand = box === null ? null : (boxOptions.find((option) => option.box === box)?.onHand ?? null)
+  const newCardNumber = boxOnHand === null ? undefined : boxOnHand + 1
 
   // Information, not a confirmation step. The owner was offered a confirmation on a new box
   // and declined it (spec 5.2), and this does not reinstate one: nothing is blocked and
@@ -2936,10 +2955,13 @@ export function CaptureScreen() {
      screen, since the row above it opened with `Box 3` too. */
   const boxSentence = box === null ? 'No box' : captureBoxLabel(box, boxName)
 
-  /* The store's next index for the box, named as the index it is. `#N` is reserved for the
-   * counted card number every other screen draws (D58); a high-water mark is not one, and a
-   * person moving between screens should never have to guess which `#` they are reading. */
-  const boxNextText = boxIsEmpty ? 'Empty' : `next index ${nextForBox ?? '?'}`
+  /* THE COUNTED NUMBER, NOT THE STORED SLOT (D58, D92, the R1c finding): this used to read
+   * `next index ${nextForBox}`, the raw stored-slot high-water mark, and said so on purpose
+   * to avoid colliding with the `#N` other screens reserve for the counted number — but the
+   * odometer three lines below draws that same `nextForBox` labelled "next card", so the
+   * screen disagreed with itself the moment a card left the box. Both now read
+   * `newCardNumber`, and the word is "card", never "index" (D196). */
+  const boxNextText = boxIsEmpty ? 'Empty' : `next card ${newCardNumber ?? '?'}`
 
   // UX-076: the known-code lookup for the halt banner, read once here so the two JSX spots
   // that need it (headline, resume sentence) do not each re-index a possibly-undefined map.
@@ -2968,7 +2990,7 @@ export function CaptureScreen() {
       <div className="capture-odo" aria-label="This sitting">
         <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
         <span className="capture-odo-rule" aria-hidden="true" />
-        <Stat value={box === null ? '—' : String(nextForBox ?? 1)} label="next card" />
+        <Stat value={box === null ? '—' : String(newCardNumber ?? '?')} label="next card" />
         {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
           <Pill tone="ok" icon="check" className="capture-odo-verdict">
             no gaps
@@ -3295,7 +3317,7 @@ export function CaptureScreen() {
               <Icon name="box" size={14} />
               <span className="capture-foot-box-name">{boxSentence}</span>
               {box === null ? null : (
-                <span className="capture-foot-next">next index {nextForBox ?? 1}</span>
+                <span className="capture-foot-next">next card {newCardNumber ?? '?'}</span>
               )}
             </span>
             {/* ============ TUNING: the machine's readout and instruments, off the surface ============ */}

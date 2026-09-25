@@ -114,6 +114,9 @@ async function open(
   options: {
     refuseDeleteFrom?: number
     nextIndex?: Record<string, number>
+    /** The `GET /boxes` roster this screen reads on mount. Defaults to `[BOX, BOX4]` — a
+     *  case that needs a box shaped differently (a sold card, D58) passes its own. */
+    boxes?: readonly unknown[]
     /** Section 6: the index a single-card remove refuses over (`renumber_blocked`). */
     blockRemoveOf?: number
   } = {},
@@ -158,7 +161,7 @@ async function open(
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ boxes: [BOX, BOX4] }),
+      body: JSON.stringify({ boxes: options.boxes ?? [BOX, BOX4] }),
     }),
   )
 
@@ -644,6 +647,42 @@ test('the odometer counts the sitting and says which drawers it went to', async 
   await expect(page.locator('.capture-odo .bn-stat')).toHaveCount(2)
 })
 
+test('a box with a sold card shows the counted number, never the stored slot (D58, R1c)', async ({
+  page,
+}) => {
+  /* THE TWO NUMBERS DISAGREE ON PURPOSE. `next_index` is the store's high-water mark over
+   * every index the box has ever handed out (`store/master.py:next_index`) — 10 cards
+   * captured, one later sold, so the mark still reads 11. `on_hand` is what D58 counts: 9
+   * cards on hand, so the CARD a fresh capture gets is 10, not 11. A screen that showed 11
+   * anywhere would be showing the slot the sold card's replacement will never occupy — D10
+   * never reuses a stored index — as if it were the count. */
+  const SOLD_BOX = {
+    ...BOX,
+    cards: 10,
+    sold: 1,
+    on_hand: 9,
+    next_index: 11,
+  }
+  await open(page, { boxes: [SOLD_BOX, BOX4], nextIndex: { '3': 11 } })
+
+  /* THE BOX ROW, CLOSED. `10`, never `11`, and the word is "card", never "index" (D196). */
+  const boxRow = page.locator('.capture-row').filter({ hasText: /Box/ })
+  await expect(boxRow).toContainText('card 10')
+  await expect(boxRow).not.toContainText('11')
+  await expect(boxRow).not.toContainText(/index/i)
+
+  /* THE ODOMETER'S "NEXT CARD" STAT, THE SAME NUMBER. Two stats — captured, next card — so
+   * the second one is the one this reads. */
+  await expect(page.locator('.capture-odo .bn-stat').nth(1).locator('.bn-stat-value')).toHaveText(
+    '10',
+  )
+
+  /* THE STAGE FOOT, THE THIRD PLACE THIS FACT IS DRAWN. Camera opened by `open()` already,
+   * so the foot is live. */
+  await expect(page.locator('.capture-foot-next')).toContainText('card 10')
+  await expect(page.locator('.capture-foot-next')).not.toContainText('11')
+})
+
 test('the strip does not change height when the drawer label appears (D118)', async ({
   page,
 }) => {
@@ -898,6 +937,8 @@ test('pressing the pause button moves nothing else on the screen (D118)', async 
  * ------------------------------------------------------------------------------------------ */
 
 const HALT_CODES: readonly { code: string; headline: string }[] = [
+  { code: 'server_busy', headline: 'the server is answering too many requests right now' },
+  { code: 'origin_not_allowed', headline: 'this page is not the one the server trusts to write' },
   { code: 'box_closed', headline: 'that box was sealed just now' },
   { code: 'store_busy', headline: 'the store is busy' },
   { code: 'store_unavailable', headline: 'the store could not be reached' },
