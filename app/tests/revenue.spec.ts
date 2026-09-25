@@ -303,8 +303,13 @@ test('a same-path query change never scrolls the page back to the top (D201)', a
   await page.setViewportSize({ width: 390, height: 360 })
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.evaluate(() => window.scrollTo(0, 400))
-  await page.waitForFunction(() => window.scrollY > 0)
+  /* THE TABLE FIRST, THEN THE SCROLL (the PR 2 integration's full run, twice under load): a
+     scroll sent while the screen still drew its short loading state clamped to 0, and one
+     `scrollTo` never repeated, so the wait below timed out before the page was ever tall. */
+  await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible()
+  await expect
+    .poll(async () => page.evaluate(() => (window.scrollTo(0, 400), window.scrollY)))
+    .toBeGreaterThan(0)
   await page.getByRole('columnheader', { name: 'Name' }).getByRole('button').click()
   const y = await page.evaluate(() => window.scrollY)
   expect(y).toBeGreaterThan(0)
