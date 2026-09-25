@@ -270,7 +270,7 @@
   the integration branch.
   Seventeen files conflict, measured against the peer's merge-tree at `b63e90ee`. The schema
   bump becomes 12, since PR #461 already took 11. Card identity writes go only through
-  `IDENTITY_WRITERS` (`+docs/specs/identity-follows-sku.md` §4, the `identity writers` audit
+  `IDENTITY_WRITERS` (`docs/specs/identity-follows-sku.md` §4, the `identity writers` audit
   row). `cards variants` is retired.
 - Owner, 2026-09-24, iconography, a rule for every screen lane. The owner's words:
 
@@ -422,7 +422,7 @@
 
   Orders' "Add orders" and "Cards to pull" become small square IconButtons on the same line as
   the one-line filter bar, once kit-icons merges. This is recorded as planned in
-  `D-orders-and-shipping-are-two-rows` and in `LANES.md`.
+  `D274` and in `LANES.md`.
 - Owner, 2026-09-24. The owner's words:
 
   ```
@@ -438,3 +438,55 @@
   files PR 1 touched.
 - Owner, 2026-09-24: a definitive ruling, finding or plan gets committed out of the scratchpad
   and into the repo, by every agent, this session included. The scratchpad is temporary.
+- Owner, 2026-09-25. The owner's words:
+
+  ```
+  oh frankly if you can be precautious enough to where your sessions/agents are commiting
+  often, i don't mind you running up till usage kills yall randomly given that ideally yall
+  are being proactive enough going forward for the remainder of this little usage to mini
+  commit often after each pass etc -- get me?
+  ```
+
+  The pause is lifted. Wave 2 goes on until usage stops it. Every agent commits and pushes
+  after each pass, for each finding, each fix, and each review step. Each commit message names
+  the ids done and the next id, so the branch alone is enough to resume.
+- Owner, 2026-09-25, asked how a shared copy's Mark sold should look. The owner's words:
+  "i had said to get rid of claiming wanted by <order> as a visual descriptor". The
+  "wanted by <order>" caption on Orders pick rows is removed. Every copy is fungible (D212),
+  so every Mark sold looks the same. No shared-copy signal comes back.
+- 2026-09-25: PR 1 (#462) merged as `316b959e3` under the owner's grant. Ids D259 through D285
+  are claimed.
+
+## PR 2 scope (owner, 2026-09-25)
+- The owner's words: "sure we can work in parallel letting pr2 go without sales and box map".
+  PR 2 carries every wave-2 lane except Sales and Box map. Sales and Box map build in parallel
+  now and land in PR 3.
+- Codes "slot {index}" (owner, 2026-09-25): leave it, a known gap. It is recorded as an open
+  item until the dormant codes feature wakes. The library lane records it in the codes
+  decision and spec open items.
+- Mid-word search (owner, 2026-09-25): add mid-word search. D271's one matcher wins over
+  store-scaling item 8's prefix-only trade-off. It builds only if a measurement on a
+  2,500-plus card store shows search stays fast. The search-server lane owns D271.
+- `hide_sold` on `getBoxes` (orchestrator, process-only): the inventory lane wires the client
+  flag. The search-server lane owns the server half.
+- Box map order key (owner, 2026-09-25, answering D265's open question): "A key on each
+  card". Every card carries its own order key. The rejected "box order is runs" shape (never
+  written as an entry) is not chosen, and gets reworked. The boxmap lane owns the D265
+  amendment.
+- Box map single cards and ranges (owner, 2026-09-25): "Next box-map slice". A card list sits
+  inside a lifted section on the Shelf.
+- Owner, 2026-09-25, process-only: "You are now the head orchestrator session for banchi."
+  This does not by itself carry merge authority for PR 2 and later. That is asked separately.
+- Merge grant (owner, 2026-09-25, process-only, verbatim): "Yes you have perpetual merge authority in this
+  session." The scope, per CLAUDE.md, covers PRs this session planned and reviewed. It applies
+  once reviews pass and CI is green, through `make merge ARGS="<n> --confirm"`, never
+  `--admin`. The grant is session-bound. No later session inherits it.
+- Review cadence (owner, 2026-09-25: "Ensure reviews are occuring at major checkpoints and not
+  repetitively over every little thing burning tokens"). Process-only.
+  1. One review per lane, at lane-done, covers every round since its last review. A merge, an
+     icon round, or a small-fix round gets no review of its own.
+  2. Another review runs only after a fail, as a delta review of the fix. Opus is reserved for
+     store, money, TCGplayer, or search paths.
+  3. The PR is the major checkpoint: one Opus integration review of store and search paths,
+     plus one all-screen pass.
+  4. No review runs on work an open owner question may still change.

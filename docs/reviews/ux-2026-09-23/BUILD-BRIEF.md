@@ -68,14 +68,14 @@ one lane already saw another's tab land in its own view.
 These slug entries already argue the owner's rulings. A lane cites them. It records only what
 its own build adds, and only in its own lane's entry, where `LANES.md` names one not already
 covered here.
-The list: `D-pull-list-is-a-pick-count`, `D-money-is-mono-everywhere`,
-`D-one-press-sends-and-makes-live` (with the double-send auto-reconcile),
-`D-a-moved-card-keeps-its-price`, and `D-a-card-is-counted-in-its-section` (with card 1 at the
-back, "slots", the departed label). Also `D-a-press-reorders-and-nothing-else-moves` (D209's
-sort, D132's fold), `D-one-forgiving-search-matcher`, `D-a-section-is-an-object`, and
-`D-card-order-key`. Also `D-reasoning-is-not-screen-copy`, `D-drawer-foot-joins-the-list`,
-`D-pricing-is-one-list-and-one-send`, `D-sales-is-a-leaderboard`,
-`D-orders-and-shipping-are-two-rows`, and `D-a-box-is-shown-by-its-name`.
+The list: `D279`, `D267`,
+`D273` (with the double-send auto-reconcile),
+`D262`, and `D260` (with card 1 at the
+back, "slots", the departed label). Also `D263` (D209's
+sort, D132's fold), `D271`, `D264`, and
+`D265`. Also `D281`, `D266`,
+`D277`, `D282`,
+`D274`, and `D259`.
 So a lane does not write its own entry for the matcher, or the section ruler. Nor for card 1
 at the back, the section-card number, nothing jumping, the orders sort press, or the orders
 walk layout.
@@ -102,8 +102,10 @@ The owner's words, 2026-09-24:
 It needs to be super pausable too because i'll run out of usage
 ```
 
-- Work in small steps. After each finding group, commit and push your lane branch. Never hold
-  more than about one hour of work uncommitted.
+- Work in small steps. After each pass, one finding, one fix, or one green check, commit and
+  push your lane branch. The owner's ruling of 2026-09-25 lifted the pause: usage can stop any
+  agent at any moment, so work that is not pushed is lost. Each commit message ends with a line
+  "Progress: done `<ids>`. Next: `<id>`." so the branch alone is enough to resume.
 - Keep your own scratchpad's `lanes/<lane>/PROGRESS.md` current after each push. Record the
   head SHA, the finding ids done, the id in progress, and the next ids. Add any open question,
   and the exact command that proves the last step. A fresh agent must be able to resume from
@@ -133,3 +135,13 @@ Your lane is not done while any entry keyed to your lane remains in
 `scripts/kit-adoption-allow.json`, an `app/tests/*-allow.json` file,
 `scripts/typed-interpunct-allow.json`, or `scripts/ste-offenders.json`, for your own files.
 Report the count left for each list.
+
+## Records leave the scratchpad (owner, 2026-09-24)
+Your scratchpad files are temporary. Once a decision, ruling, or finding in your lane is
+definitive, commit it to the repo, in the same commit as the code. Use a slug decision entry,
+a spec section, or a file under `docs/reviews/ux-2026-09-23/`. `PROGRESS.md` is the only file
+that stays in the scratchpad.
+
+Review cadence (owner, 2026-09-25): a lane is reviewed once, when it is done, covering all its
+rounds. It is re-reviewed only after a fail. The PR's integration review and screen pass are
+the major checkpoint.

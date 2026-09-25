@@ -72,3 +72,37 @@ Read these over chat memory.
   modified file. Resolve a conflict by editing the file, never by forcing a side.
 - A janitor sweep can remove a finished agent's worktree. Treat every finished agent as gone.
   Work resumes from its pushed branch, in a fresh worktree, never from the old agent id.
+
+
+## PR 2 / PR 3 lane status, 2026-09-25
+
+PR 1 (#462) merged as `316b959e3`, claiming D259 through D285. PR 2 carries every wave-2 lane
+except Sales and Box map, which build in parallel and land in PR 3. Each lane rebases onto
+main after PR 1. This table is a snapshot. Read the branch and `LANES.md` for the current
+state.
+
+| Lane | Branch | State |
+|---|---|---|
+| home | `ux/home` | Done, reviewed. |
+| orders | `ux/orders` | Round 5 and round 6 passed. Done for PR 2. |
+| inventory | `ux/inventory-r2` | Round 3 built (main plus icons, tightening, the icon map, BoxOps select, CardHero fixes). Round 4 runs the InventoryOverlay icon and the R2 dialog. One review then covers rounds 3 and 4. |
+| capture | `ux/capture` | Round 3 passed. Done for PR 2, apart from any capture entries left in the offender-list sweep. |
+| kit-icons | `ux/kit-icons` | Passed its round-3 delta review. Not merged anywhere yet. Each lane merges `origin/ux/kit-icons` into its own branch. It lands with PR 2. |
+| records | `ux/review-records` | Round 2 runs now: merge main, re-sync every ruling since round 1, and fix the D278 stale path. A Sonnet review of the whole branch follows. |
+| kit-tighten | `ux/kit-tighten` | Passed. The popover browser check stayed vacuous, since no screen drew FilterBar yet. Each screen lane checks it in its own pass. Lanes were told to merge it and clear their round-2 entries. |
+| review | `ux/review` | Round 1 runs now (the W2-8 findings, folding Runs in, three raw refusals, icons, offender entries). It merges `inventory-r2` again before its final pass. |
+| b-pricing | `ux/b-pricing` | Round 1 runs now, on Opus. It covers the whole Pricing flow, Q1 through Q7, D277, and `#/product`. |
+| sales (PR 3) | `ux/sales` | Round 1 reviewed. Every item passed, apart from two small fixes, one of them a confirmed zero-price no-source claim. Round 2 runs now: the spark stroke and the `/skus/photos` server cap. The PR 3 checkpoint stands in for a separate re-review. |
+| boxmap (PR 3) | `ux/boxmap` | Round 1 built the runs-on-the-box form. The owner asked for a per-card key and a singles-and-ranges slice next. Round 2 runs now: the rework to a per-card key, the singles-and-ranges slice, and a merge of `inventory-r2`. An Opus review follows. |
+| search-server | `ux/search-server` | Round 3 built (findings F1 through F8 fixed, mid-word search shipped, p95 44.7ms to 95.1ms measured on 2,600 cards). A fresh Opus delta review runs now. |
+| library | `ux/library` | Round 2 passed. The Codes "slot" gap is recorded in `docs/specs/code-cards.md` §8, item 8. One round-2 filter-row entry (the Codes chip row) stays in the PR 2 sweep list. |
+| shipping | `ux/shipping` | Passed review, 69 of 69. A note for later: two dead `REASON_SAYS` strings. Its OrdersHub-onto-`<Page>` item carries to the orders lane. |
+
+Other PR 2 and PR 3 notes:
+- Once kit-icons passes, it merges into PR 1 if PR 1 is still open, or into PR 2 otherwise.
+  Orders, inventory and capture then merge it and convert their presses per `ICON-MAP.md`.
+- `docs-sweep` has not started. It waits for PR 2.
+- Deferred by the owner: an independent UI/UX review of the Orders walk mode, until budget
+  allows, and the undo session (undo spec §11).
+- Recorded, to build later: Orders' "Add orders" and "Cards to pull" as small square icon
+  buttons on the filter line. This is recorded in D274.

@@ -55,7 +55,7 @@ only the alternatives the owner did not pick, and why the recommendation read th
   nobody asked about, written when a run was the whole unit of work (D48). D180 replaced D48, so
   the join can now follow a card by its own name (`cid`) rather than by a guess. Measured: 99 of
   the owner's cards had already lost their pricing surface to a move, under the old rule. The
-  owner's ruling follows the card (`D-a-moved-card-keeps-its-price`).
+  owner's ruling follows the card (`D262`).
 - **Where does the map live?** The chosen answer is a Shelf view inside Inventory, which
   keeps D31's one screen for stored cards. The other options were its own screen and nav row,
   or a sheet opened from the box rail.

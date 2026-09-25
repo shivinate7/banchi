@@ -104,9 +104,8 @@ Files: `app/src/kit/index.tsx`, `app/src/kit.css`, `app/src/kit/toast.tsx`,
 `app/src/motion.ts`, new `app/src/kit/Page.tsx`, new `app/src/kit/overlay.tsx`,
 `app/src/Gallery.tsx`, `app/src/Gallery.css`, `app/tests/gallery.spec.ts`, and
 `app/tests/button-stack.spec.ts`. Also `app/src/demoServer.ts`, `app/src/server.ts`
-(`describeFailure` only, additive), `docs/DESIGN.md`, new
-`docs/decisions/D-one-page-width.md` (amends D197), and new
-`docs/decisions/D-notice-detail.md` (amends D196's `Notice.code` exemption).
+(`describeFailure` only, additive), `docs/DESIGN.md`, and the decision entries D272 (amends
+D197) and D269 (amends D196's `Notice.code` exemption), both already landed.
 Findings (27, plus HIR-04's receipt pattern and HIR-19's toast lifetime): see `CONSOLIDATED.md`
 by id, listed in `findings.json` under `lane: "kit-frame"`.
 Work: `Page`/`Section`/`Toolbar`. One `--bn-page-w` (1600, fluid) and one `--bn-page-top`.
@@ -148,7 +147,7 @@ sheet lands on `#/product?sku=`. `typecheck` and `lint` pass. Gallery specimens 
 ### W0-3 guards (Sonnet, M), after kit-data and kit-frame
 Files: new `scripts/kit-adoption.mjs` (a TypeScript AST reader, like
 `scripts/user-strings.mjs`), new `scripts/kit-adoption-allow.json`, new
-`app/tests/scaffold.spec.ts`, new `docs/decisions/D-page-scaffold.md`, `Makefile`
+`app/tests/scaffold.spec.ts`, the landed decision entry D275, `Makefile`
 (`kit-adoption`, `kit-adoption-selftest`, both in `check`), `scripts/checks.py`, `CLAUDE.md`
 (the check census plus "a new page is one ROUTES entry plus a view that returns `<Page>`"),
 `docs/map.py` rows.
@@ -188,7 +187,7 @@ LOC-02, LOC-15), UX-013 (widened, now S1), UX-049, 055, 089, 101, 142, plus resi
 ### W1-1 shell (Sonnet, L)
 Files: `app/src/App.tsx`, `App.css`, `keys.ts`, `main.tsx`, the nav/phone/wide/page-edge/cursor
 specs, `tests/shell.ts`, `tests/routes.ts`, `scripts/js-breakpoints.py` (the rail breakpoint
-moves below 720), new `docs/decisions/D-palette-go-to.md` (amends D95).
+moves below 720), the landed decision entry D276 (amends D95).
 Findings (12, widened for UX-022 and UX-092 in round two): see `CONSOLIDATED.md`,
 `lane: "shell"`.
 Work: `ROUTES` is the single registration point. The palette reads "Go to" and lists every
@@ -210,8 +209,7 @@ Deletes `app/tests/copy-budget.spec.ts`, `copy-budget.json`, `scripts/copy-budge
 `app/tests/routeFixtures.ts`, `Makefile`, `checks.py`, `CLAUDE.md`, `DESIGN.md`, and marks D194
 superseded. New `app/tests/text-shape.spec.ts`, `machine-words.spec.ts`,
 `scripts/text-density/` (moved from the review scratchpad), a `text-density` Makefile target
-(on demand, never in `check`), `.claude/skills/text-density/SKILL.md`, new
-`docs/decisions/D-text-shape-checks.md`.
+(on demand, never in `check`), `.claude/skills/text-density/SKILL.md`, the landed decision entry D284.
 Checks: repetition (a sentence of four words or more on three or more rows or cards, or one
 number-plus-noun fact stated twice on a screen). Sentence shape (over 25 words, or a caption
 repeating 60 percent or more of its heading's tokens). Machine words read from every route's
@@ -223,7 +221,7 @@ Done: no reference to `copy-budget` remains outside a listed exemption. `check` 
 
 ### W1-3 product (Sonnet, M)
 Files: `app/src/ProductHistory.tsx`, `.css`, `app/tests/product-history.spec.ts`, new
-`docs/decisions/D-product-view-hybrid.md` (amends D227, D62).
+the landed decision entry D278 (amends D227, D62).
 Findings: UX-027, UX-132, UX-183 (new in round two).
 Work: fix the leave-the-page trap first (a hash that does not start with `#/product` is
 ignored — the `hashchange` listener and `writeSkuToHash`'s `replaceState` cause it). Extract
@@ -264,8 +262,8 @@ Files: new `app/src/kit/filters.tsx`, `filters.css`, `viewState.ts`, `highlight.
 `app/src/kit/match.cases.json` beside it (also read by `search-server`). New
 `app/tests/filters.spec.ts` and `match.spec.ts`. From `kit-frame` after it merges:
 `app/src/kit/index.tsx` (additive re-exports) and `app/src/Gallery.tsx` (mounts the
-specimens). New decisions: `D-one-filter-control.md` (amends the native dropdowns of D213 and
-D220, and the toggles of D132 and D209), `D-view-state-in-url.md` (the owner ruled filter
+specimens). New decisions: `D270.md` (amends the native dropdowns of D213 and
+D220, and the toggles of D132 and D209), `D285.md` (the owner ruled filter
 memory in the URL).
 Findings (7): see `CONSOLIDATED.md`, `lane: "filtering"`.
 Work: build `FilterBar` from Capture's picker. Its closed row always shows its own value. Each
@@ -290,7 +288,7 @@ Files: `app/src/position.ts`, `app/src/cardNumber.ts`, `app/src/PositionBar.tsx`
 `app/src/SectionTitle.tsx`, `app/src/CardLocations.tsx`/`.css`. Place parts only from
 `app/src/BoxBrowse.tsx`/`.css` (the row number, the section header badge, the `?box=&card=`
 deep link) and `app/src/ReviewQueue.tsx`/`.css` (the place pill). New
-`app/tests/locating.spec.ts`. New `docs/decisions/D-a-card-is-counted-in-its-section.md`
+`app/tests/locating.spec.ts`. The landed decision entry D260
 (amends the display half of D58 and D92). In wave 2, `BoxBrowse` and `CardLocations` pass to
 `inventory`, and `ReviewQueue` to `review`.
 Findings (14): see `CONSOLIDATED.md`, `lane: "locating"`.
@@ -303,7 +301,7 @@ box name, the section, and the card within the section. It carries no typed sepa
 It also owns `departed_label`, the stored default box name "Box `<count+1>`" on create (the
 next free name if that one is taken), and the backfill "Box N" for existing unnamed boxes.
 It also owns `PositionLabel`'s box-number removal, and the change to `fulfillment.spec.ts`'s
-"dots and all" assertion. Cite `D-a-box-is-shown-by-its-name`.
+"dots and all" assertion. Cite `D259`.
 The lane also finds a box by name only in search. No number shortcut. An unnamed box is
 backfilled "Box N", so "box 3" still matches by its name.
 Decisions: D58, D92, D155, D30, D116, D41, D45, D67, D68, D183, D5.
@@ -512,10 +510,10 @@ distinct ids, 224 in a lane, 47 released, 1 handed off.
   Clamp `layerZ` at depth 2, or assert that no screen opens three overlay layers at once.
   Exclude `tabindex="-1"` buttons from the focus-trap selector's stop count. Move the overlay
   and toast-offset breakpoint to 640, to match the 720 desktop-rail ruling.
-- `filtering` does not write a separate matcher decision: `D-one-forgiving-search-matcher`
-  already covers it. It writes `D-view-state-in-url.md`.
+- `filtering` does not write a separate matcher decision: `D271`
+  already covers it. It writes `D285.md`.
 - `locating` does not write separate ruler, card-order or section-count decisions:
-  `D-a-card-is-counted-in-its-section` already covers all three.
+  `D260` already covers all three.
 - `text-checks` starts after `guards` merges — both own `Makefile`, `CLAUDE.md` and
   `checks.py` in their own waves.
 - `DESIGN.md` and `docs/map.py` still call 768 the rail edge in places: `text-checks` or
@@ -608,7 +606,7 @@ only the wrapper.
   42px at 720. It shrinks from 140px to 42px at 390.
 - Orders, once kit-icons merges: "Add orders" and "Cards to pull" become small square
   `IconButton`s on the same line as the one-line filter bar. This is recorded as planned in
-  `D-orders-and-shipping-are-two-rows`.
+  `D274`.
 - `search-server`, which owns `server/`: `reconcile-backlog` must refuse a cutoff after today,
   from the Orders review. The screen already disables that press. The server is the second
   guard.

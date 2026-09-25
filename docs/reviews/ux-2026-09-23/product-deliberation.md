@@ -1,6 +1,6 @@
 # `#/product` and the price-history views: deliberation
 
-**Status: reasoning, not a spec.** The owner's ruling lives in `docs/decisions/D-product-view-hybrid.md`,
+**Status: reasoning, not a spec.** The owner's ruling lives in decision entry D278,
 which cites this file. This file holds the view inventory, the trap bug, and the three options
 the owner weighed before picking the hybrid.
 
