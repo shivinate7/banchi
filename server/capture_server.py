@@ -3992,19 +3992,16 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
             present = {at for at, _, _ in targets} | {at for at, _ in skipped}
             missing = sorted(selected - present)
             if missing:
-                # D196 (UX-208's carried refusal-leak item): the raw index used to ride the
-                # message on its own ("holds no card at 3, 7"). `place_within_box` names a
-                # missing position the same way it names one that resolves — its own
-                # documented fallback for an index `join.box_view` never found.
-                _, _view = join.box_view(inventory, box)
-                named = ", ".join(join.place_within_box(_view, box, at) for at in missing[:8])
+                # D196 (UX-208's carried refusal-leak item, and the PR 2 integration review): a
+                # card that is not in this box has no place to name. `place_within_box` falls
+                # back to "card <index>" for one, which is the raw store index again. So the
+                # refusal says how many named cards are not here, and names no number.
+                count = len(missing)
                 raise BadRequest(
                     HTTPStatus.NOT_FOUND,
                     "card_not_found",
-                    f"{join.said_place(inventory, box)} holds nothing at "
-                    + named
-                    + (f" (+{len(missing) - 8} more)" if len(missing) > 8 else "")
-                    + ". Nothing was changed.",
+                    f"{count} of the cards you named {'is' if count == 1 else 'are'} not in "
+                    f"{join.said_place(inventory, box)}. Nothing was changed.",
                 )
 
         # PHASE ONE — membership, against the game each card will be read as. A body that
@@ -8946,12 +8943,25 @@ def do_review_group_answer(payload: dict) -> dict:
             positions = {key: (box, index) for box, index, _sku, _condition, key in parsed}
             views: Dict[int, "join.BoxView"] = {}
             named_parts: List[str] = []
+            # A card that is not in its box has no place to name (the PR 2 integration review):
+            # `place_within_box` would fall back to "card <index>", the raw store index. Such
+            # cards are counted per box and said plainly instead.
+            absent: Dict[int, int] = {}
             for key, exc in refused:
                 box, index = positions[key]
                 if box not in views:
                     _, views[box] = join.box_view(snapshot.inventory, box)
-                where = join.place_within_box(views[box], box, index)
+                view = views[box]
+                if index not in (view.occupied or ()) and index not in (view.departed or ()):
+                    absent[box] = absent.get(box, 0) + 1
+                    continue
+                where = join.place_within_box(view, box, index)
                 named_parts.append(f"{where}: {exc.code} — {exc}")
+            for box, count in sorted(absent.items()):
+                named_parts.append(
+                    f"{count} of the cards you named {'is' if count == 1 else 'are'} not in "
+                    f"{join.said_place(snapshot.inventory, box)}"
+                )
             named = "; ".join(named_parts)
             raise BadRequest(
                 HTTPStatus.CONFLICT,

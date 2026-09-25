@@ -5660,6 +5660,22 @@ def check_group_answer(checks: Checks) -> None:
             "everything — a refused group leaves the store as if the call never arrived",
         )
 
+        # A MEMBER THAT IS NOT IN ITS BOX IS COUNTED, NEVER NAMED BY INDEX (the PR 2 integration
+        # review). `place_within_box` fell back to "card 99998" for it: the raw store index.
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101"), member(99998, "9199")]}
+            ),
+            "a group naming a card its box does not hold refuses whole",
+        )
+        if caught is not None:
+            checks.ok(
+                "1 of the cards you named is not in" in str(caught) and "99998" not in str(caught),
+                "and that card is counted plainly, with no raw index in the message",
+                f"message was: {caught}",
+            )
+
         refusal(
             checks,
             lambda: capture_server.do_review_group_answer(
@@ -9690,6 +9706,14 @@ def check_box_claims(checks: Checks) -> None:
                 where in str(caught) and "8/99" not in str(caught),
                 "and the message names the box the said way, never the raw box/index "
                 "key",
+                f"message was: {caught}",
+            )
+            checks.ok(
+                # The PR 2 integration review: `place_within_box` fell back to "card 99" for
+                # an index the box does not hold, the raw store index again. A card that is
+                # not here has no place to name, so the count is said instead.
+                "1 of the cards you named is not in" in str(caught) and "99" not in str(caught),
+                "and a card the box does not hold is counted plainly, with no raw index",
                 f"message was: {caught}",
             )
         checks.equal(
