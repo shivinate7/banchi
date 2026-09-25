@@ -156,7 +156,7 @@ ratchet's one exception: 27 files, in `scripts/kit-adoption-allow.json` under la
 excuses every violation of that rule in that file. So a new icon-only control, added to an
 already-listed file, passes silently. It stays silent until the file's other violations are
 fixed and the entry is removed. This is how the list was built before this lane, under
-D-page-scaffold. It is not a gap this entry opened. From here the list
+D275. It is not a gap this entry opened. From here the list
 only shrinks. `make kit-adoption-selftest` proves the rule in both directions. That covers
 the Fulfiller and Gallery exemptions, the svg and role="button" cases, and the review's own
 evasion fixtures (`SD/review/kit-icons/evade.mjs`), kept as permanent cases.
