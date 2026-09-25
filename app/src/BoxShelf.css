@@ -245,6 +245,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* On a picked card the number takes the button's own ink, never a faint grey on the accent. */
+.shelf-card[aria-pressed='true'] .shelf-card-number {
+  color: inherit;
+}
+
+/* "What moves" wraps inside the lift bar on a narrow column, never past it. */
+.shelf-lift .bn-seg {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 .shelf-card-name {
   overflow: hidden;
   text-overflow: ellipsis;
