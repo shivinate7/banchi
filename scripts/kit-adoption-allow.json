@@ -5,8 +5,6 @@
       "R2-icon-only-button": "icons"
     },
     "app/src/BoxBrowse.tsx": {
-      "R2-select": "inventory",
-      "R2-class": "inventory",
       "R2-icon-only-button": "icons"
     },
     "app/src/BoxOps.tsx": {
@@ -62,8 +60,6 @@
       "R2-date": "home"
     },
     "app/src/Inventory.tsx": {
-      "R1": "inventory",
-      "R2-class": "inventory",
       "R2-icon-only-button": "icons"
     },
     "app/src/InventoryOverlay.tsx": {
