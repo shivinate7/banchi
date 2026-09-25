@@ -295,8 +295,12 @@ export function standing(input: StandingInput): Standing | null {
   const unconfirmed = input.unconfirmed ?? null
   const live = runs === null ? null : runs.filter((r) => r.live)
 
-  const behind: Behind[] = []
-  if (bookFailed) behind.push({ figure: null, label: 'Your typed prices could not be read, so these counts may be off' })
+  /* THE FAILED-READ NOTE RIDES EVERY RANK THAT DRAWS BEHIND THE LINE, ranks 5 and 6 too, which
+     draw their own list (R8 review, LOW note a). */
+  const unread: Behind[] = bookFailed
+    ? [{ figure: null, label: 'Your typed prices could not be read, so these counts may be off' }]
+    : []
+  const behind: Behind[] = [...unread]
   const add = (figure: number | null, label: string, when: boolean) => {
     if (when) behind.push({ figure: figure === null ? null : figure.toLocaleString(), label })
   }
@@ -463,7 +467,7 @@ export function standing(input: StandingInput): Standing | null {
       say: [t(` — ${where} ${live.length === 1 ? 'is' : 'are'} identifying.`)],
       href: '#/runs',
       kbd: ',R',
-      behind: [{ figure: null, label: 'Nothing is waiting on you.' }],
+      behind: [...unread, { figure: null, label: 'Nothing is waiting on you.' }],
       problem,
       running: true,
     }
@@ -493,7 +497,7 @@ export function standing(input: StandingInput): Standing | null {
       ],
       href: '#/runs?state=captured',
       kbd: ',R',
-      behind: [],
+      behind: unread,
       problem,
       running: false,
     }

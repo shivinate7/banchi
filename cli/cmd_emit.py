@@ -1678,15 +1678,19 @@ def _after_single(
         # `sub_threshold` or a price and pressed again is owed that sentence: the change
         # cannot reach TCGplayer through this run, because these copies have already been
         # sent under the old answer.
+        #
+        # EXIT 1, AS THE MERGED PATH DOES, WITH ITS SENTENCE (DEBT35). This branch exited 0 and
+        # said "nothing new to send" while the merged path exited 1 and said "nothing to write",
+        # so a shell caller got two answers to one question. The `no room` list above names
+        # each card's own reason, as the merged path's list does.
         sent = runs.open_run(run_dir.directory).emitted
-        say("nothing new to send — every copy this run matched is already at "
-            f"{master.PUSHED}.")
+        say(merge.NOTHING_NEW)
         if sent:
             say(f"      {listed_names} is unchanged, from the emit at {sent.get('at', 'an earlier run')}.")
             say("      A price changed after an emit cannot travel this road; the copies "
                 "are already sent.")
             say(f"next: pkmnscan reconcile {run_dir.directory} <staged-export.csv>")
-        return 0
+        return 1
     say(f"next: import {listed_names} to Staged in TCGplayer, "
         f"then Export From Staged and run")
     say(f"      pkmnscan reconcile {run_dir.directory} <staged-export.csv>")
@@ -1943,7 +1947,7 @@ def run_merged(args, say) -> int:
                 if why == merge.LIVE_ALREADY
             ]
             return _say_empty(left_out, cut_back, needs_price, live_names, say)
-        say("nothing to write — every matched SKU is held back, unlisted, or has no room")
+        say(merge.NOTHING_NEW)
         for sku, why in left_out:
             say(f"  {sku} — {why}")
         return 1

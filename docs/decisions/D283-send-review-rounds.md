@@ -206,3 +206,12 @@ round-7 build before the fix.
   hold such a row. So a row with live copies and no price counts as a move to the stored price,
   and the button names it. That is the safe side.
 
+
+### The send matrix's two LOW notes from round 8 (2026-09-25)
+
+Both are pinned in T7's `check_send_matrix`, and each check went red on the old build first.
+
+- **A failed read at ranks 5 and 6.** Home's note that typed prices could not be read rides the
+  line at every rank. Ranks 5 and 6 draw their own list, and they dropped it. They keep it now.
+- **A row that owes nothing, on a failed read.** Home may name the failed read, and nothing
+  else. It never asks for a send or a price, and nothing behind it counts a card owing a price.

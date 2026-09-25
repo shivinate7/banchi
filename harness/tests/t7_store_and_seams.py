@@ -845,19 +845,20 @@ def seam_run(checks: Checks, cards, *, live=None, market=None, join=True):
     return runs.open_run(run_dir.directory), said
 
 
-def command(checks: Checks, *argv):
+def command(checks: Checks, *argv, exits: int = 0):
     """Run one `./pkmnscan` subcommand and return what it printed. Exit 0 or a failure.
 
     Through `cli/__main__.py:main` rather than by importing the command module, because the
     dispatch and the argument defaults are part of the seam: a flag whose default moved would
-    otherwise be invisible here.
+    otherwise be invisible here. `exits=1` is for an emit that adds nothing, which is
+    refused on both paths (DEBT35).
     """
     from cli import __main__ as entry
 
     with quiet() as said:
         code = entry.main(list(argv))
     text = said.getvalue()
-    checks.ok(code == 0, f"`pkmnscan {argv[0]}` exits 0", f"exit {code}\n{text}")
+    checks.ok(code == exits, f"`pkmnscan {argv[0]}` exits {exits}", f"exit {code}\n{text}")
     return text
 
 
@@ -16547,7 +16548,7 @@ def check_emit_identity_stamp(checks: Checks) -> None:
 
         # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
         # arithmetic, and the store cannot hold a standing figure any more.
-        command(checks, "emit", str(run_dir.directory), "--cap", "4")
+        command(checks, "emit", str(run_dir.directory), "--cap", "4", exits=1)
         after = Store().read().inventory
         checks.equal(
             after.get(master.position_key(3, 1)).state,
@@ -23880,7 +23881,7 @@ def check_listing_commands(checks: Checks) -> None:
         # being touched, and that cannot be checked against a file this block wrote itself.
         before_bytes = run_dir.path(runs.IMPORT_MERGED).read_bytes()
         command(checks, "join", str(run_dir.directory))
-        again = command(checks, "emit", str(run_dir.directory))
+        again = command(checks, "emit", str(run_dir.directory), exits=1)
         re_inventory = Store().read().inventory
         checks.equal(
             re_inventory.listing_counts(),
@@ -24457,7 +24458,7 @@ def check_listing_commands(checks: Checks) -> None:
         )
         # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
         # arithmetic, and the store cannot hold a standing figure any more.
-        again = command(checks, "emit", str(run_dir.directory), "--cap", "4")
+        again = command(checks, "emit", str(run_dir.directory), "--cap", "4", exits=1)
         checks.ok(
             "nothing new to send" in again,
             "and the re-emit says so rather than writing a file",
@@ -24493,7 +24494,7 @@ def check_listing_commands(checks: Checks) -> None:
         )
         # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
         # arithmetic, and the store cannot hold a standing figure any more.
-        command(checks, "emit", str(run_dir.directory), "--cap", "4")
+        command(checks, "emit", str(run_dir.directory), "--cap", "4", exits=1)
         checks.equal(
             run_dir.path(runs.IMPORT_MERGED).read_bytes(),
             untouched,
@@ -36247,6 +36248,7 @@ _M_SENT = "every copy in this run is already listed or has left the box"
 # checking, so a defect in the sentence builder goes red here.
 _M_ONLY_PRICE = "nothing to send: every card left needs a price first"
 _M_ONLY_CUT = "nothing to send: every priced card left is under the cut-off, and --listed-only holds it back"
+_M_NOTHING_NEW = "nothing new to send: every card left is already at TCGplayer, held back, or has no room"
 _M_PRICE_LIVE2 = "nothing to send: 1 card needs a price first, and TCGplayer already holds every copy of 2 cards"
 _M_PRICE_CUT_LIVE = (
     "nothing to send: 1 card needs a price first, and 1 priced card under the cut-off is held "
@@ -36369,11 +36371,13 @@ def _m_cases() -> Dict[str, dict]:
             route=("under_cut_off", ["Every priced card on this list is under the cut-off"]),
             home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 copies ready to send",
                   "chip": "Never sent"})
-        add("suball/listed-sent", market=_M_SUBALL, flags=["--listed-only"], twice=True,
-            exit=0 if layout == "one" else 1,
+        # DEBT35: ONE ANSWER ON BOTH PATHS. One run exited 0 with its own sentence, and several
+        # exited 1 with another. Both exit 1 now, with one headline and each card's reason.
+        add("suball/listed-sent", market=_M_SUBALL, flags=["--listed-only"], twice=True, exit=1,
             files={last: [_m_row(_M_D, "0.49"), _m_row(_M_R, "0.49"), _m_row(_M_A, "0.49")]},
-            says=["nothing new to send"] if layout == "one" else [f"{sku} — {_M_SENT}" for sku in (_M_D, _M_R, _M_A)],
-            route=("nothing_to_send", ["already at TCGplayer"]) if layout == "two" else None,
+            says=[_M_NOTHING_NEW] + [f"{sku} — {_M_SENT}" for sku in (_M_D, _M_R, _M_A)],
+            never=["nothing to write"],
+            route=("nothing_to_send", ["already at TCGplayer"]),
             home={"line": None, "behind": None, "tile": "nothing to price", "chip": "All sent"})
     # R7 F5: A SKU SHARED BY TWO DRAWERS UNDER `--cap 1`, WITH THE GUARD. The reverse holo is
     # trimmed to nothing and the send is not empty: the trim is named as a trim, never as
@@ -36463,6 +36467,19 @@ def _m_home(worklists: Dict[str, dict]) -> Dict[str, dict]:
             "    title: c.empty ? s.emptySendTitle(c.empty) : null,"
             "    tile: s.pricingTileNote(s.runsOwingPrice(c.pricing.roster), ready),"
             "    chips: c.pricing.roster.map((r) => s.runChip(r))};"
+            "}"
+            # RANKS 5 AND 6 ON A FAILED READ (R8 review, LOW note a), off a worklist that owes
+            # nothing: a live run, then photographed cards. Each keeps the typed-prices note.
+            "const calm = cases['suball/one/listed-sent'];"
+            "if (calm) {"
+            "  const at = (st, rs) => {"
+            "    const say = s.standing({status: st, statusFailed: false, orders, ordersFailed: false,"
+            "      pricing: calm.pricing, pricingFailed: false, runs: rs, runsFailed: false, unconfirmed: 0,"
+            "      book: null, bookFailed: true});"
+            "    return say === null ? null : {key: say.key, lead: say.lead, behind: say.behind.map((b) => b.label)};"
+            "  };"
+            "  out['rank:working'] = at(status, [{live: true, box: 3}]);"
+            "  out['rank:captured'] = at({...status, states: {captured: 2}}, []);"
             "}"
             "process.stdout.write(JSON.stringify(out));"
         )
@@ -36560,11 +36577,19 @@ def check_send_matrix(checks: Checks) -> None:
             f"{name}: with typed prices unread, Home never says Clear",
             str(failed),
         )
+        # A ROW THAT OWES NOTHING ON A FAILED READ NAMES THE READ AND NOTHING ELSE (R8 review, LOW
+        # note b). R8-1 lets the line say "typed prices", because the line is about that read. It
+        # never asks for a send or a price, and nothing behind it counts a card owing a price.
+        spare = failed.get("text", "").replace("typed prices", "")
         checks.ok(
             "the pricing worklist" not in failed.get("text", "")
             and (
-                want.get("failed", want["line"]) is None
-                or (
+                (
+                    "send" not in spare and "price" not in spare
+                    and not any("needs a price" in b or "need a price" in b for b in failed.get("behind", []))
+                )
+                if want.get("failed", want["line"]) is None
+                else (
                     want.get("failed", want["line"]) in failed.get("text", "")
                     and any("typed prices" in b for b in failed.get("behind", []))
                 )
@@ -36575,6 +36600,16 @@ def check_send_matrix(checks: Checks) -> None:
         if want.get("chip"):
             checks.ok(any(want["chip"] == chip for chip in got["chips"]),
                       f"{name}: a run chip says {want['chip']!r}", str(got["chips"]))
+    # R8 REVIEW, LOW NOTE A: ranks 5 and 6 draw their own list behind the line. On a failed
+    # read of typed prices they keep its note, and they are never Clear.
+    for rank in ("working", "captured"):
+        got = home.get(f"rank:{rank}") or {}
+        checks.ok(
+            got.get("key") == rank and got.get("lead") != "Clear"
+            and any("typed prices" in label for label in got.get("behind", [])),
+            f"with typed prices unread, Home's rank {rank!r} still names that read",
+            str(got),
+        )
     # R6-8: a SENT run that owes a price is told from one never sent that owes one too.
     checks.ok(
         all("Sent, 1 needs a price" in home[f"mix/{layout}/sent"]["chips"] for layout in ("one", "two")),
