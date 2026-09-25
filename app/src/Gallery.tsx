@@ -7,7 +7,7 @@ import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
-  Button, Chip, ConfirmSheet, EmptyState, Icon, Kbd, Loading, Lockup, Logo, Modal, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
+  Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
   KeyHint, Section, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
@@ -897,6 +897,52 @@ export function Gallery() {
                 <Button variant="primary" block icon="dollar">
                   Push 12 listings · $184.20
                 </Button>
+              </Spec>
+            </div>
+          </Section>
+
+          <Section
+            id="kit-icon-button"
+            data-kit-section="icon-button"
+            className="kit-section"
+            title="Icon button"
+            lede="A common, repeated action becomes an icon with a required label: the accessible name and the tooltip, never one or the other (owner's ruling, 2026-09-24). A press that spends money or cannot be undone keeps its words. docs/specs/iconography.md is the rule."
+          >
+            <div className="kit-grid">
+              <Spec label="the vocabulary">
+                <div className="kit-row kit-row-wrap">
+                  <IconButton icon="sold" label="Mark sold" />
+                  <IconButton icon="undo" label="Undo" />
+                  <IconButton icon="archive" label="Retire" />
+                  <IconButton icon="pencil" label="Edit" />
+                  <IconButton icon="trash" label="Delete" tone="danger" />
+                  <IconButton icon="eraser" label="Clear" />
+                  <IconButton icon="copy" label="Copy" />
+                  <IconButton icon="download" label="Download" />
+                  <IconButton icon="external" label="Open" />
+                  <IconButton icon="x" label="Close" />
+                  <IconButton icon="filter" label="Filter" />
+                  <IconButton icon="sortAsc" label="Low to high" />
+                  <IconButton icon="sortDesc" label="High to low" />
+                  <IconButton icon="moveTo" label="Move to a box" />
+                  <IconButton icon="grip" label="Drag to reorder" />
+                </div>
+              </Spec>
+              <Spec label="sizes" note="40px hit area at every size — only the 28-to-40px face shrinks, for a packed row.">
+                <div className="kit-row kit-row-wrap">
+                  {SIZES.map((s) => (
+                    <IconButton key={s} icon="undo" label={`Undo (${s})`} size={s} />
+                  ))}
+                </div>
+              </Spec>
+              <Spec label="pressed, busy, badge and a longer name" note="Rest, hover, keyboard focus and a touch long-press draw the tooltip the same way — the check is what a browser actually shows, not a class this page could fake.">
+                <div className="kit-row kit-row-wrap">
+                  <IconButton icon="lock" label="Hold" pressed />
+                  <IconButton icon="filter" label="Filters" badge={3} />
+                  <IconButton icon="refresh" label="Reload" busy />
+                  <IconButton icon="trash" label="Delete" tone="danger" disabled />
+                  <IconButton icon="undo" label="Undo" kbd="U" name="Undo the sale at Section 2, Card 5" />
+                </div>
               </Spec>
             </div>
           </Section>

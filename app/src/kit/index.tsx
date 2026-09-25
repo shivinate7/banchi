@@ -64,6 +64,135 @@ export function Button({
   )
 }
 
+/* ---- IconButton ---------------------------------------------------------------
+   THE ONE ICON-ONLY BUTTON (owner's ruling, 2026-09-24, ICONOGRAPHY; D-icon-buttons;
+   `docs/specs/iconography.md`): a common, repeated action from the vocabulary — Mark sold,
+   Undo, Retire, Edit, Delete, Copy, Download, Open, Close, Filter, Sort, and the rest the
+   spec names — becomes an icon with a `label` that is REQUIRED: an icon with no word is a
+   guess, not a control. A press that spends money or cannot be undone (Send, Identify, Stand
+   down) keeps its words and stays a plain `Button`. `kit-adoption`'s `R2-icon-only-button`
+   rule refuses the shapes a screen reaches for instead — `iconOnly` on `Button`, a hand-rolled
+   `<button>`/`<svg>`, or a worded `Button` whose label is a vocabulary verb — outside this
+   file, so every icon action in the product goes through here.
+
+   TWO NESTED BOXES, ON PURPOSE. The outer `<button>` is the HIT AREA: `min-width`/
+   `min-height: 40px` always, at every `size` (D117's thumb floor, made a floor this control
+   never drops under, rather than the breakpoint-raised `--btn-h` every other kit control
+   reads). The inner `.bn-icon-face` is the VISUAL face — 28px at `size="md"`, the density a
+   packed row like a walk or a table needs — and carries the hover/pressed/danger paint, so
+   the paint stays small while the target stays reachable. Reuses `button`'s own D50
+   cursor/response/press floors for free (a bare-tag selector in base.css).
+
+   `label` is BOTH the tooltip text and, when `name` is not given, the accessible name. `name`
+   is for a row where every instance would otherwise announce the same word — "Undo the sale
+   at Section 2, Card 5" as `name`, "Undo" as the short `label` a tooltip has room for. The
+   tooltip (`.bn-icon-tip`, kit.css) is `position: absolute` off `.bn-btn`'s own `position:
+   relative`, so showing it never moves anything else (D118). It shows on real `:hover`, on
+   `:focus-visible` (never a mouse `:focus`, so a click does not leave it stuck open), and on
+   a touch long-press (`onTouchStart` past `LONG_PRESS_MS`, cleared on release) — the phone
+   width has no hover, and a Banchi-specific glyph needs its word somewhere reachable there
+   too. It is `aria-hidden`: the accessible name is the button's own `aria-label`, never the
+   tooltip's text, so a screen reader is never told the label twice.
+
+   `pressed` marks a toggle of one act (Hold/Release, Reveal/Hide) with `aria-pressed`, tinted
+   like `Chip`'s own pressed state — change the label AND the icon together on a toggle, never
+   the icon alone (D118). `badge` draws a small count at the corner, `aria-hidden` and
+   `pointer-events: none`, so its arrival moves nothing (D118). */
+const LONG_PRESS_MS = 500
+const FACE_PX: Record<ButtonSize, number> = { sm: 24, md: 28, lg: 34, xl: 40 }
+const GLYPH_PX: Record<ButtonSize, number> = { sm: 12, md: 14, lg: 16, xl: 18 }
+
+export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'aria-label' | 'title'> & {
+  readonly ref?: Ref<HTMLButtonElement>
+  readonly icon: IconName
+  /** The tooltip text, and the accessible name unless `name` overrides it. Required. */
+  readonly label: string
+  /** A longer accessible name for a row where `label` alone would repeat on every instance
+   *  ("Undo the sale at Section 2, Card 5"). The tooltip still shows the short `label`. */
+  readonly name?: string
+  readonly size?: ButtonSize
+  /** The one variant this takes: everything that is not a danger press stays the kit's
+   *  default icon-only look (ghost), which is what every icon-only close/reload button in the
+   *  product already draws. */
+  readonly tone?: 'danger'
+  readonly busy?: boolean
+  /** A toggle of one act: Hold vs. Release, Reveal vs. Hide. Change the label and the icon
+   *  together with it, never the icon alone (D118). */
+  readonly pressed?: boolean
+  /** A small count at the corner — a filter bar's active-facet count. Never moves the layout
+   *  (D118): it is `position: absolute`, drawn outside the flow. */
+  readonly badge?: number | string
+  /** A keycap, shown inside the tooltip beside the label, never on the button itself — an
+   *  icon-only control has no room to spare for one. */
+  readonly kbd?: string
+}
+
+export function IconButton({
+  icon,
+  label,
+  name,
+  size = 'md',
+  tone,
+  busy,
+  pressed,
+  badge,
+  kbd,
+  className,
+  type = 'button',
+  onTouchStart,
+  onTouchEnd,
+  onTouchCancel,
+  ...rest
+}: IconButtonProps) {
+  const [longPress, setLongPress] = useState(false)
+  const timer = useRef<number | null>(null)
+  const clearTimer = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    timer.current = null
+  }
+  const classes = ['bn-btn', 'bn-icon-btn', className ?? ''].filter(Boolean).join(' ')
+  return (
+    <button
+      type={type}
+      className={classes}
+      aria-label={name ?? label}
+      aria-pressed={pressed}
+      data-tone={tone}
+      data-busy={busy ? 'true' : undefined}
+      data-tip-open={longPress ? 'true' : undefined}
+      onTouchStart={(event) => {
+        clearTimer()
+        timer.current = window.setTimeout(() => setLongPress(true), LONG_PRESS_MS)
+        onTouchStart?.(event)
+      }}
+      onTouchEnd={(event) => {
+        clearTimer()
+        setLongPress(false)
+        onTouchEnd?.(event)
+      }}
+      onTouchCancel={(event) => {
+        clearTimer()
+        setLongPress(false)
+        onTouchCancel?.(event)
+      }}
+      {...rest}
+    >
+      <span className="bn-icon-face" style={{ width: FACE_PX[size], height: FACE_PX[size] }}>
+        <Icon name={icon} size={GLYPH_PX[size]} />
+      </span>
+      {badge !== undefined && badge !== 0 && badge !== '' ? (
+        <span className="bn-icon-count" aria-hidden="true">
+          {badge}
+        </span>
+      ) : null}
+      <span className="bn-icon-tip" aria-hidden="true">
+        {label}
+        {kbd ? <Kbd>{kbd}</Kbd> : null}
+      </span>
+    </button>
+  )
+}
+
 /* ---- Kbd ------------------------------------------------------------------------ */
 export function Kbd({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
   return (
@@ -383,17 +512,16 @@ export function ReloadButton({
     return () => window.removeEventListener('keydown', onKey)
   }, [hotkey])
   return (
-    <Button
+    <IconButton
       icon="refresh"
+      label={label}
       kbd={hotkey ? 'R' : undefined}
       busy={busy}
       disabled={busy}
       aria-busy={busy ? 'true' : undefined}
       onClick={onReload}
       className={['bn-reload', className].filter(Boolean).join(' ')}
-    >
-      {label}
-    </Button>
+    />
   )
 }
 

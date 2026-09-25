@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, u
 import type { ComponentType, ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
-import { Button, useLeave } from './index'
+import { Button, IconButton, useLeave } from './index'
 import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
 
 /* ONE SHEET, ONE MODAL, ONE POPOVER, AND ONE STACK OF LAYERS (UX-057, UX-090, UX-091).
@@ -404,9 +404,7 @@ function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose
           <h2 className="bn-overlay-title" id={titleId}>
             {title}
           </h2>
-          <Button variant="ghost" iconOnly icon="x" onClick={onClose} disabled={!dismissible} className="bn-overlay-close">
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={onClose} disabled={!dismissible} className="bn-overlay-close" />
         </div>
         <OverlayContext.Provider value>
           <div className="bn-overlay-body">{children}</div>

@@ -84,6 +84,28 @@ const PATHS = {
      table under PATHS says which name means what. */
   headstone: 'M6 21V10a6 6 0 0 1 12 0v11 M4 21h16 M10 12h4 M12 10v5',
   chart: 'M4 4v16h16 M7 15l4-5 3 3 5-6',
+  /* The eight icons the ICONOGRAPHY map added (`docs/specs/iconography.md` section 3), for the
+     vocabulary `IconButton` draws from. Each is one meaning, in `ICON_MEANINGS` below. */
+  /* A round seal with $: Mark sold. Not `tag` (Pricing's own meaning) and not a bare `dollar`
+     (Sales' own meaning) — a THIRD, deliberately different mark for a THIRD meaning. */
+  sold: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M10.3 8.8h2a1.4 1.4 0 0 1 0 2.8h-1a1.4 1.4 0 0 0 0 2.8h2 M12 7v1.5 M12 15.5V17',
+  /* A pencil: Edit or Rename. The body, the tip, the underline it is about to write. */
+  pencil: 'M4 20h4l11-11a2 2 0 0 0-3-3L5 17v3z M13 6l3 3',
+  /* An eraser, angled, over the line it is about to remove: an undoable clear, never `trash`
+     (which means gone for good). */
+  eraser: 'M17 3l4 4-10.5 10.5H6L3 14z M11 6l7 7 M4 20h9',
+  /* The `eye` with a line through it: Hide, the other half of `eye`'s Reveal. */
+  eyeOff: 'M3 3l18 18 M10.6 5.1A10.7 10.7 0 0 1 22 12s-1.5 2.6-4.2 4.6 M6.2 7.4C4 9 2 12 2 12s4 7 10 7c1.3 0 2.6-.3 3.7-.8 M9.5 9.5a3 3 0 0 0 4.2 4.2',
+  /* Two arrows, opposite ends, opposite directions: the sort direction toggle. `sortAsc` points
+     up on the left (low to high); `sortDesc` points down on the left (high to low). Neither
+     names the SORT KEY, which stays in words (FLT-19, UX-214) — only which way it runs. */
+  sortAsc: 'M7 20V4 M7 4l-4 4 M7 4l4 4 M14 7h7 M14 12h7 M14 17h5',
+  sortDesc: 'M7 4v16 M7 20l-4-4 M7 20l4-4 M14 7h5 M14 12h7 M14 17h7',
+  /* An arrow into a bracket, deliberately NOT box-shaped (`box`, `package` and `archive` are
+     already boxes, and a fourth would blur at 14px): Move to a box. */
+  moveTo: 'M13 4h7v16h-7 M3 12h14 M13 7l4 5-4 5',
+  /* Six dots, two columns of three: a drag handle. */
+  grip: 'M9 6h.01 M9 12h.01 M9 18h.01 M15 6h.01 M15 12h.01 M15 18h.01',
 } as const
 
 /** WHAT AN ICON MEANS, where a meaning was ever in doubt (UX-118). A screen that draws one of
@@ -96,6 +118,33 @@ export const ICON_MEANINGS: Partial<Record<keyof typeof PATHS, string>> = {
   refresh: 'Read again from the server: reload',
   undo: 'Take back the last press',
   trash: 'Delete for good',
+  /* The ICONOGRAPHY vocabulary (`docs/specs/iconography.md` section 2, step 6): every icon
+     `IconButton` draws from, so a call site is never a guess at what a glyph means. */
+  sold: 'Mark a card sold',
+  pencil: 'Edit or rename a stored fact',
+  eraser: 'Clear a typed value; it can be undone',
+  eyeOff: 'Hide what Reveal showed',
+  sortAsc: 'Sort low to high',
+  sortDesc: 'Sort high to low',
+  moveTo: 'Move to a box',
+  grip: 'Drag to reorder',
+  copy: 'Copy to the clipboard',
+  download: 'Save a file to disk',
+  external: 'Open elsewhere',
+  x: 'Close, dismiss, or clear one value',
+  filter: 'Filter the list',
+  settings: 'Manage, or the options for this row',
+  more: 'More actions for this row',
+  lock: 'Hold a price; it does not move',
+  unlock: 'Release a held price',
+  eye: 'Reveal what is hidden',
+  chevronLeft: 'The previous item',
+  chevronRight: 'The next item, or open this row',
+  chevronUp: 'Collapse',
+  chevronDown: 'Expand',
+  search: 'Search',
+  check: 'Confirm, or a completed state',
+  hand: 'Fulfillment: a card the Fulfiller may pull',
 }
 
 export type IconName = keyof typeof PATHS

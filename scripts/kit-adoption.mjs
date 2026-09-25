@@ -58,6 +58,13 @@
  *                            HEURISTIC, said plainly: a `$` before an interpolation is read as a
  *                            price, which it is in this product. An options object held in a
  *                            variable is not seen.
+ *                R2-icon-only-button
+ *                            a hand-rolled icon-only control (owner's ruling, 2026-09-24,
+ *                            ICONOGRAPHY; D-icon-buttons): a native `<button>` whose only
+ *                            non-blank child is an `<Icon>`, or any element carrying the
+ *                            `iconOnly` JSX attribute (the kit's own `Button` prop, read by
+ *                            presence, never by its value) — the kit has `IconButton` for
+ *                            this now, with a required label and a tooltip.
  *
  * THE EXCEPTIONS ARE A SHRINKING OFFENDER LIST, NEVER A PINNED COUNT (the owner's ruling on Q3,
  * 2026-09-23). `scripts/kit-adoption-allow.json`'s `static` block is file -> rule -> lane: the
@@ -154,7 +161,25 @@ export const HOME = {
  *  (a `bn-skeleton` bar, a `bn-money` figure, the `bn-title` size), which is its whole job. It is
  *  exempt from R2-class only. R1 and every other R2 rule still apply to it. */
 export const SPECIMEN_FILES = ['app/src/Gallery.tsx']
+/** THE FULFILLER'S OWN FILES (`docs/specs/iconography.md` section 2, rule 1): the rule does
+ *  not apply there. Exempt from `R2-icon-only-button` only, alongside `SPECIMEN_FILES`. This
+ *  cannot reach `CardLocations.tsx`'s `FulfillerCard` branch, which shares a file with the
+ *  owner's own rows — a component-level exemption is not this reader's shape, so that branch
+ *  is read by the owner's rule like any other, a known gap named here rather than hidden. */
+export const FULFILLER_FILES = ['app/src/Fulfillment.tsx', 'app/src/PullConfirm.tsx']
 const ALLOW_FILE = 'scripts/kit-adoption-allow.json'
+/** R2-icon-only-button's clause (c): a `Button` whose literal label starts with one of these,
+ *  and whose `variant` cannot be shown to be always `primary` or `danger-solid` — the two
+ *  variants the ICONOGRAPHY rule always leaves as words (`docs/specs/iconography.md` section
+ *  2, rules 2 and 4). Longer phrases first, so `Mark sold` is not shadowed by nothing shorter. */
+export const VOCAB_VERBS = [
+  'Mark sold', 'Undo', 'Retire', 'Edit', 'Rename', 'Delete', 'Forget', 'Copy', 'Download',
+  'Open as page', 'Close', 'Dismiss', 'Reload', 'Manage', 'Options',
+]
+const VOCAB_VERB_RE = new RegExp(`^(${VOCAB_VERBS.map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`)
+/** The variants clause (c) never flags: the vocabulary word IS the label there on purpose
+ *  (Mark sold as the only primary in its sector, Delete behind a `danger-solid` confirm). */
+const WORDED_VARIANTS = new Set(['primary', 'danger-solid'])
 
 /** Every rule id the allow list may name. An entry naming anything else is refused. */
 export const RULES = {
@@ -165,6 +190,7 @@ export const RULES = {
   'R2-class': 'a kit-reserved class name outside the kit',
   'R2-date': 'a hand-rolled date format outside app/src/dates.ts',
   'R2-money': 'a hand-rolled $ amount outside app/src/money.ts (use the kit\'s Money, or money() from money.ts)',
+  'R2-icon-only-button': 'a hand-rolled icon-only control outside the kit (use IconButton)',
 }
 
 /** The class names only the kit may write. A token equal to one of these is reserved. */
@@ -489,6 +515,7 @@ function scanFile(rel, sf) {
   const add = (rule, node, detail) => {
     if (HOME[rule] === rel) return
     if (rule === 'R2-class' && SPECIMEN_FILES.includes(rel)) return
+    if (rule === 'R2-icon-only-button' && (SPECIMEN_FILES.includes(rel) || FULFILLER_FILES.includes(rel))) return
     hits.push({ rule, line: lineOf(sf, node), detail })
   }
   const visit = (n) => {
@@ -498,6 +525,8 @@ function scanFile(rel, sf) {
         for (const v of attrLiterals(n)) if (v === 'dialog' || v === 'alertdialog') add('R2-dialog', n, `role="${v}"`)
       } else if (name === 'className' && n.initializer) {
         for (const t of classTokens(n.initializer)) if (reserved(t)) add('R2-class', n, t)
+      } else if (name === 'iconOnly') {
+        add('R2-icon-only-button', n, 'iconOnly')
       }
     } else if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
       const tag = n.tagName.getText(sf)
@@ -521,6 +550,34 @@ function scanFile(rel, sf) {
         if (!ts.isJsxExpression(next) || !next.expression) continue
         const dollar = ts.isJsxText(k) ? DOLLAR_END.test(k.text) : ts.isJsxExpression(k) && k.expression !== undefined && endsInDollar(k.expression)
         if (dollar) add('R2-money', next, 'a `$` in JSX before `{...}`')
+      }
+      /* Clause (b): a native <button> whose only non-blank child is <Icon> or a raw <svg> — a
+         hand-rolled icon-only control that skipped the kit's Button/IconButton entirely. */
+      if (ts.isJsxElement(n) && n.openingElement.tagName.getText(sf) === 'button') {
+        const real = kids.filter((k) => !(ts.isJsxText(k) && k.text.trim() === '') && !ts.isJsxExpression(k))
+        if (real.length === 1) {
+          const only = real[0]
+          const onlyTag = ts.isJsxSelfClosingElement(only) ? only.tagName.getText(sf)
+            : ts.isJsxElement(only) ? only.openingElement.tagName.getText(sf) : null
+          if (onlyTag === 'Icon' || onlyTag === 'svg') add('R2-icon-only-button', n.openingElement, `<button> whose only child is <${onlyTag}>`)
+        }
+      }
+      /* Clause (c): a <Button> whose literal label starts with a vocabulary verb, and whose
+         `variant` cannot be shown to always be `primary` or `danger-solid` — the ICONOGRAPHY
+         rule's own two words-only variants. A label read through anything but plain JSX text
+         (an expression, a nested element) is not a literal and is not seen here, same as
+         every other heuristic in this file. */
+      if (ts.isJsxElement(n) && n.openingElement.tagName.getText(sf) === 'Button') {
+        const textKids = kids.filter((k) => !(ts.isJsxText(k) && k.text.trim() === ''))
+        if (textKids.length > 0 && textKids.every((k) => ts.isJsxText(k))) {
+          const label = textKids.map((k) => k.text).join('').replace(/\s+/g, ' ').trim()
+          const verb = VOCAB_VERB_RE.exec(label)
+          if (verb !== null) {
+            const variantLiterals = literalsOf(attr(n.openingElement, 'variant')?.initializer)
+            const provenWorded = variantLiterals.length > 0 && variantLiterals.every((v) => WORDED_VARIANTS.has(v))
+            if (!provenWorded) add('R2-icon-only-button', n.openingElement, `<Button>${label}</Button>, variant not provably primary/danger-solid`)
+          }
+        }
       }
     } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken && endsInDollar(n.left)) {
       add('R2-money', n, "`'$' + ...`")
@@ -739,6 +796,60 @@ function allowAtBase(reference = 'origin/main') {
   return { allow, base, rules }
 }
 
+/* ---- the icon vocabulary has a meaning for every icon it names (docs/specs/iconography.md
+   section 3: "Also add ICON_MEANINGS rows for the icons that exist"). Read from the AST, like
+   everything else here, never by importing Icon.tsx (it is TypeScript; this file only parses
+   it). A vocabulary icon `IconButton` can draw but `ICON_MEANINGS` cannot explain is a call
+   site with no way to check its own glyph is right. */
+const ICON_FILE = 'app/src/kit/Icon.tsx'
+/** Every icon name `docs/specs/iconography.md` section 2, step 6 draws from. */
+export const VOCAB_ICON_NAMES = [
+  'sold', 'undo', 'archive', 'pencil', 'trash', 'eraser', 'copy', 'download', 'external', 'x',
+  'filter', 'sortAsc', 'sortDesc', 'refresh', 'settings', 'more', 'moveTo', 'lock', 'unlock',
+  'eye', 'eyeOff', 'chevronLeft', 'chevronRight', 'chevronUp', 'chevronDown', 'search', 'grip',
+]
+
+/** The string-literal-keyed property names of `export const <varName> = { ... }`, or `null`
+ *  if that declaration is not there or is not an object literal. */
+function objectKeys(sf, varName) {
+  let keys = null
+  const visit = (n) => {
+    if (keys !== null) return
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === varName && n.initializer) {
+      const init = unwrap(n.initializer)
+      if (ts.isObjectLiteralExpression(init)) {
+        keys = init.properties
+          .filter((p) => (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)))
+          .map((p) => p.name.text)
+      }
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return keys
+}
+
+/** `{ missing, unknown, reason }`: `missing` is every vocabulary icon `PATHS` carries with no
+ *  `ICON_MEANINGS` row; `unknown` is every vocabulary icon `PATHS` does not carry at all (the
+ *  vocabulary named an icon nobody drew). `reason` is set, and both arrays are `null`, only
+ *  when `Icon.tsx` could not be read as expected — never a silent pass over nothing. */
+export function iconMeaningsGap(files) {
+  const text = files.get(ICON_FILE)
+  if (text === undefined) return { missing: null, unknown: null, reason: `${ICON_FILE} is missing` }
+  const sf = ts.createSourceFile(ICON_FILE, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const paths = objectKeys(sf, 'PATHS')
+  const meanings = objectKeys(sf, 'ICON_MEANINGS')
+  if (paths === null) return { missing: null, unknown: null, reason: `${ICON_FILE}: PATHS is not a readable object literal` }
+  if (meanings === null) return { missing: null, unknown: null, reason: `${ICON_FILE}: ICON_MEANINGS is not a readable object literal` }
+  const pathSet = new Set(paths)
+  const meaningSet = new Set(meanings)
+  return {
+    missing: VOCAB_ICON_NAMES.filter((name) => pathSet.has(name) && !meaningSet.has(name)),
+    unknown: VOCAB_ICON_NAMES.filter((name) => !pathSet.has(name)),
+    reason: null,
+  }
+}
+
 /* ---- the real tree ------------------------------------------------------------------------- */
 
 function readTree() {
@@ -809,10 +920,25 @@ function run() {
   const lanes = {}
   for (const lane of listed.values()) lanes[lane] = (lanes[lane] ?? 0) + 1
   const byLane = Object.entries(lanes).sort().map(([l, n]) => `${l} ${n}`).join(', ')
-  if (errors.length || unlisted.length || stale.length || (grown !== null && grown.refused.length > 0)) process.exit(1)
+
+  const iconGap = iconMeaningsGap(files)
+  if (iconGap.reason !== null) {
+    console.error(`kit-adoption: ${iconGap.reason}. Failing closed: the vocabulary cannot be checked.`)
+  } else {
+    for (const name of iconGap.missing) {
+      console.error(`kit-adoption: ${ICON_FILE}: "${name}" is in the icon vocabulary (docs/specs/iconography.md section 2) but ICON_MEANINGS has no row for it.`)
+    }
+    for (const name of iconGap.unknown) {
+      console.error(`kit-adoption: ${ICON_FILE}: the icon vocabulary names "${name}", which PATHS does not draw.`)
+    }
+  }
+  const iconGapFails = iconGap.reason !== null || iconGap.missing.length > 0 || iconGap.unknown.length > 0
+
+  if (errors.length || unlisted.length || stale.length || (grown !== null && grown.refused.length > 0) || iconGapFails) process.exit(1)
   console.log(
     `kit-adoption: ${result.routes.length} routes, ${result.violations.length} violations, every one ` +
-      `listed; ${listed.size} allow-list entries still owed (${byLane || 'none'}).`,
+      `listed; ${listed.size} allow-list entries still owed (${byLane || 'none'}). Icon vocabulary: ` +
+      `${VOCAB_ICON_NAMES.length} icons, every one has a meaning.`,
   )
 }
 
@@ -1025,6 +1151,56 @@ function selfTest() {
   add('every money shape is green inside money.ts, its home', () =>
     green(outcome(tree({ 'app/src/money.ts': "export const a = (x) => `$${x}`\nexport const b = (x) => '$' + x\n" }))))
 
+  /* R2-icon-only-button (F-icons): a hand-rolled icon-only control outside the kit. */
+  add('a <button> whose only child is <Icon> is red', () =>
+    rule('export const S = () => <button onClick={f}><Icon name="x" /></button>\n', 'R2-icon-only-button') === 1)
+  add('a <button> with an <Icon> AND visible text is green (a labelled button, not icon-only)', () =>
+    rule('export const S = () => <button onClick={f}><Icon name="x" />Close</button>\n', 'R2-icon-only-button') === 0)
+  add('a <button> whose only child is <Icon>, wrapped in whitespace, is still red', () =>
+    rule('export const S = () => <button onClick={f}>\n  <Icon name="x" />\n</button>\n', 'R2-icon-only-button') === 1)
+  add('a <Button iconOnly icon="x">Reveal</Button> is red (iconOnly, by presence)', () =>
+    rule('export const S = () => <Button iconOnly icon="x">Reveal</Button>\n', 'R2-icon-only-button') === 1)
+  add('a conditional iconOnly={cond} is still red (read by presence, not value)', () =>
+    rule('export const S = ({ small }) => <Button iconOnly={small} icon="x">Reveal</Button>\n', 'R2-icon-only-button') === 1)
+  add('a <Button icon="x">Reveal</Button> with no iconOnly, and no vocabulary word, is green', () =>
+    rule('export const S = () => <Button icon="x">Reveal</Button>\n', 'R2-icon-only-button') === 0)
+  add('an <IconButton icon="x" label="Close" /> is green: the kit primitive itself is not a violation', () =>
+    rule('export const S = () => <IconButton icon="x" label="Close" />\n', 'R2-icon-only-button') === 0)
+  add('a <button><Icon /></button> inside app/src/kit/ is green', () =>
+    green(outcome(tree({ 'app/src/kit/Toast.tsx': 'export const T = () => <button onClick={f}><Icon name="x" /></button>\n' }))))
+
+  /* Clause (b): a native <button> whose only child is an inline <svg>. */
+  add('a <button><svg>...</svg></button> is red', () =>
+    rule('export const S = () => <button onClick={f}><svg><path d="M0 0" /></svg></button>\n', 'R2-icon-only-button') === 1)
+
+  /* Clause (c): a <Button> whose literal label starts with a vocabulary verb, unless its
+     variant is provably `primary` or `danger-solid`. */
+  add('a <Button>Mark sold</Button> with no variant (default) is red', () =>
+    rule('export const S = () => <Button icon="check">Mark sold</Button>\n', 'R2-icon-only-button') === 1)
+  add('a <Button variant="primary">Mark sold</Button> is green', () =>
+    rule('export const S = () => <Button variant="primary" icon="check">Mark sold</Button>\n', 'R2-icon-only-button') === 0)
+  add('a <Button variant="danger-solid">Delete</Button> is green', () =>
+    rule('export const S = () => <Button variant="danger-solid" icon="trash">Delete</Button>\n', 'R2-icon-only-button') === 0)
+  add('a <Button variant="ghost">Undo</Button> is red', () =>
+    rule('export const S = () => <Button variant="ghost" icon="undo">Undo</Button>\n', 'R2-icon-only-button') === 1)
+  add('a dynamic variant that CAN be default (`primary ? "primary" : "default"`) is red — the map\'s own "must split into two branches" case', () =>
+    rule('export const S = ({ primary }) => <Button variant={primary ? "primary" : "default"} icon="check">Mark sold</Button>\n', 'R2-icon-only-button') === 1)
+  add('a fully dynamic label ({label}) is not seen: not a literal', () =>
+    rule('export const S = ({ label }) => <Button icon="check">{label}</Button>\n', 'R2-icon-only-button') === 0)
+  add('a label that does not START with a vocabulary verb is green (a verb mid-sentence does not match)', () =>
+    rule('export const S = () => <Button icon="check">The row can be retired</Button>\n', 'R2-icon-only-button') === 0)
+
+  /* The Fulfiller's own files, and Gallery, are exempt from this rule alone. */
+  add('R2-icon-only-button is green in app/src/Fulfillment.tsx and app/src/PullConfirm.tsx', () =>
+    green(outcome(tree({
+      'app/src/Fulfillment.tsx': 'export const F = () => <button onClick={f}><Icon name="x" /></button>\n',
+      'app/src/PullConfirm.tsx': 'export const P = () => <Button icon="check">Mark sold</Button>\n',
+    }))))
+  add('R2-icon-only-button is green in app/src/Gallery.tsx (the specimen sheet)', () => {
+    const r = outcome(tree({ 'app/src/Gallery.tsx': 'export const G = () => <button onClick={f}><Icon name="x" /></button>\n' }))
+    return !has(r.unlisted, 'app/src/Gallery.tsx', 'R2-icon-only-button')
+  })
+
   /* ONLY SHRINKS (F3): the growth read against the merge-base. */
   const base = { static: { 'app/src/A.tsx': { R1: 'home', 'R2-class': 'home' } }, runtime: { '/': { page: 'home' } } }
   /* The rules defined at the merge-base: every rule this file knows today, minus R2-new, which
@@ -1092,6 +1268,32 @@ function selfTest() {
     return g.refused.length === 0 && g.allowed.length === 0
   })
   add('no allow list at the merge-base fails open (null), never a silent pass', () => growth(null, base) === null)
+
+  /* iconMeaningsGap: every icon the vocabulary draws has a row in ICON_MEANINGS. */
+  const iconFixture = (paths, meanings) =>
+    new Map([[
+      'app/src/kit/Icon.tsx',
+      `const PATHS = { ${paths.map((p) => `${p}: 'M0 0'`).join(', ')} } as const\n` +
+        `export const ICON_MEANINGS = { ${meanings.map((m) => `${m}: 'a meaning'`).join(', ')} }\n`,
+    ]])
+  add('every vocabulary icon carrying a PATHS entry AND an ICON_MEANINGS row is green', () => {
+    const g = iconMeaningsGap(iconFixture(VOCAB_ICON_NAMES, VOCAB_ICON_NAMES))
+    return g.reason === null && g.missing.length === 0 && g.unknown.length === 0
+  })
+  add('a vocabulary icon with a PATHS entry but no ICON_MEANINGS row is in `missing`', () => {
+    const meanings = VOCAB_ICON_NAMES.filter((n) => n !== 'sold')
+    const g = iconMeaningsGap(iconFixture(VOCAB_ICON_NAMES, meanings))
+    return g.missing.includes('sold') && g.missing.length === 1 && g.unknown.length === 0
+  })
+  add('a vocabulary icon with no PATHS entry at all is in `unknown`, never `missing`', () => {
+    const paths = VOCAB_ICON_NAMES.filter((n) => n !== 'grip')
+    const g = iconMeaningsGap(iconFixture(paths, paths))
+    return g.unknown.includes('grip') && g.unknown.length === 1 && g.missing.length === 0
+  })
+  add('a missing Icon.tsx fails closed with a reason, never a silent pass', () => {
+    const g = iconMeaningsGap(new Map())
+    return g.reason !== null && g.missing === null && g.unknown === null
+  })
   add('the git read sees its subject: the committed list and both rule definitions at HEAD', () => {
     const at = allowAtBase('HEAD')
     if (at.allow === null) throw new Error(`nothing to read: ${at.reason}`)

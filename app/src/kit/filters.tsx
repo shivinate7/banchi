@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Icon } from './Icon'
-import { FailureNotice } from './index'
+import { FailureNotice, IconButton } from './index'
 import { Sheet } from './overlay'
 import { FilterChips, FilterCount, SortControl, type FilterFacet, type FilterValue, type SortOption, type SortValue } from './data'
 import { SearchField } from '../SearchField'
@@ -213,18 +213,15 @@ export function FilterBar<K extends string = string>({
         {/* THE COMPACT ROW: one trigger, one sheet. Hidden in a wide bar. */}
         {facets.length > 0 || sort !== undefined || hide !== undefined ? (
           <div className="bn-filterbar-compact">
-            <button
-              type="button"
+            <IconButton
+              icon="filter"
+              label={label}
+              badge={badge > 0 ? badge : undefined}
               className="bn-filterbar-trigger"
               aria-haspopup="dialog"
               aria-expanded={sheetOpen}
-              data-active={badge > 0 ? 'true' : undefined}
               onClick={() => setSheetOpen(true)}
-            >
-              <Icon name="filter" size={14} />
-              {label}
-              {badge > 0 ? <span className="bn-filterbar-trigger-count">{badge}</span> : null}
-            </button>
+            />
             <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={label} icon="filter">
               <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
                 <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />

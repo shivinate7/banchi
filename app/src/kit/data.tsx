@@ -3,7 +3,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as 
 import { createPortal } from 'react-dom'
 
 import { Icon, type IconName } from './Icon'
-import { cropStyle, type Crop } from './index'
+import { cropStyle, IconButton, type Crop } from './index'
 import { STATUS_TONES, UNNAMED_BOX, type StatusKind } from './dataRules'
 import { hasSheet, openSheet, sheetHref } from './sheets'
 import { useOverlayLayer } from './overlay'
@@ -999,17 +999,17 @@ function FacetChip({
       />
       {/* Drawn over the chevron's own slot, so the trigger is one width picked or not (D118). */}
       {active ? (
-        <button
-          type="button"
+        <IconButton
+          icon="x"
+          label="Clear"
+          name={`Clear ${facet.label}`}
+          size="sm"
           className="bn-fchip-clear"
-          aria-label={`Clear ${facet.label}`}
           onClick={() => {
             onChange([])
             pick.trigger.current?.focus()
           }}
-        >
-          <Icon name="x" size={12} />
-        </button>
+        />
       ) : null}
       {pick.open ? (
         <PickPanel
@@ -1128,16 +1128,13 @@ export function SortControl<K extends string>({
           onChange({ key, dir: next?.first ?? 'desc' })
         }}
       />
-      <button
-        type="button"
+      <IconButton
+        icon={value.dir === 'asc' ? 'sortAsc' : 'sortDesc'}
+        label={value.dir === 'asc' ? asc : desc}
+        name={`Order: ${value.dir === 'asc' ? asc : desc}. Press to reverse.`}
         className="bn-sort-dir"
-        aria-label={`Order: ${value.dir === 'asc' ? asc : desc}. Press to reverse.`}
         onClick={() => onChange({ key: value.key, dir: value.dir === 'asc' ? 'desc' : 'asc' })}
-      >
-        <span className="bn-sort-dir-words" aria-hidden="true">
-          {value.dir === 'asc' ? asc : desc}
-        </span>
-      </button>
+      />
     </span>
   )
 }

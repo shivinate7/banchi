@@ -363,6 +363,85 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-btn-block { width: 100%; }
 .bn-btn-pill { border-radius: var(--bn-r-full); }
 
+/* ---- IconButton ------------------------------------------------------------
+   TWO NESTED BOXES (`app/src/kit/index.tsx` has the argument): `.bn-icon-btn` is the 40px
+   HIT AREA, at every `size`, never tied to the breakpoint-raised `--btn-h` every other kit
+   control reads — this control's floor never drops. `.bn-icon-face` is the smaller VISUAL
+   face inside it (28px at rest) and carries the paint, so a packed row (a walk, a table)
+   stays dense while the target stays reachable. */
+.bn-icon-btn {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.bn-icon-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--bn-r-sm);
+  color: var(--bn-ink-2);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-icon-btn:hover .bn-icon-face { background: var(--bn-accent-tint); color: var(--bn-ink); }
+.bn-icon-btn[data-tone='danger'] .bn-icon-face { color: var(--bn-danger); }
+.bn-icon-btn[data-tone='danger']:hover .bn-icon-face { background: var(--bn-danger-tint); }
+/* A toggle of one act (Hold/Release, Reveal/Hide): the face reads pressed, off the same pair
+   `Chip`'s own `aria-pressed` reads. */
+.bn-icon-btn[aria-pressed='true'] .bn-icon-face { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.bn-icon-btn[data-busy='true'] .bn-icon-face { color: transparent; }
+
+/* A small count at the corner — a filter bar's active-facet count. `position: absolute` and
+   drawn outside the flow, so its arrival moves nothing else (D118). */
+.bn-icon-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 var(--bn-0-75);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* The tooltip: `label` (and `kbd`), never `name`, which is for a screen reader alone.
+   `position: absolute` off `.bn-btn`'s own `position: relative`, so showing it moves nothing
+   else on the page (D118). `pointer-events: none` so it is never what a click lands on.
+   `:hover`, `:focus-visible` (never a plain mouse `:focus`, so a click does not leave it stuck
+   open) and a touch long-press (`[data-tip-open]`, set by `IconButton`'s own timer — a phone
+   width has no `:hover` to read). */
+.bn-icon-tip {
+  position: absolute;
+  bottom: calc(100% + var(--bn-2));
+  left: 50%;
+  transform: translate(-50%, 2px);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  padding: var(--bn-1) var(--bn-2);
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 5;
+  transition: opacity var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
+}
+.bn-icon-tip .bn-kbd { color: inherit; background: color-mix(in srgb, currentColor 18%, transparent); border-color: transparent; }
+.bn-icon-btn:hover .bn-icon-tip, .bn-icon-btn:focus-visible .bn-icon-tip, .bn-icon-btn[data-tip-open='true'] .bn-icon-tip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 .bn-btn[data-busy='true'] { color: transparent; pointer-events: none; }
 /* Busy is one state whether or not the screen also passed disabled: the ring is drawn full-strength. */
 .bn-btn[data-busy='true']:disabled, .bn-btn[data-busy='true'][aria-disabled='true'] { opacity: 1; }

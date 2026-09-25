@@ -4510,7 +4510,7 @@ COMPONENTS = [
                         "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
                         "app/tests/scaffold.spec.ts, so the spec and the check read one table "
                         "with one reader.",
-                "governed_by": ["D18", "D173", "D-page-scaffold"]},
+                "governed_by": ["D18", "D173", "D-page-scaffold", "D-icon-buttons"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -5628,10 +5628,16 @@ COMPONENTS = [
                                  "governed_by": ["D102"]},
             "src/kit/markPalettes.ts": {"does": "docs/specs/logo.md section 9's six locked marks — prism, bracket, ground and card base per variant, bluesteel the default. GENERATED, but NOT derived: the ground rule applied to the three gold prisms produces the espresso section 8 rejected in favor of true black, so a build that re-derives them redraws marks the spec eliminated. THE ONE FILE IN app/ OUTSIDE tokens.css THAT MAY NAME A COLOUR (D102) — the `raw color` audit row cannot see it, since its scope is app/src/*.css, and `logo parity` stands in its place by reconciling every hex here against section 9 in both directions.",
                                         "governed_by": ["D94", "D102"]},
-            "src/kit/index.tsx": {"does": "the primitives as components: Button, Kbd, Pill, Chip, "
-                                          "PageHeader, EmptyState, Notice, Segmented, Stat, Logo — "
-                                          "plus three things that are not components and belong "
-                                          "beside them. `useLeave` keeps an overlay mounted one beat "
+            "src/kit/index.tsx": {"does": "the primitives as components: Button, IconButton, Kbd, "
+                                          "Pill, Chip, PageHeader, EmptyState, Notice, Segmented, "
+                                          "Stat, Logo — plus three things that are not components "
+                                          "and belong beside them. `IconButton` is the ONE icon-only "
+                                          "control (ICONOGRAPHY, D-icon-buttons): a required "
+                                          "`label` is the tooltip and, unless a longer `name` "
+                                          "overrides it, the accessible name; a 40px hit area at "
+                                          "every size around a 28px face; a CSS tooltip on hover, "
+                                          "focus-visible and a touch long-press. `useLeave` keeps an "
+                                          "overlay mounted one beat "
                                           "after it closes so the leave animation can run. "
                                           "`cropStyle` is the arithmetic that turns "
                                           "`POST /pipeline/crop-preview`'s rectangle into a picture "
@@ -5646,8 +5652,8 @@ COMPONENTS = [
                                           "`banchi.theme` — device-local like the camera's "
                                           "deviceId (D27), and nothing about a card.",
                                   "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
-                                                  "D118", "D125", "D196", "D-notice-detail",
-                                                  "D-one-page-width"]},
+                                                  "D117", "D118", "D125", "D196", "D-notice-detail",
+                                                  "D-one-page-width", "D-icon-buttons"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
