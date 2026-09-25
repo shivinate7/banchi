@@ -1,5 +1,5 @@
 import type { IconName } from './kit'
-import { missingCopies } from './orderBuyers'
+import { MISSING_FACET, missingCopies } from './orderBuyers'
 import type { OrdersPayload, PricingWorklist, RunSummary, ServerStatus } from './types'
 
 /* THE STANDING LINE — what the store is waiting on, ranked, as one sentence.
@@ -145,9 +145,9 @@ export function standing(input: StandingInput): Standing | null {
      read (D114 — no status vocabulary in `app/`), so a resolution row is counted only where
      its own order reads `open: true` on the wire, never derived from `status` text and never
      assumed pre-filtered. See `## D202`. */
-  /* THE SAME CLASSIFICATION THE ORDERS LIST DRAWS (`orderBuyers.ts:missingCopies`): every
-     missing copy on an open order, only the open orders that miss one, and the "Show" facet that
-     holds most of them. `groupBuyers` keeps only rows that read `open: true` (D202). */
+  /* THE SAME RULE THE ORDERS LIST FILTERS ON (`orderBuyers.ts:groupMissing`, summed by
+     `missingCopies`): every missing copy on an open order, and only the open orders that miss one.
+     `groupBuyers` keeps only rows that read `open: true` as open (D202). */
   const missing = orders === null ? null : missingCopies(orders.orders, orders.resolution.orders, Date.now())
   const unfindable = missing === null ? null : missing.copies
   const owed = pricing === null ? null : runsOwingPrice(pricing.roster)
@@ -165,8 +165,7 @@ export function standing(input: StandingInput): Standing | null {
          condition on this screen that is genuinely bad news, and until now it was tail text
          inside a stage note. */
   if (unfindable !== null && unfindable > 0) {
-    /* The press opens Orders on the facet that holds the most of these copies (UX-077). */
-    const facet = missing?.facet ?? null
+    /* The press opens Orders on exactly the buyers counted here (UX-077): `show=missing`. */
     const missingOrders = missing?.orders ?? 0
     return {
       key: 'unfindable',
@@ -180,7 +179,7 @@ export function standing(input: StandingInput): Standing | null {
         n(missingOrders),
         t(missingOrders === 1 ? ' order.' : ' orders.'),
       ],
-      href: facet === null ? '#/orders' : `#/orders?show=${facet}`,
+      href: `#/orders?show=${MISSING_FACET}`,
       kbd: ',O',
       behind: [],
       problem,

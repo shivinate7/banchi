@@ -226,52 +226,49 @@ export function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, Reso
   return worst
 }
 
-/** WHAT HOME'S "Cannot be filled" LINE SAYS, AND WHERE ITS PRESS LANDS (UX-077, amended twice at
- *  the PR 2 integration). One pass over the same classification the Orders list draws: each
- *  buyer group is filed under `worstStatus`, exactly as the "Show" facet files it, and the
- *  copies it cannot fill (`outstanding` on its OPEN orders, D202) are added to that facet.
- *
- *  - `copies` and `orders`: every missing copy, and only the open orders that miss one.
- *  - `byFacet`: the same two figures per "Show" facet.
- *  - `facet`: the facet holding the most missing copies (a tie keeps `STATUS_RANK`'s order), so
- *    the press opens the list where most of the problem is. `null` when nothing is missing.
- *
- *  The first build mapped a line REASON to a facet (`no_copies_on_hand` to `short`), but
- *  `statusOf` files a no-copies line under "Needs a look" unless a copy was recorded for it. On
- *  the owner's store that sent 125 of 135 missing copies to the other facet. */
-export type MissingCopies = {
-  readonly copies: number
-  readonly orders: number
-  readonly byFacet: ReadonlyMap<Status, { readonly copies: number; readonly orders: number }>
-  readonly facet: Status | null
+/** THE ONE RULE FOR "MISSING A COPY" (UX-077, the owner's option c at the PR 2 integration): a
+ *  buyer's missing copies are the `outstanding` copies on its OPEN orders (D202), and its missing
+ *  orders are the open orders with any. Home's "Cannot be filled" sentence and the Orders "Show"
+ *  facet `missing` both read this, so the sentence and the list it opens count the same thing. */
+export function groupMissing(
+  group: BuyerGroup,
+  answers: ReadonlyMap<string, ResolvedOrder>,
+): { readonly copies: number; readonly orders: number } {
+  let copies = 0
+  let orders = 0
+  for (const order of group.open) {
+    const out = answers.get(order.key)?.outstanding ?? 0
+    if (out > 0) {
+      copies += out
+      orders += 1
+    }
+  }
+  return { copies, orders }
 }
 
-export function missingCopies(orders: readonly OrderRow[], resolution: readonly ResolvedOrder[], now: number): MissingCopies {
+/** The "Show" facet value for every buyer who owes at least one missing copy. */
+export const MISSING_FACET = 'missing'
+
+/** WHAT HOME'S "Cannot be filled" LINE SAYS: every missing copy, and only the open orders that
+ *  miss one, summed over `groupMissing`. The press opens `#/orders?show=missing`, which lists
+ *  exactly the buyers counted here.
+ *
+ *  History (D-home-owed-line): the first build mapped a line reason to a facet, and the second
+ *  opened the `worstStatus` facet holding the most copies. On the owner's store that still split
+ *  135 copies across two facets (125 and 10), so no single status list matched the sentence. */
+export function missingCopies(
+  orders: readonly OrderRow[],
+  resolution: readonly ResolvedOrder[],
+  now: number,
+): { readonly copies: number; readonly orders: number } {
   const answers = new Map(resolution.map((one) => [one.key, one] as const))
   const { recent, earlier } = groupBuyers(orders, now)
-  const byFacet = new Map<Status, { copies: number; orders: number }>()
   let copies = 0
   let missingOrders = 0
   for (const group of [...recent, ...earlier]) {
-    let groupCopies = 0
-    let groupOrders = 0
-    for (const order of group.open) {
-      const out = answers.get(order.key)?.outstanding ?? 0
-      if (out > 0) {
-        groupCopies += out
-        groupOrders += 1
-      }
-    }
-    if (groupCopies === 0) continue
-    const status = worstStatus(group, answers)
-    const at = byFacet.get(status) ?? { copies: 0, orders: 0 }
-    byFacet.set(status, { copies: at.copies + groupCopies, orders: at.orders + groupOrders })
-    copies += groupCopies
-    missingOrders += groupOrders
+    const missing = groupMissing(group, answers)
+    copies += missing.copies
+    missingOrders += missing.orders
   }
-  let facet: Status | null = null
-  for (const [status, at] of [...byFacet].sort((x, y) => STATUS_RANK[x[0]] - STATUS_RANK[y[0]])) {
-    if (facet === null || at.copies > (byFacet.get(facet)?.copies ?? 0)) facet = status
-  }
-  return { copies, orders: missingOrders, byFacet, facet }
+  return { copies, orders: missingOrders }
 }

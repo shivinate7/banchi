@@ -68,3 +68,10 @@ both untouched.
 - **The `CLAUDE.md` storage-key roster.** The owner's ruling moves filter memory off
   `localStorage`, screen by screen, as each screen lane adopts this file. The roster itself
   changes in `docs-sweep`, per the addendum.
+
+### Amended 2026-09-25: a URL facet value one screen links to
+
+The owner's option c at the PR 2 integration gives `#/orders` a "Show" value, `missing` ("Missing
+a copy"), and Home's "Cannot be filled" press links to `#/orders?show=missing`. The value lives in
+the URL like every other facet value here. So the link opens the same list that a person gets
+from the option. D-home-owed-line records the rule behind it.

@@ -150,12 +150,11 @@ test('the Orders stage tile on Home carries the same figure, joined by `open` an
   expect(text).not.toContain('7 missing')
 })
 
-/* UX-077, AMENDED AT THE PR 2 INTEGRATION: the "Cannot be filled" press opens Orders on the
- * buyer list's "Show" facet (`#/orders?show=<facet>`), since Orders no longer filters by a line
- * reason. A short or no-copies reason maps to `short`, and any other reason maps to `look`. The
- * facet is kept only where a buyer who owes a missing copy has it, so the list is never empty
- * while Home's figure is above 0. Two ledgers prove both halves: one whose buyer is only short,
- * and `mixedLedger`, whose no-copies line leaves its buyer at "Needs a look". */
+/* UX-077, AMENDED AT THE PR 2 INTEGRATION (the owner's option c): the "Cannot be filled" press
+ * opens Orders on the "Show" facet "Missing a copy" (`#/orders?show=missing`), every buyer who
+ * owes a copy the store cannot find, whatever that buyer's state. Two ledgers: a buyer who is
+ * only short, and `mixedLedger`, whose no-copies line leaves its buyer at "Needs a look". Both
+ * land on a list that is not empty. */
 const EMPTY_PLAN = {
   cost: 'sections',
   stops: [],
@@ -177,8 +176,8 @@ function shortLedger(): OrdersPayload {
 }
 
 for (const [label, ledger, facet] of [
-  ['a buyer who is only short', shortLedger, 'short'],
-  ['a buyer whose missing copy leaves it at Needs a look', mixedLedger, 'look'],
+  ['a buyer who is only short', shortLedger, 'missing'],
+  ['a buyer whose missing copy leaves it at Needs a look', mixedLedger, 'missing'],
 ] as const) {
   test(`the "Cannot be filled" press opens a non-empty Orders list on show=${facet}: ${label}`, async ({ page }) => {
     await page.route(/\/orders$/, (route) => json(route, ledger()))
@@ -201,10 +200,9 @@ for (const [label, ledger, facet] of [
 /* F2, THE OWNER'S STORE IN MINIATURE (PR 2 integration review). Home said "135 copies missing
  * across 71 orders" and opened `show=short`, which held 6 buyers and 10 of those copies. The
  * other 125 sat under "Needs a look", and only 57 open orders missed a copy at all. This ledger
- * has the same shape: Ada's two orders miss 5 copies with none recorded (Orders files that as
- * "Needs a look"), Bob's order misses 1 with one copy already pulled (Orders files that as
- * "Short"), and Cy's open order misses nothing. Home counts only the 3 orders that miss a copy,
- * and the press opens the facet that holds most of them: "Needs a look", with Ada in it. */
+ * has the same split: Ada's two orders miss 5 copies with none recorded ("Needs a look"), Bob's
+ * order misses 1 with one copy already pulled ("Short"), and Cy's open order misses nothing.
+ * Home counts only the 3 orders that miss a copy, and the "Missing a copy" list adds up to it. */
 function lookHeavyLedger(): OrdersPayload {
   const ada1 = orderRow({ key: 'TCGplayer:ADA-1', number: 'ADA-1', buyer: 'Ada Lovelace', wanted: 3, recorded: 0 })
   const ada2 = orderRow({ key: 'TCGplayer:ADA-2', number: 'ADA-2', buyer: 'Ada Lovelace', wanted: 2, recorded: 0 })
@@ -229,7 +227,7 @@ function lookHeavyLedger(): OrdersPayload {
   }
 }
 
-test('"Cannot be filled" counts only the orders that miss a copy, and opens the facet holding most of them', async ({ page }) => {
+test('"Cannot be filled" counts only the orders that miss a copy, and the list it opens adds up to it exactly', async ({ page }) => {
   await page.route(/\/orders$/, (route) => json(route, lookHeavyLedger()))
   await page.route(/\/orders\/walk-plan$/, (route) => json(route, EMPTY_PLAN))
   await page.goto('/#/')
@@ -239,14 +237,26 @@ test('"Cannot be filled" counts only the orders that miss a copy, and opens the 
   await expect(standingRow).toContainText('Cannot be filled')
   const said = (await standingRow.innerText()).replace(/\s+/g, ' ')
   expect(said).toContain('6 copies missing across 3 orders')
-  await expect(standingRow).toHaveAttribute('href', '#/orders?show=look')
+  await expect(standingRow).toHaveAttribute('href', '#/orders?show=missing')
   await standingRow.click()
 
-  /* THE LIST THE PRESS OPENS HOLDS THE BUYERS HOME COUNTED UNDER THAT FACET: Ada, and nobody
-     else. Bob's one short copy is the other facet's, which is why the press did not go there. */
+  /* FULL EQUALITY (the owner's option c): the "Missing a copy" list holds every buyer Home
+     counted and nobody else, across both states. Ada is "Needs a look" and Bob is "Short", and
+     Cy, whose open order misses nothing, is not listed. Each row says its own missing copies
+     and orders, and they sum to Home's sentence. */
   const rows = page.locator('main.orders .orders-index-row')
-  await expect(rows).toHaveCount(1)
-  await expect(rows.first()).toContainText('Ada Lovelace')
+  await expect(rows).toHaveCount(2)
+  await expect(page.locator('main.orders')).not.toContainText('Cy Hopper')
+  const figures = await page.locator('main.orders .orders-index-figure').allInnerTexts()
+  const sums = figures.reduce(
+    (acc, text) => {
+      const m = /(\d+) missing in (\d+) orders?/.exec(text.replace(/\s+/g, ' '))
+      expect(m, `a row's figure: "${text}"`).not.toBeNull()
+      return { copies: acc.copies + Number(m![1]), orders: acc.orders + Number(m![2]) }
+    },
+    { copies: 0, orders: 0 },
+  )
+  expect(sums).toEqual({ copies: 6, orders: 3 })
 })
 
 /* D218: NO ROUTE TYPES A MIDDLE DOT OR BULLET. `stubStore`'s two boxes carry real

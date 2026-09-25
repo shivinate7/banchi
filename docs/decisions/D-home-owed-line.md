@@ -49,19 +49,28 @@ Home said "135 copies missing across 71 orders" and opened `show=short`. That li
 and 10 of the copies. The other 125 were under "Needs a look", and only 57 open orders missed a
 copy at all.
 
-The build now, in `orderBuyers.ts`'s `missingCopies`:
+The second build filed each buyer under `worstStatus` and opened the "Show" facet holding the
+most missing copies. On the owner's store that still split the copies across two facets (125
+under "Needs a look", 10 under "Short"), so no single status list matched the sentence.
 
-- Each buyer group is filed under `worstStatus`, the same classification the "Show" facet draws.
-  Its missing copies (`outstanding` on its open orders, D202) go to that facet.
-- The sentence counts every missing copy, and only the open orders that miss one.
-- The press opens the facet that holds the most missing copies. A tie keeps `STATUS_RANK`'s own
-  order. Where nothing is missing, the press opens plain `#/orders`.
+Amended a third time, 2026-09-25, on the owner's word (option c, verbatim): "New 'missing a
+copy' filter". The build now:
+
+- One rule, `orderBuyers.ts`'s `groupMissing`: a buyer's missing copies are the `outstanding`
+  copies on its open orders (D202), and its missing orders are the open orders with any.
+- Home's sentence sums that rule over every buyer (`missingCopies`). It counts every missing
+  copy, and only the open orders that miss one.
+- Orders' "Show" facet gains a value, `missing`, labelled "Missing a copy". It lists every buyer
+  that the same rule counts, whatever that buyer's state. Its count is the rows it shows, and it
+  is offered only while it has any. Under it, each row says its own missing copies and orders.
+- The press opens `#/orders?show=missing` (D285's URL view state).
 
 `app/tests/home.spec.ts` presses the line against a ledger shaped like the owner's store. One
 buyer misses 5 copies under "Needs a look", one misses 1 copy under "Short", and one open order
-misses nothing. The case checks "6 copies missing across 3 orders", `show=look`, and a list that
-holds that one buyer. The old code read "across 4 orders" there and went red. The two earlier
-cases (`show=short`, and `show=look` for a no-copies line) still check a list that is not empty.
+misses nothing. The case checks "6 copies missing across 3 orders", then sums the opened list's
+rows, and requires exactly 6 copies and 3 orders. The old code opened `show=look` and went red.
+`app/tests/orders.spec.ts` checks the option's count, its list, and that it is not offered while
+no buyer owes a missing copy.
 
 ### Five stages, not six (Q6, 2026-09-24)
 

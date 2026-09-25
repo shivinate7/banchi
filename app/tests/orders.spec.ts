@@ -3480,3 +3480,37 @@ test('the lightbox traps focus, closes on Escape, and gives focus back to the ph
   await expect(lightbox).toHaveCount(0)
   await expect(frame).toBeFocused()
 })
+
+/* "MISSING A COPY" (the owner's option c at the PR 2 integration): a real "Show" option, every
+ * buyer who owes at least one copy the store cannot find, whatever that buyer's state. Its count
+ * is the rows it shows, it is drawn only while it has any, and each row under it says its own
+ * missing copies and orders (`orderBuyers.ts:groupMissing`, the rule Home's line sums). */
+test('the Show facet offers "Missing a copy", counts its buyers, and lists only them', async ({ page }) => {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+  await open(page, {
+    orders: payloadOf([alice.row, bob.row], [{ ...alice.resolved, outstanding: 0 }, { ...bob.resolved, outstanding: 2 }]),
+  })
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  const option = list.getByRole('option', { name: /^Missing a copy/ })
+  await expect(option).toContainText('1')
+  await option.click()
+  await closeFilters(page)
+
+  await expect(page).toHaveURL(/[?&]show=missing/)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
+  await expect(page.locator('.orders-index-figure')).toHaveText(/2 missing in 1 order$/)
+})
+
+test('"Missing a copy" is not offered while no buyer owes a missing copy', async ({ page }) => {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  await open(page, { orders: payloadOf([alice.row], [{ ...alice.resolved, outstanding: 0 }]) })
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await expect(list.getByRole('option', { name: /^Ready/ })).toBeVisible()
+  await expect(list.getByRole('option', { name: /^Missing a copy/ })).toHaveCount(0)
+})

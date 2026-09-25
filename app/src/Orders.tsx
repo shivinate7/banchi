@@ -34,7 +34,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { isEditableTarget } from './keys'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupForOrderKey, lineReason, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupForOrderKey, groupMissing, lineReason, MISSING_FACET, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   buyerLabel,
   orderBuyerLabel,
@@ -850,8 +850,13 @@ const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
 ]
 const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
 
-/** The "Show" facet's choices, worst first: a buyer's one state (UX-171, UX-199). */
-const SHOW_ORDER: readonly Status[] = ['look', 'short', 'ready', 'unresolved', 'done']
+/** The "Show" facet's choices: a buyer's one state, worst first (UX-171, UX-199), after
+ *  "Missing a copy" — every buyer who owes at least one copy the store cannot find, across
+ *  states (`orderBuyers.ts:groupMissing`, the owner's option c). Home's "Cannot be filled"
+ *  press opens that one. */
+type ShowValue = Status | typeof MISSING_FACET
+const SHOW_ORDER: readonly ShowValue[] = [MISSING_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
+const showLabel = (value: ShowValue): string => (value === MISSING_FACET ? 'Missing a copy' : STATUS_PILL[value].label)
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -2687,13 +2692,13 @@ function PullStage({
   const feedStatuses = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
   const facetShape: readonly FilterFacet[] = useMemo(
     () => [
-      { key: 'show', label: 'Show', multiple: false, options: SHOW_ORDER.map((value) => ({ value, label: STATUS_PILL[value].label })) },
+      { key: 'show', label: 'Show', multiple: false, options: SHOW_ORDER.map((value) => ({ value, label: showLabel(value) })) },
       { key: 'status', label: 'TCGplayer status', options: feedStatuses.map((one) => ({ value: one.status, label: one.status })) },
     ],
     [feedStatuses],
   )
   const [picked, setPicked] = useFacetParams(facetShape)
-  const show = (picked.show?.[0] ?? null) as Status | null
+  const show = (picked.show?.[0] ?? null) as ShowValue | null
   const statuses = picked.status ?? []
 
   const inOpenBase = (group: BuyerGroup) => group.open.length > 0 || finished.has(group.key)
@@ -2703,8 +2708,10 @@ function PullStage({
   const passesSearch = (group: BuyerGroup) =>
     matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number)] })
   const passesHide = (group: BuyerGroup) => passesHideUnknown(group, hideUnknown, answers)
-  const passesShow = (group: BuyerGroup, value: Status | null) =>
-    value === null || value === 'done' || statusByGroup.get(group.key) === value
+  const passesShow = (group: BuyerGroup, value: ShowValue | null) =>
+    value === null ||
+    value === 'done' ||
+    (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
 
   const base = allGroups.filter(show === 'done' ? inDoneBase : inOpenBase)
   const shownGroups = sortGroups(
@@ -2719,7 +2726,7 @@ function PullStage({
       ...facetShape[0]!,
       options: SHOW_ORDER.map((value) => ({
         value,
-        label: STATUS_PILL[value].label,
+        label: showLabel(value),
         count: allGroups.filter(
           (group) =>
             (value === 'done' ? inDoneBase(group) : inOpenBase(group)) &&
@@ -2728,7 +2735,7 @@ function PullStage({
             passesSearch(group) &&
             passesHide(group),
         ).length,
-      })).filter((option) => option.value !== 'unresolved' || option.count > 0),
+      })).filter((option) => (option.value !== 'unresolved' && option.value !== MISSING_FACET) || option.count > 0),
     },
     {
       ...facetShape[1]!,
@@ -3120,6 +3127,7 @@ function PullStage({
               group={group}
               answers={answers}
               status={statusByGroup.get(group.key) ?? 'done'}
+              missing={show === MISSING_FACET ? groupMissing(group, answers) : null}
               selected={group.key === selectedKey}
               onSelect={() => select(group.key)}
             />
@@ -3374,12 +3382,16 @@ function BuyerRow({
   group,
   answers,
   status,
+  missing = null,
   selected,
   onSelect,
 }: {
   readonly group: BuyerGroup
   readonly answers: ReadonlyMap<string, ResolvedOrder>
   readonly status: Status
+  /** Under "Missing a copy", the figure the list is filtered on: the buyer's missing copies and
+   *  the open orders that miss one, so the list adds up to Home's "Cannot be filled" line. */
+  readonly missing?: { readonly copies: number; readonly orders: number } | null
   readonly selected: boolean
   readonly onSelect: () => void
 }) {
@@ -3406,7 +3418,11 @@ function BuyerRow({
         )}
       </span>
       <span className="orders-index-figure">
-        {status === 'done' ? (
+        {missing !== null ? (
+          <>
+            <b>{missing.copies}</b> missing in <b>{missing.orders}</b> {missing.orders === 1 ? 'order' : 'orders'}
+          </>
+        ) : status === 'done' ? (
           <>
             <b>{figures.sold}</b> sold
           </>
