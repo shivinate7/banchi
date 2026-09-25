@@ -131,10 +131,11 @@ def legacy_photograph(home: Path, box: int, index: int, seed: Optional[str] = No
 
 
 def raw(home: Path) -> sqlite3.Connection:
-    """The store, read-only and WITHOUT `db.connect` — so reading cannot migrate."""
-    return sqlite3.connect(
-        f"file:{home / 'inventory' / 'store.sqlite'}?mode=ro&immutable=1", uri=True
-    )
+    """The store, read-only and WITHOUT `db.connect` — so reading cannot migrate.
+    `store/db.py:open_read_only`, the same door `cli/cmd_cards.py` opens."""
+    from store import db
+
+    return db.open_read_only(home / "inventory" / "store.sqlite")
 
 
 def stamp_of(home: Path) -> Optional[int]:

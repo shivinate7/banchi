@@ -74,6 +74,8 @@ this lane, citing this entry.
    table means that every SKU is unknown to it.
 3. **The replay, for the owner to read.** `scripts/identity-replay.py`, on a copy of the real
    store. Nothing here writes. The owner reads its own table before step 4 touches real cards.
+   Put `inventory/.exports/` and `inventory/.live/` beside the `.backup` copy. 41 listing-only
+   SKUs are only in `.live/`. Without them, the SKU-IN-TABLE check fails.
 4. **`./pkmnscan cards identity --write`.** The one-time migration. It binds every card that
    derives, and holds the rest. It opens a review entry for a held card still `identified`
    (D167/D4's own protection against re-asking an already-cleared position).

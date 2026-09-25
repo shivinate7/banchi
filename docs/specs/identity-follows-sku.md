@@ -629,7 +629,7 @@ falls to `sku_unknown`.
 ### 7.4 The replay, before any write
 
 A read-only replay, in D253's manner: `scripts/identity-replay.py` (lane 2). It opens a COPY of
-the store with `mode=ro&immutable=1` and the on-disk exports read-only. It fills an in-memory
+the store through `store/db.py:open_read_only` and the on-disk exports read-only. It fills an in-memory
 SKU table, runs the press's classifier and its would-be writes in memory, and prints the table
 in 7.2. It asserts six things, and fails on any miss:
 

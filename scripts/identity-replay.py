@@ -7,7 +7,10 @@ touches the copy it is given.
     sqlite3 /path/to/store.sqlite ".backup /tmp/copy.sqlite"
     python3 scripts/identity-replay.py --store /tmp/copy.sqlite
 
-READ-ONLY, `mode=ro&immutable=1` — the same door `cli/cmd_cards.py:_read_only` opens, so this
+Put `inventory/.exports/` and `inventory/.live/` beside the `.backup` copy too. 41 listing-only
+SKUs are only in `.live/`. Without them, the SKU-IN-TABLE check fails.
+
+READ-ONLY, `store/db.py:open_read_only` — the same door `cli/cmd_cards.py:_read_only` opens, so this
 never calls `db.connect` and never performs the schema migration a preview must not perform.
 Cached exports under `inventory/.exports/` are read too (only by `pipeline/identity_binding`'s
 own SKU-table readers, which never touch a live file — the SKU table this store already holds
@@ -46,16 +49,16 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from pipeline import identity_binding as ib  # noqa: E402
+from store import db  # noqa: E402
 from store.master import IDENTITY_READ, IDENTITY_SKU, Card  # noqa: E402
 from store.numbers import display_number  # noqa: E402
 
 
 def _read_only(path: Path) -> sqlite3.Connection:
-    """`mode=ro&immutable=1` — never `db.connect`, so this cannot perform a schema
-    migration on the copy it is handed, and never writes a byte to it either way."""
-    if not path.is_file():
-        raise FileNotFoundError(f"no store at {path}")
-    return sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True)
+    """`store/db.py:open_read_only` — never `db.connect`, so this cannot perform a schema
+    migration on the copy it is handed, and never writes a byte to it either way. It reads
+    a WAL beside the file too, so a copy taken with its `-wal` is read whole."""
+    return db.open_read_only(path)
 
 
 def _number_display(card: Card) -> str:

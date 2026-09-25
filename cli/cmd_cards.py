@@ -68,17 +68,9 @@ SOURCE_ORDER = ("kept", "disk", "record", "identification", "nophoto")
 
 
 def _read_only(directory: Path) -> sqlite3.Connection:
-    """The store, read-only and immutable, WITHOUT `db.connect`.
-
-    `immutable=1` is deliberate on top of `mode=ro`: it tells SQLite the file will not change
-    under it, so no WAL recovery is attempted and no `-shm` is created — which means this
-    cannot write a byte even as a side effect of opening, including beside a store a capture
-    server is live on.
-    """
-    target = db.path(directory)
-    if not target.is_file():
-        raise FileNotFoundError(f"no store at {target}")
-    return sqlite3.connect(f"file:{target}?mode=ro&immutable=1", uri=True)
+    """The store through `store/db.py:open_read_only`, WITHOUT `db.connect`: it never
+    migrates, and it sees every commit, including one still in the WAL."""
+    return db.open_read_only(db.path(directory))
 
 
 def _meta(conn: sqlite3.Connection) -> Dict[str, str]:

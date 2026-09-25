@@ -1282,11 +1282,21 @@ def check_set_and_rarity(checks: Checks) -> None:
             "(identity-follows-sku.md §4.1)",
         )
 
+        # A READ SNAPSHOT HELD OPEN ACROSS THE FILL AND THE PRESS, ON PURPOSE. An open
+        # connection stops SQLite from checkpointing the WAL on close, so the fill's commit
+        # stays in `store.sqlite-wal`. The live rig is always in this state, because the
+        # capture server holds connections. `cmd_cards._read_only` once opened the store
+        # `immutable=1`, which never reads the WAL: it saw an empty `skus` table and bound
+        # nothing. CI caught it only when garbage collection happened to leave the read
+        # above open. Holding one here makes the case run every time, on every platform.
+        open_reader = Store().read()
+        open_reader.inventory.cards.get(resolvable_key)
         with Store().write() as snapshot:
             sku_pipeline.fill(snapshot.skus, snapshot.inventory.events)
         say_lines = []
         code = cmd_cards.run(Args("identity", write=True), say_lines.append)
         checks.equal(code, 0, "`cards identity --write` runs over the same store")
+        del open_reader
 
         after_inv = Store().read().inventory
         resolved = after_inv.cards[resolvable_key]
@@ -1338,6 +1348,79 @@ def check_set_and_rarity(checks: Checks) -> None:
             all(g["set_hint"] is None for g in result["groups"]),
             "and `set_hint` stays null on both — the real collision this was measured "
             "against, not a fixture that quietly gives the chooser an easier field",
+        )
+
+
+def check_open_read_only(checks: Checks) -> None:
+    """`store/db.py:open_read_only`, the one read-only door: it never migrates, and it sees
+    every commit, including one still in the WAL.
+
+    THE CASE THAT BROKE: one connection holds a read snapshot open, so SQLite cannot
+    checkpoint on close, and a second connection's commit stays in `store.sqlite-wal`. An
+    always-immutable open never reads the WAL. The fixture proves it builds that state (the
+    old open misses the commit) before it asks the door, so a green here is not a fixture
+    that never made the case.
+    """
+    checks.note("")
+    checks.note("READ-ONLY DOOR — store/db.py open_read_only")
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        db.connect(directory).close()
+        target = db.path(directory)
+
+        holder = sqlite3.connect(str(target), isolation_level=None)
+        holder.execute("BEGIN")
+        holder.execute("SELECT count(*) FROM meta").fetchone()
+        writer = sqlite3.connect(str(target), isolation_level=None)
+        writer.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('door', 'seen')")
+        writer.close()
+
+        old = sqlite3.connect(f"file:{target}?mode=ro&immutable=1", uri=True)
+        checks.equal(
+            old.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+            None,
+            "the fixture really leaves the commit in the WAL: an always-immutable open "
+            "misses it",
+        )
+        old.close()
+
+        door = db.open_read_only(target)
+        checks.equal(
+            door.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+            ("seen",),
+            "the door sees a commit still in the WAL, while another connection holds a "
+            "snapshot open",
+        )
+        refused = False
+        try:
+            door.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('door', 'wrote')")
+        except sqlite3.OperationalError:
+            refused = True
+        checks.ok(refused, "and it refuses a write")
+        door.close()
+        holder.execute("ROLLBACK")
+        holder.close()
+
+        # THE COLD STATE, BUILT BY HAND. Whether SQLite deletes the side files on the last
+        # close varies by build (this Mac's keeps them), so the fixture checkpoints the WAL
+        # empty and removes both, `db.py`'s own import step's shape.
+        folder = sqlite3.connect(str(target), isolation_level=None)
+        folder.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        folder.close()
+        for side in ("-wal", "-shm"):
+            Path(f"{target}{side}").unlink(missing_ok=True)
+        cold = db.open_read_only(target)
+        checks.equal(
+            cold.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+            ("seen",),
+            "and the door still opens a WAL store with no side files, and reads the commit "
+            "from the main file",
+        )
+        cold.close()
+        checks.ok(
+            not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
+            "and opening it cold created no side file",
         )
 
 
@@ -32729,6 +32812,7 @@ def run() -> Result:
     check_boxes_and_listings(checks)
     check_store(checks)
     check_set_and_rarity(checks)
+    check_open_read_only(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
     check_server_routes(checks)

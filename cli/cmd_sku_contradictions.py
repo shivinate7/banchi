@@ -33,13 +33,10 @@ from store import db
 
 
 def _read_only(directory: Path) -> sqlite3.Connection:
-    """Same door `cli/cmd_cards.py:_read_only` uses — `mode=ro&immutable=1`, never
-    `db.connect`, so a preview cannot perform a schema migration.
+    """Same door `cli/cmd_cards.py:_read_only` uses, `store/db.py:open_read_only`. It never
+    calls `db.connect`, so a preview cannot perform a schema migration.
     """
-    target = db.path(directory)
-    if not target.is_file():
-        raise FileNotFoundError(f"no store at {target}")
-    return sqlite3.connect(f"file:{target}?mode=ro&immutable=1", uri=True)
+    return db.open_read_only(db.path(directory))
 
 
 def _by_sku(conn: sqlite3.Connection) -> Dict[str, List[NumberRecord]]:
