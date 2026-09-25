@@ -982,7 +982,7 @@ function Action({
             keeps no words in either sector — the row and the phone bar both read it from the
             sentence/clock beside it. */}
         <IconButton
-          size={primary ? 'md' : 'sm'}
+          size={primary ? 'xl' : 'sm'}
           icon="undo"
           label="Undo"
           name={`Undo the sale at ${standing.place}`}
@@ -1018,7 +1018,7 @@ function Action({
       {/* ICON IN BOTH SECTORS (ICONOGRAPHY): Retire is reversible (Undo), so it never spends
           words. `archive` — a lidded box — reads as "put away" rather than "delete". */}
       <IconButton
-        size={primary ? 'md' : 'sm'}
+        size={primary ? 'xl' : 'sm'}
         icon="archive"
         label="Retire"
         disabled={busyKey !== null}
@@ -1029,7 +1029,7 @@ function Action({
           ICON IN BOTH SECTORS, the same vocabulary as Retire beside it. */}
       {copy.place.located === false ? null : (
         <IconButton
-          size={primary ? 'md' : 'sm'}
+          size={primary ? 'xl' : 'sm'}
           icon="moveTo"
           label="Move to another box"
           disabled={busyKey !== null}

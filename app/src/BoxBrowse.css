@@ -899,11 +899,19 @@
   .browse-railsheet .search-field-input { height: 44px; }
   .browse-box-head .bn-btn-sm { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
   .browse-cardops > .bn-btn { --btn-h: var(--bn-control-h-lg); }
-  .card-locations-owner .inventory-copy-actions .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
+  /* `:not(.bn-icon-btn)` (round 3): Retire, Move and Undo in this row are the kit's
+     `IconButton` now, which sizes its own face off its `size` prop (FACE_PX,
+     kit/index.tsx) and gives itself the 40px thumb floor through its own `::before` at any
+     face size (kit.css). This rule predates that — it boosted the old `Button iconOnly`'s
+     height through `--btn-h` and this padding, which IconButton never reads, so the padding
+     alone was landing on it unopposed and stretching a square 24px face into a 34x24
+     rectangle, UNDER the 40px floor on its short axis. `.bn-btn-icon` (the old class,
+     kept for any caller still on it) still gets padding zeroed the same way it always did. */
+  .card-locations-owner .inventory-copy-actions .bn-btn:not(.bn-icon-btn) { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
   .card-locations-owner .inventory-copy-actions .bn-btn-icon { padding: 0; }
   /* The receipt's Undo is the same press as the `Mark sold` it replaced, so it is the same
      height — `sm` alone is 40px, which is the thumb FLOOR and not this row's size (D119). */
-  .card-locations-owner .bn-receipt .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
+  .card-locations-owner .bn-receipt .bn-btn:not(.bn-icon-btn) { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
   .browse-stepper-count { font-size: var(--bn-fs-base); }
   .browse-boxcell { min-height: 48px; }
   .browse-details-summary { min-height: 48px; }

@@ -21,12 +21,18 @@
   min-width: 0;
 }
 
-/* The search and a screen's own control beside it: one line, at every width. */
+/* The search and a screen's own control beside it: one line, at every width.
+   `flex-basis: 0` on purpose (round 3's own fix): a `220px` basis added to the compact
+   trigger's own width made the flex-wrap algorithm's LINE-BREAKING calculation (which reads
+   the unshrunk basis, never the final shrunk size) see 220+42+gap over a 268px rail column
+   and wrap the trigger onto its own line, even though `min-width` below leaves easily enough
+   room once real shrinking is allowed. A zero basis keeps the same growth (`flex-grow: 1`
+   still fills whatever the trigger does not need) without ever forcing that wrap. */
 .bn-filterbar-lead {
   display: flex;
   align-items: center;
   gap: var(--bn-2);
-  flex: 1 1 220px;
+  flex: 1 1 0;
   min-width: 160px;
   max-width: 420px;
 }

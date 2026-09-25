@@ -3427,8 +3427,13 @@ test('the product row is drawn for the game that claims products, and for no oth
   await expect(page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })).toHaveCount(0)
   await expect(page.locator('.boxops-claim-row', { hasText: 'FINISH' })).toHaveCount(1)
 
-  /* `exact: true` since D213's inventory filter added a SECOND control whose accessible name contains 'game' as a substring ('Filter by game') — Playwright's default name match is substring, so this locator needs to say it means the box claims editor's own field and not that one. */
-  await page.getByRole('combobox', { name: 'Game', exact: true }).selectOption('pokemon_code')
+  /* THE ROW'S OWN GAME PICK IS THE KIT'S `Select`, not a native combobox (BoxOps' three
+     native `<select>`s moved to it, round 3). Its own accessible name is "Game" too — the
+     same collision the old comment named against D213's inventory filter, now a button
+     rather than a combobox either side, so this locator scopes to the claims editor's own
+     row instead of disambiguating by exact name. */
+  await page.locator('.boxops-claims .boxops-claim-row', { hasText: 'GAME' }).locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'Pokémon code cards' }).click()
 
   const row = page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })
   await expect(row).toHaveCount(1)
@@ -3438,21 +3443,27 @@ test('the product row is drawn for the game that claims products, and for no oth
      into state and threw on the first render after the fetch resolved — taking the whole
      screen down behind the route boundary and timing out four cases above this one on a
      switch none of them could reach. A case that reads a product's display name cannot pass
-     against that shape. */
-  await expect(row.locator('option')).toHaveText([
-    'No claim',
+     against that shape. `No claim` is the kit `Select`'s own PLACEHOLDER now (round 3):
+     shown on the trigger while nothing is picked, never a real option in its open panel — the
+     native `<select>` this replaced drew it as a real `<option value="">`. */
+  await expect(row.locator('.bn-pick')).toContainText('No claim')
+  await row.locator('.bn-pick').click()
+  await expect(page.locator('.bn-pick-opt')).toHaveText([
     'Booster pack',
     'Elite Trainer Box',
     'Pokémon Center ETB',
     'Other / unsure',
   ])
+  await page.keyboard.press('Escape')
 
   /* The premium lane is drawn off the registry's own flag rather than off the key's spelling —
      `codes/products.py`'s own header records a throwaway classifier putting four $0.06 blisters
      in the premium tier on the word "premium" alone. */
-  await row.getByRole('combobox', { name: 'Product' }).selectOption('booster')
+  await row.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'Booster pack' }).click()
   await expect(row.locator('.bn-pill')).toHaveText('Bulk')
-  await row.getByRole('combobox', { name: 'Product' }).selectOption('pc_etb')
+  await row.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'Pokémon Center ETB' }).click()
   await expect(row.locator('.bn-pill')).toHaveText('Premium')
 
   await row.getByRole('switch').check()
@@ -3474,12 +3485,18 @@ test('a product claim armed against the code game leaves with it, rather than ri
      Arm Product against the code game, change the game back, and without the disarming effect
      the row is gone from the screen while its claim is still in the patch — a write nobody can
      see they asked for, over every card in the box. */
-  /* `exact: true` since D213's inventory filter added a SECOND control whose accessible name contains 'game' as a substring ('Filter by game') — Playwright's default name match is substring, so this locator needs to say it means the box claims editor's own field and not that one. */
-  await page.getByRole('combobox', { name: 'Game', exact: true }).selectOption('pokemon_code')
+  /* THE ROW'S OWN GAME PICK IS THE KIT'S `Select` now (round 3), scoped to the claims
+     editor's own row rather than disambiguated by an exact accessible name — see the sibling
+     case above. */
+  const gameRow = page.locator('.boxops-claims .boxops-claim-row', { hasText: 'GAME' })
+  await gameRow.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'Pokémon code cards' }).click()
   await page.locator('.boxops-claim-row', { hasText: 'PRODUCT' }).getByRole('switch').check()
-  await page.locator('.boxops-claim-row', { hasText: 'PRODUCT' }).getByRole('combobox', { name: 'Product' }).selectOption('booster')
+  await page.locator('.boxops-claim-row', { hasText: 'PRODUCT' }).locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'Booster pack' }).click()
 
-  await page.getByRole('combobox', { name: 'Game', exact: true }).selectOption('pokemon')
+  await gameRow.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: /^Pokémon$/ }).click()
   await expect(page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })).toHaveCount(0)
 
   /* Something still has to be armed or the editor refuses and sends nothing, so the note row
@@ -4621,7 +4638,8 @@ test('S4 — the BoxOps "Move to box" select offers boxes most recent first, nev
   await open(page, boxes, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   await openBoxOps(page)
   await page.getByRole('button', { name: 'Move to box' }).click()
-  await expect(page.locator('select.bn-select option')).toHaveText(['Choose a box…', 'Extra shelf', 'ME01 spares'])
+  await page.locator('.bn-field .bn-pick').click()
+  await expect(page.locator('.bn-pick-opt')).toHaveText(['Extra shelf', 'ME01 spares'])
 })
 
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({
