@@ -2193,7 +2193,29 @@ def _run_is_open(manifest: dict, pricing: dict, answers: Optional[dict]) -> bool
     return bool(_run_owes(manifest, pricing, answers))
 
 
-def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:  # noqa: D401
+#: THE MACHINE CODE FOR EACH `owes` REASON, SENT BESIDE THE SENTENCE AS `owed` (R4, the
+#: coordinator's ruling). A screen reads the code and never the sentence, so the words may
+#: change freely. `app/src/types.ts:OweCode` is the same list, and `make readiness-agreement`
+#: reconciles the two both ways.
+#:   sub_threshold_unset  the cut-off price is unset, and `emit` refuses the whole run
+#:   needs_price          cards with no market price and no answer, left out of a send
+#:   never_emitted        the run has never written a file
+#:   unreadable           the run's files or answers cannot be read
+OWE_CODES = ("sub_threshold_unset", "needs_price", "never_emitted", "unreadable")
+
+
+def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:
+    """`_run_owed`'s sentences alone, for every caller that only asks whether a run owes."""
+    return [reason["text"] for reason in _run_owed(manifest, pricing, answers)]
+
+
+def _owe(code: str, text: str, count: Optional[int] = None) -> dict:
+    """One `owes` reason: its code, its sentence, and the count the sentence carries."""
+    assert code in OWE_CODES, code
+    return {"code": code, "text": text, "count": count}
+
+
+def _run_owed(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[dict]:  # noqa: D401
     """Why this run still has pricing work in it, in the words `emit` would refuse it with.
 
     THE PICKER DRAWS A REMAINDER RATHER THAN A TOTAL BECAUSE OF THIS FUNCTION. Every chip used
@@ -2214,19 +2236,21 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
     try:
         answered = decisions.Decisions.parse(answers or {})
     except decisions.MalformedDecisions:
-        return ["answers file cannot be read"]
+        return [_owe("unreadable", "answers file cannot be read")]
     below = [
         row.get("sku")
         for row in pricing.get("skus") or []
         if row.get("bucket") == "sub_threshold"
     ]
-    owes = list(answered.blocking(below))
+    # `blocking` HAS ONE REASON, the cut-off price unset. A second one fails
+    # `make readiness-agreement`'s reason count, which is where its code gets added.
+    owes = [_owe("sub_threshold_unset", reason, len(below)) for reason in answered.blocking(below)]
     # A PRICE OWED THAT NO LONGER BLOCKS THE SEND (D277 Q3, the delta review R3-2). A card with
     # no market price and no answer is left out of a send rather than refusing it, so
     # `blocking` no longer names it. The run still owes that price, and the screens must say
-    # so. The sentence's shape is read by `app/src/standing.ts:LEFT_OUT_FOR_PRICE`, which keeps
-    # it apart from a reason that stops the whole run. Read off this run's own rows, because
-    # the corpus holds no entry for a card nobody answered.
+    # so, by its code, `needs_price`, which keeps it apart from a reason that stops the whole
+    # run. Read off this run's own rows, because the corpus holds no entry for a card nobody
+    # answered.
     unpriced = (answers or {}).get("no_market_data") or {}
     held = (answers or {}).get("overrides") or {}
     waiting = sum(
@@ -2239,15 +2263,19 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
     )
     if waiting:
         owes.append(
-            f"{waiting} card{'' if waiting == 1 else 's'} with no market price "
-            f"need{'s' if waiting == 1 else ''} a price"
+            _owe(
+                "needs_price",
+                f"{waiting} card{'' if waiting == 1 else 's'} with no market price "
+                f"need{'s' if waiting == 1 else ''} a price",
+                waiting,
+            )
         )
     if not manifest.get("emitted"):
         # NEVER EMITTED IS WORK, AND IT IS THE COMMON CASE. Nothing has been shipped out of
         # this run, so it is open whatever its answers say — but it is listed AFTER the
         # blocking reasons, because a refusal names something to fix and this names something
         # to press.
-        owes.append("never emitted")
+        owes.append(_owe("never_emitted", "never emitted"))
     return owes
 
 
@@ -2747,7 +2775,13 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         except (OSError, ValueError, decisions.MalformedDecisions):
             owed_by_run[entry.name] = ["run files cannot be read"]
             roster.append(
-                {**summary, "owes": owed_by_run[entry.name], "open": True, "unsent": 0}
+                {
+                    **summary,
+                    "owes": owed_by_run[entry.name],
+                    "owed": [{"code": "unreadable", "count": None}],
+                    "open": True,
+                    "unsent": 0,
+                }
             )
             continue
         if summary.get("box_former"):
@@ -2775,14 +2809,23 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                     "rescued_by": [rescue["run"] for rescue in rescues],
                 }
             )
-            roster.append({**summary, "owes": [], "open": False, "unsent": 0})
+            roster.append({**summary, "owes": [], "owed": [], "open": False, "unsent": 0})
             continue
-        owes = _run_owes(manifest, parsed, answers)
+        owed = _run_owed(manifest, parsed, answers)
+        owes = [reason["text"] for reason in owed]
         owed_by_run[entry.name] = owes
         parsed_by_run[entry.name] = parsed
         if parsed:
             tables.append((run_files.open_run(entry), parsed))
-        roster.append({**summary, "owes": owes, "open": bool(owes), "unsent": 0})
+        roster.append(
+            {
+                **summary,
+                "owes": owes,
+                "owed": [{"code": reason["code"], "count": reason["count"]} for reason in owed],
+                "open": bool(owes),
+                "unsent": 0,
+            }
+        )
 
     ledger: Optional[UnsentLedger] = None
     if snapshot is not None and tables:

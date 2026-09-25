@@ -1,6 +1,8 @@
 import type { IconName } from './kit'
 import type {
   OrdersPayload,
+  OweCode,
+  OwedReason,
   PricingCorpus,
   PricingSku,
   PricingWorklist,
@@ -124,32 +126,32 @@ export function sendCounts(pricing: PricingWorklist, book: PricingCorpus): { rea
   return { ready, needsPrice }
 }
 
-/** The `owes` reason `_run_owes` adds for a card left out of the send for want of a price. It
- *  owes a price and does not block the run, so it never counts as a run that cannot be sent. */
-const LEFT_OUT_FOR_PRICE = /^(\d+) cards? with no market price needs? a price$/
-
-/** What a run's `owes` says, as the run picker's chip draws it (R4 F2): cards left out for want
- *  of a price, with their count; a reason that stops the whole run; or only the first send. */
-export function owesOf(owes: readonly string[]): { priceCards: number; blocked: boolean; neverSent: boolean } {
+/** What a run owes, read off its CODES and never its sentences (R4, the coordinator's ruling):
+ *  cards left out for want of a price, with their count; the cut-off price unset, which stops
+ *  the whole run; files that cannot be read; or only the first send. */
+export function owesOf(owed: readonly OwedReason[]): {
+  priceCards: number
+  blocked: boolean
+  unreadable: boolean
+  neverSent: boolean
+} {
   let priceCards = 0
-  let blocked = false
-  for (const reason of owes) {
-    const m = LEFT_OUT_FOR_PRICE.exec(reason)
-    if (m) priceCards += Number(m[1])
-    else if (reason !== NOT_YET_WRITTEN) blocked = true
+  for (const reason of owed) if (reason.code === 'needs_price') priceCards += reason.count ?? 1
+  const has = (code: OweCode) => owed.some((reason) => reason.code === code)
+  return {
+    priceCards,
+    blocked: has('sub_threshold_unset'),
+    unreadable: has('unreadable'),
+    neverSent: has('never_emitted'),
   }
-  return { priceCards, blocked, neverSent: owes.includes(NOT_YET_WRITTEN) }
 }
 
-/** THE ONE `owes` REASON THAT IS NOT A PRICE. `server/pipeline_routes.py:_run_owes` appends it
- *  to a joined run that has never written a file: the run waits on the SEND, and counting it
- *  as "to price" is what had Home say "2 runs to price" while Pricing said "Ready" (UX-006). */
-const NOT_YET_WRITTEN = 'never emitted'
-
 /** Runs that owe a PRICE, not only the send. ONE COUNT FOR HOME'S LINE AND HOME'S TILE, so the
- *  two cannot say different things about the same runs (UX-006; D198's one-figure rule). */
+ *  two cannot say different things about the same runs (UX-006; D198's one-figure rule). A run
+ *  that is only `never_emitted` waits on the SEND: counting it "to price" is what had Home say
+ *  "2 runs to price" while Pricing said "Ready". */
 export function runsOwingPrice(roster: PricingWorklist['roster']): number {
-  return roster.filter((r) => r.open && r.owes.some((reason) => reason !== NOT_YET_WRITTEN)).length
+  return roster.filter((r) => r.open && r.owed.some((reason) => reason.code !== 'never_emitted')).length
 }
 
 const n = (v: number): Say => ({ text: v.toLocaleString(), em: true })
@@ -230,9 +232,7 @@ export function standing(input: StandingInput): Standing | null {
   const blocked =
     pricing === null
       ? null
-      : pricing.roster.filter(
-          (r) => r.open && r.owes.some((reason) => reason !== NOT_YET_WRITTEN && !LEFT_OUT_FOR_PRICE.test(reason)),
-        ).length
+      : pricing.roster.filter((r) => r.open && owesOf(r.owed).blocked).length
   const unconfirmed = input.unconfirmed ?? null
   const live = runs === null ? null : runs.filter((r) => r.live)
 

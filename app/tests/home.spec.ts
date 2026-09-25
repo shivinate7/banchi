@@ -220,7 +220,7 @@ test('a mixed run: Home sends the priced copies and names the unpriced card apar
   await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
     json(route, {
       runs: [],
-      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['1 card with no market price needs a price', 'never emitted'], open: true, unsent: 3 }],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['1 card with no market price needs a price', 'never emitted'], owed: [{ code: 'needs_price', count: 1 }, { code: 'never_emitted', count: null }], open: true, unsent: 3 }],
       skus: [mixedSku('7001', 'listable', 1), mixedSku('7002', 'listable', 1), mixedSku('7003', 'no_market_data', 1)],
       written_at: {},
       skipped: [],
@@ -249,7 +249,7 @@ test('every card needs a price: Home says price it, and counts no copy as ready'
   await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
     json(route, {
       runs: [],
-      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['1 card with no market price needs a price', 'never emitted'], open: true, unsent: 1 }],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['1 card with no market price needs a price', 'never emitted'], owed: [{ code: 'needs_price', count: 1 }, { code: 'never_emitted', count: null }], open: true, unsent: 1 }],
       skus: [mixedSku('7003', 'no_market_data', 1)],
       written_at: {},
       skipped: [],
@@ -264,4 +264,28 @@ test('every card needs a price: Home says price it, and counts no copy as ready'
   await expect(say).toContainText('price 1 card')
   await expect(say).not.toContainText('send')
   await expect(page.locator('.home-standing')).not.toContainText('before it can be sent')
+})
+
+/* THE SCREEN READS THE CODE, NEVER THE SENTENCE (the coordinator's ruling on R4): the server's
+ * words for a price owed may change, and Home must not change with them. The code stays
+ * `needs_price`, so the line still sends the priced copies and blames no cut-off. */
+test('a reworded owed sentence changes nothing on Home while its code stays', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    json(route, {
+      runs: [],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['one card still lacks a market price', 'not written yet'], owed: [{ code: 'needs_price', count: 1 }, { code: 'never_emitted', count: null }], open: true, unsent: 3 }],
+      skus: [mixedSku('7001', 'listable', 1), mixedSku('7002', 'listable', 1), mixedSku('7003', 'no_market_data', 1)],
+      written_at: {},
+      skipped: [],
+      asked: [],
+      threshold: '0.49',
+      floor: '0.49',
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  await expect(page.locator('.home-standing .home-standing-say')).toContainText('send 2 copies to TCGplayer')
+  await expect(page.locator('.home-standing')).toContainText('1 card needs a price')
+  await expect(page.locator('.home-standing')).not.toContainText('cut-off')
 })

@@ -20,6 +20,9 @@ it had, and a run with zero is refused rather than passed by omission):
          citation exists since D277 Q3 retired the second reason; the reader stays for one)
      A citation pointing at any other line is reported as a stale citation (D149's disease:
      a line number that still resolves, to the wrong code).
+  6. The `owes` codes (R4): `server/pipeline_routes.py:OWE_CODES` and
+     `app/src/types.ts:OweCode` name the same codes, both ways. A screen decides on the code,
+     so a code one side lacks is a reason the other side cannot read.
   5. The two bare-name citations, `pipeline/decisions.py:blocking` and the two constant
      citations `pipeline/decisions.py:FLOOR_CHOICE` / `:FLAT_KEY`, resolve to something real.
 
@@ -46,11 +49,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DECISIONS_PY = REPO_ROOT / "pipeline" / "decisions.py"
 READINESS_TS = REPO_ROOT / "app" / "src" / "readiness.ts"
+ROUTES_PY = REPO_ROOT / "server" / "pipeline_routes.py"
+TYPES_TS = REPO_ROOT / "app" / "src" / "types.ts"
 
 # The number of mutation arms `--self-test` runs. Bump this only when you add or remove an
 # arm below, in the same commit — a stale count here would be exactly the disease this round
 # exists to fix, one register up.
-SELF_TEST_ARM_COUNT = 9
+SELF_TEST_ARM_COUNT = 11
 
 
 class Disagreement(Exception):
@@ -357,13 +362,35 @@ def _report(checks: list) -> int:
     return 0
 
 
+def owe_code_checks(routes_source: str, types_source: str) -> list:
+    """Check 6: the `owes` codes agree both ways (R4). Python by `ast`, TS by its flat union."""
+    codes_py = None
+    for node in ast.parse(routes_source).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "OWE_CODES" for target in node.targets
+        ):
+            codes_py = ast.literal_eval(node.value)
+    if not codes_py:
+        raise Disagreement("server/pipeline_routes.py: no `OWE_CODES` tuple literal found")
+    m = re.search(r"export type OweCode =((?:\s*\|\s*'[^']*')+)", types_source)
+    if not m:
+        raise Disagreement("app/src/types.ts: `OweCode` is not a flat union of string literals")
+    codes_ts = re.findall(r"'([^']*)'", m.group(1))
+    checks = []
+    for code in codes_py:
+        checks.append(Check(f"owe code {code!r} in app/src/types.ts:OweCode", code in codes_ts, f"ts={codes_ts}"))
+    for code in codes_ts:
+        checks.append(Check(f"owe code {code!r} in server/pipeline_routes.py:OWE_CODES", code in codes_py, f"py={list(codes_py)}"))
+    return checks
+
+
 def main_check() -> int:
     try:
         py_source = DECISIONS_PY.read_text()
         ts_source = READINESS_TS.read_text()
         py = read_py_facts(py_source)
         ts = read_ts_facts(ts_source)
-        checks = run_checks(py, ts)
+        checks = run_checks(py, ts) + owe_code_checks(ROUTES_PY.read_text(), TYPES_TS.read_text())
     except Disagreement as exc:
         print(f"READINESS-AGREEMENT: REFUSED — {exc}")
         return 3
@@ -500,6 +527,28 @@ def self_test() -> int:
         assert checks is None and err is not None, "a missing `blocking` method must be refused"
 
     arm("refuses when `Decisions.blocking` cannot be found at all", a9)
+
+    routes_source = ROUTES_PY.read_text()
+    types_source = TYPES_TS.read_text()
+
+    # Arm 10: a code the server sends and the screen's type lacks is red (R4).
+    def a10():
+        assert all(c.passed for c in owe_code_checks(routes_source, types_source)), "clean tree must agree"
+        missing = types_source.replace("  | 'needs_price'\n", "", 1)
+        assert missing != types_source, "fixture missing: `| 'needs_price'` not found in OweCode"
+        checks = owe_code_checks(routes_source, missing)
+        assert any(not c.passed and "needs_price" in c.subject for c in checks), "a missing TS code was not caught"
+
+    arm("catches an owe code app/src/types.ts does not name", a10)
+
+    # Arm 11: the other direction, a code the screen names and the server never sends.
+    def a11():
+        extra = routes_source.replace('OWE_CODES = ("sub_threshold_unset", ', 'OWE_CODES = (', 1)
+        assert extra != routes_source, "fixture missing: the OWE_CODES tuple text not found"
+        checks = owe_code_checks(extra, types_source)
+        assert any(not c.passed and "sub_threshold_unset" in c.subject for c in checks), "a code only TS names was not caught"
+
+    arm("catches an owe code server/pipeline_routes.py does not send", a11)
 
     assert len(arms) == SELF_TEST_ARM_COUNT, (
         f"SELF_TEST_ARM_COUNT says {SELF_TEST_ARM_COUNT} but {len(arms)} arms are registered — "

@@ -208,6 +208,8 @@ async function open(
     /** What each run still owes, by run name, in the server's words. Absent reads as the
      *  default: nothing once emitted, and "never emitted" before. */
     owes?: Record<string, string[]>
+    /** The machine code for each of those reasons, in the same order. */
+    owed?: Record<string, { code: string; count: number | null }[]>
     /** What no worklist can send, as the server names it. */
     unreachable?: { captured: number; in_review: number; unjoined: { run: string; cards: number }[]; reallocated: { run: string; box: number | null; cards: number | null }[] }
     /** WHICH ANSWERS A MASS-CLEAR MAY REMOVE, as the server names them — SKU to age in whole
@@ -564,6 +566,7 @@ async function open(
         roster: listed.map((row) => ({
           ...summary(row),
           owes: options.owes?.[row.run] ?? (options.emitted === true ? [] : ['never emitted']),
+          owed: options.owed?.[row.run] ?? (options.emitted === true ? [] : [{ code: 'never_emitted', count: null }]),
           open: options.emitted !== true || (options.unsent?.[row.run] ?? 0) > 0,
           unsent: options.unsent?.[row.run] ?? 0,
         })),
@@ -988,6 +991,10 @@ test('a sent run that owes a price says so, apart from a run never sent', async 
     owes: {
       '2026-08-24-box2-01': ['1 card with no market price needs a price'],
       '2026-09-02-box6-01': ['never emitted'],
+    },
+    owed: {
+      '2026-08-24-box2-01': [{ code: 'needs_price', count: 1 }],
+      '2026-09-02-box6-01': [{ code: 'never_emitted', count: null }],
     },
   })
   await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
@@ -3762,4 +3769,30 @@ test('at 390 the place line keeps the card number whole', async ({ page }) => {
   expect(clip.width).toBeGreaterThan(0)
   expect(clip.right).toBeLessThanOrEqual(clip.whereRight + 0.5)
   expect(clip.right).toBeLessThanOrEqual(clip.viewport)
+})
+
+/* THE CHIP READS THE CODE, NEVER THE SENTENCE (the coordinator's ruling on R4): reworded
+ * server words with the same codes draw the same chips. */
+test('a reworded owed sentence draws the same chip while its code stays', async ({ page }) => {
+  await open(page, {
+    noRun: true,
+    emitted: true,
+    runs: [
+      { run: '2026-08-24-box2-01', box: 2, box_name: 'Pokemon bulk', skus: 3, created_at: '2026-08-24T18:00:00+00:00' },
+      { run: '2026-09-02-box6-01', box: 6, box_name: 'Riftbound rares', skus: 2, created_at: '2026-09-02T18:00:00+00:00' },
+    ],
+    unsent: { '2026-08-24-box2-01': 3, '2026-09-02-box6-01': 2 },
+    owes: {
+      '2026-08-24-box2-01': ['three cards still lack a market price'],
+      '2026-09-02-box6-01': ['not written yet'],
+    },
+    owed: {
+      '2026-08-24-box2-01': [{ code: 'needs_price', count: 3 }],
+      '2026-09-02-box6-01': [{ code: 'never_emitted', count: null }],
+    },
+  })
+  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
+  const chips = page.locator('.pricing-run')
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
+  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('3 need a price')
 })

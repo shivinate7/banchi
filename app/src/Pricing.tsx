@@ -494,7 +494,7 @@ function PickRuns({
           const label = runBoxLabel(row)
           const day = row.created_at ? absoluteDate(row.created_at) : null
           const on = picked.has(row.run)
-          const owe = owesOf(row.owes)
+          const owe = owesOf(row.owed)
           return (
             <button
               key={row.run}
@@ -520,17 +520,7 @@ function PickRuns({
               {/* THREE STATES, NOT TWO (D156): a run that owes nothing and still holds unsent
                   copies is OPEN, and the chip says how many. */}
               <Pill tone={row.open ? 'warn' : 'ok'} className="pricing-run-owes">
-                {owe.priceCards > 0
-                  ? `${owe.priceCards} ${owe.priceCards === 1 ? 'needs' : 'need'} a price`
-                  : owe.blocked
-                    ? 'Needs a price'
-                    : owe.neverSent
-                      ? 'Never sent'
-                      : (row.unsent ?? 0) > 0
-                        ? `${row.unsent} unsent`
-                        : row.box_former === true
-                          ? 'Box deleted'
-                          : 'All sent'}
+                {chipWords(owe, row)}
               </Pill>
             </button>
           )
@@ -543,6 +533,17 @@ function PickRuns({
       )}
     </div>
   )
+}
+
+/** The run chip's words, off the run's codes (R4): a price owed with its count, the cut-off
+ *  unset, files that cannot be read, never sent, then what is left unsent. */
+function chipWords(owe: ReturnType<typeof owesOf>, row: RosterRun): string {
+  if (owe.priceCards > 0) return `${owe.priceCards} ${owe.priceCards === 1 ? 'needs' : 'need'} a price`
+  if (owe.blocked) return 'Needs a price'
+  if (owe.unreadable) return 'Cannot be read'
+  if (owe.neverSent) return 'Never sent'
+  if ((row.unsent ?? 0) > 0) return `${row.unsent} unsent`
+  return row.box_former === true ? 'Box deleted' : 'All sent'
 }
 
 /** A LIVE COUNT IS NEVER DRAWN WITHOUT ITS AGE (the owner, 2026-09-03), and the big figure is

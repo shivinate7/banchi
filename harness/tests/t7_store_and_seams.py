@@ -36071,6 +36071,18 @@ def check_emit_unpriced_left_out(checks: Checks) -> None:
             ["1 card with no market price needs a price"],
             "the joined run owes a PRICE for the unpriced card, a reason that is not the send",
         )
+        # AND EACH REASON CARRIES ITS CODE (R4): the screen reads the code, never the sentence.
+        roster = pipeline_routes.do_pipeline_worklist([])["roster"]
+        chip = next((one for one in roster if one["run"] == run_dir.name), {})
+        checks.equal(
+            chip.get("owed"),
+            [{"code": "needs_price", "count": 1}, {"code": "never_emitted", "count": None}],
+            "the roster sends a machine code beside each owed sentence, in the same order",
+        )
+        checks.ok(
+            all(reason["code"] in pipeline_routes.OWE_CODES for reason in chip.get("owed", [])),
+            "every code sent is one `OWE_CODES` declares",
+        )
         left_out(command(checks, "emit", str(run_dir.directory)))
         checks.equal(
             owes_price(),
