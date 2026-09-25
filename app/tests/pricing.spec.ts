@@ -1210,7 +1210,7 @@ test('what the double-send guard held back is named, card by card', async ({ pag
    copies and reprices cards already live. A price change is a row this press adds no copy of,
    already live, whose TYPED price is not the live one. A rule price never counts, and a typed
    price TCGplayer already shows is no change. The press says both, apart. */
-test('a mixed press says what it carries: new copies and price changes', async ({ page }) => {
+test('r5: a mixed press says what it carries: new copies and price changes', async ({ page }) => {
   const mixed = sendSummary({ copies: 3, prices: 1, rows: 2 })
   const wire = await open(page, {
     skus: [
@@ -1267,7 +1267,7 @@ test('a mixed press says what it carries: new copies and price changes', async (
 /* ROUND 5: TWO PRESSES IN ONE SECOND. A stamp is the second, then a random tail, so the card
    compared stamps and stood on its own older press whenever the newer one drew the smaller
    tail. The server lists receipts newest PRESS first, and the card stands on that. */
-test('two presses in one second: the card stands on the newest press, not the larger stamp', async ({ page }) => {
+test('r5: two presses in one second: the card stands on the newest press, not the larger stamp', async ({ page }) => {
   const mine = sendSummary({ stamp: '20260924-120000-ffffff', copies: 3 })
   const later = sendSummary({ stamp: '20260924-120000-000000', copies: 5 })
   const wire = await open(page, {
@@ -1282,7 +1282,7 @@ test('two presses in one second: the card stands on the newest press, not the la
 /* ROUND 5: AT 390 WIDE, TWO TAKEN-BACK WARNINGS STOOD HALF THE SCREEN HIGH IN THE STICKY BAR.
    Each folds to one line: the warning's own imperative, a press that opens the rest, and
    Dismiss. It never folds away: only Dismiss takes it off the card (round 4). */
-test('at 390 two taken-back warnings fold to one line each, and stay until Dismiss', async ({ page }) => {
+test('r5: at 390 two taken-back warnings fold to one line each, and stay until Dismiss', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const staged = sendSummary({
     stamp: '20260924-120000-aaaaaa',

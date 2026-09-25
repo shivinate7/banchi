@@ -142,8 +142,9 @@ function PriceMisses({ send }: { readonly send: SendSummary }) {
 
 /** What the check found, in one sentence: copies found, price changes live, or both. */
 function foundLine(send: SendSummary): string {
+  if (send.check !== null && send.prices === 0) return `${send.check.found} of ${send.check.expected} found`
   const parts: string[] = []
-  if (send.check !== null && (send.check.expected > 0 || send.prices === 0)) {
+  if (send.check !== null && send.check.expected > 0) {
     parts.push(`${send.check.found} of ${plural(send.check.expected, 'copy', 'copies')} found`)
   }
   if (send.prices > 0 && send.price_check !== null) {
