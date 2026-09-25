@@ -949,6 +949,8 @@ def _price_refusal(console: str, step: str) -> Optional[PipelineRefusal]:
     parts = []
     for note in refused:
         sentence = _PRICE_REFUSALS.get(str(note.get("why")), "it cannot be sent as it stands")
+        if note.get("why") == "live_moved" and not note.get("shown"):
+            sentence = "TCGplayer shows {live} now, and this list showed no live price"
         money = {
             key: (f"${note[key]}" if note.get(key) else "no price")
             for key in ("live", "shown", "price")
