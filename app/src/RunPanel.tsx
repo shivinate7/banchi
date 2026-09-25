@@ -624,14 +624,16 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         aria-current={open ? 'true' : undefined}
         onClick={() => onOpenRun(open ? null : row.run)}
         style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }}
+        /* D196: the run's own directory name is a repository path, never a user-visible
+           string. The box label plus the time (row-side, below) already tell two runs
+           apart; the raw id still rides the tooltip, the same pattern `claim()`'s
+           `raw` argument uses elsewhere on this screen for a pipeline spelling. */
+        title={row.run}
       >
         <span className="run-row-main">
           {/* The box label is what tells two runs apart, and the 320px master cuts it. */}
           <span className="run-row-scope" title={scopeOf(row)}>
             {scopeOf(row)}
-          </span>
-          <span className="run-row-name" title={row.run}>
-            {row.run}
           </span>
         </span>
         <span className="run-row-side">
@@ -831,8 +833,14 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     <span>{`started from ${STARTER[detail.started_by] ?? capitalize(detail.started_by)}`}</span>
                   ) : null}
                 </span>
-                <h2 className="runs-detail-h">{runBoxLabel(detail) ?? detail.run}</h2>
-                <span className="runs-detail-name">{detail.run}</span>
+                {/* D196: the run's own directory name is a repository path. The box label
+                    is the human title; where a run has none (a stranded run, D165), the
+                    title falls back to the raw id — the one case nothing better exists to
+                    say — with the id still on the title attribute for a reader who needs
+                    it. */}
+                <h2 className="runs-detail-h" title={runBoxLabel(detail) === null ? undefined : detail.run}>
+                  {runBoxLabel(detail) ?? detail.run}
+                </h2>
               </div>
               <div className="runs-detail-side">
                 {/* D165's repair, offered ONLY where the store can no longer join this run —

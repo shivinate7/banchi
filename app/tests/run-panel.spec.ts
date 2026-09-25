@@ -1297,8 +1297,7 @@ test('a run row names the drawer, and takes the name from the server', async ({ 
      BOTH ARMS, and the second one is the assertion that matters: an unnamed box draws the
      number ALONE. D20 leaves a name optional, so `Box 9 · —` would draw a fault where there
      is none. */
-  const rowScope = (run: string) =>
-    page.locator('.run-row').filter({ hasText: run }).locator('.run-row-scope')
+  const rowScope = (run: string) => page.locator(`.run-row[title="${run}"] .run-row-scope`)
 
   /* SELECTED BY RUN NAME AND NOT BY INDEX, because this list is PARTITIONED: box 9 is the
      picked box, so its run sorts above box 12's whatever order the server sent them in. An
@@ -1343,8 +1342,7 @@ test('a run over a deleted drawer says so, and the drawer on the shelf does not'
     ],
   })
 
-  const rowScope = (run: string) =>
-    page.locator('.run-row').filter({ hasText: run }).locator('.run-row-scope')
+  const rowScope = (run: string) => page.locator(`.run-row[title="${run}"] .run-row-scope`)
 
   await expect(rowScope('2026-08-22-box1-03')).toHaveText('Box 1 (deleted) · Pokemon shakedown')
   await expect(rowScope('2026-08-29-box1-01')).toHaveText('Box 1 · RB Epics')

@@ -8483,7 +8483,10 @@ COMPONENTS = [
                                  # is the shared poll hook the run list and the open run's detail
                                  # both moved onto — the detail poll's `restartKey` is what
                                  # switching between two live runs needs and the hook alone supplies.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86", "D207", "D118", "D165"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31",
+                                                 "D32", "D33", "D39", "D48", "D49", "D54", "D56",
+                                                 "D64", "D65", "D76", "D86", "D118", "D165", "D196",
+                                                 "D207"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
