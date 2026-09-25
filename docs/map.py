@@ -6828,7 +6828,7 @@ COMPONENTS = [
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
                 "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41",
-                                "D46", "D50", "D117", "D162", "D-a-box-is-shown-by-its-name"],
+                                "D46", "D50", "D117", "D118", "D162", "D-a-box-is-shown-by-its-name"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "

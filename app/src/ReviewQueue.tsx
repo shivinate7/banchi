@@ -2311,7 +2311,8 @@ function Facts({ row }: { row: Row }) {
         ),
     },
     { label: 'Waiting', value: seenText(entry) },
-    { label: 'Position', value: entry.label },
+    // No `Position` fact: the photo caption already names the card's place, and the place
+    // shows once on this screen.
   ]
   return (
     <details className="review-details">
