@@ -23,6 +23,14 @@ declare global {
  *   - the toast contrast: `SD/review/kit-icons/toast.mjs` measured the dismiss glyph at
  *     1.83:1 in light theme, `.bn-icon-face`'s own colour beating `.bn-toast-close`'s
  *     `color: inherit`.
+ *
+ * ROUND 3's own delta review found a fifth, in the same file this list already covers:
+ *   - the glyph size: round 2 dropped the `.bn-icon-face` wrapper and put `style={{ width:
+ *     FACE_PX[size], height: FACE_PX[size] }}` straight on `<Icon>`. `Icon.tsx` spreads
+ *     `rest` onto the `<svg>` after its own `width`/`height` attributes, and inline CSS beats
+ *     an SVG attribute — every glyph drew at the FACE size, filling its whole box, not at
+ *     GLYPH_PX. The fix drops that `style` prop; the button's own box is already FACE_PX and
+ *     `.bn-icon-btn`'s flex centring places the smaller glyph inside it.
  */
 
 const GALLERY = '/#/gallery'
@@ -33,6 +41,28 @@ test.beforeEach(async ({ page }) => {
   await page.goto(GALLERY)
   await expect(page.locator('[data-kit-section="icon-button"]')).toBeVisible()
   await settleMotion(page)
+})
+
+/* FACE_PX and GLYPH_PX, `kit/index.tsx`'s own table, read here rather than imported: this
+ * file is a browser spec and the table is a private module constant, so it is the test's own
+ * record of intent, checked against what the DOM actually draws. */
+const SIZES: readonly { readonly size: string; readonly face: number; readonly glyph: number }[] = [
+  { size: 'sm', face: 24, glyph: 12 },
+  { size: 'md', face: 28, glyph: 14 },
+  { size: 'lg', face: 34, glyph: 16 },
+  { size: 'xl', face: 40, glyph: 18 },
+]
+
+test('every size draws its face at FACE_PX and its glyph at GLYPH_PX, never the face size on the svg', async ({ page }) => {
+  const section = page.locator('[data-kit-section="icon-button"]')
+  for (const { size, face, glyph } of SIZES) {
+    const btn = section.getByRole('button', { name: `Undo (${size})` })
+    const svg = btn.locator('svg')
+    const faceBox = await btn.evaluate((el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) } })
+    const glyphBox = await svg.evaluate((el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) } })
+    expect([faceBox.w, faceBox.h], `size ${size} face`).toEqual([face, face])
+    expect([glyphBox.w, glyphBox.h], `size ${size} glyph`).toEqual([glyph, glyph])
+  }
 })
 
 test('the 40px hit area extends past the visual face, and clicking the extension still presses the button', async ({ page }) => {

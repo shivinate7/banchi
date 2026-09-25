@@ -9319,7 +9319,7 @@ COMPONENTS = [
                         "docs/DESIGN.md. Run by `make design-check`.",
                 "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
                                 "D118", "D125", "D136", "D193", "D212", "D218",
-                                "D-a-box-is-shown-by-its-name"],
+                                "D-a-box-is-shown-by-its-name", "D-icon-buttons"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

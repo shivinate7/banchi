@@ -273,7 +273,13 @@ export function IconButton({
       }}
       {...rest}
     >
-      <Icon name={icon} size={GLYPH_PX[size]} style={{ width: FACE_PX[size], height: FACE_PX[size] }} />
+      {/* No `style` override here (round 3's own bug): `Icon.tsx` spreads `rest` onto the
+          `<svg>` AFTER its own `width`/`height` attributes, and inline CSS beats an SVG
+          attribute — a `style={{ width: FACE_PX[size], ... }}` here drew every glyph at the
+          FACE size, not GLYPH_PX, filling the whole face. The button's OWN box is already
+          FACE_PX (its own inline `style` above) and `.bn-icon-btn`'s flex centring places the
+          smaller glyph inside it — nothing here needs to repeat that size. */}
+      <Icon name={icon} size={GLYPH_PX[size]} />
       {badge !== undefined && badge !== 0 && badge !== '' ? (
         <span className="bn-icon-count" aria-hidden="true">
           {badge}
