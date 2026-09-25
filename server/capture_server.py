@@ -311,6 +311,7 @@ from pipeline import routing  # noqa: E402
 from pipeline import skus as sku_fill  # noqa: E402
 from pipeline import walkplan  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
+from server import match  # noqa: E402
 from store import Store, db, files, master, numbers, photos, queues  # noqa: E402
 from store import orders as order_store  # noqa: E402
 
@@ -9860,6 +9861,21 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     write-only. It is deliberately not a prefix or exact rank: it is prose a human typed
     ("blue-eyes, japanese"), not an identifier, and ranking it beside a collector number
     would let a chatty note outrank a real card's own name.
+
+    THE NUMBER TIER AND THE TEXT FOLD BOTH GO THROUGH `server/match.py` (FLT-06/04, UX-173),
+    A CORRECTION AGAINST THE ORIGINAL, WHICH COMPARED RAW LOWER-CASED STRINGS AND WAS WRONG
+    two ways at once. First, `query in field.lower()` is a bare substring test, so a query of
+    `54` found `154/200` — exactly what `kit/match.ts`'s rule 4 forbids ("never a substring").
+    `match._number_match` compares CANONICAL forms instead, so a bare token only ever matches
+    a number's own first part, never an unrelated run of digits inside a longer one; it also
+    folds a hyphen standing for the slash (`054-132` reads as `054/132`), which the raw
+    substring test could never do because the literal characters disagree. Second, `.lower()`
+    does not fold a combining mark, so a query of `flabebe` (typed without the accent) never
+    found `Flabébé` even though the FTS5 candidate step upstream — `unicode61
+    remove_diacritics 2` — had already surfaced the row as a candidate; the rank step then
+    silently dropped it. `match.fold_text` NFKD-folds every field the same way the index
+    does, so the two agree. SKU stays a bare substring on purpose (see the header above this
+    function): a `TCGplayer Id` is unique, so where its one group sorts costs nothing.
     """
     name = str(card.name or "")
     number = str(card.number or "")
@@ -9871,22 +9887,95 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     # raw field is still here, and the display form joins it.
     shown = _number_display(card) or ""
 
-    if query in {number.strip().lower(), key.lower(), shown.lower()} - {""}:
+    # THE NUMBER FIELDS ARE COMPARED STRUCTURALLY, NOT AS SUBSTRINGS, so they are checked
+    # here and left OUT of the plain substring loop below — a bare `query in field.lower()`
+    # over `number`/`key`/`shown` is exactly the bug rule 4 forbids (`54` finding `154/200`).
+    numbers = tuple(v for v in (number, key, shown) if v)
+    number_parts = [match._number_parts(match.canonical_number(n)) for n in numbers]
+    if match._number_match(query, number_parts):
         return _RANK_EXACT_NUMBER
-    if name.lower().startswith(query):
+    folded_query = match.fold_text(query)
+    if folded_query and match.fold_text(name).startswith(folded_query):
         return _RANK_NAME_PREFIX
-    for field in (
-        name,
-        number,
-        str(card.sku or ""),
-        str(card.set_hint or ""),
-        str(card.note or ""),
-        key,
-        shown,
-    ):
+    for field in (name, str(card.sku or ""), str(card.set_hint or ""), str(card.note or "")):
+        if folded_query and folded_query in match.fold_text(field):
+            return _RANK_SUBSTRING
         if query in field.lower():
             return _RANK_SUBSTRING
     return None
+
+
+_BARE_NUMBER_HEAD = re.compile(r"^(\d{1,2})(/.*)?$")
+
+
+def _zero_padded_variant(term: str) -> Optional[str]:
+    """`54` -> `054`, `54/132` -> `054/132`, or None where the term is not a bare number
+    typed without ITS OWN leading zeros.
+
+    `number_key` (`store/db.py:_add_search_index`) is always composed through
+    `store.numbers.join_key`, which is `zfill(3)(number) + "/" + printed_total` — unconditionally,
+    every game, because `zfill` on a string already three characters or longer is a no-op
+    (D76's per-game width rule governs what `join.py:number_index_key` compares on the
+    JOIN, never this — `store/numbers.py`'s own header: "Fuzzy '54' to '054' is fine in
+    SEARCH, and must never feed the join"). So the FTS5 index never carries a token that
+    starts with a bare 1-2-digit run; this widens the CANDIDATE query to the padded form the
+    index actually holds, the same zfill(3), never a fourth digit or more.
+    """
+    found = _BARE_NUMBER_HEAD.match(term)
+    if not found:
+        return None
+    digits, rest = found.group(1), found.group(2) or ""
+    return digits.zfill(3) + rest
+
+
+def _fts_query_variants(term: str) -> List[str]:
+    """Every SINGLE-TOKEN spelling of `term` that should reach the FTS5 candidate step
+    (UX-173): the term itself, a hyphen standing for the collector-number slash
+    (`054-132` -> `054/132`), and each of those zero-padded (`54/132` -> `054/132`).
+    Order-preserving and deduplicated, so a term with no number shape at all still returns
+    exactly `[term]`. See `_fts_term_alternatives` for the hyphen-as-word-break case, which
+    is not a single token and does not belong in this list.
+    """
+    # A plain `dict` keeps insertion order (Python 3.7+) and is used as an ordered set —
+    # `_fts_query`'s own OR clause must not repeat a spelling.
+    seen: Dict[str, None] = {}
+    for candidate in (term, match._hyphen_to_slash(term)):
+        seen.setdefault(candidate, None)
+    for candidate in list(seen):
+        padded = _zero_padded_variant(candidate)
+        if padded:
+            seen.setdefault(padded, None)
+    return list(seen)
+
+
+def _fts_quote(term: str) -> str:
+    """One term, quoted and made a prefix — the one escaping rule `_fts_query` states."""
+    return '"' + term.replace('"', '""') + '"*'
+
+
+def _fts_term_alternatives(term: str) -> List[str]:
+    """Every standalone FTS5 clause `term` should try, ORed together (UX-173): each single
+    token from `_fts_query_variants`, quoted, PLUS — where `term` carries a hyphen AS A
+    WORD BREAK rather than a digit-to-digit separator — the hyphen split into its own words,
+    each still required (`heimerdinger-inventor` finds a name the tokenizer indexed as TWO
+    words, `heimerdinger` and `inventor`, because `-` is a `tokenchars` character and the
+    literal hyphenated token is never one the index holds).
+
+    A DIGIT-ADJACENT HYPHEN IS NOT ALSO SPLIT HERE, so `054-132` contributes `("054-132"*
+    OR "054/132"*)` from the variants above and not a THIRD alternative `("054"* "132"*)` —
+    the number tiers already reach it more precisely (`_number_match` compares canonical
+    forms), and a generic AND-of-halves would let `054-132` also match any row carrying
+    `054` and `132` as two unrelated words, which is not what a person typing a card number
+    asked for.
+    """
+    clauses = [_fts_quote(v) for v in _fts_query_variants(term)]
+    words = [w for w in term.split("-") if w]
+    if len(words) > 1 and not any(w.isdigit() for w in words):
+        clauses.append("(" + " ".join(_fts_quote(w) for w in words) + ")")
+    seen: Dict[str, None] = {}
+    for clause in clauses:
+        seen.setdefault(clause, None)
+    return list(seen)
 
 
 def _fts_query(text: str) -> str:
@@ -9911,12 +10000,30 @@ def _fts_query(text: str) -> str:
     no attempt to tokenize the way FTS5 itself would (e.g. `4/102` splitting is FTS5's
     tokenizer's job, not this function's); this function's only job is turning a sentence
     into an AND of prefix terms.
+
+    A TERM WITH A NUMBER SHAPE OR A HYPHEN BECOMES AN OR OF ITS SPELLINGS, NOT ONE PREFIX
+    (UX-173, a CORRECTION against the original playbook, which quoted the bare term and was
+    wrong two ways at once. The index's own number token is always zero-padded
+    (`number_key`'s `zfill(3)`), so a bare `54/132` or a hyphenated `054-132` never
+    prefix-matched anything. And a hyphenated NAME (`heimerdinger-inventor`) is one token to
+    the index too — `-` is a `tokenchars` character — while the field it is meant to find
+    (`Heimerdinger, Inventor`) tokenizes on the comma into two separate words; the literal
+    hyphenated token never matched either. Both measured directly, before this fix:
+    `do_search` answered empty for both. `_fts_term_alternatives` is the widening, per term;
+    parenthesised so the per-term OR does not leak into the AND between terms.
+    Accents need no widening here: `store/db.py:_FTS_TOKENIZE` is `unicode61
+    remove_diacritics 2`, which folds the query side exactly as it folds the index — the
+    accent bug UX-173 also names is entirely in `_match_rank`'s own field comparison, fixed
+    there.
     """
     terms = text.split()
     if not terms:
         return ""
-    escaped = ('"' + term.replace('"', '""') + '"*' for term in terms)
-    return " ".join(escaped)
+    clauses = []
+    for term in terms:
+        alternatives = _fts_term_alternatives(term)
+        clauses.append(alternatives[0] if len(alternatives) == 1 else "(" + " OR ".join(alternatives) + ")")
+    return " ".join(clauses)
 
 
 def _distinct(values: Iterable) -> List[str]:

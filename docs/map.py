@@ -5590,6 +5590,30 @@ COMPONENTS = [
                         "already aims the export. PKMNSCAN_TCG_SELLER_KEY must be in .env or "
                         "a live fetch answers 403.",
             },
+            "match.py": {
+                "does": "the one forgiving matcher (FLT-06/04, UX-173), ported from "
+                        "`app/src/kit/match.ts` — NFKC/NFKD accent folding, canonical "
+                        "collector-number comparison (zero padding and a hyphen standing "
+                        "for the slash), SKU-prefix and box-name matching, stdlib only "
+                        "(`unicodedata` stands in for the `regex` package's `\\p{L}`/`\\p{N}` "
+                        "classes, which `requirements.txt`'s own \"Deliberately absent\" "
+                        "section is why nothing new was added). `capture_server.py:_match_rank` "
+                        "calls its lower-level primitives to fix two defects a raw "
+                        "`.lower()`/`in` comparison had: a bare `54` wrongly matching `154/200`, "
+                        "and an accented name (`Flabébé`) not answering its unaccented query "
+                        "even once the FTS5 index had already surfaced it as a candidate. "
+                        "`_fts_query` calls its `canonical_number`/`_hyphen_to_slash` to widen "
+                        "the FTS5 CANDIDATE query itself, which is the half a rank fix alone "
+                        "cannot reach — the index's own token is always zero-padded, so a bare "
+                        "`54/132` or a hyphenated `054-132` never prefix-matched anything.",
+                "governed_by": ["D166", "D213"],
+                "tested_by": ["T7"],
+                "note": "`scripts/match-selftest.py` runs every row of "
+                        "`app/src/kit/match.cases.json` through this module directly, proving "
+                        "it agrees with the TypeScript original the filtering lane wrote the "
+                        "case table for. `make match-selftest`, wired into `make check`, not a "
+                        "harness test — no `Tn` id names it.",
+            },
         },
     },
     {
