@@ -416,37 +416,59 @@ def bind_or_hold(
     read_number: Optional[str],
     read_printed_total: Optional[str],
     confidence: str,
+    bound_at: str,
 ) -> None:
     """One card's identity, written the way the product writes it now
     (identity-follows-sku.md §4, lane 6), never straight onto the record.
 
     `record_identification` FIRST, ALWAYS — the evidence group (`read_name`/`read_number`/
-    `read_printed_total`/`confidence`), and, while the card carries no binding yet, the
-    identity group too (that method's own rule: "on a card with no SKU the identity follows
-    the read"). THEN, ONLY IF `sku` IS A ROW `seed_skus` ALREADY FOLDED IN, `bind_sku`
-    REPLACES that identity with the catalogue's own (§4.1, "the one writer") — the same
-    branch a real join takes, faked here only because identification is the one paid step
-    (see the module docstring). `card` must already be in `inventory.cards` — both writers
-    are silent no-ops on a key they cannot find.
+    `read_printed_total`/`confidence`/`read_disputes`), and, while the card carries no
+    binding yet, the identity group too (that method's own rule: "on a card with no SKU the
+    identity follows the read"). `card` must already be in `inventory.cards` — both writers
+    below are silent no-ops on a key they cannot find.
+
+    THREE OUTCOMES, NEVER TWO. `sku` absent from `skus` (the `other` pool: 0 of 40 in any
+    fixture export) leaves the card `IDENTITY_READ`, as before. `sku` present and the read
+    AGREES is `bind_sku` — the same branch a real join takes, faked here only because
+    identification is the one paid step (see the module docstring). `sku` present and the
+    read DISPUTES the row is REVIEW ROUND, NOT LANE 6'S FIRST PASS: §4.1, "a join caller
+    refuses to bind a card whose read disputes the row." `bind_sku` is never called — the
+    card is left HELD, `cli/cmd_cards.py`'s own migration held branch, reused rather than a
+    second path: `identity_source = IDENTITY_READ` (set directly, exactly as that branch
+    does) with `sku` PRESENT (set directly too, since there is no earlier writer here for the
+    migration to have found it already bound by) — `record_identification` above already put
+    the read on both the evidence and the identity fields, and `read_disputes` travels with
+    it. This is `#/inventory`'s "the listing is right?" case verbatim (§8.1): a card whose
+    drawn name is only the camera's, and whose SKU already names the real listing.
 
     Measured (§3.2, and this file's own `catalog()`): every `priceable` row's SKU is a real
-    row in the three fixture exports; 0 of the `other` pool's are. So this is `bind_sku` for
-    one pool and `IDENTITY_READ` for the other by construction, never a second flag.
+    row in the three fixture exports; 0 of the `other` pool's are.
+
+    `bound_at` IS THE CALLER'S FIXED CLOCK, THREADED INTO `bind_sku`'s OWN `at` — `bind_sku`
+    stamps `now()` by default, which would put a different `bound_at` on every one of the
+    ~90 cards this seed binds per `make demo` run (review round: measured, 97 timestamps
+    differed between two runs before this parameter existed). `SEED`/`NOW` are this file's
+    whole promise of a byte-identical rebuild; a wall-clock stamp inside the one writer broke
+    it from underneath.
     """
+    row = skus.entries.get(sku) if sku else None
+    disputes = ib.name_disputes(read_name, [ib._row_dict(row)]) if row is not None else False
     inventory.record_identification(
         card.key, name=read_name, number=read_number, printed_total=read_printed_total,
-        confidence=confidence, run=run,
+        confidence=confidence, run=run, read_disputes=disputes,
     )
-    row = skus.entries.get(sku) if sku else None
     if row is None:
         card.identity_source = IDENTITY_READ
         return
+    if disputes:
+        card.sku = sku
+        card.identity_source = IDENTITY_READ
+        return
     entry = games_module.get(game)
-    disputes = ib.name_disputes(read_name, [ib._row_dict(row)])
     inventory.bind_sku(
         card.key, sku, bound_by="join", skus=skus,
         number_strategy=entry["join_key"], expected_product_line=entry.get("product_line"),
-        read_disputes=disputes, event="sku_bound",
+        read_disputes=False, event="sku_bound", at=bound_at,
     )
 
 
@@ -524,6 +546,14 @@ def build_store(force: bool) -> dict:
             for offset, row in enumerate(rows):
                 index = offset + 1
                 state = state_for(offset, len(rows), rng)
+                # ONE DELIBERATE MISREAD (§5.9, review round), FORCED TO `identified`
+                # REGARDLESS OF THE ROLL ABOVE. `#/inventory`'s confirm press needs
+                # `state === 'identified'` (`eligible = sku !== null && card.state ===
+                # 'identified'`, `app/src/CardHero.tsx`) — a `sold` roll here would seat the
+                # dispute in a pane that draws no press at all.
+                disputed = spec["box"] == DISPUTE_BOX and offset == DISPUTE_OFFSET
+                if disputed:
+                    state = "identified"
                 captured_at = stamps[offset]
 
                 # THE CARD'S NAME, AND THE SEED HAS TO ISSUE IT ITSELF (D172). These rows go
@@ -562,15 +592,16 @@ def build_store(force: bool) -> dict:
                     # An identified card knows what it is. A captured one does not yet —
                     # that is the whole difference, and the review queue is where the
                     # difference gets settled. Written through `record_identification` and
-                    # `bind_sku` now, never straight onto the record (identity-follows-sku.md
-                    # §4, lane 6) — `bind_or_hold` above is what decides which of the two
-                    # this card gets, off whether its SKU is one `seed_skus` folded in.
+                    # `bind_sku`/held now, never straight onto the record
+                    # (identity-follows-sku.md §4, lane 6) — `bind_or_hold` above is what
+                    # decides which of the three this card gets.
                     #
-                    # ONE DELIBERATE MISREAD (§5.9): the model's reading names a DIFFERENT
-                    # real card (`rows[DISPUTE_OFFSET + 1]`) from the one the join actually
-                    # binds this position to, so `read_disputes` comes back true and the
-                    # confirm press, "Read as" and "Listed as" all have something to draw.
-                    disputed = spec["box"] == DISPUTE_BOX and offset == DISPUTE_OFFSET
+                    # ONE DELIBERATE MISREAD (§5.9, review round): the model's reading names
+                    # a DIFFERENT real card (`rows[DISPUTE_OFFSET + 1]`) from the one this
+                    # position's own SKU actually names, so `read_disputes` comes back true —
+                    # `bind_or_hold` leaves it HELD rather than binding it (§4.1's own
+                    # refusal), and the confirm press, "Read as" and "Listed as" all have
+                    # something to draw.
                     read_row = rows[DISPUTE_OFFSET + 1] if disputed else row
                     bind_or_hold(
                         inventory, snapshot.skus, card,
@@ -578,6 +609,7 @@ def build_store(force: bool) -> dict:
                         read_name=read_row.name, read_number=read_row.number,
                         read_printed_total=read_row.printed_total,
                         confidence="low" if disputed else "high",
+                        bound_at=stamp(2.0),
                     )
                 if state == "retired":
                     card.retire_reason = "damaged"
