@@ -5156,11 +5156,13 @@ test('the box fill is qualified once, on the identity line', async ({ page }) =>
   await expect(page.locator('.boxops-census-qual')).toHaveCount(0)
   await expect(censusValue(page, 'Fill')).toHaveText('7')
 
-  /* AND IT IS QUALIFIED ONCE, ON THE IDENTITY LINE — which says whether the lid is on. That is
-     what D20 asks for: a reader can tell an open box's fill-so-far from a sealed box's frozen
-     capacity without going to look, and the census below does not annotate the same fact twice. */
-  const identity = await page.locator('.boxops-identity').innerText()
-  expect(identity.toLowerCase()).toMatch(/\bopen\b|\bsealed\b/)
+  /* AND IT IS QUALIFIED ONCE, IN THE SHEET THAT DRAWS THE FILL — whose head says whether the lid
+     is on. That is what D20 asks for: a reader can tell an open box's fill-so-far from a sealed
+     box's frozen capacity without going to look, and the census does not annotate it twice. The
+     rail's box card draws a state pill only for a sealed box since UX-269, so the sheet's head
+     is where an open box says so. */
+  const head = await page.locator('.boxops-sheet .inv-sheet-head').innerText()
+  expect(head.toLowerCase()).toMatch(/\bopen\b|\bsealed\b/)
 })
 
 test('the walk keeps a floor when the box editors open beneath it', async ({ page }) => {
