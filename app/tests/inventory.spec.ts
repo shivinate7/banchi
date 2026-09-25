@@ -4486,6 +4486,59 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
   expect(sent[0]?.body).toMatchObject({ to_box: 7 })
 })
 
+test('the header holds one worded primary and the filter bar one line, at 390 and 720', async ({
+  page,
+}) => {
+  /* LANES-ADDENDUM "Tighten headers and filters": a page header holds at most one worded
+   * primary (the rest IconButtons or a More menu), and a filter bar is one line — search plus
+   * one Filters press, facets and sort behind it. Inventory's own `<Page>` passes neither
+   * `toolbar` nor `verdict` (Inventory.tsx), so the header carries zero worded primaries
+   * already; this measures that it stays that way and that the filter bar's own height still
+   * reads as one control row, at both widths the owner asked this measured at. */
+  for (const width of [390, 720]) {
+    await page.setViewportSize({ width, height: 900 })
+    // Below 640 the rail is a phone drawer — `.browse-mobilebar` chip settles it; at 720 the
+    // desk rail is on screen from the start and the usual section-fold wait applies.
+    await open(page, BOXES, STORE, () => PRICING, SALE, {
+      settle: width < 640 ? '.browse-mobilebar' : undefined,
+    })
+
+    // ZERO WORDED PRIMARIES IN THE HEADER: the toolbar slot Page.tsx would draw one in is
+    // simply not there — `.bn-toolbar` never renders when `Inventory.tsx` passes no `toolbar`.
+    await expect(page.locator('.bn-toolbar')).toHaveCount(0)
+
+    if (width < 640) {
+      // Below 640 the whole rail — search, filters, the box list — sits behind the phone's
+      // own drawer chip (`.browse-mobilebar`), so there is no filter bar row to measure above
+      // the walk at all: the chip IS the one line. `.browse-filterbar` is correctly ABSENT
+      // here, not merely narrow — asserted so a change that started rendering it inline does
+      // not silently pass this case for the wrong reason.
+      await expect(page.locator('.browse-filterbar')).toHaveCount(0)
+      // D117's own thumb floor (40px+) is why this ceiling is looser than the desk bar's —
+      // the chip is still one line, of touch-sized controls.
+      const chip = page.locator('.browse-mobilebar')
+      const chipBox = await chip.boundingBox()
+      expect(chipBox?.height ?? 999, `mobile bar is ${chipBox?.height}px tall at ${width}`).toBeLessThan(80)
+    } else {
+      // ONE LINE: `.bn-filterbar-controls` is the search+Filters row alone — the facet/sort/
+      // hide row hides inside it under 480px of the bar's OWN width (a container query, not
+      // the page's), and `FilterCount`'s "N of M boxes" line is a SEPARATE sibling below
+      // `.bn-filterbar-controls`, not part of the one-line claim this measures.
+      const controls = page.locator('.browse-filterbar .bn-filterbar-controls')
+      await expect(controls).toBeVisible()
+      const controlsBox = await controls.boundingBox()
+      expect(controlsBox?.height ?? 999, `filter bar controls are ${controlsBox?.height}px tall at ${width}`).toBeLessThan(60)
+    }
+
+    // THE SPACE ABOVE THE WALK: from the page's own top to where the box rail / card panel
+    // begins. Recorded as a measurement, not asserted against a guessed ceiling — the number
+    // is what the owner asked for, not a pass/fail this case invents one for.
+    const pageTop = (await page.locator('.bn-page').boundingBox())?.y ?? 0
+    const walkTop = (await page.locator('.browse-body, .browse-mobilebar').first().boundingBox())?.y ?? 0
+    console.log(`INFO space above the walk at ${width}px: ${Math.round(walkTop - pageTop)}px`)
+  }
+})
+
 test('the value sort ranks boxes by their own dollar total, high to low by default', async ({
   page,
 }) => {
