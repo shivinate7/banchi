@@ -10701,6 +10701,16 @@ def do_search(query: str) -> dict:
             # changing: whichever copy of a tied SKU the query returns first, the lower rank wins.
             ranked[sku] = min(rank, ranked.get(sku, rank))
 
+    # ponytail: the body built below is UNPAGED — every ranked SKU's full group, every
+    # copy, in one response. Measured (round-5 Opus delta review, 2026-09-25, D271): a
+    # broad hostile query (`("e " * 100)`) returns a 719KB body at 3,000 cards and 2.4MB
+    # at 10,000, and the JSON encode plus the socket write of that body is most of what
+    # pushes real HTTP p95 over 500ms — the matcher itself stays fast (see D271's table).
+    # The owner's real ~3,510-card store never hits this, because a real query there
+    # matches far fewer rows than a deliberately hostile one does. Ceiling: a genuinely
+    # broad query on a synthetic store of 3,000+ cards. Upgrade path: page the response
+    # (a `limit`/`cursor` on `groups`), a real change needing its own decision — D271
+    # names it, never builds it here.
     groups: List[dict] = []
     for sku, rank in ranked.items():
         copies = inventory.positions_for_sku(sku)

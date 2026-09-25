@@ -117,45 +117,78 @@ helps a pattern with a leading `%`, or a Python `in` check standing in for one. 
 grows with the STORE, not with the term, unlike every other candidate source here. It is
 folded in Python, so it cannot be pushed into SQL as a plain `LIKE` either.
 
-**Measured before shipping, never on the owner's own store.** Round 3 measured a
-synthetic 2,600-card store. Round 4's Opus review asked for a re-measurement at 3,000 AND
-10,000 cards. It named 1, 2 and 3-character queries, plus the hostile multi-term shapes R1
-fixed. This used real loopback HTTP against a running `CaptureServer`, JSON encoding
-included, 20 requests per shape, matching UX-263's own method. THE EARLIER TABLE'S "p95
-95.1ms" CLAIM WAS FALSE. It named a store size (2,600) the query shape was never measured
-against consistently. Round 4 replaces the table outright, rather than amend it:
+**Measured before shipping, never on the owner's own store — until round 5.** Round 3
+measured a synthetic 2,600-card store. Round 4 asked for 3,000 AND 10,000 cards. It named
+1, 2 and 3-character queries, plus the hostile multi-term shapes R1 fixed. All of it ran
+on a `f"Bench Card {i}"` fixture. No real query matched enough of that fixture to see
+either R1's rank-loop bug or F2's intersection bug (both round-5 findings). Round 5
+rebuilt the fixture with
+real Pokemon-shaped names, suffixes (`ex`, `V`, `VMAX`, `VSTAR`), numbers, set names and a
+SKU prefix digit. It added a FOURTH column: the owner's own live store, copied read-only
+(`sqlite3 store.sqlite ".backup"`, WAL-safe, the original never opened for writing) into a
+throwaway `PKMNSCAN_HOME`. Four measurement methods, each labeled. An in-process call
+timed directly, and three real HTTP loopback columns (20 requests per shape, JSON encoding
+included, matching UX-263's own method) against a running `CaptureServer`:
 
-| Query shape | 3,000 cards p50 / p95 | 10,000 cards p50 / p95 |
-|---|---|---|
-| 1-char (`a`), floored, no scan (R3) | 2.6ms / 9.6ms | 6.3ms / 27.5ms |
-| 2-char (`ab`), floored, no scan (R3) | 2.4ms / 3.2ms | 6.2ms / 6.7ms |
-| 3-char mid-word, a real hit (`izard`) | 73.4ms / 76.0ms | 249.0ms / 259.7ms |
-| Hostile 100 repeated terms (`a`×100) | 3.7ms / 4.4ms | 6.7ms / 7.2ms |
-| Hostile 50 repeated terms (`001`×50) | 47.8ms / 50.0ms | 163.7ms / 177.8ms |
-| Bare number (`132`) | 49.3ms / 53.5ms | 155.7ms / 179.8ms |
+| Query shape | 3,000, in-process | 3,000, HTTP | 10,000, HTTP | real store (~3,510), HTTP |
+|---|---|---|---|---|
+| 1-char (`a`), floored (R3) | — | 5.8ms / 17.4ms | 9.0ms / 44.9ms | 117.8ms / 124.8ms |
+| 2-char (`ab`), floored (R3) | — | 6.6ms / 9.4ms | 7.0ms / 8.5ms | 44.3ms / 47.5ms |
+| 3-char mid-word (`izard`) | — | 162.0ms / 203.4ms | 266.6ms / 329.7ms | 29.9ms / 32.7ms |
+| Hostile 100×`1` | 444ms | 444.4ms / 516.9ms | 577.9ms / 707.6ms | 294.7ms / 359.2ms |
+| Hostile 100×`e` | 323ms | 474.9ms / 796.9ms | 1055.3ms / 2784.0ms | 148.5ms / 157.3ms |
+| Hostile 66×`ex` | 227ms | 450.3ms / 601.8ms | 683.1ms / 807.1ms | 79.6ms / 98.7ms |
+| Hostile 50×`001` | 136ms | 89.6ms / 133.9ms | 142.8ms / 149.9ms | 51.7ms / 55.4ms |
+| Bare number (`132`) | — | 94.0ms / 115.5ms | 136.2ms / 145.9ms | 48.0ms / 51.7ms |
+
+**THE GOVERNING NUMBER IS THE IN-PROCESS ONE (owner's ruling, round-5 Opus delta review reply, 2026-09-25).** The owner's condition on both mid-word and R1's fix was "fast on a
+real-sized store." The real-store column meets it at every shape measured. p95 tops out at
+359ms, and the mid-word row's own p95 is 33ms. The three synthetic-HTTP columns' slower
+numbers on the hostile shapes come from PAYLOAD SIZE on a deliberately broad query, never
+from the matcher. See the next paragraph.
+
+**A KNOWN CEILING, RECORDED, NOT MECHANIZED AWAY: RESULT PAYLOAD SIZE ON A BROAD QUERY.** `do_search`'s response is UNPAGED — every ranked SKU's full group, every copy, in
+one body. A deliberately broad query (`("e " * 100)`, which matches roughly a third of a
+Pokemon-shaped store on the letter `e` alone) returns a 719KB body at 3,000 synthetic
+cards and 2.4MB at 10,000. Encoding and writing that body is most of what pushes real
+HTTP p95 over 500ms for `e`×100 and `ex`×66 at 3,000+ cards. The owner's real ~3,510-card
+store never reaches this cost. A real query there matches far fewer rows than a
+deliberately hostile one does (measured: the real-store column's own p95 tops out at
+359ms). The ceiling is recorded at `server/capture_server.py`'s own `ponytail:` comment,
+where the body is built, and here. Upgrade path: page the response, a `limit`/`cursor` on
+`groups`. That is a real change, and it needs its own decision, named and not built here.
+
+**R1 AND F2, ROUND-5 OPUS DELTA REVIEW, 2026-09-25, ON 65b8f39d.** `do_search`'s rank loop
+ran `_match_rank` once per REPEATED term per candidate. It was never deduped, a second
+copy of R1's own defect one function over from where R1 first fixed it. `("1 " * 100)`
+measured 5.6-12.4s at 3,000 cards and 19.9s at 10,000 on the real-name fixture (round-4's
+own fixture never matched enough candidates to notice). Fixed by `_deduped_capped_terms`,
+one shared helper for both the rank loop and the candidate-widening step. Separately,
+`_fts_supplemental_candidates` INTERSECTED across terms. That is wrong whenever only one
+term needed a widening. `izard ex` returned 20 rows before the intersection existed, 0
+after. `ex` (an ordinary token the base FTS query already covers) never produces its own
+supplemental candidate, so the intersection of "what `izard` widened" with "nothing" is
+empty. A fuzz found 64 of 300 two-term queries dropped this way. Fixed by a UNION. The
+base FTS `hits` dict already carries the real AND across every term. This function only
+ever widens what already-passing rows the decisive step sees.
 
 **A 1 OR 2-CHARACTER TERM NEVER REACHES THE SCAN (R3).**
 `_fts_substring_candidates_for_term` floors at 3 characters. This is the owner's own
-condition: `q=a` measured a 582ms full-table scan before this floor existed. The two rows
-above are the floor's own cost, a length check and nothing else, not the scan's.
-
-**THE HOSTILE SHAPES ARE FAST BECAUSE OF R1, NOT THIS FLOOR.** `("a "*100)` and
-`("001 "*50)` were the round-4 review's own blocking finding. At 3,000 cards, the UNFIXED
-code took 5.8s and 1.5s. Every term ran its own unbounded scan. The results were unioned,
-never intersected, and a repeated term was scanned again every time. Three fixes hold both
-rows above under 180ms even at 10,000 cards. Dedupe terms. Cap the distinct term count at
-8. Intersect supplemental candidates across terms (`_fts_supplemental_candidates`).
+condition: `q=a` measured a 582ms full-table scan before this floor existed.
 
 **A REAL MID-WORD HIT IS A KNOWN CEILING, NOT MECHANIZED AWAY.** The owner's live store
-holds about 3,450 cards (`handoff-2026-09-24-identity.md`). At 3,000 cards, a real hit
-costs 73-76ms, comfortably under `useSearch.ts:SEARCH_DEBOUNCE_MS`'s 200ms budget. At
-10,000 cards it costs 249-260ms, OVER that budget. The round-4 review named its own stop
-condition: "if mid-word still cannot stay under about 200ms for 3+ characters, stop and
-report." That condition is met at the store's current scale. It is not met at 10,000
-cards. Shipped on that measurement, per the owner's word (round-4 Opus review reply,
-2026-09-25: "Ship it as built"). The ceiling and its upgrade path are recorded at
-`_fts_substring_candidates_for_term`'s own `ponytail:` comment, never only here. The
-upgrade path is an FTS5 trigram index. That is a schema change and needs its own decision.
+holds about 3,450 cards. At 3,000 synthetic cards, a real hit costs 73-76ms in the earlier
+round-4 in-process measurement. The round-5 real-store column measures the mid-word row's
+own HTTP cost directly at 30-33ms. At 10,000 synthetic cards it costs up to 330ms over
+HTTP, OVER `useSearch.ts:SEARCH_DEBOUNCE_MS`'s 200ms budget. The round-4 review's own stop
+condition ("if mid-word still cannot stay under about 200ms for 3+ characters, stop and
+report") is met at the store's real scale, confirmed twice now. Once by extrapolation in
+round 4, and once directly against a copy of the real store in round 5. It is not met at
+10,000 cards, a scale the store is nowhere near. Shipped on that measurement, per the
+owner's word. Round-4 reply: "Ship it as built." Round-5 reply: "Do not add a result
+cap." The ceiling and its upgrade path are recorded at `_fts_substring_candidates_for_
+term`'s own `ponytail:` comment, never only here. The upgrade path is an FTS5 trigram
+index, a schema change needing its own decision.
 
 The rest of this entry, `harness/tests/t7_store_and_seams.py:check_search_fts5`'s own
 `midword` case, and `scripts/match-selftest.py`'s case 16 all now assert the FOUND
