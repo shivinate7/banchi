@@ -944,6 +944,14 @@ export function Gallery() {
                   <IconButton icon="undo" label="Undo" kbd="U" name="Undo the sale at Section 2, Card 5" />
                 </div>
               </Spec>
+              <Spec
+                label="the anchor form"
+                note="`href` (plus `target`/`rel`) renders an `<a>` with the same face, hit area, tooltip and accessible name — an icon-only control that opens another route keeps the browser's own middle-click, right-click and copy-link, which a `window.open` in an `onClick` cannot give."
+              >
+                <div className="kit-row kit-row-wrap">
+                  <IconButton icon="external" label="Cards to pull" href="#/fulfillment" target="_blank" rel="noreferrer" />
+                </div>
+              </Spec>
             </div>
           </Section>
 
