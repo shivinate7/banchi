@@ -77,6 +77,25 @@
 .capture-odo-drawer.is-here { color: var(--bn-ink-2); }
 .capture-odo-drawer.is-here b { color: var(--bn-ink); }
 
+/* TIGHTEN ABOVE THE CAMERA (owner, 2026-09-24): under kit's own actions-wrap breakpoint the
+   title and the odometer stack, and the odometer is the one thing here that is not "at most
+   one worded primary" — it is stats, not a control, so it stays, but it does not need the
+   wide-column sizing while it is standing on its own line above the viewfinder. Measured at
+   390 and 720 (both fall under this container width) as the gap from the page's own top to
+   `.capture-shell`'s: 195.6px and 143.6px before, see PROGRESS.md for the numbers after. The
+   Box/Game/Camera/etc. rows below are setup VALUES, not a filter bar, and stay untouched. */
+@container bn-page (max-width: 640px) {
+  .capture .bn-page-head { margin-bottom: var(--bn-2); }
+  .capture-odo { gap: var(--bn-3); }
+  .capture-odo .bn-stat { min-width: 0; }
+  .capture-odo .bn-stat-value { font-size: var(--bn-fs-lg); }
+  .capture-odo-rule { height: 18px; }
+  .capture-odo-split {
+    min-height: calc(var(--bn-fs-xs) * 1.4);
+    font-size: var(--bn-fs-xs);
+  }
+}
+
 /* ---- the shell: rail | stage | last, filmstrip underneath ------------------------------- */
 .capture-shell {
   flex: 1 1 auto;

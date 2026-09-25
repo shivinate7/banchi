@@ -10,9 +10,7 @@
       "R2-class": "inventory"
     },
     "app/src/CaptureScreen.tsx": {
-      "R1": "capture",
-      "R2-search": "capture",
-      "R2-class": "capture"
+      "R2-search": "capture"
     },
     "app/src/CardHero.tsx": {
       "R2-date": "inventory",
