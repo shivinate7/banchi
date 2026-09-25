@@ -2815,7 +2815,9 @@ class Inventory:
         self._log(PHOTO_RECLAIMED, key, sku=card.sku, sha256=sha256, bytes=int(size))
         return True
 
-    def move_card(self, key: str, to_box) -> Tuple[Card, Card]:
+    def move_card(
+        self, key: str, to_box, *, slot: Optional[Tuple[int, float]] = None
+    ) -> Tuple[Card, Card]:
         """Move one card to a fresh index in another box. Returns `(tombstone, transplant)`.
 
         D83. A card leaving box A for box B is the same KIND of event as a sale or a
@@ -2881,7 +2883,12 @@ class Inventory:
             )
         self.ensure_box(to_box)
 
-        new_index = self.next_index(to_box)
+        # `slot` IS `(index, key)` ALLOCATED ONCE PER PRESS by a caller moving many cards
+        # (`server/capture_server.py:_cross`, the R3 review): a scan of the destination per
+        # card made a 500-card merge quadratic, about 3.8 s under the store lock.
+        new_index, new_order = slot if slot is not None else (
+            self.next_index(to_box), self.next_key(to_box)
+        )
         new_key = position_key(to_box, new_index)
         if new_key in self.cards:
             raise PositionOccupied(
@@ -2891,9 +2898,7 @@ class Inventory:
             )
 
         # AT THE BACK OF THE DESTINATION (D265): a later `place` gives it its real key.
-        transplant = replace(
-            card, box=to_box, index=new_index, photo=None, order=self.next_key(to_box)
-        )
+        transplant = replace(card, box=to_box, index=new_index, photo=None, order=new_order)
         self.cards[new_key] = transplant
 
         card.state = MOVED
@@ -2921,12 +2926,11 @@ class Inventory:
         # A CARD MOVED A SECOND TIME NEEDS A SECOND TOMBSTONE NAME (the box map, D264). The
         # first move left `moved:<name>` on its old slot. A second `moved:<name>` would fire
         # `cards_cid`'s UNIQUE index at the commit, so a card could move only once in its
-        # life. A later tombstone adds `@<its own key>`, which no other row can hold. The
-        # first tombstone keeps the plain form, so every existing store reads as before.
-        tomb = f"{MOVED_CID_PREFIX}{card.cid}" if card.cid else None
-        if tomb is not None and self.cards.select(("state",), cid=tomb):
-            tomb = f"{tomb}@{key}"
-        card.cid = tomb
+        # life. So every tombstone written from now on is `moved:<name>@<its own key>`, which no
+        # other row can hold. A tombstone already on disk keeps its plain form and reads as
+        # before. NO QUERY DECIDES THE FORM: a lookup per card re-checked every row the
+        # session had touched, which made a 500-card merge quadratic (the R3 review).
+        card.cid = f"{MOVED_CID_PREFIX}{card.cid}@{key}" if card.cid else None
 
         self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
         self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)

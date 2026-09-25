@@ -4912,7 +4912,13 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
 
 
 def _move_one(
-    snapshot, inventory: master.Inventory, key: str, box: int, index: int, to_box: int
+    snapshot,
+    inventory: master.Inventory,
+    key: str,
+    box: int,
+    index: int,
+    to_box: int,
+    slot: Optional[Tuple[int, float]] = None,
 ) -> dict:
     """One card's whole move, against an ALREADY-OPEN snapshot. `do_move_card`'s body,
     lifted out so `do_move_cards` can call it in a loop inside ONE `Store.write()` — the
@@ -4990,7 +4996,7 @@ def _move_one(
             f"Runs first. Nothing was moved.",
         )
 
-    tombstone, transplant = inventory.move_card(key, to_box)
+    tombstone, transplant = inventory.move_card(key, to_box, slot=slot)
     new_key = transplant.key
 
     # THE TRANSPLANT KEEPS THE NAME AND THEREFORE THE PATH. `move_card` hands it this card's
@@ -5399,11 +5405,18 @@ def _cross(
     what undo needs for each: `[old key, new key, state, state_at, photo]`."""
     block: List[int] = []
     pairs: List[List[object]] = []
-    for at in indices:
+    # THE DESTINATION'S NEXT INDEX AND KEY ARE READ ONCE PER PRESS (the R3 review): one
+    # scan, then each card takes the next pair. The cards land at the back, and
+    # `Inventory.place` gives them their real keys.
+    next_index = inventory.next_index(to_box)
+    next_key = inventory.next_key(to_box)
+    for n, at in enumerate(indices):
         key = master.position_key(box, at)
         card = inventory.cards[key]
         kept: List[object] = [key, None, card.state, card.state_at, card.photo]
-        moved = _move_one(snapshot, inventory, key, box, at, to_box)
+        moved = _move_one(
+            snapshot, inventory, key, box, at, to_box, slot=(next_index + n, next_key + n)
+        )
         kept[1] = moved["to"]
         block.append(int(moved["new_index"]))
         pairs.append(kept)

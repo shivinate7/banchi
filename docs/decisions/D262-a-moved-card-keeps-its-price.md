@@ -61,5 +61,7 @@ refuses. Each assertion was red before its fix.
 
 **One more defect, found by that case.** A card could move only once. The second tombstone took
 the first tombstone's `moved:<name>`, and `cards_cid` is UNIQUE, so the commit failed.
-`Inventory.move_card` now names a later tombstone `moved:<name>@<its own key>`. The first
-tombstone keeps the plain form, so a store written before this reads as before.
+`Inventory.move_card` now names every new tombstone `moved:<name>@<its own key>`. A tombstone
+already on disk keeps its plain form and reads as before. A first build asked the store whether
+the plain form was taken, and the R3 review measured that lookup making a 500-card merge
+quadratic (3.8 s under the lock). So no query decides the form.
