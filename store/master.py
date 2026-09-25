@@ -926,6 +926,17 @@ def as_order(value) -> float:
     return int(out) if out.is_integer() else out
 
 
+def front_of_box(dividers, lowest=None) -> Tuple:
+    """THE ONE RULE FOR THE FRONT OF A BOX (D265, the R3 review). The first divider is the
+    front: 1 for an undeclared box, and never above the lowest key in the box, because there is
+    no card before the front. `pipeline/join.py:Position`, `Inventory.layout_of` and the
+    divider editor all read the front through this, so they cannot disagree about it."""
+    out = list(dividers) or [1]
+    if lowest is not None and lowest < out[0]:
+        out[0] = lowest
+    return tuple(out)
+
+
 # THE SMALLEST GAP A PLACEMENT MAY LEAVE BETWEEN TWO KEYS. Below it the box is re-spaced
 # (`Inventory._respace`), which writes every card in it once. A 64-bit float halves one gap
 # about forty times before this, so a re-space is rare, and it is named here rather than
@@ -1929,8 +1940,8 @@ class Inventory:
             if int(card.index) not in skip
         )
         dividers = [float(d) for d in (entry.layout() if entry is not None else ())]
-        if not dividers and records:
-            dividers = [min(1.0, records[0][0])]
+        if dividers or records:
+            dividers = [float(d) for d in front_of_box(dividers, records[0][0] if records else None)]
         sections = [{"div": d, "name": names.get(divider_key(d)), "slots": []} for d in dividers]
         for key, index in records:
             at = max(0, bisect.bisect_right(dividers, key) - 1)

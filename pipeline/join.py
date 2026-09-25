@@ -231,6 +231,11 @@ class Position:
         default=None, compare=False
     )
 
+    def _front(self) -> Tuple:
+        """The dividers with the front of the box set by the one rule (`master.front_of_box`)."""
+        lows = [v[0] for v in (self._occ or (), self._dep or ()) if v]
+        return master.front_of_box(self.sections, min(lows) if lows else None)
+
     @property
     def _i(self) -> int:
         return self.index if self.ordered is None else self.ordered[0]
@@ -296,7 +301,7 @@ class Position:
         is still physically in the box. `section` counts dividers, so the empty one keeps
         its ordinal and simply holds nothing.
         """
-        declared = self.sections or (1,)
+        declared = self._front()
         if not self.consolidated:
             return declared
         return tuple(self._divider(start) for start in declared)
@@ -345,7 +350,7 @@ class Position:
             # divider maps to, and read as section 2. The declared dividers are indices, and
             # the index never moves (D10), so the section it left is the one whose divider is
             # the last at or before its index.
-            count = sum(1 for start in (self.sections or (1,)) if start <= self._i)
+            count = sum(1 for start in self._front() if start <= self._i)
             return max(1, count)
         count = 0
         for start in self.layout:
@@ -680,7 +685,8 @@ def divider_index(
     if ordinal <= 1:
         # The front of the box: 1, or below it where a section was placed in front of card
         # 1 (D265, the order key).
-        return min([1] + [v for v in (occupied[:1] or ()) ] + [v for v in (departed[:1] or ())])
+        lows = [v[0] for v in (occupied, departed) if v]
+        return master.front_of_box((), min(lows) if lows else None)[0]
     if ordinal <= len(occupied):
         return int(occupied[ordinal - 1])
     high = max(

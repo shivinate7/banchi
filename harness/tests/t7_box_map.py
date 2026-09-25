@@ -593,8 +593,46 @@ def check_undo_keeps_paid_answers(checks: Checks) -> None:
         )
 
 
+def check_front_of_box(checks: Checks) -> None:
+    """R3 review, item 3: one rule for the front of a box, so a far-back placement reads.
+
+    Red before the fix: `Position` took the front as 1 and `layout_of` as the lowest key, so
+    `GET /boxes` raised IndexError (a 500) after a card was placed in front of card 1.
+    """
+    checks.note("")
+    checks.note("BOX MAP R3 — the front of the box after a far-back placement (D265)")
+
+    def reads() -> object:
+        try:
+            capture_server.do_boxes()
+            return True
+        except Exception as caught:  # noqa: BLE001 — the failure is the assertion
+            return f"{type(caught).__name__}: {caught}"
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [9], "to_box": 1, "before_card": 1})
+        capture_server.do_move_sections(1, {"first": 2, "to_box": 2})
+        checks.equal(reads(), True, "a sections move after a far-back placement still reads")
+        checks.equal(
+            _label(1, "o9"), "Origins, Section 1, Card 1",
+            "and the card at the far back is card 1 of section 1",
+        )
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [9], "to_box": 1, "before_card": 1})
+        capture_server.do_put_box(1, {"sections": []})
+        checks.equal(reads(), True, "clearing the dividers after a far-back placement still reads")
+        checks.equal(
+            (_label(1, "o9"), _label(1, "o1")),
+            ("Origins, Section 1, Card 1", "Origins, Section 1, Card 2"),
+            "and the box is one section, counted from the card at the far back",
+        )
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
-    check_undo_keeps_paid_answers,
+    check_undo_keeps_paid_answers, check_front_of_box,
 )
