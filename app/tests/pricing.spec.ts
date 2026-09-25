@@ -1401,6 +1401,25 @@ for (const [kind, warning, said] of [
   })
 }
 
+test('a Take back that fails says so, and never offers a retry that would send', async ({ page }) => {
+  /* THE ROUND-3 CARD PUT A FAILED TAKE BACK IN THE PRESS'S OWN FAILURE LINE: it read "the copies
+     are back on the list", and a network failure there offered "Try again", which sends. */
+  const short = sendSummary({
+    state: 'short',
+    takeable: 3,
+    checked_at: '2026-09-24T12:18:00+00:00',
+    check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+  })
+  const wire = await open(page, { sends: () => ({ ...SENDS_NONE, sends: [short] }) })
+  await page.route(/\/pipeline\/sends\/[^/]+\/take-back$/, (route) => route.abort())
+  await page.locator('.send-short-check').getByRole('button', { name: 'Take 3 copies back' }).click()
+  const failed = page.locator('.send-undo-failure')
+  await expect(failed).toContainText('Banchi could not take these copies back.')
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  await expect(page.locator('.send-card')).not.toContainText('the copies are back on the list')
+  expect(sendPosts(wire)).toHaveLength(0)
+})
+
 test('a send that stopped partway is held, says so, and leaves every press on', async ({ page }) => {
   /* THE ROUND-2 REVIEW, F1: a failure after the receipt used to leave it "sending", with both
      buttons off for as long as the server lived. Now it is unknown, and nothing is stuck. */

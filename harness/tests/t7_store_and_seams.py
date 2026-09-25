@@ -19030,19 +19030,25 @@ def check_send_review_r4(checks: Checks) -> None:
             "H2: A SEND TAKEN BACK WHOSE UPLOAD MAY WAIT IN STAGED KEEPS SAYING SO: publishing "
             "it now would list the copies twice",
         )
-        for _ in range(send_routes.SENDS_SHOWN):
-            stamp = send_routes._new_stamp()
+        # TWENTY NEWER SENDS, stamped a day later so none can sort before it.
+        for index in range(send_routes.SENDS_SHOWN):
+            stamp = f"29990101-{index:06d}-aaaaaa"
             send_routes._write(
                 send_routes.sends_dir() / stamp,
                 {"stamp": stamp, "kind": "send", "phase": "done", "failure": {"code": "x", "message": "x"},
                  "taken_back_at": "2026-09-24T12:00:00+00:00"},
             )
+        listed = [s["stamp"] for s in send_routes.do_sends()["sends"]]
         checks.ok(
-            staged in [s["stamp"] for s in send_routes.do_sends()["sends"]],
+            staged in listed and len(listed) == send_routes.SENDS_SHOWN + 1,
             "H2: and it is listed while it warns, however many newer sends there are",
         )
-        send_routes.do_dismiss(staged, {})
-        checks.equal(receipt(staged)["warning"], None, "H2: until the owner dismisses it")
+        dismissed = send_routes.do_dismiss(staged, {})["send"]
+        checks.equal(
+            (dismissed["warning"], staged in [s["stamp"] for s in send_routes.do_sends()["sends"]]),
+            (None, False),
+            "H2: until the owner dismisses it: then it warns no more, and ages off the list",
+        )
         checks.equal(
             download.get("send", {}).get("warning"),
             None,

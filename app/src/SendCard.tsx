@@ -284,6 +284,9 @@ export function SendCard({
   const [split, setSplit] = useState(false)
   const [takingBack, setTakingBack] = useState(false)
   const [dismissing, setDismissing] = useState(false)
+  /* A TAKE BACK OR A DISMISS THAT FAILED IS ITS OWN LINE, never the press's failure: that one
+     offers "Try again", which SENDS, and says the copies are back on the list. */
+  const [undoFailure, setUndoFailure] = useState<{ title: string; failure: Failure } | null>(null)
 
   /* THE PRESS WAITS FOR THE SAVE RATHER THAN RACING IT: the server writes the file from the
      prices on disk, so a press with a save in flight would send the price before the last one
@@ -358,11 +361,13 @@ export function SendCard({
 
   const takeBack = async (stamp: string) => {
     setTakingBack(true)
+    setUndoFailure(null)
     try {
       await takeBackSend(stamp)
       onSent()
     } catch (err) {
-      setFailure(describeFailure(err))
+      const failed = describeFailure(err)
+      setUndoFailure({ title: failed.code === 'take_back_not_yet' ? refusalTitle(failed.code) : 'Banchi could not take these copies back.', failure: failed })
     } finally {
       setTakingBack(false)
       void refreshLive()
@@ -371,10 +376,11 @@ export function SendCard({
 
   const dismiss = async (stamp: string) => {
     setDismissing(true)
+    setUndoFailure(null)
     try {
       await dismissSendWarning(stamp)
     } catch (err) {
-      setFailure(describeFailure(err))
+      setUndoFailure({ title: 'Banchi could not dismiss this warning.', failure: describeFailure(err) })
     } finally {
       setDismissing(false)
       void refreshLive()
@@ -447,6 +453,10 @@ export function SendCard({
         />
       ) : (
         <Refusal compact className="send-failure" title={refusalTitle(failure.code)} code={failure.code} detail={failure.message} />
+      )}
+
+      {undoFailure === null ? null : (
+        <Refusal compact className="send-failure send-undo-failure" title={undoFailure.title} code={undoFailure.failure.code} detail={undoFailure.failure.message} />
       )}
 
       {open.map((send) => (
