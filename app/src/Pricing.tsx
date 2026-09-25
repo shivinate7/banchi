@@ -860,6 +860,10 @@ export function Pricing() {
   const [push, setPush] = useState<'idle' | 'sending' | 'writing'>('idle')
   const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
   const [wroteUpload, setWroteUpload] = useState(false)
+  /* WHETHER THE FILE'S LINK WAS ON SCREEN WHEN THE PRESS BEGAN (round 9, R9-1). A link already
+     drawn stays through the press; one the press itself writes waits until it ends. Either way
+     nothing appears or vanishes beside the press while it runs (D118). */
+  const [linkHeld, setLinkHeld] = useState(false)
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
   /** The pricing corpus — one document for the store, and the authority (D86). */
@@ -3811,22 +3815,35 @@ export function Pricing() {
               className="pricing-emit"
               busy={push === 'sending'}
               disabled={push !== 'idle' || pushable.length === 0}
-              onClick={() => setPush('sending')}
+              onClick={() => {
+                setLinkHeld(wroteUpload)
+                setPush('sending')
+              }}
             >
-              {push === 'sending'
-                ? 'Checking TCGplayer, then sending…'
-                : `Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
+              {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118): `busy` draws the
+                  spinner, and what it is doing is said to a screen reader beside it. */}
+              {`Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
             </Button>
+            <span className="bn-sr" role="status">
+              {push === 'sending' ? 'Checking TCGplayer, then sending…' : ''}
+            </span>
             <Button
               variant="quiet"
               icon="download"
               busy={push === 'writing'}
               disabled={push !== 'idle' || pushable.length === 0}
-              onClick={() => setPush('writing')}
+              onClick={() => {
+                setLinkHeld(wroteUpload)
+                setPush('writing')
+              }}
             >
               {push === 'writing' ? 'Writing…' : 'Download the file instead'}
             </Button>
-            {!wroteUpload ? null : (
+            {/* THE FILE'S LINK NEITHER APPEARS NOR VANISHES WHILE A PRESS RUNS (round 9, D118
+                and R9-1). The send writes the file first, and a link appearing beside the press
+                pushed it sideways under the finger; a link already drawn that vanished pushed it
+                back. A link on screen when the press began stays until it ends. */}
+            {!wroteUpload || (push !== 'idle' && !linkHeld) ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
                 <Icon name="download" size={16} />
                 import.csv

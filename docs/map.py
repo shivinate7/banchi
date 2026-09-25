@@ -7559,7 +7559,7 @@ COMPONENTS = [
                                          "on is OWNERSHIP age.",
                                  "governed_by": ["D7", "D9", "D13", "D33", "D49", "D64", "D86",
                                                  "D87", "D94", "D95", "D100", "D103", "D104",
-                                                 "D105", "D-one-press-sends-and-makes-live"],
+                                                 "D105", "D118", "D-one-press-sends-and-makes-live"],
                                  # `app/tests/markdown.spec.ts` is the check the hard rule says
                                  # does not otherwise exist — it runs under `make design-check`,
                                  # not at turn end, so it is named here in prose rather than in
@@ -9304,7 +9304,8 @@ COMPONENTS = [
                                                "press is scoped to the filter rather than to "
                                                "the whole survey (D62). Not a harness test.",
                                                "governed_by": ["D28", "D54", "D62", "D99", "D100",
-                                                               "D101", "D103", "D107", "D218",
+                                                               "D101", "D103", "D107", "D118",
+                                                               "D218",
                                                                "D-one-press-sends-and-makes-live"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
@@ -9396,7 +9397,7 @@ COMPONENTS = [
                         "intercepted and their bodies read; no real request is made and no store "
                         "is touched.",
                 "governed_by": ["D7", "D9", "D33", "D64", "D86", "D100", "D103", "D104", "D105",
-                                "D218"],
+                                "D118", "D218"],
                 "note": "ONE OF ITS CASES IS A GEOMETRY ASSERTION AND IT WAS WRITTEN FROM A "
                         "DEFECT. The survey console rendered 512px wide and 0px TALL — "
                         "`.runslog` sets `overflow: hidden`, which makes a flex item's automatic "
