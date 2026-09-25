@@ -1074,7 +1074,7 @@ export function Revenue() {
               onClick={() => setActiveBucket((cur) => (cur === b.key ? null : b.key))}
             >
               <span className="revenue-month-barwrap">
-                {b.gross > 0 ? <span className="bn-money revenue-month-v">{moneyGrouped(b.gross)}</span> : null}
+                {b.gross > 0 ? <span className="revenue-month-v">{moneyGrouped(b.gross)}</span> : null}
                 <span
                   className="revenue-month-bar"
                   data-zero={b.gross === 0 ? 'true' : undefined}
