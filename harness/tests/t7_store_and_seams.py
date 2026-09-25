@@ -30540,6 +30540,29 @@ def check_order_reconcile_backlog(checks: Checks) -> None:
             "one",
         )
 
+        # search-server lane, 2026-09-24 (from the Orders review): a cutoff after today
+        # would stand down every open order, live Ready-to-ship included — the SAME
+        # hazard HOR-04 found in the screen's own preview, at the server this time. The
+        # screen already disables the press past today; this is the SECOND guard.
+        future = str(int(order_store.today()[:4]) + 1) + order_store.today()[4:]
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_order_reconcile({"preview": True, "cutoff": future}),
+            "a cutoff after today refuses, even under preview, which writes nothing",
+        )
+        if caught is not None:
+            checks.equal(
+                caught.code, "cutoff_in_future",
+                "and the refusal names itself so a client can tell it apart from "
+                "cutoff_invalid's plain formatting complaint",
+            )
+        checks.equal(
+            capture_server.do_order_reconcile({"preview": True, "cutoff": order_store.today()})["cutoff"],
+            order_store.today(),
+            "today itself is still a valid cutoff — the refusal is strictly AFTER today, "
+            "never on it",
+        )
+
 
 # ---------------------------------------------------------------- the order screen
 

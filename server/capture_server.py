@@ -13341,6 +13341,15 @@ def _reconcile_cutoff(payload: dict) -> str:
 
     A DATE ALONE, NEVER A TIMESTAMP — compared against the first ten characters of
     `placed_at`, which is `store/orders.py:now`'s own format and always starts with one.
+
+    NEVER AFTER TODAY (the search-server lane, 2026-09-24, from the Orders review). A
+    future cutoff would stand down every order placed before a day that has not happened
+    yet — which is every open order in the store, live `Ready to Ship` work included, the
+    exact HOR-04 hazard D203 exists to prevent. Two ISO-8601 dates compare correctly as
+    plain strings, so this is one comparison against `order_store.today()`, the same
+    function the default above already calls. THE SCREEN ALREADY DISABLES THE PRESS past
+    today (`ReconcileBacklogPanel`, the orders lane's own build); this is the SECOND guard,
+    on the server, so a stale client or a direct request cannot bypass the first.
     """
     raw = payload.get("cutoff")
     if raw is None:
@@ -13351,7 +13360,16 @@ def _reconcile_cutoff(payload: dict) -> str:
             "cutoff_invalid",
             f"cutoff was {raw!r}; send a date as YYYY-MM-DD, or omit it for today.",
         )
-    return raw.strip()
+    cutoff = raw.strip()
+    today = order_store.today()
+    if cutoff > today:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "cutoff_in_future",
+            f"cutoff was {cutoff}, after today ({today}). A cutoff past today would stand "
+            "down orders that have not had their chance to ship yet.",
+        )
+    return cutoff
 
 
 def _reconcile_candidates(
