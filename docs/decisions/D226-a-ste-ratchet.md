@@ -227,4 +227,8 @@ unpinned file is its own failure.
 
 D173 names the mechanism: `make docs-audit`'s `ste ratchet` row.
 
+### Superseded in part 2026-09-24 — `D-ratchets-become-offender-lists`
+
+**The ratchet is gone. The reader stays.** The vendored linter, the four error rules, the four exemption classes and the survey floor stay as this entry settled them. The pin is retired, and D229's per-file shape with it. The row is now `ste offenders`. It fails on each offending sentence that `scripts/ste-offenders.json` does not list. It also fails on a stale entry, and on growth over the list at the merge-base. The ratio is still measured and printed, and gates nothing.
+
 ---

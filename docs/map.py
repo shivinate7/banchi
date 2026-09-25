@@ -3370,8 +3370,11 @@ COMPONENTS = [
                         "a case. Never writes. WIDENED, OFF BY DEFAULT, FOR ONE "
                         "CALLER: `--include-code-attr` and `--join-literals` "
                         "(D218) — see the header for what each "
-                        "adds and why neither reaches `no mechanism on screen`'s own call.",
-                "governed_by": ["D134", "D196", "D218"],
+                        "adds and why neither reaches `no mechanism on screen`'s own call. "
+                        "Every hit also carries `scope`, the nearest named function, class, "
+                        "arrow binding or module-level constant (`scopeOf`), which `typed "
+                        "interpunct` keys its list by.",
+                "governed_by": ["D134", "D196", "D218", "D-ratchets-become-offender-lists"],
             },
             "build-mark.mjs": {"does": "generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo. Asserts on what it extracted (the tile is 221 points, the display bracket is an outlined polygon, the small bracket is a stroked path) before writing 25KB of path data into app/. D18: a generator may write and nothing that writes may gate a commit — this is run by hand, never on the commit path.",
                                 "governed_by": ["D18", "D94", "D102"]},
@@ -3410,22 +3413,20 @@ COMPONENTS = [
                     "25 words and the captions that repeat their heading."),
                 "governed_by": ["D18", "D43", "D194", "D-text-shape-checks"],
             },
-            "typed-interpunct-pin.mjs": {
-                "does": "`node scripts/typed-interpunct-pin.mjs --pin` re-measures the "
-                        "typed-dot count `scripts/docs-audit.py`'s `typed interpunct` row "
-                        "asserts and rewrites `scripts/typed-interpunct.json`. Shells out to "
-                        "`scripts/user-strings.mjs --join-literals --include-code-attr`, "
-                        "the same extraction the row itself reads, so the pin path and the "
-                        "assert path cannot drift apart. Written exactly, no slack.",
-                "governed_by": ["D18", "D196", "D218", "D-text-shape-checks"]},
-            "typed-interpunct.json": {
-                "does": "the ratchet's pinned ceiling, one field, `count`. Written only by "
-                        "`typed-interpunct-pin.mjs --pin`; `scripts/docs-audit.py`'s `typed "
-                        "interpunct` row only reads it, since that row sits on the commit "
-                        "path (D18).",
-                "governed_by": ["D18", "D194", "D218"]},
+            "typed-interpunct-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `typed "
+                        "interpunct` row (D218): file -> lane and `interpunct` -> every "
+                        "user-visible string in that file that types a middle dot or bullet, "
+                        "as `<scope>: <string>`, once per occurrence. The scope is the named "
+                        "function around the string, so a bare `·` excuses one place and not "
+                        "the file. The row fails on a typed dot the list does not "
+                        "name, on a stale entry, and on an entry the list at the merge-base "
+                        "with origin/main did not hold. Replaced a pinned count "
+                        "(D-ratchets-become-offender-lists). Shrunk by hand or by "
+                        "`make offenders-prune`, which only deletes. Never grown by a tool.",
+                "governed_by": ["D41", "D218", "D-ratchets-become-offender-lists"]},
             "ste/ste_lint.py": {
-                "does": "the STE ratchet's linter, VENDORED verbatim from $HOME/.claude/"
+                "does": "the STE prose check's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
                         "COPY, never a symlink (D47): a fresh clone, a CI runner and this "
                         "repo's own git history all lack $HOME/.claude, so a gate here cannot "
@@ -3439,35 +3440,32 @@ COMPONENTS = [
                         "beside it — the license's one condition for reuse.",
                 "governed_by": ["D226"]},
             "ste_measure.py": {
-                "does": "the STE ratchet's ONE measurer, called by both "
-                        "`scripts/docs-audit.py`'s `ste ratchet` row (read-only) and "
-                        "`scripts/ste-ratchet-pin.py --pin` (the writer, D18) — no counting "
-                        "logic is duplicated between them. Runs the vendored linter's four "
-                        "ERROR-severity rules over caller-supplied (path, text) pairs, drops "
-                        "findings a named `EXEMPTIONS` recognizer proves are an artifact of "
-                        "the text's shape (a table cell, a verbatim quotation, a decision "
-                        "citation, the literal \"VS Code\") rather than its prose, and reports "
-                        "the total, the per-code counts, and errors-per-1,000-PLAIN-words "
-                        "(matching `wc -w`, not `ste_lint.py`'s own STE-adjusted count) per "
-                        "directory bucket and repo-wide. Never touches disk itself.",
-                "governed_by": ["D18", "D218", "D226"]},
-            "ste-ratchet-pin.py": {
-                "does": "`python3 scripts/ste-ratchet-pin.py --pin` re-measures every tracked "
-                        "markdown file via `ste_measure.py:measure()` — the same function the "
-                        "row itself calls — and rewrites `scripts/ste-ratchet.json`. Contains "
-                        "no counting logic of its own. D18: a generator may write, on no "
-                        "`make` target and no hook; `git diff scripts/ste-ratchet.json` is "
-                        "the receipt, mirroring `typed-interpunct-pin.mjs`'s own discipline. "
-                        "D194's own ratchet, `copy-budget.mjs`, is retired — superseded by "
-                        "`D-text-shape-checks`, 2026-09-23.",
-                "governed_by": ["D18", "D194", "D218", "D226", "D-text-shape-checks"]},
-            "ste-ratchet.json": {
-                "does": "the ratchet's pinned ceiling: `total`, `by_code` (the four "
-                        "ERROR-severity rule counts, post-exemption), and "
-                        "`ratio_per_1k_words` (per bucket and repo-wide). Written only by "
-                        "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
-                        "row only reads it, since that row sits on the commit path (D18).",
-                "governed_by": ["D18", "D226"]},
+                "does": "the STE prose check's ONE measurer, read by `scripts/docs-audit.py`'s "
+                        "`ste offenders` row. Runs the vendored linter's four ERROR-severity "
+                        "rules over caller-supplied (path, text) pairs, drops findings a named "
+                        "`EXEMPTIONS` recognizer proves are an artifact of the text's shape (a "
+                        "table cell, a decision citation, the literal \"VS Code\", `via`), and "
+                        "names each remaining one as an OFFENDER: one sentence per rule, keyed "
+                        "by a hash of its folded text (`offender_identity`), so a reflow, a "
+                        "code-span edit or a claim moves nothing. A code span, decision "
+                        "citation or `VS Code` that crosses a line break is read over the "
+                        "joined paragraph (`join_span_breaks`), never line by line. Also "
+                        "reports the per-code "
+                        "counts and errors-per-1,000-plain-words per bucket, printed and never "
+                        "gated. Never touches disk itself.",
+                "governed_by": ["D18", "D140", "D218", "D226", "D229",
+                                "D-ratchets-become-offender-lists"]},
+            "ste-offenders.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `ste offenders` "
+                        "row (D226): `rules` (the vendored linter's ERROR-severity codes) and "
+                        "file -> lane and rule -> `<hash> <label>` entries, one per offending "
+                        "sentence, only the hash compared. A decision entry is keyed by its "
+                        "file tail, so a claim moves nothing. The row fails on an unlisted "
+                        "sentence, a stale entry, and growth over the merge-base, so a new "
+                        "file starts clean. Replaced D229's per-file pinned ratio "
+                        "(D-ratchets-become-offender-lists). Shrunk by hand or by "
+                        "`make offenders-prune`, which only deletes. Never grown by a tool.",
+                "governed_by": ["D226", "D229", "D-ratchets-become-offender-lists"]},
             "line-anchors-pin.py": {
                 "does": "`python3 scripts/line-anchors-pin.py --pin` re-measures every "
                         "tracked markdown file's RAW `path:N`/`path:N-M` line-anchor count "
@@ -3475,8 +3473,7 @@ COMPONENTS = [
                         "function the `line anchor ratchet` row calls — and rewrites "
                         "`scripts/line-anchors.json`. Contains no counting logic of its "
                         "own. D18: a generator may write, on no `make` target and no hook; "
-                        "`git diff scripts/line-anchors.json` is the receipt, mirroring "
-                        "`ste-ratchet-pin.py`'s own discipline exactly, one ruler over.",
+                        "`git diff scripts/line-anchors.json` is the receipt.",
                 "governed_by": ["D18", "D218", "D226", "D229"]},
             "line-anchors.json": {
                 "does": "the line-anchor ratchet's pinned ceiling: one `path -> count` "
@@ -3504,8 +3501,7 @@ COMPONENTS = [
                         "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)` — "
                         "the same call the row itself makes. Contains no counting logic of "
                         "its own. D18: a generator may write, on no `make` target and no "
-                        "hook; `git diff` is the receipt, mirroring `ste-ratchet-pin.py`'s "
-                        "own discipline exactly.",
+                        "hook; `git diff` is the receipt.",
                 "governed_by": ["D18"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
@@ -3583,7 +3579,7 @@ COMPONENTS = [
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
                                 "D213", "D215", "D218", "D226", "D229", "D247",
-                                "D-text-shape-checks"],
+                                "D-ratchets-become-offender-lists", "D-text-shape-checks"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3763,8 +3759,8 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D194", "D218",
-                                "D-text-shape-checks"],
+                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D194", "D218", "D226", "D229",
+                                "D248", "D-ratchets-become-offender-lists", "D-text-shape-checks"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -4316,8 +4312,9 @@ COMPONENTS = [
             },
             "map-fix.py": {
                 "does": "`make map-fix` — add the decision ids a file cites to that file's "
-                        "`governed_by` here. THE ONE GENERATOR IN THE REPO, and it gates "
-                        "nothing: D18's seam list names this one location and nothing else. "
+                        "`governed_by` here. THE ONE GENERATOR THAT WRITES INTO A DOC, and it "
+                        "gates nothing: D18's seam list names this one location and nothing "
+                        "else. "
                         "Previews by default; `--write` applies. It imports "
                         "`docs-audit.py:cited_decisions()` rather than reimplementing it, so "
                         "the writer and the gate cannot disagree about what a file cites. "
@@ -4336,6 +4333,22 @@ COMPONENTS = [
                         "in `make check`, on `catalog-index-selftest`'s precedent: what it "
                         "writes is already verified by a gate that runs on every commit.",
             },
+            "offenders-prune.py": {
+                "does": "`make offenders-prune` — delete the STALE entries from the two "
+                        "shrinking offender lists (`ste-offenders.json`, "
+                        "`typed-interpunct-allow.json`), and re-key a listed file that git's "
+                        "rename detection (`git diff -M` from the merge-base with origin/main) "
+                        "says moved. It NEVER ADDS an entry, and it refuses to write a plan "
+                        "that holds any identity more often than the list it read. Reads with "
+                        "the rows' own `_offender_list_shape`, `_offender_diff`, "
+                        "`ste_measure.measure` and `_typed_interpunct_found`, imported, so the "
+                        "pruner and the gate cannot disagree about what is stale. Previews; "
+                        "`--write` applies. A generator that gates nothing (D18): on no hook, "
+                        "and its selftest is not in `make check`, on `map-fix.py`'s precedent. "
+                        "It writes a data file under scripts/, as `line-anchors-pin.py` does, "
+                        "so it opens no seam in D18's list.",
+                "governed_by": ["D18", "D218", "D226", "D229",
+                                "D-ratchets-become-offender-lists"]},
             "map-view.py": {
                 "does": "`make map` — docs/map.py rendered for a person, in four views: the "
                         "shape, one package, one module, everything a decision governs, and "

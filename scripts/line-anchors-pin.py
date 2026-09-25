@@ -5,9 +5,7 @@
 
 D18 IS ABSOLUTE HERE: a generator may write, and nothing that writes may gate a commit.
 This script is on no `make` target and no git hook — a person runs it, on purpose, once,
-and `git diff scripts/line-anchors.json` is the receipt, the same discipline
-`scripts/ste-ratchet-pin.py` and `scripts/typed-interpunct-pin.mjs` already keep for their
-own ratchets (D226, D218).
+and `git diff scripts/line-anchors.json` is the receipt.
 
 THE PIN IS PER FILE (D229), never a repo-wide total — a repo-wide number is one every
 merge takes from somebody, D226's own argument, mirrored. One entry per tracked markdown

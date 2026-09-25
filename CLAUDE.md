@@ -105,13 +105,20 @@ make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line sp
                     #   component DRAWS it, and the expression that decides whether it is
                     #   drawn. A renderer — writes nothing, gates nothing, derived every run.
                     #   READ IT BEFORE BRIEFING A SCREEN CHANGE.
-make map-fix        # THE ONE GENERATOR (D18, amended). Adds the decision ids a file cites
-                    #   to its `governed_by` in docs/map.py — the answer `make docs-audit`'s
-                    #   `repo map` row already computes, imported from that row rather than
-                    #   reimplemented. IT GATES NOTHING and is on no hook. Run it when the row
-                    #   refuses you; the row is still what says you are right. Previews.
+make map-fix        # THE ONE GENERATOR INTO A DOC (D18, amended). Adds the decision ids a
+                    #   file cites to its `governed_by` in docs/map.py — the answer
+                    #   `make docs-audit`'s `repo map` row already computes, imported from that
+                    #   row rather than reimplemented. IT GATES NOTHING and is on no hook. Run it
+                    #   when the row refuses you; the row is still what says you are right.
+                    #   Previews.
                     #   ARGS=--write applies. It only ever ADDS. `make map-fix-selftest`
                     #   proves it, deliberately NOT in `make check`.
+make offenders-prune # a generator that only DELETES (D18). It removes the stale entries from
+                    #   the two offender lists (`scripts/ste-offenders.json`,
+                    #   `scripts/typed-interpunct-allow.json`). It re-keys a listed file that
+                    #   git's rename detection says moved. It never adds an entry. It reads
+                    #   with the rows' own functions. Previews. ARGS=--write applies. On no
+                    #   hook. `make offenders-prune-selftest` proves it, NOT in `make check`.
 make harness        # all TEN verification tests (T1-T9 and T11); the Stop hook runs it at
                     #   turn end. RECOUNT from harness/run.py's TESTS list. THERE IS NO T10:
                     #   that id belongs to the shelved IMB encoder (DEBT26), and this repo
@@ -898,10 +905,10 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   removed the dot-joined address string and moved the separator into CSS
   (`::before { content: '·' }`) — a screen may SHOW a separator, never TYPE one into a
   string. Mechanized by `make docs-audit`'s `typed interpunct` row over
-  `scripts/user-strings.mjs`'s extraction, RATCHETED against `scripts/typed-interpunct.json`'s
-  pinned count (D194's own discipline, mirrored). It fails only when the count RISES. A lower
-  count is accepted silently and printed. `node scripts/typed-interpunct-pin.mjs --pin`
-  re-pins it, run by a person, never quietly. See D218.
+  `scripts/user-strings.mjs`'s extraction. It fails on every typed dot that
+  `scripts/typed-interpunct-allow.json` does not list, by file and by string. It also fails on
+  a stale entry, and on an entry the list at the merge-base did not hold. No count is pinned.
+  See D218 and D-ratchets-become-offender-lists.
 
 ## Working agreement
 

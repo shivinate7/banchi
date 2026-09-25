@@ -43,7 +43,7 @@
  * `no mechanism on screen` row, which reads this script with no flags and whose fixtures
  * assert both stay unreached without one — widening the default would retroactively change
  * a row this file did not touch. `typed interpunct` (D218) opts
- * into both, because it counts a different thing (a typed separator character) over a wider
+ * into both, because it reads a different thing (a typed separator character) over a wider
  * notion of "visible" than D196's mechanism-naming policy needs:
  *
  *   - `--include-code-attr` adds `code` to the tracked attribute set for this run only —
@@ -66,7 +66,9 @@
  *     concatenation into a `const`, then returned and interpolated by reference elsewhere) —
  *     the same data-flow gap the header names, one call shape narrower.
  *
- * Prints one JSON array to stdout: `[{file, line, text}, …]`, file relative to the repo root.
+ * Prints one JSON array to stdout: `[{file, line, text, scope}, …]`, file relative to the repo
+ * root. `scope` is the nearest named function, class or binding around the string (see
+ * `scopeOf`).
  * Never writes. `--self-test` is not here — the auditor's own `--self-test` drives this
  * script by shelling out to it over synthetic fixtures, the same split
  * `scripts/screenshot.mjs` and `scripts/docs-audit.py` already keep.
@@ -139,6 +141,39 @@ function literalsIn(expr) {
   return []
 }
 
+/** The name of the nearest NAMED declaration around `node`: a function, a method, a class,
+ *  a `const X = () => …` binding (a component or helper written as an arrow), or a
+ *  module-level `const X = …` (a table). A plain local variable (`const label = …` inside a
+ *  function) is not a scope, so renaming one moves nothing. A NESTED named scope is
+ *  qualified by the scope around it (`Outer.helper`), so two local helpers that share a name
+ *  in two functions never share a key. Anonymous callbacks are passed through to the name
+ *  around them. `(module)` when nothing names it. `typed interpunct` keys an entry by this
+ *  and the text together, so a listed bare separator such as `·` excuses that string in that
+ *  one function, never the same string typed anywhere else in the file. A line number would
+ *  do the same job and rot on the next edit above it. Still shared: two helpers with one
+ *  name in two sibling blocks of the SAME function. */
+function scopeOf(node) {
+  for (let cur = node.parent; cur; cur = cur.parent) {
+    let name = null
+    if (
+      (ts.isFunctionDeclaration(cur) || ts.isClassDeclaration(cur) || ts.isMethodDeclaration(cur)) &&
+      cur.name
+    ) {
+      name = cur.name.getText()
+    } else if (ts.isVariableDeclaration(cur) && ts.isIdentifier(cur.name)) {
+      const init = cur.initializer
+      const isFunction = init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))
+      const atModule = cur.parent?.parent && ts.isSourceFile(cur.parent.parent.parent)
+      if (isFunction || atModule) name = cur.name.text
+    }
+    if (name !== null) {
+      const outer = scopeOf(cur)
+      return outer === '(module)' ? name : `${outer}.${name}`
+    }
+  }
+  return '(module)'
+}
+
 function walkFile(file, text) {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const hits = []
@@ -147,7 +182,7 @@ function walkFile(file, text) {
   function push(node, raw) {
     const trimmed = raw.replace(/\s+/g, ' ').trim()
     if (trimmed === '') return
-    hits.push({ line: lineOf(node.getStart(sf)), text: trimmed })
+    hits.push({ line: lineOf(node.getStart(sf)), text: trimmed, scope: scopeOf(node) })
   }
 
   function collectObjectStrings(node) {
@@ -228,7 +263,12 @@ function extract(srcDir, rootDir) {
   for (const file of files) {
     const text = fs.readFileSync(file, 'utf8')
     for (const hit of walkFile(file, text)) {
-      out.push({ file: path.relative(rootDir, file).split(path.sep).join('/'), line: hit.line, text: hit.text })
+      out.push({
+        file: path.relative(rootDir, file).split(path.sep).join('/'),
+        line: hit.line,
+        text: hit.text,
+        scope: hit.scope,
+      })
     }
   }
   return out

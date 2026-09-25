@@ -87,8 +87,8 @@ BUILT in the locating lane, server half:
   default keeps it.
 - The backfill gives each unnamed box its own `Box <number>` where that name is free, and
   only then moves the boxes that clash. A clash never pushes a later box off a free name.
-- A server refusal that names a box or a card says the box's name, and for a card its section
-  and card in the section, through `pipeline/join.py:said_place`. The store's own refusals use
+- A server refusal that names a box says the box's name. A refusal that names a card also says
+  its section and its card in the section, through `pipeline/join.py:said_place`. The store's own refusals use
   `store/master.py:Inventory.box_title`. Both read `store/numbers.py:box_title`. The error
   codes do not change.
 
