@@ -7022,9 +7022,8 @@ COMPONENTS = [
                                                  "exactly — one unconditional read on mount, no "
                                                  "more requests at all once the answer holds no "
                                                  "claims.",
-                                         "governed_by": ["D174", "D33", "D39",
-                                                         "D50", "D57", "D89", "D94", "D118",
-                                                         "D207"]},
+                                         "governed_by": ["D33", "D39", "D50", "D57", "D89", "D94",
+                                                         "D118", "D174", "D196", "D207"]},
             "src/SubmissionClaims.css": {"does": "that panel's own styles: the row's two columns "
                                                  "and nothing else — the kit supplies the panel, "
                                                  "the list, the pills and the buttons. The action "

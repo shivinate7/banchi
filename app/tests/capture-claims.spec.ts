@@ -1155,7 +1155,7 @@ test('a restored box that has been sealed since is let go of, by name', async ({
 
   /* AND THE REMEDY IS THE PRESS THEY WERE ABOUT TO MAKE: the field is open with focus in the
      entry, which is where `Pick a box` would have put them. */
-  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
+  await expect(page.getByLabel(/box.s name or number/i)).toBeFocused()
 })
 
 test('a restored box that is gone is let go of, and says so without naming a drawer', async ({
@@ -1165,7 +1165,7 @@ test('a restored box that is gone is let go of, and says so without naming a dra
 
   await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
   await expect(page.locator('.capture-refused').filter({ hasText: /not in the store/ })).toBeVisible()
-  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
+  await expect(page.getByLabel(/box.s name or number/i)).toBeFocused()
 })
 
 /* ============================================================================================
@@ -1206,7 +1206,7 @@ test('a restored box whose number now belongs to another drawer is let go of', a
   await expect(note).toContainText('Box 3')
   await expect(note).not.toContainText('Epics')
 
-  await expect(page.getByLabel(/Find a box by name or number/)).toBeFocused()
+  await expect(page.getByLabel(/box.s name or number/i)).toBeFocused()
 })
 
 test('a restored box the store still calls the same drawer is kept', async ({ page }) => {

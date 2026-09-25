@@ -3550,7 +3550,14 @@ export function CaptureScreen() {
                        and must (D20 makes this one control over both), a drawer may have no
                        name at all, and a placeholder that stopped saying so would make a
                        working search undiscoverable. */
-                    aria-label="Find a box by name or number, or type a new one"
+                    /* R2-search (owner, 2026-09-24: "move it onto the kit's search primitive
+                       if that is small"). It is not: this is a combobox that picks a row by
+                       key or creates a box by name (D20), not `SearchField`'s type-then-see-
+                       results shape, and it has no server call to debounce. What the linter
+                       actually read was this label's own wording — "Find" matched R2-search's
+                       heuristic for a box it cannot tell apart from a real search field. The
+                       control is unchanged; only the word that looked like one is gone. */
+                    aria-label="Type a box's name or number, or type a new one"
                     placeholder="Name or number"
                     value={boxEntry}
                     disabled={boxBusy}

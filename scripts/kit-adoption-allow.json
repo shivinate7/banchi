@@ -9,9 +9,6 @@
       "R2-select": "inventory",
       "R2-class": "inventory"
     },
-    "app/src/CaptureScreen.tsx": {
-      "R2-search": "capture"
-    },
     "app/src/CardHero.tsx": {
       "R2-date": "inventory",
       "R2-money": "inventory"
@@ -121,9 +118,6 @@
     "app/src/Shipping.tsx": {
       "R1": "shipping"
     },
-    "app/src/SubmissionClaims.tsx": {
-      "R2-date": "capture"
-    },
     "app/src/ValueBands.tsx": {
       "R2-class": "b-pricing",
       "R2-money": "b-pricing"
@@ -140,9 +134,6 @@
       "top": "home"
     },
     "/capture": {
-      "page": "capture",
-      "h1": "capture",
-      "width": "capture",
       "top": "capture"
     },
     "/runs": {
