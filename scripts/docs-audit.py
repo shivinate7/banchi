@@ -1517,162 +1517,111 @@ def check_line_anchors(report: Report, docs: List[Path], allowed: Dict[str, str]
     report.add("line anchors", MECHANICAL, findings, summary, scanned=len(anchors))
 
 
-# --------------------------------------------------------------- line anchor ratchet (D229)
+# ------------------------------------------------ line anchor offenders (D245, D-ratchets-become-offender-lists)
 
-# CLAUSE C: A PER-FILE RATCHET ON THE ANCHOR COUNT, NEVER A REPO-WIDE ONE — D229's own
-# ruling, and the reasoning is D226's, mirrored exactly: a repo-wide number is one every
-# merge takes from somebody, so the pin is one entry per CITING markdown file, and only a
-# RISE in that file's own count is a failure. D218 is the closer model of the two — it is
-# the newer discipline the owner named — but the SHAPE (a `files` map, not a scalar) is
-# D226's amendment, because "leave nothing alone" (the owner's ruling for this clause) means
-# every anchor, resolving or not, docs-target or code-target, counts toward the ratchet: a
-# citation that goes from resolving to dangling is still a line anchor someone wrote, and
-# Clause A/B already have their own findings for the dangling case.
+# CLAUSE C: A SHRINKING OFFENDER LIST OF LINE ANCHORS, NEVER A PINNED COUNT. The owner's ruling,
+# 2026-09-24, "convert both of the last pins": D229's per-file count is retired here the way the
+# typed-dot count and the prose ratio were. A count let a new anchor pass wherever an old one was
+# fixed in the same file, and it needed a person to re-pin it. The list names every anchor.
 #
-# READS THE WHOLE TRACKED MARKDOWN TREE, staged or not — the retired STE ratchet's reasoning (D229):
-# a backlog ratchet's subject is the corpus, not the files one commit happens to touch.
+# `scripts/line-anchor-offenders.json` is file -> lane and `line-anchor` -> entries. An entry is
+# the anchor as written, `path:N` or `path:N-M`, once per occurrence (`line_anchor_identity`).
+# THE ENTRY SURVIVES THE EDITS THAT DO NOT TOUCH THE ANCHOR, the way the prose list does:
+#   - an edit elsewhere in the file, or a reflow, moves no anchor's text;
+#   - a claim (D140) turns `docs/decisions/D-<slug>.md` into `docs/decisions/D<n>-<slug>.md`.
+#     Both the anchor's decision path and a decision entry's own file key fold to
+#     `docs/decisions/*-<slug>.md`, so a claim moves nothing.
+# An edit to the anchor itself (a new line number) is a new identity: the old entry goes stale,
+# and the new text cannot be listed, because that is growth. The fix is a symbol, never a line.
 #
-# ONE RULE DOES NOT MIRROR D226: A FILE THE PIN HAS NEVER SEEN IS HELD TO ZERO, NEVER
-# ACCEPTED AT ITS OWN RATE. The retired STE ratchet treated an unseen file as free because its
-# subject is a RATIO over prose that already exists. This ratchet counts an ABSOLUTE NUMBER
-# of a thing the owner ruled should only fall, and a new markdown file is exactly where a
-# new line anchor is written — accepting it unseen would leave the inflow this clause exists
-# to stop wide open. See `_line_anchor_ratchet_verdict`'s own docstring.
-LINE_ANCHOR_RATCHET_PIN = ROOT / "scripts" / "line-anchors.json"
+# "LEAVE NOTHING ALONE" STILL HOLDS (the owner's ruling for this clause): every anchor
+# `line_anchor_candidates` extracts is listed, resolving or not. `line anchors` has its own
+# findings for a dangling one.
+#
+# GROWTH IS THE SHARED HELPER'S (`scripts/only_shrinks.py`), counted over the whole list, as the
+# prose list counts it. So a paragraph moved to another file carries its anchors and adds
+# nothing. A new file starts clean: an anchor in it is growth, unless the same anchor left
+# another file in the same branch.
+LINE_ANCHOR_OFFENDERS = ROOT / "scripts" / "line-anchor-offenders.json"
+LINE_ANCHOR_RULE = "line-anchor"
+_DECISION_PATH_ID = re.compile(r"(docs/decisions/)D[0-9]*-")
 
 
-def _line_anchor_counts(docs: Sequence[Path]) -> Dict[str, int]:
-    """path -> RAW line-anchor count in that document's own prose — every candidate
-    `line_anchor_candidates` extracts, whether or not it resolves to a real file today.
-    Files with zero anchors are omitted, the same "only what it counts" discipline
-    the retired STE ratchet's `files` map kept."""
-    counts: Dict[str, int] = {}
+def line_anchor_identity(anchor: LineAnchor) -> str:
+    """One list entry: the anchor as written, with a decision entry's number folded out of its
+    path (`docs/decisions/*-<slug>.md`), so a claim moves no identity."""
+    path = _DECISION_PATH_ID.sub(r"\1*-", anchor.path)
+    return f"{path}:{anchor.start}" + (f"-{anchor.end}" if anchor.end is not None else "")
+
+
+def _line_anchor_found(docs: Sequence[Path]) -> Dict[str, Dict[str, List[str]]]:
+    """list key -> {LINE_ANCHOR_RULE: every anchor in that document, once per occurrence}.
+    A decision entry is keyed by its file tail (`ste_measure.list_key`), as the prose list is."""
+    ste_measure = _sibling("ste_measure.py")
+    list_key = ste_measure.list_key if ste_measure is not None else (lambda path: path)
+    found: Dict[str, Dict[str, List[str]]] = {}
     for doc in docs:
-        total = 0
-        for line in read(doc).splitlines():
-            total += len(line_anchor_candidates(line))
-        if total:
-            counts[rel(doc)] = total
-    return counts
+        entries = [line_anchor_identity(anchor) for line in read(doc).splitlines()
+                   for anchor in line_anchor_candidates(line)]
+        if entries:
+            found.setdefault(list_key(rel(doc)), {}).setdefault(LINE_ANCHOR_RULE, []).extend(entries)
+    return {key: {rule: sorted(es) for rule, es in per.items()} for key, per in found.items()}
 
 
-def _read_line_anchor_pin(path: Optional[Path] = None) -> Optional[Dict[str, object]]:
-    """The ratchet's pinned per-file ceiling, or `None` when it cannot be read, is not
-    JSON, or does not carry this ratchet's own shape (a `files` map of path -> int).
-    Mirrors the retired STE pin reader's `None`/real-value split exactly: `0` is a real,
-    achievable ceiling for a file and a missing or malformed pin is a different answer
-    this row must refuse rather than silently treat as "nothing pinned yet, so nothing is
-    a violation".
-    """
-    path = LINE_ANCHOR_RATCHET_PIN if path is None else path
-    if not exists(path):
-        return None
-    try:
-        data = json.loads(read(path))
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    files = data.get("files")
-    if not isinstance(files, dict):
-        return None
-    for value in files.values():
-        if not isinstance(value, int):
-            return None
-    return data
+def check_line_anchor_offenders(report: Report) -> None:
+    """Clause C. No markdown file may write a `path:N` line anchor that
+    `scripts/line-anchor-offenders.json` does not name. See the section header above.
 
-
-def _line_anchor_ratchet_verdict(
-    counts: Dict[str, int], pin: Optional[Dict[str, object]]
-) -> Tuple[str, List[str]]:
-    """`("unpinned" | "rose" | "ok", risen)` — one comparison per file, against that
-    file's OWN pin.
-
-    DELIBERATELY NOT THE RETIRED STE RATCHET'S RULE FOR AN UNSEEN FILE, and the reason
-    is the coordinator's own catch: that ratchet accepts a file the pin has never seen at
-    its OWN natural rate, because its subject is a RATIO over prose that already exists —
-    a new file starting at its own rate is reasonable there. This ratchet counts an
-    ABSOLUTE NUMBER of a thing the owner ruled should only fall ("leave nothing alone"),
-    and a new markdown file is exactly where a new line anchor gets written — accepting
-    it unseen would leave open the one inflow this clause exists to close. So a file the
-    pin has never seen is held to ZERO: any anchor in it is a finding, naming the count
-    and telling the author to pin deliberately with the generator. D229 still holds — the
-    pin stays per file, so the diff for a new file belongs to the branch that added it,
-    never a scalar taken from somebody else's file.
-
-    A pin whose file dropped to zero anchors (or was deleted) is still a fall to nothing,
-    never a failure — that half of the retired STE ratchet's reasoning DOES transfer,
-    because a fall is a fall under either ratchet's own rule. `ok` covers strictly lower
-    and exactly equal, for a file the pin already knows.
-    """
-    if pin is None:
-        return "unpinned", []
-    pinned_files = pin.get("files", {})
-    pinned_files = pinned_files if isinstance(pinned_files, dict) else {}
-    risen: List[str] = []
-    for path in sorted(counts):
-        now = counts[path]
-        was = pinned_files.get(path)
-        if was is None:
-            risen.append(
-                f"{path}: no pin (new file) — {now} line anchor(s), held to zero. Pin "
-                f"it deliberately: `python3 scripts/line-anchors-pin.py --pin`."
-            )
-            continue
-        if now > was:
-            risen.append(f"{path}: {was} pinned, {now} now (+{now - was})")
-    return ("rose" if risen else "ok"), risen
-
-
-def check_line_anchor_ratchet(report: Report) -> None:
-    """Clause C. See the section header above for the whole argument; this docstring is
-    the row's own mechanics, one ruler over from the retired STE ratchet (D229) and DELIBERATELY
-    NOT ITS TWIN on the unseen-file rule — see `_line_anchor_ratchet_verdict`'s own
-    docstring for why.
-
-    `scripts/line-anchors.json` is pinned only by `scripts/line-anchors-pin.py --pin`, a
-    person, on purpose, once (D18: a generator may write, and nothing that writes may
-    gate a commit — this row never writes)."""
-    counts = _line_anchor_counts(markdown_files())
-    pin = _read_line_anchor_pin()
-    verdict, risen = _line_anchor_ratchet_verdict(counts, pin)
-
-    if verdict == "unpinned":
+    Three failures, as every shrinking list has: an unlisted anchor, a stale entry, and growth
+    over the list at the merge-base with origin/main (`only_shrinks.growth`, via
+    `_offender_growth`). READS THE WHOLE TRACKED MARKDOWN TREE, staged or not. D18: the row
+    only reads. `make offenders-prune` deletes stale entries and never adds one."""
+    found = _line_anchor_found(markdown_files())
+    total = sum(len(es) for per in found.values() for es in per.values())
+    rules = {LINE_ANCHOR_RULE}
+    list_rel = rel(LINE_ANCHOR_OFFENDERS)
+    document, unreadable = _read_offender_list(LINE_ANCHOR_OFFENDERS)
+    if document is None:
         report.add(
-            "line anchor ratchet", MECHANICAL,
-            [
-                Finding(
-                    rel(LINE_ANCHOR_RATCHET_PIN),
-                    f"no ceiling pinned, or the pin file does not carry this ratchet's "
-                    f"per-file shape (a `files` map of path -> int) — "
-                    f"{sum(counts.values())} line anchors found just now across "
-                    f"{len(counts)} files. Run `python3 scripts/line-anchors-pin.py "
-                    f"--pin` first, on purpose, once — never quietly.",
-                )
-            ],
-            "no pin — cannot tell a rise from a fall", scanned=len(counts),
+            "line anchor offenders", MECHANICAL,
+            [Finding(list_rel, f"{unreadable}, so no anchor can be told listed from new "
+                               f"({total} line anchors found). Restore the list from git.")],
+            "no offender list", scanned=len(found),
         )
         return
+    listed, lanes, shape_errors = _offender_list_shape(document, rules)
+    findings = [Finding(list_rel, error) for error in shape_errors]
+    unlisted, stale = _offender_diff(found, listed)
+    for file, _rule, anchor in unlisted:
+        findings.append(Finding(
+            file,
+            f"cites {anchor!r} by line number, and {list_rel} does not list it. A line number "
+            "rots on the next edit above it. Cite a symbol, a section or a decision id instead. "
+            "Never add an entry to excuse a new anchor."))
+    for file, _rule, anchor in stale:
+        findings.append(Finding(
+            f"{list_rel}: {file}",
+            f"lists {anchor!r} for lane {lanes.get(file, '?')!r}, and {file} no longer cites it. "
+            "Delete the entry (`make offenders-prune`): the list only shrinks."))
 
-    if verdict == "rose":
-        findings = [Finding(rel(LINE_ANCHOR_RATCHET_PIN), line) for line in risen]
-        report.add(
-            "line anchor ratchet", MECHANICAL, findings,
-            f"{sum(counts.values())} line anchors over {len(counts)} files — "
-            f"{len(risen)} file(s) rose (a new, unpinned file with any anchor counts as "
-            f"a rise from zero). Fix the new anchor(s) named below, or, if the addition "
-            "is deliberately accepted, run `python3 scripts/line-anchors-pin.py --pin` "
-            "and say why in the commit.",
-            scanned=len(counts),
-        )
-        return
+    base_doc, where = _offender_list_at_merge_base(list_rel)
+    if base_doc is None:
+        growth_note = f" Only-shrinks not compared: {where}. Failing open."
+    else:
+        base_listed, _, _ = _offender_list_shape(base_doc, rules)
+        refused, _allowed = _offender_growth(base_listed, listed, rules, rules)
+        for line in refused:
+            findings.append(Finding(
+                list_rel, f"gained {line} over the merge-base {where}. Cite a symbol instead of "
+                          "excusing the anchor."))
+        growth_note = f" Only-shrinks compared against the merge-base {where}."
 
-    pinned_files = pin.get("files", {}) if isinstance(pin.get("files"), dict) else {}
+    listed_count = sum(len(es) for per in listed.values() for es in per.values())
     report.add(
-        "line anchor ratchet", MECHANICAL, [],
-        f"{sum(counts.values())} line anchors over {len(counts)} files, every one at or "
-        f"under its own pinned ceiling ({len(pinned_files)} pinned).",
-        scanned=len(counts),
+        "line anchor offenders", MECHANICAL, findings,
+        f"{total} line anchors over {len(found)} files; {listed_count} listed over "
+        f"{len(listed)} files; {len(unlisted)} unlisted, {len(stale)} stale.{growth_note}",
+        scanned=len(found),
     )
 
 
@@ -13067,8 +13016,9 @@ def check_no_mechanism_on_screen(report: Report) -> None:
 # unless its entries moved out of another file in the same branch: a new document or a new
 # component starts clean, because its author is writing it now.
 #
-# D18: both rows only READ. The merge-base read is `git merge-base` and `git show`, two plain
-# reads, exactly as `scripts/kit-adoption.mjs:allowAtBase` does. IT FAILS OPEN, AND PRINTS WHY:
+# D18: the rows only READ. THE ONLY-SHRINKS RULES LIVE IN ONE HELPER, `scripts/only_shrinks.py`
+# (`list_at_merge_base`, `growth`), which `scripts/kit-adoption.mjs` runs as a command. The
+# merge-base read is `git merge-base` and `git show`, two plain reads. IT FAILS OPEN, AND PRINTS WHY:
 # no git, no `origin/main`, no merge-base, or no list at the merge-base (the branch that gives
 # the list its birth).
 
@@ -13150,6 +13100,12 @@ def _offender_diff(
     return unlisted, stale
 
 
+def _only_shrinks():
+    """`scripts/only_shrinks.py`, the ONE helper for every shrinking list's growth rules, or
+    None. `scripts/kit-adoption.mjs` runs the same file as a command."""
+    return _sibling("only_shrinks.py")
+
+
 def _offender_growth(
     base: Dict[str, Dict[str, List[str]]],
     head: Dict[str, Dict[str, List[str]]],
@@ -13157,61 +13113,34 @@ def _offender_growth(
     head_rules: Optional[Set[str]],
     key=lambda entry: entry,
 ) -> Tuple[List[str], List[str]]:
-    """`(refused, allowed)`: every (rule, identity) that occurs more often in the list at HEAD
-    than in the list at the merge-base, across ALL files.
+    """`(refused, allowed)`, each a printable line: every (rule, identity) that occurs more
+    often in the list at HEAD than in the list at the merge-base, across ALL files.
 
-    A rule the merge-base does not define was born on this branch: its first offenders may be
-    listed, and each one is returned in `allowed` with that reason. A rule definition that
-    cannot be read allows nothing. And if any rule the merge-base defines is gone at HEAD, all
-    growth is refused: a renamed rule would otherwise bring every old offender back as new."""
-    from collections import Counter
+    THE RULES ARE `only_shrinks.growth`'s, never a copy: a rule born on this branch may list
+    its first offenders, a rule set that cannot be read allows nothing, and a rule the
+    merge-base defines that is missing at HEAD refuses all growth. This only turns each list
+    into `(rule, identity)` pairs and formats the answer. With no helper, nothing is allowed."""
+    def pairs(files: Dict[str, Dict[str, List[str]]]) -> List[Tuple[str, str]]:
+        return [(rule, key(e)) for per in files.values() for rule, es in per.items() for e in es]
 
-    def census(files: Dict[str, Dict[str, List[str]]]) -> "Counter[Tuple[str, str]]":
-        return Counter((rule, key(e)) for per in files.values() for rule, es in per.items() for e in es)
-
-    before, after = census(base), census(head)
-    removed = sorted(base_rules - head_rules) if base_rules is not None and head_rules is not None else []
-    refused: List[str] = []
-    allowed: List[str] = []
-    for (rule, k), n in sorted(after.items()):
-        extra = n - before.get((rule, k), 0)
-        if extra <= 0:
-            continue
-        what = f"{rule} {k!r} (+{extra})"
-        if base_rules is None or head_rules is None:
-            refused.append(f"{what}: the rules at the merge-base or at HEAD could not be read, so no growth is allowed")
-        elif removed:
-            refused.append(f"{what}: {', '.join(removed)}, defined at the merge-base, is gone at HEAD, so no growth is allowed")
-        elif rule in base_rules:
-            refused.append(f"{what}: rule {rule} exists at the merge-base, and a rule that exists only shrinks")
-        else:
-            allowed.append(f"{what}: rule {rule} is not defined at the merge-base, so it was born on this branch")
-    return refused, allowed
+    helper = _only_shrinks()
+    if helper is None:
+        return (["scripts/only_shrinks.py could not be loaded, so no growth is allowed"]
+                if pairs(head) else []), []
+    refused, allowed = helper.growth(pairs(base), pairs(head), base_rules, head_rules)
+    line = lambda g: f"{g.rule} {g.identity!r} (+{g.extra}): {g.why}"  # noqa: E731
+    return [line(g) for g in refused], [line(g) for g in allowed]
 
 
 def _offender_list_at_merge_base(relpath: str) -> Tuple[Optional[object], str]:
-    """`(document, where)`: the list as it stood at the merge-base with `origin/main`, and a
-    short merge-base id. `(None, reason)` when there is none, and the reason says why."""
-    def run(*args: str) -> Optional[str]:
-        try:
-            done = subprocess.run(["git", *args], cwd=str(ROOT), stdout=subprocess.PIPE,
-                                  stderr=subprocess.DEVNULL, check=False)
-        except OSError:
-            return None
-        return done.stdout.decode("utf-8", errors="replace") if done.returncode == 0 else None
-
-    base = (run("merge-base", "HEAD", _MERGE_BASE_REFERENCE) or "").strip()
-    if not base:
-        return None, (f"no merge-base between HEAD and {_MERGE_BASE_REFERENCE} (no git, no "
-                      f"{_MERGE_BASE_REFERENCE}, or no shared history)")
-    text = run("show", f"{base}:{relpath}")
-    if text is None:
-        return None, (f"{relpath} does not exist at the merge-base {base[:8]}, so this branch "
-                      "gives it its birth and every entry is new")
-    try:
-        return json.loads(text), base[:8]
-    except (json.JSONDecodeError, ValueError) as exc:
-        return None, f"{relpath} at the merge-base {base[:8]} is not JSON ({exc})"
+    """`(document, where)`: `only_shrinks.list_at_merge_base`, the list as it stood at the
+    merge-base with `origin/main` and a short merge-base id. `(None, reason)` when there is
+    none, and the reason says why, so the row fails open and prints it."""
+    helper = _only_shrinks()
+    if helper is None:
+        return None, "scripts/only_shrinks.py could not be loaded"
+    document, where, _, _ = helper.list_at_merge_base(relpath, ROOT, _MERGE_BASE_REFERENCE)
+    return document, where
 
 
 def _read_offender_list(path: Path) -> Tuple[Optional[object], Optional[str]]:
@@ -18554,29 +18483,53 @@ def self_test() -> int:
            "a malformed entry is reported rather than silently ignored",
            str(report.checks[0].findings))
 
-    print("\nline anchor ratchet: the verdict arithmetic, isolated from the file walk and the pin file")
-    ok(_line_anchor_ratchet_verdict({"a.md": 3}, None) == ("unpinned", []),
-       "no pin at all is its own state, never treated as zero")
-    ok(_line_anchor_ratchet_verdict({"a.md": 3}, {"files": {"a.md": 3}}) == ("ok", []),
-       "an exact match is accepted silently")
-    ok(_line_anchor_ratchet_verdict({"a.md": 2}, {"files": {"a.md": 3}}) == ("ok", []),
-       "a fall is accepted exactly as silently as a tie")
-    verdict, risen = _line_anchor_ratchet_verdict({"a.md": 4}, {"files": {"a.md": 3}})
-    ok(verdict == "rose" and len(risen) == 1 and "a.md" in risen[0],
-       "a raised per-file count is a rise, and names the file", f"{verdict} {risen}")
-    # THE COORDINATOR'S OWN CATCH: an unseen file is HELD TO ZERO, unlike
-    # the retired STE ratchet's rule — new anchors in a brand-new file must be a rise,
-    # never an accepted freebie, or the ratchet is open on exactly the inflow it exists
-    # to stop.
-    verdict, risen = _line_anchor_ratchet_verdict(
-        {"a.md": 4, "b.md": 1}, {"files": {"a.md": 5}})
-    ok(verdict == "rose" and any("b.md" in line for line in risen),
-       "a file the pin has never seen is a rise, named, held to zero — never accepted "
-       "at its own rate",
-       f"{verdict} {risen}")
-    verdict, risen = _line_anchor_ratchet_verdict({"a.md": 3}, {"files": {"a.md": 3, "gone.md": 9}})
-    ok(verdict == "ok", "a pin whose file is gone (fell to zero anchors) is not a failure",
-       f"{verdict} {risen}")
+    # THE ONE ONLY-SHRINKS HELPER'S OWN SELF-TEST, run here so it rides `make check`'s
+    # `audit-self-test` rather than a target nothing calls. `kit-adoption.mjs --self-test`
+    # proves the same helper through its command.
+    print("\nonly shrinks: the shared helper's own self-test")
+    helper = _only_shrinks()
+    ok(helper is not None and helper.self_test() == 0,
+       "scripts/only_shrinks.py loads and its own self-test is clean")
+
+    print("\nline anchor offenders: the identity, the list comparison and growth, in memory")
+    anchor_rules = {LINE_ANCHOR_RULE}
+    one = line_anchor_candidates("See scripts/serve.py:120 and docs/GATES.md:10-12 here.")
+    ok([line_anchor_identity(a) for a in one] == ["scripts/serve.py:120", "docs/GATES.md:10-12"],
+       "an entry is the anchor as written, a range included",
+       f"{[line_anchor_identity(a) for a in one]}")
+    # BUILT FROM PARTS, never spelled: a decision-path token in this file is read as a
+    # citation by `repo map`.
+    slug_path = "docs/decisions/" + "D" + "-a-slug.md:7"
+    claimed_path = "docs/decisions/" + "D" + "301-a-slug.md:7"
+    ok([line_anchor_identity(a) for a in line_anchor_candidates(slug_path)]
+       == [line_anchor_identity(a) for a in line_anchor_candidates(claimed_path)]
+       == ["docs/decisions/*-a-slug.md:7"],
+       "a claim that numbers a decision moves no anchor's identity")
+    ANCHORS = {"docs/a.md": {LINE_ANCHOR_RULE: ["scripts/x.py:1", "scripts/x.py:1", "scripts/y.py:9"]}}
+    ok(_offender_diff(ANCHORS, ANCHORS) == ([], []), "the tree and the list agree")
+    renumbered = {"docs/a.md": {LINE_ANCHOR_RULE: ["scripts/x.py:1", "scripts/x.py:1", "scripts/y.py:10"]}}
+    unlisted, stale = _offender_diff(renumbered, ANCHORS)
+    ok(unlisted == [("docs/a.md", LINE_ANCHOR_RULE, "scripts/y.py:10")]
+       and stale == [("docs/a.md", LINE_ANCHOR_RULE, "scripts/y.py:9")],
+       "RED: an anchor given a new line number is a new offender and a stale entry — the fix "
+       "is a symbol, never a fresh number", f"{unlisted} {stale}")
+    third = {"docs/a.md": {LINE_ANCHOR_RULE: ANCHORS["docs/a.md"][LINE_ANCHOR_RULE] + ["scripts/x.py:1"]}}
+    unlisted, _ = _offender_diff(third, ANCHORS)
+    ok(unlisted == [("docs/a.md", LINE_ANCHOR_RULE, "scripts/x.py:1")],
+       "RED: a third copy of an anchor listed twice is unlisted", f"{unlisted}")
+    refused, _ = _offender_growth(ANCHORS, third, anchor_rules, anchor_rules)
+    ok(len(refused) == 1 and "scripts/x.py:1" in refused[0],
+       "RED: listing it anyway is growth, refused by the shared helper", f"{refused}")
+    new_doc = {**ANCHORS, "docs/new.md": {LINE_ANCHOR_RULE: ["scripts/z.py:3"]}}
+    refused, _ = _offender_growth(ANCHORS, new_doc, anchor_rules, anchor_rules)
+    ok(len(refused) == 1 and "scripts/z.py:3" in refused[0],
+       "RED: a brand-new file with an anchor is growth — a new file starts clean", f"{refused}")
+    moved = {"docs/b.md": ANCHORS["docs/a.md"]}
+    ok(_offender_growth(ANCHORS, moved, anchor_rules, anchor_rules) == ([], []),
+       "a paragraph moved to another file carries its anchors and is not growth")
+    ok(_offender_growth(ANCHORS, {"docs/a.md": {LINE_ANCHOR_RULE: ["scripts/x.py:1"]}},
+                        anchor_rules, anchor_rules) == ([], []),
+       "a list that only lost entries is not growth")
 
     print("\nderived numbers: marker extraction, isolated from the file walk")
     dn_module = _derived_numbers()
@@ -21497,7 +21450,7 @@ def audit(staged_only: bool) -> Report:
     line_allowed = load_line_allowlist()
     check_line_anchors(report, docs, line_allowed)
     check_line_anchor_allowlist(report, line_allowed)
-    check_line_anchor_ratchet(report)
+    check_line_anchor_offenders(report)
     check_derived_numbers(report, docs)
     check_make_targets(report, docs)
     check_pkmnscan_commands(report, docs, all_docs)

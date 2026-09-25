@@ -3466,22 +3466,31 @@ COMPONENTS = [
                         "(D-ratchets-become-offender-lists). Shrunk by hand or by "
                         "`make offenders-prune`, which only deletes. Never grown by a tool.",
                 "governed_by": ["D226", "D229", "D-ratchets-become-offender-lists"]},
-            "line-anchors-pin.py": {
-                "does": "`python3 scripts/line-anchors-pin.py --pin` re-measures every "
-                        "tracked markdown file's RAW `path:N`/`path:N-M` line-anchor count "
-                        "via `docs-audit.py`'s own `_line_anchor_counts()` — the same "
-                        "function the `line anchor ratchet` row calls — and rewrites "
-                        "`scripts/line-anchors.json`. Contains no counting logic of its "
-                        "own. D18: a generator may write, on no `make` target and no hook; "
-                        "`git diff scripts/line-anchors.json` is the receipt.",
-                "governed_by": ["D18", "D218", "D226", "D229"]},
-            "line-anchors.json": {
-                "does": "the line-anchor ratchet's pinned ceiling: one `path -> count` "
-                        "entry per tracked markdown file carrying at least one line "
-                        "anchor. Written only by `line-anchors-pin.py --pin`; "
-                        "`scripts/docs-audit.py`'s `line anchor ratchet` row only reads "
-                        "it, since that row sits on the commit path (D18).",
-                "governed_by": ["D18", "D111", "D149", "D163", "D180", "D221", "D225", "D229"]},
+            "line-anchor-offenders.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `line anchor "
+                        "offenders` row (D245): file -> lane and `line-anchor` -> every "
+                        "`path:N`/`path:N-M` line anchor that file cites, as written, once per "
+                        "occurrence. A decision entry's number is folded out of its file key "
+                        "and out of an anchor's decision path, so a claim moves nothing. The "
+                        "row fails on an unlisted anchor, a stale entry, and growth over the "
+                        "merge-base (`only_shrinks.py`), so a new file starts clean. Replaced "
+                        "D229's per-file pinned count (D-ratchets-become-offender-lists). "
+                        "Shrunk by hand or by `make offenders-prune`, which only deletes. Never "
+                        "grown by a tool.",
+                "governed_by": ["D229", "D245", "D-ratchets-become-offender-lists"]},
+            "only_shrinks.py": {
+                "does": "THE ONE only-shrinks helper for every shrinking offender list "
+                        "(D-ratchets-become-offender-lists). `list_at_merge_base` reads a list "
+                        "(and, on request, other files) as it stood at the merge-base with "
+                        "origin/main, and fails open with the reason. `growth` counts every "
+                        "`(rule, identity)` pair HEAD holds more often than the merge-base, "
+                        "refuses it under a rule the merge-base defines, allows it under a rule "
+                        "born on the branch, and refuses all growth when a rule the merge-base "
+                        "defines is missing at HEAD. `docs-audit.py`'s three offender rows "
+                        "import it. `kit-adoption.mjs` runs it as a command (`base`, `growth`) "
+                        "and reads JSON back. Two plain git reads, so D18 holds. Stdlib only. "
+                        "`--self-test` proves it in memory and in a throwaway repository.",
+                "governed_by": ["D18", "D-ratchets-become-offender-lists"]},
             "derived_numbers.py": {
                 "does": "a named registry of tree-descriptive numbers: one pure "
                         "`compute(root) -> int` function per figure, called by both "
@@ -3578,7 +3587,7 @@ COMPONENTS = [
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226", "D229", "D247",
+                                "D213", "D215", "D218", "D226", "D229", "D245", "D247",
                                 "D-ratchets-become-offender-lists", "D-text-shape-checks"],
             },
             "claim-ids.py": {
@@ -3760,7 +3769,8 @@ COMPONENTS = [
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D90", "D96", "D194", "D218", "D226", "D229",
-                                "D248", "D-ratchets-become-offender-lists", "D-text-shape-checks"],
+                                "D245", "D248", "D-ratchets-become-offender-lists",
+                                "D-text-shape-checks"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -4482,7 +4492,7 @@ COMPONENTS = [
                         "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
                         "app/tests/scaffold.spec.ts, so the spec and the check read one table "
                         "with one reader.",
-                "governed_by": ["D18", "D173", "D-page-scaffold"]},
+                "governed_by": ["D18", "D173", "D-page-scaffold", "D-ratchets-become-offender-lists"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "

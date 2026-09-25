@@ -66,7 +66,7 @@ A stale entry must be deleted, and the prose list holds more than 14,000 lines o
 - **It deletes a stale entry.** It deletes one occurrence for each occurrence that the tree no longer has.
 - **It re-keys a renamed file.** A listed file key that names no file today moves to the one new path that git's rename detection names. It reads `git diff -M` from the merge-base with `origin/main`. A rename onto a key that the list already holds is refused and named.
 
-It never adds an entry. It refuses to write a plan that holds any identity more often than the list that it read. A list that is not JSON, such as one with merge-conflict markers, is not pruned. The pruner prints the recipe and writes nothing: keep either side's list whole, then run the pruner. That works because the list only shrinks. It reads with the rows' own functions, imported, so the pruner and the gate cannot disagree about what is stale. It previews by default, and `ARGS=--write` applies. It is on no hook and in no `make check`, because D18 says "A generator may write. Nothing that writes may gate a commit." It writes a data file under `scripts/`, as `scripts/line-anchors-pin.py` does. So it opens no seam in D18's list, which governs the prose files that agents read as argument. `make offenders-prune-selftest` proves it.
+It never adds an entry. It refuses to write a plan that holds any identity more often than the list that it read. A list that is not JSON, such as one with merge-conflict markers, is not pruned. The pruner prints the recipe and writes nothing: keep either side's list whole, then run the pruner. That works because the list only shrinks. It reads with the rows' own functions, imported, so the pruner and the gate cannot disagree about what is stale. It previews by default, and `ARGS=--write` applies. It is on no hook and in no `make check`, because D18 says "A generator may write. Nothing that writes may gate a commit." It writes data files under `scripts/` only. So it opens no seam in D18's list, which governs the prose files that agents read as argument. `make offenders-prune-selftest` proves it.
 
 The rows read tracked files only. `markdown_files()` in `scripts/docs-audit.py` reads the index in staged mode and `git ls-files` otherwise. So a scratch `.md` file that git does not track never fails `make docs-audit`.
 
@@ -85,14 +85,37 @@ The rows read tracked files only. `markdown_files()` in `scripts/docs-audit.py` 
 - Two helpers with one name, in two sibling blocks of the same function, share one scope.
 - A file split in two gives git one rename pair, so the second new file reads as new. A typed dot moved into it is refused as growth, even with its entry moved. It fails closed, and it matches the rule that a new file starts clean.
 - The pruner cannot re-key a rename that git does not see. That includes a plain `mv` that is not staged, and a move with too large an edit for rename detection. The old entries then go stale and are deleted, and the new file's offenders stay unlisted.
+- `kit-adoption.mjs` needs `python3` for its growth check. If the helper cannot run, the check refuses all growth. It fails closed.
+- If `scripts/docs-audit.py` cannot load the helper, the three offender rows do not compare growth. They fail open and print why, as they do with no merge-base.
+- A line anchor inside a code fence is listed too. The rule counts every anchor, as its pin did.
 - A markdown file that git does not track is not read until `git add`. The pre-commit hook reads the index, so a commit still carries every file it names.
 
 ### Mechanism
 
-`make docs-audit`'s `typed interpunct` and `ste offenders` rows, in `scripts/docs-audit.py`. `scripts/ste_measure.py` names each prose offender. `python3 scripts/docs-audit.py --self-test` proves each failure red in memory. It proves a new offender in a listed file, a stale entry, growth under an existing rule, and a brand-new file. It also proves that a move, a reflow, a code-span edit and a claim change nothing. The reflow cases include a code span that crosses a line break, split both ways, in a paragraph, a blockquote and a list item. They also include a break inside a decision citation and inside `VS Code`. It proves that a function rename is not growth once its entries are re-keyed. It proves that a bare `·` moved to another component is red, and that a scratch markdown file is not read.
+`make docs-audit`'s `typed interpunct`, `ste offenders` and `line anchor offenders` rows, in `scripts/docs-audit.py`. `scripts/only_shrinks.py` decides growth for all three and for `make kit-adoption`, and `python3 scripts/only_shrinks.py --self-test` proves it. `scripts/ste_measure.py` names each prose offender. `python3 scripts/docs-audit.py --self-test` proves each failure red in memory. It proves a new offender in a listed file, a stale entry, growth under an existing rule, and a brand-new file. It also proves that a move, a reflow, a code-span edit and a claim change nothing. The reflow cases include a code span that crosses a line break, split both ways, in a paragraph, a blockquote and a list item. They also include a break inside a decision citation and inside `VS Code`. It proves that a function rename is not growth once its entries are re-keyed. It proves that a bare `·` moved to another component is red, and that a scratch markdown file is not read.
 
 `scripts/typed-interpunct.json`, `scripts/typed-interpunct-pin.mjs`, `scripts/ste-ratchet.json` and `scripts/ste-ratchet-pin.py` are deleted.
 
-### Pinned counts this entry does not reach
+### The line-anchor pin becomes a list too
 
-Two more per-file pins remain, and the owner's ruling did not name them. `make docs-audit`'s `line anchor ratchet` row pins a count of line anchors per file (D229's shape). `make token-literal-check` pins literal counts per file (D256). Each could take the same list shape. That is the owner's call.
+The owner's ruling, later on 2026-09-24, was "convert both of the last pins". D245's `line anchor ratchet` row pinned a count of line anchors per file, in D229's shape. It is now the `line anchor offenders` row, over `scripts/line-anchor-offenders.json`.
+
+- **An entry is the anchor as written**, `path:N` or `path:N-M`, once per occurrence. An edit elsewhere in the file, or a reflow, does not touch it.
+- **A claim moves nothing.** A decision entry's number is folded out of the document's own file key, as the prose list folds it. It is also folded out of an anchor's decision path, so both read `docs/decisions/*-<slug>.md`.
+- **A new line number is a new identity.** The old entry goes stale, and the new anchor cannot be listed, because that is growth. The fix is a symbol, a section or a decision id.
+- **Growth is counted over the whole list**, as the prose list counts it. A paragraph moved to another file carries its anchors and adds nothing. A new file starts clean.
+
+The list was seeded from the tree on the day of the ruling: 777 anchors in 44 files, all owned by `docs-sweep`. The retired pin held the same 777 over the same 44 files. `scripts/line-anchors.json` and `scripts/line-anchors-pin.py` are deleted. `make offenders-prune` covers the new list.
+
+`make token-literal-check` still pins literal counts per file (D256). Another session owns that conversion.
+
+### One helper decides "only shrinks"
+
+Three copies of the only-shrinks rules existed: `scripts/kit-adoption.mjs` and two rows in `scripts/docs-audit.py`. A fix to one did not reach the others. Now one Python module holds them: `scripts/only_shrinks.py`.
+
+- `list_at_merge_base` reads a list as it stood at the merge-base with `origin/main`. It fails open and returns the reason. On request it also returns other files from the same commit.
+- `growth` counts each `(rule, identity)` pair that HEAD holds more often than the merge-base. It refuses the pair under a rule the merge-base defines. It allows the pair under a rule born on the branch. It refuses all growth when a rule that the merge-base defines is missing at HEAD, or when a rule set cannot be read.
+
+**Why one Python helper and not one helper per language.** The other choice kept two implementations and a shared fixture to prove that they agree. A fixture proves agreement only on the cases it holds, and the next fix still has to be made twice. One implementation cannot drift from itself. The price is small. `kit-adoption.mjs` already runs `git` as a child process, and every place that runs `make check` already has `python3`. So the `.mjs` runs `python3 scripts/only_shrinks.py base` and `growth` as commands and reads JSON back. It keeps only what is its own: the keys that a block holds, and the rule ids that its source defines.
+
+Each caller still decides what an identity is, and so whether growth is counted per file. The prose and line-anchor lists count over the whole list. The typed-dot list puts the file in the identity. The kit list keys one entry per file and rule.

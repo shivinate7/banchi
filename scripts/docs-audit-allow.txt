@@ -31,3 +31,5 @@ scripts/typed-interpunct.json  # Deleted 2026-09-24, superseded by D-ratchets-be
 scripts/typed-interpunct-pin.mjs  # Deleted 2026-09-24 with the file above. Same reason, same record.
 scripts/ste-ratchet.json  # Deleted 2026-09-24 with the file above. D226, D229 and D248 name it as history. Same reason, same record.
 scripts/ste-ratchet-pin.py  # Deleted 2026-09-24 with the file above. Same reason, same record.
+scripts/line-anchors-pin.py  # Deleted 2026-09-24, superseded by D-ratchets-become-offender-lists (owner's ruling: "convert both of the last pins"). D245 names it as history, in its own "Superseded" note. Kept as that record. Delete this line if the file is ever rebuilt here.
+scripts/line-anchors.json  # Deleted 2026-09-24 with the file above. D245 and D-ratchets-become-offender-lists name it as history. Same reason, same record.
