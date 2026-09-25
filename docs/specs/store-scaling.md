@@ -216,10 +216,13 @@ the owner's word after a walkthrough**: they chose multi-word any-order matching
 best-match ranking, were told mid-word matching (`izard` → Charizard) is lost, and took it;
 the playbook adds prefix matching so a partial word still hits.
 
-REVERSED 2026-09-25 (MID-WORD, the owner's own later ruling: "Add mid-word search").
-D271 carries the reversal, the mechanism (`_fts_substring_candidates`) and the numbers a
-2,600-card synthetic store measured before it shipped. This paragraph stays as the record
-of the original trade-off. It is no longer the current behavior.
+SUPERSEDED 2026-09-25 on the mid-word point (the owner's own later ruling, verbatim:
+"Add mid-word search"). D271 carries the supersession, the mechanism
+(`_fts_substring_candidates_for_term`) and the measured numbers, re-measured again by the
+round-4 Opus review at 3,000 and 10,000 cards. This paragraph stays as the record of the
+original trade-off. It is no longer the current behavior. D271 also records the ceiling
+that trade-off named. A real mid-word hit costs 249-260ms at 10,000 cards, over the
+200ms debounce budget, and D271 names the upgrade path: an FTS5 trigram index.
 
 An external-content FTS5
 table over `cards` with the three sync triggers, so the index maintains itself inside the

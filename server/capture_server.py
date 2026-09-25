@@ -10304,6 +10304,14 @@ def _fts_substring_candidates_for_term(conn: sqlite3.Connection, term: str) -> L
     part of this cost to what store-scaling item 8 was always about (building 50,000
     objects), not to the column count.
     """
+    # ponytail: a full O(store) row walk per term, in Python. Measured at 10,000 cards
+    # (round-4 Opus review, 2026-09-25, R3 re-measurement, warm index, real HTTP): a real
+    # mid-word hit (`izard`, ~1/37 of rows) costs 249-260ms p50/p95, over
+    # `useSearch.ts`'s 200ms debounce. At 3,000 cards (the owner's live store holds about
+    # 3,450) it costs 73-76ms, well under bound — shipped on that measurement (D271). Ceiling
+    # is a store size somewhere between 3,000 and 10,000 cards. Upgrade path: an FTS5
+    # trigram index (`fts5(... tokenize='trigram'`), which can answer a mid-word LIKE with a
+    # real index instead of a table scan. That is a schema change and needs its own decision.
     if len(term) < 3 or not match._has_letter(term):
         return []
     folded_term = match.fold_text(term)

@@ -103,36 +103,64 @@ The two implementations agree on every mark, spacing or not. `scripts/match-self
 `case_match_fold_text_strips_every_mark_by_category` proves it, verified red on the old
 code and green on the new one.
 
-**MID-WORD SEARCH IS ADDED (the owner's ruling, 2026-09-25: "Add mid-word search").** D271
-wins over store-scaling item 8's own prefix-only trade-off. `do_search("izard")` now finds
+**MID-WORD SEARCH IS ADDED, the owner's ruling, 2026-09-25, verbatim: "Add mid-word search."** The owner set one condition. Mid-word ships "only if a measurement... says
+search stays fast." D271 wins over store-scaling item 8's own prefix-only trade-off. That
+item is now SUPERSEDED on this one point (below). `do_search("izard")` now finds
 "Charizard", the exact case store-scaling item 8 measured and traded away.
 
-`server/capture_server.py:_fts_substring_candidates` is a fourth candidate source. It is a
-plain SQL scan, `LIKE '%term%'`, over `name`, `set_hint` and the note field. FTS5's own
-prefix index can never answer this shape. A token has to start with what was typed. A
-substring scan cannot use an index. No B-tree ordering helps a pattern with a leading `%`.
-Its cost grows with the STORE, not with the term, unlike every other candidate source
-here.
+`server/capture_server.py:_fts_substring_candidates_for_term` is a fourth candidate
+source, one term at a time (R1, round-4 Opus review, 2026-09-25 — see below). It folds
+both the query term and each candidate field in Python (`match.fold_text`,
+`match.compact_text`). FTS5's own prefix index can never answer this shape: a token has
+to start with what was typed. A substring scan cannot use an index. No B-tree ordering
+helps a pattern with a leading `%`, or a Python `in` check standing in for one. Its cost
+grows with the STORE, not with the term, unlike every other candidate source here. It is
+folded in Python, so it cannot be pushed into SQL as a plain `LIKE` either.
 
-**Measured before shipping, never on the owner's own store.** A synthetic store of 2,600
-cards, built in this session's own worktree. Real loopback HTTP, JSON encoding included,
-matching UX-263's own method. 20 requests per query shape.
+**Measured before shipping, never on the owner's own store.** Round 3 measured a
+synthetic 2,600-card store. Round 4's Opus review asked for a re-measurement at 3,000 AND
+10,000 cards. It named 1, 2 and 3-character queries, plus the hostile multi-term shapes R1
+fixed. This used real loopback HTTP against a running `CaptureServer`, JSON encoding
+included, 20 requests per shape, matching UX-263's own method. THE EARLIER TABLE'S "p95
+95.1ms" CLAIM WAS FALSE. It named a store size (2,600) the query shape was never measured
+against consistently. Round 4 replaces the table outright, rather than amend it:
 
-| Query shape | Before p50 / p95 | After p50 / p95 |
+| Query shape | 3,000 cards p50 / p95 | 10,000 cards p50 / p95 |
 |---|---|---|
-| Name prefix (`chariz`) | 52.5ms / 56.9ms | 58.1ms / 63.1ms |
-| Mid-word, a real hit (`izard`) | 2.1ms / 3.0ms (0 found) | 59.7ms / 63.6ms (114 found) |
-| Mid-word, no match (`urf`) | 2.7ms / 3.4ms | 5.2ms / 5.6ms |
-| Bare number (`132`) | 35.9ms / 39.6ms | 39.0ms / 41.9ms |
-| No match at all | 2.4ms / 3.0ms | 5.1ms / 5.8ms |
-| Two-word name (`deadly duelist`) | 43.1ms / 44.7ms | 67.0ms / 95.1ms |
+| 1-char (`a`), floored, no scan (R3) | 2.6ms / 9.6ms | 6.3ms / 27.5ms |
+| 2-char (`ab`), floored, no scan (R3) | 2.4ms / 3.2ms | 6.2ms / 6.7ms |
+| 3-char mid-word, a real hit (`izard`) | 73.4ms / 76.0ms | 249.0ms / 259.7ms |
+| Hostile 100 repeated terms (`a`×100) | 3.7ms / 4.4ms | 6.7ms / 7.2ms |
+| Hostile 50 repeated terms (`001`×50) | 47.8ms / 50.0ms | 163.7ms / 177.8ms |
+| Bare number (`132`) | 49.3ms / 53.5ms | 155.7ms / 179.8ms |
 
-Every shape stays well inside `useSearch.ts:SEARCH_DEBOUNCE_MS`'s own 200ms budget. The
-worst case measured, a two-word name (one substring scan per term), rose from p95 44.7ms
-to p95 95.1ms. Still under half the debounce window.
+**A 1 OR 2-CHARACTER TERM NEVER REACHES THE SCAN (R3).**
+`_fts_substring_candidates_for_term` floors at 3 characters. This is the owner's own
+condition: `q=a` measured a 582ms full-table scan before this floor existed. The two rows
+above are the floor's own cost, a length check and nothing else, not the scan's.
+
+**THE HOSTILE SHAPES ARE FAST BECAUSE OF R1, NOT THIS FLOOR.** `("a "*100)` and
+`("001 "*50)` were the round-4 review's own blocking finding. At 3,000 cards, the UNFIXED
+code took 5.8s and 1.5s. Every term ran its own unbounded scan. The results were unioned,
+never intersected, and a repeated term was scanned again every time. Three fixes hold both
+rows above under 180ms even at 10,000 cards. Dedupe terms. Cap the distinct term count at
+8. Intersect supplemental candidates across terms (`_fts_supplemental_candidates`).
+
+**A REAL MID-WORD HIT IS A KNOWN CEILING, NOT MECHANIZED AWAY.** The owner's live store
+holds about 3,450 cards (`handoff-2026-09-24-identity.md`). At 3,000 cards, a real hit
+costs 73-76ms, comfortably under `useSearch.ts:SEARCH_DEBOUNCE_MS`'s 200ms budget. At
+10,000 cards it costs 249-260ms, OVER that budget. The round-4 review named its own stop
+condition: "if mid-word still cannot stay under about 200ms for 3+ characters, stop and
+report." That condition is met at the store's current scale. It is not met at 10,000
+cards. Shipped on that measurement, per the owner's word (round-4 Opus review reply,
+2026-09-25: "Ship it as built"). The ceiling and its upgrade path are recorded at
+`_fts_substring_candidates_for_term`'s own `ponytail:` comment, never only here. The
+upgrade path is an FTS5 trigram index. That is a schema change and needs its own decision.
 
 The rest of this entry, `harness/tests/t7_store_and_seams.py:check_search_fts5`'s own
 `midword` case, and `scripts/match-selftest.py`'s case 16 all now assert the FOUND
 direction. `docs/specs/store-scaling.md` item 8 and `docs/specs/store-scaling/
 08-search-fts5.md` keep their original text as the record of the earlier trade-off, each
-with a note pointing here.
+with a note pointing here. Item 8 is now marked SUPERSEDED on the mid-word point. The
+prefix-only design it argued for is not what shipped.
+
