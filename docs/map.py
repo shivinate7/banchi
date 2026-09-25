@@ -3140,7 +3140,8 @@ COMPONENTS = [
                         "offering several candidates are excluded and reported, never "
                         "dropped. With no `--store` it proves the sweep logic against an "
                         "in-file fixture and REFUSES to measure nothing; with `--store` it "
-                        "opens read-only and immutable. No network call on any path. One "
+                        "opens read-only through `store/db.py:open_read_only`. No network "
+                        "call on any path. One "
                         "mutation arm: an always-trust stub must misclassify exactly the "
                         "fixture's known misreads. Not wired into `make check` — "
                         "`holdings-selftest.py`'s own precedent.",
