@@ -4093,7 +4093,7 @@ export type PriceChange = { sku: string; price: string; was: string | null }
 
 /** Live copies a listing row moves, as the button names them: the new copy carries Banchi's
  *  stored price, and every live copy of the card moves with it (the owner's ruling, round 7). */
-export type LiveMove = { sku: string; name: string; copies: number; price: string }
+export type LiveMove = { sku: string; name: string; copies: number; price: string; was: string | null }
 
 /** One row a send refused, as data (round 7, R6-1): `live_moved` is a named price whose live
  *  price moved since the screen read it; `move_unnamed` is live copies a listing row would
@@ -4101,7 +4101,7 @@ export type LiveMove = { sku: string; name: string; copies: number; price: strin
 export type RefusedPrice = {
   sku: string
   name: string
-  why: 'live_moved' | 'move_unnamed' | 'below_floor' | 'not_saved' | 'not_in_send'
+  why: 'live_moved' | 'move_unnamed' | 'move_count' | 'below_floor' | 'not_saved' | 'not_in_send'
   price: string | null
   live: string | null
   shown: string | null

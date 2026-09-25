@@ -188,3 +188,21 @@ went red on the round-6 build before the fix. The reviewer's probe P11 is a T7 c
 - **R6-2, undo.** Undo takes the SKU out of the prices typed this visit.
 - **R6-4, a held mark-down.** A mark-down over a card that an unconfirmed send holds refuses
   with `send_held`, not `send_in_progress`. The send is not running: it waits for the check.
+
+### Round 8: the review of round 7 (2026-09-24)
+
+The review of round 7 passed, with four small findings. Each case below has a T7 case in
+`check_send_review_r8`, or a spec case in `app/tests/pricing.spec.ts`, that went red on the
+round-7 build before the fix.
+
+- **R7-1, the floor.** A move that would take live copies under `policy.threshold` is refused
+  `below_floor`, as data. It is never offered for a second press. This is S1's rule for a move.
+- **R7-2, several prices.** A press can move live copies to more than one price. Then the card
+  lists each card before the press, with its live copies and its old and new price. The button
+  keeps its short phrase.
+- **R7-3, the count.** A named move carries its count of live copies. A count that is not
+  TCGplayer's is refused as data, and one press names the move again at TCGplayer's count.
+- **R7-4, a live row with no price.** Nothing here shows whether TCGplayer's real export can
+  hold such a row. So a row with live copies and no price counts as a move to the stored price,
+  and the button names it. That is the safe side.
+

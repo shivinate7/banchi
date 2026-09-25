@@ -131,7 +131,9 @@ function MovesPhrase({ moves }: { readonly moves: readonly { copies: number; pri
 function confirmable(failure: Failure | null): RefusedPrice[] {
   if (failure === null || failure.code !== 'price_refused') return []
   const refused = ((failure.data as { refused?: RefusedPrice[] } | undefined)?.refused ?? []).filter(Boolean)
-  if (refused.length === 0 || refused.some((row) => row.why !== 'live_moved' && row.why !== 'move_unnamed')) return []
+  /* A MOVE UNDER THE FLOOR, A PRICE NOT SAVED, A CARD NOT IN THE SEND: never offered (R7-1). */
+  const offered = new Set<RefusedPrice['why']>(['live_moved', 'move_unnamed', 'move_count'])
+  if (refused.length === 0 || refused.some((row) => !offered.has(row.why))) return []
   return refused
 }
 
@@ -170,11 +172,36 @@ function ResendPrices({
           <li key={`${row.sku}-${row.why}`}>
             <span className="send-name">{row.name || row.sku}</span>
             <span className="send-figure">
-              {row.why === 'move_unnamed' ? `${plural(row.copies, 'live copy', 'live copies')} at ` : 'TCGplayer shows '}
+              {row.why === 'live_moved' ? 'TCGplayer shows ' : `${plural(row.copies, 'live copy', 'live copies')} at `}
               {row.live === null ? 'no price' : <Money value={Number(row.live)} />}
-              {row.why === 'move_unnamed' ? ' move to ' : ' now. Send '}
+              {row.why === 'live_moved' ? ' now. Send ' : ' move to '}
               {row.price === null ? 'this price' : <Money value={Number(row.price)} />}
-              {row.why === 'move_unnamed' ? '.' : '?'}
+              {row.why === 'live_moved' ? '?' : '.'}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Notice>
+  )
+}
+
+/** EVERY LIVE COPY A PRESS MOVES, BEFORE THE PRESS, when they move to more than one price (the
+ *  owner's ruling names the copies AND their price; round 8, R7-2). One price fits the button's
+ *  own words; more than one is listed here, card by card, the way the guard's trims are listed
+ *  after a press. */
+function MovesList({ moves }: { readonly moves: readonly LiveMove[] }) {
+  if (new Set(moves.map((move) => Number(move.price))).size < 2) return null
+  return (
+    <Notice tone="info" compact className="send-moves" title="Live copies this press moves to their new price.">
+      <ul className="send-names">
+        {moves.map((move) => (
+          <li key={move.sku}>
+            <span className="send-name">{move.name || move.sku}</span>
+            <span className="send-figure">
+              {`${plural(move.copies, 'live copy', 'live copies')}, `}
+              {move.was === null ? 'no price' : <Money value={Number(move.was)} />}
+              {' to '}
+              <Money value={Number(move.price)} />
             </span>
           </li>
         ))}
@@ -537,7 +564,9 @@ export function SendCard({
       const next = { was: { ...held.was }, moves: { ...held.moves } }
       for (const row of rows) {
         if (row.why === 'live_moved') next.was[row.sku] = row.live
-        else if (row.price !== null) next.moves[row.sku] = { sku: row.sku, name: row.name, copies: row.copies, price: row.price }
+        /* A MOVE THE BUTTON DID NOT NAME, OR NAMED AT ANOTHER COUNT: named now at TCGplayer's own
+           count of live copies (round 8, R7-3). */
+        else if (row.price !== null) next.moves[row.sku] = { sku: row.sku, name: row.name, copies: row.copies, price: row.price, was: row.live }
       }
       return next
     })
@@ -674,6 +703,8 @@ export function SendCard({
           )}
         </div>
       )}
+
+      <MovesList moves={liveMoves} />
 
       {offered.length > 0 ? (
         <ResendPrices rows={offered} busy={busy} onSend={() => resend(offered)} />

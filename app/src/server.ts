@@ -2414,7 +2414,7 @@ export async function sendCopies(
       ...quantitiesClaim(options.quantities),
       ...(options.prices !== undefined && options.prices.length > 0 ? { prices: options.prices } : {}),
       ...(options.moves !== undefined && options.moves.length > 0
-        ? { moves: options.moves.map((move) => ({ sku: move.sku, price: move.price })) }
+        ? { moves: options.moves.map((move) => ({ sku: move.sku, price: move.price, copies: move.copies })) }
         : {}),
     }),
   })) as SendAnswer

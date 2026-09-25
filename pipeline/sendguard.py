@@ -230,6 +230,7 @@ REFUSED_NOT_SAVED = "not_saved"        # the saved price is not the one the butt
 REFUSED_BELOW_FLOOR = "below_floor"    # under the store's floor, the mark-down door's rule
 REFUSED_NOT_IN_SEND = "not_in_send"    # the button named a card this press does not price
 REFUSED_MOVE_UNNAMED = "move_unnamed"  # a listing row would move live copies the button did not name
+REFUSED_MOVE_COUNT = "move_count"      # the button named another count of live copies than TCGplayer holds
 
 
 @dataclass(frozen=True)
@@ -336,18 +337,26 @@ class LiveMove:
 
 def live_moves(
     going: Mapping[str, tuple],
-    named: Mapping[str, str],
+    named: Mapping[str, tuple],
     live: Mapping[str, int],
     prices: Mapping[str, Optional[str]],
+    floor=None,
 ) -> tuple:
     """`(moves, refused)`: the live copies this press's LISTING rows move, and any the button did
     not name.
 
     `going` is SKU -> (name, the row's price) for every row that adds a copy. A row moves live
     copies when TCGplayer holds some and shows another price. The button names each move it
-    drew with its price (`named`, SKU -> price), off the same newest live export the worklist
-    carries. A move the button did not name, or named at another price, REFUSES the press with
-    the live figure as data, so the screen can say "TCGplayer shows $X now" and send again.
+    drew with its price and its count (`named`, SKU -> (price, copies)), off the same newest
+    live export the worklist carries. A move the button did not name, or named at another price,
+    REFUSES the press with the live figure as data, so the screen can say "TCGplayer shows $X
+    now" and send again. So does a move named at another count of live copies (round 8, R7-3).
+
+    A MOVE UNDER THE STORE'S FLOOR (`floor`, `policy.threshold`) IS REFUSED `below_floor`, as
+    data, and never offered back (round 8, R7-1): the rule S1 gave a price-only row.
+
+    A LIVE ROW WITH COPIES AND NO PRICE IS A MOVE, from no price to the row's (round 8, R7-4).
+    Whether TCGplayer's real export can hold one is not known, and naming it is the safe side.
     """
     moves: List[LiveMove] = []
     refused: List[PriceNote] = []
@@ -356,15 +365,25 @@ def live_moves(
         price = tcgcsv.format_price(price)
         held = int(live.get(sku, 0))
         now = prices.get(sku)
-        # A LIVE ROW WITH NO PRICE SHOWS NONE TO MOVE FROM, and TCGplayer lists no copy without
-        # one, so it is not named. Only a price TCGplayer shows can be said to move.
-        if held <= 0 or now is None or now == price:
+        if held <= 0 or now == price:
             continue
-        told = named.get(sku)
-        if told is None or tcgcsv.format_price(told) != price:
+        if floor is not None and Decimal(price) < Decimal(str(floor)):
+            refused.append(
+                PriceNote(sku, str(name or ""), REFUSED_BELOW_FLOOR, price=price, live=now, copies=held)
+            )
+            continue
+        told_price, told_copies = named.get(sku, (None, None))
+        if told_price is None or tcgcsv.format_price(told_price) != price:
             refused.append(
                 PriceNote(sku, str(name or ""), REFUSED_MOVE_UNNAMED, price=price, live=now,
-                          shown=None if told is None else tcgcsv.format_price(told), copies=held)
+                          shown=None if told_price is None else tcgcsv.format_price(told_price),
+                          copies=held)
+            )
+            continue
+        if told_copies is None or int(told_copies) != held:
+            refused.append(
+                PriceNote(sku, str(name or ""), REFUSED_MOVE_COUNT, price=price, live=now,
+                          shown=None if told_copies is None else str(int(told_copies)), copies=held)
             )
             continue
         moves.append(LiveMove(sku=sku, name=str(name or ""), copies=held, price=price, was=now))

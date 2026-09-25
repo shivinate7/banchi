@@ -920,13 +920,18 @@ def _named_moves(payload: dict) -> List[dict]:
             price = tcgcsv.parse_price(str(row.get("price") or "")) if sku else None
         except (ArithmeticError, ValueError):
             price = None
-        if not sku.isdigit() or price is None or price <= 0:
+        copies = row.get("copies") if sku else None
+        # THE COUNT OF LIVE COPIES THE BUTTON SAID MOVE (round 8, R7-3): `emit` refuses when
+        # TCGplayer holds another count, so the button never names a count it did not draw.
+        counted = isinstance(copies, int) and not isinstance(copies, bool) and copies > 0
+        if not sku.isdigit() or price is None or price <= 0 or not counted:
             raise PipelineRefusal(
                 HTTPStatus.BAD_REQUEST,
                 "moves_invalid",
-                "Each named move needs a TCGplayer id and a price above zero.",
+                "Each named move needs a TCGplayer id, a price above zero and a count of live "
+                "copies.",
             )
-        out.append({"sku": sku, "price": tcgcsv.format_price(price)})
+        out.append({"sku": sku, "price": tcgcsv.format_price(price), "copies": int(copies)})
     return out
 
 
@@ -937,6 +942,7 @@ _PRICE_REFUSALS = {
     "below_floor": "{price} is under the store's floor",
     "not_in_send": "this send does not price that card",
     "move_unnamed": "{copies} live cop{ies} at {live} would move to {price}, and the button did not say so",
+    "move_count": "TCGplayer holds {copies} live cop{ies}, and the button counted another number",
 }
 
 

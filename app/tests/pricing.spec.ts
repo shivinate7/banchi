@@ -1387,6 +1387,99 @@ test('r7: undo takes a typed price off the button', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Send 3 copies to TCGplayer' })).toBeVisible()
 })
 
+/* ROUND 8, R7-2: THE OWNER'S RULING NAMES THE COPIES THAT MOVE AND THEIR PRICE. When a press moves
+   live copies to more than one price, the button keeps its short phrase and the card lists each
+   card, its live copies, and its old and new price before the press. The press sends each
+   move's count, and the server refuses a count that is not TCGplayer's. */
+test('r8: moves to more than one price are listed card by card before the press', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      sku({
+        sku: '8608859',
+        name: 'Articuno',
+        add_to_quantity: 1,
+        copies: 1,
+        live_before: 2,
+        listing: { pushed: 2, staged: 0, live: 2 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '22.03' },
+      }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        add_to_quantity: 1,
+        copies: 1,
+        live_before: 3,
+        listing: { pushed: 3, staged: 0, live: 3 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 3, price: '5.00' },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99', '8608459': '6.00' } },
+  })
+  const press = page.getByRole('button', { name: 'Send 2 copies, 5 live copies move to new prices' })
+  await expect(press).toBeVisible()
+  const list = page.locator('.send-moves')
+  await expect(list).toContainText('Articuno')
+  await expect(list).toContainText('2 live copies, $22.03 to $19.99')
+  await expect(list).toContainText('Dunsparce')
+  await expect(list).toContainText('3 live copies, $5.00 to $6.00')
+  await press.click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect(sendPosts(wire)[0]?.body).toMatchObject({
+    moves: [
+      { sku: '8608859', price: '19.99', copies: 2 },
+      { sku: '8608459', price: '6.00', copies: 3 },
+    ],
+  })
+})
+
+/* ROUND 8, R7-4: A LIVE ROW WITH COPIES AND NO PRICE IS A MOVE. Whether TCGplayer can hold one is
+   not known, so the button names it: the safe side. */
+test('r8: live copies with no price are named as a move', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({
+        sku: '8608859',
+        name: 'Articuno',
+        add_to_quantity: 1,
+        copies: 1,
+        live_before: 2,
+        listing: { pushed: 2, staged: 0, live: 2 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: null },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99' } },
+  })
+  await expect(page.getByRole('button', { name: 'Send 1 copy, 2 live copies move to $19.99' })).toBeVisible()
+})
+
+/* ROUND 8, R7-3: THE BUTTON COUNTED ANOTHER NUMBER OF LIVE COPIES THAN TCGPLAYER HOLDS. The refusal
+   carries TCGplayer's count, and one press names the move at that count. */
+test('r8: a refused count of live copies is offered back at TCGplayer count', async ({ page }) => {
+  let presses = 0
+  const wire = await open(page, {
+    send: () => {
+      presses += 1
+      return presses === 1
+        ? {
+            status: 409,
+            code: 'price_refused',
+            data: {
+              refused: [
+                { sku: '8608859', name: 'Articuno', why: 'move_count', price: '19.99', live: '22.03', shown: '1', copies: 2 },
+              ],
+            },
+          }
+        : { status: 200, body: { send: sendSummary(), console: '' } }
+    },
+  })
+  await sendPress(page).click()
+  const offer = page.locator('.send-resend')
+  await expect(offer).toContainText('2 live copies at $22.03 move to $19.99.')
+  await offer.getByRole('button', { name: 'Send $19.99' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(2)
+  expect(sendPosts(wire)[1]?.body).toMatchObject({ moves: [{ sku: '8608859', price: '19.99', copies: 2 }] })
+})
+
 /* ROUND 6, S4: A ROLLBACK'S ANSWER IS NOT PROOF. A press TCGplayer turned away and Banchi rolled
    back offers no Try again, and keeps "check the Staged list" until the owner dismisses it. */
 test('r6: a rolled-back send offers no retry and keeps the Staged check until dismissed', async ({ page }) => {

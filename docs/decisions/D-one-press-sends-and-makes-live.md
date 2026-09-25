@@ -106,7 +106,10 @@ deleted to lower a price, and the quantity is not a variable.
   TCGplayer lists every copy of one card at one price, so the live copies move with it. The
   button names every live copy that moves and its new price, for example "Send 1 copy, 2 live
   copies move to $19.99". The press refuses a move the button did not name, and the receipt
-  records each move (`pipeline/sendguard.py:live_moves`).
+  records each move (`pipeline/sendguard.py:live_moves`). Round 8 added three rules. A move
+  under the store's floor is refused and never offered back. A move carries its count of live
+  copies, and a count that is not TCGplayer's is refused. A live row with copies and no price
+  is a move too. Moves to more than one price are listed card by card before the press.
 - **The live price the screen shows (round 7).** The worklist reads what TCGplayer holds off
   the newest live export on disk. Every send and every check writes one. A price change and a
   move are named against it. A refusal carries each refused row as data, so the card says

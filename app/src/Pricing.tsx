@@ -1642,9 +1642,11 @@ export function Pricing() {
       if (isWithheld(standing)) continue
       const price = typeof standing === 'string' ? standing : suggestionFor(row)
       const now = liveOf(row)
-      if (price === '' || now.copies <= 0 || now.price === null) continue
-      if (Number(price) === Number(now.price)) continue
-      out.push({ sku: row.sku, name: row.name, copies: now.copies, price })
+      if (price === '' || now.copies <= 0) continue
+      /* A LIVE ROW WITH COPIES AND NO PRICE IS A MOVE TOO (round 8, R7-4): whether TCGplayer
+         can hold one is not known, and naming it is the safe side. */
+      if (now.price !== null && Number(price) === Number(now.price)) continue
+      out.push({ sku: row.sku, name: row.name, copies: now.copies, price, was: now.price })
     }
     return out
   }, [rows, answerFor, askedFor, suggestionFor, source.kind])

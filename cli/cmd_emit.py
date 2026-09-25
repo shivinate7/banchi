@@ -346,7 +346,13 @@ def _named_prices(path) -> tuple:
             str(row["sku"]): (str(row["price"]), None if row.get("was") in (None, "") else str(row["was"]))
             for row in said.get("prices") or []
         }
-        moves = {str(row["sku"]): str(row["price"]) for row in said.get("moves") or []}
+        moves = {
+            str(row["sku"]): (
+                str(row["price"]),
+                None if row.get("copies") in (None, "") else int(row["copies"]),
+            )
+            for row in said.get("moves") or []
+        }
         return prices, moves
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         raise PriceRefused(f"the named prices could not be read: {exc}") from None
@@ -380,7 +386,7 @@ def _price_changes(args, guarded, candidates, going, floor, say):
     changes, left, refused = sendguard.price_changes(
         named, candidates, guarded["live"], prices, floor, set(going)
     )
-    moves, unnamed = sendguard.live_moves(going, told, guarded["live"], prices)
+    moves, unnamed = sendguard.live_moves(going, told, guarded["live"], prices, floor)
     refused = list(refused) + list(unnamed)
     if refused:
         import json
