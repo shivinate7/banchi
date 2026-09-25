@@ -10133,12 +10133,23 @@ def _fts_slash_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str
     """Card `(key, sku)` rows for a query naming the SECOND half of a collector number
     alone (S2, UX-173 amended): `/132` for a card stored as `054/132`. FTS5 has no "ends
     with" — `tokenchars '/-'` keeps the composed number ONE token, so a prefix search from
-    either end finds the FIRST half and never the second. A plain SQL suffix scan over the
-    real `cards.number_key` column (`store/master.py:_card_columns`, a genuine column, not
-    JSON), matching `match.py:_number_match`'s own leading-`/` rule — which already runs
-    correctly once a candidate reaches it; this only gets the candidate there. A SUPERSET,
-    like every candidate source here: `match.match_query` (or `_match_rank`, for a
-    single-term query) still decides."""
+    either end finds the FIRST half and never the second. A plain SQL suffix scan, matching
+    `match.py:_number_match`'s own leading-`/` rule — which already runs correctly once a
+    candidate reaches it; this only gets the candidate there. A SUPERSET, like every
+    candidate source here: `match.match_query` (or `_match_rank`, for a single-term query)
+    still decides.
+
+    TWO COLUMNS, NEVER ONE (F2, round-3 Opus review, 2026-09-25). `number_key`
+    (`store/master.py:_card_columns`, a genuine column, not JSON) is `join_key(number,
+    printed_total)` and is EMPTY when either half is missing — Riftbound keeps its whole
+    printed identifier in `number` alone (CLAUDE.md: "One Piece and Riftbound match the
+    printed identifier verbatim... Both carry denominator-less rows"), so a Riftbound card
+    stored as `023/221` has `number_key == ""` and `number == "023/221"`. Scanning only
+    `number_key` measured `q=/221` returning ZERO candidates for such a card, while
+    `match.match_query` itself correctly accepts it once given the chance — the row was
+    never missing from the CANDIDATE step's own promise, `_number_match`'s rule, only from
+    what this function was willing to look at.
+    """
     out: Dict[str, str] = {}
     for term in text.split():
         found = _LEADING_SLASH_DIGITS.match(term)
@@ -10146,8 +10157,10 @@ def _fts_slash_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str
             continue
         digits = found.group(1)
         for suffix in {digits, digits.zfill(3)}:
+            pattern = f"%/{suffix}"
             for key, sku in conn.execute(
-                "SELECT key, sku FROM cards WHERE number_key LIKE ?", (f"%/{suffix}",)
+                "SELECT key, sku FROM cards WHERE number_key LIKE ? OR number LIKE ?",
+                (pattern, pattern),
             ):
                 out.setdefault(str(key), sku)
     return list(out.items())

@@ -258,6 +258,33 @@ def case_do_search_finds_a_padded_number_typed_without_its_zeros() -> None:
         check("9999" in skus, f"do_search({query!r}) finds the card stored as 054/132")
 
 
+def case_do_search_finds_a_whole_number_second_half() -> None:
+    """F2, round-3 Opus review, 2026-09-25. `_fts_slash_candidates` scanned only
+    `cards.number_key`, which is EMPTY when either half is missing —
+    `join_key(number, printed_total)` refuses to compose without both. Riftbound keeps
+    its whole printed identifier in `number` alone with no separate denominator
+    (CLAUDE.md: "One Piece and Riftbound match the printed identifier verbatim... Both
+    carry denominator-less rows"), so a card stored as `023/221` has `number == "023/221"`
+    and `number_key == ""`. `q=/221` found nothing for it, while `match.match_query`
+    itself already accepted the row once given the chance — the candidate step, not the
+    matcher, was the gap. The PADDED-NUMBER case above always splits `number`/
+    `printed_total` apart, so its own green proved only that shape.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        card = master.Card(
+            box=1, index=1, name="A Riftbound Card", number="023/221", sku="8800",
+            game="riftbound",
+        )
+        snapshot.inventory.cards["1/1"] = card
+
+    skus = [g["sku"] for g in cs.do_search("/221")["groups"]]
+    check("8800" in skus, "do_search('/221') finds a card whose whole number is 023/221")
+
+
 def case_do_search_finds_a_hyphenated_name() -> None:
     """`heimerdinger-inventor` found nothing against `Heimerdinger, Inventor`, because the
     literal hyphenated token is not one the FTS5 index holds — the comma splits the field
@@ -468,6 +495,7 @@ CASES = [
     case_match_digit_tests_are_ascii_only,
     case_match_query_stays_fast_on_repeated_tokens,
     case_do_search_finds_a_padded_number_typed_without_its_zeros,
+    case_do_search_finds_a_whole_number_second_half,
     case_do_search_finds_a_hyphenated_name,
     case_do_search_multiword_never_500s_next_to_a_widened_word,
     case_do_search_refuses_a_query_past_the_length_cap,
