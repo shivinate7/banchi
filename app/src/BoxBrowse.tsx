@@ -944,17 +944,21 @@ export function BoxBrowse({
   /* D192, item 2: under a search, which OTHER boxes hold a match comes off the search's own
      result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
      so it can no longer answer "which boxes does this search touch" on its own. */
+  /* S3: the same Hide-sold rule `matchesByShelf` now keeps — a box a search touches only
+     through a departed copy is not a box the fold offers to reach for, so it is not one of
+     the "N of M boxes" the count line below states. */
   const searchBoxes = useMemo(() => {
     if (results === null) return []
     const boxes = new Set<number>()
     for (const group of activeGroups) {
       for (const copy of group.copies) {
+        if (hideSold && copyDeparted(copy)) continue
         const shelf = copyShelf(copy)
         if (typeof shelf === 'number') boxes.add(shelf)
       }
     }
     return [...boxes]
-  }, [results, activeGroups])
+  }, [results, activeGroups, hideSold])
 
   /* WHAT HIDE SOLD KEEPS, for every count the filter draws: with it on, a count is of the cards
    * the walk would draw (UX-210's rule: the counts follow the other filters, Hide sold too). */
@@ -1035,18 +1039,24 @@ export function BoxBrowse({
   const sections = useMemo(() => sectionsOf(visible), [visible])
 
   /* How many matches each shelf holds under a query, for the box list. Off `results` rather
-     than `inQuery` for the same reason `order`/`shelves` are, above (D192, item 2). */
+     than `inQuery` for the same reason `order`/`shelves` are, above (D192, item 2).
+     S3: WITH Hide sold ON, A DEPARTED COPY DOES NOT COUNT — `keepCell`'s own rule, below,
+     asked of a search match rather than a facet cell. `visible` already folds a departed copy
+     off the shelf it sold from; a rail cell counting it too, and a "2 of 4 boxes" line built on
+     the same count, disagreed with the very pane saying "Nothing matches". Off when the toggle
+     is off, matching the fold's own two states. */
   const matchesByShelf = useMemo(() => {
     const out = new Map<Shelf, number>()
     if (!filtered || results === null) return out
     for (const group of activeGroups) {
       for (const copy of group.copies) {
+        if (hideSold && copyDeparted(copy)) continue
         const s = copyShelf(copy)
         out.set(s, (out.get(s) ?? 0) + 1)
       }
     }
     return out
-  }, [filtered, results, activeGroups])
+  }, [filtered, results, activeGroups, hideSold])
 
   /* Every position with an open question, for the row badges. */
   const queuedKeys = useMemo(() => {

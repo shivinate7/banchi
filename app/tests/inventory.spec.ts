@@ -4399,6 +4399,37 @@ test('S2 — the phone sticky bar draws no second Sold pill beside the hero', as
   await expect(page.locator('.browse-actionbar-slot .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
 })
 
+test('S3 — with Hide sold on, a search count excludes what the fold already hides', async ({
+  page,
+}) => {
+  /* `matchesByShelf`/`searchBoxes` used to count every matching copy, sold ones included, no
+   * matter what Hide sold said — so a term matching only sold copies drew "1 match" on two rail
+   * cells and "2 of 3 boxes" on the count line, while the pane itself said "Nothing matches".
+   * Box 2 keeps a LIVE, unrelated card so the walk lands there naturally, the way the review's
+   * own repro read: the two boxes the search over-counted were neither of them the open one. */
+  const boxes = {
+    boxes: [
+      ...TWO_BOXES.boxes,
+      { box: 9, name: 'Extra shelf', sections: [1], state: 'open', capacity: null, fill: 1, next_index: 2, cards: 1, sold: 1, retired: 0, listed: 0, moved: 0, sections_detail: [{ section: 1, start: 1, end: 1, count: 1 }] },
+    ],
+  }
+  const cards: Cards = {
+    '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+    '7/1': card({ index: 1, state: 'sold', name: 'Wobbuffet', sku: '9191919', box: 7, boxName: 'ME01 spares', section: 1, sectionStart: 1, sectionEnd: 1, boxTotal: 1 }),
+    '9/1': card({ index: 1, state: 'sold', name: 'Wobbuffet', sku: '9191919', box: 9, boxName: 'Extra shelf', section: 1, sectionStart: 1, sectionEnd: 1, boxTotal: 1 }),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, boxes, store, () => PRICING, SALE, { hideSold: true })
+
+  await page.getByRole('searchbox').fill('Wobbuffet')
+  await expect(page.getByText('Nothing matches')).toBeVisible()
+
+  const meta = page.locator('.browse-boxcell-meta')
+  await expect(meta).toHaveText(['No match', 'No match', 'No match'])
+
+  await expect(page.locator('.browse-filterbar .bn-filtercount-figure')).toHaveText('0 of 3 boxes')
+})
+
 test('UX-244 — one copy moves to another box from its own row, and the receipt names the box', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []
