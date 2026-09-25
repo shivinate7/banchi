@@ -4367,6 +4367,38 @@ test('S1 — bringing a card back names the box, never its number', async ({ pag
   expect(sent?.body).toEqual({ undo: true })
 })
 
+test('S2 — a sold card says so once, not on the hero, the row and the phone bar all at once', async ({
+  page,
+}) => {
+  /* `Eiscue` (2/4) arrives already sold — no undo window in play, so this is the CONFIRMED,
+   * terminal state the hero's own chip, the row's own state pill and the phone's sticky bar
+   * used to all draw `Sold` for at once. The struck number is the row's own mark now (S2). */
+  await open(page)
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+
+  const row = page.locator('.card-locations-row.is-current')
+  await expect(row).toBeVisible()
+  await expect(row.locator('.card-locations-state .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
+  await expect(row.locator('.card-locations-action .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
+  await expect(page.locator('.browse-hero-chips .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
+})
+
+test('S2 — the phone sticky bar draws no second Sold pill beside the hero', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  // Deep-linked (`&card=`) rather than walked to, so this reaches Eiscue with no box-rail
+  // drawer in the way — the same door a Review pill link or an order pull opens it by.
+  const cards: Cards = { ...CARDS, '2/4': card({ index: 4, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 3, cid: 'eiscue-cid' }) }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, BOXES, store, () => PRICING, SALE, {
+    settle: '.card-locations-owner',
+    route: '/#/inventory?box=2&card=eiscue-cid',
+  })
+
+  await expect(page.locator('.browse-hero-chips .bn-pill', { hasText: 'Sold' })).toHaveCount(1)
+  await expect(page.locator('.browse-actionbar-slot .bn-pill', { hasText: 'Sold' })).toHaveCount(0)
+})
+
 test('UX-244 — one copy moves to another box from its own row, and the receipt names the box', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []

@@ -946,13 +946,13 @@ function Action({
   const busy = busyKey === copy.key
   if (copy.state === 'sold' || soldKeys.has(copy.key)) {
     const standing = undoableSales.get(copy.key)
-    /* After the undo window the state is a pill, in the register of every other state on the
-       screen. UNCHANGED BY D119, AND DELIBERATELY: a copy row's own state pill already says
-       `sold` once the re-read lands, so the row draws a second one ONLY for an optimistic sale
-       still in flight. The phone bar has no state pill beside it and so always draws one. Two
-       `Sold` markers on one row is what this condition exists to prevent. */
+    /* After the undo window the state is a pill, ONLY FOR AN OPTIMISTIC SALE STILL IN FLIGHT
+       (S2): the struck number this row already draws is the confirmed-sold mark, and the hero
+       chips above say `Sold` once for the copy the walk stands on. That covers the phone's
+       sticky bar too — it used to draw its own `Sold` unconditionally once `primary` was true,
+       which was a THIRD `Sold` on the one row a phone actually shows all three at once. */
     return standing === undefined ? (
-      primary || copy.state !== 'sold' ? (
+      copy.state !== 'sold' ? (
         <Pill tone="ok" icon="check">
           Sold
         </Pill>
@@ -993,7 +993,9 @@ function Action({
     )
   }
   if (copy.state === 'retired' || retiredKeys.has(copy.key)) {
-    return primary || copy.state !== 'retired' ? (
+    /* S2's own reasoning applies here too: an optimistic pill only, never once the state is
+       confirmed — the struck number and the hero chip already say `Retired`. */
+    return copy.state !== 'retired' ? (
       <Pill tone="warn" icon="archive">
         Retired
       </Pill>

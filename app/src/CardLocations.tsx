@@ -590,12 +590,18 @@ function OwnerRows({
                   </a>
                 )}
                 {/* A STATE ONLY WHEN IT IS THE EXCEPTION (UX-221): nearly every copy is identified,
-                    so the word told the hand nothing, twice per card. */}
-                {copy.state === IDENTIFIED ? null : <Pill tone={stateTone(copy.state)}>{stateLabel(copy.state)}</Pill>}
+                    so the word told the hand nothing, twice per card. NEVER for a departed one
+                    (S2): the struck number `PositionLabel` already draws is that row's own mark,
+                    and the hero chips above already say "Sold" or "Retired" once for the copy
+                    the walk stands on — a second pill here repeated it, a third time in the
+                    action bar at 390. */}
+                {copy.state === IDENTIFIED || copy.state === SOLD || copy.state === RETIRED ? null : (
+                  <Pill tone={stateTone(copy.state)}>{stateLabel(copy.state)}</Pill>
+                )}
               </span>
 
-              {/* The action, or what stands where one would. A sold copy's own state pill
-                  already says so; an optimistic sale whose re-read is still in flight needs a
+              {/* The action, or what stands where one would. A departed copy's struck number
+                  already says so (S2); an optimistic sale whose re-read is still in flight needs a
                   word, and a sale whose undo window is still running draws its draining clock
                   and an `Undo` here since D119 — inside this cell, at the size the cell already
                   reserves (D118), because a press may not resize the slot it lands in. */}
