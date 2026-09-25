@@ -285,7 +285,12 @@ test('the confirm control is reachable on #/inventory for a held card, and its u
 
   await expect.poll(() => unconfirmed).not.toBeNull()
   expect((unconfirmed as unknown as { body: { undo: boolean } }).body.undo).toBe(true)
-  await expect(page.locator('.bn-toast', { hasText: 'Confirmation undone' })).toBeVisible()
+  const undoneToast = page.locator('.bn-toast', { hasText: 'Confirmation undone' })
+  await expect(undoneToast).toBeVisible()
+  // The body names the place from the card's own label (read as a sentence), never the box
+  // and store index alone.
+  await expect(undoneToast).toContainText("Box 2, Section 1, Card 1 — back to the camera's read.")
+  await expect(undoneToast).not.toContainText('Box 2, Card 1')
 })
 
 /* THE D118 SWEEP OVER THIS PRESS, `inventory.spec.ts`'s own shape (the file's own header

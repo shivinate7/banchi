@@ -12142,6 +12142,44 @@ def check_correct_answer(checks: Checks) -> None:
             "correct",
         )
 
+        # THE REFUSAL NAMES THE CONFIRM PRESS ONLY WHERE THE SCREEN DRAWS IT. `CardHero.tsx`
+        # draws "The listing is right" for an identified card whose identity is still the
+        # camera's read. A bound card gets no such press, so its refusal must not name one.
+        def unchanged_message() -> str:
+            try:
+                capture_server.do_correct_answer(4, 1, {"sku": old_sku})
+            except capture_server.BadRequest as caught:
+                return str(caught)
+            return ""
+
+        before_source = Store().read().inventory.cards["4/1"].identity_source
+        bound_text = unchanged_message()
+        checks.ok(
+            "already lists as that" in bound_text and "The listing is right" not in bound_text,
+            "sku_unchanged on a card whose identity is not the read names no confirm press",
+            f"said: {bound_text!r}",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/1"].identity_source = master.IDENTITY_READ
+        read_text = unchanged_message()
+        checks.ok(
+            "The listing is right" in read_text,
+            "sku_unchanged on a held card (identity_source read) names the confirm press",
+            f"said: {read_text!r}",
+        )
+        place = join.said_place(Store().read().inventory, 4, 1)
+        checks.ok(
+            read_text.startswith(place)
+            and "Box 4, card 1" not in read_text
+            and "/inventory/" not in read_text
+            and "\u00a7" not in read_text,
+            "and it names the place the screens draw, never the store index, a route or a "
+            "spec section",
+            f"place: {place!r}, said: {read_text!r}",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/1"].identity_source = before_source
+
         # ------------------------------------------------------------- the correction itself
         before_release = Store().read().inventory.listings[old_sku]
         checks.equal(

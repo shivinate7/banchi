@@ -8206,11 +8206,21 @@ def do_correct_answer(box: int, index: int, payload: dict) -> dict:
         new_condition = str(chosen.get("condition") or "")
 
         if str(chosen.get("sku") or "") == str(card.sku or ""):
+            # The press sentence only where the screen draws that press: `CardHero.tsx`'s
+            # `confirmable`, an identified card whose identity is still the camera's read.
+            confirmable = (
+                card.state == master.IDENTIFIED
+                and getattr(card, "identity_source", None) == master.IDENTITY_READ
+            )
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "sku_unchanged",
-                f"{join.said_place(snapshot.inventory, box, index)} already lists as that. "
-                f"If the listing is right, press \u201cThe listing is right\u201d instead.",
+                f"{join.said_place(snapshot.inventory, box, index)} already lists as that."
+                + (
+                    " If the listing is right, press \u201cThe listing is right\u201d instead."
+                    if confirmable
+                    else ""
+                ),
             )
 
         # identity-follows-sku.md §4.2: "upsert the chosen row, then bind_sku
