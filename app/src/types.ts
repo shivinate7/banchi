@@ -2096,6 +2096,12 @@ export type PricingSku = {
    *  NEVER READ IT BARE. `cardState.ts:forSale` takes the pair and `soldSince` takes this
    *  one; both coerce, and the `?` here is what makes the compiler say so. */
   listing: { pushed: number; staged: number; live: number; sold_here?: number } | null
+  /** What TCGplayer holds now, off the NEWEST live export on disk, or null when none was
+   *  ever fetched (round 7, R6-1). Every send and every check writes one, so this is minutes
+   *  old where `snap.now` is the join's. A price change and a move of live copies are named
+   *  against it, and the send refuses if TCGplayer moved again since. Optional: an older
+   *  server sends none. */
+  live_now?: { export: string; copies: number; price: string | null } | null
 }
 
 export type PricingTable = {
@@ -4043,6 +4049,8 @@ export type SendSummary = {
   } | null
   /** Price changes the button named that the press left out, and why (round 6). */
   prices_left: { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }[]
+  /** Live copies this send's listing rows moved to their price (the owner's ruling, round 7). */
+  moves: { sku: string; name: string; copies: number; price: string; was: string | null }[]
   /** True when the upload may still wait in TCGplayer's Staged list, including a press that
    *  died mid-push with no `unknown` (round 6). The Staged warning reads this. */
   staged: boolean
@@ -4082,6 +4090,23 @@ export type SendSummary = {
 /** One price change the screen names to a send: the price the button counts, and the live
  *  price the row drew beside it. The server sends no price it was not named (round 6). */
 export type PriceChange = { sku: string; price: string; was: string | null }
+
+/** Live copies a listing row moves, as the button names them: the new copy carries Banchi's
+ *  stored price, and every live copy of the card moves with it (the owner's ruling, round 7). */
+export type LiveMove = { sku: string; name: string; copies: number; price: string }
+
+/** One row a send refused, as data (round 7, R6-1): `live_moved` is a named price whose live
+ *  price moved since the screen read it; `move_unnamed` is live copies a listing row would
+ *  move that the button did not name. Both can be sent again, named. */
+export type RefusedPrice = {
+  sku: string
+  name: string
+  why: 'live_moved' | 'move_unnamed' | 'below_floor' | 'not_saved' | 'not_in_send'
+  price: string | null
+  live: string | null
+  shown: string | null
+  copies: number
+}
 
 /** `GET /pipeline/sends`. `due` is the one bit the timer and the visit check both read. */
 export type SendsStatus = {

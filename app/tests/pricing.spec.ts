@@ -75,6 +75,7 @@ function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown
     taken_back_at: null,
     warning: null,
     prices_left: [],
+    moves: [],
     ...over,
     /* THE SERVER SAYS `staged` WHENEVER `unknown.staged` DOES (`_maybe_staged`), and also for a
        press that died mid-push with no `unknown` (round 6, S2). A case names it only for that. */
@@ -226,7 +227,7 @@ async function open(
     /** What `POST /pipeline/send` answers, as a function of the body the card sent — the one
      *  press (`D-one-press-sends-and-makes-live`). `status` other than 200 answers the server's
      *  refusal envelope with `code`. Default: a send that went live. */
-    send?: (body: Record<string, unknown>) => { status: number; body?: unknown; code?: string }
+    send?: (body: Record<string, unknown>) => { status: number; body?: unknown; code?: string; data?: unknown }
     /** What `GET /pipeline/sends` answers, as a function of what the page has already sent (the
      *  wire so far). A function and not a queue: the page may read the status more than once on
      *  arrival, and a queue would hand the second read an answer meant for later. Default:
@@ -260,7 +261,7 @@ async function open(
   await page.route(/\/pipeline\/send$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pipeline/send', body })
-    const answer: { status: number; body?: unknown; code?: string } = (
+    const answer: { status: number; body?: unknown; code?: string; data?: unknown } = (
       options.send ?? (() => ({ status: 200, body: { send: sendSummary(), console: '' } }))
     )(body)
     await route.fulfill({
@@ -269,7 +270,13 @@ async function open(
       body: JSON.stringify(
         answer.status === 200
           ? answer.body
-          : { error: { code: answer.code ?? 'refused', message: 'The server said no.' } },
+          : {
+              error: {
+                code: answer.code ?? 'refused',
+                message: 'The server said no.',
+                ...(answer.data === undefined ? {} : { data: answer.data }),
+              },
+            },
       ),
     })
   })
@@ -1276,6 +1283,108 @@ test('r6: a mixed press counts only the prices typed on this list, and names the
      other price row, and refuses this one if TCGplayer's price moved since. */
   expect(sendPosts(wire)[0]?.body).toMatchObject({ prices: [{ sku: '8608459', price: '13.00', was: '9.99' }] })
   await expect(page.locator('.send-standing')).toContainText('3 copies and 1 price change went live at')
+})
+
+/* ROUND 7, THE OWNER'S RULING (R6-3): A NEW COPY OF A CARD ALREADY LIVE CARRIES BANCHI'S STORED
+   PRICE, and TCGplayer lists every copy of one card at one price, so the live copies move with
+   it. The button names every live copy that moves and its new price, off the newest live
+   export, and the press tells the server which moves it named. */
+test('r7: the button names the live copies a new copy moves, and the press names them', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      sku({
+        sku: '8608859',
+        name: 'Articuno',
+        add_to_quantity: 1,
+        copies: 1,
+        live_before: 2,
+        listing: { pushed: 2, staged: 0, live: 2 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '22.03' },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '19.99' } },
+  })
+  const press = page.getByRole('button', { name: 'Send 1 copy, 2 live copies move to $19.99' })
+  await expect(press).toBeVisible()
+  await press.click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect(sendPosts(wire)[0]?.body).toMatchObject({ moves: [{ sku: '8608859', price: '19.99' }] })
+})
+
+/* ROUND 7, R6-1: A PRICE THE LIST SHOWED AGAINST A LIVE FIGURE THAT HAS MOVED SINCE. The refusal
+   carries the live price as data; the card says "TCGplayer shows $22.03 now. Send $30.00?", and
+   one press sends again with that live price named. */
+test('r7: a moved live price is offered back, and one press sends it at the owner price', async ({ page }) => {
+  let presses = 0
+  const wire = await open(page, {
+    skus: [sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 2,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '11.00' },
+        listing: { pushed: 2, staged: 0, live: 2 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '9.99' },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
+    send: () => {
+      presses += 1
+      return presses === 1
+        ? {
+            status: 409,
+            code: 'price_refused',
+            data: {
+              refused: [
+                { sku: '8608459', name: 'Dunsparce', why: 'live_moved', price: '30.00', live: '22.03', shown: '9.99', copies: 2 },
+              ],
+            },
+          }
+        : { status: 200, body: { send: sendSummary({ copies: 3, prices: 1 }), console: '' } }
+    },
+  })
+  const dunsparce = page.getByLabel('Price for Dunsparce')
+  await dunsparce.fill('30.00')
+  await dunsparce.press('Tab')
+  await page.getByRole('button', { name: 'Send 3 copies and 1 price change' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const offer = page.locator('.send-resend')
+  await expect(offer).toContainText('TCGplayer shows $22.03 now. Send $30.00?')
+  await offer.getByRole('button', { name: 'Send $30.00' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(2)
+  expect(sendPosts(wire)[1]?.body).toMatchObject({ prices: [{ sku: '8608459', price: '30.00', was: '22.03' }] })
+  await expect(page.locator('.send-resend')).toHaveCount(0)
+})
+
+/* ROUND 7, R6-2: UNDO TAKES A PRICE OUT OF THE NAMED ONES. The answer it restores may be a Live
+   tab preset or a mark-down never sent, so it was not typed this visit and does not ride. */
+test('r7: undo takes a typed price off the button', async ({ page }) => {
+  await open(page, {
+    skus: [sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 2,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '11.00' },
+        listing: { pushed: 2, staged: 0, live: 2 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '9.99' },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': '12.50' } },
+  })
+  const dunsparce = page.getByLabel('Price for Dunsparce')
+  await dunsparce.fill('13.00')
+  await dunsparce.press('Tab')
+  await expect(page.getByRole('button', { name: 'Send 3 copies and 1 price change' })).toBeVisible()
+  await dunsparce.focus()
+  await page.keyboard.press('u')
+  await expect(page.getByRole('button', { name: 'Send 3 copies to TCGplayer' })).toBeVisible()
 })
 
 /* ROUND 6, S4: A ROLLBACK'S ANSWER IS NOT PROOF. A press TCGplayer turned away and Banchi rolled

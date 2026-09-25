@@ -43,6 +43,7 @@ import type {
   MarkdownTable,
   PricingWorklist,
   Unreachable,
+  LiveMove,
   PricingSku,
   RunDetail,
   RunSummary,
@@ -443,6 +444,13 @@ function heldReason(value: WithheldRecord | 'unlisted'): string {
 }
 
 /** Where a section's answer is written: a property of the SECTION, not the row. */
+/** What TCGplayer holds of a row NOW: the newest live export on disk (`live_now`, round 7,
+ *  R6-1), or the join's own figures where no live export was ever fetched. */
+function liveOf(row: PricingSku): { copies: number; price: string | null } {
+  if (row.live_now) return { copies: row.live_now.copies, price: row.live_now.price }
+  return { copies: Math.max(row.live_before, row.listing?.live ?? 0), price: row.snap.now }
+}
+
 function targetOf(bucket: PricingSku['bucket']): 'overrides' | 'no_market_data' {
   return bucket === 'no_market_data' ? 'no_market_data' : 'overrides'
 }
@@ -1524,13 +1532,14 @@ export function Pricing() {
       const typed = answerFor(row)
       if (typeof typed !== 'string') continue
       const addsNone = row.at_cap || askedFor(row.sku) === 0
-      const live = Math.max(row.live_before, row.listing?.live ?? 0)
-      if (!addsNone || live <= 0) continue
-      if (row.snap.now !== null && Number(typed) === Number(row.snap.now)) continue
-      out.push({ sku: row.sku, price: typed, was: row.snap.now })
+      const now = liveOf(row)
+      if (!addsNone || now.copies <= 0) continue
+      if (now.price !== null && Number(typed) === Number(now.price)) continue
+      out.push({ sku: row.sku, price: typed, was: now.price })
     }
     return out
   }, [rows, answerFor, askedFor, typedHere, source.kind])
+
 
   useEffect(() => {
     latestRows.current = rows
@@ -1615,6 +1624,30 @@ export function Pricing() {
     (sku: PricingSku): string => (sku.bucket === 'sub_threshold' ? cheapDigits() : ruleFigure(sku)),
     [cheapDigits, ruleFigure],
   )
+
+  /* THE LIVE COPIES A LISTING ROW MOVES (the owner's ruling, 2026-09-24, round 7). A new copy
+     of a card already live carries Banchi's stored price, and TCGplayer lists every copy of
+     one card at one price, so the live copies move with it. The button names each move and
+     its new price, against the same fresh read as a price change. A row whose price this
+     screen cannot draw (a custom rule) is left to the server, which refuses and names it. */
+  const liveMoves = useMemo(() => {
+    const out: LiveMove[] = []
+    if (source.kind !== 'run') return out
+    for (const row of rows) {
+      if (row.at_cap) continue
+      const asked = askedFor(row.sku)
+      const going = asked === undefined ? row.add_to_quantity : Math.min(asked, row.add_to_quantity)
+      if (going <= 0) continue
+      const standing = answerFor(row)
+      if (isWithheld(standing)) continue
+      const price = typeof standing === 'string' ? standing : suggestionFor(row)
+      const now = liveOf(row)
+      if (price === '' || now.copies <= 0 || now.price === null) continue
+      if (Number(price) === Number(now.price)) continue
+      out.push({ sku: row.sku, name: row.name, copies: now.copies, price })
+    }
+    return out
+  }, [rows, answerFor, askedFor, suggestionFor, source.kind])
 
   /** A preset writes `rule`/`basis` and NO override; it refills only the rows the operator has
    *  not set, and lights each one it moved. */
@@ -1864,6 +1897,13 @@ export function Pricing() {
       return { ...current, skus }
     })
     setUndo(rest)
+    /* AN UNDONE ANSWER WAS NOT TYPED THIS VISIT (round 7, R6-2): the earlier answer may be a
+       Live tab preset or a mark-down never sent, so it leaves the named prices. */
+    setTypedHere((held) => {
+      const next = new Set(held)
+      next.delete(top.sku)
+      return next
+    })
     // The field is uncontrolled, so its digits are corrected here the way Escape and a preset
     // already correct them: the restored answer, or the rule's suggestion where there was none.
     const row = rows.find((one) => one.sku === top.sku)
@@ -3738,6 +3778,7 @@ export function Pricing() {
             runs={loaded}
             copies={progress.outCopies}
             priceChanges={priceChanges}
+            liveMoves={liveMoves}
             settled={!dirty && !saving}
             saveFailed={saveFailed}
             quantities={quantitiesAsked}
