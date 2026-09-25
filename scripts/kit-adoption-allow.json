@@ -121,7 +121,6 @@
       "R2-icon-only-button": "icons"
     },
     "app/src/ReviewQueue.tsx": {
-      "R1": "review",
       "R2-dialog": "review",
       "R2-search": "review",
       "R2-class": "review",
@@ -187,8 +186,6 @@
       "top": "b-runs"
     },
     "/review": {
-      "page": "review",
-      "width": "review",
       "top": "review"
     },
     "/pricing": {

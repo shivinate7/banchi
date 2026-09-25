@@ -33,7 +33,7 @@ import {
   undoRetire,
   undoStandDown,
 } from './server'
-import { Button, EmptyState, Icon, IconButton, Kbd, Notice, PageHeader, Pill, ReloadButton } from './kit'
+import { Button, EmptyState, Icon, IconButton, Kbd, Notice, Page, Pill, ReloadButton } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
@@ -1366,74 +1366,72 @@ export function ReviewQueue() {
   )
 
   return (
-    <main className="review bn-page" data-queue-open={queueOpen ? 'true' : undefined} data-lens={lens ? 'true' : undefined}>
-      <PageHeader
-        icon="inbox"
-        title="Review"
-        className={lens ? 'review-pagehead has-lens' : 'review-pagehead'}
-        lede={
-          <span className="review-progress" aria-live="polite">
-            <span className="review-progress-text bn-tnum">
-              {rows === null ? (
-                loading ? (
-                  'Reading the queues…'
-                ) : (
-                  'The queues did not load.'
-                )
-              ) : total === 0 ? (
-                'Nothing is waiting.'
+    <Page
+      className={['review', queueOpen ? 'is-queue-open' : '', lens ? 'review-pagehead has-lens' : 'review-pagehead'].filter(Boolean).join(' ')}
+      icon="inbox"
+      title="Review"
+      lede={
+        <span className="review-progress" aria-live="polite">
+          <span className="review-progress-text bn-tnum">
+            {rows === null ? (
+              loading ? (
+                'Reading the queues…'
               ) : (
-                /* UX-256: one count, not two that can differ by one. "to go" is
-                   `everyone.length`, the same number the Queue button's own badge shows
-                   (D164's counter), so the two never disagree again. */
-                <>
-                  <strong>{done}</strong> done, <strong>{everyone.length}</strong> to go
-                </>
-              )}
-              {counts !== null && counts.parked > 0 ? <span className="review-progress-parked">{counts.parked} parked</span> : null}
-            </span>
-            {total === 0 ? null : (
-              <span className="bn-progress review-progress-bar" aria-hidden="true">
-                <span style={{ width: `${Math.round(progress * 100)}%` }} />
-              </span>
+                'The queues did not load.'
+              )
+            ) : total === 0 ? (
+              'Nothing is waiting.'
+            ) : (
+              /* UX-256: one count, not two that can differ by one. "to go" is
+                 `everyone.length`, the same number the Queue button's own badge shows
+                 (D164's counter), so the two never disagree again. */
+              <>
+                <strong>{done}</strong> done, <strong>{everyone.length}</strong> to go
+              </>
             )}
+            {counts !== null && counts.parked > 0 ? <span className="review-progress-parked">{counts.parked} parked</span> : null}
           </span>
-        }
-        actions={
-          <>
-            {groupOffer === null || grouping ? null : (
-              <Button icon="layers" kbd={GROUP_KEY_LABEL} onClick={() => setGrouping(true)} disabled={disabled}>
-                Answer all {groupOffer.rows.length} together
-              </Button>
-            )}
-            {/* The header rule (owner, 2026-09-24): one worded primary. "Answer all N
-                together" is it, when a group offer is on screen — the rest are icons. NOT
-                THE RELOAD BESIDE IT: one re-fetches these two queues, this one asks the
-                pipeline to look at every waiting card again. Same icon vocabulary word would
-                make them read as one control, so the tooltip keeps the fuller sentence. */}
-            <IconButton icon="wand" label="Re-check every waiting card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
-            {/* The kit's own reload control (D-icon-buttons), with its internal 'r' hotkey
-                OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
-                because a second listener would fire the read twice. */}
-            <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
-            {everyone.length === 0 ? null : (
-              <IconButton
-                icon="list"
-                label="Queue"
-                /* The badge is aria-hidden (D118), so the count reaches a screen reader
-                   through `name` only — the same pattern `kit/filters.tsx`'s own trigger
-                   uses for its active-facet count. */
-                name={`Queue, ${everyone.length}`}
-                badge={everyone.length}
-                onClick={() => setQueueOpen(true)}
-                className="review-queue-toggle"
-                aria-expanded={queueOpen}
-              />
-            )}
-          </>
-        }
-      />
-
+          {total === 0 ? null : (
+            <span className="bn-progress review-progress-bar" aria-hidden="true">
+              <span style={{ width: `${Math.round(progress * 100)}%` }} />
+            </span>
+          )}
+        </span>
+      }
+      actions={
+        <>
+          {groupOffer === null || grouping ? null : (
+            <Button icon="layers" kbd={GROUP_KEY_LABEL} onClick={() => setGrouping(true)} disabled={disabled}>
+              Answer all {groupOffer.rows.length} together
+            </Button>
+          )}
+          {/* The header rule (owner, 2026-09-24): one worded primary. "Answer all N
+              together" is it, when a group offer is on screen — the rest are icons. NOT
+              THE RELOAD BESIDE IT: one re-fetches these two queues, this one asks the
+              pipeline to look at every waiting card again. Same icon vocabulary word would
+              make them read as one control, so the tooltip keeps the fuller sentence. */}
+          <IconButton icon="wand" label="Re-check every waiting card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
+          {/* The kit's own reload control (D-icon-buttons), with its internal 'r' hotkey
+              OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
+              because a second listener would fire the read twice. */}
+          <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
+          {everyone.length === 0 ? null : (
+            <IconButton
+              icon="list"
+              label="Queue"
+              /* The badge is aria-hidden (D118), so the count reaches a screen reader
+                 through `name` only — the same pattern `kit/filters.tsx`'s own trigger
+                 uses for its active-facet count. */
+              name={`Queue, ${everyone.length}`}
+              badge={everyone.length}
+              onClick={() => setQueueOpen(true)}
+              className="review-queue-toggle"
+              aria-expanded={queueOpen}
+            />
+          )}
+        </>
+      }
+    >
       {!lens ? null : (
         <div className="review-filters" role="group" aria-label="Work one reason at a time">
           {shape.map(([reason, n]) => (
@@ -1534,7 +1532,7 @@ export function ReviewQueue() {
       </div>
 
       <QueueRefresh open={recheckOpen} onClose={closeRecheck} onWrote={reload} />
-    </main>
+    </Page>
   )
 }
 

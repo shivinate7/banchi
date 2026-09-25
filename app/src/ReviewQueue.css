@@ -893,7 +893,7 @@
     box-shadow: var(--bn-shadow-3);
     animation: bn-sheet-in var(--bn-t-slow) var(--bn-ease) both;
   }
-  .bn-shell:not([data-rail='true']) .review[data-queue-open='true'] .review-rail { display: flex; }
+  .bn-shell:not([data-rail='true']) .review.is-queue-open .review-rail { display: flex; }
 }
 @media (max-width: 1319px) {
   .review-body { grid-template-columns: minmax(0, 1fr); }
@@ -915,7 +915,7 @@
     box-shadow: var(--bn-shadow-3);
     animation: bn-sheet-in var(--bn-t-slow) var(--bn-ease) both;
   }
-  .review[data-queue-open='true'] .review-rail { display: flex; }
+  .review.is-queue-open .review-rail { display: flex; }
 }
 :root[data-theme='dark'] .review-rail { background: var(--bn-surface); }
 
@@ -1038,7 +1038,7 @@
   .review-progress-bar { width: 96px; }
   /* The queue sheet keeps a band of scrim beside it: 380px in a 390px viewport left a 10px
      sliver of the page, which reads as a misfit rather than as an overlay. */
-  .review[data-queue-open='true'] .review-rail { width: calc(100vw - var(--bn-7)); }
+  .review.is-queue-open .review-rail { width: calc(100vw - var(--bn-7)); }
   .review-filters { padding: 2px; margin-top: calc(-1 * var(--bn-3)); margin-bottom: var(--bn-5); }
   .review-question-title { font-size: var(--bn-fs-xl); }
   .review-candidate { min-height: 56px; padding: 10px var(--bn-3); gap: var(--bn-3); }
