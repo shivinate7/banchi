@@ -15,6 +15,15 @@ export type { IconName }
 export type ButtonVariant = 'default' | 'primary' | 'ghost' | 'quiet' | 'danger' | 'danger-solid' | 'ok'
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl'
 
+/** `R2-icon-only-button` clause (c)'s declared exception (the coordinator's ruling,
+ *  2026-09-25): which of `docs/specs/iconography.md` section 2's numbered WORDS rules keeps a
+ *  vocabulary-verb `<Button>` worded, when the variant alone cannot prove it (`primary`/
+ *  `danger-solid`). Reused verbatim as `scripts/kit-adoption.mjs`'s `WORDS_REASONS` keys — a
+ *  lane STATES its reason at the press, rather than picking a variant that happens to pass the
+ *  check (the shipping lane's own finding: "Forget this export" moved to `danger-solid` only
+ *  to get past the rule, not because that variant fit). */
+export type WordsReason = 'irreversible' | 'fact-on-face' | 'only-primary' | 'word-only-control' | 'not-in-vocabulary'
+
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   readonly ref?: Ref<HTMLButtonElement>
   readonly variant?: ButtonVariant
@@ -26,6 +35,9 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   readonly block?: boolean
   readonly pill?: boolean
   readonly iconOnly?: boolean
+  /** Declares why a vocabulary-verb label stays WORDS (see `WordsReason`). Read by
+   *  `make kit-adoption` only — it never reaches the DOM and changes nothing on screen. */
+  readonly words?: WordsReason
 }
 
 export function Button({
@@ -38,6 +50,7 @@ export function Button({
   block,
   pill,
   iconOnly,
+  words: _words,
   className,
   children,
   type = 'button',

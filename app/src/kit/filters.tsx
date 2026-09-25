@@ -230,6 +230,12 @@ export function FilterBar<K extends string = string>({
                  finding: before IconButton, the count sat in the button's own text. */
               name={badge > 0 ? `${label}, ${badge} on` : label}
               badge={badge > 0 ? badge : undefined}
+              /* Sized to the field beside it through the SAME inline `style` IconButton already
+                 merges a caller's `style` into — never a CSS override (FLT-24), the same pattern
+                 `SortControl`'s own direction button uses. Without it the trigger sat at its
+                 default (smaller) size: 28px beside a 34px search field, under the 40px thumb
+                 floor at 390 (the orders lane's own finding, ux/orders 555d6b62). */
+              style={{ width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }}
               className="bn-filterbar-trigger"
               aria-haspopup="dialog"
               aria-expanded={overlayOpen}

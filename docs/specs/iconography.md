@@ -403,6 +403,33 @@ split into two JSX branches before the check can prove it worded. The violations
 today are on the shrinking offender list, under lane `icons`. Rule (c) is born on this branch.
 It may add keys under the only-shrinks exception `scripts/kit-adoption.mjs` already carries.
 
+**Clause (c)'s declared exception** (the coordinator's ruling, 2026-09-25). A vocabulary-verb
+label with no provably worded variant has a second door. A literal `words="<reason>"` on the
+`Button` itself excuses it. Its values are `kit/index.tsx`'s `WordsReason` type, mirrored in
+`scripts/kit-adoption.mjs`'s `WORDS_REASONS`:
+
+| `words` value | This section's rule |
+|---|---|
+| `irreversible` | rule 2: money, TCGplayer, or no way back |
+| `fact-on-face` | rule 3: the face carries a count, a price, a name, a box, or a current value |
+| `only-primary` | rule 4: the only primary in its sector |
+| `word-only-control` | rule 5: a menu item, a tab, a chip, a link, or a press inside a sentence |
+| `not-in-vocabulary` | rule 7: the leading word matches a vocabulary verb by text, not by its meaning here |
+
+This is a STATED reason at the press, never an allow-list entry. A reviewer reads why beside
+the code. It survives the press moving files, where an allow-list entry, keyed to a path, does
+not. `words` is read only by the check. It never reaches the DOM and changes nothing on
+screen. An unrecognized value excuses nothing.
+
+Found live, the day this door was built: Capture's "Clear the setup" (`not-in-vocabulary` —
+"Clear" matches the vocabulary's word, not its "clear typed values, undoable" meaning. It
+resets the whole rig) and SubmissionClaims' "Release N cards" (`irreversible` — a paid
+identification claim, cannot be undone). Shipping's "Forget this export" names the
+`only-primary` case: alone in an empty state. It had already moved to `danger-solid` only to
+pass the check, not because that variant fit. Gaming the variant proof is exactly what this
+door replaces. These three presses adopt `words` in their own lanes, once `ux/kit-tighten`
+merges. This branch names them here. It does not edit files those lanes own.
+
 ### What IconButton carries, beyond the brief's first cut
 
 - `kbd`, drawn in the tooltip.

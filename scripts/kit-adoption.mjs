@@ -64,7 +64,11 @@
  *                            non-blank child is an `<Icon>`, or any element carrying the
  *                            `iconOnly` JSX attribute (the kit's own `Button` prop, read by
  *                            presence, never by its value) — the kit has `IconButton` for
- *                            this now, with a required label and a tooltip.
+ *                            this now, with a required label and a tooltip. Clause (c) (a
+ *                            vocabulary-verb label with no provably worded variant) is also
+ *                            excused by a declared `words="<reason>"` on the `Button` itself
+ *                            (WORDS_REASONS, below) — a stated reason, never a variant picked
+ *                            only to pass the check.
  *                R2-header-actions
  *                            the owner's tighten ruling, 2026-09-24 ("i question whether they
  *                            deserve all that real estate... egregious"): a `<Page>` or
@@ -206,6 +210,29 @@ const VOCAB_VERB_RE = new RegExp(`^(${VOCAB_VERBS.map((v) => v.replace(/[.*+?^${
 /** The variants clause (c) never flags: the vocabulary word IS the label there on purpose
  *  (Mark sold as the only primary in its sector, Delete behind a `danger-solid` confirm). */
 const WORDED_VARIANTS = new Set(['primary', 'danger-solid'])
+
+/** Clause (c)'s DECLARED EXCEPTION (the coordinator's ruling, 2026-09-25): a literal `words`
+ *  attribute on the `<Button>` itself, naming which of `docs/specs/iconography.md` section 2's
+ *  numbered WORDS rules keeps this vocabulary-verb press worded. `kit/index.tsx`'s
+ *  `WordsReason` type carries the same keys — keep them in step by hand, since this file only
+ *  parses TSX and cannot import that type. A press that cannot be proven `primary`/
+ *  `danger-solid` AND carries no declared `words` reason still fails: this is a second door,
+ *  never a replacement for the variant proof, so a lane cannot silently drop a `words` value it
+ *  no longer means. THE POINT of a stated reason over an allow-list entry: it lives at the
+ *  press, so a reviewer reads WHY beside the code, and it survives the press moving files (an
+ *  allow-list entry is keyed to a file path). Found live, the day this rule was written: Capture
+ *  "Clear the setup" ('not-in-vocabulary': the word matches, the sense does not — it resets the
+ *  whole rig, not "clear typed values") and "Release N cards" ('irreversible': a paid
+ *  identification claim). Shipping's "Forget this export" had ALREADY been moved to
+ *  `danger-solid` to escape the rule rather than declared `words="only-primary"` (rule 4, alone
+ *  in an empty state) — gaming the variant check is exactly what this door replaces. */
+export const WORDS_REASONS = {
+  irreversible: 'rule 2: the press spends money, writes to TCGplayer, or no undo can reverse it',
+  'fact-on-face': 'rule 3: the face carries a count, a price, a name, a box, or a current value',
+  'only-primary': 'rule 4: the only primary in its sector (a page primary, an empty-state door, a sheet footer)',
+  'word-only-control': 'rule 5: a menu item, a tab, a chip, a link, or a press inside a sentence',
+  'not-in-vocabulary': "rule 7: the label's leading word matches a vocabulary verb by text, not by that verb's own meaning here",
+}
 
 /** Every rule id the allow list may name. An entry naming anything else is refused. */
 export const RULES = {
@@ -789,18 +816,23 @@ function scanFile(rel, sf) {
           add('R2-icon-only-button', n.openingElement, `<${tag0} aria-label> with no visible content`)
         }
       }
-      /* Clause (c): a <Button> whose literal label starts with a vocabulary verb, and whose
-         `variant` cannot be shown to always be `primary` or `danger-solid` — the ICONOGRAPHY
-         rule's own two words-only variants. `leadingLabelText` reads through `{'Undo'}` and
-         `Undo {n}` (round 2's review); `resolveVariantLiterals` refuses to call a `??`/`||`/
-         `&&`/ternary variant provably worded unless EVERY branch resolves to a literal. */
+      /* Clause (c): a <Button> whose literal label starts with a vocabulary verb, excused by
+         EITHER a provably worded variant (`primary`/`danger-solid`) OR a declared `words`
+         reason (WORDS_REASONS, above) — never by a variant chosen only to pass this check.
+         `leadingLabelText` reads through `{'Undo'}` and `Undo {n}` (round 2's review);
+         `resolveVariantLiterals` refuses to call a `??`/`||`/`&&`/ternary variant provably
+         worded unless EVERY branch resolves to a literal. */
       if (ts.isJsxElement(n) && n.openingElement.tagName.getText(sf) === 'Button') {
         const label = leadingLabelText(kids)
         const verb = label === '' ? null : VOCAB_VERB_RE.exec(label)
         if (verb !== null) {
           const variantLiterals = resolveVariantLiterals(attr(n.openingElement, 'variant')?.initializer)
           const provenWorded = variantLiterals !== null && variantLiterals.length > 0 && variantLiterals.every((v) => WORDED_VARIANTS.has(v))
-          if (!provenWorded) add('R2-icon-only-button', n.openingElement, `<Button>${label}</Button>, variant not provably primary/danger-solid`)
+          const declaredWords = attrLiterals(attr(n.openingElement, 'words'))[0]
+          const excused = declaredWords !== undefined && declaredWords in WORDS_REASONS
+          if (!provenWorded && !excused) {
+            add('R2-icon-only-button', n.openingElement, `<Button>${label}</Button>, variant not provably primary/danger-solid and no words= reason declared`)
+          }
         }
       }
     } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken && endsInDollar(n.left)) {
@@ -1463,6 +1495,21 @@ function selfTest() {
     rule('export const S = () => <Button icon="eye">Reveal</Button>\n', 'R2-icon-only-button') === 1 &&
     rule('export const S = () => <Button icon="eyeOff">Hide</Button>\n', 'R2-icon-only-button') === 1 &&
     rule('export const S = () => <Button icon="eraser">Clear</Button>\n', 'R2-icon-only-button') === 1)
+
+  /* Clause (c)'s declared exception (the coordinator's ruling, 2026-09-25): `words="<reason>"`
+     on the Button itself, never a variant chosen only to pass the check. */
+  add('a vocabulary-verb Button with a declared words= reason is green', () =>
+    rule('export const S = () => <Button words="irreversible">Release 3 cards</Button>\n', 'R2-icon-only-button') === 0)
+  add('every WORDS_REASONS key excuses the press', () =>
+    Object.keys(WORDS_REASONS).every((reason) => rule(`export const S = () => <Button words="${reason}">Forget this export</Button>\n`, 'R2-icon-only-button') === 0))
+  add('an undeclared vocabulary-verb Button still fails: no words= at all', () =>
+    rule('export const S = () => <Button>Release 3 cards</Button>\n', 'R2-icon-only-button') === 1)
+  add('an unrecognized words= value is not a declared reason and still fails', () =>
+    rule('export const S = () => <Button words="because-i-said-so">Forget this export</Button>\n', 'R2-icon-only-button') === 1)
+  add('a dynamic words={reason} is not read (only a literal counts, the pattern every heuristic here follows)', () =>
+    rule('export const S = ({ reason }) => <Button words={reason}>Release 3 cards</Button>\n', 'R2-icon-only-button') === 1)
+  add('words= does not excuse a hand-rolled icon-only button (clause b): it only reaches clause (c)', () =>
+    rule('export const S = () => <button words="irreversible"><Icon name="x" /></button>\n', 'R2-icon-only-button') === 1)
 
   /* R2-header-actions (the tighten ruling, 2026-09-24): at most one worded <Button> in a
      <Page>/<PageHeader> actions slot. */
