@@ -37,6 +37,7 @@ import { buyerKeyOf, groupBuyers, groupForOrderKey, type BuyerGroup } from './or
 import {
   buyerLabel,
   groupHasUnseenLine,
+  groupIsReadyToShip,
   passesHideUnknown,
   sortedReadyFirst,
   sortGroups,
@@ -88,17 +89,15 @@ import type {
 } from './types'
 import './Orders.css'
 
-/* THE ORDERS HUB — one screen, two stages (D69).
+/* THE ORDERS HUB: two screens, two sidebar rows, one shared state (D69,
+ * D-orders-and-shipping-are-two-rows).
  *
- *   ORDERS   which copies each buyer gets and where they are; one press per copy, aimed by the
- *            row's own `capture_id`, with twenty seconds to take it back. Worked one order at a
- *            time (a list beside the open order) or as one walk through the boxes.
+ *   ORDERS   the buyers, the walk through the boxes for the buyers walked, and the card to pick,
+ *            with every copy of it and Mark sold. One press per copy, aimed by `capture_id`.
  *   SHIPPING TCGplayer's Export Shipping file sorted into three lanes, and the Pirate Ship import.
  *
- * `#/orders` renders the hub with the first selected and `#/shipping` with the second; the tabs
- * move the hash, so bookmarks, the nav and the `,O` / `,S` chords all keep working. What each
- * stage knows of the other is a client-side join by order number and nothing is written across
- * the seam.
+ * `#/orders` and `#/shipping` each draw the kit `Page`. No tab strip joins them. What each knows
+ * of the other is a client-side join by order number, and nothing is written across the seam.
  *
  * ONE READ ANSWERS BOTH HALVES OF THE LEDGER. `GET /orders` computes the order list and the
  * resolution out of ONE store snapshot, and this screen makes exactly one call for the pair.
@@ -2640,16 +2639,19 @@ function PullStage({
   /* A BUYER FINISHED ON THIS SCREEN STAYS ON IT, marked done, until the next visit (the owner's
      "nothing jumps" ruling, FLT-22, read for this list; UX-197): the last Mark sold never pulls
      the row, or the walk, out from under the hand. */
-  const [finished, setFinished] = useState<ReadonlySet<string>>(new Set())
-  const openBefore = useRef<ReadonlySet<string> | null>(null)
+  /* Keyed by buyer, holding whether it led as Ready to ship when it left, so it keeps its place
+     in the sort too (a finished buyer has no open order left to say so). */
+  const [finished, setFinished] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const openBefore = useRef<ReadonlyMap<string, boolean> | null>(null)
   useEffect(() => {
-    const now = new Set(allGroups.filter((group) => group.open.length > 0).map((group) => group.key))
+    const now = new Map(allGroups.filter((group) => group.open.length > 0).map((group) => [group.key, groupIsReadyToShip(group)] as const))
     const before = openBefore.current
     openBefore.current = now
     if (before === null) return
-    const left = [...before].filter((key) => !now.has(key))
-    if (left.length > 0) setFinished((prev) => new Set([...prev, ...left]))
+    const left = [...before].filter(([key]) => !now.has(key))
+    if (left.length > 0) setFinished((prev) => new Map([...prev, ...left]))
   }, [allGroups])
+  const readyOf = (group: BuyerGroup) => finished.get(group.key) ?? groupIsReadyToShip(group)
 
   const feedStatuses = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
   const facetShape: readonly FilterFacet[] = useMemo(
@@ -2677,6 +2679,7 @@ function PullStage({
   const shownGroups = sortGroups(
     base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group, show)),
     sort.dir === 'asc' ? 'oldest' : 'newest',
+    readyOf,
   )
 
   /* EACH OPTION'S COUNT IS THE ROWS IT WOULD SHOW, under the other facets (FilterChips' rule). */
@@ -3090,7 +3093,7 @@ function PullStage({
         {allTicked ? 'Walk one buyer' : `Walk all ${tickableKeys.size} buyers`}
       </Button>
     )
-  const readyFirst = sortedReadyFirst(shownGroups)
+  const readyFirst = sortedReadyFirst(shownGroups, readyOf)
 
   const buyerList = (
     <>

@@ -71,7 +71,7 @@ function isReadyToShip(status: string | null): boolean {
 /** Does this group carry a Ready-to-Ship order among its OPEN orders — what leads the default
  *  ordering. Read off `open` rather than every order: a buyer's closed history should not drag
  *  a settled group to the front because one of their old orders once said "Ready to Ship". */
-function groupIsReadyToShip(group: BuyerGroup): boolean {
+export function groupIsReadyToShip(group: BuyerGroup): boolean {
   return group.open.some((order) => isReadyToShip(order.status))
 }
 
@@ -84,10 +84,13 @@ function placedAtMs(placedAt: string | null): number {
 /** The two-key comparator: Ready-to-Ship groups first regardless of sort direction — the
  *  owner's ruling is about which groups LEAD, not about which way time runs — then `latest`
  *  within each bucket, in the direction `sort` asks for. */
-export function compareGroups(sort: OrderSort): (a: BuyerGroup, b: BuyerGroup) => number {
+export function compareGroups(
+  sort: OrderSort,
+  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
+): (a: BuyerGroup, b: BuyerGroup) => number {
   return (a, b) => {
-    const aReady = groupIsReadyToShip(a)
-    const bReady = groupIsReadyToShip(b)
+    const aReady = ready(a)
+    const bReady = ready(b)
     if (aReady !== bReady) return aReady ? -1 : 1
     const diff = placedAtMs(a.latest) - placedAtMs(b.latest)
     return sort === 'newest' ? -diff : diff
@@ -96,14 +99,23 @@ export function compareGroups(sort: OrderSort): (a: BuyerGroup, b: BuyerGroup) =
 
 /** The live-sorted list for the current view — no freeze, no filter. What a fresh take would
  *  produce right now. */
-export function sortGroups(groups: readonly BuyerGroup[], sort: OrderSort): BuyerGroup[] {
-  return [...groups].sort(compareGroups(sort))
+/** `ready` lets a screen hold a buyer it just finished where it stood (FLT-22): a finished
+ *  buyer has no open order left to say Ready to ship. */
+export function sortGroups(
+  groups: readonly BuyerGroup[],
+  sort: OrderSort,
+  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
+): BuyerGroup[] {
+  return [...groups].sort(compareGroups(sort, ready))
 }
 
 /** True when a sorted list leads with Ready to ship buyers AND holds others after them: the one
  *  case the list must say so, because the date order alone would not explain it (UX-170). */
-export function sortedReadyFirst(groups: readonly BuyerGroup[]): boolean {
-  return groups.some(groupIsReadyToShip) && groups.some((group) => !groupIsReadyToShip(group))
+export function sortedReadyFirst(
+  groups: readonly BuyerGroup[],
+  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
+): boolean {
+  return groups.some(ready) && groups.some((group) => !ready(group))
 }
 
 /** Does this group carry a line the resolver could not identify — the "Never seen" chip's own

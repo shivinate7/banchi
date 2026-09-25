@@ -1,21 +1,20 @@
 import { useSyncExternalStore } from 'react'
 
 import { onServerBoot } from './server'
-import type { OrderLineReason, OrdersPayload, PullTarget, ShippingBatch, ShippingLane } from './types'
+import type { OrdersPayload, PullTarget, ShippingBatch, ShippingLane } from './types'
 
 /* THE HUB'S MEMORY ACROSS A STAGE SWITCH.
  *
- * `#/orders` and `#/shipping` are one screen with two stages, but the shell keys its view on the
- * hash, so switching stages unmounts and remounts the hub. Everything a person would be annoyed
- * to lose on that switch lives here rather than in component state: the ledger's last answer,
- * an unsent paste, the filter, and above all the export the capture server is holding — which
+ * `#/orders` and `#/shipping` are two screens over one state, and the shell keys its view on the
+ * hash, so moving between them unmounts and remounts the hub. Everything a person would be
+ * annoyed to lose on that move lives here rather than in component state: the ledger's last
+ * answer, an unsent paste, and above all the export the capture server is holding — which
  * the server cannot list back, so a client that forgot it would have no way to find it again.
  *
  * Nothing here touches the browser's storage. It lives as long as the tab does, which is the
  * same lifetime as the batch it remembers. */
 
 export type Stage = 'pull' | 'ship'
-export type PullFilter = 'all' | 'done' | OrderLineReason
 
 /** The lanes, in the order the columns draw them and `pipeline/shipping.py:LANES` declares
  *  them: envelope first because most orders land there, unjudged last because it is the pile
@@ -28,7 +27,6 @@ export type HubState = {
    *  stops the well flashing open before the ledger has said whether it is empty. */
   readonly arriving: boolean | null
   readonly paste: string
-  readonly filter: PullFilter
   /** The order the Pull stage has open — an `OrderRow.key`. `null` means the first one shown.
    *  Mirrored into the hash as `#/orders?order=<key>` so a selection is linkable. */
   readonly selected: string | null
@@ -55,7 +53,6 @@ let state: HubState = {
   payload: null,
   arriving: null,
   paste: '',
-  filter: 'all',
   selected: null,
   batch: null,
   lanes: new Set(SHIP_LANES),
