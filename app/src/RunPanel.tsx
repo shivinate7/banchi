@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import {
   describeFailure,
@@ -442,7 +442,10 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
      case caught it under load). The step now follows only a new run or a moved phase. */
   const lastRun = useRef<string | null>(null)
   const lastStep = useRef<Command | null>(null)
-  useEffect(() => {
+  /* A LAYOUT EFFECT, SO THE STEP IS SETTLED BEFORE PAINT (D128's rule, applied here at the PR 2
+     integration). A passive effect let one frame paint every step closed, and a press landing in
+     that frame was then reversed when the effect opened the run's own step. */
+  useLayoutEffect(() => {
     if (detail === null) return
     const step = COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify'
     const changed = lastRun.current !== detail.run
