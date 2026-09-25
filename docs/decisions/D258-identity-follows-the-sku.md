@@ -82,6 +82,20 @@ this lane, citing this entry.
 
 No step here runs on its own. Each one waits for the owner to say go.
 
+**Run on the owner's store, 2026-09-24.** The runbook above, executed. Numbers are evidence
+and are never rewritten to match a later tree.
+
+- PR #461 merged as `19d56c65`.
+- `skus adopt --write`: 13 files read, 12,052 SKUs, 0 changed, 0 conflicts, 916 of 916 card
+  SKUs covered.
+- The replay, on a `.backup` copy with `.exports/` and `.live/` beside it: all six checks
+  pass. T1 2,609, T2 159, T3 612, T4u 70 (3,450 derive), T4s 24, T5 28 (52 held), T6 8,
+  `sku_unknown` 0. 247 identity moves, all in T3 and T4u.
+- `cards identity --write`: 3,450 bound (`bound_by=migration`), 52 held, 38
+  `listing_disputed` entries opened, 4 already human-cleared and so skipped (3/747, 3/811,
+  3/968, 3/987), 10 sold cards reported only. The write took 1.52s.
+- Rell, Magnetic (1/5, 4/654) and Jax, Unmatched (1/14, 4/624) now read correctly.
+
 Governs `store/master.py` (`IDENTITY_FIELDS`, `IDENTITY_WRITERS`, `Inventory.hold_sku`),
 `scripts/docs-audit.py` (the `identity writers` row), `scripts/demo-seed.py`,
 `cli/cmd_cards.py`, `cli/archive_review.py`, `scripts/demo-determinism.py`,
