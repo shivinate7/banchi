@@ -1543,6 +1543,59 @@ class TooManyRaces(RuntimeError):
     """
 
 
+# THE ONE `SQLITE_READONLY_*` REASON THIS FUNCTION MAY SWALLOW. Every other one is a real
+# permission or state problem on the MAIN file — `_ROLLBACK` (a stale `-journal` it cannot
+# clear), `_DBMOVED` (the file was renamed or deleted out from under an open handle),
+# `_DIRECTORY` (a legacy rollback journal, not WAL, needs a journal directory it cannot
+# write) and bare `SQLITE_READONLY` (an ordinary write refused) — and `open_read_only`
+# raises on every one of them, by not naming them here.
+_WAL_INDEX_INIT_ERRORNAME = "SQLITE_READONLY_CANTINIT"
+
+# THE MESSAGE FALLBACK, for a Python built without `sqlite_errorcode`/`sqlite_errorname`
+# (below 3.11 — see `_is_wal_index_init_failure`'s own docstring). Both measured directly,
+# same fixture, different SQLite build: "unable to open database file" (SQLITE_CANTOPEN) on
+# this Mac's SQLite 3.54.0, "attempt to write a readonly database"
+# (SQLITE_READONLY_CANTINIT) on CI's Linux SQLite 3.45.1.
+_WAL_INDEX_INIT_MESSAGES = (
+    "unable to open database file",
+    "attempt to write a readonly database",
+)
+
+
+def _is_wal_index_init_failure(exc: sqlite3.OperationalError) -> bool:
+    """Whether `exc` means "the plain `mode=ro` open could not initialise the WAL index" —
+    the one condition `open_read_only`'s immutable fallback exists for — and never a real
+    corruption or a permission error on the main file.
+
+    KEYED ON THE ERROR CODE WHEN THIS PYTHON EXPOSES ONE, NOT ON THE MESSAGE. PR #463's CI
+    is what found this: the SAME fixture (a read-only directory over a cold WAL store) raised
+    "unable to open database file" (`SQLITE_CANTOPEN`) on this Mac's SQLite 3.54.0, and
+    `open_read_only` fell back correctly — but on CI's Linux SQLite 3.45.1 it raised "attempt
+    to write a readonly database" (`SQLITE_READONLY_CANTINIT`) instead, a message the old
+    check never named, so the door raised on exactly the state it exists to handle. The
+    MEANING is identical on both builds — SQLite's own docs for `SQLITE_READONLY_CANTINIT`:
+    "cannot obtain a read lock on the wal-index because the shared-memory file could not be
+    created due to lack of write permission" — only the reported code differs. `sqlite3`'s
+    `Error.sqlite_errorcode`/`sqlite_errorname` (Python 3.11+) report that code directly;
+    this checks `sqlite_errorname` first and falls back to a message match only when it is
+    absent, exactly the two Pythons the fleet actually runs (this repo's CI pins 3.11; a
+    worktree may still carry 3.9).
+
+    `SQLITE_CANTOPEN`'S WHOLE FAMILY COUNTS, WITHOUT NARROWING TO ONE VARIANT: for a
+    `mode=ro` connection to a main file that `db_path.is_file()` already proved exists, ANY
+    `SQLITE_CANTOPEN_*` reason can only mean a SIDE file it needed could not be created or
+    opened — there is no other file left for it to mean. `SQLITE_READONLY_CANTINIT` is the
+    one specific `SQLITE_READONLY_*` reason that means the same thing; see the module-level
+    comment above this function for every other reason in that family, and why each one is
+    left OUT and reaches `raise`.
+    """
+    name = getattr(exc, "sqlite_errorname", None)
+    if name is not None:
+        return name.startswith("SQLITE_CANTOPEN") or name == _WAL_INDEX_INIT_ERRORNAME
+    message = str(exc)
+    return any(needle in message for needle in _WAL_INDEX_INIT_MESSAGES)
+
+
 def open_read_only(db_path: Path) -> sqlite3.Connection:
     """The one read-only door onto a store file. It never migrates, and it sees every commit.
 
@@ -1562,11 +1615,15 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     reaches the main file only at a checkpoint, and a checkpoint runs when the last connection
     closes. Plain `mode=ro` reads the WAL through the `-shm` index a live writer already
     keeps, so it sees every commit, checkpointed or not, and it creates no file of its own.
-    It only refuses — "unable to open database file", measured on SQLite 3.54 — when the
-    store has no side files at all: a cold, fully-checkpointed store, or a fresh `.backup`
-    copy (the backup API folds committed WAL pages into the copy's own main file). In that
-    one state every commit is already IN the main file, so `immutable=1` is exact, and it is
-    the only case this function falls back to it.
+    It only refuses when the store has no side files at all: a cold, fully-checkpointed
+    store, or a fresh `.backup` copy (the backup API folds committed WAL pages into the
+    copy's own main file). In that one state every commit is already IN the main file, so
+    `immutable=1` is exact, and it is the only case this function falls back to it. WHICH
+    ERROR IT RAISES FOR THAT STATE IS BUILD-DEPENDENT, MEASURED AS TWO DIFFERENT ONES ON THE
+    SAME FIXTURE: "unable to open database file" (`SQLITE_CANTOPEN`) on this Mac's SQLite
+    3.54.0, "attempt to write a readonly database" (`SQLITE_READONLY_CANTINIT`) on CI's
+    Linux SQLite 3.45.1 — see `_is_wal_index_init_failure`, above, for which of either family
+    counts and why.
 
     `sqlite3.connect(...)` ITSELF NEVER RAISES THAT ERROR — IT IS LAZY. SQLite does not touch
     the file, the WAL or the side files until the first statement runs, so a bare `connect()`
@@ -1600,6 +1657,9 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     `check_open_read_only_race` forces the gap deterministically, by monkeypatching
     `sqlite3.connect` to land a commit the instant this function asks for the `immutable=1`
     connection, and proves it is caught rather than served stale.
+    `check_open_read_only_wal_index_init` proves `_is_wal_index_init_failure` reads BOTH
+    builds' shapes — a synthetic `SQLITE_CANTOPEN` and a synthetic `SQLITE_READONLY_CANTINIT`
+    — off one machine, since this repo has no second SQLite build to raise the real thing on.
     """
     if not db_path.is_file():
         raise FileNotFoundError(f"no store at {db_path}")
@@ -1611,7 +1671,7 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
             return conn
         except sqlite3.OperationalError as exc:
             conn.close()
-            if "unable to open database file" not in str(exc):
+            if not _is_wal_index_init_failure(exc):
                 raise
         conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
         if not (wal.is_file() and wal.stat().st_size > 0):

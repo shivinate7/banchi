@@ -1619,6 +1619,126 @@ def check_open_read_only_race(checks: Checks) -> None:
                 holder.close()
 
 
+def check_open_read_only_wal_index_init(checks: Checks) -> None:
+    """`store/db.py:_is_wal_index_init_failure` reads BOTH builds' shapes for the plain
+    `mode=ro` open's own refusal on a cold WAL store — `SQLITE_CANTOPEN` (this Mac's SQLite
+    3.54.0) and `SQLITE_READONLY_CANTINIT` (CI's Linux SQLite 3.45.1, the exact failure PR
+    #463 found: `open_read_only` raised instead of falling back, because the old check
+    matched only the first one's message). SYNTHETIC, because this checkout has no second
+    SQLite build to raise the real thing on — `check_open_read_only_race`'s own reason for
+    monkeypatching rather than threading.
+    """
+    checks.note("")
+    checks.note("READ-ONLY DOOR — which build's refusal falls back, and which does not")
+
+    def synthetic(message: str, errorname: Optional[str]) -> sqlite3.OperationalError:
+        exc = sqlite3.OperationalError(message)
+        if errorname is not None:
+            exc.sqlite_errorcode = 1  # any int — only `sqlite_errorname` is read
+            exc.sqlite_errorname = errorname
+        return exc
+
+    checks.ok(
+        db._is_wal_index_init_failure(
+            synthetic("unable to open database file", "SQLITE_CANTOPEN")
+        ),
+        "SQLITE_CANTOPEN, named by code, falls back — this Mac's own shape",
+    )
+    checks.ok(
+        db._is_wal_index_init_failure(
+            synthetic("attempt to write a readonly database", "SQLITE_READONLY_CANTINIT")
+        ),
+        "SQLITE_READONLY_CANTINIT, named by code, falls back — CI's Linux shape, PR #463",
+    )
+    checks.ok(
+        not db._is_wal_index_init_failure(
+            synthetic("attempt to write a readonly database", "SQLITE_READONLY_DBMOVED")
+        ),
+        "a DIFFERENT SQLITE_READONLY_* reason, named by code, is never swallowed — a real "
+        "state problem on the main file, not a WAL-index init failure",
+    )
+    checks.ok(
+        not db._is_wal_index_init_failure(
+            synthetic("attempt to write a readonly database", "SQLITE_READONLY")
+        ),
+        "and neither is the bare SQLITE_READONLY code",
+    )
+    checks.ok(
+        db._is_wal_index_init_failure(synthetic("unable to open database file", None)),
+        "with no code attribute (below Python 3.11), the message fallback still catches "
+        "this Mac's own shape",
+    )
+    checks.ok(
+        db._is_wal_index_init_failure(
+            synthetic("attempt to write a readonly database", None)
+        ),
+        "and CI's own shape too, by message alone",
+    )
+    checks.ok(
+        not db._is_wal_index_init_failure(synthetic("disk I/O error", None)),
+        "and an unrelated message, with no code attribute, is never swallowed",
+    )
+
+    checks.note("")
+    checks.note("READ-ONLY DOOR — the door itself falls back on the READONLY shape end to end")
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        db.connect(directory).close()
+        target = db.path(directory)
+
+        writer = sqlite3.connect(str(target), isolation_level=None)
+        writer.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('door', 'seen')")
+        writer.close()
+
+        # THE COLD STATE, `check_open_read_only`'s own recipe: checkpointed into the main
+        # file, no side files — this test does not need the plain `mode=ro` attempt to
+        # fail for a REAL reason, only to raise the shape below, so the store itself need
+        # not even be cold for `_FakePlainOpen` to matter — it is, to keep this fixture
+        # honest about what `target` looks like on disk.
+        folder = sqlite3.connect(str(target), isolation_level=None)
+        folder.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        folder.close()
+        for side in ("-wal", "-shm"):
+            Path(f"{target}{side}").unlink(missing_ok=True)
+
+        real_connect = sqlite3.connect
+
+        class _FakePlainOpen:
+            """Stands in for the plain `mode=ro` connection long enough to raise the
+            READONLY shape on its first statement — exactly where `open_read_only` forces
+            the lazy open (its own docstring: `sqlite3.connect` itself never raises this).
+            """
+
+            def execute(self, *_args, **_kwargs):
+                raise synthetic(
+                    "attempt to write a readonly database", "SQLITE_READONLY_CANTINIT"
+                )
+
+            def close(self) -> None:
+                pass
+
+        def readonly_shaped_connect(database, *args, **kwargs):
+            if "immutable=1" not in str(database) and "mode=ro" in str(database):
+                return _FakePlainOpen()
+            return real_connect(database, *args, **kwargs)
+
+        sqlite3.connect = readonly_shaped_connect
+        try:
+            door = db.open_read_only(target)
+        finally:
+            sqlite3.connect = real_connect
+
+        checks.equal(
+            door.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+            ("seen",),
+            "the door falls back to immutable=1 on the READONLY shape too, and still reads "
+            "the commit from the main file — never raises on the exact state it exists to "
+            "handle (PR #463, CI's Linux SQLite 3.45.1)",
+        )
+        door.close()
+
+
 def check_store_of_record(checks: Checks) -> None:
     """D88: one transaction over every table, a session that loads only what it names, and
     a legacy JSON store imported whole on the first open and moved aside rather than read.
@@ -36373,6 +36493,7 @@ def run() -> Result:
     check_set_and_rarity(checks)
     check_open_read_only(checks)
     check_open_read_only_race(checks)
+    check_open_read_only_wal_index_init(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
     check_server_routes(checks)
