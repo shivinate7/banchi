@@ -132,7 +132,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
    * sentence this screen deleted on purpose. */
   if (isRetiredReason(entry.reason)) {
     return [
-      say('This screen no longer asks this question — the answer was the same row either way. The card was queued before it was dropped: the rows below are the ones that matched, and answering one lists it.'),
+      say('This screen no longer asks this question — the answer was the same listing either way. The card was queued before it was dropped: the listings below are the ones that matched, and answering one lists it.'),
     ]
   }
 
@@ -149,46 +149,46 @@ function sentence(entry: QueueEntryWire): Segment[] {
   switch (entry.reason) {
     case 'no_catalog_row':
       return number === null
-        ? [say('The export has no row for this card.')]
-        : [say('The export has no row for '), value(number), say('.')]
+        ? [say('TCGplayer has no listing for this card.')]
+        : [say('TCGplayer has no listing for '), value(number), say('.')]
 
     case 'number_unread_name_matched': {
       const head: Segment[] =
         number === null
           ? [say('No collector number could be read from this photograph. ')]
-          : [say('The number read as '), value(number), say(', which is in no row. ')]
+          : [say('The number read as '), value(number), say(', which is in no listing. ')]
       const matched: Segment[] =
         only === null
-          ? [say(' matched one row in this set by name.')]
-          : [say(' matched one '), claim(only), say(' row in this set by name.')]
+          ? [say(' matched one listing in this set by name.')]
+          : [say(' matched one '), claim(only), say(' listing in this set by name.')]
       return name === null
-        ? [...head, say('The name matched one row in this set.')]
+        ? [...head, say('The name matched one listing in this set.')]
         : [...head, value(name), ...matched]
     }
 
     case 'metadata_not_stocked': {
-      if (toggle === null || toggleWord === null) return [say('The export stocks no row for the finish recorded on this stack.')]
+      if (toggle === null || toggleWord === null) return [say('TCGplayer has no listing for the finish recorded on this stack.')]
       const head = [say('You sorted this stack as '), claim(toggle, toggleWord)]
       return only === null
-        ? [...head, say(', and the export stocks no such row for this number.')]
-        : [...head, say(', and the export stocks only '), claim(only), say(' for this number.')]
+        ? [...head, say(', and TCGplayer has no such listing for this number.')]
+        : [...head, say(', and TCGplayer has only '), claim(only), say(' for this number.')]
     }
 
     case 'detected_finish_not_stocked': {
       const head = [say('The photograph reads as '), detected === null ? say('a finish this entry does not record') : claim(detected)]
       return only === null
-        ? [...head, say(', and the export stocks no such row for this number.')]
-        : [...head, say(', and the export stocks only '), claim(only), say(' for this number.')]
+        ? [...head, say(', and TCGplayer has no such listing for this number.')]
+        : [...head, say(', and TCGplayer has only '), claim(only), say(' for this number.')]
     }
 
     case 'ambiguous_no_signal':
-      return [say('No finish recorded, and the photograph didn\'t settle it — every row below is possible.')]
+      return [say('No finish recorded, and the photograph didn\'t settle it — every listing below is possible.')]
 
     case 'duplicate_condition': {
       const duplicate = duplicatedCondition(entry.candidates)
       return duplicate === null
-        ? [say('Two export rows claim the same condition for this number — nothing can choose between them.')]
-        : [say('Two export rows claim '), claim(duplicate), say(' for this number — nothing can choose between them.')]
+        ? [say('Two of TCGplayer\'s listings claim the same condition for this number — nothing can choose between them.')]
+        : [say('Two of TCGplayer\'s listings claim '), claim(duplicate), say(' for this number — nothing can choose between them.')]
     }
 
     case 'low_confidence': {
@@ -213,14 +213,14 @@ function sentence(entry: QueueEntryWire): Segment[] {
         hint === null
           ? [say('and no set hint was recorded to break the tie.')]
           : [say('and the set hint '), value(hint), say(' names none of them.')]
-      return [...head, say('matches rows in more than one set, '), ...tail]
+      return [...head, say('matches listings in more than one set, '), ...tail]
     }
 
     case 'card_not_detected':
       return [say('No card found in this photograph — no number corner to crop or read.')]
 
     case 'no_market_data':
-      return [say('This row carries no market price — a missing price is unknown, not low.')]
+      return [say('This listing carries no market price — a missing price is unknown, not low.')]
 
     /* D23's job (a): the only reason that can mean the rows themselves are the wrong card.
      *
@@ -237,17 +237,17 @@ function sentence(entry: QueueEntryWire): Segment[] {
           ? [
               say('You claimed this stack holds '),
               claim(claimed.join(' or '), orList(claimed.map(humanize))),
-              say(number === null ? ', and every row below is ' : ', and every row '),
+              say(number === null ? ', and every listing below is ' : ', and every listing '),
               ...(number === null ? [] : [value(number), say(' found is ')]),
               claim(rowWords.join(' or '), orList(rowWords.map(humanize))),
               say('. '),
             ]
           : number === null
-            ? [say('The rarities claimed at capture match none of the rows below. ')]
-            : [say('The rarities claimed at capture match none of the rows '), value(number), say(' found. ')]
+            ? [say('The rarities claimed at capture match none of the listings below. ')]
+            : [say('The rarities claimed at capture match none of the listings '), value(number), say(' found. ')]
       return [
         ...head,
-        say('A confident misread number can land on real rows for a different card. Check against the photograph before answering.'),
+        say('A confident misread number can land on real listings for a different card. Check against the photograph before answering.'),
       ]
     }
 
@@ -264,13 +264,13 @@ function sentence(entry: QueueEntryWire): Segment[] {
       const offersBoth = entry.candidates.some((row) => row.found_by === 'name')
       const head: Segment[] =
         name === null
-          ? [say('The name on this photograph could not be checked against the row below. ')]
+          ? [say('The name on this photograph could not be checked against the listing below. ')]
           : rowName === null
-            ? [say('This photograph reads as '), value(name), say(', which is not what the row below is called. ')]
+            ? [say('This photograph reads as '), value(name), say(', which is not what the listing below is called. ')]
             : [
                 say('This photograph reads as '),
                 value(name),
-                say(number === null ? ', but the row it matched is ' : ', but '),
+                say(number === null ? ', but the listing it matched is ' : ', but '),
                 ...(number === null ? [] : [value(number), say(' is ')]),
                 value(rowName),
                 say('. '),
@@ -302,18 +302,18 @@ function sentence(entry: QueueEntryWire): Segment[] {
  * A reason with no entry here is not asked about — a retired code draws the headline below
  * instead, and an unknown one draws its label. */
 const QUESTIONS: Readonly<Record<string, string>> = {
-  no_catalog_row: 'Which row is this card?',
+  no_catalog_row: 'Which listing is this card?',
   metadata_not_stocked: 'Which finish is stocked?',
   rarity_claim_mismatch: 'Is this the right card at all?',
   detected_finish_not_stocked: 'Which finish is this?',
   ambiguous_no_signal: 'Which finish is this?',
-  duplicate_condition: 'Which of the two rows?',
+  duplicate_condition: 'Which of the two listings?',
   low_confidence: 'Is this the card?',
   no_position: 'Where is this card?',
   identification_failed: 'What is this card?',
   set_ambiguous: 'Which set is it from?',
   card_not_detected: 'What is in this photograph?',
-  number_unread_name_matched: 'Is this the row it matched?',
+  number_unread_name_matched: 'Is this the listing it matched?',
   name_disputed: 'Is this the right card at all?',
   no_market_data: 'Is this the card?',
   /* `pipeline/routing.py:LISTING_DISPUTED` (identity-follows-sku.md §7.3, lane 2): a held
@@ -1919,7 +1919,7 @@ function Card({
               disabled={busy}
               aria-expanded={looking}
             >
-              {looking ? 'Back to rows' : phone ? 'Search export' : 'Search the export'}
+              {looking ? 'Back to listings' : phone ? 'Search TCGplayer' : 'Search TCGplayer\'s list'}
             </Button>
           )}
           <Button

@@ -5767,8 +5767,10 @@ test('a card with an open question in the queue says so, and says whether it can
   /* The notice's own title and body — the kit's slots, which is where this screen's warnings are
      drawn now. What is said is unchanged, and the machine string still rides its own slot. */
   await expect(block).toContainText('Waiting in the review queue')
-  /* The reason's HUMAN label, from the shared map — not the raw code, which is the line below. */
-  await expect(block).toContainText('Not in the export')
+  /* The reason's HUMAN label, from the shared map — not the raw code, which is the line below.
+     D196 (UX-208): the label no longer names the export, the pipeline-internal noun for
+     TCGplayer's own catalog. */
+  await expect(block).toContainText('No listing on TCGplayer')
 
   /* ZERO CANDIDATES IS LOAD-BEARING, not decoration: it is the difference between "go and answer
      it" and "it cannot be answered as it stands", and it is what points at the re-shoot icon
