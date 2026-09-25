@@ -2397,12 +2397,18 @@ class Inventory:
         that reaches here). Only `sku` (when given), `identity_source`, `read_disputes`
         (when given) and `bound_at` move.
 
-        `sku=None` (the migration's own call: `cli/cmd_cards.py` never had a SKU to offer —
-        the card already carries whatever one it is disputing, from before this migration
-        ran) SKIPS THE LOOKUP ENTIRELY and leaves `card.sku` untouched. `sku` GIVEN (demo-
-        seed's own call) IS CHECKED AGAINST `skus` — the same `SkuUnknown`/`GameMismatch`
-        refusals `bind_sku` makes, because a hold is still a claim about a real listing, and
-        `skus` is then required.
+        `sku=None` COVERS TWO DIFFERENT CASES, BOTH "SKIP THE LOOKUP, LEAVE `card.sku`
+        EXACTLY AS IT IS" — the field is never cleared, whatever it already holds. ONE: THE
+        SKU IS NOT KNOWN AT ALL — `scripts/demo-seed.py`'s own call, for its fixture's
+        `other` pool, a card whose read never resolved to any row in `skus`. `card.sku` is
+        `None` going in and stays `None` coming out; there was never anything to hold. TWO:
+        THE SKU IS KNOWN, JUST NOT OFFERED HERE — `cli/cmd_cards.py`'s migration HELD class
+        (§7.3): the card already carries the SKU it is disputing, bound by an earlier writer
+        or by a pre-lane-7 direct assignment, and this call's job is only to correct
+        `identity_source`, not to re-decide the SKU. `sku` GIVEN (demo-seed's OTHER call,
+        for its `priceable` pool's disputed rows) IS CHECKED AGAINST `skus` — the same
+        `SkuUnknown`/`GameMismatch` refusals `bind_sku` makes, because a hold is still a
+        claim about a real listing, and `skus` is then required.
 
         `read_disputes=None` (the migration's own call) LEAVES THE FIELD EXACTLY AS IT IS —
         this writer's one departure from `bind_sku`'s always-set convention.

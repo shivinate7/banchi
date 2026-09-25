@@ -427,7 +427,11 @@ def bind_or_hold(
     below are silent no-ops on a key they cannot find.
 
     THREE OUTCOMES, NEVER TWO. `sku` absent from `skus` (the `other` pool: 0 of 40 in any
-    fixture export) leaves the card `IDENTITY_READ`, as before. `sku` present and the read
+    fixture export) calls `hold_sku(card.key, at=bound_at)` with no `sku` to offer — lane 7's
+    own writer, not "as before": the card's `identity_source` still ends up `IDENTITY_READ`,
+    the outcome is the same as it always was, but `bound_at` is now stamped too (to the
+    caller's own fixed clock, never a real `now()` — see below), where the pre-lane-7 code
+    left it `None`. `sku` present and the read
     AGREES is `bind_sku` — the same branch a real join takes, faked here only because
     identification is the one paid step (see the module docstring). `sku` present and the
     read DISPUTES the row is REVIEW ROUND, NOT LANE 6'S FIRST PASS: §4.1, "a join caller

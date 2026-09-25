@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """`Inventory.bind_sku`/`unbind_sku` — THE ONE WRITER (docs/specs/identity-follows-sku.md
-§4.1, lane 1) — and `record_identification`'s narrowed write, proved in memory.
+§4.1, lane 1) — `record_identification`'s narrowed write, and `hold_sku` (lane 7, the fourth
+writer), proved in memory.
+
+`hold_sku` IS BIND_SKU'S SIBLING REFUSALS, RUN AGAIN (cases 5c-5g, beside bind_sku's own
+4/5). Same `SkuUnknown`/`GameMismatch` refusals, both writing nothing. Unlike `bind_sku`, it
+never derives the identity from the row — only `sku`/`identity_source`/`read_disputes`/
+`bound_at` move, proved by asserting the identity fields stay `None`. `sku=None` (the
+migration's own call) skips the lookup and leaves `card.sku` exactly as it was.
+`read_disputes=None` (the default) leaves that field untouched too — hold_sku's one
+departure from bind_sku's always-set convention. `sku` given with no `skus=` raises
+`ValueError`, `unbind_sku(sku=<given>)`'s own requirement for `number_strategy`.
 
 WHAT THIS PROVES. `bind_sku` stamps `name`/`number`/`printed_total`/`rarity`/`set_name`/
 `condition` off a `skus` table row (store/skus.py, lane 0 — never an export file) for a
@@ -256,6 +266,80 @@ def main() -> int:
         expected_product_line=product_line_of("misc"),
     )
     ok(card5b is not None, "a falsy expected_product_line (misc) never refuses")
+
+    # ---------------------------------------------- case 5c: hold_sku, the SKU is known
+    # (identity-follows-sku.md §4.1/§4.3, lane 7) — bind_sku's own refusals, sibling-tested
+    # against the fourth writer. hold_sku never derives the identity from the row (unlike
+    # bind_sku): only sku/identity_source/read_disputes/bound_at move.
+    inv5c = new_card(53, game="pokemon")
+    held = inv5c.hold_sku(
+        "1/53", "8001", skus=skus, expected_product_line=product_line_of("pokemon"),
+        read_disputes=True,
+    )
+    ok(held.sku == "8001", "hold_sku stamps the known SKU", held.sku)
+    ok(held.identity_source == master.IDENTITY_READ,
+       "and identity_source is READ, never SKU — the row is not trusted")
+    ok(held.name is None and held.number is None and held.rarity is None
+       and held.set_name is None and held.condition is None,
+       "and it never derives name/number/rarity/set_name/condition from the row",
+       (held.name, held.number, held.rarity, held.set_name, held.condition))
+    ok(held.bound_by is None, "bound_by is never touched — a hold is not a bind")
+    ok(held.bound_at is not None, "bound_at is stamped — a hold is itself an act")
+    ok(held.read_disputes is True, "read_disputes is the caller's own answer, written")
+    ok(len(inv5c.events) == 1 and inv5c.events[0]["event"] == "sku_held",
+       "one sku_held history event", inv5c.events)
+
+    # --------------------------------------- case 5d: hold_sku, sku absent from the table
+    inv5d = new_card(54, game="pokemon")
+    before5d = dict(inv5d.cards["1/54"].__dict__)
+    threw5d = False
+    try:
+        inv5d.hold_sku("1/54", "no-such-sku", skus=skus)
+    except SkuUnknown:
+        threw5d = True
+    ok(threw5d, "hold_sku raises SkuUnknown for a SKU absent from the table, same as bind_sku")
+    ok(inv5d.cards["1/54"].__dict__ == before5d, "and the card is unchanged", inv5d.cards["1/54"])
+    ok(inv5d.events == [], "and no history event was appended", inv5d.events)
+
+    # ---------------------------------------- case 5e: hold_sku, product_line disagrees
+    inv5e = new_card(55, game="pokemon")  # claims Pokemon; skus2's row is Riftbound
+    before5e = dict(inv5e.cards["1/55"].__dict__)
+    threw5e = False
+    try:
+        inv5e.hold_sku(
+            "1/55", "9001", skus=skus2, expected_product_line=product_line_of("pokemon"),
+        )
+    except GameMismatch:
+        threw5e = True
+    ok(threw5e, "hold_sku raises GameMismatch for a row whose product_line disagrees, "
+       "same as bind_sku")
+    ok(inv5e.cards["1/55"].__dict__ == before5e, "and the card is unchanged", inv5e.cards["1/55"])
+    ok(inv5e.events == [], "and no history event was appended", inv5e.events)
+
+    # --------------------------------- case 5f: hold_sku(sku=None) — no SKU offered at all
+    # `cli/cmd_cards.py`'s own migration call: the card already carries whatever SKU it is
+    # disputing, and this writer did not put it there, so the lookup is skipped entirely.
+    inv5f = new_card(56, game="pokemon")
+    inv5f.cards["1/56"].sku = "already-here"
+    inv5f.cards["1/56"].read_disputes = True
+    held5f = inv5f.hold_sku("1/56", event="identity_migration_held")
+    ok(held5f.sku == "already-here", "hold_sku(sku=None) leaves card.sku exactly as it was",
+       held5f.sku)
+    ok(held5f.identity_source == master.IDENTITY_READ, "and still sets identity_source = read")
+    ok(held5f.read_disputes is True,
+       "and read_disputes=None (the default) leaves that field untouched too")
+    ok(inv5f.events[0]["event"] == "identity_migration_held",
+       "event= is the caller's own name for the line", inv5f.events[0]["event"])
+
+    # ------------------------------------ case 5g: hold_sku(sku=<real>, skus=None) refuses
+    inv5g = new_card(57, game="pokemon")
+    threw5g = False
+    try:
+        inv5g.hold_sku("1/57", "8001")  # skus= omitted entirely
+    except ValueError:
+        threw5g = True
+    ok(threw5g, "hold_sku(sku=<given>) with no skus= raises ValueError — the same "
+       "requirement unbind_sku(sku=<given>) makes for number_strategy")
 
     # ------------------------------------------------ case 6: bound_by outside the vocabulary
     inv6 = new_card(6, game="pokemon")
