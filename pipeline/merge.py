@@ -298,6 +298,50 @@ def _token(value: object) -> str:
     return str(value)
 
 
+#: Why a send left a card out: no market price, and nobody has priced it yet (D277 Q3). It
+#: stays on the worklist, owed; `emit` names it on its own line.
+NO_PRICE_YET = "no market price, and no price typed yet"
+
+#: What a send says when every card it could carry is waiting for a price (the delta review,
+#: R3-3). One sentence for the single-run path and the merged one, which both exit 1 on it,
+#: and the marker the send route reads to answer `needs_price` rather than `nothing_to_send`.
+ONLY_UNPRICED = "nothing to send: every card left needs a price first"
+
+#: What emit names a card that is withheld or answered `unlisted`, on both send paths.
+HELD_BACK = "held back or answered unlisted"
+
+#: What emit names a card the live guard trimmed to nothing (R6-3). Not "asked for none":
+#: the guard lowers the asked figure, and the owner asked for nothing of the kind.
+LIVE_ALREADY = "TCGplayer already holds every copy on hand"
+
+
+def empty_send_sentence(needs_price: int = 0, under_cut_off: int = 0, live: int = 0) -> str:
+    """The one line an empty send ends on, worded from the reasons it has (R6-9).
+
+    A send with one reason keeps that reason's own sentence. A send with several names every
+    one, so a card the guard trimmed is never hidden behind a card that needs a price."""
+    if needs_price and not (under_cut_off or live):
+        return ONLY_UNPRICED
+    if under_cut_off and not (needs_price or live):
+        return ONLY_UNDER_CUT
+    parts = []
+    if needs_price:
+        parts.append(f"{needs_price} card{'s' if needs_price != 1 else ''} "
+                     f"need{'' if needs_price != 1 else 's'} a price first")
+    if under_cut_off:
+        parts.append(f"{under_cut_off} priced card{'s' if under_cut_off != 1 else ''} under the "
+                     f"cut-off {'are' if under_cut_off != 1 else 'is'} held back by --listed-only")
+    if live:
+        parts.append(f"TCGplayer already holds every copy of {live} card{'s' if live != 1 else ''}")
+    return "nothing to send: " + ", and ".join(parts)
+
+
+#: What a send says when `--listed-only` holds back every priced card left, because each is
+#: under the cut-off (the delta review, R4 F4). Both paths say it, and exit 1 on it, and the
+#: send route reads it to answer `under_cut_off`. A card with no price is named apart.
+ONLY_UNDER_CUT = "nothing to send: every priced card left is under the cut-off, and --listed-only holds it back"
+
+
 def plan(
     resolved_by_run: Mapping[str, object],
     choice: decisions_mod.Decisions,
@@ -356,7 +400,10 @@ def plan(
             sku: v for sku, v in choice.no_market_data.items() if sku in merged
         },
         withheld=set(choice.withheld()),
+        # A SEND LEAVES AN UNANSWERED NO-PRICE CARD OUT (D277 Q3), named below as dropped.
+        leave_unanswered=True,
     )
+    unanswered = set(choice.unanswered)
 
     out = Plan()
     for sku, legs in legs_by_sku.items():
@@ -365,7 +412,11 @@ def plan(
             # WITHHELD, or answered `unlisted` — `prices_for` leaves both out of the mapping
             # and a row is not written for either. Named rather than dropped: `CLAUDE.md`
             # forbids losing a card without saying so.
-            out.dropped[sku] = "held back or answered unlisted"
+            out.dropped[sku] = (
+                NO_PRICE_YET
+                if sku in unanswered and not match.has_market_data
+                else HELD_BACK
+            )
             continue
         out.skus.append(
             MergedSku(

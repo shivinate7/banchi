@@ -303,24 +303,11 @@ export function markdownInHash(): string | null {
   return /^\d{8}-\d{6}$/.test(stamp) ? stamp : null
 }
 
-/** Which end of the money `#/pricing?band=…` is open on, or `null` for the worklist
- *  (D159).
- *
- *  A SECOND QUERY ON THE SAME ROUTE, for `markdownInHash`'s reason directly above: `App.tsx`
- *  strips `?…` before matching, so a lens costs no `ROUTES` row — and a row there moves three
- *  mechanical counts, which makes it a deliberate edit rather than a side effect.
- *
- *  `?markdown=` WINS WHERE BOTH ARE PRESENT, and the caller enforces it. Two lenses on one
- *  screen is one lens too many: the header can draw only one pressed door, and a screen showing
- *  a markdown's rows under a value band's controls would be answering two questions with one
- *  body.
- *
- *  SHAPE-CHECKED HERE, exactly as the stamp is. Only the two words this screen mints are
- *  accepted — anything else reads as no lens rather than as an empty one, so a mistyped URL
- *  lands on the worklist instead of on a screen with no rows and no explanation. */
-export function bandInHash(): 'top' | 'bottom' | null {
-  const end = query().get('band') ?? ''
-  return end === 'top' || end === 'bottom' ? end : null
+/** Whether the hash asks for the Live tab (D277, Q6): `?live`, or a markdown stamp. The tab
+ *  with no stamp yet opens the newest read, or says there is none. */
+export function liveInHash(): boolean {
+  const asked = query()
+  return asked.has('live') || markdownInHash() !== null
 }
 
 function query(): URLSearchParams {

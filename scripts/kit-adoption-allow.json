@@ -1,14 +1,6 @@
 {
   "_about": "THE SHRINKING OFFENDER LIST (the owner's ruling on Q3, 2026-09-23; D275). static: file -> rule -> the lane that owes the fix, read by scripts/kit-adoption.mjs. runtime: route path -> assertion -> lane, read by app/tests/scaffold.spec.ts. Both FAIL on a violation not listed here AND on an entry that no longer matches a violation. A lane that fixes one deletes its entry in the same commit. The list ONLY SHRINKS: scripts/kit-adoption.mjs refuses any key in either block that the list at the merge-base with origin/main does not hold, unless the key's rule is not defined at the merge-base (a rule born on the branch; the check prints which rule allowed it and why). Never add an entry to make a new screen pass: render <Page> from ./kit and use the kit's primitives.",
   "static": {
-    "app/src/ClearPrices.tsx": {
-      "R2-dialog": "b-pricing",
-      "R2-class": "b-pricing",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/Codes.tsx": {
-      "R2-filter-row": "library"
-    },
     "app/src/Fulfillment.tsx": {
       "R1": "fulfillment",
       "R2-class": "fulfillment"
@@ -16,30 +8,6 @@
     "app/src/LiveReconcile.tsx": {
       "R2-dialog": "review",
       "R2-class": "review"
-    },
-    "app/src/Markdown.tsx": {
-      "R2-dialog": "b-pricing",
-      "R2-select": "b-pricing",
-      "R2-class": "b-pricing",
-      "R2-date": "b-pricing",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/PriceHistory.tsx": {
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/PriceTrend.tsx": {
-      "R2-class": "b-pricing"
-    },
-    "app/src/Pricing.tsx": {
-      "R1": "b-pricing",
-      "R2-dialog": "b-pricing",
-      "R2-class": "b-pricing",
-      "R2-date": "b-pricing",
-      "R2-money": "b-pricing",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/ProductHistory.tsx": {
-      "R2-icon-only-button": "icons"
     },
     "app/src/ReviewQueue.tsx": {
       "R2-dialog": "review",
@@ -60,13 +28,6 @@
       "R2-dialog": "review",
       "R2-select": "review",
       "R2-class": "review"
-    },
-    "app/src/SendCard.tsx": {
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/ValueBands.tsx": {
-      "R2-class": "b-pricing",
-      "R2-money": "b-pricing"
     }
   },
   "runtime": {
@@ -82,11 +43,6 @@
     },
     "/review": {
       "top": "review"
-    },
-    "/pricing": {
-      "page": "b-pricing",
-      "width": "b-pricing",
-      "top": "b-pricing"
     },
     "/fulfillment": {
       "page": "fulfillment"

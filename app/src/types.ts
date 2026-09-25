@@ -2371,8 +2371,12 @@ export type MergedSku = PricingSku & {
  *  property of what is in the drawer; this route merges the VIEW and never the file, and one
  *  answer to a merged row is one `PUT` per run in that row's `in`. */
 export type RosterRun = RunSummary & {
-  /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. */
+  /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. For a
+   *  person to read, never for a screen to decide on: that is `owed` below. */
   owes: string[]
+  /** The machine code for each `owes` reason, in the same order, and the count its sentence
+   *  carries (R4). A screen decides on this and never on the sentence. */
+  owed: OwedReason[]
   /** Open while it OWES something OR HOLDS AN UNSENT COPY (D156). The
    *  first is `owes`; the second is `unsent` below, and it is what keeps an answered, emitted
    *  run on the worklist for as long as one of its copies is not at TCGplayer. */
@@ -2382,6 +2386,27 @@ export type RosterRun = RunSummary & {
    *  2026-09-12, which the picker reads as zero. */
   unsent?: number
 }
+
+/** WHY AN EMPTY SEND SENT NOTHING, as figures (R6-2): cards that need a price, priced cards
+ *  under the cut-off a listed-only send held back, and cards TCGplayer already held every copy
+ *  of, with their names. Rides a `needs_price` or `under_cut_off` refusal's `data.empty`. */
+export type EmptySend = {
+  needs_price: number
+  under_cut_off: number
+  live: number
+  live_names: string[]
+}
+
+/** WHY A RUN OWES, AS A CODE. The same list as `server/pipeline_routes.py:OWE_CODES`, one
+ *  literal per line, reconciled both ways by `make readiness-agreement`. */
+export type OweCode =
+  | 'sub_threshold_unset'
+  | 'needs_price'
+  | 'never_emitted'
+  | 'unreadable'
+
+/** One `owes` reason as a code, with the count its sentence carries, or null. */
+export type OwedReason = { code: OweCode; count: number | null }
 
 /** What no worklist can offer, named rather than left out (D156,
  *  `CLAUDE.md`: never silently drop a card). Each figure is a door to the screen that moves

@@ -169,7 +169,13 @@
 }
 
 /* ---- the run form: the same ranking, laid out in one dimension ---- */
-.position-run { white-space: nowrap; }
+/* A RUN BREAKS BETWEEN PARTS, NEVER INSIDE ONE (R4): each part is nowrap, and the `<wbr>`
+   after it is the break. `nowrap` on the run itself suppressed every `<wbr>`, and a narrow line
+   clipped the card number off the end. */
+.position-run { white-space: normal; }
+.position-run-path,
+.position-run-key,
+.position-run-num { white-space: nowrap; }
 .position-run-path,
 .position-run-key {
   font-family: var(--bn-font-ui);

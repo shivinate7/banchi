@@ -36517,10 +36517,575 @@ def check_value_page(checks: Checks) -> None:
         )
 
 
+def check_emit_unpriced_left_out(checks: Checks) -> None:
+    """A SEND WITH ONE UNPRICED ROW SENDS EVERY OTHER READY COPY (D277 Q3, the owner's words:
+    "send every ready copy; unpriced rows stay on the list").
+
+    `emit` used to refuse the WHOLE file while any card with no market price had no answer
+    (`Decisions.blocking`, `join.prices_for`). A missing price is still unknown and never low
+    (D9, D49), so that card still cannot go: it is LEFT OUT, named, and stays owed. The two
+    priced cards go. Both paths the send can take are asserted: one run, and several runs.
+    """
+    checks.note("")
+    checks.note("EMIT, ONE UNPRICED ROW — the ready copies go, the unpriced one stays owed")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Dunsparce", "120", "reverse_holo"),
+        (3, 3, "Articuno", "161", None),
+    ]
+    # A BLANK MARKET CELL IS "NO MARKET PRICE" (D9), and `join` seeds it unanswered.
+    no_price = {ARTICUNO_SKU: ""}
+
+    def left_out(said: str) -> None:
+        # THE FILE IS WHERE `emit` SAID IT WROTE IT, read off its own line, so one assertion
+        # serves the single-run path and the merged one.
+        paths = [Path(found) for found in re.findall(r"-> (\S+\.csv)", said)]
+        written = {
+            row[tcgcsv.SKU_COLUMN]
+            for path in paths
+            if path.is_file()
+            for row in tcgcsv.read_export(path).rows
+        }
+        checks.equal(
+            sorted(written),
+            sorted([DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU]),
+            "the file carries EXACTLY the two ready rows — not zero (the old whole-send "
+            "refusal) and not three (a guess at a price nobody gave)",
+        )
+        checks.ok(
+            "no market price" in said and ARTICUNO_SKU in said,
+            "the unpriced card is NAMED where it was left out, never dropped silently",
+            said,
+        )
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        checks.equal(
+            0 if listing is None else listing.pushed,
+            0,
+            "and it STAYS OWED: nothing of it was committed as sent, so the next worklist "
+            "still carries it",
+        )
+        checks.equal(
+            getattr(corpus.Corpus.read().answers.get(ARTICUNO_SKU), "value", None),
+            None,
+            "and it still has no answer — nothing was invented for it",
+        )
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards, market=no_price)
+        # THE WORKLIST SAYS THE RUN OWES A PRICE, BEFORE AND AFTER THE SEND (the delta review,
+        # R3-2). `blocking` no longer names the card, so the roster reads the rows itself:
+        # otherwise Home counted the unpriced copy as ready to send and never said to price it.
+        def owes_price() -> List[str]:
+            roster = pipeline_routes.do_pipeline_worklist([])["roster"]
+            row = next((one for one in roster if one["run"] == run_dir.name), {})
+            return [reason for reason in row.get("owes", []) if reason != "never emitted"]
+
+        checks.equal(
+            owes_price(),
+            ["1 card with no market price needs a price"],
+            "the joined run owes a PRICE for the unpriced card, a reason that is not the send",
+        )
+        # AND EACH REASON CARRIES ITS CODE (R4): the screen reads the code, never the sentence.
+        roster = pipeline_routes.do_pipeline_worklist([])["roster"]
+        chip = next((one for one in roster if one["run"] == run_dir.name), {})
+        checks.equal(
+            chip.get("owed"),
+            [{"code": "needs_price", "count": 1}, {"code": "never_emitted", "count": None}],
+            "the roster sends a machine code beside each owed sentence, in the same order",
+        )
+        checks.ok(
+            all(reason["code"] in pipeline_routes.OWE_CODES for reason in chip.get("owed", [])),
+            "every code sent is one `OWE_CODES` declares",
+        )
+        left_out(command(checks, "emit", str(run_dir.directory)))
+        checks.equal(
+            owes_price(),
+            ["1 card with no market price needs a price"],
+            "and after the send it still owes that price: the card stayed back, so the run did",
+        )
+
+    with isolated_home():
+        first, _ = seam_run(checks, [cards[0], cards[2]], market=no_price)
+        second, _ = seam_run(checks, [cards[1]], market=no_price)
+        left_out(command(checks, "emit", str(first.directory), str(second.directory)))
+
+    # WHEN EVERY READY CARD NEEDS A PRICE, THE REFUSAL SAYS SO, AND BOTH PATHS AGREE (the delta
+    # review, R3-3). The single-run path said "every row is already sent" and exited 0; the
+    # merged path said "held back, unlisted, or has no room" and exited 1; the send route read
+    # either as "already at TCGplayer or held back". All three were false.
+    from cli import __main__ as entry
+
+    def refused(argv) -> Tuple[int, str]:
+        with quiet() as said:
+            code = entry.main(list(argv))
+        return code, said.getvalue()
+
+    with isolated_home():
+        only, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(["emit", str(only.directory)])
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and "already sent" not in said,
+            "one run, every card unpriced: `emit` refuses by saying the card needs a price",
+            f"exit {code}\n{said}",
+        )
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[2]], market=no_price)
+        two, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(["emit", str(one.directory), str(two.directory)])
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and "no room" not in said,
+            "several runs, every card unpriced: the same sentence and the same exit",
+            f"exit {code}\n{said}",
+        )
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNPRICED}\n", [], "sent")
+    checks.equal(
+        (answer.code, "already at TCGplayer" in str(answer)),
+        ("needs_price", False),
+        "and the send route names it `needs_price`, never `nothing_to_send`",
+    )
+
+    # THE REVIEWER'S STORES, R4 (the delta review of 683860e7).
+    #
+    # F3: several runs, one card sent with `--quantity SKU=0` and one with no price. The empty
+    # send returned on the price sentence before the loop that names every left-out card, so
+    # the zero-quantity card was never named.
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[0], cards[2]], market=no_price)
+        two, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(
+            ["emit", str(one.directory), str(two.directory), "--quantity", f"{DUNSPARCE_SKU}=0"]
+        )
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and f"{DUNSPARCE_SKU} — " in said,
+            "several runs, an empty send: every left-out card is NAMED with its reason before "
+            "the price sentence",
+            f"exit {code}\n{said}",
+        )
+
+    # F4: `--listed-only` over a priced card under the cut-off and an unpriced card. Nothing
+    # can go. The single-run path ignored the flag, and the merged path said every card needs a
+    # price while a priced card stayed back. Both paths must say the same true thing: the
+    # priced card is held back by the flag, and it is named apart from the unpriced one.
+    under = {ARTICUNO_SKU: "", DUNSPARCE_SKU: "0.10"}
+
+    def listed_only_truth(argv, label) -> None:
+        code, said = refused(argv)
+        checks.ok(
+            code == 1
+            # R6-9: both reasons in one headline, never only the flag's.
+            and "nothing to send: 1 card needs a price first, and 1 priced card under the "
+            "cut-off is held back by --listed-only" in said
+            and merge.ONLY_UNPRICED not in said
+            and f"{DUNSPARCE_SKU} — under the cut-off" in said
+            and ARTICUNO_SKU in said,
+            f"{label}, --listed-only: the priced card under the cut-off is named apart from the "
+            "unpriced one, and the refusal says the flag holds it back",
+            f"exit {code}\n{said}",
+        )
+
+    with isolated_home():
+        only, _ = seam_run(checks, [cards[0], cards[2]], market=under)
+        listed_only_truth(["emit", str(only.directory), "--listed-only"], "one run")
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[0]], market=under)
+        two, _ = seam_run(checks, [cards[2]], market=under)
+        listed_only_truth(
+            ["emit", str(one.directory), str(two.directory), "--listed-only"], "several runs"
+        )
+
+    # F5: a live-guard trim beside the price reason. The route checked the price sentence
+    # first and dropped the trim. It names both now.
+    trim = {"sku": DUNSPARCE_SKU, "name": "Dunsparce", "live": 1, "on_hand": 1, "would": 1, "goes": 0}
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNPRICED}\n", [trim], "sent")
+    checks.ok(
+        answer.code == "needs_price" and "Dunsparce" in str(answer) and "TCGplayer already" in str(answer),
+        "the send route names the trimmed card beside the price reason, never hides it",
+        str(answer),
+    )
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNDER_CUT}\n", [], "sent")
+    checks.equal(
+        answer.code,
+        "under_cut_off",
+        "and a send that --listed-only emptied is named for the flag, not for a price",
+    )
+
+
+# ============================================================================= the send matrix
+#
+# THE REVIEWER'S CASE MATRIX, MADE PERMANENT (R6). Every round of the pricing lane closed one
+# message defect and opened another, because each fix was checked against the case that found
+# it and nothing else. This is every store shape and every flag set a send can meet, over one
+# run and over several, and for each one it asserts all four places the owner reads the answer:
+#
+#   the file      each import file's rows, as (SKU, Add to Quantity, price)
+#   emit          the reasons it prints, and the ones it must never print
+#   the route     the refusal code, and the title the Send card words from the refusal's
+#                 figures (`standing.ts:emptySendTitle`, never the server's sentence, D269)
+#   Home          the standing line, the Pricing tile and the run chips, from the worklist
+#                 the send started from. Read by running `app/src/standing.ts` itself, bundled
+#                 by the app's own esbuild, so no third copy of the rule lives here.
+#
+# A ROW NAMES ITS OWN DEFECT where it has one: R6-3 is the live-guard trim named as a trim,
+# R6-5 the one-run twin of F3, R6-6 the merged `--listed-only` naming, R6-9 the headline worded
+# from its reasons. R6-4 (a failed read of typed prices) and R6-8 (the chip) are Home columns.
+
+_M_D, _M_R, _M_A = DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU, ARTICUNO_SKU
+_M_CARDS = [
+    (3, 1, "Dunsparce", "120", "normal"),
+    (3, 2, "Dunsparce", "120", "reverse_holo"),
+    (3, 3, "Articuno", "161", None),
+    # A SECOND DRAWER HOLDING THE SAME TWO SKUS, for the shared-SKU rows (R7 F5).
+    (4, 1, "Dunsparce", "120", "normal"),
+    (4, 2, "Articuno", "161", None),
+]
+_M_MIX = {_M_A: ""}
+_M_SUB = {_M_A: "", _M_D: "0.10"}
+_M_SUBALL = {_M_A: "0.05", _M_D: "0.10", _M_R: "0.12"}
+_M_LAYOUT = {"one": [[0, 1, 2]], "two": [[0, 2], [1]], "share": [[0, 1, 2], [3, 4]]}
+_M_NONE_NAMED = {"prices": [], "moves": []}
+
+# The reasons, as emit prints them, one per card.
+_M_LIVE = "TCGplayer already holds every copy on hand"
+_M_HELD = "held back or answered unlisted"
+_M_ASKED0 = "this send asked for none of this card"
+_M_SENT = "every copy in this run is already listed or has left the box"
+
+# THE HEADLINES, WRITTEN OUT (R7 F6). The matrix never asks `merge` for the sentence it is
+# checking, so a defect in the sentence builder goes red here.
+_M_ONLY_PRICE = "nothing to send: every card left needs a price first"
+_M_ONLY_CUT = "nothing to send: every priced card left is under the cut-off, and --listed-only holds it back"
+_M_PRICE_LIVE2 = "nothing to send: 1 card needs a price first, and TCGplayer already holds every copy of 2 cards"
+_M_PRICE_CUT_LIVE = (
+    "nothing to send: 1 card needs a price first, and 1 priced card under the cut-off is held "
+    "back by --listed-only, and TCGplayer already holds every copy of 1 card"
+)
+
+
+def _m_row(sku: str, price: str) -> Tuple[str, int, str]:
+    return (sku, 1, price)
+
+
+def _m_cases() -> Dict[str, dict]:
+    """Every case: store, layout, flags, and what each of the four readers must say."""
+    d_mix, r_mix = _m_row(_M_D, "2.06"), _m_row(_M_R, "2.60")
+    d_sub = _m_row(_M_D, "0.49")
+    both = [d_mix, r_mix]
+    send2 = {"line": "send 2 copies to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 2 ready"}
+    cases: Dict[str, dict] = {}
+    for layout in ("one", "two"):
+        last = "import.csv"
+
+        def add(name, _layout=layout, **spec):
+            spec.setdefault("flags", [])
+            spec.setdefault("says", [])
+            spec.setdefault("never", [])
+            spec.setdefault("route", None)
+            spec["layout"] = _layout
+            cases[f"{name.split('/')[0]}/{_layout}/{name.split('/')[1]}"] = spec
+
+        # A MIXED STORE: two priced cards and one with no market price.
+        for flag, argv, want in (
+            ("plain", [], {last: both}),
+            ("cap1", ["--cap", "1"], {last: both}),
+            ("listed", ["--listed-only"], {last: both}),
+            ("splitT", ["--split-threshold"], {"import-listed.csv": both}),
+            ("splitG", ["--split-games"], {"import-pokemon.csv": both}),
+        ):
+            add(f"mix/{flag}", market=_M_MIX, flags=argv, exit=0, files=want, says=[_M_A], home=send2)
+        add("mix/qty0", market=_M_MIX, flags=["--quantity", f"{_M_D}=0"], exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} Dunsparce — asked 0, none sent"], home=send2)
+        add("mix/held", market=_M_MIX, pre=(_M_D,), exit=0, files={last: [r_mix]}, says=[_M_A],
+            home={"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 1 ready",
+                  "failed": "send 2 copies to TCGplayer"})
+        # R6-5: the one-run empty send names every card it left out, as the merged one does.
+        add("mix/heldall", market=_M_MIX, pre=(_M_D, _M_R), exit=1, files={},
+            says=[f"{_M_D} — {_M_HELD}", f"{_M_R} — {_M_HELD}", _M_A, _M_ONLY_PRICE],
+            route=("needs_price", ["Every card on this list needs a price first"]),
+            home={"line": "price 1 card", "behind": None, "tile": "run to price",
+                  "failed": "send 2 copies to TCGplayer"})
+        add("mix/qty0all", market=_M_MIX, flags=["--quantity", f"{_M_D}=0", "--quantity", f"{_M_R}=0"], exit=1, files={},
+            says=[f"{_M_D} — {_M_ASKED0}", f"{_M_R} — {_M_ASKED0}", _M_A, _M_ONLY_PRICE],
+            route=("needs_price", ["Every card on this list needs a price first"]), home=send2)
+        add("mix/sent", market=_M_MIX, twice=True, exit=1, files={last: both},
+            says=[f"{_M_D} — {_M_SENT}", f"{_M_R} — {_M_SENT}", _M_A, _M_ONLY_PRICE],
+            route=("needs_price", ["Every card on this list needs a price first"]),
+            home={"line": "price 1 card", "behind": None, "tile": "run to price",
+                  "chip": "Sent, 1 needs a price"})
+        # R6-3 and R6-9: a live-guard trim is named as a trim, and the headline and the title
+        # state every reason the send was empty, never only the price.
+        for flag, named in (("guard", None), ("guard+named", _M_NONE_NAMED)):
+            add(f"mix/{flag}", market=_M_MIX, live={_M_D: 1, _M_R: 1, _M_A: 0}, named=named, exit=1, files={},
+                says=[f"{_M_D} — {_M_LIVE}", f"{_M_R} — {_M_LIVE}", _M_A,
+                      _M_PRICE_LIVE2],
+                never=[_M_ASKED0, _M_ONLY_PRICE],
+                route=("needs_price", ["1 card needs a price first", "TCGplayer already had every copy of 2 cards"]),
+                home=send2)
+        add("mix/guard+part", market=_M_MIX, live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED, exit=0,
+            files={last: [r_mix]}, says=[f"{_M_D} Dunsparce — TCGplayer holds 1 of 1 on hand", f"{_M_D} — {_M_LIVE}"],
+            never=[_M_ASKED0], home=send2)
+        # R8-2: A SEND THAT IS NOT EMPTY, WITH A LIVE CARD THAT HAS ANOTHER REASON. A card with
+        # no price and a withheld card are named for that reason alone, on both paths: never in
+        # the "no room" list as live, never in the guard's trimmed list the Send card draws.
+        add("own/sub-listed+Alive", market=_M_SUB, flags=["--listed-only"], live={_M_D: 0, _M_R: 0, _M_A: 1},
+            named=_M_NONE_NAMED, exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} — under the cut-off (Dunsparce)", _M_A],
+            never=[f"{_M_A} — {_M_LIVE}", f'"sku": "{_M_A}", "would"', _M_ASKED0], home=send2)
+        add("own/held+live", market=_M_MIX, pre=(_M_D,), live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED,
+            exit=0, files={last: [r_mix]}, says=[_M_A],
+            never=[f"{_M_D} — {_M_LIVE}", f'"sku": "{_M_D}", "would"', _M_ASKED0],
+            home={"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 1 ready",
+                  "failed": "send 2 copies to TCGplayer"})
+        # R7 F4: a card with no price that TCGplayer also holds has one reason, the price. It is
+        # counted once, and never named among the live cards.
+        add("mix/unpricedlive", market=_M_MIX, live={_M_D: 1, _M_R: 1, _M_A: 1}, named=_M_NONE_NAMED, exit=1,
+            files={}, says=[f"{_M_D} — {_M_LIVE}", f"{_M_R} — {_M_LIVE}", _M_A, _M_PRICE_LIVE2,
+                            '"live_names": ["Dunsparce", "Dunsparce"]'],
+            never=[_M_ASKED0, f"{_M_A} — {_M_LIVE}"],
+            route=("needs_price", ["Nothing was sent. 1 card needs a price first. TCGplayer already had every "
+                                   "copy of 2 cards (Dunsparce, Dunsparce)."]),
+            home=send2)
+
+        # A STORE WITH A PRICED CARD UNDER THE CUT-OFF.
+        sub_both = [d_sub, r_mix]
+        for flag, argv, want in (
+            ("plain", [], {last: sub_both}),
+            ("cap1", ["--cap", "1"], {last: sub_both}),
+            ("splitT", ["--split-threshold"], {"import-listed.csv": [r_mix], "import-subthreshold.csv": [d_sub]}),
+            ("splitG", ["--split-games"], {"import-pokemon.csv": sub_both}),
+        ):
+            add(f"sub/{flag}", market=_M_SUB, flags=argv, exit=0, files=want, says=[_M_A], home=send2)
+        add("sub/qty0", market=_M_SUB, flags=["--quantity", f"{_M_D}=0"], exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} Dunsparce — asked 0, none sent"], home=send2)
+        # R6-6: `--listed-only` names the priced card it leaves under the cut-off, on both paths.
+        add("sub/listed", market=_M_SUB, flags=["--listed-only"], exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} — under the cut-off (Dunsparce)", _M_A], home=send2)
+        # R6-9: the headline is not "every priced card is under the cut-off" when a priced card
+        # above it was trimmed by the guard.
+        add("sub/listed+guard", market=_M_SUB, flags=["--listed-only"], live={_M_D: 0, _M_R: 1, _M_A: 0},
+            named=_M_NONE_NAMED, exit=1, files={},
+            says=[f"{_M_D} — under the cut-off (Dunsparce)", f"{_M_R} — {_M_LIVE}", _M_A,
+                  _M_PRICE_CUT_LIVE],
+            never=[_M_ONLY_CUT, _M_ASKED0],
+            route=("needs_price", ["1 card needs a price first", "1 priced card is under the cut-off",
+                                   "TCGplayer already had every copy of 1 card"]),
+            home=send2)
+
+        # EVERY CARD PRICED AND UNDER THE CUT-OFF.
+        add("suball/listed", market=_M_SUBALL, flags=["--listed-only"], exit=1, files={},
+            says=[f"{sku} — under the cut-off" for sku in (_M_D, _M_R, _M_A)] + [_M_ONLY_CUT],
+            route=("under_cut_off", ["Every priced card on this list is under the cut-off"]),
+            home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 copies ready to send",
+                  "chip": "Never sent"})
+        add("suball/listed-sent", market=_M_SUBALL, flags=["--listed-only"], twice=True,
+            exit=0 if layout == "one" else 1,
+            files={last: [_m_row(_M_D, "0.49"), _m_row(_M_R, "0.49"), _m_row(_M_A, "0.49")]},
+            says=["nothing new to send"] if layout == "one" else [f"{sku} — {_M_SENT}" for sku in (_M_D, _M_R, _M_A)],
+            route=("nothing_to_send", ["already at TCGplayer"]) if layout == "two" else None,
+            home={"line": None, "behind": None, "tile": "nothing to price", "chip": "All sent"})
+    # R7 F5: A SKU SHARED BY TWO DRAWERS UNDER `--cap 1`, WITH THE GUARD. The reverse holo is
+    # trimmed to nothing and the send is not empty: the trim is named as a trim, never as
+    # "asked for none".
+    cases["share/two/cap1-guardall"] = {
+        "layout": "share", "market": _M_MIX, "flags": ["--cap", "1"],
+        "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
+        "files": {"import.csv": [d_mix]},
+        "says": [f"{_M_R} — {_M_LIVE}"], "never": [_M_ASKED0], "route": None,
+        "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
+    }
+    return cases
+
+
+def _m_hold(skus) -> None:
+    book = corpus.Corpus.read()
+    for sku in skus:
+        book.answers[sku] = corpus.Answer(value={"withheld": "keeping"})
+    book.write()
+
+
+def _m_files(dirs) -> Dict[str, List[Tuple[str, int, str]]]:
+    out: Dict[str, List[Tuple[str, int, str]]] = {}
+    for directory in dirs:
+        for path in sorted(Path(directory).glob("import*.csv")):
+            out[path.name] = sorted(
+                (
+                    str(row[tcgcsv.SKU_COLUMN]),
+                    tcgcsv.parse_quantity(row.get(tcgcsv.QUANTITY_COLUMN, "")),
+                    str(row.get("TCG Marketplace Price", "")),
+                )
+                for row in tcgcsv.read_export(path).rows
+            )
+    return out
+
+
+def _m_home(worklists: Dict[str, dict]) -> Dict[str, dict]:
+    """Home's line, tile and run chips for each worklist, off `app/src/standing.ts` itself."""
+    root = Path(__file__).resolve().parents[2]
+    esbuild = root / "app" / "node_modules" / ".bin" / "esbuild"
+    if not esbuild.exists():
+        raise RuntimeError("app/node_modules is not installed (npm --prefix app ci); Home cannot be read")
+    with tempfile.TemporaryDirectory() as tmp:
+        bundle = Path(tmp) / "standing.mjs"
+        subprocess.run(
+            [str(esbuild), str(root / "app" / "src" / "standing.ts"), "--bundle", "--format=esm",
+             "--platform=node", "--log-level=warning", f"--outfile={bundle}"],
+            check=True,
+        )
+        cases = Path(tmp) / "cases.json"
+        cases.write_text(json.dumps(worklists))
+        script = (
+            f"import * as s from {json.dumps(bundle.as_uri())};"
+            "import {readFileSync} from 'node:fs';"
+            f"const cases = JSON.parse(readFileSync({json.dumps(str(cases))}, 'utf8'));"
+            "const status = {cards: 3, queues: {review: 0, parked: 0}, states: {}, problem: null};"
+            "const orders = {orders: [], resolution: {orders: [], counts: {}}};"
+            "const out = {};"
+            "for (const [name, c] of Object.entries(cases)) {"
+            "  const read = (book, failed) => {"
+            "    const say = s.standing({status, statusFailed: false, orders, ordersFailed: false,"
+            "      pricing: c.pricing, pricingFailed: false, runs: [], runsFailed: false, unconfirmed: 0,"
+            "      book, bookFailed: failed});"
+            "    return say === null ? null : {lead: say.lead, text: say.say.map((x) => x.text).join(''),"
+            "      behind: say.behind.map((b) => `${b.figure ?? ''} ${b.label}`.trim())};"
+            "  };"
+            "  const ready = s.sendCounts(c.pricing, c.book).ready;"
+            "  out[name] = {line: read(c.book, false), failed: read(null, true),"
+            "    title: c.empty ? s.emptySendTitle(c.empty) : null,"
+            "    tile: s.pricingTileNote(s.runsOwingPrice(c.pricing.roster), ready),"
+            "    chips: c.pricing.roster.map((r) => s.runChip(r))};"
+            "}"
+            "process.stdout.write(JSON.stringify(out));"
+        )
+        done = subprocess.run(
+            ["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=False
+        )
+        if done.returncode != 0:
+            raise RuntimeError(f"node could not read Home: {done.stderr.strip()[:900]}")
+        return json.loads(done.stdout)
+
+
+def check_send_matrix(checks: Checks) -> None:
+    """THE SEND MATRIX (R6): every store shape and flag set, all four readers, one table."""
+    from cli import __main__ as entry
+
+    checks.note("")
+    checks.note("THE SEND MATRIX — the file, emit's reasons, the route's refusal, and Home, per case")
+
+    def emit(argv) -> Tuple[int, str]:
+        with quiet() as said:
+            code = entry.main(["emit", *argv])
+        return code, said.getvalue()
+
+    cases = _m_cases()
+    worklists: Dict[str, dict] = {}
+    for name, spec in cases.items():
+        with isolated_home() as home:
+            made = [seam_run(checks, [_M_CARDS[i] for i in part], market=spec["market"])[0]
+                    for part in _M_LAYOUT[spec["layout"]]]
+            dirs = [str(run.directory) for run in made]
+            if spec.get("pre"):
+                _m_hold(spec["pre"])
+            extra: List[str] = []
+            if spec.get("live") is not None:
+                live = home / "live.csv"
+                live.write_bytes(_live_export_bytes(spec["live"]))
+                extra += ["--live-guard", str(live)]
+            if spec.get("named") is not None:
+                told = home / "named.json"
+                told.write_text(json.dumps(spec["named"]))
+                extra += ["--reprice-live", str(told)]
+            if spec.get("twice"):
+                emit(dirs)
+            worklists[name] = {
+                "pricing": pipeline_routes.do_pipeline_worklist([]),
+                "book": pipeline_routes.do_pricing_corpus().get("corpus") or {},
+            }
+            code, said = emit(dirs + spec["flags"] + extra)
+            checks.equal(code, spec["exit"], f"{name}: emit exits {spec['exit']}")
+            checks.equal(_m_files(dirs), {k: sorted(v) for k, v in spec["files"].items()},
+                         f"{name}: the import files hold exactly these rows")
+            for phrase in spec["says"]:
+                checks.ok(phrase in said, f"{name}: emit says {phrase!r}", said[-1500:])
+            for phrase in spec["never"]:
+                checks.ok(phrase not in said, f"{name}: emit never says {phrase!r}", said[-1500:])
+            if spec["route"] is not None:
+                guard = send_routes._guard_line(said) or {}
+                refusal = send_routes._empty_send_refusal(said, guard.get("trimmed") or [], "sent", code)
+                want_code, _ = spec["route"]
+                checks.equal(refusal.code, want_code, f"{name}: the route refuses as {want_code}")
+                worklists[name]["empty"] = (refusal.data or {}).get("empty")
+                worklists[name]["detail"] = str(refusal)
+
+    try:
+        home = _m_home(worklists)
+    except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
+        checks.ok(False, "Home can be read for every matrix case", str(exc))
+        return
+    for name, spec in cases.items():
+        want, got = spec["home"], home[name]
+        if spec["route"] is not None:
+            # R6-2: the Send card's title states every reason; the server's sentence is only the
+            # detail behind the fold. A refusal with no figures keeps its fixed title, and the
+            # detail is what names it.
+            title = got["title"] if got["title"] is not None else worklists[name]["detail"]
+            for phrase in spec["route"][1]:
+                checks.ok(phrase in title, f"{name}: the Send card's title says {phrase!r}", title)
+        line = (got["line"] or {}).get("text", "")
+        if want["line"] is None:
+            checks.ok("send" not in line and "price" not in line, f"{name}: Home owes nothing on Pricing", line)
+        else:
+            checks.ok(want["line"] in line, f"{name}: Home says {want['line']!r}", line)
+        if want.get("behind"):
+            checks.ok(want["behind"] in (got["line"] or {}).get("behind", []),
+                      f"{name}: Home names {want['behind']!r} behind the line", str(got["line"]))
+        checks.ok(want["tile"] in got["tile"], f"{name}: the Pricing tile says {want['tile']!r}", got["tile"])
+        # R6-4 AND R8-1: a failed read of typed prices degrades to the worklist's own counts, the
+        # no-price count included, and a Pricing line names that read. A line from a rank below
+        # Pricing still draws.
+        failed = (got["failed"] or {})
+        # R8-1: A FAILED READ IS NEVER CLEAR. `standing.ts` says Clear only from a complete
+        # reading, so a store whose typed prices could not be read never reads as owing nothing.
+        checks.ok(
+            failed.get("lead") != "Clear" and "nothing is owed" not in failed.get("text", ""),
+            f"{name}: with typed prices unread, Home never says Clear",
+            str(failed),
+        )
+        checks.ok(
+            "the pricing worklist" not in failed.get("text", "")
+            and (
+                want.get("failed", want["line"]) is None
+                or (
+                    want.get("failed", want["line"]) in failed.get("text", "")
+                    and any("typed prices" in b for b in failed.get("behind", []))
+                )
+            ),
+            f"{name}: with typed prices unread, Home still counts the worklist and names that read",
+            str(failed),
+        )
+        if want.get("chip"):
+            checks.ok(any(want["chip"] == chip for chip in got["chips"]),
+                      f"{name}: a run chip says {want['chip']!r}", str(got["chips"]))
+    # R6-8: a SENT run that owes a price is told from one never sent that owes one too.
+    checks.ok(
+        all("Sent, 1 needs a price" in home[f"mix/{layout}/sent"]["chips"] for layout in ("one", "two")),
+        "a sent run that owes a price says it was sent",
+        str([home[f"mix/{layout}/sent"]["chips"] for layout in ("one", "two")]),
+    )
+    checks.ok(
+        all(any(chip.startswith("Never sent, 1 needs") for chip in home[f"mix/{layout}/plain"]["chips"])
+            for layout in ("one", "two")),
+        "a never-sent run that owes a price says it was never sent",
+        str([home[f"mix/{layout}/plain"]["chips"] for layout in ("one", "two")]),
+    )
+    checks.note(f"send matrix: {len(cases)} cases")
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
     check_emit_claim_decides(checks)
+    check_emit_unpriced_left_out(checks)
+    check_send_matrix(checks)
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
     check_prices_adopt(checks)

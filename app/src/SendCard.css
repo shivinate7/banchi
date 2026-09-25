@@ -81,6 +81,26 @@
 .send-short {
   display: none;
 }
+.send-more-press {
+  display: none;
+}
+/* ONE LINE ON A PHONE (D277, Q4): the press and More, pinned above the tab bar. The quiet doors
+   open beneath it on More. SendCard's own narrow breakpoint, where the doors used to wrap. */
+@media (max-width: 767px) {
+  .send-act .send-press {
+    flex: 1 1 auto;
+  }
+  .send-more-press {
+    display: inline-flex;
+    flex: none;
+  }
+  .send-act:not([data-more='open']) .send-door {
+    display: none;
+  }
+  .send-act[data-more='open'] .send-door {
+    flex: 1 1 auto;
+  }
+}
 
 /* THE TAKEN-BACK WARNING'S FOLD (round 5). Above a phone it is not drawn: the sentence and its
    warning both show, as they always did. */

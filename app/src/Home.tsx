@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   getBoxes,
   getOrders,
+  getPricingCorpus,
   getPricingWorklist,
   getRecentCards,
   getRuns,
@@ -19,7 +20,7 @@ import type {
 import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, Kbd, Loading, Page, type IconName } from './kit'
 import { dayMonth, weekdayDate } from './dates'
-import { runsOwingPrice, standing, type Standing } from './standing'
+import { pricingTileNote, runsOwingPrice, sendCounts, standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { placeWordsOf } from './position'
@@ -460,6 +461,7 @@ export function Home() {
   const runs = useLoad<RunSummary[]>(getRuns, runsRead)
   const orders = useLoad<OrdersPayload>(getOrders)
   const pricing = useLoad<PricingWorklist>(() => getPricingWorklist())
+  const book = useLoad(async () => (await getPricingCorpus()).corpus)
   /* A VISIT TO HOME RUNS A DUE LIVE CHECK (the owner's Q3 ruling): a send whose wait ended
      while the app was closed is checked here, by itself. */
   const liveCheck = useLiveCheck()
@@ -526,9 +528,9 @@ export function Home() {
       : 0
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
   const runsToPrice = pricing.state === 'ready' ? runsOwingPrice(pricing.value.roster) : null
-  /* And the copies every joined run still holds that TCGplayer does not (D156)
-     — the same `unsent` the picker draws per run, summed, so this note and that chip agree. */
-  const unsentCopies = pricing.state === 'ready' ? pricing.value.roster.reduce((n, r) => n + (r.unsent ?? 0), 0) : null
+  /* And the copies ready to send, by the bar's own rule (R4): never an unpriced or held copy. */
+  const readyCopies =
+    pricing.state === 'ready' && book.state === 'ready' ? sendCounts(pricing.value, book.value).ready : null
 
   /* THE STANDING LINE. The policy is `standing.ts`; this only hands it the readings and
      keeps the three non-values apart, which is the whole of what that module needs to obey
@@ -543,6 +545,8 @@ export function Home() {
     runs: runs.state === 'ready' ? runs.value : null,
     runsFailed: runs.state === 'failed',
     unconfirmed: liveCheck.status?.unconfirmed.copies ?? null,
+    book: book.state === 'ready' ? book.value : null,
+    bookFailed: book.state === 'failed',
   })
 
   /* Shipping: the export the hub last read, if one is in hand. */
@@ -610,13 +614,7 @@ export function Home() {
           ? pricing.state === 'failed'
             ? 'worklist not read'
             : 'reading the worklist…'
-          : runsToPrice === 0
-            ? unsentCopies !== null && unsentCopies > 0
-              ? `${plural(unsentCopies, 'copy', 'copies')} ready to send`
-              : 'nothing to price'
-            : runsToPrice === 1
-              ? 'run'
-              : 'runs',
+          : pricingTileNote(runsToPrice, readyCopies),
       tone: runsToPrice ? 'warn' : runsToPrice === 0 ? 'ok' : undefined,
     },
     {
