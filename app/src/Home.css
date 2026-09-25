@@ -1,30 +1,29 @@
-/* Six `1fr` stage tiles and a two-panel grid, none of which reads better for being wider. */
-.home { display: flex; flex-direction: column; gap: var(--bn-7); --bn-page-max: var(--bn-page-w-rows); }
-
-/* The hero sits in the same band as every other screen's header: eyebrow at the top of the
-   page, not centred against the art. */
-.home-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--bn-8);
-  padding: 0 0 var(--bn-4);
-}
-.home-hero-text { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
-.home-hero-text .bn-eyebrow { white-space: nowrap; }
-.home-title {
+/* Six `1fr` stage tiles and a two-panel grid, none of which reads better for being wider.
+   `Page` supplies the width, the top gap and the left edge (D275) — this sheet
+   only carries the hero's own look on top of it. */
+.home .bn-page-body { display: flex; flex-direction: column; gap: var(--bn-7); }
+/* THE HERO IS `Page`'S OWN HEADER NOW (kit-adoption R1): the greeting is `Page`'s one h1, the
+   date is its lede, and the deck is its actions slot — the same three-part shape every other
+   screen's header has, carrying this screen's own look through the rules below. */
+.home .bn-page-head { gap: var(--bn-8); }
+/* The date sits ABOVE the greeting, as it always has — `Page` draws the lede after the h1,
+   so this moves it back with `order` alone; the DOM order (h1 then lede) is unchanged. */
+.home .bn-lede { order: -1; font-size: inherit; color: inherit; max-width: none; }
+.home .bn-lede .bn-eyebrow { white-space: nowrap; }
+.home .bn-title {
   font-family: var(--bn-font-display);
   font-size: clamp(36px, 5vw, 56px);
   font-weight: 800;
   letter-spacing: -0.035em;
   line-height: 1;
 }
+.home-hero-body { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
 /* ── THE STANDING LINE ─────────────────────────────────────────────────────────────────
    One sentence naming what the store is waiting on, ranked by `standing.ts`. The emphasis
    floor is a TINT and never a fill: an accent fill spends the element's only colour channel,
    so a danger condition comes out the same cheerful blue as a clear one. */
 .home-standing { margin-top: var(--bn-4); max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
-.home-standing-skel { margin-top: var(--bn-4); max-width: 620px; height: 58px; border-radius: var(--bn-r-lg); }
+.home-standing-skel { margin-top: var(--bn-4); max-width: 620px; }
 .home-standing[data-tone='danger'] { --tone: var(--bn-danger); --tone-tint: var(--bn-danger-tint); }
 .home-standing[data-tone='warn']   { --tone: var(--bn-warn);   --tone-tint: var(--bn-warn-tint); }
 .home-standing[data-tone='live']   { --tone: var(--bn-live);   --tone-tint: var(--bn-live-tint); }
@@ -66,7 +65,6 @@ a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
 a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate: 2px 0; }
 .home-standing-behind { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-md); color: var(--bn-ink-3);
   display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-2) var(--bn-4); }
-.home-standing-behind b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-standing-behind-lab { color: var(--bn-ink-3); }
 .home-standing-problem { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-warn);
   display: flex; align-items: center; gap: var(--bn-2); }
@@ -84,6 +82,12 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
    frames it on both sides exactly as it framed the character. */
 .home-foot-sum i::before { content: '·'; }
 .home-foot-quiet { color: var(--bn-ink-3); }
+/* THE ONLY LINK OFF HOME INTO SALES (UX-032): styled as plain text at rest, so it reads as
+   part of the sentence and not as a stray button, and picks up the accent only on hover —
+   the same "an alpha over what is already there" rule as every other link on this page. */
+.home-foot-sold { color: inherit; text-decoration: none; }
+.home-foot-sold:hover { color: var(--bn-accent); text-decoration: none; }
+.home-foot-sold:hover b { color: var(--bn-accent); }
 .home-foot-last { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.5; }
 .home-foot-last b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-foot-last em { font-style: normal; color: var(--bn-ink-3); }
@@ -200,10 +204,6 @@ a.home-deck { pointer-events: auto; }
   animation-delay: 420ms;
 }
 .home-deck-address .bn-icon { color: var(--bn-stage-live); }
-.home-deck-sep { opacity: 0.4; }
-/* D218: `.home-deck-address` is already `inline-flex; gap: 6px`, so the gap alone spaces this
-   marker from its neighbours on both sides — the content is the only thing that moved to CSS. */
-.home-deck-sep::before { content: '·'; }
 .home-deck-card-no { color: var(--bn-stage-accent); }
 /* D218: the server's own parts, kept apart by CSS. */
 .home-deck-card-no > span:not(:first-child)::before { content: '·'; margin: 0 4px; opacity: 0.6; }
@@ -211,7 +211,6 @@ a.home-deck { pointer-events: auto; }
    would strip. The end of an enter animation is the element's resting style. */
 @keyframes home-deck-in { from { opacity: 0; transform: translateY(14px); } }
 @media (max-width: 767px) {
-  .home-hero { grid-template-columns: 1fr; gap: 0; padding-top: 0; }
   /* Hidden WITHOUT `display: none`: Chromium's full-page capture matches this media query for
      a frame, and a display toggle restarts the deck's enter animations — so every screenshot
      of this screen at 1440 showed an empty hero. A zero-height, invisible block toggles nothing. */
@@ -220,10 +219,10 @@ a.home-deck { pointer-events: auto; }
   .home-actions .bn-btn { width: 100%; }
 }
 
-/* the spine */
+/* the spine — FIVE stages, not six (Runs folded into Review, 2026-09-24). */
 .home-spine {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--bn-3);
 }
 .home-stage {
@@ -286,7 +285,6 @@ a.home-deck { pointer-events: auto; }
   .home-more { min-height: var(--bn-control-h-sm); padding: 0 var(--bn-2); margin: -11px calc(-1 * var(--bn-2)); }
 }
 .home-boxes, .home-runs { display: flex; flex-direction: column; padding: var(--bn-2); }
-.home-skel-row { height: 44px; margin: 4px var(--bn-2); }
 .home-empty { padding: var(--bn-5); color: var(--bn-ink-3); font-size: var(--bn-fs-md); text-align: center; }
 
 .home-box, .home-run {
@@ -300,6 +298,8 @@ a.home-deck { pointer-events: auto; }
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
 .home-box:hover, .home-run:hover { background: var(--bn-hover); text-decoration: none; }
+/* AN ICON, NOT THE BOX'S NUMBER (the owner's ruling, 2026-09-23): the number is an internal
+   index, never a fact this screen shows. */
 .home-box-num {
   width: 32px;
   height: 32px;
@@ -308,9 +308,6 @@ a.home-deck { pointer-events: auto; }
   place-items: center;
   background: var(--bn-ink);
   color: var(--bn-bg);
-  font-family: var(--bn-font-display);
-  font-weight: 800;
-  font-size: var(--bn-fs-base);
   flex: none;
 }
 .home-box-text, .home-run-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
@@ -322,7 +319,6 @@ a.home-deck { pointer-events: auto; }
 .home-box-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .home-box-bar { width: 96px; height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; flex: none; }
 .home-box-bar > span { display: block; height: 100%; background: var(--bn-accent); border-radius: 3px; transition: width var(--bn-t-slow) var(--bn-ease); }
-.home-box-count { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); width: 40px; text-align: right; flex: none; }
 .home-run-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
 @media (max-width: 559px) { .home-box-bar { display: none; } }
 @media (max-width: 767px) {

@@ -67,6 +67,22 @@ export function relativeDate(at: Date | string | number | null | undefined, now:
   return days === 1 ? 'yesterday' : `${days} days ago`
 }
 
+/** `Thursday, September 25`, or `—` where there is no date. For a screen naming today, not a
+ *  stamp on a record — the year is redundant there. */
+export function weekdayDate(at: Date | string | number | null | undefined): string {
+  const when = toDate(at)
+  return when === null ? '—' : WEEKDAY.format(when)
+}
+const WEEKDAY = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+
+/** `24 September`, or `—` where there is no date. The day leads, for a sentence that reads
+ *  "since 24 September" — `absoluteDate`'s "Sep 24, 2026" reads wrong in that position. */
+export function dayMonth(at: Date | string | number | null | undefined): string {
+  const when = toDate(at)
+  return when === null ? '—' : DAY_MONTH.format(when)
+}
+const DAY_MONTH = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long' })
+
 /** THE OLD SALE-DATE SHAPE, `Sep 09, 2026`, kept only so `Revenue.tsx` and `ProductHistory.tsx`
  *  draw what they drew until their own lanes move them to `absoluteDate`. Do not call it from
  *  new code: the zero-padded day is one of the seven formats the review counted.

@@ -56,11 +56,6 @@
       "R2-class": "library",
       "R2-icon-only-button": "icons"
     },
-    "app/src/Home.tsx": {
-      "R1": "home",
-      "R2-class": "home",
-      "R2-date": "home"
-    },
     "app/src/Inventory.tsx": {
       "R1": "inventory",
       "R2-class": "inventory",
@@ -175,9 +170,7 @@
   },
   "runtime": {
     "/": {
-      "page": "home",
       "h1": "home",
-      "width": "home",
       "top": "home"
     },
     "/capture": {

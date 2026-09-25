@@ -127,12 +127,12 @@ test('a terminal order never inflates the "cannot be filled" figure, and the cou
   await expect(standing).toHaveAttribute('data-tone', 'danger')
   const text = (await standing.locator('.home-standing-say').innerText()).replace(/\s+/g, ' ')
 
-  // The genuine shortfall alone: 2 copies, 1 open order. Never 7 copies — the terminal
-  // order's 5 must never reach this sentence.
-  expect(text).toMatch(/\b2 copies for\b/)
-  expect(text).not.toMatch(/\b7 copies for\b/)
-  expect(text).toMatch(/\b1 open order\b/)
-  expect(text).not.toMatch(/\b2 open orders\b/)
+  // The genuine shortfall alone: 2 copies, 1 order. Never 7 copies — the terminal
+  // order's 5 must never reach this sentence. (UX-051/TXT-26: one word, "missing", once.)
+  expect(text).toMatch(/\b2 copies missing across\b/)
+  expect(text).not.toMatch(/\b7 copies\b/)
+  expect(text).toMatch(/\b1 order\b/)
+  expect(text).not.toMatch(/\b2 orders\b/)
 })
 
 test('the Orders stage tile on Home carries the same figure, joined by `open` and not by trust', async ({ page }) => {
@@ -144,9 +144,31 @@ test('the Orders stage tile on Home carries the same figure, joined by `open` an
   await expect(ordersTile).toBeVisible()
   // The tile loads `/orders` itself, on its own timer (D121 — every panel loads on its own),
   // so this waits for the resolved note rather than reading whatever text painted first.
-  await expect(ordersTile).toContainText('2 not found')
+  // "missing", the same word the standing line now uses (UX-051).
+  await expect(ordersTile).toContainText('2 missing')
   const text = (await ordersTile.innerText()).replace(/\s+/g, ' ')
-  expect(text).not.toContain('7 not found')
+  expect(text).not.toContain('7 missing')
+})
+
+/* UX-077: the "Cannot be filled" sentence opens Orders on the dominant SHORT reason, not on
+ * "All open" — `mixedLedger`'s one open line is `no_copies_on_hand`, so the click should set
+ * that filter, computed from the same resolution rows rather than guessed. */
+test('the "Cannot be filled" press opens Orders pre-filtered to the reason actually short', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, mixedLedger()))
+  /* Orders' own walk starts on landing (`docs/specs/order-walk-plan.md` §13) — an empty plan
+   * is all this test needs, since it only reads the filter select. */
+  await page.route(/\/orders\/walk-plan$/, (route) =>
+    json(route, { cost: 'sections', stops: [], shortfall: [], counts: { stops: 0, boxes: 0, copies: 0, sections_considered: 0, sections_candidate: 0, exact: true, solve_ms: 0 } }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+
+  const standingRow = page.locator('a.home-standing-row')
+  await expect(standingRow).toBeVisible()
+  await standingRow.click()
+
+  await expect(page).toHaveURL(/#\/orders/)
+  await expect(page.locator('select.orders-filter-select')).toHaveValue('no_copies_on_hand')
 })
 
 /* D218: NO ROUTE TYPES A MIDDLE DOT OR BULLET. `stubStore`'s two boxes carry real
@@ -192,5 +214,32 @@ test('a visit to Home matches a finished reading, and asks nothing over a match 
   await expect.poll(() => posted.length).toBe(1)
   expect(posted[0]).toEqual({ path: `/pipeline/runs/${runRow().run}/match`, body: {} })
   await expect.poll(() => reads).toBeGreaterThan(1)
+})
+
+/* UX-139's anti-pattern reaches the Review tile too: a bare figure with no note reads as an
+ * unlabelled number, the same defect the box row's trailing count had. The common case —
+ * cards waiting in Review, none parked — must say so, in the standing line's own word. */
+test('the Review tile says "waiting", never a bare figure, when the queue is not empty and nothing is parked', async ({
+  page,
+}) => {
+  await page.route(/\/status$/, (route) =>
+    json(route, {
+      captures_root: 'captures',
+      store: 'inventory/store.sqlite',
+      store_exists: true,
+      cards: 4,
+      states: {},
+      queues: { review: 9, parked: 0 },
+      next_index: {},
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+
+  const reviewTile = page.locator('a.home-stage[href="#/review"]')
+  await expect(reviewTile).toBeVisible()
+  await expect(reviewTile).toContainText('waiting')
+  const note = page.locator('a.home-stage[href="#/review"] .home-stage-note')
+  await expect(note).not.toHaveText('')
 })
 
