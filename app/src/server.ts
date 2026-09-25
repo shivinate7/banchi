@@ -2412,6 +2412,15 @@ export async function takeBackSend(stamp: string): Promise<{ send: SendSummary; 
   })) as { send: SendSummary; moved: number }
 }
 
+/** The owner has read a taken-back receipt's warning, so the card stops drawing it. */
+export async function dismissSendWarning(stamp: string): Promise<{ send: SendSummary }> {
+  return (await request(`/pipeline/sends/${encodeURIComponent(stamp)}/dismiss`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })) as { send: SendSummary }
+}
+
 /**
  * Read what is live and confirm every send that is due. The server runs it only when asked:
  * `force` is the manual "Check what is live" press, which runs with nothing due.

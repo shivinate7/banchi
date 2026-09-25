@@ -14,14 +14,16 @@
  *  - a press still running, which a dropped connection reads instead of offering a second press;
  *  - a send TCGplayer did not confirm, whose cards are held and which is never offered again;
  *  - "Take them back" ONLY after a live check has run past the wait (the owner's ruling,
- *    2026-09-24). Before that the card says when it will be safe.
+ *    2026-09-24). Before that the card says when it will be safe;
+ *  - after Take back, what must not happen next: an upload that may wait in Staged is not
+ *    published, and a downloaded file is not uploaded. Drawn until the owner dismisses it.
  *
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { useEffect, useState } from 'react'
 import { Button, Icon, Notice, Refusal, Retry } from './kit'
 import { clockTime } from './dates'
-import { describeFailure, sendCopies, sendFileUrl, takeBackSend } from './server'
+import { describeFailure, dismissSendWarning, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { SendSummary, SendTrim } from './types'
 import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
@@ -116,6 +118,38 @@ const STAGED_WARNING = 'The upload may still wait in TCGplayer’s Staged list. 
 function StagedWarning({ send }: { readonly send: SendSummary }) {
   if (!send.unknown?.staged) return null
   return <p className="send-staged">{STAGED_WARNING}</p>
+}
+
+/** A TAKEN-BACK RECEIPT'S WARNING, until the owner dismisses it (the round-3 review, H2). The
+ *  moment after Take back is the one it matters most: the copies are on the list again, so the
+ *  old upload published by hand, or the old file uploaded, would list them twice. */
+function TakenBackWarning({
+  send,
+  dismiss,
+  dismissing,
+}: {
+  readonly send: SendSummary
+  readonly dismiss: (stamp: string) => void
+  readonly dismissing: boolean
+}) {
+  if (send.warning === null) return null
+  return (
+    <Notice
+      tone="warn"
+      compact
+      className="send-standing send-taken-back"
+      title={`Copies taken back at ${clockTime(send.taken_back_at)}.`}
+      action={
+        <Button size="sm" busy={dismissing} disabled={dismissing} onClick={() => dismiss(send.stamp)}>
+          Dismiss
+        </Button>
+      }
+    >
+      {send.warning === 'staged'
+        ? STAGED_WARNING
+        : `Do not upload the file written at ${clockTime(send.at)}. Its copies are back on the list.`}
+    </Notice>
+  )
 }
 
 /** One receipt, in one sentence and at most one list. `takeBack` is drawn only when the server
@@ -249,6 +283,7 @@ export function SendCard({
   const [downloadOpen, setDownloadOpen] = useState(false)
   const [split, setSplit] = useState(false)
   const [takingBack, setTakingBack] = useState(false)
+  const [dismissing, setDismissing] = useState(false)
 
   /* THE PRESS WAITS FOR THE SAVE RATHER THAN RACING IT: the server writes the file from the
      prices on disk, so a press with a save in flight would send the price before the last one
@@ -301,6 +336,7 @@ export function SendCard({
   const latest = newest !== null && (sent === null || newest.stamp >= sent.stamp) ? newest : sent
   const settledAt = Date.parse(latest?.checked_at ?? latest?.published_at ?? '')
   const open = openReceipts(live.status?.sends ?? [])
+  const warned = (live.status?.sends ?? []).filter((send) => send.state === 'taken_back' && send.warning !== null)
   const standing =
     latest === null || open.some((send) => send.stamp === latest.stamp)
       ? null
@@ -329,6 +365,18 @@ export function SendCard({
       setFailure(describeFailure(err))
     } finally {
       setTakingBack(false)
+      void refreshLive()
+    }
+  }
+
+  const dismiss = async (stamp: string) => {
+    setDismissing(true)
+    try {
+      await dismissSendWarning(stamp)
+    } catch (err) {
+      setFailure(describeFailure(err))
+    } finally {
+      setDismissing(false)
       void refreshLive()
     }
   }
@@ -403,6 +451,10 @@ export function SendCard({
 
       {open.map((send) => (
         <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
+      ))}
+
+      {warned.map((send) => (
+        <TakenBackWarning key={send.stamp} send={send} dismiss={(stamp) => void dismiss(stamp)} dismissing={dismissing} />
       ))}
 
       {standing === null ? null : (

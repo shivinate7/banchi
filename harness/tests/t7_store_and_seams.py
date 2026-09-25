@@ -18467,8 +18467,9 @@ def check_send_review_r3(checks: Checks) -> None:
     it "sending" for as long as the server lived; a mark-down press that died left a claim
     nothing released; the check read a missing baseline as zero; a press that sent nothing
     left a claim; the stale half of the claim had no case; a listing row could carry no copy;
-    a listing send could put back the price a mark-down had just set; and a downloaded file
-    offered its copies back after one check, although the owner may have uploaded it late.
+    and a downloaded file offered its copies back after one check, although the owner may have
+    uploaded it late. (Round 3's price wait had a case here too. Round 4 removed the wait, whose
+    premise was false, and `check_send_review_r4`'s H3 case proves the price a send carries.)
     """
     checks.note("")
     checks.note("SEND REVIEW, ROUND 3 — what the round-2 review found, each red first")
@@ -18754,31 +18755,6 @@ def check_send_review_r3(checks: Checks) -> None:
             "and the same row still passes the price door",
         )
 
-    # --------------------- a listing send never puts back a price a mark-down just set
-    with _case(checks, "a listing send after a mark-down"), send_portal() as portal, \
-            isolated_home() as home:
-        directory = _markdown_dir(home, "20260924-160000")
-        now = send_routes._iso(send_routes._now())
-        pipeline_routes._write_push(
-            directory,
-            {"upload_id": "u-5", "rows": 1, "accepted": 1, "messages": [],
-             "pushed_at": now, "published_at": now},
-        )
-        run_dir, _ = seam_run(checks, cards)
-        portal["live"] = _live_export_bytes(empty)
-        answer = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
-        checks.equal(
-            sorted(row["ProductConditionId"] for row in portal["rows"]),
-            [DUNSPARCE_SKU],
-            "A LISTING SEND SKIPS A CARD WHOSE PRICE A MARK-DOWN JUST CHANGED: its row would put "
-            "the old price back before TCGplayer shows the new one",
-        )
-        checks.equal(
-            (pushed(ARTICUNO_SKU), answer.get("waiting_on_price")),
-            (0, [ARTICUNO_SKU]),
-            "and its copies stay on the list, named, for the next press",
-        )
-
     # --------- the orchestrator's call: a downloaded file takes back after a second check
     with _case(checks, "a downloaded file: take back after a second check"), \
             send_portal() as portal, isolated_home():
@@ -18809,6 +18785,306 @@ def check_send_review_r3(checks: Checks) -> None:
             (second["state"], second["takeable"]),
             ("short", 4),
             "and a second check that still finds none offers all four back",
+        )
+
+
+class _GatedStore:
+    """`Store`, with the first two `write()` calls held at a barrier until both arrive. Two
+    presses at once then enter their store write together, which is the race a take-back must
+    survive. Reads pass straight through."""
+
+    gate: Optional[threading.Barrier] = None
+    arrived: List[int] = []
+
+    def __init__(self, *args, **kwargs):
+        self._real = Store(*args, **kwargs)
+
+    def read(self, *args, **kwargs):
+        return self._real.read(*args, **kwargs)
+
+    def write(self, *args, **kwargs):
+        if self.gate is not None and len(self.arrived) < 2:
+            self.arrived.append(1)
+            with contextlib.suppress(threading.BrokenBarrierError):
+                self.gate.wait()
+        return self._real.write(*args, **kwargs)
+
+
+def check_send_review_r4(checks: Checks) -> None:
+    """The round-3 adversarial review's failures (H1-H4), each red first on the round-3 build.
+
+    H1: the live check credited a SKU's rise to the OLDEST due receipt, whatever its kind and
+    whatever earlier checks had already credited. A download nobody uploaded took the credit
+    for a send that went live, so the live send was offered back (A), and two checks each
+    credited the same single copy (B). H3: the price wait held copies out of a listing send for
+    a reason that was never true, since a mark-down writes its price into the price file.
+    H4: two Take back presses at once both took the copies back. And a route shape the round-2
+    stamp outgrew: the screen's take-back and file routes matched no new receipt.
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 4 — what the round-3 review found, each red first")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    empty = {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0}
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def receipt(stamp):
+        return [s for s in send_routes.do_sends()["sends"] if s["stamp"] == stamp][0]
+
+    def found(stamp, sku):
+        """Copies of `sku` the receipt's last check credited it with."""
+        summary = receipt(stamp)
+        sent = send_routes._read(send_routes.sends_dir() / stamp).get("copies", {}).get(sku, 0)
+        for row in (summary["check"] or {}).get("missing") or []:
+            if row["sku"] == sku:
+                return int(row["found"])
+        return int(sent) if summary["check"] else 0
+
+    def one_articuno(run_dir, **extra):
+        return dict(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}}, **extra
+        )
+
+    # ------------- H1-A: a download nobody uploaded never takes a live send's credit
+    with _case(checks, "H1-A: a download and a send, one check"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        download = send_routes.do_send(one_articuno(run_dir, download=True))["send"]["stamp"]
+        sent = send_routes.do_send(one_articuno(run_dir, confirm=True))["send"]["stamp"]
+        checks.equal(
+            [row["AddToQuantity"] for row in portal["rows"]],
+            ["1"],
+            "H1-A: one Articuno is written to a file and not uploaded, and one is sent",
+        )
+        # THE SEND WENT LIVE. The downloaded file never left the Mac.
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0})
+        _age_receipt(download)
+        _age_receipt(sent)
+        send_routes.do_live_check({})
+        live_send, file = receipt(sent), receipt(download)
+        checks.equal(
+            (live_send["state"], live_send["takeable"], found(sent, ARTICUNO_SKU)),
+            ("checked", 0, 1),
+            "H1-A: THE RISE IS THE SEND'S. Banchi saw its upload succeed, and the time of a "
+            "download's upload is not known, so the send is credited first and is never "
+            "offered back",
+        )
+        checks.equal(
+            (file["state"], found(download, ARTICUNO_SKU)),
+            ("written", 0),
+            "H1-A: and the download is found at none, and waits for its second check",
+        )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_take_back(sent, {"confirm": True})),
+            "not_takeable",
+            "H1-A: TAKE BACK OF THE LIVE SEND IS REFUSED, so the next press cannot send its copy "
+            "again",
+        )
+        directory = send_routes.sends_dir() / download
+        record = send_routes._read(directory)
+        record["checked_at"] = record["first_checked_at"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        send_routes.do_live_check({})
+        checks.equal(
+            (receipt(download)["state"], receipt(download)["takeable"], receipt(sent)["state"]),
+            ("short", 1, "checked"),
+            "H1-A: THE SECOND CHECK STILL CREDITS THE SEND, not the file: the file's one copy "
+            "comes back, and the send stays found",
+        )
+        send_routes.do_take_back(download, {"confirm": True})
+        checks.equal(
+            pushed(ARTICUNO_SKU),
+            1,
+            "H1-A: and after the file's copy comes back the store counts one Articuno out, "
+            "which is what TCGplayer holds",
+        )
+
+    # ------------- H1-B: two checks never credit one copy twice
+    with _case(checks, "H1-B: two sends, two checks, one copy live"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        first = send_routes.do_send(one_articuno(run_dir, confirm=True))["send"]["stamp"]
+        # THE EXPORT HAS NOT SHOWN THE FIRST SEND YET (D106's lag), so the second press reads
+        # the same baseline of none.
+        second = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1},
+             "confirm": True}
+        )["send"]["stamp"]
+        # ONE ARTICUNO WENT LIVE, NOT TWO. The Dunsparce went too.
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1})
+        _age_receipt(first)
+        send_routes.do_live_check({})
+        checks.equal(
+            (receipt(first)["state"], found(first, ARTICUNO_SKU)),
+            ("checked", 1),
+            "H1-B: the first check credits the one live Articuno to the older send",
+        )
+        _age_receipt(second)
+        send_routes.do_live_check({})
+        checks.equal(
+            found(first, ARTICUNO_SKU) + found(second, ARTICUNO_SKU),
+            1,
+            "H1-B: ONE CREDIT LEDGER PER SKU ACROSS CHECKS: the second check does not credit "
+            "the same live Articuno again. TCGplayer holds one, and the two receipts together "
+            "claim one",
+        )
+        checks.equal(
+            (receipt(second)["state"], receipt(second)["takeable"], found(second, DUNSPARCE_SKU)),
+            ("short", 1, 1),
+            "H1-B: so the second send is short one Articuno, which can come back, and its "
+            "Dunsparce is found",
+        )
+
+    # ------------- H3: a listing send carries the price a mark-down just set
+    with _case(checks, "H3: a listing send after a mark-down"), send_portal() as portal, \
+            isolated_home() as home:
+        run_dir, _ = seam_run(checks, cards)
+        priced = home / "live-priced.csv"
+        priced.write_bytes(_live_export_priced({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "25.00"}))
+        command(checks, "reprice", "list", str(priced), "--days", "9999", "--write")
+        stamp = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1].name
+        applied = pipeline_routes.do_markdown_apply(
+            stamp, {"edits": [{"sku": ARTICUNO_SKU, "price": "20.00"}], "write": True}
+        )
+        checks.ok(applied["ok"] and applied["wrote"], f"H3: the mark-down to 20.00 is written: {applied.get('ok')}")
+        portal["live"] = priced.read_bytes()
+        send_routes.do_markdown_send(stamp, {"confirm": True})
+        # THE MARK-DOWN WENT LIVE MOMENTS AGO. The listing send comes straight after it.
+        portal["rows"].clear()
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        rows = {row["ProductConditionId"]: row for row in portal["rows"]}
+        checks.equal(
+            (rows.get(ARTICUNO_SKU) or {}).get("MyPrice"),
+            "20.00",
+            "H3: A LISTING SEND RIGHT AFTER A MARK-DOWN CARRIES THE MARKED-DOWN PRICE. The "
+            "mark-down wrote it into the price file, so no row can put the old price back, and "
+            "no copy waits",
+        )
+
+    # ------------- H4: two Take back presses at once take the copies back once
+    with _case(checks, "H4: two take-backs at once"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0})
+        _age_receipt(stamp)
+        send_routes.do_live_check({})
+        checks.equal(receipt(stamp)["takeable"], 3, "H4: the check offers three copies back")
+        _GatedStore.gate = threading.Barrier(2, timeout=5)
+        _GatedStore.arrived = []
+        answers: Dict[int, tuple] = {}
+        try:
+            with _patched(send_routes, "Store", _GatedStore):
+                threads = [
+                    _press_thread(
+                        lambda: send_routes.do_take_back(stamp, {"confirm": True}), answers, index
+                    )
+                    for index in (0, 1)
+                ]
+                for thread in threads:
+                    thread.join(30)
+        finally:
+            _GatedStore.gate = None
+        checks.equal(
+            sorted(kind if kind == "sent" else f"{kind} {answer}" for kind, answer in answers.values()),
+            ["refused not_takeable", "sent"],
+            f"H4: TWO TAKE BACK PRESSES AT ONCE: one takes the copies back, the other is "
+            f"refused: {answers}",
+        )
+        checks.equal(
+            (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+            (1, 0),
+            "H4: and the store still counts the one live Articuno out: the copies came back once",
+        )
+
+    # ------------- H2: a taken-back receipt keeps its warning until it is dismissed
+    with _case(checks, "H2: the warning a take-back keeps"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        download = send_routes.do_send(one_articuno(run_dir, download=True))
+        # THE REST GO IN A SEND WHOSE PUBLISH AND ROLLBACK ARE BOTH REFUSED: its upload may
+        # still wait in Staged.
+        portal["refuse"] = {"movetolive"}
+        portal["fail"] = {"rollbackexportcsv"}
+        _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True}))
+        portal["refuse"], portal["fail"] = set(), set()
+        staged = [stamp for stamp, record in send_routes._receipts() if record.get("kind") == "send"][0]
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_dismiss(staged, {})),
+            "nothing_to_dismiss",
+            "H2: before Take back there is no taken-back warning to dismiss",
+        )
+        _age_receipt(staged)
+        send_routes.do_live_check({})
+        send_routes.do_take_back(staged, {"confirm": True})
+        checks.equal(
+            receipt(staged)["warning"],
+            "staged",
+            "H2: A SEND TAKEN BACK WHOSE UPLOAD MAY WAIT IN STAGED KEEPS SAYING SO: publishing "
+            "it now would list the copies twice",
+        )
+        for _ in range(send_routes.SENDS_SHOWN):
+            stamp = send_routes._new_stamp()
+            send_routes._write(
+                send_routes.sends_dir() / stamp,
+                {"stamp": stamp, "kind": "send", "phase": "done", "failure": {"code": "x", "message": "x"},
+                 "taken_back_at": "2026-09-24T12:00:00+00:00"},
+            )
+        checks.ok(
+            staged in [s["stamp"] for s in send_routes.do_sends()["sends"]],
+            "H2: and it is listed while it warns, however many newer sends there are",
+        )
+        send_routes.do_dismiss(staged, {})
+        checks.equal(receipt(staged)["warning"], None, "H2: until the owner dismisses it")
+        checks.equal(
+            download.get("send", {}).get("warning"),
+            None,
+            "H2: a written file carries no taken-back warning before it is taken back",
+        )
+        record = send_routes._read(send_routes.sends_dir() / download["send"]["stamp"])
+        record["taken_back_at"] = "2026-09-24T12:30:00+00:00"
+        checks.equal(
+            send_routes._warning(record),
+            "old_file",
+            "H2: A DOWNLOADED FILE TAKEN BACK WARNS: uploading the old file now would list its "
+            "copies twice",
+        )
+
+    # ------------- the screen's routes read the stamp a press now writes
+    with _case(checks, "the take-back and file routes read a round-2 stamp"), isolated_home():
+        stamp = "20260924-120000-abcdef"
+        directory = send_routes.sends_dir() / stamp
+        send_routes._write(
+            directory,
+            {"stamp": stamp, "kind": "download", "at": "2026-09-24T12:00:00+00:00",
+             "phase": "done", "files": ["import.csv"], "copies": {ARTICUNO_SKU: 1},
+             "copies_total": 1, "check_after": "2999-01-01T00:00:00+00:00"},
+        )
+        (directory / "import.csv").write_text("x\n", encoding="utf-8")
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            file_status, _, _ = request(port, "GET", f"/pipeline/sends/{stamp}/file?name=import.csv")
+            back_status, back_body, _ = request(
+                port, "POST", f"/pipeline/sends/{stamp}/take-back", payload={"confirm": True}
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+        checks.equal(
+            (file_status, back_status, (json.loads(back_body or b"{}").get("error") or {}).get("code")),
+            (200, 409, "take_back_not_yet"),
+            "THE SCREEN'S ROUTES MATCH THE STAMP A PRESS WRITES: the file is served, and Take "
+            "back answers for the receipt rather than 404",
         )
 
 
@@ -33509,6 +33785,7 @@ def run() -> Result:
     check_send_press(checks)
     check_send_hazards(checks)
     check_send_review_r3(checks)
+    check_send_review_r4(checks)
     check_run_match(checks)
     check_publish_lag(checks)
     check_withholding(checks)

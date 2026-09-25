@@ -4058,6 +4058,10 @@ export type SendSummary = {
   take_back_after: string | null
   files: string[]
   taken_back_at: string | null
+  /** What a TAKEN-BACK receipt still warns about, until the owner dismisses it: `staged`, an
+   *  upload that may still wait in TCGplayer's Staged list; `old_file`, a downloaded file still
+   *  on the Mac. Either, published or uploaded now, would list the copies twice. */
+  warning: 'staged' | 'old_file' | null
 }
 
 /** `GET /pipeline/sends`. `due` is the one bit the timer and the visit check both read. */

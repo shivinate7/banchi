@@ -215,9 +215,49 @@ finding, so its red case is in `app/tests/pricing.spec.ts`.
 - **The listing door and D100.** A listing row must add at least one copy. A row adding none
   only moves a price, and a price goes through the price door, where D100's zero rule holds
   whole. The open question above still stands for the listing door as a whole.
-- **A mark-down's new price.** A listing row carries a price. A listing send now leaves out
-  the cards that a mark-down re-priced inside the publish lag, so that it cannot put the old
-  price back. Their copies stay on the list for a later press, and the receipt names them.
+- **A mark-down's new price. REMOVED IN ROUND 4: the premise was false.** Round 3 made a
+  listing send leave out the cards that a mark-down re-priced inside the publish lag, so that
+  a listing row could not put the old price back. But `reprice apply --write` writes the new
+  price into the price file (D86), and a listing row takes its price from that file. So a
+  listing send always carries the new price, and the wait only held copies back with no
+  reason. See round 4.
 - **A downloaded file (the orchestrator's call).** Take them back is offered only after a
   SECOND check, one wait after the first. The wait counts from when Banchi wrote the file, and
   the owner uploads it by hand at an unknown time.
+
+
+### Round 4: what the third review found, and the fixes (2026-09-24)
+
+The review of round 3 failed. Each finding is fixed at its cause, and each has a T7 case in
+`check_send_review_r4` that went red on the round-3 build before the fix. H2 is a screen
+finding, so it also has red cases in `app/tests/pricing.spec.ts`.
+
+- **H1, one rise, two credits.** The check gave each SKU's live rise to the OLDEST due
+  receipt, of any kind, and each check started again from its own baseline. Two sequences
+  proved it on the stand-in portal. (A) A downloaded file that nobody uploaded took the credit
+  for a send that went live, so the check offered the live send back. A second press would
+  then send its copy again. (B) Two checks, each from a baseline read before the first send
+  showed, both read "1 of 1 found" while TCGplayer held one copy. Now the check keeps ONE
+  CREDIT LEDGER PER SKU. The ledger is the per-SKU credit that each receipt's own check
+  records, so it has no second file to drift from the receipts. The rise is measured once,
+  from the oldest baseline of every receipt whose copies can be inside it. The copies that an
+  earlier check credited are taken off first, so a rise is never credited twice. The rest goes
+  first to sends that Banchi saw go live, then to sends it did not see confirmed, then to
+  downloaded files, because their upload time is not known. A send still inside its wait is
+  served before a downloaded file, and never before another send.
+- **H2, the warning after Take back.** The card did not draw a taken-back receipt, so "do not
+  publish it there" went at the moment it matters most. A downloaded file had no warning at
+  all. Now a taken-back receipt keeps its warning until the owner dismisses it: a send whose
+  upload may still wait in Staged, and a downloaded file, which must not be uploaded now. The
+  dismissal is `POST /pipeline/sends/<stamp>/dismiss`, and it changes nothing but the receipt.
+  A receipt with a warning stays in the list, whatever its age.
+- **H3, the price wait (the orchestrator's call).** Removed, with `--price-wait` and the
+  receipt's `waiting_on_price`. The T7 case now proves that a listing send right after a
+  mark-down carries the marked-down price.
+- **H4, two Take back presses at once.** Both took the copies back. Now Take back reads the
+  receipt again inside the store's own write and sets `taken_back_at` there. The store write
+  admits one press at a time, from any process, so the second press finds the copies taken.
+- **The route shape.** The screen's Take back and file routes matched only the round-1 stamp.
+  Every press since round 2 writes a stamp with a random tail, so both routes answered 404
+  for every new receipt. The routes now read the send module's own stamp pattern.
+

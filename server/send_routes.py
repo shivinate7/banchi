@@ -90,8 +90,11 @@ SENDS = cmd_reprice.SENDS
 RECEIPT = "send.json"
 #: A send's stamp: UTC to the second, then six hex characters of its own. THE TAIL IS THE FIX
 #: for two presses in one second sharing a directory (the 2026-09-24 review); a round-1 stamp
-#: without it still reads.
-_STAMP = re.compile(r"^[0-9]{8}-[0-9]{6}(-[0-9a-f]{6})?$")
+#: without it still reads. `STAMP_SHAPE` IS WHAT THE SERVER'S ROUTES MATCH TOO
+#: (`server/capture_server.py`): the round-2 stamp outgrew a route pattern typed beside it, and
+#: the screen's Take back and file download matched no new receipt (the round-3 review).
+STAMP_SHAPE = r"[0-9]{8}-[0-9]{6}(?:-[0-9a-f]{6})?"
+_STAMP = re.compile(rf"^{STAMP_SHAPE}$")
 #: How many receipts `GET /pipeline/sends` returns. A screen shows the newest few; the rest
 #: stay on disk as the record.
 SENDS_SHOWN = 20
@@ -421,6 +424,24 @@ def _takeable(record: dict) -> Dict[str, int]:
     return out
 
 
+def _warning(record: dict) -> Optional[str]:
+    """The warning a TAKEN-BACK receipt keeps until the owner dismisses it, or None.
+
+    - `staged`    a send whose upload may still wait in TCGplayer's Staged list. Publishing it
+                  by hand now would list copies that are back on the list.
+    - `old_file`  a downloaded file. Uploading it now would do the same.
+
+    A failed press has none: nothing can be waiting at TCGplayer, and no file was handed over.
+    """
+    if not record.get("taken_back_at") or record.get("failure") or record.get("dismissed_at"):
+        return None
+    if record.get("kind") == KIND_DOWNLOAD:
+        return "old_file"
+    if (record.get("unknown") or {}).get("staged"):
+        return "staged"
+    return None
+
+
 def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozenset()) -> dict:
     state = state_of(record, now)
     pushed = record.get("pushed") or {}
@@ -452,11 +473,9 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "held": stamp in held,
         "takeable": sum(offer.values()),
         "take_back_after": _iso(take_after) if waiting_to_take and take_after is not None else None,
-        # CARDS THIS PRESS LEFT ON THE LIST because a mark-down changed their price moments
-        # ago: a listing row would have put the old price back.
-        "waiting_on_price": list((record.get("guard") or {}).get("waiting_on_price") or []),
         "files": record.get("files") or [],
         "taken_back_at": record.get("taken_back_at"),
+        "warning": _warning(record),
     }
 
 
@@ -603,22 +622,28 @@ def _sold_by_sku(skus) -> Dict[str, int]:
 
 
 def _take_back(copies: Dict[str, int], stamp: str, by: str) -> int:
-    """Put these copies back on the list and release the send's claim. One store write.
+    """Put these copies back on the list and release the send's claim. One store write."""
+    with Store().write() as writable:
+        moved = _bump_back(writable, copies)
+        writable.send_claims.release(stamp, by)
+    return moved
+
+
+def _bump_back(writable, copies: Dict[str, int]) -> int:
+    """Lower `pushed` by these copies, inside a store write the caller holds.
 
     `pushed` is a QUANTITY per SKU (D7 amended), and `emit` raised it by exactly the file's
     `Add to Quantity`. Lowering it by the same figure is the whole undo: `cli/resolve.py:
     _copies_out` reads it, so the next worklist offers these copies again. `bump` floors at 0.
     """
     moved = 0
-    with Store().write() as writable:
-        for sku, count in copies.items():
-            listing = writable.inventory.listings.get(sku)
-            if listing is None or count <= 0:
-                continue
-            before = listing.pushed
-            listing.bump(master.PUSHED, -int(count))
-            moved += before - listing.pushed
-        writable.send_claims.release(stamp, by)
+    for sku, count in copies.items():
+        listing = writable.inventory.listings.get(sku)
+        if listing is None or count <= 0:
+            continue
+        before = listing.pushed
+        listing.bump(master.PUSHED, -int(count))
+        moved += before - listing.pushed
     return moved
 
 
@@ -753,10 +778,8 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
     live_name, live_path = _fetch_live(step)
     _reconcile(live_path, step)
     live_before = _live_quantities(live_path, step)
-    # THE PRICE WAIT (round 3). A mark-down published inside the lag changed a price the live
-    # export cannot show yet, and a listing row carries a price: sending one of those cards
-    # now would put the old price back. Their copies stay on the list for a later press.
-    waiting = sorted(cmd_reprice.published_recently(kinds=(cmd_reprice.MARKDOWN_RECEIPTS,)))
+    # NO PRICE WAIT (removed in round 4). A mark-down's `reprice apply --write` writes its new
+    # price into the price file, so a listing row carries the new price, never the old one.
 
     # 3. THE WRITE, INTO THIS PRESS'S OWN DIRECTORY, BEHIND THE GUARD AND THE CLAIM.
     stamp = _new_stamp()
@@ -781,7 +804,7 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
     # receipt naming them rather than a claim nobody can see.
     _write(directory, record)
     try:
-        return _write_and_send(payload, directories, download, record, live_path, live_before, waiting)
+        return _write_and_send(payload, directories, download, record, live_path, live_before)
     except Exception as caught:  # noqa: BLE001 — every failure after the receipt ends known
         _settle(directory, caught)
         raise
@@ -794,7 +817,6 @@ def _write_and_send(
     record: dict,
     live_path: Path,
     live_before: Dict[str, int],
-    waiting: Sequence[str],
 ) -> dict:
     """Steps 3 on, once the receipt exists. Any exception here reaches `_settle`."""
     step = "written" if download else "sent"
@@ -803,8 +825,6 @@ def _write_and_send(
     argv = [str(pipeline_routes.PKMNSCAN), "emit", *[str(d) for d in directories]]
     argv += ["--live-guard", str(live_path), "--send-dir", str(directory)]
     argv += ["--send-claim", stamp, "--claim-holder", str(os.getpid())]
-    for sku in waiting:
-        argv += ["--price-wait", sku]
     if download and payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += pipeline_routes._quantity_flags(payload)
@@ -823,15 +843,8 @@ def _write_and_send(
         if refused is not None:
             raise refused
         trimmed = guard.get("trimmed") or []
-        held_price = guard.get("waiting_on_price") or []
-        if code == 0 or trimmed or held_price or "nothing to write" in console or "nothing new" in console:
+        if code == 0 or trimmed or "nothing to write" in console or "nothing new" in console:
             held = f" {len(trimmed)} card{'s' if len(trimmed) != 1 else ''} held back." if trimmed else ""
-            if held_price:
-                held += (
-                    f" {len(held_price)} card{'s' if len(held_price) != 1 else ''} "
-                    f"{'wait' if len(held_price) != 1 else 'waits'} for a price change to show "
-                    f"at TCGplayer, and can go in a few minutes."
-                )
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT,
                 "nothing_to_send",
@@ -1116,7 +1129,12 @@ def do_sends() -> dict:
     now = _now()
     receipts = _receipts()
     held = _held_stamps()
-    shown = [_summary(stamp, record, now, held) for stamp, record in receipts[:SENDS_SHOWN]]
+    # A RECEIPT STILL CARRYING A WARNING IS LISTED WHATEVER ITS AGE: the warning goes when the
+    # owner dismisses it, never because twenty newer sends pushed it off the list.
+    listed = receipts[:SENDS_SHOWN] + [
+        (stamp, record) for stamp, record in receipts[SENDS_SHOWN:] if _warning(record)
+    ]
+    shown = [_summary(stamp, record, now, held) for stamp, record in listed]
     unconfirmed = [
         (stamp, record)
         for stamp, record in receipts
@@ -1187,11 +1205,50 @@ def do_take_back(stamp: str, payload: dict) -> dict:
             "confirm_required",
             "Taking copies back changes what the next send offers. Send `confirm`.",
         )
-    moved = _take_back(offer, stamp, "taken_back")
-    record["taken_back_at"] = _iso(_now())
-    record["taken_back"] = offer
-    _write(directory, record)
+    # COMPARE AND SET, INSIDE THE STORE'S OWN WRITE (the round-3 review, H4). Two presses at once
+    # both read "not taken back" above; the store write lets one in at a time, whatever process
+    # it came from, and the receipt is read again inside it. The second press finds it taken.
+    with Store().write() as writable:
+        record = _read(directory)
+        offer = _takeable(record)
+        if offer:
+            moved = _bump_back(writable, offer)
+            writable.send_claims.release(stamp, "taken_back")
+            record["taken_back_at"] = _iso(_now())
+            record["taken_back"] = offer
+            # WRITTEN BEFORE THE STORE COMMITS. A crash between the two leaves a receipt that
+            # says "taken back" over copies still counted out: the safe side, since nothing is
+            # sent twice, and the owner reads the receipt and presses nothing more.
+            _write(directory, record)
+    if not offer:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "not_takeable",
+            "These copies were already taken back. Nothing changed.",
+        )
     return {"send": _summary(stamp, record, _now(), _held_stamps()), "moved": moved}
+
+
+def do_dismiss(stamp: str, payload: dict) -> dict:
+    """`POST /pipeline/sends/<stamp>/dismiss` — the owner has read a taken-back receipt's warning.
+
+    THE ROUND-3 REVIEW'S H2. A taken-back send whose upload may still wait in TCGplayer's
+    Staged list, and a taken-back download whose file is still on the Mac, each carry a warning
+    that matters most right after Take back: publishing that upload, or uploading that file,
+    would list the copies twice now that they are back on the list. The card draws it until the
+    owner dismisses it. This changes nothing but the receipt's own `dismissed_at`.
+    """
+    directory = _open_send(stamp)
+    record = _read(directory)
+    if _warning(record) is None:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "nothing_to_dismiss",
+            "This send carries no warning to dismiss. Nothing changed.",
+        )
+    record["dismissed_at"] = _iso(_now())
+    _write(directory, record)
+    return {"send": _summary(stamp, record, _now(), _held_stamps())}
 
 
 # ----------------------------------------------------------------------- the live check
@@ -1254,17 +1311,157 @@ def do_live_check(payload: dict) -> dict:
     figures for a while after a publish (D106, measured), so reading it early would call a copy
     missing that simply has not shown yet. `reconcile --live` holds those SKUs back itself.
 
-    ONE RISE IS NEVER TWO CONFIRMATIONS (the 2026-09-24 review, S3). Two receipts that sent the
-    same SKU from the same baseline used to each count the whole rise. Now the rise per SKU is
-    measured once, from the OLDEST due receipt's baseline, and handed out oldest first: the
-    older send is credited first, and the newer one only with what is left.
+    ONE RISE IS CREDITED ONCE, ACROSS RECEIPTS AND ACROSS CHECKS (`_credits`, the round-3
+    review, H1). The rise per SKU is measured from one baseline, and every copy an earlier check
+    already credited out of it is taken off first. What is left goes to the receipts that could
+    have caused it: a send whose upload Banchi saw succeed before a send it did not, and both
+    before a downloaded file, whose upload time nobody knows.
     """
+    # ONE CHECK AT A TIME IN THIS SERVER: two at once would each credit the same rise, since
+    # neither has written its credit when the other reads the ledger.
+    with _CHECK:
+        return _live_check(bool(payload.get("force")))
+
+
+_CHECK = threading.Lock()
+
+#: The order a rise is credited in (`_credits`). A SEND BANCHI SAW MADE LIVE is the likeliest
+#: cause of a rise, an UNCONFIRMED send the next, and a DOWNLOADED FILE the last: the owner
+#: uploads it by hand at a time nobody here knows, or never.
+TIER_PUBLISHED, TIER_UNCONFIRMED, TIER_DOWNLOAD = 0, 1, 2
+
+
+def _tier(record: dict) -> int:
+    if record.get("kind") == KIND_DOWNLOAD:
+        return TIER_DOWNLOAD
+    return TIER_PUBLISHED if record.get("published_at") and not _uncertain(record) else TIER_UNCONFIRMED
+
+
+def _pressed_at(stamp: str, record: dict) -> datetime:
+    """When the press read its baseline: the receipt's `at`, or the time its stamp names."""
+    at = _parse(record.get("at"))
+    if at is not None:
+        return at
+    try:
+        return datetime.strptime(stamp[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _settled(record: dict, now: datetime) -> bool:
+    """Is this receipt's result final? A final result is a credit other checks take off the
+    rise; a pending one is judged again when it is due."""
+    return bool(record.get("check")) and state_of(record, now) in ("checked", "short", "taken_back")
+
+
+def _credited(record: dict, sku: str, sent: int) -> int:
+    """Copies of `sku` this receipt's last check credited it with: the ledger's entry."""
+    check = record.get("check") or {}
+    by_sku = check.get("found_by_sku")
+    if isinstance(by_sku, dict) and sku in by_sku:
+        return int(by_sku[sku])
+    for row in check.get("missing") or []:
+        if str(row.get("sku")) == sku:
+            return int(row.get("found", 0))
+    return int(sent)
+
+
+def _credits(
+    receipts: Sequence[Tuple[str, dict]],
+    due: frozenset,
+    sent_by: Dict[str, Dict[str, int]],
+    live_now: Dict[str, int],
+    sold_now: Dict[str, int],
+    now: datetime,
+) -> Dict[str, Dict[str, int]]:
+    """Stamp -> SKU -> copies found, for every due receipt. THE ONE CREDIT LEDGER PER SKU.
+
+    THE ROUND-3 REVIEW'S H1. The round-3 check measured each SKU's rise from the oldest due
+    receipt and handed it out oldest first, whatever the receipt's kind and whatever an earlier
+    check had credited. So (A) a downloaded file nobody uploaded took the credit for a send that
+    went live, and that live send was offered back; and (B) two checks, each from its own stale
+    baseline, both credited the one copy TCGplayer held.
+
+    THE GROUP. Per SKU, the due receipts, and every other receipt whose copies could lie inside
+    the rise measured from the group's oldest baseline: one pressed at or after that baseline
+    was read, and one whose result was not yet final when it was read. The group grows until no
+    receipt joins; the rise is measured once, from its oldest member's baseline, plus the copies
+    sold since.
+
+    THE LEDGER. A member with a final result keeps it: what an earlier check credited it is
+    taken off the rise first, so no copy is credited twice across checks. The rest is handed to
+    the due members by tier (`_tier`), oldest first within a tier. A pending send that is not
+    due yet is served before any due download, so a file's credit is never a send's copy; it is
+    NOT served before a due send, whose copies may simply be the ones that showed first.
+
+    MEASURING FROM AN OLDER BASELINE IS NEVER WRONG, ONLY WIDER: every receipt pressed since it
+    is in the group, with its credit taken off. What the ledger cannot see is a copy that went
+    live with no receipt at all (a hand upload); that over-credits, which holds copies out of
+    the next send rather than sending them twice.
+    """
+    out: Dict[str, Dict[str, int]] = {stamp: {} for stamp in due}
+    by_stamp = dict(receipts)
+    pressed = {stamp: _pressed_at(stamp, record) for stamp, record in receipts}
+    final = {stamp: _settled(record, now) for stamp, record in receipts}
+    checked_at = {stamp: _parse(record.get("checked_at")) for stamp, record in receipts}
+    skus = sorted({sku for stamp in due for sku in sent_by.get(stamp, {})})
+    for sku in skus:
+        members = [stamp for stamp in sent_by if sku in sent_by[stamp]]
+        group = {stamp for stamp in members if stamp in due}
+        while True:
+            since = min(pressed[stamp] for stamp in group)
+            joined = {
+                stamp
+                for stamp in members
+                if stamp not in group
+                and (
+                    pressed[stamp] >= since
+                    or not final[stamp]
+                    or checked_at[stamp] is None
+                    or checked_at[stamp] >= since
+                )
+            }
+            if not joined:
+                break
+            group |= joined
+        anchor = min(group, key=lambda stamp: (pressed[stamp], stamp))
+        record = by_stamp[anchor]
+        before = int(_baseline(record).get(sku, 0))
+        rise = live_now.get(sku, 0) - before + _sold_since(record, sku, sold_now)
+        left = rise - sum(
+            _credited(by_stamp[stamp], sku, sent_by[stamp][sku])
+            for stamp in group
+            if stamp not in due and final[stamp]
+        )
+        left = max(0, left)
+
+        def order(stamp: str) -> Tuple[datetime, str]:
+            return (pressed[stamp], stamp)
+
+        judged = sorted((stamp for stamp in group if stamp in due), key=lambda st: (_tier(by_stamp[st]), order(st)))
+        pending_sends = [
+            stamp
+            for stamp in group
+            if stamp not in due and not final[stamp] and _tier(by_stamp[stamp]) != TIER_DOWNLOAD
+        ]
+        reserved = False
+        for stamp in judged:
+            if not reserved and _tier(by_stamp[stamp]) == TIER_DOWNLOAD:
+                # THE SENDS STILL INSIDE THEIR WAIT ARE SERVED BEFORE ANY FILE.
+                left = max(0, left - sum(int(sent_by[st][sku]) for st in pending_sends))
+                reserved = True
+            given = max(0, min(int(sent_by[stamp][sku]), left))
+            out[stamp][sku] = given
+            left -= given
+    return out
+
+
+def _live_check(force: bool) -> dict:
     now = _now()
     receipts = _receipts()
     due = [(stamp, record) for stamp, record in receipts if _due(record, now)]
     due.reverse()  # OLDEST FIRST — `_receipts` is newest first.
     markdowns = _markdown_due_list(now)
-    force = bool(payload.get("force"))
     if not due and not markdowns and not force:
         status = do_sends()
         return {"ran": False, "check_at": status["check_at"], "checked": []}
@@ -1273,27 +1470,24 @@ def do_live_check(payload: dict) -> dict:
     console = _reconcile(path, "checked")
     live_now = _live_quantities(path, "checked")
     claims = Store().read().send_claims
-    sent_by = {stamp: _copies_of(stamp, record, claims) for stamp, record in due}
-    sold_now = _sold_by_sku({sku for copies in sent_by.values() for sku in copies})
-
-    # THE POOL: per SKU, the rise since the oldest due baseline, plus what sold since then.
-    pool: Dict[str, int] = {}
-    for stamp, record in due:
-        before = _baseline(record)
-        for sku in sent_by[stamp]:
-            if sku in pool:
-                continue
-            sold_since = _sold_since(record, sku, sold_now)
-            pool[sku] = max(0, live_now.get(sku, 0) - int(before.get(sku, 0)) + sold_since)
+    # EVERY RECEIPT THAT MAY STILL HOLD COPIES AT TCGPLAYER is in the ledger. A failed press put
+    # its copies back with nothing left there, so it holds none.
+    sent_by = {
+        stamp: _copies_of(stamp, record, claims)
+        for stamp, record in receipts
+        if not record.get("failure")
+    }
+    due_stamps = frozenset(stamp for stamp, _ in due)
+    sold_now = _sold_by_sku({sku for stamp in due_stamps for sku in sent_by.get(stamp, {})})
+    credits = _credits(receipts, due_stamps, sent_by, live_now, sold_now, now)
 
     checked = []
     for stamp, record in due:
-        copies = sent_by[stamp]
+        copies = sent_by.get(stamp, {})
         missing = []
         found_total = 0
         for sku, sent in copies.items():
-            found = max(0, min(int(sent), pool.get(sku, 0)))
-            pool[sku] = pool.get(sku, 0) - found
+            found = credits[stamp].get(sku, 0)
             found_total += found
             if found < sent:
                 missing.append(
@@ -1309,6 +1503,8 @@ def do_live_check(payload: dict) -> dict:
             "found": found_total,
             "expected": sum(int(n) for n in copies.values()),
             "missing": missing,
+            # THE LEDGER'S ENTRY FOR THIS RECEIPT: what a later check takes off the rise.
+            "found_by_sku": {sku: int(credits[stamp].get(sku, 0)) for sku in sorted(copies)},
         }
         record.setdefault("copies", copies)
         record["copies_total"] = record.get("copies_total") or sum(copies.values())

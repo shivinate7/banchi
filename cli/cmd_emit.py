@@ -251,14 +251,7 @@ def _live_guard(args):
     return target.name, live
 
 
-def _price_wait(args) -> frozenset:
-    """SKUs whose price a mark-down set inside the publish lag (`--price-wait`, the send press
-    only). A listing row carries a price, so sending one of these now would put the old price
-    back before TCGplayer shows the new one. They go on a later press."""
-    return frozenset(str(sku) for sku in (getattr(args, "price_wait", None) or ()))
-
-
-def _apply_guard(guard, matches_by_sku, inventory, waiting: frozenset = frozenset()):
+def _apply_guard(guard, matches_by_sku, inventory):
     """Bound every matched SKU by the guard's room. Returns what `_say_guard` reads, or None.
 
     `matches_by_sku` is SKU -> every match that sends it (one on the single-run path, one per
@@ -289,10 +282,7 @@ def _apply_guard(guard, matches_by_sku, inventory, waiting: frozenset = frozense
         for match in matches:
             if match.asked is None or match.asked > rooms[sku]:
                 match.asked = rooms[sku]
-            if sku in waiting:
-                # THE PRICE WAIT, THROUGH THE SAME PRIMITIVE: no copy of this card this press.
-                match.asked = 0
-    return {"name": name, "live": live, "held": held, "rooms": rooms, "waiting": waiting}
+    return {"name": name, "live": live, "held": held, "rooms": rooms}
 
 
 def _say_guard(applied, would_by_sku, names, say) -> None:
@@ -306,16 +296,8 @@ def _say_guard(applied, would_by_sku, names, say) -> None:
         return
     import json
 
-    # A CARD WAITING ON A PRICE CHANGE IS NAMED AS THAT, never as a trim as well.
-    waiting = sorted(
-        sku for sku in applied.get("waiting") or () if would_by_sku.get(sku, 0) > 0
-    )
     trimmed = sendguard.trims(
-        applied["live"],
-        {sku: n for sku, n in would_by_sku.items() if sku not in waiting},
-        applied["rooms"],
-        applied["held"],
-        names,
+        applied["live"], would_by_sku, applied["rooms"], applied["held"], names
     )
     say("")
     say(f"{'live guard':<16} {len(would_by_sku)} SKU(s) checked against {applied['name']}")
@@ -328,15 +310,7 @@ def _say_guard(applied, would_by_sku, names, say) -> None:
         say(f"{'':<16} ...and {len(trimmed) - 8} more")
     if not trimmed:
         say(f"{'':<16} nothing trimmed")
-    for sku in waiting[:8]:
-        say(f"{'':<16} {sku} {names.get(sku, '')} — its price changed moments ago; it goes "
-            f"on a later press")
-    say(
-        json.dumps(
-            sendguard.report(applied["name"], len(would_by_sku), trimmed, waiting),
-            sort_keys=True,
-        )
-    )
+    say(json.dumps(sendguard.report(applied["name"], len(would_by_sku), trimmed), sort_keys=True))
 
 
 def _would(match, typed) -> int:
@@ -731,7 +705,6 @@ def run(args, say) -> int:
             _live_guard(args),
             {sku: [match] for sku, match in resolved.matches.items()},
             snapshot.inventory,
-            _price_wait(args),
         )
     except GuardRefused as refusal:
         say(f"REFUSING to write: {refusal}. Nothing was written.")
@@ -1263,7 +1236,7 @@ def run_merged(args, say) -> int:
             legs_by_sku.setdefault(sku, []).append(match)
     try:
         guarded = _apply_guard(
-            _live_guard(args), legs_by_sku, Store().read().inventory, _price_wait(args)
+            _live_guard(args), legs_by_sku, Store().read().inventory
         )
     except GuardRefused as refusal:
         say(f"REFUSING to write: {refusal}. Nothing was written.")

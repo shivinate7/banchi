@@ -93,6 +93,8 @@
     GET    /pipeline/sends                 every send's receipt, what is written and not
                                            confirmed, and whether the live check is due
     POST   /pipeline/sends/<stamp>/take-back   a written file's copies back on the list
+    POST   /pipeline/sends/<stamp>/dismiss     the owner has read a taken-back receipt's
+                                               warning, so the card stops drawing it
     GET    /pipeline/sends/<stamp>/file    the file one send wrote, for the download door
     POST   /pipeline/live-check            reads what is live and confirms the sends that are
                                            due. Runs only when a request asks
@@ -694,8 +696,11 @@ _MARKDOWN_ROLLBACK_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/ro
 # mark-down. The two routes above stay, and this one calls them in order.
 _MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$")
 # A written file's copies back on the list (the owner's Q8 ruling). A send stamp, the same shape.
-_SEND_TAKE_BACK_RE = re.compile(r"^/pipeline/sends/([0-9]{8}-[0-9]{6})/take-back$")
-_SEND_FILE_RE = re.compile(r"^/pipeline/sends/([0-9]{8}-[0-9]{6})/file$")
+# THE SHAPE IS `send_routes.STAMP_SHAPE`, never a copy of it: a copy typed here missed the random
+# tail every press has written since round 2, and matched no new receipt.
+_SEND_TAKE_BACK_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/take-back$")
+_SEND_DISMISS_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/dismiss$")
+_SEND_FILE_RE = re.compile(rf"^/pipeline/sends/({send_routes.STAMP_SHAPE})/file$")
 # The lens (D103): every live listing this survey saw, and the two readings over one of them.
 # Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
 # — the document holding the export row is what says what the card is, so the address names a
@@ -13650,6 +13655,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, send_routes.do_take_back(match.group(1), self._body())
+                )
+            match = _SEND_DISMISS_RE.match(path)
+            if match:
+                # The owner has read a taken-back receipt's warning. Changes nothing else.
+                return self._json(
+                    HTTPStatus.OK, send_routes.do_dismiss(match.group(1), self._body())
                 )
             match = _MARKDOWN_SEND_RE.match(path)
             if match:

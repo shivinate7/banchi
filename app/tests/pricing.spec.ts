@@ -71,6 +71,7 @@ function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown
     take_back_after: null,
     files: ['import.csv'],
     taken_back_at: null,
+    warning: null,
     ...over,
   }
 }
@@ -245,6 +246,10 @@ async function open(
       contentType: 'application/json',
       body: JSON.stringify({ send: sendSummary({ kind: 'download', state: 'taken_back' }), moved: 4 }),
     })
+  })
+  await page.route(/\/pipeline\/sends\/[^/]+\/dismiss$/, async (route) => {
+    wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ send: sendSummary({ state: 'taken_back' }) }) })
   })
   await page.route(/\/pipeline\/send$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
@@ -1356,6 +1361,45 @@ test('an unconfirmed send the check found whole still names the upload that may 
   await expect(card).toContainText('3 of 3 found at TCGplayer')
   await expect(card).toContainText('may still wait in TCGplayer’s Staged list')
 })
+
+/* THE ROUND-3 REVIEW, H2: THE WARNING OUTLIVES TAKE BACK. Right after it the copies are on the
+   list again, so the old upload published by hand, or the old file uploaded, would list them
+   twice. The round-3 card drew no taken-back receipt at all, so the warning went at the one
+   moment it matters most. It stays until the owner dismisses it. */
+for (const [kind, warning, said] of [
+  ['send', 'staged', 'may still wait in TCGplayer’s Staged list. Do not publish it there.'],
+  ['download', 'old_file', 'Do not upload the file written at'],
+] as const) {
+  test(`a taken-back ${kind} keeps its warning until the owner dismisses it`, async ({ page }) => {
+    const staged = kind === 'send' ? { stage: 'publish', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' } : null
+    const short = sendSummary({
+      kind,
+      state: 'short',
+      published_at: null,
+      takeable: 3,
+      checked_at: '2026-09-24T12:18:00+00:00',
+      check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+      unknown: staged,
+    })
+    const taken = sendSummary({ ...short, state: 'taken_back', takeable: 0, taken_back_at: '2026-09-24T12:20:00+00:00', warning })
+    const wire = await open(page, {
+      sends: (seen) =>
+        seen.some((r) => r.path.endsWith('/dismiss'))
+          ? { ...SENDS_NONE, sends: [{ ...taken, warning: null }] }
+          : seen.some((r) => r.path.endsWith('/take-back'))
+            ? { ...SENDS_NONE, sends: [taken] }
+            : { ...SENDS_NONE, sends: [short] },
+    })
+    await page.locator('.send-short-check').getByRole('button', { name: 'Take 3 copies back' }).click()
+    await expect.poll(() => wire.filter((r) => r.path.endsWith('/take-back')).length).toBe(1)
+    const warned = page.locator('.send-taken-back')
+    await expect(warned).toContainText('Copies taken back at')
+    await expect(warned).toContainText(said)
+    await warned.getByRole('button', { name: 'Dismiss' }).click()
+    await expect.poll(() => wire.filter((r) => r.path.endsWith('/dismiss')).length).toBe(1)
+    await expect(page.locator('.send-taken-back')).toHaveCount(0)
+  })
+}
 
 test('a send that stopped partway is held, says so, and leaves every press on', async ({ page }) => {
   /* THE ROUND-2 REVIEW, F1: a failure after the receipt used to leave it "sending", with both
