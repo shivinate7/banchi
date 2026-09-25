@@ -6455,8 +6455,9 @@ COMPONENTS = [
             "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
-                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218", "D252", "D-a-box-is-shown-by-its-name",
+                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D159", "D172",
+                            "D181", "D192", "D213", "D218", "D221", "D252",
+                            "D-a-box-is-shown-by-its-name",
                             "D-a-press-reorders-and-nothing-else-moves", "D-page-scaffold",
                             "D-view-state-in-url"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
@@ -9200,8 +9201,8 @@ COMPONENTS = [
                                 "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58",
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
-                                "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D196",
-                                "D213", "D218", "D-a-box-is-shown-by-its-name"],
+                                "D136", "D142", "D155", "D159", "D172", "D181", "D192", "D194",
+                                "D196", "D213", "D218", "D-a-box-is-shown-by-its-name"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

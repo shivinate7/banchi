@@ -4486,6 +4486,47 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
   expect(sent[0]?.body).toMatchObject({ to_box: 7 })
 })
 
+test('the value sort ranks boxes by their own dollar total, high to low by default', async ({
+  page,
+}) => {
+  /* The owner's ruling, 2026-09-24: the value list (D159, `#/pricing?band=`) becomes an
+   * Inventory sort through the shared `SortControl`, fetched lazily off the same aggregates
+   * `ValueBands.tsx` reads — `GET /pipeline/value`'s per-box `total`, never re-derived here. */
+  await page.route(/\/pipeline\/value\?/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        at: '2026-09-24T00:00:00+00:00',
+        basis: 'market',
+        threshold: '0.49',
+        sources: [],
+        boxes: [
+          { box: 2, name: 'ME01 commons', cards: 7, valued: 5, unpriced: 2, under_cutoff: 2, at_or_over: 3, total: '12.50', per_card: '2.50', top: null },
+          { box: 7, name: 'ME01 spares', cards: 40, valued: 30, unpriced: 10, under_cutoff: 5, at_or_over: 25, total: '340.00', per_card: '11.33', top: null },
+        ],
+        unrankable: { total: 0, never_identified: 0, read_nothing: 0, no_reading: 0, by_box: {} },
+        totals: { cards: 47, valued: 35, value: '352.50', under_cutoff: 7, at_or_over: 28 },
+      }),
+    })
+  })
+
+  await open(page, TWO_BOXES, STORE)
+
+  const names = page.locator('.browse-boxcell .browse-boxcell-name')
+  await expect(names).toHaveText(['ME01 commons', 'ME01 spares'])
+
+  await page.locator('.browse-filterbar .bn-filterbar-trigger:visible').click()
+  await page.locator('.bn-filterbar-popover .bn-pick', { hasText: /^Sort/ }).click()
+  await page.locator('.bn-pick-opt', { hasText: 'Value' }).click()
+  await page.keyboard.press('Escape')
+
+  await expect(names).toHaveText(['ME01 spares', 'ME01 commons'])
+  await expect(
+    page.locator('.browse-boxcell', { hasText: 'ME01 spares' }).locator('.browse-boxcell-meta'),
+  ).toContainText('$340')
+})
+
 test('S4 — the move panel offers boxes most recent first, never by number', async ({ page }) => {
   /* S4: `MovePanel`'s own comment said "most recent first" while `others` was the server's
    * `GET /boxes` order — box number, since nothing sorted it. Box 9 is a lower recency than

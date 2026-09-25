@@ -25,6 +25,7 @@ import {
   getQueues,
   getInventoryBox,
   getPricing,
+  getValueAggregates,
   photoUrl,
   removeCardInPlace,
   reshootPhoto,
@@ -52,7 +53,7 @@ import {
 import { IDENTIFIED, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Loading, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
@@ -758,6 +759,29 @@ export function BoxBrowse({
      the press moved the pressed box to the top, and the row under the pointer became another
      box. */
   const [recency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
+  /* THE RAIL'S OWN SORT (the ruling of 2026-09-24: the value list is D159's own screen no
+   * longer — it is an Inventory sort, through the same `SortControl` every other sorted list
+   * in the kit uses). `recent` is the resting order above and needs no fetch; `value` reads
+   * `GET /pipeline/value`'s aggregates, fetched lazily the first time it is picked and kept —
+   * a box's own dollar total does not move under a sale the way `on_hand` does, so nothing
+   * here re-fetches on a write the way `boxRecords` does. */
+  const [sort, setSort] = useState<SortValue<'recent' | 'value'>>({ key: 'recent', dir: 'desc' })
+  const [valueByBox, setValueByBox] = useState<ReadonlyMap<number, number> | null>(null)
+  useEffect(() => {
+    if (sort.key !== 'value' || valueByBox !== null) return
+    let live = true
+    getValueAggregates()
+      .then((aggregates) => {
+        if (live) setValueByBox(new Map(aggregates.boxes.map((box) => [box.box, Number(box.total)])))
+      })
+      .catch(() => {
+        // Deliberately nothing — the rail falls back to box order below (D18's own reason:
+        // a sort with no data to sort by is not a failure the operator asked to hear about).
+      })
+    return () => {
+      live = false
+    }
+  }, [sort.key, valueByBox])
   /* Every SKU's listing record, off the same read as the cards. Read for `at` — how old the
      live figures are — and never for a second copy of the counts. */
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
@@ -918,6 +942,22 @@ export function BoxBrowse({
      are both facts about the DRAWER, not the count inside it, so nothing a sale touches can
      move this tie-break again. */
   const order = useMemo(() => {
+    /* VALUE IS ITS OWN, SIMPLER ORDER — the operator asked to see the money, not the money
+       folded into the recency rule's own tie-breaks. A box the aggregates never mention (none
+       of its cards have a market reading) sorts last regardless of direction, never as if it
+       were worth $0. */
+    if (sort.key === 'value') {
+      const dirMul = sort.dir === 'asc' ? 1 : -1
+      return (a: number, b: number): number => {
+        const va = valueByBox?.get(a)
+        const vb = valueByBox?.get(b)
+        if (va === undefined && vb === undefined) return a - b
+        if (va === undefined) return 1
+        if (vb === undefined) return -1
+        if (va !== vb) return (va - vb) * dirMul
+        return a - b
+      }
+    }
     const rankOf = new Map(boxesMostRecentFirst(boxRecords, recency).map((record, i) => [record.box, i]))
     /* UNDER A SEARCH THE BOX WHOSE FULLEST SECTION HOLDS THE MOST LIVE COPIES OF THE ANSWER
        LEADS (D132, amended on the owner's rule of 2026-09-11): "the largest quantity of
@@ -954,7 +994,7 @@ export function BoxBrowse({
       if (rra !== rrb) return rra - rrb
       return a - b
     }
-  }, [boxRecords, recency, filtered, results, activeGroups, frozen])
+  }, [sort, valueByBox, boxRecords, recency, filtered, results, activeGroups, frozen])
 
   /* D192, item 2: under a search, which OTHER boxes hold a match comes off the search's own
      result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
@@ -1893,6 +1933,15 @@ export function BoxBrowse({
           placeholder: 'Search',
         }}
         count={{ shown: reachableCount, total: boxRecords.length, noun: { one: 'box', many: 'boxes' } }}
+        sort={{
+          options: [
+            { key: 'recent', label: 'Most recent' },
+            { key: 'value', label: 'Value', asc: 'Lowest first', desc: 'Highest first', first: 'desc' },
+          ],
+          value: sort,
+          onChange: setSort,
+          defaultValue: { key: 'recent', dir: 'desc' },
+        }}
         beside={
           phone ? undefined : (
             <Button
@@ -1959,18 +2008,22 @@ export function BoxBrowse({
                   {/* The lock beside the row already says sealed; the meta keeps to the count. */}
                   <span className="browse-boxcell-meta">
                     {/* ONE LABEL FOR "NO MATCH HERE" (UX-261), whether a search or a filter
-                        left the box out. */}
+                        left the box out. Sorted by value and not searching, the meta is the
+                        one figure that sort is actually about (D221: `Money`, never a plain
+                        string, or this dollar sign sits in the wrong face). */}
                     {!reachable
                       ? 'No match'
                       : matches !== undefined
                       ? `${matches} ${matches === 1 ? 'match' : 'matches'}`
-                      : record
-                        ? `${(onHand ?? 0).toLocaleString()} on hand`
-                        : cell === 'pooled'
-                          ? 'a count, not a location'
-                          : cell === 'unplaced'
-                            ? 'no position at all'
-                            : ''}
+                      : record && sort.key === 'value' && typeof cell === 'number'
+                        ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
+                        : record
+                          ? `${(onHand ?? 0).toLocaleString()} on hand`
+                          : cell === 'pooled'
+                            ? 'a count, not a location'
+                            : cell === 'unplaced'
+                              ? 'no position at all'
+                              : ''}
                   </span>
                 </span>
                 {record ? (
