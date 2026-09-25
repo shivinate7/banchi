@@ -1,4 +1,5 @@
 import type { IconName } from './kit'
+import { dominantMissingReason, unfindableFacet } from './orderBuyers'
 import type { OrdersPayload, PricingWorklist, RunSummary, ServerStatus } from './types'
 
 /* THE STANDING LINE — what the store is waiting on, ranked, as one sentence.
@@ -164,6 +165,18 @@ export function standing(input: StandingInput): Standing | null {
          condition on this screen that is genuinely bad news, and until now it was tail text
          inside a stage note. */
   if (unfindable !== null && unfindable > 0) {
+    /* The press opens Orders on the buyers who owe these copies (UX-077): the "Show" facet
+       `unfindableFacet` picks, `short` for a short or no-copies reason and `look` for the rest,
+       kept only where a buyer owing a missing copy has it, so the list is never empty. */
+    const facet =
+      orders === null || openKeys === null
+        ? null
+        : unfindableFacet(
+            orders.orders,
+            orders.resolution.orders,
+            dominantMissingReason(orders.resolution.orders, openKeys),
+            Date.now(),
+          )
     return {
       key: 'unfindable',
       tone: 'danger',
@@ -176,7 +189,7 @@ export function standing(input: StandingInput): Standing | null {
         n(open === null ? 0 : open.length),
         t(open !== null && open.length === 1 ? ' order.' : ' orders.'),
       ],
-      href: '#/orders',
+      href: facet === null ? '#/orders' : `#/orders?show=${facet}`,
       kbd: ',O',
       behind: [],
       problem,

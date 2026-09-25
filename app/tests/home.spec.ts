@@ -150,26 +150,53 @@ test('the Orders stage tile on Home carries the same figure, joined by `open` an
   expect(text).not.toContain('7 missing')
 })
 
-/* UX-077: the "Cannot be filled" sentence opens Orders on the dominant SHORT reason, not on
- * "All open" — `mixedLedger`'s one open line is `no_copies_on_hand`, so the click should set
- * that filter, computed from the same resolution rows rather than guessed. */
-test('the "Cannot be filled" press opens Orders pre-filtered to the reason actually short', async ({ page }) => {
-  await page.route(/\/orders$/, (route) => json(route, mixedLedger()))
-  /* Orders' own walk starts on landing (`docs/specs/order-walk-plan.md` §13) — an empty plan
-   * is all this test needs, since it only reads the filter select. */
-  await page.route(/\/orders\/walk-plan$/, (route) =>
-    json(route, { cost: 'sections', stops: [], shortfall: [], counts: { stops: 0, boxes: 0, copies: 0, sections_considered: 0, sections_candidate: 0, exact: true, solve_ms: 0 } }),
-  )
-  await page.goto('/#/')
-  await expect(page.locator('main.home')).toBeVisible()
+/* UX-077, AMENDED AT THE PR 2 INTEGRATION: the "Cannot be filled" press opens Orders on the
+ * buyer list's "Show" facet (`#/orders?show=<facet>`), since Orders no longer filters by a line
+ * reason. A short or no-copies reason maps to `short`, and any other reason maps to `look`. The
+ * facet is kept only where a buyer who owes a missing copy has it, so the list is never empty
+ * while Home's figure is above 0. Two ledgers prove both halves: one whose buyer is only short,
+ * and `mixedLedger`, whose no-copies line leaves its buyer at "Needs a look". */
+const EMPTY_PLAN = {
+  cost: 'sections',
+  stops: [],
+  shortfall: [],
+  counts: { stops: 0, boxes: 0, copies: 0, sections_considered: 0, sections_candidate: 0, exact: true, solve_ms: 0 },
+}
 
-  const standingRow = page.locator('a.home-standing-row')
-  await expect(standingRow).toBeVisible()
-  await standingRow.click()
+/** `mixedLedger` with one copy of the open line already pulled for this order, so its line
+ *  reads short (`lineReason`, UX-196) and the buyer's worst state is Short. */
+function shortLedger(): OrdersPayload {
+  const ledger = mixedLedger()
+  const progress: OrderRow['progress'] = [
+    { sku: '9191001', wanted: 3, recorded: 1, outstanding: 2, over: 0, copies: ['1:1'], by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null, at: null },
+  ]
+  return {
+    ...ledger,
+    orders: ledger.orders.map((row) => (row.key === OPEN_KEY ? { ...row, wanted: 3, recorded: 1, progress } : row)),
+  }
+}
 
-  await expect(page).toHaveURL(/#\/orders/)
-  await expect(page.locator('select.orders-filter-select')).toHaveValue('no_copies_on_hand')
-})
+for (const [label, ledger, facet] of [
+  ['a buyer who is only short', shortLedger, 'short'],
+  ['a buyer whose missing copy leaves it at Needs a look', mixedLedger, 'look'],
+] as const) {
+  test(`the "Cannot be filled" press opens a non-empty Orders list on show=${facet}: ${label}`, async ({ page }) => {
+    await page.route(/\/orders$/, (route) => json(route, ledger()))
+    await page.route(/\/orders\/walk-plan$/, (route) => json(route, EMPTY_PLAN))
+    await page.goto('/#/')
+    await expect(page.locator('main.home')).toBeVisible()
+
+    const standingRow = page.locator('a.home-standing-row')
+    await expect(standingRow).toContainText('Cannot be filled')
+    await expect(standingRow).toHaveAttribute('href', `#/orders?show=${facet}`)
+    await standingRow.click()
+
+    await expect(page).toHaveURL(new RegExp(`#/orders\\?show=${facet}`))
+    const rows = page.locator('main.orders .orders-index-row')
+    await expect(rows.first()).toBeVisible()
+    await expect(rows.first()).toContainText('Ada Lovelace')
+  })
+}
 
 /* D218: NO ROUTE TYPES A MIDDLE DOT OR BULLET. `stubStore`'s two boxes carry real
  * `on_hand`/`sold` figures (box 2: 3 on hand, 1 sold), which is what actually puts

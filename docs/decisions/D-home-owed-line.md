@@ -33,13 +33,30 @@ word: "27 to pull, 6 missing" (UX-039's own example). It used to say "not found"
 
 ### The press opens the orders that are actually short (UX-077)
 
-The sentence names copies this store cannot find, across every open order. Orders' own filter
-narrows to ONE reason at a time (`short`, `no_copies_on_hand`, and the rest). Home now computes
-which reason carries the most outstanding copies among the open orders. It reads the same
-`resolution.orders` rows the sentence already sums. It sets that filter
-(`OrdersHubStore.setHub`) before the press navigates. A tie keeps `ORDER_REASONS`'s own order.
-Never a guess: where the resolution carries no lines, or the join finds nothing, nothing is
-set. Orders opens on its own default.
+The sentence names copies this store cannot find, across every open order. The press opens
+Orders on the buyer list's "Show" facet, as `#/orders?show=<facet>`. `standing.ts` builds that
+`href`.
+
+Amended at the PR 2 integration, 2026-09-25, on the orchestrator's word. The first build set a
+per-reason filter (`OrdersHubStore.setHub`) before the press navigated. The orders lane removed
+that filter. The buyer list now filters only on each buyer's worst open order (UX-199). So the
+press now names a facet in the URL (D285), and it sets no shared state.
+
+The mapping, in `orderBuyers.ts`'s `unfindableFacet`:
+
+- `dominantMissingReason` finds the reason that carries the most outstanding copies among the
+  open orders (D202). It reads the same `resolution.orders` rows that the sentence sums. A tie
+  keeps `ORDER_REASONS`'s own order.
+- `short` and `no_copies_on_hand` map to `show=short`. Every other reason maps to `show=look`.
+- The facet filters buyers, not lines. A buyer who owes a missing copy can read "Needs a look"
+  because of another line. So the mapped facet is kept only where at least one buyer who owes
+  a missing copy has it. If none does, the worst state that such a buyer has is used. The list
+  is never empty while Home's figure is above 0.
+- Where no open order owes a missing copy, the press opens plain `#/orders`.
+
+`app/tests/home.spec.ts` presses the line against two ledgers: a buyer who is only short
+(`show=short`), and a no-copies line whose buyer reads "Needs a look" (`show=look`). Each
+checks that the buyer list is not empty. Dropping the fallback turns the second case red.
 
 ### Five stages, not six (Q6, 2026-09-24)
 

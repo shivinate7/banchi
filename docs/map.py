@@ -7953,8 +7953,13 @@ COMPONENTS = [
                                         "screen and its fetch receipt cannot disagree about "
                                         "what \"today\" means mid-render; `groupForOrderKey` "
                                         "is the `?order=` deep link's reverse lookup into "
-                                        "whichever group holds it.",
-                                "governed_by": ["D13", "D63", "D69", "D97", "D193"]},
+                                        "whichever group holds it. It also holds a buyer's "
+                                        "status (`statusOf`, `worstStatus`, moved out of "
+                                        "Orders.tsx) so Home can reach it, and "
+                                        "`unfindableFacet`, the `show=` facet Home's "
+                                        "\"Cannot be filled\" press opens (UX-077).",
+                                "governed_by": ["D13", "D63", "D69", "D97", "D193", "D202",
+                                                "D285", "D-home-owed-line"]},
             "src/orderView.ts": {"does": "HOW THE BUYER LIST IS SORTED AND FILTERED "
                                         "(`D209`): Ready to Ship leads, newest "
                                         "first within a group, everything else stays reachable "

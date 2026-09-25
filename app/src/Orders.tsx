@@ -34,7 +34,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { isEditableTarget } from './keys'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupForOrderKey, type BuyerGroup } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupForOrderKey, lineReason, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   buyerLabel,
   orderBuyerLabel,
@@ -820,7 +820,6 @@ function headlineOf(line: ResolvedLine): Headline {
 
 /* ---- status ---------------------------------------------------------------------------------- */
 
-type Status = 'ready' | 'short' | 'look' | 'unresolved' | 'done'
 
 /** Does this order still have a body worth drawing — a walk, its lines, a Pull button — even
  *  though `order.open` says no? An order the marketplace calls done for having every copy
@@ -833,22 +832,7 @@ function ownsAWalkableBody(order: OrderRow): boolean {
   return order.terminal && order.wanted > order.recorded
 }
 
-/** A line whose on-hand copies were all pulled FOR THIS ORDER is short, not "none left"
- *  (UX-196): the owner's own sale is not a problem to look at. */
-function lineReason(order: OrderRow, line: ResolvedLine): OrderLineReason {
-  if (line.reason !== 'no_copies_on_hand') return line.reason
-  const got = order.progress.find((one) => one.sku === line.sku)?.recorded ?? 0
-  return got > 0 ? 'short' : line.reason
-}
 
-function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status {
-  if (!order.open) return 'done'
-  if (answer === null) return 'unresolved'
-  const reasons = answer.lines.map((line) => lineReason(order, line))
-  if (reasons.some((reason) => reason !== 'resolved' && reason !== 'short')) return 'look'
-  if (reasons.some((reason) => reason === 'short')) return 'short'
-  return 'ready'
-}
 
 const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconName }> = {
   /* THE WORD IS "Ready" — one word, not "Ready to sell" (owner's ruling, 2026-09-19). */
@@ -3342,20 +3326,6 @@ function StandDownLegend({ group, answers }: { readonly group: BuyerGroup; reado
 
 /* ================================================================== a buyer, in the list */
 
-/** Worst-of ordering over a group's open orders — `look` and `unresolved` outrank `short`,
- *  which outranks `ready`. A group with nothing open is `done`. Used only to pick the ONE dot
- *  colour a multi-order buyer's row shows; every order's own status still shows on its own
- *  chip beside it. */
-const STATUS_RANK: Record<Status, number> = { look: 0, unresolved: 1, short: 2, ready: 3, done: 4 }
-
-function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): Status {
-  let worst: Status = 'done'
-  for (const order of group.open) {
-    const status = statusOf(order, answers.get(order.key) ?? null)
-    if (STATUS_RANK[status] < STATUS_RANK[worst]) worst = status
-  }
-  return worst
-}
 
 /** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
  *  still want. `short` is the copies that cannot be pulled: per line, what it owes less what is

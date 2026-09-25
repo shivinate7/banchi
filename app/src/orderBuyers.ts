@@ -32,7 +32,8 @@
  * receipt above it so the two cannot disagree about what "today" means mid-render.
  */
 
-import type { OrderRow } from './types'
+import { ORDER_REASONS } from './orderReasons'
+import type { OrderLineReason, OrderRow, ResolvedLine, ResolvedOrder } from './types'
 
 /** How long a buyer with nothing open still counts as RECENT rather than sinking under the
  *  `Earlier` fold — a client-side cut on `placed_at`, not a server concept. */
@@ -187,4 +188,95 @@ export function groupForOrderKey(
     if (group.orders.some((order) => order.key === orderKey)) return group
   }
   return null
+}
+
+/* ---- a buyer's status: one state per order, the worst per buyer (UX-199). Pure, so Home's
+   "Cannot be filled" press can name the same facet the Orders list filters on. */
+
+export type Status = 'ready' | 'short' | 'look' | 'unresolved' | 'done'
+
+/** A line whose on-hand copies were all pulled FOR THIS ORDER is short, not "none left"
+ *  (UX-196): the owner's own sale is not a problem to look at. */
+export function lineReason(order: OrderRow, line: ResolvedLine): OrderLineReason {
+  if (line.reason !== 'no_copies_on_hand') return line.reason
+  const got = order.progress.find((one) => one.sku === line.sku)?.recorded ?? 0
+  return got > 0 ? 'short' : line.reason
+}
+
+export function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status {
+  if (!order.open) return 'done'
+  if (answer === null) return 'unresolved'
+  const reasons = answer.lines.map((line) => lineReason(order, line))
+  if (reasons.some((reason) => reason !== 'resolved' && reason !== 'short')) return 'look'
+  if (reasons.some((reason) => reason === 'short')) return 'short'
+  return 'ready'
+}
+
+/** Worst-of ordering over a group's open orders — `look` and `unresolved` outrank `short`,
+ *  which outranks `ready`. A group with nothing open is `done`. Used only to pick the ONE dot
+ *  colour a multi-order buyer's row shows; every order's own status still shows on its own
+ *  chip beside it. */
+export const STATUS_RANK: Record<Status, number> = { look: 0, unresolved: 1, short: 2, ready: 3, done: 4 }
+
+export function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): Status {
+  let worst: Status = 'done'
+  for (const order of group.open) {
+    const status = statusOf(order, answers.get(order.key) ?? null)
+    if (STATUS_RANK[status] < STATUS_RANK[worst]) worst = status
+  }
+  return worst
+}
+
+/** WHICH "Show" FACET HOME'S "Cannot be filled" PRESS OPENS ORDERS ON (UX-077, amended at the
+ *  integration): `#/orders?show=<facet>`. The mapping, off the reason carrying the most missing
+ *  copies (`dominant`): `short` and `no_copies_on_hand` -> `short`; every other reason ->
+ *  `look` ("Needs a look"). The facet filters BUYERS on their worst open order, so a buyer who
+ *  owes a missing copy can still read `look` for another order. The preferred facet is kept
+ *  only when at least one buyer who owes a missing copy (an OPEN order, D202) has it.
+ *  Otherwise the worst state such a buyer does have is used, so the list is never empty while
+ *  Home's figure is above 0. `null` when no open order owes a missing copy. */
+export function unfindableFacet(
+  orders: readonly OrderRow[],
+  resolution: readonly ResolvedOrder[],
+  dominant: OrderLineReason | null,
+  now: number,
+): Status | null {
+  const answers = new Map(resolution.map((one) => [one.key, one] as const))
+  const { recent, earlier } = groupBuyers(orders, now)
+  const found = new Set<Status>()
+  for (const group of [...recent, ...earlier]) {
+    const owes = group.open.some((order) => (answers.get(order.key)?.outstanding ?? 0) > 0)
+    if (owes) found.add(worstStatus(group, answers))
+  }
+  if (found.size === 0) return null
+  const preferred: Status = dominant === 'short' || dominant === 'no_copies_on_hand' ? 'short' : 'look'
+  if (found.has(preferred)) return preferred
+  return [...found].sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0] ?? null
+}
+
+/** THE REASON CARRYING THE MOST MISSING COPIES over the open orders (UX-077), summed off the
+ *  same `outstanding` Home's figure sums. A tie keeps `ORDER_REASONS`'s own order (`short`
+ *  first). `null` when nothing open is missing. */
+export function dominantMissingReason(
+  resolution: readonly ResolvedOrder[],
+  openKeys: ReadonlySet<string>,
+): OrderLineReason | null {
+  const totals = new Map<OrderLineReason, number>()
+  for (const o of resolution) {
+    if (!openKeys.has(o.key)) continue
+    for (const line of o.lines) {
+      if (line.reason === 'resolved') continue
+      totals.set(line.reason, (totals.get(line.reason) ?? 0) + line.outstanding)
+    }
+  }
+  let best: OrderLineReason | null = null
+  let bestN = 0
+  for (const reason of ORDER_REASONS) {
+    const n = totals.get(reason) ?? 0
+    if (n > bestN) {
+      best = reason
+      bestN = n
+    }
+  }
+  return best
 }

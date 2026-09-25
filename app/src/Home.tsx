@@ -11,7 +11,6 @@ import {
 import type {
   BoxRecord,
   InventoryCard,
-  OrderLineReason,
   OrdersPayload,
   PricingWorklist,
   RunSummary,
@@ -25,11 +24,10 @@ import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbo
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { placeWordsOf } from './position'
 import { runBoxLabel } from './runScope'
-import { hubState, setHub } from './OrdersHubStore'
+import { hubState } from './OrdersHubStore'
 import { useLiveCheck } from './liveCheck'
 import { matchWaiting } from './autoMatch'
 import { storedBoxRecency } from './deviceMemory'
-import { ORDER_REASONS } from './orderReasons'
 import './Home.css'
 
 /* BANCHI HOME — the one page where the product is drawn as a picture: the five-stage spine
@@ -211,16 +209,7 @@ type Stage = {
 }
 
 /** The ranked sentence. Renders what `standing.ts` decided and judges nothing itself. */
-function StandingLine({
-  standing: say,
-  onBeforeNav,
-}: {
-  readonly standing: Standing | null
-  /** Fires on a press, before the browser follows `href` — UX-077's fix: the sentence names a
-   *  filtered view of Orders, so the press has to set that filter up first. Keyed on `say.key`
-   *  rather than always firing, since every other row's `href` needs nothing extra. */
-  readonly onBeforeNav?: (key: string) => void
-}) {
+function StandingLine({ standing: say }: { readonly standing: Standing | null }) {
   if (say === null) return <Loading rows={1} shape="rows" className="home-standing-skel" />
   /* A row that cannot be pressed is PROSE, not a control: it drops the surface, the ring and
      the shadow, so the shape says whether there is work before the colour or the words do. */
@@ -267,7 +256,7 @@ function StandingLine({
           {body}
         </div>
       ) : (
-        <a className="home-standing-row" href={say.href} onClick={onBeforeNav === undefined ? undefined : () => onBeforeNav(say.key)}>
+        <a className="home-standing-row" href={say.href}>
           {body}
         </a>
       )}
@@ -535,36 +524,6 @@ export function Home() {
     orders.state === 'ready' && openKeys !== null
       ? orders.value.resolution.orders.reduce((n, o) => n + (openKeys.has(o.key) ? (o.outstanding ?? 0) : 0), 0)
       : 0
-  /* WHICH REASON THE "CANNOT BE FILLED" LINE SHOULD OPEN ORDERS ON (UX-077): the sentence
-     above sums `outstanding` over EVERY unresolved reason, and Orders' own filter narrows to
-     ONE reason at a time — so the click hands over the reason carrying the most copies,
-     computed off the same rows rather than guessed. A tie keeps `ORDER_REASONS`'s own order
-     (`short` before `no_copies_on_hand` and the rest), which is the order the filter itself
-     lists them in. */
-  const dominantShortReason: OrderLineReason | null =
-    orders.state === 'ready' && openKeys !== null
-      ? (() => {
-          const totals = new Map<OrderLineReason, number>()
-          for (const o of orders.value.resolution.orders) {
-            if (!openKeys.has(o.key)) continue
-            for (const line of o.lines) {
-              if (line.reason === 'resolved') continue
-              totals.set(line.reason, (totals.get(line.reason) ?? 0) + line.outstanding)
-            }
-          }
-          let best: OrderLineReason | null = null
-          let bestN = 0
-          for (const reason of ORDER_REASONS) {
-            const n = totals.get(reason) ?? 0
-            if (n > bestN) {
-              best = reason
-              bestN = n
-            }
-          }
-          return best
-        })()
-      : null
-
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
   const runsToPrice = pricing.state === 'ready' ? runsOwingPrice(pricing.value.roster) : null
   /* And the copies every joined run still holds that TCGplayer does not (D156)
@@ -777,12 +736,7 @@ export function Home() {
       actions={deckArt}
     >
       <div className="home-hero-body">
-        <StandingLine
-          standing={say}
-          onBeforeNav={(key) => {
-            if (key === 'unfindable' && dominantShortReason !== null) setHub({ filter: dominantShortReason })
-          }}
-        />
+        <StandingLine standing={say} />
         <div className="home-actions">
           <Button
             variant="primary"
