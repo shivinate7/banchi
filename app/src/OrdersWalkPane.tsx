@@ -730,7 +730,7 @@ export function WalkCardPane({
           )
         })}
       </ul>
-      {mock === 'C' && row !== null ? <CardDetailsSection card={row.card} market={market} listings={listings} phone={false} /> : null}
+      {mock === 'C' && row !== null ? <CardDetailsSection card={row.card} market={market} listings={listings} phone={window.innerWidth < 640} /> : null}
       {!zoomed || row === null ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img
