@@ -36141,6 +36141,12 @@ def run() -> Result:
     check_shipping_stamps(checks)
     check_value_table(checks)
     check_value_page(checks)
+    # The box map's cases live in a sibling file (D264). Imported here, not at the top,
+    # because that file imports its fixtures from this one.
+    from harness.tests import t7_box_map
+
+    for box_map_check in t7_box_map.CHECKS:
+        box_map_check(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

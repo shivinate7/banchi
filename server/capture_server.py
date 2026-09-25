@@ -4924,6 +4924,20 @@ def _move_one(
             f"{join.said_place(inventory, box, index)} was already moved to {card.moved_to} (D83). Move "
             f"the transplant at {card.moved_to} instead.",
         )
+    # A CARD WITH A LIVE PAID READING DOES NOT MOVE (D262, D174). The claim holds this
+    # key, and the batch writes its answer onto that key when it lands. Moved, the key is a
+    # tombstone: the answer lands there and the card stays unidentified, with the money
+    # spent. `Submissions.overlap` is the check every paid press already makes.
+    held = snapshot.submissions.overlap([key])
+    if held:
+        runs_named = ", ".join(sub.run or sub.receipt for sub, _ in held)
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "card_being_read",
+            f"{join.said_place(inventory, box, index)} is being read by a paid run "
+            f"({runs_named}). Move it after that reading lands, or release the claim on "
+            f"Runs first. Nothing was moved.",
+        )
 
     tombstone, transplant = inventory.move_card(key, to_box)
     new_key = transplant.key

@@ -52,6 +52,14 @@ live claim cannot move. That keeps D174 (a press claims the cards it is about to
 
 ### What is built
 
-NOT BUILT. It is slice 0 of `docs/specs/box-map.md`, and it ships before any screen change.
-Its harness case: move a joined card, re-run the join, and assert that the card keeps its row
-on Pricing. The same case with a `cid` mismatch must refuse.
+BUILT, 2026-09-25, as slice 0 of `docs/specs/box-map.md`. `cli/resolve.py:follow_moved` is
+the follow. `realign` calls it before its per-box check, so a box merged away whole does not
+read as `unverified`. `server/capture_server.py:_move_one` refuses `card_being_read` on a live
+claim. T7's `check_box_map_safety` (in `harness/tests/t7_box_map.py`) moves a joined card,
+re-runs the join, and asserts that the card keeps its row. The same case with a name mismatch
+refuses. Each assertion was red before its fix.
+
+**One more defect, found by that case.** A card could move only once. The second tombstone took
+the first tombstone's `moved:<name>`, and `cards_cid` is UNIQUE, so the commit failed.
+`Inventory.move_card` now names a later tombstone `moved:<name>@<its own key>`. The first
+tombstone keeps the plain form, so a store written before this reads as before.

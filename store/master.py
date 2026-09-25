@@ -2601,7 +2601,16 @@ class Inventory:
         # into the destination box's directory, because the filename WAS the address; the
         # photograph is filed under the card's name now, so a move is this field update and
         # nothing else.
-        card.cid = f"{MOVED_CID_PREFIX}{card.cid}" if card.cid else None
+        #
+        # A CARD MOVED A SECOND TIME NEEDS A SECOND TOMBSTONE NAME (the box map, D264). The
+        # first move left `moved:<name>` on its old slot. A second `moved:<name>` would fire
+        # `cards_cid`'s UNIQUE index at the commit, so a card could move only once in its
+        # life. A later tombstone adds `@<its own key>`, which no other row can hold. The
+        # first tombstone keeps the plain form, so every existing store reads as before.
+        tomb = f"{MOVED_CID_PREFIX}{card.cid}" if card.cid else None
+        if tomb is not None and self.cards.select(("state",), cid=tomb):
+            tomb = f"{tomb}@{key}"
+        card.cid = tomb
 
         self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
         self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)
