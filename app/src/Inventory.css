@@ -44,7 +44,13 @@
 }
 
 /* ---- the copy actions ---- */
-.inventory-copy-actions { display: inline-flex; align-items: center; gap: var(--bn-1); }
+/* `--bn-4` (round 3), not `--bn-1`: three `IconButton`s this close together each reserve a
+   40px thumb floor through their own `::before` (kit.css), which reaches 8px into the real
+   gap on a 24px `sm` face. At a 4px gap the two neighbours' reach overlapped by 12px, and
+   the later one in DOM order always won that overlap — so the earlier button's own probe on
+   its shared edge could never land on itself. 16px is exactly two 8px reaches, touching but
+   never overlapping. */
+.inventory-copy-actions { display: inline-flex; align-items: center; gap: var(--bn-4); }
 
 /* the lone copy: a card with no name and no SKU */
 .inventory-lone { min-width: 0; }

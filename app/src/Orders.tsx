@@ -51,7 +51,7 @@ import {
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import { useOrderWalk, WalkList, WalkMainPane, type WalkPullFn, type WalkUndoFn } from './OrdersWalkPane'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import './BoxBrowse.css'
 import './BoxOps.css'
 import type {
