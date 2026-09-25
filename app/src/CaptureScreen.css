@@ -364,7 +364,7 @@
 .capture-entry { display: flex; }
 .capture-entrybox { width: 100%; }
 .capture-entrybox .capture-filter { padding-right: 104px; min-height: 36px; font-size: var(--bn-fs-md); }
-/* The state of what is typed, in sentence case beside the entry: `Next index 134`, `Sealed`,
+/* The state of what is typed, in sentence case beside the entry: `Next index 134` or
    `New box`. Capped, and the placeholder is `Number or name`, so neither is cut mid-word in
    the 300px rail (the note under the list already says what Enter does). */
 .capture-entrymeta {

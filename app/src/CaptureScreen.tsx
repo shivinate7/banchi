@@ -182,10 +182,8 @@ const BOX_DIGITS = /^[0-9]+$/
 /** One row of the Box field: what the registry calls it, how full it is, whether it is shut.
  *
  *  `next` is the store's high-water mark and NOT a card count — the two disagree the moment
- *  a record is removed, which is why the row trails the server's own word for it. `sealed`
- *  is the fact this screen could not see until it started reading `GET /boxes`: D20 refuses
- *  a capture into a shut box before it computes an index, so offering one here bought a
- *  refusal at the shutter. */
+ *  a record is removed, which is why the row trails the server's own word for it. A box has
+ *  no seal (`D-sealed-boxes-removed`), so every box here takes cards. */
 type BoxOption = {
   box: number
   /** WHICH DRAWER THIS ROW IS, as opposed to which number it wears (D145). Carried so a pick
@@ -1561,10 +1559,10 @@ export function CaptureScreen() {
 
      PHOTOGRAPHING INTO THE WRONG DRAWER IS THE EXPENSIVE FAILURE ON THIS SCREEN, and the
      setup now outlives the browser, so the gap between "the box I last picked" and "a box that
-     still exists and still takes cards" is a gap that can be days wide. Between two sittings a
-     box can be sealed (D20), deleted (D34's panel), or deleted and its number handed to a
-     different physical drawer by `next_box_number`'s lowest-free allocation. The first two are
-     refused at the shutter anyway; the THIRD is refused HERE, and was refused nowhere at all
+     still exists" is a gap that can be days wide. Between two sittings a box can be deleted
+     (D34's panel), or deleted and its number handed to a different physical drawer by
+     `next_box_number`'s lowest-free allocation. The first is refused at the shutter anyway;
+     the SECOND is refused HERE, and was refused nowhere at all
      until 2026-09-12, because box 7 exists and takes cards — it is simply not the box the
      operator thinks they are looking at.
 
@@ -1579,14 +1577,13 @@ export function CaptureScreen() {
 
      IT RUNS ONCE. `restoredBoxRef` is spent on the first answer — nulled before the verdict,
      so the good path spends it too — because the operator may deliberately re-pick a box this
-     effect just cleared, or pick a sealed one to see the refusal, and an ungated version would
+     effect just cleared, and an ungated version would
      take it straight back off them. What is being judged is the RESTORE, which happens on mount
      and never again.
 
-     THE THIRD CASE IS THE ID'S, AND IT WAS REFUSED NOWHERE UNTIL 2026-09-12
-     (D153, on D145's id). D142
-     enumerated all three and built two: a reallocated number passes `found !== undefined` and
-     (and, until `D-sealed-boxes-removed`, `state !== 'closed'`) because box 7 exists. The
+     THE REUSED NUMBER IS THE ID'S CASE, AND IT WAS REFUSED NOWHERE UNTIL 2026-09-12
+     (D153, on D145's id). A reallocated number passes `found !== undefined` because box 7
+     exists. The
      paragraph above it — *"the restore falls back to NO SELECTION, never to a guess"* — read as
      though it covered every case, and a reader had no way to tell that the code covered two.
      Photographs then go to an address that does not match the shelf, silently, and D36's realign

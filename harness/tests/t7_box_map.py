@@ -660,8 +660,136 @@ def check_card_move_refusals(checks: Checks) -> None:
         checks.equal(_walk(3), ["o2"], "item 9: a card moves into an empty box")
 
 
+def check_divider_editor_keys(checks: Checks) -> None:
+    """R4 review, item 1: the divider editor keeps a fractional key.
+
+    Red before the fix: `join.divider_index` cut a key to an integer, so saving the editor's
+    own unchanged starts after a section move moved every fractional divider, and m2 fell into
+    the moved section.
+    """
+    checks.note("")
+    checks.note("BOX MAP R4 — the divider editor after a placement (D265)")
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_sections(1, {"first": 2, "to_box": 2, "before": 2})
+        before = Store().read().inventory.sections_for(2)
+        labels = [_label(2, name) for name in _walk(2)]
+        row = next(b for b in capture_server.do_boxes()["boxes"] if b["box"] == 2)
+        capture_server.do_put_box(2, {"sections": [d["start"] for d in row["sections_detail"]]})
+        checks.equal(
+            Store().read().inventory.sections_for(2), before,
+            "saving the editor's own starts unchanged keeps every divider key",
+        )
+        checks.equal(
+            [_label(2, name) for name in _walk(2)], labels,
+            "and moves no card into another section",
+        )
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_sections(1, {"first": 2, "to_box": 2})
+        capture_server.do_put_box(2, {"sections": [1, 5]})
+        checks.equal(
+            (_label(2, "m4"), _label(2, "o4"), _label(2, "o5")),
+            ("Mixed, Section 1, Card 4", "Mixed, Section 2, Card 1", "Mixed, Section 2, Card 2"),
+            "a divider set at a placed card starts the section at that card",
+        )
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [4], "to_box": 2, "before_card": 3})
+        capture_server.do_put_box(2, {"sections": [1, 3]})
+        checks.equal(
+            (_label(2, "m2"), _label(2, "o4"), _label(2, "m3")),
+            ("Mixed, Section 1, Card 2", "Mixed, Section 2, Card 1", "Mixed, Section 2, Card 2"),
+            "a divider set at a card placed between two others starts the section at THAT card",
+        )
+
+
+def check_delete_keeps_dividers(checks: Checks) -> None:
+    """R4 review, item 2: a delete in a box nothing was placed into keeps its sections, and
+    undo refuses a claim on the old key alone. Item 3: a delete clears a dead move link, and
+    the renumber refusal says a tombstone moved."""
+    from store import submissions as claims
+
+    checks.note("")
+    checks.note("BOX MAP R4 — dividers across a delete, the old-key claim, dead move links")
+    with isolated_home():
+        capture_server.do_create_box({"box": 1, "name": "Plain"})
+        with Store().write() as snapshot:
+            for index in range(1, 9):
+                snapshot.inventory.record_capture(
+                    master.Card(box=1, index=index, cid=fake_cid(f"plain-{index}"), name=f"c{index}")
+                )
+            snapshot.inventory.set_sections(1, [1, 5])
+        capture_server.do_remove_card(1, 3, {"capture_id": None})
+        checks.equal(
+            (_label(1, "c5"), _label(1, "c4")),
+            ("Plain, Section 2, Card 1", "Plain, Section 1, Card 3"),
+            "c5 stays card 1 of section 2 after c3 is deleted: the divider stays with the card",
+        )
+
+    with isolated_home():
+        _shelf()
+        body = capture_server.do_move_sections(1, {"first": 2, "to_box": 2})
+        with Store().write() as snapshot:
+            snapshot.submissions.entries["r-old"] = claims.Submission(
+                receipt="r-old", pid=os.getpid(), started_at=master.now(),
+                keys=["1/4"], state=claims.STATE_LIVE,
+            )
+        refusal(
+            checks, lambda: capture_server.do_undo_section_move({"move": body["move"]}),
+            "card_being_read", "undo refuses a live claim on the OLD key alone",
+        )
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [2], "to_box": 2, "section_end": 2})
+        capture_server.do_remove_card(2, 5, {"capture_id": None})
+        tomb = Store().read().inventory.cards["1/2"]
+        checks.equal(
+            tomb.moved_to, None,
+            "item 3: deleting the card a tombstone points to clears the tombstone's link",
+        )
+        said = None
+        try:
+            capture_server.do_remove_card(1, 1, {"capture_id": None})
+        except capture_server.BadRequest as caught:
+            said = str(caught)
+        checks.ok(
+            said is not None and " is moved" in said and "is sold" not in said,
+            "item 3: the renumber refusal says a tombstone moved, never that it sold",
+            str(said),
+        )
+
+
+def check_merge_speed(checks: Checks) -> None:
+    """R4 review, item 4: a 500-card merge into a 500-card box holds the lock under 1 s.
+
+    Red before R3's fix: 3.8 s, growing with the square of the box."""
+    import time
+
+    checks.note("")
+    checks.note("BOX MAP R4 — merge speed")
+    with isolated_home():
+        capture_server.do_create_box({"box": 1, "name": "A"})
+        capture_server.do_create_box({"box": 2, "name": "B"})
+        with Store().write() as snapshot:
+            for box in (1, 2):
+                for i in range(1, 501):
+                    snapshot.inventory.cards[master.position_key(box, i)] = master.Card(
+                        box=box, index=i, cid=fake_cid(f"speed-{box}-{i}"), order=float(i),
+                        state=master.CAPTURED,
+                    )
+        start = time.perf_counter()
+        capture_server.do_move_sections(1, {"first": 1, "to_box": 2})
+        took = time.perf_counter() - start
+        checks.ok(took < 1.0, "a 500-into-500 merge takes under a second", f"{took:.2f} s")
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
+    check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
 )

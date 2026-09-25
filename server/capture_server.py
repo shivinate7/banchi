@@ -4713,6 +4713,7 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
                 gone = (
                     f"retired: {other.retire_reason}"
                     if other.state == master.RETIRED
+                    else "moved" if other.state == master.MOVED
                     else "sold"
                 )
                 blockers.append((at, f"{where} is {gone}"))
@@ -4780,6 +4781,10 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         for tomb in inventory.cards.where(state=master.MOVED):
             if tomb.moved_to:
                 pointing.setdefault(tomb.moved_to, []).append(tomb)
+        # A MOVE LINK TO THE DELETED CARD IS CLEARED (the R4 review): it names nothing now, and
+        # the join already refuses to follow it. The record says so too.
+        for tomb in pointing.pop(key, ()):
+            tomb.moved_to = None
         for at, old_key, other in movers:
             new_index = at - 1
             new_key = master.position_key(box, new_index)

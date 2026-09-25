@@ -688,7 +688,9 @@ def divider_index(
         lows = [v[0] for v in (occupied, departed) if v]
         return master.front_of_box((), min(lows) if lows else None)[0]
     if ordinal <= len(occupied):
-        return int(occupied[ordinal - 1])
+        # THE KEY ITSELF, NEVER `int()` OF IT (the R4 review): a placed card's key is a
+        # fraction, and cutting it moved the divider onto the card in front (D265).
+        return master.as_order(occupied[ordinal - 1])
     high = max(
         int(occupied[-1]) if occupied else 0,
         int(departed[-1]) if departed else 0,
