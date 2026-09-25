@@ -599,12 +599,14 @@ export function SendCard({
           : null
   const running = open.some((send) => send.state === 'sending')
   const busy = phase !== 'idle' || running
+  /* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118: a press changes what is on the
+     screen, never where the rest of it is). Its label named the live copies on two lines at a
+     phone width and became one short line under the finger, so the sticky bar shrank and the
+     press moved. `busy` draws the spinner on it; what the press is doing is said to a screen
+     reader beside it, in a status that takes no room. */
+  const doing = phase === 'waiting' ? 'Saving your prices…' : phase === 'sending' || running ? 'Checking TCGplayer, then sending…' : ''
   const label =
-    phase === 'waiting'
-      ? 'Saving your prices…'
-      : phase === 'sending' || running
-        ? 'Checking TCGplayer, then sending…'
-        : liveMoves.length > 0
+    liveMoves.length > 0
           ? /* THE LIVE COPIES THE PRESS MOVES ARE NAMED ON IT (the owner's ruling, round 7):
                "Send 1 copy, 2 live copies move to $19.99". */
             (
@@ -664,6 +666,9 @@ export function SendCard({
         >
           {label}
         </Button>
+        <span className="bn-sr" role="status">
+          {doing}
+        </span>
         <Button
           variant="quiet"
           icon="download"
