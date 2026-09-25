@@ -183,9 +183,9 @@
 .bn-filterbar-sheet-body .bn-filterchips { flex-direction: column; align-items: stretch; }
 .bn-filterbar-sheet-body .bn-filterchips > .bn-fchip { flex: none; width: 100%; }
 .bn-filterbar-sheet-body .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; min-width: 0; max-width: none; }
-.bn-filterbar-sheet-body .bn-sort { flex-direction: column; align-items: stretch; }
-.bn-filterbar-sheet-body .bn-sort > .bn-pick,
-.bn-filterbar-sheet-body .bn-sort-dir { width: 100%; min-width: 0; max-width: none; justify-content: flex-start; }
+/* The direction is now an IconButton (D-icon-buttons): compact, not a field, so it stays at
+   its own size beside the key instead of stacking full width with it. */
+.bn-filterbar-sheet-body .bn-sort > .bn-pick { flex: 1; min-width: 0; max-width: none; justify-content: flex-start; }
 
 /* ---- The match highlight (`kit/highlight.tsx`) ------------------------------------------------ */
 .bn-highlight {

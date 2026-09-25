@@ -255,25 +255,10 @@
 /* Off until two facets are on: it keeps its place in the bar and is not drawn. */
 .bn-filterchips-clear[data-off='true'] { visibility: hidden; }
 
-/* SortControl: the key, then which way, both in words, one height. */
+/* SortControl: the key stays in words (a `Select`); the direction is an IconButton
+   (D-icon-buttons) and carries no styling of its own here — `.bn-icon-btn` in kit.css is
+   the whole of it. */
 .bn-sort { display: inline-flex; align-items: center; gap: var(--bn-1); }
-.bn-sort-dir {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bn-1);
-  height: var(--bn-control-h);
-  padding: 0 var(--bn-3);
-  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
-  border-radius: var(--bn-r);
-  background: var(--bn-surface);
-  font: inherit;
-  font-size: var(--bn-fs-md);
-  font-weight: 600;
-  color: var(--bn-ink-2);
-  white-space: nowrap;
-  transition: border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
-}
-.bn-sort-dir:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
 
 /* The panel: Capture's open-field body, floating. Above a sheet (61), below a toast (80). */
 .bn-pick-panel {

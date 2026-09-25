@@ -5681,7 +5681,8 @@ COMPONENTS = [
             "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
                                          "in a filter bar (`--bn-control-h`) and one width floor "
                                          "and cap. Mono for machine strings only.",
-                                 "governed_by": ["D50", "D117", "D118", "D195", "D218"]},
+                                 "governed_by": ["D50", "D117", "D118", "D195", "D218",
+                                                 "D-icon-buttons"]},
             "src/kit/dataRules.ts": {"does": "the pure half of `data.tsx`: STATUS_TONES (amber is "
                                              "only 'needs the owner', blue only 'moving now') and "
                                              "`boxesMostRecentFirst` (this browser's hand, then the "
@@ -5764,7 +5765,8 @@ COMPONENTS = [
                                             "trigger and its sheet take over — both trees are always "
                                             "mounted, CSS alone decides which is visible. The facet "
                                             "triggers share one grid track width.",
-                                    "governed_by": ["D50", "D118", "D195", "D-one-filter-control"]},
+                                    "governed_by": ["D50", "D118", "D195", "D-one-filter-control",
+                                                     "D-icon-buttons"]},
             "src/kit/filters.specimens.tsx": {"does": "`FilterBar` (full width, and in a 280px "
                                                        "rail), `HideToggle`, `SortHeader` and "
                                                        "`Highlight`, on invented rows whose counts "
