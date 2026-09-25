@@ -387,3 +387,23 @@ prices reached the corpus. 26 cards were marked `sold` with a real sale date. Th
 well under the ~20 MB budget. `make demo-determinism-selftest` and a bare `make demo-seed`
 are unaffected. The diff against the file before this section is purely additive: two new
 functions, roughly 70 lines, plus eight lines wired into `main()`.
+
+**The box carries a neutral name, and so does the section.** Review round 2026-09-25: the
+box was first named after the owner directly, and the owner renamed it. It is `Demo Box`
+now. Its one section carries no name at all. `Section 1` reads with nothing after it,
+exactly how an undeclared section reads everywhere else in this product (D10). No screen,
+tooltip, or title in the built demo may say whose cards these are.
+`grep -rio owner app/demo/bundle.json dist-demo/` finds nothing about this box. The only
+hits anywhere in the built JS and CSS are React's own `ownerDocument` DOM property and an
+unrelated `search-field-owner` class name.
+
+**The curator's own QR clearance is not the gate. The commit is.** Review round
+2026-09-25: a reviewer committed a synthetic, decodable QR JPEG into
+`demo-assets/extra/photos/`. The pre-commit hook let it through. The hook matched the
+PATH and never opened the file. It trusted the two curator scripts to be the only
+writers, rather than checking. `scripts/qr-clear-check.py` closes that gap.
+`scripts/githooks/pre-commit` now re-decodes every STAGED image under
+`demo-assets/photos/` and `demo-assets/extra/photos/` with `codes/qr.py`. It reads the
+staged blob, never the working-tree file, and refuses on the first decode it finds, naming
+the file. `PKMNSCAN_QR=off` is the bypass, in the shape every other opsec rule in this hook
+already uses.

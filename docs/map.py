@@ -5074,6 +5074,20 @@ COMPONENTS = [
                 # `cards.cid` is unique on the photograph's own digest.
                 "governed_by": ["D18", "D43", "D172"],
             },
+            "qr-clear-check.py": {
+                "does": "re-decodes every STAGED image under demo-assets/photos/ and "
+                        "demo-assets/extra/photos/ with codes/qr.py, reading the STAGED BLOB "
+                        "(`git show :<path>`) rather than the working-tree file. Refuses and "
+                        "names the file on the first decode it finds. ON THE COMMIT PATH — "
+                        "scripts/githooks/pre-commit runs it over both directories, because "
+                        "the curator scripts' own QR clearance proves the curator was honest, "
+                        "never that everything staged into either path went through it. "
+                        "Review round 2026-09-25: a synthetic, decodable QR JPEG staged "
+                        "outside either curator passed the old hook, which only matched the "
+                        "path and never opened the file.",
+                # D70: a live code's whole identity is its QR, decoded rather than assumed.
+                "governed_by": ["D70"],
+            },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {

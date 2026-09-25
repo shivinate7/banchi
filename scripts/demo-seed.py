@@ -1033,14 +1033,14 @@ def add_extra_real_boxes() -> dict:
     with store.write() as snapshot:
         inventory = snapshot.inventory
         box_number = max((int(b) for b in inventory.boxes), default=0) + 1
-        box_name = "Owner's Real Cards"
+        box_name = "Demo Box"
         if box_name in {b.name for b in inventory.boxes.values()}:
             return {}  # already added by an earlier run — never a second box
         inventory.boxes[str(box_number)] = Box(
             box=box_number,
             name=box_name,
             sections=[1],
-            section_names={"1": "From the owner's own store"},
+            section_names={},  # section 1 carries no name, on the owner's own ruling
             state="open",
             capacity=None,
             created_at=stamp(1.0),
