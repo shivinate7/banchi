@@ -112,7 +112,7 @@
 .position-void {
   font-size: 1em;
   font-weight: 400;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   line-height: 1;
   letter-spacing: 0;
   text-align: center;
@@ -183,3 +183,19 @@
 .position-run-path b { font-weight: 700; color: var(--bn-ink); letter-spacing: 0; }
 .position-run-key { margin-right: var(--bn-1); }
 .position-run-num { font-weight: 800; color: var(--bn-ink); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+
+/* ---- a card that has left its box (the owner's ruling, 2026-09-23) ----
+   The label still names the place it left. The departure is drawn, never worded: the figure is
+   struck through and every part is muted, in both flows. `data-departed` is set by
+   `PositionLabel.tsx` from its `departed` prop, which a caller reads off `isDeparted(place)`. */
+.position-parts[data-departed='true'] .position-num,
+.position-run[data-departed='true'] .position-run-num {
+  color: var(--bn-ink-3);
+  text-decoration: line-through;
+  text-decoration-thickness: 0.09em;
+  text-decoration-color: var(--bn-ink-3);
+}
+.position-parts[data-departed='true'] .position-path b,
+.position-run[data-departed='true'] .position-run-path b {
+  color: var(--bn-ink-3);
+}

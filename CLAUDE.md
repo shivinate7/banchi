@@ -105,13 +105,21 @@ make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line sp
                     #   component DRAWS it, and the expression that decides whether it is
                     #   drawn. A renderer — writes nothing, gates nothing, derived every run.
                     #   READ IT BEFORE BRIEFING A SCREEN CHANGE.
-make map-fix        # THE ONE GENERATOR (D18, amended). Adds the decision ids a file cites
-                    #   to its `governed_by` in docs/map.py — the answer `make docs-audit`'s
-                    #   `repo map` row already computes, imported from that row rather than
-                    #   reimplemented. IT GATES NOTHING and is on no hook. Run it when the row
-                    #   refuses you; the row is still what says you are right. Previews.
+make map-fix        # THE ONE GENERATOR INTO A DOC (D18, amended). Adds the decision ids a
+                    #   file cites to its `governed_by` in docs/map.py — the answer
+                    #   `make docs-audit`'s `repo map` row already computes, imported from that
+                    #   row rather than reimplemented. IT GATES NOTHING and is on no hook. Run it
+                    #   when the row refuses you; the row is still what says you are right.
+                    #   Previews.
                     #   ARGS=--write applies. It only ever ADDS. `make map-fix-selftest`
                     #   proves it, deliberately NOT in `make check`.
+make offenders-prune # a generator that only DELETES (D18). It removes the stale entries from
+                    #   the three offender lists (`scripts/ste-offenders.json`,
+                    #   `scripts/typed-interpunct-allow.json`,
+                    #   `scripts/line-anchor-offenders.json`). It re-keys a listed file that
+                    #   git's rename detection says moved. It never adds an entry. It reads
+                    #   with the rows' own functions. Previews. ARGS=--write applies. On no
+                    #   hook. `make offenders-prune-selftest` proves it, NOT in `make check`.
 make harness        # all TEN verification tests (T1-T9 and T11); the Stop hook runs it at
                     #   turn end. RECOUNT from harness/run.py's TESTS list. THERE IS NO T10:
                     #   that id belongs to the shelved IMB encoder (DEBT26), and this repo
@@ -203,6 +211,15 @@ make suite-lock-selftest # the lock, proved by violating it, including a holder 
                     #   In `check`.
 make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
                     #   real tree (D215). In `check`.
+make text-density   # the owner's third D194 replacement (`D284`): an
+                    #   ON-DEMAND density pass, never a gate (D18: it writes one receipt,
+                    #   `.serve/text-density.json`). Runs `text-shape.spec.ts` in a report
+                    #   mode (`TEXT_DENSITY=1`), so it reads the SAME seeded screens as the
+                    #   gates, at 1440 and 390, with no dev server or store needed. Prints a
+                    #   CUT TABLE: per route, the largest prose blocks with word counts, then
+                    #   what repeats and what runs long. ARGS="--route '#/pricing' --top 8".
+                    #   NOT in `make check` or `make design-check`. The skill
+                    #   `.claude/skills/text-density/SKILL.md` says how to read the table.
 make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
                     #   is not a fork, what is real and what is invented, why VITE_DEMO is
@@ -218,7 +235,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check +
                     #   css-var-check + css-var-check-selftest + token-literal-check +
-                    #   ignore-check +
+                    #   kit-adoption + ignore-check +
                     #   lint + vale + typecheck + audit-self-test +
                     #   mutate-anchors +
                     #   githooks-selftest + merge-selftest + revert-selftest +
@@ -239,8 +256,8 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
                     #   subagent-override-selftest + guard-scope-selftest +
-                    #   token-literal-check-selftest +
-                    #   demo-determinism-selftest,
+                    #   token-literal-check-selftest + kit-adoption-selftest +
+                    #   port-slots-selftest + demo-determinism-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -266,6 +283,21 @@ make token-literal-check-selftest  # that checker, on fixtures in both direction
                     #   passes, the same value under a different family's property passes, a
                     #   raised/lowered/unseen per-file count and a stale allow-list entry are
                     #   each proved.
+make kit-adoption   # every ROUTES view renders <Page> from the kit, and no screen hand-rolls
+                    #   a kit primitive: a dialog role, a search input, a <select>, a kit
+                    #   class, a date format, a money format (D275). TypeScript
+                    #   AST. `scripts/kit-adoption-allow.json` is a SHRINKING offender list,
+                    #   file -> rule -> lane: an unlisted violation fails, a stale entry fails,
+                    #   and a key that the list at the merge-base with origin/main does not
+                    #   hold fails, unless its rule is not defined at the merge-base (a rule
+                    #   born on the branch). The output names each such rule and why. A
+                    #   removed or renamed rule refuses all growth. With no merge-base it
+                    #   fails open and says so.
+make kit-adoption-selftest  # that checker, on in-memory fixtures in both directions. Writes
+                    #   nothing (D18).
+make port-slots-selftest  # two throwaway trees forced into one port slot, a real Vite and a
+                    #   real Playwright in each. A run in one tree refuses the other's server.
+                    #   After a claim, each tree holds its own slot. Writes under `mktemp -d`.
 make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
 make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
                     #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.
@@ -299,6 +331,20 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   --listed-only      above-threshold rows only
                                    #   --split-threshold  import-listed.csv / import-subthreshold.csv
                                    #   --split-games      one file per game
+                                   #   --live-guard FILE  trim each row so TCGplayer never
+                                   #                      holds more copies than are here
+                                   #   --reprice-live F   with --live-guard: a PRICE-ONLY row
+                                   #                      (Add to Quantity 0) for each live
+                                   #                      card that adds no copy and whose
+                                   #                      price the screen NAMED in F. A
+                                   #                      price F does not name never rides.
+                                   #                      A listing row that moves live
+                                   #                      copies to its price refuses unless
+                                   #                      F names that move (round 7).
+                                   #                      A listing file
+                                   #                      may mix both (the owner's ruling,
+                                   #                      2026-09-24). The send press passes
+                                   #                      both flags.
 ./pkmnscan cards    name             # a card's stable name and photograph location (D172).
                                    #   Free, read-only. Never calls `db.connect`, which would
                                    #   perform the migration it previews.
@@ -406,7 +452,7 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 **The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
 Three routes are off-nav (the `aside` group — Kit, Cards to pull, and the per-product view
-D226 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
+D227 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
 `ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
 below).
 
@@ -436,8 +482,23 @@ below).
 #/fulfillment  Cards to pull  the Fulfiller's whole product. NO shell (D5)
 #/gallery      Kit            the component sheet, rendered by the build
 #/product      Product history one product's market history and the owner's own sales on
-                              it, by SKU. Off-nav, deep-linked (D226)
+                              it, by SKU. Off-nav, deep-linked (D227)
 ```
+
+**A new screen is one `ROUTES` entry plus a view that returns `<Page>`** (D275).
+`Page` in `app/src/kit/Page.tsx` carries what every page shares. That is one width, one top
+gap and one h1 from the route's `title ?? label`. It is also the verdict, the toolbar, the
+status slot and the loading shape. `make kit-adoption` fails a route view that does not render
+it, and a screen that hand-rolls a primitive that the kit owns. `app/tests/scaffold.spec.ts` asserts the frame in a
+browser, per route, at 1440, 820, 720 and 390. The exceptions are one shrinking offender list,
+`scripts/kit-adoption-allow.json` (file -> rule -> lane). It fails on an unlisted violation and
+on a stale entry. It also fails on a key that the list at the merge-base with `origin/main` does
+not hold. So every rule that exists at the merge-base only shrinks. The one exception is a rule
+that the merge-base does not define, which is a rule born on the branch. Its first offenders may
+be listed, and the check prints which rule allowed them and why. The exception holds only while
+every rule that the merge-base defines still exists. If a branch removes or renames a rule, the
+check refuses all growth and names that rule. A lane that moves a screen onto
+`Page` deletes that screen's entries in the same commit.
 
 **`#/orders` and `#/shipping` are two stages of one screen and two routes.** `OrdersHub` with a
 stage strip, joined client-side on order number. Not D31's defect returning: one sale, two
@@ -447,7 +508,7 @@ stages, not two unrelated views.
 not routes. Box operations live in its Manage box sheet.
 
 **Three routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
-kit, and `#/product`, the per-product view (D226). It is a deep link reached
+kit, and `#/product`, the per-product view (D227). It is a deep link reached
 by SKU, never a destination anyone browses to cold. All three stay registered routes,
 reachable from elsewhere.
 
@@ -464,9 +525,9 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-140<!-- derived:app_src_file_count --> files under `app/src`: none read the
+159<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-295<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+310<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
@@ -477,10 +538,10 @@ first paint, cross-faded as one mechanism. A screen not looked at in dark is not
 everything), `--bn-font-mono` (JetBrains Mono, machine strings only — SKUs, run names, reason
 codes, key caps, card numbers). Numbers in tables are Inter tabular-nums, not mono, except
 money: a dollar figure takes the mono face through `.bn-money`, never a hand-rolled
-declaration (D221). **NOT MECHANIZED:** a machine cannot tell a dollar figure
-from another tabular machine string by its CSS alone. Mono, 600-weight and tabular-nums
-already mark SKUs, run ids and card numbers throughout `app/src`. Which face a span deserves
-is read from what it holds, never from its declaration. Body is 14px.
+declaration (D221). Mechanized by `app/tests/money-face.spec.ts`, in a real browser. CSS
+alone cannot tell a dollar figure from a SKU, because mono, 600-weight and tabular-nums mark
+both. So the spec reads what a span HOLDS. Every `$` figure in the rendered text fails unless
+its resolved face is JetBrains Mono, whole dollars and inputs included. Body is 14px.
 
 **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders all of it. Reach for
 the kit before writing a primitive. A fourth hand-rolled button is how a design system dies.
@@ -490,10 +551,22 @@ are a real sentence and one action. **No user-visible string may name a decision
 path, or a pipeline-internal noun** (D196). Mechanized by `make docs-audit`'s
 `no mechanism on screen` row over `scripts/user-strings.mjs`.
 
-**The visible word count on every owner screen may only go down** (D194). Blind to which words
-a screen uses — a rewording that says the same thing in fewer words is exactly what this
-rewards. `app/tests/copy-budget.spec.ts` asserts against `app/tests/copy-budget.json`'s pinned
-ceiling. Only `node scripts/copy-budget.mjs --pin` raises it, run by `make design-check`.
+**D194's pinned word ceiling is retired** (superseded by `D284`, 2026-09-23, the
+owner's ruling). Three checks replace it, none of them a count.
+`app/tests/text-shape.spec.ts` catches four shapes. A repeated sentence on three-plus
+repeating cards or rows. A number-plus-noun fact stated twice. A sentence over 25 words. A
+caption repeating 60%+ of its heading. `app/tests/machine-words.spec.ts` closes D196's own
+gap. It reads rendered `innerText`, not just JSX literals. `app/tests/money-face.spec.ts`
+reads D221: every dollar figure must sit in the mono face. All three read every route through
+one sweep, `app/tests/routeSweep.ts`, at 1440 and 390. The seeded store is deterministic, and
+a screen is read only once it is loaded.
+Each reads a shrinking pending list in `app/tests/`, keyed to the finding. An entry excuses
+one finding, and a new one on the same route is red. `text-shape-allow.json` is route ->
+assertion -> finding text -> lane. `machine-words-allow.json` is route -> word -> lane, with
+no wildcard route. `money-face-allow.json` is route -> amount -> lane. Each fails on an
+unlisted finding and on a stale entry.
+`make text-density` is the third piece of the owner's ruling, an on-demand cut table off the
+same sweep, never a gate (D18: it writes).
 
 **The mark is generated** (D102). `Logo` renders `docs/specs/logo.md`'s locked set, six
 variants, `bluesteel` default. `scripts/build-mark.mjs` writes its geometry and
@@ -666,7 +739,12 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
 - **EVERY CHECKOUT HAS ITS OWN STORE AND ITS OWN PORTS** (D43). `store/files.py:home()`
   defaults to the checkout the code runs from. Ports derive from the checkout's path
   (`app/devPort.ts`, `server/ports.py`, kept in step by `make port-agreement`). An empty
-  inventory in a worktree is correct — the real one is the main checkout's.
+  inventory in a worktree is correct — the real one is the main checkout's. A hash of the
+  path put two live worktrees on one port, so a linked checkout now CLAIMS its slot once in
+  `~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`). `make dev`, `server`, `up`,
+  `design-check` and `scripts/launch-config.py` claim first. A test run refuses a reused dev server
+  that does not name this checkout (`app/checkoutIdentity.ts`,
+  D261).
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing
   about a card in `localStorage`. **Eleven keys are stored on the device**, each a fact about
@@ -823,7 +901,8 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   decision id, a section, or the `module.symbol` form the `paths` row verifies. That form
   takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line anchors`
   refuses a line past the file's end, and any anchor into a split-record stub. `line anchor
-  ratchet` is per file, in D229's shape. A file its pin has never seen is held to zero.
+  offenders` refuses an anchor that `scripts/line-anchor-offenders.json` does not list. That
+  list only shrinks. A new file starts clean, unless the anchor moved out of another file.
   `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt` that has
   stopped being true. The rot rate
   printed beside them is MEASURED and never gated. A citation pointing at a real line whose
@@ -856,10 +935,10 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   removed the dot-joined address string and moved the separator into CSS
   (`::before { content: '·' }`) — a screen may SHOW a separator, never TYPE one into a
   string. Mechanized by `make docs-audit`'s `typed interpunct` row over
-  `scripts/user-strings.mjs`'s extraction, RATCHETED against `scripts/typed-interpunct.json`'s
-  pinned count (D194's own discipline, mirrored). It fails only when the count RISES. A lower
-  count is accepted silently and printed. `node scripts/typed-interpunct-pin.mjs --pin`
-  re-pins it, run by a person, never quietly. See D218.
+  `scripts/user-strings.mjs`'s extraction. It fails on every typed dot that
+  `scripts/typed-interpunct-allow.json` does not list, by file and by string. It also fails on
+  a stale entry, and on an entry the list at the merge-base did not hold. No count is pinned.
+  See D218 and D280.
 
 ## Working agreement
 
@@ -1197,6 +1276,33 @@ D255 One SKU, two stored names: the sibling check D242 cannot see
 D256 A literal that duplicates a token is caught by family, and the ratchet is pinned per file
 D257 a worktree's node_modules is provisioned, not reported
 D258 Identity follows the SKU
+D259 A box is shown only by its name, and a box with no name gets a stored default name
+D260 A card's number counts within its section, card 1 is at the far back, and the ruler marks the card
+D261 A checkout claims its port slot once, and a reused server must name its checkout
+D262 A join follows a moved card by its own link, checked by its name
+D263 A sort press re-sorts at once, a sold row folds on the next load, and box lists lead with the most recent
+D264 A section is an object that moves whole, and the box map is a view inside Inventory
+D265 A card's place in its box is an order key apart from its stored index
+D266 The phone drawer has no fixed foot, and its items join the one scrolling list
+D267 Every dollar figure takes the mono face, and a check that reads the rendered page enforces it
+D268 A copied tree never gets the live port, and only a `.git` directory keeps 8000
+D269 The machine's words go behind "What the server said"
+D270 One filter bar, everywhere a list is filtered
+D271 Every search field uses one forgiving matcher, on the server and in the browser
+D272 One page width, one top gap, and a scaffold every screen inherits
+D273 Banchi sends the listing file itself, one press makes it live, and the checks after it run by themselves
+D274 Orders and Shipping are two sidebar rows with no tabs, and the walk gets the full height
+D275 Every screen inherits the page scaffold, and a shrinking list holds the exceptions
+D276 The palette is "Go to", it lists every screen and finds cards, and the rail starts at 640
+D277 Pricing shows every row with the rows that need the owner on top, one slim bar holds Send, and the value list moves to Inventory
+D278 One product view, two frames, and the trap it had is fixed first
+D279 Cards to pull asks for a count of a card, and shows where every copy is
+D280 The typed-dot count and the prose ratio become lists of offenders, and no count is pinned
+D281 A decision's argument is not screen copy, and a note about zero does not draw
+D282 Sales leads with a summary band and the best sellers, and a line with no price gets its price from TCGplayer
+D283 The send press's review record: each round's findings, and the fix for each
+D284 Three checks replace one ceiling, and none of them is a pinned number
+D285 A screen's filter, sort, search and hide state lives in the URL
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

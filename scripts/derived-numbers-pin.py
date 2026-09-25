@@ -4,8 +4,7 @@ what `scripts/derived_numbers.py:REGISTRY[<name>].compute(ROOT)` says right now.
 
     python3 scripts/derived-numbers-pin.py --write
 
-D18 IS ABSOLUTE HERE, same discipline `scripts/ste-ratchet-pin.py` documents in its own
-docstring (read it first): a generator may write, and nothing that writes may gate a commit.
+D18 IS ABSOLUTE HERE: a generator may write, and nothing that writes may gate a commit.
 This script is on no `make` target and no git hook — a person runs it, on purpose, once, and
 `git diff` is the receipt.
 

@@ -18,7 +18,7 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.inv-readage.is-unread { color: var(--bn-ink-4); font-style: italic; }
+.inv-readage.is-unread { color: var(--bn-ink-3); font-style: italic; }
 
 /* THE SPLIT UNDER A LIVE COUNT (D115): "4 when read · 2 sold here since". One step louder than
    `.inv-readage` because it carries FIGURES rather than an age — a reader who sees two numbers
@@ -554,6 +554,11 @@
   color: var(--bn-ink);
   overflow-wrap: break-word;
 }
+/* ONE PART, ONE LINE (LOC-27): the address wraps between its parts, never inside one, so
+   `Section 2` never lands with `Section` on one line and `2` on the next. A box name longer than
+   the column still breaks, because `overflow-wrap` above is inherited and a name is free text. */
+.card-locations-place-part { white-space: nowrap; }
+.card-locations-place-part:first-child { white-space: normal; }
 
 .card-locations-fulfiller .card-locations-action {
   display: flex;

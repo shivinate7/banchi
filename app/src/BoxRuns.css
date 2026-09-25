@@ -40,7 +40,7 @@
 .boxruns-go:hover { background: var(--bn-accent-tint); text-decoration: none; }
 .boxruns-go .bn-icon:first-child { color: var(--bn-accent); }
 .boxruns-go .bn-icon:last-child { color: var(--bn-ink-4); }
-.boxruns-go[aria-disabled='true'] { color: var(--bn-ink-4); pointer-events: none; }
+.boxruns-go[aria-disabled='true'] { color: var(--bn-ink-3); pointer-events: none; }
 
 /* a thumb presses this one */
 /* THE POINTER AND NOT THE WIDTH (D117, tokens.css's own rule): every rule in this block is a

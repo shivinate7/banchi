@@ -26,7 +26,15 @@ export type Persona = 'owner' | 'fulfiller'
 
 /** One drawn segment of the track: an inclusive run of card numbers, and whether the card
  *  being drawn is inside it. */
-export type Span = { start: number; end: number; current: boolean }
+export type Span = {
+  start: number
+  end: number
+  current: boolean
+  /** The section this run IS, when the run is one section: every run drawn off a box's own
+   *  `sections_detail`, and the card's own run without it. Null for the runs a bare `Place`
+   *  can only state as "the sections before" and "the sections after". */
+  section?: number | null
+}
 
 export function clamp(value: number, low: number, high: number): number {
   if (!Number.isFinite(value)) return low
@@ -71,6 +79,7 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
         start,
         end,
         current: holds(start, end) || (left !== null && detail.section === left),
+        section: detail.section,
       })
     }
     if (spans.length > 0) return spans
@@ -80,9 +89,9 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
   const end = clamp(place.section_end === null ? total : place.section_end, start, total)
 
   const spans: Span[] = []
-  if (start > 1) spans.push({ start: 1, end: start - 1, current: holds(1, start - 1) })
-  spans.push({ start, end, current: holds(start, end) || wasIn(start, end) })
-  if (end < total) spans.push({ start: end + 1, end: total, current: holds(end + 1, total) })
+  if (start > 1) spans.push({ start: 1, end: start - 1, current: holds(1, start - 1), section: null })
+  spans.push({ start, end, current: holds(start, end) || wasIn(start, end), section: place.section })
+  if (end < total) spans.push({ start: end + 1, end: total, current: holds(end + 1, total), section: null })
   return spans
 }
 
@@ -108,10 +117,32 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
  */
 export type SentenceParts = { main: string; detail: string | null }
 
+/** How many cards this card's own SECTION holds — never the box's total (owner's ruling,
+ *  2026-09-23, amending how D58's number is DRAWN: "a card's place number counts WITHIN ITS
+ *  SECTION, not within the whole box... restarting at every divider"). THE SERVER ALREADY
+ *  SENDS THE NUMERATOR SECTION-RELATIVE: `place.card` is `pipeline/join.py:Position.card`,
+ *  `slot - section_start + 1`, so the same number `Box 3 · Section 2 · Card 1` already puts
+ *  in the label. What is missing is the DENOMINATOR — the server sends the section's bounds
+ *  (`section_start`/`section_end`), not its size — so this is the one client-side derivation
+ *  the ruling asks for, never a server change. `section_end` is null only for an open box's
+ *  final section, which runs to the box's own end (`box_total`), the same fallback
+ *  `pipeline/join.py:Position.card`'s own docstring and `_of_uncached` already use server-side
+ *  for that same section's `section_end`. */
+function sectionCardTotal(place: Place): number | null {
+  const { section_start, section_end, box_total } = place
+  const end = section_end ?? (Number.isFinite(box_total) && box_total > 0 ? box_total : null)
+  if (end === null) return null
+  return Math.max(0, end - section_start + 1)
+}
+
 export function sentencePartsOf(place: Place, persona: Persona = 'owner'): SentenceParts {
-  const { slot, box_total, box_closed, fraction } = place
+  const { slot, card, box_total, fraction } = place
   if (isDeparted(place)) {
-    return { main: persona === 'fulfiller' ? 'No longer in the box' : 'no longer in the box', detail: null }
+    /* PAST TENSE, AND THE PLACE IT LEFT (D259): the server's departed
+       label carries the card number it would take going back, read here rather than invented. */
+    const was = placePartsOf(place.label)?.card ?? null
+    const words = was === null ? 'Was in this box' : `Was card ${was}`
+    return { main: persona === 'fulfiller' ? words : words.toLowerCase(), detail: null }
   }
   if (slot === null) {
     return {
@@ -127,9 +158,15 @@ export function sentencePartsOf(place: Place, persona: Persona = 'owner'): Sente
       ? { main: `Card ${slot}`, detail: 'where it sits in the box is not known yet' }
       : { main: `#${slot}`, detail: 'where this sits in the box is not known yet' }
   }
-  if (persona === 'fulfiller') return { main: `Card ${slot} of ${box_total}`, detail: null }
-  if (box_closed) return { main: `#${slot} of ${box_total}`, detail: `${Math.round(fraction * 100)}% in` }
-  return { main: `#${slot} of ${box_total}`, detail: null }
+  /* ONE COUNT PER INSTRUMENT, AND IT IS THE SECTION'S (D260).
+     Both personas say `Card 5 of 12`, the card's number within its section and the section's
+     own size, the number a hand counts to from the divider. The box-wide `#12 of 34` that the
+     owner's caption drew was a second scale on one panel (LOC-03). `card` and the section total
+     fall back to the box-wide reading only if the server ever omits either, which it does not
+     on this path (slot is not null here). */
+  const total = sectionCardTotal(place)
+  if (card !== null && total !== null) return { main: `Card ${card} of ${total}`, detail: null }
+  return { main: `Card ${slot} of ${box_total}`, detail: null }
 }
 
 /** The joined form, for the accessible name only (D41 kept the dot there on purpose). Never
@@ -155,6 +192,48 @@ export function sayPlace(label: string): string {
   return label.replace(/ · /g, ', ')
 }
 
+/** A server place label read back into its three facts, or null for a label of no place shape
+ *  (a pooled card's line, an empty string).
+ *
+ *  THE ONE READER OF `pipeline/join.py:place_label` (D259). The label is
+ *  `<box name>, Section <n>, Card <m>`, and a box name is free text that may hold a comma of its
+ *  own, so the parts are taken from the RIGHT end: the last `, Section <n>, Card <m>` is the
+ *  place and everything in front of it is the name. A label from before the ruling
+ *  (`Box 3 · Section 1 · Card 7`, and D68's `Box 3 · departed · B3 #96`) is read too, so a
+ *  fixture or an older server still draws. */
+export type PlaceText = { readonly box: string; readonly section: number | null; readonly card: number | null }
+
+const PLACE_NOW = /^(.+), Section (\d+), Card (\d+)$/
+const PLACE_NO_SECTION = /^(.+), Card (\d+)$/
+const PLACE_BEFORE = /^Box (\d+) · Section (\d+) · Card (\d+)$/
+const DEPARTED_BEFORE = /^Box (\d+) · departed · B\d+ #\d+$/
+
+export function placePartsOf(label: string | null | undefined): PlaceText | null {
+  if (typeof label !== 'string') return null
+  const text = label.trim()
+  let match = PLACE_NOW.exec(text)
+  if (match !== null) return { box: match[1] as string, section: Number(match[2]), card: Number(match[3]) }
+  match = PLACE_BEFORE.exec(text)
+  if (match !== null) return { box: `Box ${match[1]}`, section: Number(match[2]), card: Number(match[3]) }
+  match = DEPARTED_BEFORE.exec(text)
+  if (match !== null) return { box: `Box ${match[1]}`, section: null, card: null }
+  match = PLACE_NO_SECTION.exec(text)
+  if (match !== null) return { box: match[1] as string, section: null, card: Number(match[2]) }
+  return null
+}
+
+/** A place label as the words a screen draws one per element, the separator drawn by CSS (D218):
+ *  `['RB Origins', 'Section 2', 'Card 5']`, or the label whole when it is no place. */
+export function placeWordsOf(label: string): string[] {
+  const place = placePartsOf(label)
+  if (place === null) return [label]
+  return [
+    place.box,
+    ...(place.section === null ? [] : [`Section ${place.section}`]),
+    ...(place.card === null ? [] : [`Card ${place.card}`]),
+  ]
+}
+
 /** The second scale: how far into its own SECTION a card sits. Null when there is no honest
  *  answer — a pooled card, a degraded block, a box the server cannot size. */
 export type SectionDepth = {
@@ -165,10 +244,13 @@ export type SectionDepth = {
   of: number
   /** True when the far bound is not final, so the number can be larger tomorrow. */
   growing: boolean
-  /** 0..100 along the section track, and NULL where there is no card to mark — a departed
-   *  copy. The bar keeps the mark mounted and animates it away rather than deleting it; see
-   *  `PositionBar.tsx`. */
+  /** 0..100 along the section track: the CENTRE of this card's own cell, so the mark sits on
+   *  the card and not on the boundary in front of it (LOC-05). NULL where there is no card to
+   *  mark, a departed copy. The bar keeps the mark mounted and animates it away rather than
+   *  deleting it; see `PositionBar.tsx`. */
   marker: number | null
+  /** This card's own cell on the track, as a left edge and a width in percent, or null. */
+  cell: { readonly left: number; readonly width: number } | null
   sentence: string
   /** THE CAPTION'S TWO HALVES, HANDED OVER AS FIELDS AND NEVER RECOVERED BY SPLITTING
    *  `sentence`. The ruler's caption ellipsizes its head and pins its tail, which needs two
@@ -180,10 +262,9 @@ export type SectionDepth = {
    *  whole because it is also the accessible name (D41). */
   head: readonly string[]
   tail: readonly string[]
-  /** The section's bounds IN BOX CARDS — `86` and `170` of a box holding 400 — so the ruler's
-   *  two ends can state the nesting as a number the reader checks against the box caption
-   *  rather than as a shape they have to trust. D58's unit: a card COUNT, never a stored
-   *  index. */
+  /** The ruler's two ends IN SECTION NUMBERS: `1` at the far back and the section's own size at
+   *  the front (D260). The box-wide bounds this carried before
+   *  were a second scale on one instrument (LOC-04). */
   firstCard: number
   lastCard: number
 }
@@ -276,7 +357,7 @@ export function sectionTitleText(parts: SectionTitleParts): string {
 export function sectionDepthOf(place: Place): SectionDepth | null {
   if (place.located === false) return null
 
-  const { card: slot, section, section_start: start, box_total: total } = place
+  const { card: slot, section } = place
   const gone = isDeparted(place)
   if (section === null) return null
   /* THE SECTION'S NAME IS SAID WITH ITS NUMBER (D132) — `Section 6`, `Rares`, `card 54 of 153`.
@@ -295,15 +376,14 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   if (span === null) return null
   const { of, growing } = span
 
-  /* The same convention the server's own `fraction` uses — `(index - 1) / total` — so a card at
-     the front of both tracks sits at the front of both. */
-  const marker = gone || slot === null ? null : clamp(((slot - 1) / of) * 100, 0, 100)
+  /* THE MARK SITS ON THE CARD (LOC-05): the centre of card `slot`'s own cell, one cell of `of`.
+     Card 1 is the far back, so the back is the track's left end and card `of` its right. */
+  const marker = gone || slot === null ? null : clamp(((slot - 0.5) / of) * 100, 0, 100)
+  const cell = gone || slot === null ? null : { left: clamp(((slot - 1) / of) * 100, 0, 100), width: 100 / of }
 
-  /* THE SECTION'S OWN RUN, COUNTED IN BOX CARDS, which is what the ruler writes inside its two
-     ends. `of` is already the width in the growing and the settled case alike, so the far bound
-     follows from the near one and cannot disagree with the denominator the caption prints. */
-  const firstCard = clamp(start, 1, total)
-  const lastCard = firstCard + of - 1
+  /* SECTION NUMBERS AT BOTH ENDS, the same count the caption and the big numeral use (LOC-04). */
+  const firstCard = 1
+  const lastCard = of
 
   if (gone || slot === null) {
     /* A SHORT TAIL THAT DOES NOT FIGHT THE RULER UNDER IT. The old two facts (`40 slots`,
@@ -316,12 +396,18 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
        function today is fed through `PositionBar`, which does not thread that word in either.
        One neutral phrase, shorter than what it replaces, says exactly what is known and no
        more (D194 — the count only ever goes down). */
-    const tail: readonly string[] = [growing ? `${of} cards` : `${of} slots`, 'left this section']
+    /* PAST TENSE, ONE FACT (LOC-23, and the owner's ruling that a departed card speaks of the
+       place it left). The number is the one the server's departed label carries. */
+    const was = placePartsOf(place.label)?.card ?? null
+    /* No `of N` here: a card that stood behind the section's last card would read `was card 12 of
+       11`, which is true of the place and reads as an error. */
+    const tail: readonly string[] = [was === null ? 'was in this section' : `was card ${was}`]
     return {
       slot: null,
       of,
       growing,
       marker: null,
+      cell: null,
       sentence: [...head, ...tail].join(' · '),
       head,
       tail,
@@ -330,12 +416,15 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
     }
   }
 
-  const tail: readonly string[] = [growing ? `card ${slot} of ${of}` : `card ${slot} of ${of} slots`]
+  /* "CARDS", NEVER "SLOTS", HERE (LOC-22; the owner's final ruling keeps "slots" for the box's
+     capacity in Inventory's header and strip only). */
+  const tail: readonly string[] = [`card ${slot} of ${of}`]
   return {
     slot,
     of,
     growing,
     marker,
+    cell,
     sentence: [...head, ...tail].join(' · '),
     head,
     tail,

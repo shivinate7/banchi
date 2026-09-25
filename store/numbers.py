@@ -271,3 +271,22 @@ def catalog_number_fields(strategy: str, raw_number) -> Tuple[Optional[str], Opt
         return split_catalog_number(raw_number)
     raw = str(raw_number or "").strip()
     return (raw or None), None
+
+
+def box_title(name: Optional[str], number: int) -> str:
+    """A box's name for a label or a sentence: the stored name, or `Box <number>` without one.
+
+    THE FALLBACK IS THE DEFAULT NAME THE STORE WRITES, NOT A SECOND VOCABULARY. The owner's
+    ruling, 2026-09-23 (D259): an unnamed box gets the stored name
+    `Box <count+1>` at creation, a cleared name stores the same default, and every box that
+    had no name was backfilled `Box <number>` (`store/master.py:Inventory.default_box_name`,
+    `Inventory.backfill_box_names`). So no registered box reaches this fallback after the
+    backfill. A caller with no registry to ask (T3, T4 and T5 build a bare
+    `Position(box, index)`) still gets the string the backfill stored for that box.
+
+    A LEAF HERE, NOT IN `pipeline/join.py`, for this module's own reason: `store/master.py`
+    names a box in its refusals and may not import `pipeline/` (D63). `pipeline/join.py`
+    imports it back under the same name.
+    """
+    text = (name or "").strip()
+    return text if text else f"Box {int(number)}"

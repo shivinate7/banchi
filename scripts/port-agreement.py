@@ -28,17 +28,38 @@ WHAT IT COMPARES, and it is deliberately two different things:
      where both sides are looking at the same tree. That is one case, and it is the case that
      matters: it is the pair a running `make server` and a running `make dev` actually use.
 
-WHAT IT DOES NOT COVER, said plainly rather than implied by a green run: the main tree's
-branch of the derivation is asserted against the documented constants on the Python side only,
-because proving TypeScript's requires running it from a checkout whose `.git` is a directory
-and this test does not move itself between trees.
+  3. THE THREE KINDS OF TREE, on COPIES (D268, a copied tree never gets
+     the live port). Both files are copied into three throwaway trees, and each copy is asked
+     for its OWN default ports, through the same module-location read a real build makes:
+       - `.git` a DIRECTORY, the primary checkout: 8000 and 5173, on both sides.
+       - `.git` a FILE, a linked worktree: its band plus its slot, on both sides.
+       - NO `.git`, a scratch copy or an exported tree: its band plus its slot, on both
+         sides, and NEVER 8000 or 5173. On 2026-09-23 a copy of main with no `.git` built
+         an app that called the owner's live server on 8000. This arm holds that case.
+     A copy, not a path fed to a function, because the incident was the module reading where
+     it LIVES. Only a copy reaches that read.
+
+  3b. THE CLAIMED SLOT (D261). Both sides
+     read one registry of claimed slots before the hash. A temporary registry claims a slot
+     for the linked-worktree copy that its hash would never give it, and both sides must
+     answer that slot. A damaged registry must read as nothing claimed, on both sides.
+     So must a slot written as a decimal (`149.0`) or with an exponent, and a file
+     holding NaN: Python's json and JSON.parse read those differently.
+
+  4. THE TWO FALLBACKS that do not use the derivation. `app/src/server.ts` bundled with NO
+     port define, with `fetch` stubbed, must refuse by name and address no base port. A copy
+     of `scripts/screenshot.sh` that cannot derive its port may fall back to 5173 only in a
+     primary checkout. Neither arm loads a page or opens a socket.
 
 Stdlib only, and it never writes outside the temporary directory it creates and destroys.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -52,20 +73,36 @@ from server import ports  # noqa: E402
 CASES = 12
 
 
-def node_answers(paths: list[str]) -> dict:
-    """Run the real `app/devPort.ts` — never a copy of it — and read back its answers."""
+# The three kinds of tree the derivation must tell apart, by what sits at `<root>/.git`.
+TREE_KINDS = ("primary", "linked", "no-git")
+
+
+def node_answers(paths: list[str], copies: list[str]) -> dict:
+    """Run the real `app/devPort.ts`, and each COPY of it, and read back their answers.
+
+    `copies` are the `app/devPort.ts` files inside the throwaway trees. Each one is imported
+    from where it sits, so its `DEV_PORT` and `CAPTURE_PORT` are what a build from that tree
+    would bake.
+    """
     script = (
         "const m = await import(%s);\n"
         "const paths = JSON.parse(process.argv[1]);\n"
+        "const copies = JSON.parse(process.argv[2]);\n"
+        "const trees = [];\n"
+        "for (const url of copies) {\n"
+        "  const c = await import(url);\n"
+        "  trees.push({ devPort: c.DEV_PORT, capturePort: c.CAPTURE_PORT });\n"
+        "}\n"
         "console.log(JSON.stringify({\n"
         "  slots: paths.map((p) => m.slotFor(p)),\n"
         "  devPort: m.DEV_PORT,\n"
         "  capturePort: m.CAPTURE_PORT,\n"
+        "  trees,\n"
         "}));\n" % json.dumps((ROOT / "app" / "devPort.ts").as_uri())
     )
     done = subprocess.run(
         ["node", "--experimental-strip-types", "--input-type=module", "-e", script,
-         json.dumps(paths)],
+         json.dumps(paths), json.dumps([Path(c).as_uri() for c in copies])],
         cwd=str(ROOT), capture_output=True, text=True, check=False,
     )
     if done.returncode != 0:
@@ -74,6 +111,165 @@ def node_answers(paths: list[str]) -> dict:
             "not the same as agreed:\n" + (done.stderr.strip() or "(no stderr)")
         )
     return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def build_tree(tmp: Path, kind: str) -> Path:
+    """A throwaway tree holding copies of both files, with `.git` shaped by `kind`."""
+    tree = tmp / f"copy-{kind}"
+    (tree / "server").mkdir(parents=True)
+    (tree / "app").mkdir()
+    shutil.copy2(ROOT / "server" / "ports.py", tree / "server" / "ports.py")
+    shutil.copy2(ROOT / "app" / "devPort.ts", tree / "app" / "devPort.ts")
+    # `app/package.json` says `"type": "module"`. The copy needs the same, or node reads
+    # `import.meta` in a CommonJS scope.
+    (tree / "app" / "package.json").write_text('{"type": "module"}\n', encoding="utf-8")
+    if kind == "primary":
+        (tree / ".git").mkdir()
+    elif kind == "linked":
+        (tree / ".git").write_text("gitdir: /nowhere/.git/worktrees/copy\n", encoding="utf-8")
+    return tree
+
+
+def python_answers(tree: Path) -> dict:
+    """Load the COPY of `server/ports.py` and read its no-argument answers.
+
+    The copy's `REPO_ROOT` is the copy's own tree, as it is for a server started there.
+    `PKMNSCAN_PORT` is set aside for the call: it is an override, and this reads the
+    derivation under it.
+    """
+    spec = importlib.util.spec_from_file_location(
+        f"ports_copy_{tree.name.replace('-', '_')}", tree / "server" / "ports.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    saved = os.environ.pop(ports.PORT_ENV, None)
+    try:
+        return {
+            "devPort": module.dev_port(),
+            "capturePort": module.capture_port(),
+            "slot": module.slot_for(tree),
+        }
+    finally:
+        if saved is not None:
+            os.environ[ports.PORT_ENV] = saved
+
+
+def expected(kind: str, slot: int) -> tuple:
+    """(dev, capture) a tree of this kind must answer. The constants are the module's own."""
+    if kind == "primary":
+        return ports.DEV_BASE_PORT, ports.CAPTURE_BASE_PORT
+    return ports.DEV_LOW + slot, ports.CAPTURE_LOW + slot
+
+
+def registry_failures(tmp: Path, tree: Path) -> list:
+    """Both sides over one temporary registry: a claimed slot, then files neither may trust."""
+    registry = tmp / "port-slots.json"
+    claimed = (ports.hashed_slot(tree) + 7) % ports.SLOTS
+    copy = str(tree / "app" / "devPort.ts")
+    failures = []
+    saved = os.environ.get(ports.SLOT_REGISTRY_ENV)
+    os.environ[ports.SLOT_REGISTRY_ENV] = str(registry)
+    key = json.dumps(ports.canonical(tree))
+    hashed = ports.hashed_slot(tree)
+    try:
+        for label, text, want in (
+            ("a claimed slot", json.dumps({"version": 1, "slots": {ports.canonical(tree): claimed}}),
+             claimed),
+            ("a damaged registry", "{not json", hashed),
+            # A slot written as a decimal is not a whole slot, even when its value is whole.
+            # JSON.parse reads `149.0` as the integer 149 and Python reads it as a float, so
+            # only the written text can decide, and both sides must refuse it the same way.
+            ("a decimal slot", '{"version": 1, "slots": {%s: %d.0}}' % (key, claimed), hashed),
+            ("an exponent slot", '{"version": 1, "slots": {%s: %de0}}' % (key, claimed), hashed),
+            ("a fractional slot", '{"version": 1, "slots": {%s: %d.5}}' % (key, claimed), hashed),
+            # Python's json reads NaN, and JSON.parse refuses the whole file. So a file that
+            # holds one is damaged as a whole, on both sides.
+            ("a NaN beside a good claim",
+             '{"version": 1, "slots": {%s: %d, "/elsewhere": NaN}}' % (key, claimed), hashed),
+        ):
+            registry.write_text(text, encoding="utf-8")
+            node_tree = node_answers([str(tree)], [copy])
+            py_tree = python_answers(tree)
+            want_ports = (ports.DEV_LOW + want, ports.CAPTURE_LOW + want)
+            for side, slot, got in (
+                ("python", py_tree["slot"], (py_tree["devPort"], py_tree["capturePort"])),
+                ("node", node_tree["slots"][0],
+                 (node_tree["trees"][0]["devPort"], node_tree["trees"][0]["capturePort"])),
+            ):
+                if slot != want or got != want_ports:
+                    failures.append(
+                        f"{label}: {side} answers slot {slot}, ports {got}; want slot {want}, "
+                        f"ports {want_ports}"
+                    )
+    finally:
+        if saved is None:
+            os.environ.pop(ports.SLOT_REGISTRY_ENV, None)
+        else:
+            os.environ[ports.SLOT_REGISTRY_ENV] = saved
+    return failures
+
+
+def client_fallback_answers(tmp: Path) -> dict:
+    """Bundle the real `app/src/server.ts` WITHOUT `vite.config.ts`'s port define, and ask it.
+
+    This is the bundle `FALLBACK_BASE` exists for. `fetch` is a stub that records the URL and
+    rejects, so this opens no socket, on the old code or the new. The answer is every URL the
+    client tried, the code a read refused with, and one photo URL.
+    """
+    bundle = tmp / "server-no-define.mjs"
+    esbuild = ROOT / "app" / "node_modules" / ".bin" / "esbuild"
+    built = subprocess.run(
+        [str(esbuild), str(ROOT / "app" / "src" / "server.ts"), "--bundle", "--format=esm",
+         "--platform=neutral", "--define:__BN_DEMO__=false", "--define:import.meta.env={}",
+         "--external:./demoServer", f"--outfile={bundle}", "--log-level=error"],
+        cwd=str(ROOT), capture_output=True, text=True, check=False,
+    )
+    if built.returncode != 0:
+        raise SystemExit(
+            "esbuild could not bundle app/src/server.ts — the client fallback is unproven,\n"
+            "which is not the same as safe:\n" + (built.stderr.strip() or "(no stderr)")
+        )
+    script = (
+        "const calls = [];\n"
+        "globalThis.fetch = (url) => { calls.push(String(url));"
+        " return Promise.reject(new Error('stub')); };\n"
+        "const m = await import(%s);\n"
+        "let code = null;\n"
+        "try { await m.getStatus(); } catch (err) { code = err && err.code; }\n"
+        "console.log(JSON.stringify({ calls, code, photo: m.photoUrl(1, 1) }));\n"
+        % json.dumps(bundle.as_uri())
+    )
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        cwd=str(tmp), capture_output=True, text=True, check=False,
+    )
+    if done.returncode != 0:
+        raise SystemExit(
+            "node could not run the bundled client — the fallback is unproven:\n"
+            + (done.stderr.strip() or "(no stderr)")
+        )
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def screenshot_refuses(tmp: Path, kind: str) -> bool:
+    """Run a copy of `scripts/screenshot.sh` in a tree that CANNOT derive its port.
+
+    The tree has no `server/ports.py`, so the derivation fails and the fallback decides. It
+    has no `app/node_modules`, so a run that does not refuse stops at that check, before any
+    render. No page loads either way. True when the script refused for the port.
+    """
+    tree = tmp / f"shot-{kind}"
+    (tree / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "screenshot.sh", tree / "scripts" / "screenshot.sh")
+    if kind == "primary":
+        (tree / ".git").mkdir()
+    elif kind == "linked":
+        (tree / ".git").write_text("gitdir: /nowhere/.git/worktrees/copy\n", encoding="utf-8")
+    done = subprocess.run(
+        ["bash", str(tree / "scripts" / "screenshot.sh")],
+        cwd=str(tree), capture_output=True, text=True, check=False, timeout=60,
+    )
+    return done.returncode != 0 and "dev port could not be derived" in done.stderr
 
 
 def main() -> int:
@@ -87,7 +283,8 @@ def main() -> int:
         roots.append(ROOT)
         as_strings = [str(path) for path in roots]
 
-        theirs = node_answers(as_strings)
+        trees = [build_tree(Path(tmp), kind) for kind in TREE_KINDS]
+        theirs = node_answers(as_strings, [str(t / "app" / "devPort.ts") for t in trees])
         mine = [ports.slot_for(path) for path in roots]
 
         failures = []
@@ -102,12 +299,59 @@ def main() -> int:
             if want != got:
                 failures.append(f"{label} disagrees for this checkout: python {want}, node {got}")
 
-        # The main-tree branch, Python side. One-sided and the docstring says so.
-        main_tree = Path(tmp) / "main-like"
-        main_tree.mkdir()
-        (main_tree / ".git").mkdir()
-        if ports.capture_port(main_tree) != ports.CAPTURE_BASE_PORT:
-            failures.append("a checkout whose .git is a DIRECTORY must answer the base port")
+        # The three kinds of tree, each a copy asked for its own default ports.
+        for kind, tree, node_tree in zip(TREE_KINDS, trees, theirs["trees"]):
+            py_tree = python_answers(tree)
+            want_dev, want_capture = expected(kind, py_tree["slot"])
+            for side, got in (("python", py_tree), ("node", node_tree)):
+                if (got["devPort"], got["capturePort"]) != (want_dev, want_capture):
+                    failures.append(
+                        f"{kind} tree: {side} answers dev {got['devPort']} / capture "
+                        f"{got['capturePort']}, want dev {want_dev} / capture {want_capture}"
+                    )
+                if kind != "primary" and (
+                    got["capturePort"] == ports.CAPTURE_BASE_PORT
+                    or got["devPort"] == ports.DEV_BASE_PORT
+                ):
+                    failures.append(
+                        f"{kind} tree: {side} answers the PRIMARY checkout's live port. A "
+                        f"build here would call the owner's live server "
+                        f"(D268, a copied tree never gets the live port)"
+                    )
+
+        # The claimed slot: both sides read one registry before the hash.
+        failures += registry_failures(Path(tmp), trees[TREE_KINDS.index("linked")])
+
+        # The client bundle with no port define: it must refuse, and never call a base port.
+        client = client_fallback_answers(Path(tmp))
+        live = (f":{ports.CAPTURE_BASE_PORT}", f":{ports.DEV_BASE_PORT}")
+        for url in client["calls"] + [client["photo"]]:
+            if any(port in url for port in live):
+                failures.append(
+                    f"a client bundle with no port define addresses {url}, the PRIMARY "
+                    f"checkout's live port (D268, a copied tree never gets "
+                    f"the live port)"
+                )
+        if client["calls"]:
+            failures.append(
+                f"a client bundle with no port define fetched {client['calls']} — it must "
+                f"refuse before any request"
+            )
+        if client["code"] != "no_server_address":
+            failures.append(
+                f"a client bundle with no port define refused with {client['code']!r}, "
+                f"want 'no_server_address'"
+            )
+
+        # The screenshot runner's fallback: only a primary checkout may fall back to 5173.
+        for kind in TREE_KINDS:
+            refused = screenshot_refuses(Path(tmp), kind)
+            if refused != (kind != "primary"):
+                failures.append(
+                    f"{kind} tree: scripts/screenshot.sh "
+                    f"{'refused' if refused else 'fell back to the base dev port'} when it "
+                    f"could not derive its port; only the primary checkout may fall back"
+                )
 
         if failures:
             print("port agreement: FAILED")
@@ -117,7 +361,10 @@ def main() -> int:
 
         print(
             f"port agreement: {len(as_strings)} paths, slots identical; "
-            f"this checkout dev {ports.dev_port()} / capture {ports.capture_port()} on both sides"
+            f"this checkout dev {ports.dev_port()} / capture {ports.capture_port()} on both "
+            f"sides; {len(trees)} copied trees ({', '.join(TREE_KINDS)}) answer their own kind; "
+            f"a claimed slot and five registries neither side may trust read alike; "
+            f"a client with no port define refuses; screenshot.sh falls back only when primary"
         )
         return 0
 

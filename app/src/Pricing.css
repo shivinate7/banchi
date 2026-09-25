@@ -12,19 +12,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--bn-5);
-  /* THE LIST STOPS BEFORE THE PAGE DOES. Nine of this row's ten tracks are fixed, so every
-     pixel the page gains lands in the card's name and nowhere else. MEASURED at a 1920
-     viewport with the sidebar open, before this line existed: the identity cell was 924px
-     wide while the price field it is deciding — the hero of the row (D49) — was 68px at the
-     far end of that gap.
-     THE FIGURE IS THE INK, NOT A PREFERENCE. Measured over all 67 rows of the demo store at
-     that same viewport: the identity ink reaches 257px at the median and 430px at the 90th
-     percentile, against a 668px cell even after `--bn-page-w-rows`. This row's other tracks
-     are 612px of fixed width and gap, so 1120 leaves the name 444px — past the 90th
-     percentile, with the longest few wrapping as they already do. It is narrower than
-     `--bn-page-w-rows` because Codes needs that width for a six-tile hero and this screen
-     has no such thing. */
-  --bn-page-max: 1120px;
+  /* `--bn-page-max: 1120px` stood here, capping this screen under D197's later "one width"
+     ruling. DELETED (UX-002): the measurement it cited was of the price field ALREADY
+     narrowed to 68px by the track-count bug below, so the cap was reasoning from the
+     defect. This row's other nine tracks are fixed pixel widths (see `--pricing-cols`); a
+     wider page only ever grows the flexible name column, so falling back to the shared
+     `--bn-page-w` here does not reopen that measurement. */
   /* AND THE SHIP BAR ASKS THIS COLUMN, NOT THE WINDOW. The two rules that used to hide the
      fine print and wrap the key legend were `@media` widths, so they fired at the same
      viewport whether the shell had given this screen 1204px or 1376px — a 172px swing they
@@ -524,7 +517,7 @@
   color: var(--bn-ink-2);
   font-variant-numeric: tabular-nums;
 }
-.pricing-meter-keys li[data-zero='true'] { color: var(--bn-ink-4); }
+.pricing-meter-keys li[data-zero='true'] { color: var(--bn-ink-3); }
 .pricing-meter-dot {
   width: 8px;
   height: 8px;
@@ -642,6 +635,21 @@
 .pricing-section {
   --pricing-cols: 36px minmax(0, 1fr) 56px 128px 68px 68px 68px 132px 68px;
 }
+/* THE PRICE AND ACTIONS TRACKS ARE PINNED FROM THE END OF THE ROW (UX-002, S1). `.pricing-facts`
+   is `display: contents` (below), so its children — Qty, the trend, and the Compare-gated SNAPS
+   ref columns — are direct grid items too, auto-placed in DOM order. `compare` is per-section
+   state (default off) and swings the ref-column count from one to four, but every
+   `--pricing-cols` value in this file still ends in the same two tracks: 132px, then 68px. Left
+   to auto-placement, a one-column default filled those 132px/68px tracks with the SPARE 68px
+   tracks meant for a compare column that was not drawn — the price field measured 68px, and
+   13.11 read as "$1". Anchored to the last two lines, the field gets its track regardless of
+   how many ref columns actually render. The caption row carries the same SNAPS list and the
+   same defect on its own trailing cells (the unlabelled thumb/actions placeholders), so it is
+   anchored the same way, below. */
+.pricing-price { grid-column: -3 / -2; }
+.pricing-actions { grid-column: -2 / -1; }
+.pricing-caption-price { grid-column: -3 / -2; }
+.pricing-caption > span:last-child { grid-column: -2 / -1; }
 /* the kit table's `th`, so a column head reads the same here as on the codes ledger */
 .pricing-caption {
   padding: 6px var(--bn-4);
@@ -754,7 +762,7 @@
    flex gap before the next fact. */
 .pricing-meta > *:not(:last-child)::after { content: '·'; margin-left: 5px; color: var(--bn-ink-4); }
 /* a condition and a set every row of the section shares: kept for the reader, dimmed for the eye */
-.pricing-meta-same { color: var(--bn-ink-4); }
+.pricing-meta-same { color: var(--bn-ink-3); }
 .pricing-row-span,
 .pricing-row-note { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .pricing-row-note { flex: 0 1 auto !important; overflow: hidden; max-width: 100%; }
@@ -824,7 +832,7 @@
   font-variant-numeric: tabular-nums;
   padding: 0;
 }
-.pricing-input::placeholder { color: var(--bn-ink-4); font-weight: 500; }
+.pricing-input::placeholder { color: var(--bn-ink-3); font-weight: 500; }
 /* a field brought into view by focus (Enter walks the list) lands above the sticky ship bar, not under it */
 .pricing-row input,
 .pricing-row button { scroll-margin-block: 72px calc(var(--pricing-ship-h, 0px) + var(--bn-4) + var(--bn-5)); }
@@ -842,8 +850,14 @@
 .pricing-price[data-answer='typed'] .pricing-field { border-color: var(--bn-ink-4); }
 .pricing-price[data-answer='typed'] .pricing-price-check { opacity: 1; transform: none; }
 .pricing-field:hover { border-color: var(--bn-ink-4); }
+/* THE FOCUS RING (D50, UX-073): `[data-answer='typed'] .pricing-field` above is two classes plus
+   an attribute (0,3,0) and used to outrank the plain `.pricing-field:focus-within` (0,2,0) below
+   it, so a TYPED row — most of them, once a price is answered — kept its grey `--bn-ink-4`
+   border while focused; only the halo showed, at 18% alpha, about 1.3:1. Both answer states are
+   named here so focus always wins, matching every other `.bn-input`-family field in the kit. */
 .pricing-field:focus-within,
-.pricing-price[data-answer='suggested'] .pricing-field:focus-within {
+.pricing-price[data-answer='suggested'] .pricing-field:focus-within,
+.pricing-price[data-answer='typed'] .pricing-field:focus-within {
   border-style: solid;
   border-color: var(--bn-accent);
   background: var(--bn-surface);
@@ -1212,7 +1226,12 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   .pricing-rule:not(:has(.pricing-custom)) .pricing-rule-line { min-height: 0; }
   .pricing-body[data-trends='off'] .pricetrend { display: none; }
   .pricing-row {
-    grid-template-columns: 36px minmax(0, 1fr) 124px auto;
+    /* THE PRICE TRACK IS 132px, NOT 124px (UX-002): measured on this checkout's own dev
+       server, a typed 7-character price ("1234.56") needed 67px inside the field and the
+       124px column gave the input only 65 — a 2px clip nothing in the finding's own repro
+       hit, because its own prices ran two and three digits. 132px matches the table tier's
+       own price track (below), so this is a reused figure and not a new one. */
+    grid-template-columns: 36px minmax(0, 1fr) 132px auto;
     grid-template-rows: auto auto;
     row-gap: 3px;
     column-gap: var(--bn-3);
@@ -1222,7 +1241,7 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   .pricing-id { grid-column: 2; grid-row: 1; }
   /* With no thumb there is no first column to leave room for, and the two placed children
      move left rather than the row keeping a 36px gutter over nothing. */
-  .pricing-section[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 124px auto; }
+  .pricing-section[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 132px auto; }
   .pricing-section[data-copies='none'] .pricing-id { grid-column: 1; }
   .pricing-section[data-copies='none'] .pricing-facts { grid-column: 1; }
   .pricing-facts {
@@ -1264,8 +1283,18 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
     text-transform: uppercase;
     color: var(--bn-ink-3);
   }
-  .pricing-price { grid-column: 3; grid-row: 1 / 3; }
-  .pricing-actions { grid-column: 4; grid-row: 1 / 3; }
+  /* ANCHORED FROM THE END, NOT COUNTED FROM THE FRONT (review round 2, compact-tier
+     markdown lens). `grid-column: 3` / `4` assumed the FOUR-track template above
+     (`36px minmax(0, 1fr) 132px auto`), where price is track 3 and actions is track 4. The
+     `data-copies='none'` template two lines up has only THREE tracks
+     (`minmax(0, 1fr) 132px auto`) — no thumb, so no first 36px track — and the same two
+     rules still asked for tracks 3 and 4: price landed in the actions track ("auto", sized
+     to content), the true 132px price track sat empty as the ~160px gap at 700px, and
+     actions fell into an IMPLICIT fourth column the template never declared. Both templates
+     still end in the same two tracks, `132px auto`, so the fix is the same one UX-002 used
+     on the table tier: count from the end. */
+  .pricing-price { grid-column: -3 / -2; grid-row: 1 / 3; }
+  .pricing-actions { grid-column: -2 / -1; grid-row: 1 / 3; }
   .pricing-meta .pricing-row-note { display: none; }
 }
 

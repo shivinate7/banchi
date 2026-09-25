@@ -8,6 +8,7 @@ import type {
   OrdersPayload,
   PickRow,
   Place,
+  ProductHistoryPayload,
   ResolvedLine,
   ResolvedOrder,
   ShippingBatch,
@@ -16,24 +17,25 @@ import type {
 } from '../src/types'
 
 /* THE BUILDER FUNCTIONS `run-panel.spec.ts`, `orders.spec.ts` AND `shipping.spec.ts` ALREADY
- * WROTE, MOVED HERE SO A FOURTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING SHAPE
- * (`D194`'s own gap, closed in the same PR that names it).
+ * WROTE, MOVED HERE SO A FOURTH AND FIFTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING
+ * SHAPE (a gap D194 closed in the PR that named it; D194 is superseded by
+ * `D284`, and this module's job did not go with it).
  *
- * `app/tests/copy-budget.spec.ts` renders `#/runs`, `#/orders`, `#/shipping`, `#/codes` and
- * `#/graveyard` off `sealEveryTest({ store: true, cards: 122 })` alone, which draws no run, no
- * order, no export, no code and no departed record for any of the five — so their pinned
- * word ceilings bound an EMPTY-ISH state rather than the busiest one a real store draws, and a
- * session could add a sentence to any of the five without the ratchet ever seeing it in its
- * populated form. This module is what those five routes' POPULATED fixtures are built from:
- * the same shapes `run-panel.spec.ts`'s `runRow`, `orders.spec.ts`'s `place`/`pick`/`line`/
- * `order`/`payloadOf` and `shipping.spec.ts`'s `row`/`batchOf` already prove render correctly,
- * plus two new ones — `codeEntry`/`codeLedgerOf` and `departedCard` — for the two screens no
- * existing spec seeds at all.
+ * `app/tests/text-shape.spec.ts` and `app/tests/machine-words.spec.ts` render `#/runs`,
+ * `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` off `sealEveryTest({ store: true,
+ * cards: 122 })` alone, which draws no run, no order, no export, no code and no departed
+ * record for any of the five — so a check run only against that state never sees the busiest
+ * screen a real store draws, and a repeated sentence or a machine word landing in a populated
+ * list could pass unseen. This module is what those five routes' POPULATED fixtures are built
+ * from: the same shapes `run-panel.spec.ts`'s `runRow`, `orders.spec.ts`'s `place`/`pick`/
+ * `line`/`order`/`payloadOf` and `shipping.spec.ts`'s `row`/`batchOf` already prove render
+ * correctly, plus two new ones — `codeEntry`/`codeLedgerOf` and `departedCard` — for the two
+ * screens no existing spec seeds at all.
  *
- * THE THREE SPECS IMPORT FROM HERE NOW INSTEAD OF DEFINING THEIR OWN COPY. A second copy of
- * `runRow` in `copy-budget.spec.ts` is exactly the drift this repo's own rule against a second
- * implementation warns about — see `pipeline/join.py:number_index_key` in `CLAUDE.md`, the
- * same argument one register down.
+ * EVERY SPEC THAT NEEDS ONE OF THESE SHAPES IMPORTS FROM HERE INSTEAD OF DEFINING ITS OWN
+ * COPY. A second copy of `runRow` anywhere else is exactly the drift this repo's own rule
+ * against a second implementation warns about — see `pipeline/join.py:number_index_key` in
+ * `CLAUDE.md`, the same argument one register down.
  */
 
 /* ---------------------------------------------------------------------------- the runs */
@@ -125,7 +127,7 @@ export async function seedPopulatedRuns(page: Page): Promise<void> {
 /** A position block with every field the server sends — `orders.spec.ts`'s own `place`. */
 export function place(over: Partial<Place> = {}): Place {
   const base: Place = {
-    label: 'Box 3 · Section 2 · Card 17',
+    label: 'Box 3, Section 2, Card 17',
     located: true,
     box: 3,
     index: 21,
@@ -423,6 +425,21 @@ export async function seedPopulatedOrders(page: Page): Promise<void> {
       body: JSON.stringify(severalOrdersWalkPlan()),
     }),
   )
+  /* `POST /orders/picks` ANSWERS EVERY KEY THE LEDGER HOLDS, the way `do_order_picks` does.
+   * `shell.ts:stubStore`'s own answer is `{ orders: [] }`, right for its empty ledger and
+   * wrong for this one: these three orders ARE held. MEASURED 2026-09-24: with the empty
+   * answer, `#/orders` re-asks for the missing keys without end (4,934 requests in 10s), so
+   * the screen never settles. That loop is a product defect for the orders lane (the screen
+   * re-asks forever for a key the answer leaves out), recorded in `D284`. */
+  await page.route(/\/orders\/picks$/, (route) => {
+    const asked = new Set<string>((route.request().postDataJSON() as { keys?: string[] } | null)?.keys ?? [])
+    const held = severalOrders().resolution.orders.filter((one) => asked.has(one.key))
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ orders: held }),
+    })
+  })
 }
 
 /* ------------------------------------------------------------------------- the shipping */
@@ -731,10 +748,70 @@ export async function seedPopulatedGraveyard(page: Page): Promise<void> {
   )
 }
 
+/* ------------------------------------------------------------------------- the product */
+
+/** `#/product` WITH A SKU, the only state that route draws anything real in. The SKU is
+ *  `severalOrders()`'s first line (Volcanion, `9191486`), so the owner's own fill on it comes
+ *  off the same `/orders` stub the Orders screen reads, and the page draws both of its marks.
+ *  A fresh fixture off `types.ts:ProductHistoryPayload`, not an import of
+ *  `product-history.spec.ts`'s own: that file belongs to the product lane. */
+export const PRODUCT_SKU = '9191486'
+
+/** The route the three text sweeps append to the nav harvest. `#/product` is off-nav (it is a
+ *  deep link by SKU), so no nav or drawer harvest ever returns it. It is kept in this module,
+ *  not in a spec, for the reason the roster block below gives. */
+export const PRODUCT_ROUTE = `#/product?sku=${PRODUCT_SKU}`
+
+export function productHistory(): ProductHistoryPayload {
+  return {
+    sku: PRODUCT_SKU,
+    product_id: 42,
+    name: 'Volcanion',
+    set_name: 'Steam Siege',
+    condition: 'Near Mint',
+    source: 'archive',
+    history_begins: '2026-03-01',
+    never_sold: false,
+    ranges: [
+      {
+        range: 'month',
+        width_days: 1,
+        buckets: 4,
+        from: '2026-08-26',
+        to: '2026-08-29',
+        latest_market: '1.31',
+        points: [
+          { at: '2026-08-26', market: '1.20', quantity: 2, low: '1.05', high: '1.40' },
+          { at: '2026-08-27', market: '1.22', quantity: 1, low: '1.10', high: '1.40' },
+          { at: '2026-08-28', market: null, quantity: 0, low: null, high: null },
+          { at: '2026-08-29', market: '1.31', quantity: 1, low: '1.15', high: '1.52' },
+        ],
+      },
+    ],
+  }
+}
+
+/** Stub the product's own history read. Its fills come off `seedPopulatedOrders`'s `/orders`,
+ *  and its printings switch reads `/search`, which `shell.ts:stubStore` already answers. */
+export async function seedPopulatedProduct(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(productHistory()),
+    }),
+  )
+}
+
 /* ------------------------------------------------------------------------- the roster */
 
-/** The five routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
- *  populates it — `copy-budget.spec.ts`'s own use, kept here rather than in that file.
+/** The six routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
+ *  populates it — read by `routeSweep.ts:sweepEveryRoute`, which REGISTERS EVERY SEED ONCE,
+ *  before the sweep starts, so every route reads the same populated store at both widths.
+ *  (Registering each seed on arrival at its route piled the handlers up in nav order: a route
+ *  drawn before `#/orders` at 1440 read the empty ledger, and the same route at 390 read the
+ *  full one. That was the whole of the run-to-run variation the first build blamed on a
+ *  "seeded-random" fixture. Nothing in this fixture is random.)
  *
  *  DELIBERATELY NOT IN A `*.spec.ts` FILE. `scripts/docs-audit.py`'s `route rosters` row
  *  reconciles a hand-typed list of THREE OR MORE route hashes found in a spec against
@@ -751,4 +828,5 @@ export const POPULATED_ROUTE_SEEDS: Record<string, (page: Page) => Promise<void>
   '#/shipping': seedPopulatedShipping,
   '#/codes': seedPopulatedCodes,
   '#/graveyard': seedPopulatedGraveyard,
+  [PRODUCT_ROUTE]: seedPopulatedProduct,
 }

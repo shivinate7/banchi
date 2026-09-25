@@ -116,6 +116,12 @@ SCOPE = (
         "why": "Named in the `design-check` recipe: the suite starts through it.",
     },
     {
+        "path": "scripts/port-slots.py",
+        "why": "Named in the `design-check` recipe: it claims this checkout's port slot "
+               "before the suite starts, so it decides which port the browser is pointed at "
+               "(D261).",
+    },
+    {
         "path": ".github/workflows/check.yml",
         "why": "The gate itself. A change to how the matrix is invoked, sharded or skipped "
                "has to run the matrix, or the change is verified by nothing.",
@@ -124,6 +130,27 @@ SCOPE = (
         "path": "scripts/browser-scope.py",
         "why": "The classifier. Same argument as the workflow: a change to the gate's own "
                "reasoning is proven only by the run it decides about.",
+    },
+    {
+        "path": "scripts/kit-adoption.mjs",
+        "why": "Read by `app/tests/scaffold.spec.ts`, which runs it with `--routes` to get "
+               "the route table it sweeps (D275). A change to how it reads "
+               "`ROUTES` changes which routes the browser measures.",
+    },
+    {
+        "path": "scripts/kit-adoption-allow.json",
+        "why": "Read by `app/tests/scaffold.spec.ts`: its `runtime` block is the shrinking "
+               "offender list the spec reconciles against (D275). Deleting an "
+               "entry is a claim that a screen now passes, and only the browser proves it.",
+    },
+    {
+        "path": "scripts/machine-words.json",
+        "why": "Read by `app/tests/machine-words.spec.ts`: the one word list the rendered-text "
+               "check scans every route for (D196, D284). A word added or "
+               "removed changes what the browser refuses, so only the browser proves it. The "
+               "three browser pending lists (`app/tests/*-allow.json`) sit under `app/**` "
+               "already. `scripts/machine-words-allow.json` is the AST row's list and no spec "
+               "reads it.",
     },
 )
 
@@ -757,7 +784,7 @@ _SHARED_EXACT = {
 }
 _SHARED_APP_FILES = {
     "app/playwright.config.ts", "app/vite.config.ts", "app/devPort.ts",
-    "app/design-check-reporter.ts", "app/eslint.config.js",
+    "app/checkoutIdentity.ts", "app/design-check-reporter.ts", "app/eslint.config.js",
 }
 
 

@@ -61,13 +61,13 @@ a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
 .home-standing-say { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-lg); line-height: 1.35; color: var(--bn-ink-2); }
 .home-standing-lead { font-weight: 700; color: var(--tone); }
 .home-standing-say strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
-.home-standing-go { display: inline-flex; align-items: center; gap: var(--bn-2); flex: none; color: var(--bn-ink-4);
+.home-standing-go { display: inline-flex; align-items: center; gap: var(--bn-2); flex: none; color: var(--bn-ink-3);
   transition: color var(--bn-t-fast) var(--bn-ease), translate var(--bn-t-fast) var(--bn-ease); }
 a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate: 2px 0; }
 .home-standing-behind { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-md); color: var(--bn-ink-3);
   display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-2) var(--bn-4); }
 .home-standing-behind b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
-.home-standing-behind-lab { color: var(--bn-ink-4); }
+.home-standing-behind-lab { color: var(--bn-ink-3); }
 .home-standing-problem { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-warn);
   display: flex; align-items: center; gap: var(--bn-2); }
 
@@ -79,14 +79,14 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
   max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
 .home-foot-sum { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
 .home-foot-sum b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
-.home-foot-sum i { font-style: normal; color: var(--bn-ink-4); padding: 0 5px; }
+.home-foot-sum i { font-style: normal; color: var(--bn-ink-3); padding: 0 5px; }
 /* D218: the separator is CSS content now, not typed into the JSX; the padding above still
    frames it on both sides exactly as it framed the character. */
 .home-foot-sum i::before { content: '·'; }
-.home-foot-quiet { color: var(--bn-ink-4); }
+.home-foot-quiet { color: var(--bn-ink-3); }
 .home-foot-last { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.5; }
 .home-foot-last b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
-.home-foot-last em { font-style: normal; color: var(--bn-ink-4); }
+.home-foot-last em { font-style: normal; color: var(--bn-ink-3); }
 
 .home-ribbon { width: 100%; height: 56px; display: block; }
 .home-ribbon-axis { stroke: var(--bn-line-strong); stroke-width: 1; }

@@ -102,6 +102,7 @@ problem. That is the trap this paragraph exists to keep somebody out of.
 
 from __future__ import annotations
 
+import http.client
 import json
 import sys
 import urllib.error
@@ -329,10 +330,13 @@ class FetchRefusal(Exception):
     from a response body, which is where a portal would echo one back.
     """
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, status: Optional[int] = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        # The HTTP status the portal answered, when it answered one. A write's caller reads it
+        # to tell a request TCGplayer turned away (4xx) from one it may have done (5xx).
+        self.status = status
 
 
 def endpoint() -> str:
@@ -424,24 +428,39 @@ def _open(
     if cookie:
         request.add_header("Cookie", cookie)
     opener = urllib.request.build_opener(_NoRedirect)
+    host = urlparse(url).netloc
     try:
         response = opener.open(request, timeout=TIMEOUT_S)
         return response.status, dict(response.headers), response.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as caught:
         # A 3xx reaches here BECAUSE of `_NoRedirect`, which is the point: an HTTPError is
         # how a non-followed redirect is delivered, and its headers carry the Location.
-        return caught.code, dict(caught.headers), caught.read(MAX_BYTES + 1)
+        try:
+            body = caught.read(MAX_BYTES + 1)
+        except (OSError, http.client.HTTPException):
+            body = b""
+        return caught.code, dict(caught.headers), body
     except urllib.error.URLError as caught:
         raise FetchRefusal(
             "tcg_unreachable",
-            f"Could not reach {urlparse(url).netloc}: {caught.reason}. Nothing was fetched "
-            f"and nothing was written.",
+            f"Could not reach {host}: {caught.reason}.",
         ) from None
-    except TimeoutError:
+    except (OSError, http.client.HTTPException):
+        # EVERY OTHER WAY THE SOCKET CAN FAIL, AND THE TIMEOUT IS THE ONE THAT MATTERS. On this
+        # repo's Python 3.9 `socket.timeout` is an `OSError` and NOT a `TimeoutError` (the two
+        # were merged in 3.10), and urllib raises it raw from `getresponse()` and from
+        # `read()` — outside the `URLError` it wraps a connect failure in. `except TimeoutError`
+        # alone caught none of them, so a slow answer escaped every caller as a traceback. A
+        # dropped connection (`RemoteDisconnected`, `IncompleteRead`) is the same event from
+        # the caller's side: no answer it can read.
+        #
+        # THE MESSAGE SAYS WHAT IS KNOWN AND NO MORE. On a read, nothing was fetched. On a
+        # write, the other end may have done the work before it went quiet — so this sentence
+        # does not say "nothing was written", and `server/tcg_import.py`'s callers decide what
+        # an unanswered write means.
         raise FetchRefusal(
             "tcg_unreachable",
-            f"{urlparse(url).netloc} did not answer within {TIMEOUT_S}s. The export may be "
-            f"large; nothing was fetched and nothing was written.",
+            f"{host} did not answer within {TIMEOUT_S}s, or dropped the connection.",
         ) from None
 
 

@@ -20,7 +20,7 @@ export function runningFor(row: { created_at?: string | null }): string {
   return mins < 60 ? `Running ${mins}m` : `Running ${Math.floor(mins / 60)}h ${mins % 60}m`
 }
 
-export const STAGES = ['Identify', 'Join', 'Review', 'Price', 'Emit', 'Reconcile'] as const
+export const STAGES = ['Identify', 'Match', 'Review', 'Price', 'Send', 'Compare'] as const
 
 /** The four commands this screen drives, in order. */
 export const COMMANDS = ['identify', 'join', 'emit', 'reconcile'] as const
@@ -44,22 +44,63 @@ export function stageOf(row: RunSummary): Stage {
     case 'ready':
       return { label: 'Not started', tone: 'default', filled: 0, live: false, step: 0 }
     case 'identify':
-      return { label: 'Not collected', tone: 'warn', filled: 0, live: false, step: 0 }
+      return { label: 'Not read', tone: 'warn', filled: 0, live: false, step: 0 }
     case 'join':
-      return { label: 'Needs join', tone: 'warn', filled: 1, live: false, step: 1 }
+      /* THE MATCH RUNS BY ITSELF (flow interview, Q4), so "needs matching" is no longer a job
+         for the owner. What the row says is the match in progress, or the problem that stopped
+         it — which is then the run's next step, in two words. */
+      if (row.match_problem != null) {
+        return { label: matchProblemLabel(row.match_problem.code), tone: 'warn', filled: 1, live: false, step: 1 }
+      }
+      return { label: 'Matching…', tone: 'accent', filled: 1, live: false, step: 1 }
     case 'emit': {
       const review = row.counts.queued_main ?? 0
       if (review > 0) {
         return { label: `${review} to review`, tone: 'warn', filled: 2, live: false, step: 2 }
       }
-      return { label: 'Needs pricing', tone: 'accent', filled: 3, live: false, step: 2 }
+      /* THE REAL NEXT STEP, NOT A GUESS ABOUT PRICES (UX-006). This row cannot see whether a
+         price is owed — that is Pricing's worklist, too heavy for the polled list — so it names
+         the screen the step is on, which is one screen and one press whatever the prices say.
+         Two words, the same as the label it replaced: Inventory draws this pill too, and its
+         word ceiling holds (D194). Home's line reads the worklist and says which. */
+      return { label: 'Next: Pricing', tone: 'accent', filled: 3, live: false, step: 2 }
     }
     case 'reconcile':
-      return { label: 'Emitted', tone: 'ok', filled: 5, live: false, step: 3 }
+      return { label: 'Written', tone: 'ok', filled: 5, live: false, step: 3 }
     case 'done':
-      return { label: 'Reconciled', tone: 'ok', filled: 6, live: false, step: 4 }
+      return { label: 'Compared', tone: 'ok', filled: 6, live: false, step: 4 }
     default:
       return { label: 'Unknown', tone: 'default', filled: 0, live: false, step: 0 }
+  }
+}
+
+/** A match problem in two words, for the pill. The sentence is the detail panel's. */
+export function matchProblemLabel(code: string): string {
+  switch (code) {
+    case 'export_needs_set_hint':
+      return 'Needs sets'
+    case 'tcg_session_expired':
+    case 'tcg_cookie_missing':
+    case 'tcg_cookie_malformed':
+      return 'Sign in again'
+    default:
+      return 'Match stopped'
+  }
+}
+
+/** The problem as one sentence and the one thing to do about it. */
+export function matchProblemTitle(code: string): string {
+  switch (code) {
+    case 'export_needs_set_hint':
+      return 'Some cards need a set before they can be matched. Add the sets, then try again.'
+    case 'tcg_session_expired':
+    case 'tcg_cookie_missing':
+    case 'tcg_cookie_malformed':
+      return 'The TCGplayer sign-in has expired. Sign in again, then try again.'
+    case 'tcg_unreachable':
+      return 'TCGplayer did not answer, so the cards were not matched.'
+    default:
+      return 'The cards could not be matched.'
   }
 }
 

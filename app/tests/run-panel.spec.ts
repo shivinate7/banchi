@@ -232,11 +232,25 @@ async function open(
      *  `standing.ts`'s own link and is what a case bookmarking the composer's default scope
      *  passes here. */
     at?: string
+    /** What `POST /pipeline/runs/<name>/match` answers (flow interview, Q4). Recorded into the
+     *  wire either way, so a case can assert that the match ran with nobody pressing — or that
+     *  it did not. Default: not waiting, which changes nothing on screen. */
+    match?: (body: Record<string, unknown>) => unknown
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   const record = (method: string, url: string, body: unknown) =>
     wire.push({ method, path: new URL(url).pathname, body })
+
+  await page.route(/\/pipeline\/runs\/[^/]+\/match$/, async (route) => {
+    const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
+    record('POST', route.request().url(), body)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.match?.(body) ?? { ran: false, reason: 'not_waiting', summary: runRow() }),
+    })
+  })
 
   /* THE SPEND ROUTE, INTERCEPTED AND NEVER CALLED. The body is recorded so the assertion can
      read what the screen would have sent — the strongest thing a browser test can say about a
@@ -535,6 +549,14 @@ async function open(
 async function openComposer(page: Page) {
   await page.locator('.bn-head-actions').getByRole('button', { name: /^Identify/ }).click()
   await expect(page.locator('.runs-composer')).toBeVisible()
+  /* OPEN, THEN SPEND (the owner's Q5 ruling). The free cost check runs the moment the sheet
+     opens over the default start, so the sheet lands on Cost. Most cases here build a selection
+     of their own, so the helper waits for that first answer — a quote or a refusal — and steps
+     back to Cards, which is where every case below was written to begin. */
+  await expect(page.locator('.run-quote, .runs-composer .bn-notice-danger').first()).toBeVisible()
+  const cards = page.locator('.runs-stages').getByRole('button', { name: 'Cards' })
+  if ((await cards.count()) > 0) await cards.click()
+  await expect(page.locator('.runs-starts')).toBeVisible()
 }
 
 /** Ticks a box on the dialog's first stage.
@@ -547,20 +569,20 @@ async function pickBox(page: Page, box = 9) {
      more: a selection can begin from a STATE, from the cards handed over, or from a previous
      run. Choosing the start first is idempotent — `Segmented` re-presses without toggling —
      so every existing caller of this helper keeps meaning what it meant. */
-  const drawers = page.locator('.runs-starts').getByRole('button', { name: 'Drawers' })
+  const drawers = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
   if (await drawers.isVisible()) await drawers.click()
   await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^Box ${box}\\b`) }).click()
 }
 
 /** Forward from the boxes stage to the reading stage. */
 async function toReading(page: Page) {
-  await page.getByRole('button', { name: /^Continue to the reading$/ }).click()
+  await page.getByRole('button', { name: /^Next: photos$/ }).click()
   await expect(page.locator('.run-readings').first()).toBeVisible()
 }
 
 /** Back to the reading stage from the cost stage, by the footer's own way back. */
 async function backToReading(page: Page) {
-  await page.locator('.runs-composer-foot').getByRole('button', { name: 'Reading' }).click()
+  await page.locator('.runs-composer-foot').getByRole('button', { name: 'Photos' }).click()
   await expect(page.locator('.run-readings').first()).toBeVisible()
 }
 
@@ -636,12 +658,13 @@ test('the panel is open on arrival, with all four commands named and reachable',
      person arrives, and the press that reaches them is on the screen rather than behind
      anything. That is `CLAUDE.md`'s route-is-not-a-feature test, and it is what the fold
      assertion was ever standing in for. */
-  await expect(page.locator('.bn-lede')).toContainText('Identify, join, emit and reconcile')
+  await expect(page.locator('.bn-lede')).toContainText('Only Identify costs money.')
 
   const identify = page.locator('.bn-head-actions').getByRole('button', { name: /^Identify/ })
   await expect(identify).toBeVisible()
   await identify.click()
-  await expect(page.getByRole('dialog', { name: /Which cards/ })).toBeVisible()
+  /* THE SHEET OPENS ON ITS OWN COST CHECK (Q5), so its heading is the cost's. */
+  await expect(page.getByRole('dialog', { name: /Which cards|What it costs/ })).toBeVisible()
 })
 
 test('a live run is announced where the panel already is', async ({ page }) => {
@@ -683,7 +706,7 @@ test('the pipeline is on its own screen, with all four steps named', async ({ pa
      that has only just mounted it answers `[]` and the failure reads as four missing steps. */
   await expect(page.locator('.run-step-title')).toHaveCount(4)
   const titles = await page.locator('.run-step-title').allInnerTexts()
-  expect(titles).toEqual(['Identify', 'Join', 'Emit', 'Reconcile'])
+  expect(titles).toEqual(['Identify', 'Match', 'Price and send', 'Compare'])
   await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(1)
 })
 
@@ -699,10 +722,10 @@ test('the four steps are named before any run exists', async ({ page }) => {
   await open(page, { runs: [] })
 
   await expect(page.locator('.run-empty')).toContainText('No runs yet')
-  await expect(page.locator('.bn-lede')).toContainText('Identify, join, emit and reconcile')
+  await expect(page.locator('.bn-lede')).toContainText('Only Identify costs money.')
   const empty = page.locator('.runs-detail-empty')
   await expect(empty).toContainText('Identify a box first')
-  await expect(empty).toContainText('Join, emit and reconcile')
+  await expect(empty).toContainText('Matching and pricing do not')
 })
 
 test('which steps cost money is on the heading line, not buried in the prose', async ({
@@ -725,9 +748,9 @@ test('which steps cost money is on the heading line, not buried in the prose', a
   const costs = await page.locator('.runs-step .runs-step-cost').allTextContents()
   expect(costs).toEqual([
     'Cost $0.15',
-    'Freere-runnable',
-    'Freere-runnable',
-    'Freere-runnable',
+    'Free',
+    'Free',
+    'Free',
   ])
 })
 
@@ -839,10 +862,8 @@ test('the reading is explained before Check cost is pressed, not after', async (
      rather than once per row — the sentence is the same either way, and it is the sentence
      that is under test. */
   const says = page.locator('.runs-reading-says')
-  await expect(says).toContainText('Crops to the card')
-  await expect(says).toContainText('never touched')
-  /* The measurement, in the house voice: box 2's own figure rather than an asserted rule. */
-  await expect(says).toContainText('$0.62')
+  /* ONE SHORT LINE PER READING (UX-153): what it does, never one box's measured cost. */
+  await expect(says).toHaveText('Crops to the card, 1200px.')
 })
 
 test('each reading sends the pair it names, never half of one', async ({ page }) => {
@@ -1005,8 +1026,8 @@ test('the raw controls are behind Custom, and that is where the mistake is named
      pairing is named by its measurement rather than by a shouted word now, which is the same
      claim: a crop at an unchanged 1568 cost 26% MORE. */
   const says = page.locator('.runs-reading-says')
-  await expect(says).toContainText('one decision')
-  await expect(says).toContainText('26% more')
+  /* THE RANGE THAT WORKS, IN ONE LINE (UX-153), rather than the measurement behind it. */
+  await expect(says).toContainText('Between 900 and 1400px works best')
 })
 
 test('changing the reading voids the estimate, because it changes what would be sent', async ({
@@ -1035,7 +1056,8 @@ test('changing the reading voids the estimate, because it changes what would be 
   await expect(page.locator('.run-button-money')).toHaveCount(0)
 
   await checkCost(page)
-  expect(wire.filter((row) => row.path === '/pipeline/preflight')).toHaveLength(2)
+  /* THREE: the one the sheet ran by itself on opening (Q5), then the two pressed here. */
+  expect(wire.filter((row) => row.path === '/pipeline/preflight')).toHaveLength(3)
   expect(wire.filter((row) => row.path === '/pipeline/preflight').pop()?.body).toMatchObject({
     crop: true,
     max_edge: 900,
@@ -1235,6 +1257,8 @@ test('this run\'s own receipts download here; the import CSVs do not', async ({ 
      `pricing.json` come from join, `reconcile.txt` from reconcile — each one screen-inch
      from the button that produced it, which is docs/GATES.md's gap answered for the half of
      the artefacts that stayed. */
+  /* BEHIND A CLOSED "Files" (UX-020): the record, one press away from the run. */
+  await page.locator('.runs-detail-files > summary').click()
   const file = page.locator('.run-file').filter({ hasText: 'reconcile.txt' })
   await expect(file).toBeVisible()
   await expect(file).toHaveAttribute('download', 'reconcile.txt')
@@ -1439,7 +1463,7 @@ test('several drawers are one selection, one estimate and one confirm', async ({
   await expect(page.locator('.run-leg')).toHaveCount(0)
   /* The header behind the dialog carries the same selection, which is what the operator is
      left looking at when the dialog closes. */
-  await expect(page.locator('.runs-scope')).toContainText('2 drawers')
+  await expect(page.locator('.runs-scope')).toContainText('2 boxes')
 
   await checkCost(page)
 
@@ -1524,11 +1548,11 @@ test('a drawer is untickable, and the last one out leaves nothing to price', asy
   /* THE SELECTION LINE IS WHAT SAYS WHICH DRAWERS, where the cart had one `.run-leg` row per
      drawer on the reading stage. There is one reading now, so there are no rows to count and
      the footer's own sentence is the thing that has to stay true. */
-  await expect(page.locator('.runs-composer-note')).toContainText('2 drawers')
+  await expect(page.locator('.runs-composer-note')).toContainText('2 boxes')
 
   await pickBox(page, 12)
   await expect(page.locator('.runs-composer-note')).toContainText('Box 9')
-  await expect(page.locator('.runs-composer-note')).not.toContainText('2 drawers')
+  await expect(page.locator('.runs-composer-note')).not.toContainText('2 boxes')
 
   /* THE LAST DRAWER OUT LEAVES THE `Drawers` START ANSWERING NOTHING, and the way forward is
      disabled rather than absent — the one control here that gets to be disabled, because it is
@@ -1541,9 +1565,9 @@ test('a drawer is untickable, and the last one out leaves nothing to price', asy
      reached by unticking, and is the state this asserts. */
   /* Box 9 is still ticked at this point — the untick above took 12 out — so the way forward is
      enabled, and taking the LAST drawer out is what disables it. */
-  await expect(page.getByRole('button', { name: /^Continue to the reading$/ })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /^Next: photos$/ })).toBeEnabled()
   await pickBox(page, 9)
-  await expect(page.getByRole('button', { name: /^Continue to the reading$/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Next: photos$/ })).toBeDisabled()
 })
 
 test('a box the send could not start is named, not swallowed', async ({ page }) => {
@@ -1592,14 +1616,14 @@ test('no DRAWER is picked for the operator, and the default start is a state rat
      own case above. */
   await openComposer(page)
   await expect(page.locator('.runs-composer-note')).toContainText('Every card waiting to be identified')
-  const next = page.getByRole('button', { name: /^Continue to the reading$/ })
+  const next = page.getByRole('button', { name: /^Next: photos$/ })
   await expect(next).toBeEnabled()
 
   /* AND NO DRAWER IS TICKED — the half of the old rule that still binds. Choosing `Drawers`
      shows a grid with nothing picked, and the way forward is disabled rather than absent: it
      is free, it is the next thing to press, and a control that vanishes until an unrelated
      press brings it back is a screen that looks broken. */
-  await page.locator('.runs-starts').getByRole('button', { name: 'Drawers' }).click()
+  await page.locator('.runs-starts').getByRole('button', { name: 'Boxes' }).click()
   await expect(page.locator('.runs-boxes button[aria-pressed="true"]')).toHaveCount(0)
   await expect(next).toBeDisabled()
   await expect(page.locator('.runs-scope')).toHaveCount(0)
@@ -1644,8 +1668,8 @@ test('a ticked handoff opens the dialog on exactly those cards, and sends keys r
   await expect(page.locator('.runs-composer')).toBeVisible()
   await expect(page.locator('.runs-composer-note')).toContainText('2 ticked cards in Box 9')
 
-  await toReading(page)
-  await checkCost(page)
+  /* OPEN, THEN SPEND (Q5): the free check ran by itself over the handed-over cards. */
+  await expect(page.locator('.run-quote')).toBeVisible()
   await page.locator('.run-button-money').click()
 
   const spend = wire.find((row) => row.path === '/pipeline/identify')
@@ -1674,8 +1698,7 @@ test('a handoff spans drawers, and every key it carries goes on one flat list', 
     '3 ticked cards in 2 drawers · boxes 9 and 12',
   )
 
-  await toReading(page)
-  await checkCost(page)
+  await expect(page.locator('.run-quote')).toBeVisible()
   await page.locator('.run-button-money').click()
 
   const spend = wire.find((row) => row.path === '/pipeline/identify')
@@ -1705,10 +1728,11 @@ test('#/runs?state=captured opens the composer on its default scope, the way sta
      identified — with nothing pressed. This is a READ and not a bookmark of a narrowing: there
      is no `&box=` term and no write-back of a chip press into the address. */
   await expect(page.locator('.runs-composer')).toBeVisible()
-  await expect(page.locator('.runs-composer-note')).toContainText('Every card waiting to be identified')
-
-  await toReading(page)
-  await checkCost(page)
+  /* OPEN, THEN SPEND (Q5): the free check ran by itself, once, and the figure is on screen
+     with no press. The spend is the second press. */
+  await expect(page.locator('.run-quote')).toBeVisible()
+  expect(wire.filter((row) => row.path === '/pipeline/preflight')).toHaveLength(1)
+  expect(wire.filter((row) => row.path === '/pipeline/identify')).toHaveLength(0)
   await page.locator('.run-button-money').click()
 
   const spend = wire.find((row) => row.path === '/pipeline/identify')
@@ -2099,12 +2123,12 @@ test('a joined run says how to correct a whole stack, and that the box alone is 
   await open(page, { detail: { joined: true, counts: { cards_in: 40, skus: 30, queued_main: 12, queued_parked: 3 } } })
   await openRun(page)
 
-  const note = page.locator('.runs-correction')
-  await expect(note).toBeVisible()
-  await expect(note).toContainText('Manage box')
-  await expect(note).toContainText('correcting the box alone changes nothing')
-  await expect(note).toContainText('costs nothing')
-  await expect(note.getByRole('link', { name: /Inventory/i })).toHaveAttribute('href', '#/inventory')
+  /* IT NO LONGER SITS ON EVERY RUN (UX-122): one line inside the Match step, which is the
+     step it tells the owner to run again. */
+  await expect(page.locator('.runs-correction')).toHaveCount(0)
+  const head = page.locator('.runs-step', { hasText: 'Match' }).locator('.runs-step-head')
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  await expect(page.getByText('Fixed a rarity on Inventory? Identify and match again.')).toBeVisible()
 })
 
 test('and it is not drawn on a run that has never been joined', async ({ page }) => {
@@ -2889,6 +2913,44 @@ test('rebind: the write lands a receipt with a way back to the new run, never co
   expect(writes.map((call) => call.body)).toEqual([{ write: false }, { write: true }])
 })
 
+// ---------------------------------------------------- the match runs by itself (Q4)
+
+const matchPosts = (wire: Wire[]) => wire.filter((call) => call.method === 'POST' && call.path.endsWith('/match'))
+
+test('a finished reading is matched with nobody pressing anything', async ({ page }) => {
+  /* THE DEFAULT RUN HAS READ ITS CARDS AND WAITS FOR ITS MATCH: collected, not joined. The owner's
+     ruling (flow interview, Q4) is that this step runs by itself, so arriving is the cue. */
+  const wire = await open(page, { match: () => ({ ran: true, ok: true, summary: runRow({ phase: 'emit' }) }) })
+  await expect.poll(() => matchPosts(wire).length).toBe(1)
+  expect(matchPosts(wire)[0]?.body).toEqual({})
+  await expect(page.locator('.run-row').first()).toContainText('Matching')
+})
+
+test('a match that stopped is the run\'s next step, with one door, and is not asked again by itself', async ({
+  page,
+}) => {
+  const problem = {
+    code: 'export_needs_set_hint',
+    message: 'Every Pokémon card in a run has to name its set, and 3 of 40 do not.',
+    step: 'fetch',
+  }
+  const wire = await open(page, {
+    runs: [runRow({ match_problem: problem })],
+    detail: { match_problem: problem },
+    match: () => ({ ran: true, ok: true, summary: runRow({ phase: 'emit' }) }),
+  })
+  /* THE PILL SAYS WHAT IS IN THE WAY, in two words. */
+  await expect(page.locator('.run-row').first()).toContainText('Needs sets')
+  await openRun(page)
+  const notice = page.locator('.run-match-problem')
+  await expect(notice).toContainText('Some cards need a set before they can be matched.')
+  /* A PROBLEM THAT STANDS IS NOT ASKED AGAIN WITHOUT A PRESS: TCGplayer is asked nothing. */
+  expect(matchPosts(wire)).toHaveLength(0)
+  await notice.getByRole('button', { name: 'Try again' }).click()
+  await expect.poll(() => matchPosts(wire).length).toBe(1)
+  expect(matchPosts(wire)[0]?.body).toEqual({ retry: true })
+})
+
 test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ page }) => {
   const wire: Wire[] = []
   await open(page, { detail: { box_former: true, box_bid: 1 } })
@@ -2910,7 +2972,7 @@ test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ p
   await page.getByRole('button', { name: 'Rebind' }).click()
 
   const sheet = page.locator('.rescue-sheet')
-  await expect(sheet).toContainText('already left the store')
+  await expect(sheet).toContainText('They have left the store')
   const text = (await sheet.innerText()).toLowerCase()
   expect(text).not.toContain('none_on_shelf')
   expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toHaveCount(0)

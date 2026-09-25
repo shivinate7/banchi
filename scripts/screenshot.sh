@@ -69,15 +69,16 @@ PORTS
 )
 EOF
 
-# A LINKED WORKTREE THAT CANNOT DERIVE ITS PORT RENDERS NOTHING. `.git` as a FILE is the
-# linked-worktree test, the same one fact app/devPort.ts, server/ports.py and
-# scripts/worktree-guard.sh all detect on. Refusing is the answer here rather than an
-# obstacle: falling back to the documented default would render the main checkout's app and
-# the renders would look fine, which is the failure being fixed and not a degraded version
-# of it. The main tree has nothing to derive and needs none of this.
+# A TREE THAT IS NOT THE PRIMARY CHECKOUT AND CANNOT DERIVE ITS PORT RENDERS NOTHING. Only a
+# `.git` DIRECTORY is the primary checkout, the same one fact server/ports.py and
+# app/devPort.ts detect on (D268, a copied tree never gets the live port).
+# A linked worktree (`.git` a FILE) and a copy with no `.git` both refuse. Refusing is the
+# answer here rather than an obstacle: falling back to the documented default would render
+# the main checkout's app and the renders would look fine, which is the failure being fixed
+# and not a degraded version of it. The main tree has nothing to derive and needs none of this.
 if [ -z "${DEV_PORT:-}" ]; then
-  if [ -f .git ]; then
-    echo "screenshot: this is a linked worktree and its dev port could not be derived." >&2
+  if [ ! -d .git ]; then
+    echo "screenshot: this is not the primary checkout and its dev port could not be derived." >&2
     echo "  Without it the manifest's :5173 would render the MAIN checkout's app — a branch's" >&2
     echo "  screenshots showing main's code, over the owner's real store (D43). Refusing." >&2
     echo "  Fix: python3 must be able to import server/ports.py from $(pwd)" >&2
@@ -125,6 +126,52 @@ warn_other_tree() {
   esac
 }
 
+# THE SERVER ON THIS CHECKOUT'S DEV PORT MUST NAME THIS CHECKOUT
+# (D261). Two checkouts can share a port.
+# A render of another tree's server looks exactly right and shows the wrong code. So before
+# the first render of this checkout's dev origin, the server there is asked at `/__checkout`,
+# the same question `app/checkoutIdentity.ts` asks for a Playwright run, and a server that
+# names another checkout, or names none, is refused. Nothing listening is left to the render,
+# which already says "nothing is serving". Any other origin is not this check's business.
+# `PKMNSCAN_CHECKOUT_IDENTITY=off` skips it, and the refusal prints that.
+identity_checked=""
+require_own_server() {
+  case "$1" in
+    http://localhost:"$DEV_PORT"|http://localhost:"$DEV_PORT"/*) ;;
+    http://127.0.0.1:"$DEV_PORT"|http://127.0.0.1:"$DEV_PORT"/*) ;;
+    *) return 0 ;;
+  esac
+  [ "${PKMNSCAN_CHECKOUT_IDENTITY:-}" = "off" ] && return 0
+  [ -n "$identity_checked" ] && return 0
+  local served here
+  served="$(python3 - "$DEV_PORT" <<'IDENTITY' 2>/dev/null
+import json, sys, urllib.error, urllib.request
+url = "http://127.0.0.1:%s/__checkout" % sys.argv[1]
+try:
+    with urllib.request.urlopen(url, timeout=3) as response:
+        body = json.loads(response.read().decode("utf-8"))
+    served = body.get("checkout") if isinstance(body, dict) else None
+    print(served if isinstance(served, str) and served else "(a server that names no checkout)")
+except urllib.error.HTTPError:
+    print("(a server that names no checkout)")
+except (OSError, ValueError):
+    print("")
+IDENTITY
+)"
+  [ -z "$served" ] && return 0
+  here="$(python3 -c 'import os; print(os.path.realpath("."))')"
+  if [ "$served" != "$here" ]; then
+    echo "screenshot: REFUSED: the dev server on :$DEV_PORT is not this checkout's, so this" >&2
+    echo "  render would show another tree's code." >&2
+    echo "  This checkout: $here" >&2
+    echo "  That server:   $served" >&2
+    echo "  Fix: make dev in THIS checkout (it claims a port of its own first)." >&2
+    echo "  To render it anyway: PKMNSCAN_CHECKOUT_IDENTITY=off" >&2
+    return 1
+  fi
+  identity_checked=1
+}
+
 usage() {
   echo "usage: scripts/screenshot.sh <url> <name> [<selector>[,<selector>...]]" >&2
   echo "       scripts/screenshot.sh --manifest <file>" >&2
@@ -160,6 +207,7 @@ render() {
   want="${3:-}"
   dest="$OUT_DIR/$2.png"
 
+  require_own_server "$url" || return 1
   mkdir -p "$OUT_DIR" || return 1
   rm -f "$dest"
 

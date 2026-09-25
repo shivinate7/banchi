@@ -166,6 +166,7 @@ says the same thing about 7b that a green T6 says about geometry: it is self-con
 
 from __future__ import annotations
 
+import argparse
 import ast
 import base64
 import codecs
@@ -193,6 +194,7 @@ import sqlite3
 # THIS COMMENT SAID "THE ONLY TEST" UNTIL THE MERGE THAT BROUGHT THEM TOGETHER, and both sides
 # were right when they were written: main added the import for the first, this branch for the
 # second, and the count is the one thing neither could see.
+import re
 import subprocess
 import sys
 import tempfile
@@ -207,7 +209,7 @@ from decimal import Decimal
 from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -230,6 +232,7 @@ from pipeline import (  # noqa: E402
     reprice,
     routing,
     selection,
+    sendguard,
     shipping,
     tcgcsv,
     variant,
@@ -246,11 +249,13 @@ from server import (  # noqa: E402
     order_transport,
     pipeline_routes,
     ports,
+    send_routes,
     shipping_routes,
     tcg_export,
     tcg_import,
 )
 from store import db, files, master, photos, queues  # noqa: E402
+from store import sendclaims  # noqa: E402
 # `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
 # — the resolver computes and stores nothing, this one persists — so it takes an alias
 # rather than shadowing the name half this file's order cases are written against.
@@ -356,6 +361,17 @@ NEVER_BOUND_IDENTITY_SNAPSHOT = {
     "read_disputes": False,
 }
 
+
+
+def stored_label(box: int, index: int) -> str:
+    """`Position.label` for a card, against the box's STORED name (D259).
+
+    A box created with no name carries its stored default (`Inventory.default_box_name`), so a
+    bare `join.Position(box, index).label` (the `Box <number>` fallback for a caller with no
+    registry) is not what a route answers. This is the one formula with the registry's name.
+    """
+    entry = Store().read().inventory.box(box)
+    return join.Position(box, index, box_name=entry.name if entry else None).label
 
 def entry(box: int, index: int, **extra) -> queues.QueueEntry:
     """A queue entry for a captured position, with the fields a review row is drawn from.
@@ -1905,7 +1921,7 @@ def check_server_routes(checks: Checks) -> None:
         checks.ok(body["new_box"], "and flags the box as new")
         checks.equal(
             body["label"],
-            join.Position(3, 1).label,
+            stored_label(3, 1),
             "the rendered label matches pipeline/join.py's — one renderer, not two",
         )
 
@@ -2084,7 +2100,7 @@ def check_server_routes(checks: Checks) -> None:
         row = inventory["cards"]["3/2"]
         checks.equal(
             row["label"],
-            join.Position(3, 2).label,
+            stored_label(3, 2),
             "and each row carries the label pipeline/join.py renders — not a second copy of "
             "D10's divider rule living in the app",
         )
@@ -2255,11 +2271,13 @@ def check_undo(checks: Checks) -> None:
                 "undo_not_newest",
                 "and it refuses in its own code, not card_not_found",
             )
+            undoable = capture_server.do_inventory()["cards"]["3/3"].get("label")
             checks.ok(
-                "box 3, card 3" in str(caught),
+                bool(undoable) and str(undoable) in str(caught),
                 "and the refusal NAMES the position that is undoable — otherwise the app "
-                "has to ask again to find out",
-                f"message was: {caught}",
+                "has to ask again to find out. It names it the way the card row does: the "
+                "box's name, the section and the card in the section, never the number",
+                f"message was: {caught}; label: {undoable}",
             )
         checks.ok(
             Store().read().inventory.get("3/1") is not None,
@@ -3364,7 +3382,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             snapshot.cache.put("3/5", {"name": "N5"}, "sha-5", "p1")
             snapshot.review.upsert(
                 queues.QueueEntry(
-                    position="3/5", box=3, index=5, label=join.Position(3, 5).label,
+                    position="3/5", box=3, index=5, label=stored_label(3, 5),
                     photo=str(photo_of(3, 5)),
                     reason="metadata_detection_disagreement", market="2.00",
                 )
@@ -3415,9 +3433,24 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "renumber_blocked", "renumber_blocked")
             checks.ok(
-                "card 4 is retired: damaged" in str(caught),
-                "and the refusal NAMES the blocker with its reason",
+                "Section 1, Card 4 is retired: damaged" in str(caught)
+                and "card 4 is retired" not in str(caught),
+                "and the refusal NAMES the blocker with its reason, in the SAME SHAPE a "
+                "card row reads — Section n, Card m, never the bare store index "
+                "(D259)",
                 f"message was: {caught}",
+            )
+            # THE LISTED CARD'S TEXT MATCHES ITS OWN LABEL. Box 3 got no typed name, so it
+            # carries the stored default — `said_place` (a second code path through
+            # `join.box_view`) answers the same "Section 1, Card 4" for this departed card,
+            # cross-checking `place_within_box`, the one the list actually calls.
+            expected_label = join.said_place(Store().read().inventory, 3, 4)
+            checks.ok(
+                expected_label.endswith("Section 1, Card 4")
+                and "Section 1, Card 4" in str(caught),
+                "the list's own text for card 4 matches `said_place`'s label for the same "
+                "index, minus the box name already said once in the sentence",
+                f"said_place: {expected_label!r}; message: {caught}",
             )
         refusal(
             checks,
@@ -3440,8 +3473,11 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "renumber_blocked", "renumber_blocked")
             checks.ok(
-                "8608859" in str(caught) and "1 pushed" in str(caught),
-                "naming the SKU and the stage that holds it",
+                "Section 1, Card 3 is one copy of SKU 8608859" in str(caught)
+                and "1 pushed" in str(caught)
+                and "card 3 is one copy" not in str(caught),
+                "naming the SKU and the stage that holds it, against the card's Section n, "
+                "Card m label — never the bare store index",
                 f"message was: {caught}",
             )
         with Store().write() as snapshot:
@@ -3522,7 +3558,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             f"entry was: {moved_entry!r}",
         )
         checks.ok(
-            moved_entry is not None and moved_entry.label == join.Position(3, 5).label,
+            moved_entry is not None and moved_entry.label == stored_label(3, 5),
             "AND ITS STORED LABEL IS NOT REWRITTEN, which is D92 and is the reverse of what "
             "this case asserted until then. The re-key composed one with `join.Position` and "
             "no `occupied`, so it was in INDEX space while every route serves a label "
@@ -3626,12 +3662,21 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                 "in its own code",
             )
             checks.ok(
-                "8608859" in str(caught) and "1 pushed" in str(caught)
+                "Section 1, Card 1 is one copy of SKU 8608859" in str(caught)
+                and "1 pushed" in str(caught)
+                and "card 1 is one copy" not in str(caught)
                 and "is sold" not in str(caught) and "is retired" not in str(caught)
                 and "was moved" not in str(caught),
-                "and the refusal names only the listed copy — the sold, retired and "
-                "moved records no longer stand in the way (D134)",
+                "and the refusal names only the listed copy, in the SAME SHAPE a card "
+                "row reads — Section n, Card m, never the bare store index "
+                "(D259) — the sold, retired and moved records "
+                "no longer stand in the way (D134)",
                 f"message was: {caught}",
+            )
+            checks.equal(
+                join.said_place(Store().read().inventory, 3, 1),
+                "Box 1, Section 1, Card 1",
+                "cross-checked against `said_place` for the same index",
             )
         checks.equal(
             len(Store().read().inventory.cards), 5,
@@ -3701,7 +3746,8 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             and by_key["3/2"].get("sku") is None
             and by_key["3/2"].get("box") == 3
             and by_key["3/2"].get("index") == 2
-            and by_key["3/2"].get("box_name") is None
+            # A BOX CREATED WITH NO NAME CARRIES ITS STORED DEFAULT (D259).
+            and by_key["3/2"].get("box_name") == "Box 1"
             and by_key["3/2"].get("capture_id") == "r3"
             and by_key["3/2"].get("order") is None
             and by_key["3/2"].get("photo_sha256")
@@ -4214,6 +4260,7 @@ def check_queues(checks: Checks) -> None:
                 "age_days",
                 "box",
                 "candidates",
+                "cid",
                 "cleared_by_human",
                 "confidence",
                 "first_seen",
@@ -4221,11 +4268,13 @@ def check_queues(checks: Checks) -> None:
                 "label",
                 "market",
                 "photo",
+                "place",
                 "position",
                 "read",
                 "reason",
             ],
-            "a queue row is the whole QueueEntry record plus age_days — not a projection "
+            "a queue row is the whole QueueEntry record plus age_days, the card's place block "
+            "and its stable name (the review pill opens THIS card, LOC-12) — not a projection "
             "the app has to hold against review.json field by field",
         )
         checks.equal(
@@ -4247,7 +4296,7 @@ def check_queues(checks: Checks) -> None:
         )
         checks.equal(
             row["label"],
-            join.Position(3, 3).label,
+            stored_label(3, 3),
             "the label is pipeline/join.py's, the same one every other route answers with",
         )
 
@@ -4509,7 +4558,7 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             body["card"]["label"],
-            join.Position(3, 1).label,
+            stored_label(3, 1),
             "the returned card is a decorated inventory row — the same shape GET "
             "/inventory answers with, so the app needs no second vocabulary for a card",
         )
@@ -8973,23 +9022,28 @@ def check_box_names(checks: Checks) -> None:
             "written, which is the shape a screen that PUTs its whole form back produces",
         )
 
-        # --- clearing puts it back to unnamed --------------------------------------------
+        # --- clearing stores the default name ---------------------------------------------
+        # A box is shown by its name only (D259), so a clear cannot
+        # leave it with none: it stores the default `Box <count+1>`, the orchestrator's call
+        # on the locating review, 2026-09-24 — ANOTHER ORCHESTRATOR CALL, 2026-09-24, AMENDS
+        # THE COUNT: the box being cleared is already in the registry when this runs, and its
+        # own row does not count toward `<count+1>` any more than its own name counts as
+        # taken. One box stands beside it here, so the default is `Box 2`, not `Box 3`.
         cleared = capture_server.do_put_box(1, {"name": None})
         checks.equal(
             cleared["name"],
-            None,
+            "Box 2",
             "`{name: null}` clears the name — the shape a cleared text field sends, and a "
-            "legitimate edit rather than a refusal",
+            "legitimate edit rather than a refusal. One OTHER box stands (`mega pulls`), so "
+            "it stores `Box 2`: the box being cleared does not count itself",
         )
         cleared_event = [e for e in Store().history() if e["event"] == "box_renamed"][-1]
         checks.equal(
-            [cleared_event["name_from"], "name_to" in cleared_event],
-            ["ME01 commons, tray 2", False],
-            "and the clear is logged like any other rename, with `name_to` ABSENT rather "
-            "than null — `_log` drops None by construction, the same convention that keeps "
-            "a box-level event from carrying a null `position`. Asserted rather than worked "
-            "around: after this write there is no other evidence the box was ever called "
-            "anything, so what the line does and does not carry is the whole record",
+            [cleared_event["name_from"], cleared_event.get("name_to")],
+            ["ME01 commons, tray 2", "Box 2"],
+            "and the clear is logged like any other rename, with both names on the line: "
+            "after this write there is no other evidence the box was ever called anything, "
+            "so what the line carries is the whole record",
         )
         freed = capture_server.do_create_box({"name": "ME01 commons, tray 2"})[1]
         checks.equal(
@@ -9087,9 +9141,18 @@ def check_box_claims(checks: Checks) -> None:
                 getattr(caught, "code", None), "claim_not_stocked_by_game", "in its own code"
             )
             checks.ok(
-                "card 3" in str(caught),
-                "naming the card whose game rejected it",
+                "Section 1, Card 3" in str(caught) and "card 3:" not in str(caught),
+                "naming the card whose game rejected it, in the SAME SHAPE a card row "
+                "reads — Section n, Card m, never the bare store index "
+                "(D259)",
                 f"message was: {caught}",
+            )
+            # THE LISTED CARD MATCHES ITS OWN LABEL — a second code path, `said_place`,
+            # answers the same numbers for the same index.
+            checks.equal(
+                join.said_place(Store().read().inventory, 6, 3),
+                "Box 1, Section 1, Card 3",
+                "cross-checked against `said_place` for the same index",
             )
         checks.ok(
             all(
@@ -9322,16 +9385,15 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             rows["4/3"]["place"]["neighbors"],
             {
-                "prev": {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
-                "next": None,
+                "prev": {"index": 1, "slot": 1, "name": "Mantine", "unread": 0},
+                "next": {"index": 5, "slot": 3, "name": None, "unread": 1},
             },
-            "a card between two gaps names the nearest NON-TERMINAL, NAMED record — the "
-            "sold card at 2 and the retired card at 4 are skipped as landmarks, never "
-            "named: a departed card cannot be the thing you count from (D30) — and each "
-            "side carries BOTH numbers (D92): the store key and D58's count, which this "
-            "box has already pulled apart. `next` is NULL and not the unnamed card at 5: "
-            "past that card there is nothing this box can name, and a side with no "
-            "landmark answers the same null the box's own edge does (D116)",
+            "a card between two gaps names the nearest NON-TERMINAL record — the sold card "
+            "at 2 and the retired card at 4 are skipped, never named: a departed card cannot "
+            "be the thing you count from (D30) — and each side carries BOTH numbers (D92): "
+            "the store key and D58's count, which this box has already pulled apart. `next` "
+            "IS THE UNREAD CARD AT 5, `unread: 1`: the owner's ruling of 2026-09-24 (LOC-28, "
+            "amending D116) counts an unread card as a neighbour, where D116 answered null",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -9352,31 +9414,24 @@ def check_place_neighbors(checks: Checks) -> None:
         )
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["prev"],
-            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 1},
-            "AND A CARD NOBODY HAS NAMED IS SKIPPED AS A LANDMARK TOO, WHICH IS D116 AND "
-            "IS THE REVERSE OF WHAT THIS CASE ASSERTED. It pinned `{index: 3, slot: 2, "
-            "name: None}` — the adjacent card, sent nameless for the app to draw as `#2` "
-            "— and the owner read that figure on their own store as a sold card leaking "
-            "into the ladder. It never was one: index 425 in box 3 is a live card at "
-            "count 270, one of 7 the model returned no name for. But a figure names "
-            "nothing you can recognise while flipping a box, so the walk passes it and "
-            "names Mantine instead. THE TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED "
-            "TOGETHER (D92): the card at index 3 is the SECOND card in this box. And "
-            "`skipped: 1` is the price — one on-hand card lies between Mantine and this "
-            "one, so a hand counting from Mantine lands one short unless the row says so",
+            {"index": 3, "slot": 2, "name": None, "unread": 1},
+            "AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending "
+            "D116). D116 walked past the unread card at 3 to name Mantine, and the screen "
+            "said `with 1 unidentified card in between`; the owner's word is that the card "
+            "next to this one is the neighbour, read or not, said as `an unread card`. THE "
+            "TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED TOGETHER (D92): the card at "
+            "index 3 is the SECOND card in this box",
         )
         checks.equal(
             [
-                rows["4/3"]["place"]["neighbors"]["prev"]["skipped"],
+                rows["4/3"]["place"]["neighbors"]["prev"]["unread"],
                 rows["4/3"]["place"]["section_gaps"],
             ],
             [0, 2],
-            "and `skipped` COUNTS THE ON-HAND CARDS PASSED OVER AND NEVER THE DEPARTED "
-            "ONES: card 3 reaches Mantine across a sold record at 2 and answers 0, while "
-            "the same two departed records are its section's gaps. The box closed up over "
-            "them (D58), so they lie between nothing and a hand counting from Mantine "
-            "arrives at card 3 exactly — the two numbers count different things and this "
-            "pins them apart",
+            "and `unread` COUNTS ON-HAND CARDS AND NEVER THE DEPARTED ONES: card 3 reaches "
+            "Mantine across a sold record at 2 and answers 0, while the same two departed "
+            "records are its section's gaps. The box closed up over them (D58), so they lie "
+            "between nothing",
         )
 
         # --- a sold card is not a landmark, and the sale is what proves it ---------------
@@ -9396,19 +9451,46 @@ def check_place_neighbors(checks: Checks) -> None:
         before_sale = capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]
         checks.equal(
             before_sale["prev"],
-            {"index": 2, "slot": 2, "name": "Thievul", "skipped": 0},
+            {"index": 2, "slot": 2, "name": "Thievul", "unread": 0},
             "with every card on hand, card 3's `prev` is the card next to it — the "
             "landmark this case is about to sell",
         )
         capture_server.do_mark_sold(6, 2, {})
         checks.equal(
             capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]["prev"],
-            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
+            {"index": 1, "slot": 1, "name": "Mantine", "unread": 0},
             "AND SELLING IT MOVES THE LANDMARK RATHER THAN NAMING A SOLD CARD. Thievul is "
             "not in that drawer any more, so a sentence naming him sends a hand to a slot "
             "the card has left (D30) — the walk names Mantine, who has closed up to be "
-            "the card in front (D58), and `skipped` stays 0 because a departed card lies "
+            "the card in front (D58), and `unread` stays 0 because a departed card lies "
             "between nothing at all",
+        )
+
+        # --- a run of unread cards is one neighbour, with its count ----------------------
+        # Box 8: Mantine, then three cards nothing has named, then this card, then Thievul.
+        # The owner's words for the run are "N unread cards", so `unread` is the length of the
+        # run, counted from the neighbour outward to the next named card.
+        for _ in range(6):
+            capture_server.do_capture(capture_payload(8))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["8/1"].name = "Mantine"
+            snapshot.inventory.cards["8/5"].name = "Charizard"
+            snapshot.inventory.cards["8/6"].name = "Thievul"
+        run = capture_server.do_inventory()["cards"]["8/5"]["place"]["neighbors"]
+        checks.equal(
+            run,
+            {
+                "prev": {"index": 4, "slot": 4, "name": None, "unread": 3},
+                "next": {"index": 6, "slot": 6, "name": "Thievul", "unread": 0},
+            },
+            "THREE UNREAD CARDS IN A ROW ARE THE NEIGHBOUR TOWARD THE BACK, SAID AS `3 unread "
+            "cards`: `prev` is the adjacent card, and `unread: 3` is the run up to Mantine",
+        )
+        checks.equal(
+            capture_server.do_inventory()["cards"]["8/2"]["place"]["neighbors"]["next"],
+            {"index": 3, "slot": 3, "name": None, "unread": 2},
+            "and the run is counted from the neighbour outward, not from the box's start: "
+            "card 2's front side holds two unread cards before Charizard",
         )
 
         # --- an unallocated tail is not a gap --------------------------------------------
@@ -9647,6 +9729,283 @@ def check_box_claim_product(checks: Checks) -> None:
         )
 
 
+def check_box_names_and_place_labels(checks: Checks) -> None:
+    """A box is shown by its name, and a place label is box name, section and card in section.
+
+    THE OWNER'S RULINGS OF 2026-09-23, both argued in their own entries:
+    D259 (the box number never reaches a screen; an unnamed box gets the
+    stored name `Box <count+1>`; the boxes that had no name are backfilled `Box <number>`) and
+    D260 (the card number restarts at every divider). Four parts:
+    the label's shape, where a departed card says it was, the default name at creation, and the
+    backfill as a previewed, idempotent, one-transaction write.
+    """
+    checks.note("")
+    checks.note("BOX NAMES AND PLACE LABELS — D259")
+
+    # --- the label's shape -------------------------------------------------------------------
+    view = join.BoxView(sections=(1, 6), occupied=(1, 2, 3, 4, 6, 7, 8), departed=(5,),
+                        name="Mixed Singles")
+    live = view.at(7, 7)
+    checks.equal(
+        live.label,
+        "Mixed Singles, Section 2, Card 2",
+        "a place label is the box's NAME, the section, and the card counted within its "
+        "section: index 7 is the second card behind the divider at index 6",
+    )
+    typed = [
+        text for text in (live.label, view.at(7, 5).label, join.where_phrase("pokemon", view.at(7, 5)))
+        if "\u00b7" in text or "\u2022" in text
+    ]
+    checks.equal(
+        typed,
+        [],
+        "no place label, departed label or report phrase TYPES a middle dot or bullet (D218)",
+    )
+    checks.ok(
+        "7" not in live.label.replace("Card 2", ""),
+        "and the box NUMBER is nowhere in a named box's label",
+        live.label,
+    )
+    checks.equal(
+        join.Position(7, 1).label,
+        "Box 7, Section 1, Card 1",
+        "a caller with no registry to ask gets `Box <number>`, which is exactly the name the "
+        "backfill stores for that box, so the two cannot come to spell it differently",
+    )
+
+    # --- where a departed card was ----------------------------------------------------------
+    departed = view.at(7, 5)
+    checks.equal(
+        (departed.slot, departed.card, departed.section, departed.was_card, departed.label),
+        (None, None, 1, 5, "Mixed Singles, Section 1, Card 5"),
+        "A DEPARTED CARD NAMES THE PLACE IT LEFT, IN ITS OWN SECTION. Index 5 was the last "
+        "card of section 1 (the divider is at index 6), so it reads Section 1, Card 5: the "
+        "number it would take going back. Counted in the slot space it would read Section 2, "
+        "the next divider's number, which is the defect this guards",
+    )
+    checks.equal(
+        join.where_phrase("pokemon", departed),
+        "formerly at Mixed Singles, Section 1, Card 5",
+        "and a report sentence about it is in the past tense",
+    )
+
+    with isolated_home():
+        # --- the default name at creation --------------------------------------------------
+        capture_server.do_create_box({"box": 4})
+        inventory = Store().read().inventory
+        checks.equal(
+            inventory.box(4).name,
+            "Box 1",
+            "A BOX CREATED WITH NO NAME GETS THE STORED NAME `Box <count+1>`: the first box is "
+            "`Box 1` whatever its number (4)",
+        )
+        capture_server.do_create_box({"name": "Box 3"})
+        capture_server.do_create_box({"box": 9})
+        inventory = Store().read().inventory
+        checks.equal(
+            [(entry.box, entry.name) for entry in sorted(inventory.boxes.values(), key=lambda e: e.box)],
+            [(1, "Box 3"), (4, "Box 1"), (9, "Box 4")],
+            "WHEN `Box <count+1>` IS TAKEN, THE NEXT FREE NAME IS USED. Two boxes stand, so the "
+            "third is `Box 3`, but the owner named box 1 `Box 3` by hand: box 9 gets `Box 4`, "
+            "and names stay unique (D20)",
+        )
+
+        # THE DEFAULT GOES THROUGH THE SAME UNIQUE-NAME CHECK AS A TYPED NAME. The default is
+        # chosen free, and the check is what proves it: a default that clashes is refused,
+        # never stored beside the box that already answers to it.
+        real_default = master.Inventory.default_box_name
+        master.Inventory.default_box_name = lambda self, count=None, number=None: "Box 1"
+        try:
+            with Store().write() as snapshot:
+                clash = checks.raises(
+                    master.BoxNameTaken,
+                    lambda: snapshot.inventory.ensure_box(20),
+                    "a default name that another box already has is REFUSED at creation: the "
+                    "default path takes the same unique-name check a typed name takes",
+                )
+                if clash is None:
+                    snapshot.inventory.boxes.pop("20", None)
+        finally:
+            master.Inventory.default_box_name = real_default
+        checks.equal(
+            Store().read().inventory.box(20),
+            None,
+            "and the refused box is not registered",
+        )
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(4))
+        capture_server.do_put_box(4, {"name": "Rares"})
+        checks.equal(
+            capture_server.do_inventory()["cards"]["4/2"].get("label"),
+            "Rares, Section 1, Card 2",
+            "and a rename reaches every label at once: the name is joined at read time",
+        )
+
+        # --- clearing a name stores the default -------------------------------------------
+        # The orchestrator's call on the locating review: a cleared name is the default name
+        # `Box <count+1>`, the next free one, never a bare number drawn at render time.
+        capture_server.do_put_box(4, {"name": ""})
+        checks.equal(
+            Store().read().inventory.box(4).name,
+            "Box 5",
+            "CLEARING A BOX'S NAME STORES THE DEFAULT NAME. Three boxes stand, so the default "
+            "is `Box 4`, which box 9 has: the next free one, `Box 5`, is stored",
+        )
+        cleared = [e for e in Store().history() if e.get("event") == "box_renamed"
+                   and e.get("box") == 4 and e.get("name_from") == "Rares"]
+        checks.equal(
+            [e.get("name_to") for e in cleared],
+            ["Box 5"],
+            "and the clear lands as one `box_renamed` line naming the stored default",
+        )
+        before_events = len(Store().history())
+        capture_server.do_put_box(9, {"name": None})
+        checks.ok(
+            Store().read().inventory.box(9).name == "Box 4"
+            and len(Store().history()) == before_events,
+            "a box that already carries `Box <count+1>` keeps it when cleared, and nothing is "
+            "logged: its own name is not taken from it",
+            Store().read().inventory.box(9).name,
+        )
+
+        # --- the backfill ------------------------------------------------------------------
+        # A store from before the ruling: registered boxes with no name.
+        # `set_name` no longer stores None (a cleared name is the default), so a legacy box is
+        # made by writing the row's name away directly, the shape a store from before the
+        # ruling holds.
+        with Store().write() as snapshot:
+            snapshot.inventory.box(4).name = None
+            snapshot.inventory.box(9).name = None
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            # Box 5 came from a capture, which now names it; unname it to stand for a legacy box.
+            snapshot.inventory.box(5).name = None
+        before = Store().read().inventory
+        plan = before.box_name_plan()
+        checks.equal(
+            plan,
+            [(4, "Box 4"), (5, "Box 5"), (9, "Box 9")],
+            "the backfill PLANS `Box <number>` for every unnamed box, today's number, so "
+            "nothing visible changes and the drawers' physical labels still match",
+        )
+        checks.equal(
+            [Store().read().inventory.box(n).name for n in (4, 5, 9)],
+            [None, None, None],
+            "and a plan writes nothing: the preview is a read",
+        )
+
+        said: list = []
+        from cli import cmd_boxes  # noqa: E402 — the CLI seam, imported where it is exercised
+
+        cmd_boxes.run(argparse.Namespace(boxes_action="names", write=False), said.append)
+        checks.ok(
+            Store().read().inventory.box(4).name is None and any("box 4 -> Box 4" in line for line in said),
+            "`pkmnscan boxes names` with no flag PREVIEWS: it prints the plan and writes nothing",
+            "\n".join(said),
+        )
+        said.clear()
+        cmd_boxes.run(argparse.Namespace(boxes_action="names", write=True), said.append)
+        after = Store().read().inventory
+        checks.equal(
+            [after.box(n).name for n in (1, 4, 5, 9)],
+            ["Box 3", "Box 4", "Box 5", "Box 9"],
+            "`--write` names every unnamed box and leaves a named one alone",
+        )
+        renamed = [e for e in Store().history() if e.get("event") == "box_renamed"
+                   and e.get("name_from") is None and e.get("box") in (4, 5, 9)]
+        checks.equal(
+            sorted(e.get("box") for e in renamed if str(e.get("name_to", "")).startswith("Box ")),
+            [4, 5, 9],
+            "each name goes through `set_name`, so each lands with its `box_renamed` line",
+        )
+        said.clear()
+        cmd_boxes.run(argparse.Namespace(boxes_action="names", write=True), said.append)
+        checks.ok(
+            Store().read().inventory.box_name_plan() == []
+            and any("already has a name" in line for line in said),
+            "A SECOND PASS CHANGES NOTHING: the backfill is idempotent",
+            "\n".join(said),
+        )
+
+    with isolated_home():
+        # A clash: `Box <number>` already belongs to another box, named that way by hand.
+        capture_server.do_create_box({"box": 1, "name": "Box 2"})
+        capture_server.do_create_box({"box": 2})
+        with Store().write() as snapshot:
+            snapshot.inventory.box(2).name = None
+        checks.equal(
+            Store().read().inventory.box_name_plan(),
+            [(2, "Box 3")],
+            "WHEN `Box <number>` IS ANOTHER BOX'S NAME, the backfill plans the next free one: "
+            "names stay unique (D20), and no box is renamed to make room",
+        )
+
+    with isolated_home():
+        # --- a refusal names the place the way a card row does -----------------------------
+        # The orchestrator's call on the locating review, 2026-09-24: a server refusal that
+        # names a card says the box's NAME, the section and the card within the section,
+        # through the one helper (`join.said_place`), and never the box number or the store
+        # index. A refusal reaches a screen as a toast. The error code does not change.
+        capture_server.do_create_box({"box": 7, "name": "Rares", "sections": [1, 3]})
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(7))
+        capture_server.do_mark_sold(7, 4, {})
+        try:
+            capture_server.do_mark_sold(7, 4, {})
+            said_sold = None
+        except capture_server.BadRequest as caught:
+            said_sold = caught
+        checks.ok(
+            said_sold is not None
+            and said_sold.code == "already_sold"
+            and str(said_sold).startswith("Rares, Section 2, Card 2 is already sold")
+            and "7/" not in str(said_sold) and "Box 7" not in str(said_sold)
+            and "card 4" not in str(said_sold),
+            "A REFUSAL ABOUT A CARD SAYS THE BOX'S NAME, SECTION AND CARD IN THE SECTION. Index "
+            "4 is the second card behind the divider at index 3: `Rares, Section 2, Card 2`. "
+            "The code stays `already_sold`, and neither the box number nor the index is said",
+            f"refusal: {getattr(said_sold, 'code', None)}: {said_sold}",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.close_box(7)
+        try:
+            capture_server.do_capture(capture_payload(7))
+            said_sealed = ""
+        except Exception as caught:  # noqa: BLE001 — the message is what is read here
+            said_sealed = str(caught)
+        checks.ok(
+            said_sealed.startswith("Rares is sealed") and "box 7" not in said_sealed.casefold(),
+            "and a store refusal about a box says its name: `Rares is sealed`, never `box 7`",
+            said_sealed,
+        )
+        checks.equal(
+            (
+                join.said_place(Store().read().inventory, 7),
+                join.said_place(Store().read().inventory, 7, 99),
+            ),
+            ("Rares", "Rares"),
+            "the helper says the box alone for no index, and for an index that holds no card "
+            "(a place with no card has no section or card number to say)",
+        )
+
+    with isolated_home():
+        # A clash must not push a box off a name that was free for it. Box 1 was named `Box 4`
+        # by hand; boxes 4 and 5 have no name. Box 5's own `Box 5` is free, so it keeps it,
+        # and only box 4, the one that clashes, moves to the next free name.
+        capture_server.do_create_box({"box": 1, "name": "Box 4"})
+        capture_server.do_create_box({"box": 4})
+        capture_server.do_create_box({"box": 5})
+        with Store().write() as snapshot:
+            snapshot.inventory.box(4).name = None
+            snapshot.inventory.box(5).name = None
+        checks.equal(
+            Store().read().inventory.box_name_plan(),
+            [(4, "Box 6"), (5, "Box 5")],
+            "EVERY UNNAMED BOX GETS ITS OWN `Box <number>` FIRST, WHERE IT IS FREE, and only then "
+            "are the clashes resolved: a clash never shifts a later box off its own free name",
+        )
+
+
 def check_consolidated_numbering(checks: Checks) -> None:
     """A card's number is its place among the cards IN the box, not among the slots. D58.
 
@@ -9677,6 +10036,9 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_create_box({"box": 3, "sections": [1, 7]})
         for _ in range(12):
             capture_server.do_capture(capture_payload(3))
+        # THE LABEL SAYS THE BOX'S NAME (D259), and a box created with
+        # no name carries its stored default. Read back, so this check is about numbering.
+        box_title = Store().read().inventory.box(3).name
 
         def label(index: int) -> object:
             return capture_server.do_inventory()["cards"][f"3/{index}"].get("label")
@@ -9687,9 +10049,9 @@ def check_consolidated_numbering(checks: Checks) -> None:
         checks.equal(
             [label(1), label(7), label(12)],
             [
-                "Box 3 · Section 1 · Card 1",
-                "Box 3 · Section 2 · Card 1",
-                "Box 3 · Section 2 · Card 6",
+                f"{box_title}, Section 1, Card 1",
+                f"{box_title}, Section 2, Card 1",
+                f"{box_title}, Section 2, Card 6",
             ],
             "a box nothing has left renders exactly as it did before D58 — the two spaces "
             "coincide until the first departure, which is what makes this additive",
@@ -9699,14 +10061,14 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_mark_sold(3, 3, {})
         checks.equal(
             label(4),
-            "Box 3 · Section 1 · Card 3",
+            f"{box_title}, Section 1, Card 3",
             "SELL CARD 3 AND THE CARD BEHIND IT BECOMES CARD 3 — the whole of D58 in one "
             "assertion, and the sentence `docs/specs/order-flow.md` §10.4 says could not "
             "be true while a label named a slot",
         )
         checks.equal(
             label(7),
-            "Box 3 · Section 2 · Card 1",
+            f"{box_title}, Section 2, Card 1",
             "AND SECTION 2 IS UNDISTURBED: a sale in an earlier section moves the divider "
             "and the cards behind it by the same one, so the number WITHIN a section is "
             "the difference between two things that both moved. Mapping the cards and not "
@@ -9720,18 +10082,16 @@ def check_consolidated_numbering(checks: Checks) -> None:
         )
         checks.equal(
             capture_server.do_inventory()["cards"]["3/3"].get("label"),
-            "Box 3 · departed · B3 #3",
-            "the DEPARTED card does not keep the number it held — that number belongs to "
-            "the card that closed up behind it, and answering it would send someone to the "
-            "wrong slot. It says where the record belongs, that there is no slot, and which "
-            "record it is (D68), which is the same shape a pooled card's line takes for the "
-            "same reason (D24)",
+            f"{box_title}, Section 1, Card 3",
+            "the DEPARTED card's label keeps the PLACE it left: the box's name, its section, "
+            "and the number it would take going back (the owner's ruling, "
+            "D259). No word says it left and no store key is "
+            "printed; the screen draws a mark for that, off `slot` being null",
         )
         checks.equal(
             place(3)["label"],
-            join.departed_label(3, 3),
-            "and its block says so in the one composer that owns that string, beside "
-            "`pooled_label` — a card with no slot, said the same way both times it happens",
+            join.departed_label(box_title, 1, 3),
+            "and its block says so through the one composer that owns a departed label",
         )
         checks.equal(
             [place(3)["slot"], place(3)["card"], place(3)["fraction"]],
@@ -9743,13 +10103,13 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_mark_sold(3, 8, {})
         checks.equal(
             label(9),
-            "Box 3 · Section 2 · Card 2",
+            f"{box_title}, Section 2, Card 2",
             "a sale in this card's OWN section and in front of it moves it by one — the "
             "other half of the pair, and the half a build that mapped nothing would pass",
         )
         checks.equal(
             label(4),
-            "Box 3 · Section 1 · Card 3",
+            f"{box_title}, Section 1, Card 3",
             "while section 1 is untouched by a sale behind it: the map runs one way",
         )
 
@@ -9759,14 +10119,12 @@ def check_consolidated_numbering(checks: Checks) -> None:
         # 11 of 12 departed records sit in a group that does it. Asserted as an inequality
         # rather than against the literals above it, because what the label must guarantee is
         # that no two records ever share one.
-        checks.ok(
-            label(3) != label(8) and {label(3), label(8)} == {
-                "Box 3 · departed · B3 #3",
-                "Box 3 · departed · B3 #8",
-            },
-            "two departed records in one box draw two different labels, each naming the "
-            "record it belongs to — `Place.index`, which D58 keeps immovable, and never "
-            "`Place.slot`, which now belongs to the card that closed up behind it",
+        checks.equal(
+            [label(3), label(8)],
+            [f"{box_title}, Section 1, Card 3", f"{box_title}, Section 2, Card 2"],
+            "two departed records in two sections each name the place they left, counted in "
+            "their own section; `Place.slot` stays null for both, and it is the mark a screen "
+            "draws off that null, never a word, that says they left",
         )
 
         # --- the index never moved --------------------------------------------------------
@@ -9790,7 +10148,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_retire(3, 5, {"reason": "damaged"})
         checks.equal(
             label(6),
-            "Box 3 · Section 1 · Card 4",
+            f"{box_title}, Section 1, Card 4",
             "a RETIRED card is counted out exactly as a sold one is — `master.TERMINAL_"
             "STATES` is the pair, and both mean the card is not in the box any more",
         )
@@ -10119,13 +10477,21 @@ def check_origin_gate(checks: Checks) -> None:
         "constant 5173 while D43 made the dev port per-checkout, so a linked worktree "
         "served an app whose every write its own server then refused",
     )
-    with tempfile.TemporaryDirectory() as plain:
+    with tempfile.TemporaryDirectory() as primary:
+        (Path(primary) / ".git").mkdir()
         checks.equal(
-            ports.dev_port(Path(plain)),
+            ports.dev_port(Path(primary)),
             5173,
-            "AND THE MAIN TREE IS UNMOVED: a root that is not a linked worktree still "
+            "AND THE MAIN TREE IS UNMOVED: a root whose .git is a DIRECTORY still "
             "derives 5173, so this list is byte-identical to the constant it replaced "
             "wherever the owner actually works, and every doc naming that number stays true",
+        )
+    with tempfile.TemporaryDirectory() as plain:
+        checks.ok(
+            ports.dev_port(Path(plain)) != 5173,
+            "and a root with NO .git does not derive 5173 (D268, a copied "
+            "tree never gets the live port): a scratch copy of main once derived the main "
+            "tree's ports and its app read the owner's live store",
         )
     if ports.is_linked_worktree(ports.REPO_ROOT):
         checks.ok(
@@ -11775,6 +12141,44 @@ def check_correct_answer(checks: Checks) -> None:
             "choosing the row the card already carries refuses — there is nothing here to "
             "correct",
         )
+
+        # THE REFUSAL NAMES THE CONFIRM PRESS ONLY WHERE THE SCREEN DRAWS IT. `CardHero.tsx`
+        # draws "The listing is right" for an identified card whose identity is still the
+        # camera's read. A bound card gets no such press, so its refusal must not name one.
+        def unchanged_message() -> str:
+            try:
+                capture_server.do_correct_answer(4, 1, {"sku": old_sku})
+            except capture_server.BadRequest as caught:
+                return str(caught)
+            return ""
+
+        before_source = Store().read().inventory.cards["4/1"].identity_source
+        bound_text = unchanged_message()
+        checks.ok(
+            "already lists as that" in bound_text and "The listing is right" not in bound_text,
+            "sku_unchanged on a card whose identity is not the read names no confirm press",
+            f"said: {bound_text!r}",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/1"].identity_source = master.IDENTITY_READ
+        read_text = unchanged_message()
+        checks.ok(
+            "The listing is right" in read_text,
+            "sku_unchanged on a held card (identity_source read) names the confirm press",
+            f"said: {read_text!r}",
+        )
+        place = join.said_place(Store().read().inventory, 4, 1)
+        checks.ok(
+            read_text.startswith(place)
+            and "Box 4, card 1" not in read_text
+            and "/inventory/" not in read_text
+            and "\u00a7" not in read_text,
+            "and it names the place the screens draw, never the store index, a route or a "
+            "spec section",
+            f"place: {place!r}, said: {read_text!r}",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/1"].identity_source = before_source
 
         # ------------------------------------------------------------- the correction itself
         before_release = Store().read().inventory.listings[old_sku]
@@ -13513,11 +13917,21 @@ def check_review_stand_down(checks: Checks) -> None:
             "field_not_settable",
             "a reversal carrying a reason refuses rather than obeying with the reason ignored",
         )
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 4, {"reason": "not_listing"}),
-            "not_in_queue",
-            "a card in no queue has no question to stand down from",
+        not_in_queue_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 4, {"reason": "not_listing"})
+        )
+        checks.ok(
+            not_in_queue_text is not None
+            and not_in_queue_text[0] == "not_in_queue"
+            and not_in_queue_text[1].startswith(
+                "Box 1, Section 1, Card 4 is in no queue file"
+            )
+            and "3/4" not in not_in_queue_text[1]
+            and "box 3" not in not_in_queue_text[1].lower(),
+            "a card in no queue has no question to stand down from, and the refusal NAMES "
+            "THE PLACE — Section n, Card m — never the store key `3/4` "
+            "(D259)",
+            f"got {not_in_queue_text!r}",
         )
 
         # --- the write itself, on the card that cannot be answered --------------------
@@ -13562,11 +13976,19 @@ def check_review_stand_down(checks: Checks) -> None:
             "name here: a state would make months of these parse as card states",
         )
 
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 2, {"reason": "not_listing"}),
-            "already_cleared",
-            "a second stand-down refuses rather than re-writing a settled question",
+        already_cleared_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 2, {"reason": "not_listing"})
+        )
+        checks.ok(
+            already_cleared_text is not None
+            and already_cleared_text[0] == "already_cleared"
+            and already_cleared_text[1].startswith(
+                "Box 1, Section 1, Card 2 has already been"
+            )
+            and "3/2" not in already_cleared_text[1],
+            "a second stand-down refuses rather than re-writing a settled question, and "
+            "the refusal names the place, never `3/2` (D259)",
+            f"got {already_cleared_text!r}",
         )
 
         # --- both queues, one press ---------------------------------------------------
@@ -13586,12 +14008,20 @@ def check_review_stand_down(checks: Checks) -> None:
             not Store().read().review.entries["3/2"].cleared_by_human,
             "and the entry is waiting again",
         )
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 2, {"undo": True}),
-            "not_stood_down",
+        second_reversal_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 2, {"undo": True})
+        )
+        checks.ok(
+            second_reversal_text is not None
+            and second_reversal_text[0] == "not_stood_down"
+            and second_reversal_text[1].startswith(
+                "Box 1, Section 1, Card 2 is already waiting in its queue"
+            )
+            and "3/2" not in second_reversal_text[1],
             "a second reversal refuses — the first reopened the entry, so nothing has to "
-            "remember that a reversal happened",
+            "remember that a reversal happened — and the refusal names the place, never "
+            "`3/2` (D259)",
+            f"got {second_reversal_text!r}",
         )
 
         # --- THE GUARD THAT MATTERS MOST -----------------------------------------------
@@ -13599,12 +14029,21 @@ def check_review_stand_down(checks: Checks) -> None:
         # against a draft whose reversal only checked `cleared_by_human`.
         answered = {"sku": CANDIDATES[1]["sku"], "condition": CANDIDATES[1]["condition"]}
         capture_server.do_review_answer(3, 1, answered)
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 1, {"undo": True}),
-            "not_stood_down",
+        answer_guard_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 1, {"undo": True})
+        )
+        checks.ok(
+            answer_guard_text is not None
+            and answer_guard_text[0] == "not_stood_down"
+            and answer_guard_text[1].startswith(
+                "Box 1, Section 1, Card 1 was closed by an ANSWER"
+            )
+            and "3/1 is" not in answer_guard_text[1],
             "a card closed by an ANSWER refuses this reversal — taking back a real "
-            "identification through the un-dismiss control is the one thing it must not do",
+            "identification through the un-dismiss control is the one thing it must not "
+            "do — and the refusal names the place, never the store key "
+            "(D259)",
+            f"got {answer_guard_text!r}",
         )
         still = Store().read().inventory.cards["3/1"]
         checks.equal(
@@ -15800,9 +16239,11 @@ def check_cli_refusals(checks: Checks) -> None:
     # `readings`'s — so a SKU an export no longer lists keeps its row.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["archive", "cards", "emit", "identify", "join", "prices", "queue", "readings",
-         "reconcile", "reprice", "rescue", "scan", "skus"],
-        "thirteen commands are registered, and only thirteen",
+        ["archive", "boxes", "cards", "emit", "identify", "join", "prices", "queue",
+         "readings", "reconcile", "reprice", "rescue", "scan", "skus"],
+        # `boxes` IS THE FOURTEENTH (D259): `boxes names` gives every
+        # unnamed box its stored default name. Previews by default; `--write` is one transaction.
+        "fourteen commands are registered, and only fourteen",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -18188,6 +18629,2758 @@ def check_markdown_push(checks: Checks) -> None:
     )
 
 
+def _live_export_bytes(quantities: Dict[str, int]) -> bytes:
+    """A live export (My Pricing shape) holding the seam rows at these `Total Quantity`s.
+
+    EACH ROW ASKS ITS OWN MARKET PRICE (round 8). The fixture's catalogue row carries
+    Articuno at 25.9900, the join's own figure, and a live row at a price the plan does not list
+    at is a move of live copies the button must name (`pipeline/sendguard.py:live_moves`). A
+    blank price is a move too (R7-4). The seam run lists at market, so a case about quantities
+    moves nothing; a case about prices uses `_live_export_priced`."""
+    source = tcgcsv.read_export(FIXTURE_EXPORT)
+    by_sku = source.by_sku()
+    rows = [
+        dict(
+            by_sku[sku],
+            **{
+                tcgcsv.LIVE_QUANTITY_COLUMN: str(quantity),
+                tcgcsv.PRICE_COLUMN: str(by_sku[sku].get(tcgcsv.MARKET_PRICE_COLUMN) or ""),
+            },
+        )
+        for sku, quantity in quantities.items()
+    ]
+    path = Path(tempfile.mkdtemp()) / "live.csv"
+    tcgcsv.write_csv(path, source.header, rows)
+    return path.read_bytes()
+
+
+@contextmanager
+def send_portal():
+    """A loopback TCGplayer: the live export GET and the five pricing POSTs, and a record of
+    every call. NOTHING HERE CAN REACH THE REAL PORTAL: `tcg_import._url` and
+    `tcg_export.live_endpoint` both follow `PKMNSCAN_TCG_EXPORT_URL`, which is set to this
+    socket, and `envfile` is made hermetic so a real `.env` cannot supply a real cookie.
+
+    THE MODES, EACH A WAY THE REAL PORTAL CAN ANSWER THAT A SEND MUST SURVIVE:
+
+      `fail`      endpoints (the last path segment) that answer 500 — an UNCLEAR answer: the
+                  server may have done the work before it failed. `{"rollbackexportcsv"}` is
+                  the rollback-refused mode.
+      `refuse`    endpoints that answer 400 — a CLEAR refusal: the request was turned away.
+      `slow`      endpoint -> seconds to sleep before answering (`"GET"` for the live read).
+                  Past `tcg_export.TIMEOUT_S` this is the slow mode, and the work still lands.
+      `turn_away` how many rows of each upload chunk `SuccessfulProductCount` leaves out —
+                  the partial-accept mode.
+      `published_then_5xx`  `movetolive` publishes, then answers 500 — the portal did the
+                  work and said it failed.
+      `hold`      endpoint -> a `threading.Event` the handler waits on before answering, so a
+                  case can look at a press while it is still running.
+      `gate`      a `threading.Barrier` the live read waits on, so two presses overlap.
+      `catalog`   the CATALOGUE export a run's match fetches (a POST to the export URL), with
+                  `filters` as the set list `getjsonfilters` answers. `signed_out` reaches it.
+
+    `state["live"]` is the export body; `state["signed_out"]` makes the GET redirect to the
+    login page. The server is THREADED, as the real one is: a rollback sent while a slow chunk
+    is still sleeping must be answered, not queued behind it.
+    """
+    state = {
+        "live": _live_export_bytes({DUNSPARCE_SKU: 0}),
+        "signed_out": False,
+        "fail": set(),
+        "refuse": set(),
+        "slow": {},
+        "turn_away": 0,
+        "published_then_5xx": False,
+        "hold": {},
+        "gate": None,
+        "catalog": FIXTURE_EXPORT.read_bytes(),
+        "filters": {
+            "Sets": [
+                {"Text": "All Set Names", "Value": "0"},
+                {"Text": "SV09: Journey Together", "Value": "4242"},
+            ],
+            "Rarities": [{"Text": "All Rarities", "Value": "0"}],
+            "Conditions": [{"Text": "All Conditions", "Value": "0"}],
+            "Printings": [{"Text": "All Printings", "Value": "0"}],
+        },
+        "calls": [],
+        "rows": [],
+        "moved": [],
+        "rolled": [],
+        "uploads": 0,
+    }
+
+    class Portal(http.server.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):  # noqa: A003
+            pass
+
+        def _answer(self, status, body, kind="application/json"):
+            try:
+                self.send_response(status)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except OSError:
+                # THE CLIENT GAVE UP (the slow mode's whole point). The work above stands.
+                pass
+
+        def _wait(self, name):
+            held = state["hold"].get(name)
+            if held is not None:
+                held.wait(20)
+            delay = state["slow"].get(name)
+            if delay:
+                time.sleep(delay)
+
+        def do_GET(self):  # noqa: N802
+            state["calls"].append(("GET", urllib.parse.urlparse(self.path).path))
+            if "getjsonfilters" in self.path:
+                self._answer(200, json.dumps(state["filters"]).encode("utf-8"))
+                return
+            gate = state["gate"]
+            if gate is not None:
+                with contextlib.suppress(threading.BrokenBarrierError):
+                    gate.wait(3)
+            self._wait("GET")
+            if state["signed_out"]:
+                self.send_response(302)
+                self.send_header("Location", "https://store.tcgplayer.com/oauth/login")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self._answer(200, state["live"], "text/csv")
+
+        def do_POST(self):  # noqa: N802
+            path = urllib.parse.urlparse(self.path).path
+            name = path.rsplit("/", 1)[-1]
+            length = int(self.headers.get("Content-Length") or 0)
+            form = urllib.parse.parse_qs(
+                self.rfile.read(length).decode("utf-8"), keep_blank_values=True
+            )
+            state["calls"].append(("POST", name))
+            if name == "downloadexportcsv":
+                if state["signed_out"]:
+                    self.send_response(302)
+                    self.send_header("Location", "https://store.tcgplayer.com/oauth/login")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                self._answer(200, state["catalog"], "text/csv")
+                return
+            if name in state["refuse"]:
+                self._wait(name)
+                self._answer(400, b"{}")
+                return
+            if name in state["fail"]:
+                self._wait(name)
+                self._answer(500, b"{}")
+                return
+            answer: dict = {}
+            if name == "initializeexportcsv":
+                state["uploads"] += 1
+                answer = {"StagedPricingUploadId": f"u-{state['uploads']}"}
+            elif name == "uploadexportcsv":
+                rows: Dict[int, dict] = {}
+                for key, values in form.items():
+                    found = re.match(r"^data\[(\d+)\]\[(\w+)\]$", key)
+                    if found:
+                        rows.setdefault(int(found.group(1)), {})[found.group(2)] = values[0]
+                kept = [rows[index] for index in sorted(rows)]
+                kept = kept[: max(0, len(kept) - int(state["turn_away"]))]
+                state["rows"] += kept
+                answer = {"SuccessfulProductCount": len(kept), "Messages": []}
+            elif name == "movetolive":
+                state["moved"].append(form.get("stagedPricingUploadId", [""])[0])
+                if state["published_then_5xx"]:
+                    self._wait(name)
+                    self._answer(500, b"{}")
+                    return
+                answer = {"Success": True}
+            elif name == "rollbackexportcsv":
+                state["rolled"].append(form.get("stagedPricingUploadId", [""])[0])
+            self._wait(name)
+            self._answer(200, json.dumps(answer).encode("utf-8"))
+
+    keys = (
+        "PKMNSCAN_TCG_EXPORT_URL",
+        "TCGPLAYER_STORE_COOKIE",
+        "PKMNSCAN_TCG_USER_AGENT",
+        envfile.FROM_FILE_ENV,
+    )
+    previous = {name: os.environ.get(name) for name in keys}
+    portal = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Portal)
+    portal.daemon_threads = True
+    thread = threading.Thread(target=portal.serve_forever, daemon=True)
+    thread.start()
+    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+        f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
+    )
+    os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=t7-send-not-a-real-session"
+    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-send-no-such.env"
+    envfile._from_file.clear()
+    os.environ.pop(envfile.FROM_FILE_ENV, None)
+    envfile._loaded = False
+    try:
+        yield state
+    finally:
+        portal.shutdown()
+        portal.server_close()
+        envfile.ENV_FILE, from_file, envfile._loaded = env_before
+        envfile._from_file.clear()
+        envfile._from_file.update(from_file)
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def _refusal_text_route(fn) -> Optional[Tuple[str, str]]:
+    """`(code, message)` off the `PipelineRefusal` `fn` raised, or None if it answered. For a case
+    whose refusal must NAME a card, where the message is the contract."""
+    try:
+        fn()
+    except pipeline_routes.PipelineRefusal as caught:
+        return (caught.code, str(caught))
+    return None
+
+
+def _route_refusal(fn) -> Optional[str]:
+    """The `PipelineRefusal` code `fn` raised, or None if it answered."""
+    try:
+        fn()
+    except pipeline_routes.PipelineRefusal as caught:
+        return caught.code
+    return None
+
+
+def check_send_guard(checks: Checks) -> None:
+    """The double-send guard, at the command: TCGplayer never ends up holding more than is here.
+
+    THE OWNER'S RULING (`D273`): a send "never doubles a quantity".
+    THE DEFECT IS SHOWN FIRST, THEN THE GUARD. A store whose bookkeeping says nothing is out,
+    while TCGplayer's own export says all three copies are live — the D100 §2 shape, a file
+    uploaded by hand. `emit` alone writes all three again. `emit --live-guard` over the same
+    store writes none, and names the card.
+    """
+    checks.note("")
+    checks.note("SEND GUARD — a file never leaves TCGplayer holding more than is on hand")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def written(run_dir):
+        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
+        return {row[tcgcsv.SKU_COLUMN]: row[tcgcsv.QUANTITY_COLUMN] for row in rows}
+
+    live = Path(tempfile.mkdtemp()) / "live.csv"
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+        checks.equal(
+            written(run_dir).get(ARTICUNO_SKU),
+            "3",
+            "THE DEFECT: with no guard, a store that has lost track of three live copies "
+            "writes all three again — a doubled quantity the moment the file is uploaded",
+        )
+
+    for held_live, goes in ((3, None), (2, "1")):
+        live.write_bytes(_live_export_bytes({ARTICUNO_SKU: held_live, DUNSPARCE_SKU: 0}))
+        with isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            said = command(checks, "emit", str(run_dir.directory), "--live-guard", str(live))
+            checks.equal(
+                written(run_dir).get(ARTICUNO_SKU),
+                goes,
+                f"WITH THE GUARD, TCGplayer holding {held_live} of 3 leaves room for "
+                f"{goes or 'none'}: live plus added never passes what is on hand",
+            )
+            checks.equal(
+                written(run_dir).get(DUNSPARCE_SKU),
+                "1",
+                "and a card TCGplayer does not hold goes out untouched",
+            )
+            report = send_routes._guard_line(said) or {}
+            trimmed = {row["sku"]: row for row in report.get("trimmed", [])}
+            checks.ok(
+                ARTICUNO_SKU in trimmed
+                and trimmed[ARTICUNO_SKU]["would"] == 3
+                and trimmed[ARTICUNO_SKU]["live"] == held_live,
+                f"the trim is NAMED in the command's JSON line, with the figures: {report}",
+            )
+            listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+            checks.equal(
+                0 if listing is None else listing.pushed,
+                int(goes or 0),
+                "and `pushed` follows the trimmed file, never the untrimmed one",
+            )
+
+    # A GUARD FILE THAT CANNOT BE READ REFUSES THE WRITE. It never fails open to no guard.
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        from cli import __main__ as entry
+
+        with quiet() as said:
+            code = entry.main(
+                ["emit", str(run_dir.directory), "--live-guard", "/no/such/live.csv"]
+            )
+        checks.ok(
+            code == 1 and not run_dir.path(runs.IMPORT_MERGED).exists(),
+            f"an unreadable guard file writes nothing. exit {code}: {said.getvalue()[-200:]!r}",
+        )
+
+    # THE PURE RULE, ONCE, WITHOUT A STORE: a departed copy is not on hand, and a matched
+    # position the store has never seen is.
+    sold = master.Card(box=1, index=1)
+    sold.sku, sold.state = "9", master.SOLD
+    kept = master.Card(box=1, index=2)
+    kept.sku = "9"
+    cards_by_key = {"1/1": sold, "1/2": kept}
+    checks.equal(
+        sendguard.on_hand([kept], cards_by_key, ["1/1", "1/2", "1/3"]),
+        2,
+        "on hand is the store's unsold copies union this send's matched positions, less "
+        "every copy that has left",
+    )
+    checks.equal(sendguard.room(live=5, held=3), 0, "room is never negative")
+
+
+def check_send_press(checks: Checks) -> None:
+    """The one press, every path, against the loopback portal (`send_portal`).
+
+    NOTHING HERE REACHES TCGPLAYER. What is asserted is what the portal RECEIVED and what the
+    store and the receipt say afterwards: the live read first, a refusal that sends nothing,
+    the double-send trim end to end, a failed push and a failed publish that both put the
+    copies back, the download door, take-back, the live check after the lag, and the
+    mark-down's one press.
+    """
+    checks.note("")
+    checks.note("SEND PRESS — read what is live, send, make live, check")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    # ------------------------------------------------ the happy path, and the check after it
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name]})),
+            "confirm_required",
+            "an unconfirmed send refuses",
+        )
+        checks.equal(portal["calls"], [], "and it refuses before TCGplayer is asked anything")
+
+        answer = send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        sent = answer["send"]
+        names = [call for call in portal["calls"]]
+        checks.equal(
+            names[0],
+            ("GET", "/admin/pricing/DownloadMyExportCSV"),
+            "THE LIVE READ COMES FIRST, before any write reaches TCGplayer",
+        )
+        checks.equal(
+            [name for kind, name in names if kind == "POST"],
+            ["initializeexportcsv", "uploadexportcsv", "finalizeexportcsv", "movetolive"],
+            "ONE PRESS pushes and publishes: the four calls, in order, and no rollback",
+        )
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "3", DUNSPARCE_SKU: "1"},
+            "the portal received every unsent copy, as the listing file's own quantities",
+        )
+        checks.equal(portal["moved"], ["u-1"], "and the publish named the upload it pushed")
+        checks.equal(sent["state"], "waiting", "the receipt waits for the check after the lag")
+        checks.ok(bool(sent["check_after"]), "and says when that check is due")
+        checks.ok(
+            ARTICUNO_SKU in cmd_reprice.published_recently(),
+            "THE LAG GUARD SEES A LISTING PUBLISH, not only a mark-down's",
+        )
+
+        # NOT DUE YET: the check runs only when a receipt's lag has passed.
+        early = send_routes.do_live_check({})
+        checks.equal(early["ran"], False, "a check inside the lag does not run")
+
+        # THE LAG PASSES (the receipt's clock moved back), and TCGplayer shows one short.
+        directory = send_routes.sends_dir() / sent["stamp"]
+        record = send_routes._read(directory)
+        record["check_after"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        checks.ok(send_routes.do_sends()["due"], "once the lag has passed, the check is due")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        checked = send_routes.do_live_check({})
+        summary = checked["checked"][0]
+        checks.equal(
+            (summary["state"], summary["check"]["found"], summary["check"]["expected"]),
+            ("short", 3, 4),
+            "the check finds three of four live and names the short one",
+        )
+        checks.equal(
+            [row["sku"] for row in summary["check"]["missing"]],
+            [DUNSPARCE_SKU],
+            "by SKU, so the screen can name the card",
+        )
+        checks.equal(
+            send_routes.do_live_check({})["ran"], False, "and a checked send is not checked again"
+        )
+
+        # A SECOND SEND OF THE SAME COPIES ADDS NOTHING: they are pushed, and TCGplayer holds
+        # three. The send refuses rather than uploading an empty file.
+        portal["calls"].clear()
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "nothing_to_send",
+            "a second press over copies already sent refuses and sends nothing",
+        )
+        checks.equal(
+            [name for kind, name in portal["calls"] if kind == "POST"],
+            [],
+            "and TCGplayer receives no write",
+        )
+
+    # ----------------------------------------- the double-send trim, end to end through the press
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        # TCGplayer holds two Articuno the store never recorded (a hand upload).
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0})
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "1", DUNSPARCE_SKU: "1"},
+            "THE PRESS NEVER DOUBLES: two live of three on hand sends one Articuno, not three",
+        )
+
+    # --------------------------------------------------------- the live read cannot run
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["signed_out"] = True
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "live_check_failed",
+            "SIGNED OUT, THE SEND REFUSES by name, and the screen offers Try again",
+        )
+        checks.equal(
+            [name for kind, name in portal["calls"] if kind == "POST"],
+            [],
+            "and nothing was pushed or published",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 0, "and no copy was marked sent")
+        checks.ok(
+            not send_routes.sends_dir().exists() or not any(send_routes.sends_dir().iterdir()),
+            "and no receipt was written",
+        )
+
+    # ------------------------------------------------ a failed push, then a failed publish
+    # A 500 ON THE OPENING CALL (nothing staged: no upload id, no row), then a CLEAR 400 on
+    # the publish, which is rolled back. An UNCLEAR publish is `check_send_hazards`' case: its
+    # copies are held, never put back (the 2026-09-24 review, S1-b).
+    for failing, rolled in (("initializeexportcsv", []), ("movetolive", ["u-1"])):
+        with send_portal() as portal, isolated_home():
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+            portal["fail" if failing == "initializeexportcsv" else "refuse"] = {failing}
+            code = _route_refusal(
+                lambda run_dir=run_dir: send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+            )
+            checks.equal(code, "send_rolled_back" if rolled else "tcg_write_refused", f"a failing {failing} refuses the press; after a rollback it is `send_rolled_back`, never a retry (round 6, S4)")
+            checks.equal(
+                (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+                (0, 0),
+                f"and after a failing {failing} THE COPIES ARE BACK ON THE LIST: a copy is "
+                f"never marked sent when it was not",
+            )
+            checks.equal(portal["rolled"], rolled, f"and the upload is rolled back ({failing})")
+            receipt = send_routes.do_sends()["sends"][0]
+            checks.equal(receipt["state"], "failed", "and the receipt says the press failed")
+
+    # --------------------------------------------------- the download door, and take-back
+    with send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        answer = send_routes.do_send({"runs": [run_dir.name], "download": True})
+        checks.equal(
+            [name for kind, name in portal["calls"] if kind == "POST"],
+            [],
+            "THE DOWNLOAD DOOR sends nothing to TCGplayer — but it still read what is live",
+        )
+        checks.equal(answer["send"]["state"], "written", "its copies are written, not confirmed")
+        status = send_routes.do_sends()
+        checks.equal(status["unconfirmed"]["copies"], 4, "and Pricing can name all four copies")
+        checks.equal(pushed(ARTICUNO_SKU), 3, "the file's copies are held out of the next file")
+        stamp = answer["send"]["stamp"]
+        checks.ok(
+            ARTICUNO_SKU.encode() in send_routes.do_send_file(stamp, answer["send"]["files"][0]),
+            "the file the download door wrote is served by name",
+        )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send_file(stamp, "../send.json")),
+            "no_such_file",
+            "and a name the receipt does not list is refused, never joined onto a path",
+        )
+        # THE OWNER'S RULING, 2026-09-24: Take them back only after a check past the wait.
+        checks.equal(
+            _route_refusal(
+                lambda: send_routes.do_take_back(answer["send"]["stamp"], {"confirm": True})
+            ),
+            "take_back_not_yet",
+            "TAKE THEM BACK WAITS for a live check past the wait: the file may be uploading now",
+        )
+        checks.ok(
+            bool(send_routes.do_sends()["sends"][0]["take_back_after"]),
+            "and the receipt says when it will be safe",
+        )
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        record["check_after"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        send_routes.do_live_check({})
+        checks.equal(
+            send_routes.do_sends()["sends"][0]["takeable"],
+            0,
+            "past the wait, ONE check that finds none of the file's copies offers none back: the "
+            "owner uploads a download by hand, at a time Banchi does not know",
+        )
+        # THE SECOND CHECK, ONE WAIT AFTER THE FIRST (the orchestrator's call, round 3).
+        record = send_routes._read(directory)
+        record["checked_at"] = record["first_checked_at"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        send_routes.do_live_check({})
+        checks.equal(
+            send_routes.do_sends()["sends"][0]["takeable"],
+            4,
+            "and a second check one wait later that still finds none offers all four back",
+        )
+        taken = send_routes.do_take_back(answer["send"]["stamp"], {"confirm": True})
+        checks.equal(taken["send"]["state"], "taken_back", "Take them back puts them back")
+        checks.equal(pushed(ARTICUNO_SKU), 0, "and the next send offers them again")
+        checks.equal(
+            _route_refusal(
+                lambda: send_routes.do_take_back(answer["send"]["stamp"], {"confirm": True})
+            ),
+            "not_takeable",
+            "and a second take-back refuses: there is nothing left to take",
+        )
+
+    # ------------------------------------------------ the same bytes are never pushed twice
+    with isolated_home():
+        directory = send_routes.sends_dir() / "20260923-120000"
+        send_routes._write(
+            directory,
+            {"kind": "send", "digest": "abc", "pushed": {"upload_id": "u"}, "taken_back_at": None},
+        )
+        checks.equal(
+            send_routes._already_pushed("abc"),
+            "20260923-120000",
+            "a file whose bytes already went to TCGplayer is found by its digest",
+        )
+
+    # ------------------------------------------------------------ the mark-down's one press
+    for failing in (None, "movetolive"):
+        with send_portal() as portal, isolated_home() as home:
+            directory = home / "inventory" / "markdowns" / "20260923-130000"
+            directory.mkdir(parents=True)
+            source = tcgcsv.read_export(FIXTURE_EXPORT)
+            row = dict(
+                source.by_sku()[ARTICUNO_SKU],
+                **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: "19.99"},
+            )
+            tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+            if failing:
+                # A CLEAR REFUSAL (400): rolled back, nothing left. The unclear 500 is
+                # `check_send_hazards`' case, where the receipt stays and the SKUs are held.
+                portal["refuse"] = {failing}
+                checks.equal(
+                    _route_refusal(
+                        lambda directory=directory: send_routes.do_markdown_send(directory.name, {"confirm": True})
+                    ),
+                    "send_rolled_back",
+                    "a mark-down whose publish fails refuses, and after its rollback it says so (round 6, S4)",
+                )
+                checks.equal(portal["rolled"], ["u-1"], "and its upload is rolled back")
+                checks.ok(
+                    pipeline_routes._read_push(directory) is None,
+                    "and no receipt is left offering to publish rows TCGplayer was told to forget",
+                )
+                continue
+            send_routes.do_markdown_send(directory.name, {"confirm": True})
+            checks.equal(
+                [call for call in portal["calls"]][0][0],
+                "GET",
+                "THE MARK-DOWN'S PRESS READS WHAT IS LIVE FIRST, like the listing send",
+            )
+            checks.equal(
+                [name for kind, name in portal["calls"] if kind == "POST"],
+                ["initializeexportcsv", "uploadexportcsv", "finalizeexportcsv", "movetolive"],
+                "ONE PRESS pushes and publishes a mark-down",
+            )
+            checks.equal(
+                [row["AddToQuantity"] for row in portal["rows"]],
+                ["0"],
+                "and the price file still moves no copy (D100's rule, untouched)",
+            )
+            checks.ok(
+                bool((pipeline_routes._read_push(directory) or {}).get("published_at")),
+                "and its receipt says it went live",
+            )
+
+    # ------------------------------------------------ the transport's listing door
+    good = {
+        "Id": 0, "ProductConditionId": "123", "CategoryName": "Pokemon", "SetName": "S",
+        "ProductName": "P", "ConditionName": "Near Mint", "AddToQuantity": "3",
+        "MyPrice": "1.00", "ProOnlineStoreReserveQuantity": "", "ProOnlineStorePrice": "",
+        "Number": "1/1",
+    }
+    tcg_import._check([good], listing=True)
+    checks.ok(True, "a listing row may add copies")
+    checks.equal(
+        _refusal_code_transport([dict(good, AddToQuantity="-1")], listing=True),
+        "tcg_import_moves_quantity",
+        "but never a negative quantity",
+    )
+    checks.equal(
+        _refusal_code_transport([good], listing=False),
+        "tcg_import_moves_quantity",
+        "and a price file still refuses any quantity at all (D100)",
+    )
+
+
+def _press_thread(fn, answers, index):
+    """Run one press on its own thread and keep what it answered, or the code it refused."""
+
+    def go():
+        try:
+            answers[index] = ("sent", fn())
+        except pipeline_routes.PipelineRefusal as caught:
+            answers[index] = ("refused", caught.code)
+        except Exception as caught:  # noqa: BLE001 — the case reports it, never swallows it
+            answers[index] = ("raised", f"{type(caught).__name__}: {caught}")
+
+    thread = threading.Thread(target=go, daemon=True)
+    thread.start()
+    return thread
+
+
+@contextmanager
+def _short_timeout(seconds: float):
+    """The transport's timeout, lowered for one case so the slow mode is past it quickly."""
+    before = tcg_export.TIMEOUT_S
+    tcg_export.TIMEOUT_S = seconds
+    try:
+        yield
+    finally:
+        tcg_export.TIMEOUT_S = before
+
+
+def _age_receipt(stamp: str) -> None:
+    """Move a receipt's wait into the past: the lag has passed for it."""
+    directory = send_routes.sends_dir() / stamp
+    record = send_routes._read(directory)
+    record["check_after"] = "2000-01-01T00:00:00+00:00"
+    send_routes._write(directory, record)
+
+
+def _posts(portal) -> List[str]:
+    return [name for kind, name in portal["calls"] if kind == "POST"]
+
+
+@contextmanager
+def _case(checks: Checks, label: str):
+    """One case of many: a case that raises is a FAIL naming it, and the next case still runs."""
+    try:
+        yield
+    except Exception:  # noqa: BLE001 — reported, never swallowed
+        import traceback
+
+        checks.ok(False, f"{label}: the case raised", traceback.format_exc()[-1500:])
+
+
+def check_send_hazards(checks: Checks) -> None:
+    """The adversarial review's failures, each against the stand-in portal's own mode.
+
+    EVERY CASE HERE WENT RED ON THE BUILD BEFORE IT. Two presses at once, a publish TCGplayer
+    answered 500 after doing it, a rollback it refused, a chunk that never answered, a partial
+    accept, one live rise read as two confirmations, a same-bytes rule that never forgot, an
+    export with no quantity column. What is asserted is what the portal RECEIVED and what the
+    store and the receipt say afterwards — never a message's wording.
+    """
+    checks.note("")
+    checks.note("SEND HAZARDS — two presses, unclear answers, slow answers, partial answers")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    empty = {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0}
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def newest():
+        return send_routes.do_sends()["sends"][0]
+
+    # ------------------------------------------------------- S1-a: two presses at once
+    with _case(checks, "S1-a: two presses at once"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["gate"] = threading.Barrier(2)
+        answers: Dict[int, tuple] = {}
+        threads = [
+            _press_thread(
+                lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True}),
+                answers,
+                index,
+            )
+            for index in (0, 1)
+        ]
+        for thread in threads:
+            thread.join(60)
+        kinds = sorted(kind for kind, _ in answers.values())
+        checks.equal(
+            kinds,
+            ["refused", "sent"],
+            f"TWO PRESSES AT ONCE: one sends and the other is refused, never both: {answers}",
+        )
+        checks.equal(
+            [code for kind, code in answers.values() if kind == "refused"],
+            ["send_in_progress"],
+            "and the refusal names the press that is already sending",
+        )
+        checks.equal(
+            _posts(portal).count("initializeexportcsv"),
+            1,
+            "ONE upload reached TCGplayer, not two",
+        )
+        checks.equal(
+            {row["ProductConditionId"]: row["AddToQuantity"] for row in portal["rows"]},
+            {ARTICUNO_SKU: "3", DUNSPARCE_SKU: "1"},
+            "and it carried each copy once",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 3, "and the store counts three Articuno sent, not six")
+
+    # --------------------------------- S1-a: the store claim holds across processes too
+    with _case(checks, "S1-a: the store claim holds across processes too"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        with Store().write() as writable:
+            writable.send_claims.claim(
+                "20260924-120000-aaaaaa", "listing", {ARTICUNO_SKU: 3}, pid=os.getpid()
+            )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_in_progress",
+            "A LIVE STORE CLAIM ON A CARD refuses a press over it, whoever wrote the claim",
+        )
+        checks.equal(
+            [name for name in _posts(portal)],
+            [],
+            "and nothing reaches TCGplayer's write side",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 0, "and no copy is counted sent")
+
+    # ------------------------------------ S1-a: a stamp is unique within one second
+    with _case(checks, "S1-a: a stamp is unique within one second"), isolated_home():
+        first, second = send_routes._new_stamp(), send_routes._new_stamp()
+        checks.ok(
+            first != second
+            and (send_routes.sends_dir() / first).is_dir()
+            and (send_routes.sends_dir() / second).is_dir(),
+            f"two presses in one second get two directories of their own: {first}, {second}",
+        )
+
+    # ---------------- S1-a: a dropped connection sees the press still running, not a retry
+    with _case(checks, "S1-a: a dropped connection sees the press still running, not a retry"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        release = threading.Event()
+        portal["hold"] = {"movetolive": release}
+        answers = {}
+        thread = _press_thread(
+            lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True}), answers, 0
+        )
+        deadline = time.monotonic() + 20
+        while "movetolive" not in _posts(portal) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        running = newest()
+        checks.equal(
+            running["state"],
+            "sending",
+            "WHILE A PRESS RUNS, its receipt says so: a screen whose request dropped reads this",
+        )
+        gets = len([call for call in portal["calls"] if call[0] == "GET"])
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_in_progress",
+            "and a second press is refused while the first still runs",
+        )
+        checks.equal(
+            len([call for call in portal["calls"] if call[0] == "GET"]),
+            gets,
+            "before it asks TCGplayer anything",
+        )
+        release.set()
+        thread.join(30)
+        checks.equal(answers.get(0, ("", {}))[0], "sent", "and the first press still lands")
+        checks.equal(newest()["state"], "waiting", "and its receipt moves on to the wait")
+
+    # --------------------------------------------- S1-a: a holder that died is unknown
+    with _case(checks, "S1-a: a holder that died is unknown"), isolated_home():
+        gone = subprocess.Popen(["true"])
+        gone.wait()
+        stamp = "20260924-120000-bbbbbb"
+        send_routes._write(
+            send_routes.sends_dir() / stamp,
+            {
+                "stamp": stamp, "kind": "send", "at": "2026-09-24T12:00:00+00:00",
+                "phase": "publishing", "holder": {"pid": gone.pid, "proc_start": "gone"},
+                "copies": {ARTICUNO_SKU: 3}, "copies_total": 3,
+                "pushed": {"upload_id": "u-9", "rows": 1, "accepted": 1},
+                "publish_started_at": "2026-09-24T12:00:05+00:00",
+            },
+        )
+        checks.equal(
+            newest()["state"],
+            "unknown",
+            "A PRESS WHOSE SERVER DIED MID-PUBLISH is unknown, never failed and never live",
+        )
+
+    # --------------------- S1-b: TCGplayer published, then answered 500 (unclear publish)
+    with _case(checks, "S1-b: TCGplayer published, then answered 500 (unclear publish)"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["published_then_5xx"] = True
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_unknown",
+            "AN UNCLEAR PUBLISH is its own answer: TCGplayer did not say whether they went live",
+        )
+        checks.equal(
+            (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+            (3, 1),
+            "and THE COPIES ARE NOT TAKEN BACK: they may be live, and taking them back would "
+            "send them twice",
+        )
+        receipt = newest()
+        checks.ok(
+            receipt["state"] == "unknown" and receipt["held"],
+            f"the receipt says unknown and holds its cards: {receipt['state']}, {receipt['held']}",
+        )
+        checks.ok(
+            bool(receipt["take_back_after"]),
+            "and says when taking them back will be safe",
+        )
+        # A NEW COPY OF A HELD CARD IS NOT SENT WHILE THE OUTCOME IS UNKNOWN.
+        second, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)])
+        portal["calls"].clear()
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [second.name], "confirm": True})),
+            "send_held",
+            "A HELD CARD STAYS OUT OF EVERY SEND until a check past the wait resolves it",
+        )
+        checks.equal(_posts(portal), [], "and nothing is written to TCGplayer")
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_take_back(receipt["stamp"], {"confirm": True})),
+            "take_back_not_yet",
+            "TAKE THEM BACK IS REFUSED before a check has run past the wait",
+        )
+        # THE WAIT PASSES AND TCGPLAYER SHOWS THEM: the unknown send did go live.
+        _age_receipt(receipt["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 1})
+        send_routes.do_live_check({})
+        resolved = [s for s in send_routes.do_sends()["sends"] if s["stamp"] == receipt["stamp"]][0]
+        checks.ok(
+            resolved["state"] == "checked" and not resolved["held"],
+            f"a check past the wait resolves it: found live, the hold released: {resolved['state']}",
+        )
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 1})
+        portal["published_then_5xx"] = False
+        send_routes.do_send({"runs": [second.name], "confirm": True})
+        checks.equal(
+            portal["rows"][-1]["AddToQuantity"] if portal["rows"] else None,
+            "1",
+            "and the held card's new copy goes on the next press",
+        )
+
+    # --------------- S1-b / S1-c: a clear publish refusal whose rollback is ALSO refused
+    with _case(checks, "S1-b / S1-c: a clear publish refusal whose rollback is ALSO refused"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["refuse"] = {"movetolive"}
+        portal["fail"] = {"rollbackexportcsv"}
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_unknown",
+            "A REFUSED ROLLBACK leaves the upload waiting at TCGplayer: the answer is unknown",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 3, "and the copies are not taken back")
+        receipt = newest()
+        checks.equal(
+            (receipt["unknown"] or {}).get("upload_id"),
+            "u-1",
+            "the receipt names the upload that waits at TCGplayer",
+        )
+        _age_receipt(receipt["stamp"])
+        portal["live"] = _live_export_bytes(empty)
+        send_routes.do_live_check({})
+        after = [s for s in send_routes.do_sends()["sends"] if s["stamp"] == receipt["stamp"]][0]
+        checks.ok(
+            after["state"] == "short" and after["takeable"] == 4,
+            f"PAST THE WAIT, a check that finds none of them offers all four back: {after}",
+        )
+        taken = send_routes.do_take_back(receipt["stamp"], {"confirm": True})
+        checks.equal(taken["moved"], 4, "and Take them back returns them")
+        checks.equal(pushed(ARTICUNO_SKU), 0, "so the next send offers them again")
+
+    # ---------------------- a push chunk refused whose rollback is refused: unknown too
+    with _case(checks, "a push chunk refused whose rollback is refused: unknown too"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["fail"] = {"uploadexportcsv", "rollbackexportcsv"}
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "send_unknown",
+            "A FAILED CHUNK WHOSE ROLLBACK FAILED is unknown: rows may wait at TCGplayer",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 3, "and nothing is taken back on a guess")
+        checks.equal(_posts(portal).count("movetolive"), 0, "and nothing is published")
+
+    # ----------------------------------------------------------- S2: the slow modes
+    with _case(checks, "S2: the slow modes"), \
+            send_portal() as portal, isolated_home(), _short_timeout(0.4):
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["slow"] = {"GET": 1.2}
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "live_check_failed",
+            "A LIVE READ THAT NEVER ANSWERS is the named refusal, not a crash",
+        )
+        checks.equal(_posts(portal), [], "and nothing is written to TCGplayer")
+        checks.equal(pushed(ARTICUNO_SKU), 0, "and nothing is counted sent")
+        try:
+            tcg_export._open(tcg_export.live_endpoint(), cookie="a=b")
+            code = None
+        except tcg_export.FetchRefusal as refusal:
+            code = refusal.code
+        except Exception as caught:  # noqa: BLE001
+            code = type(caught).__name__
+        checks.equal(code, "tcg_unreachable", "every timeout on the transport is `tcg_unreachable`")
+
+        with send_portal() as portal, isolated_home(), _short_timeout(0.4):
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes(empty)
+            portal["slow"] = {"uploadexportcsv": 1.2}
+            code = _route_refusal(
+                lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+            )
+            receipt = newest() if send_routes.do_sends()["sends"] else {}
+            checks.ok(
+                code == "send_rolled_back" and receipt.get("state") == "failed",
+                f"A SLOW CHUNK after the copies were counted leaves a receipt: {code}, "
+                f"{receipt.get('state')}",
+            )
+            checks.equal(portal["rolled"], ["u-1"], "and the upload is rolled back")
+            checks.equal(pushed(ARTICUNO_SKU), 0, "and, the rollback confirmed, the copies are back")
+
+        with send_portal() as portal, isolated_home(), _short_timeout(0.4):
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes(empty)
+            portal["slow"] = {"movetolive": 1.2}
+            checks.equal(
+                _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+                "send_unknown",
+                "A SLOW PUBLISH is unknown: TCGplayer may have done it",
+            )
+            checks.equal(pushed(ARTICUNO_SKU), 3, "and the copies are held, not taken back")
+
+    # ------------------------------------------------------- S2: the partial accept
+    with _case(checks, "S2: the partial accept"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        portal["turn_away"] = 1
+        answer = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.ok(
+            answer["accepted"] == 1 and answer["rows"] == 2 and answer["turned_away"] == 1,
+            f"TCGPLAYER TOOK 1 OF 2 ROWS, and the receipt says so: {answer['accepted']} of "
+            f"{answer['rows']}, {answer['turned_away']} turned away",
+        )
+        _age_receipt(answer["stamp"])
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0})
+        send_routes.do_live_check({})
+        after = newest()
+        checks.equal(
+            ([row["sku"] for row in (after["check"] or {}).get("missing", [])], after["takeable"]),
+            ([DUNSPARCE_SKU], 1),
+            "the check names the copy turned away and offers exactly it back",
+        )
+        send_routes.do_take_back(answer["stamp"], {"confirm": True})
+        checks.equal(
+            (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+            (3, 0),
+            "and taking it back returns the turned-away copy and nothing that went live",
+        )
+
+    # ---------------------------------------------------- S3: the same bytes, windowed
+    with _case(checks, "S3: the same bytes, windowed"), isolated_home():
+        now = send_routes._now()
+        # ROUND-1 STAMPS, WITHOUT THE RANDOM TAIL: the old shape still reads, and it is the
+        # shape the round-1 build could see, so this case goes red on that build for the
+        # right reason (it refused the 20-minute-old bytes) rather than by not seeing them.
+        for stamp, age in (("20260924-110000", 20 * 60), ("20260924-115900", 60)):
+            send_routes._write(
+                send_routes.sends_dir() / stamp,
+                {
+                    "kind": "send", "digest": f"d{age}", "taken_back_at": None,
+                    "pushed": {"upload_id": "u", "pushed_at": send_routes._iso(now - timedelta(seconds=age))},
+                },
+            )
+        checks.equal(
+            send_routes._already_pushed(f"d{20 * 60}"),
+            None,
+            "THE SAME BYTES PAST THE UPLOAD WINDOW do not refuse: the live read sees them now",
+        )
+        checks.equal(
+            send_routes._already_pushed("d60"),
+            "20260924-115900",
+            "and the same bytes inside the window still do",
+        )
+
+    # --------------------------------------- S3: an export with no quantity column refuses
+    with _case(checks, "S3: an export with no quantity column refuses"):
+        for missing in (tcgcsv.SKU_COLUMN, tcgcsv.LIVE_QUANTITY_COLUMN):
+            present = {tcgcsv.SKU_COLUMN: ARTICUNO_SKU, tcgcsv.LIVE_QUANTITY_COLUMN: "2"}
+            present.pop(missing)
+            try:
+                sendguard.live_by_sku([present])
+                refused = False
+            except ValueError:
+                refused = True
+            checks.ok(refused, f"AN EXPORT WITH NO `{missing}` COLUMN is refused, never read as zero")
+
+    # -------------------------------------- S3: one live rise confirms one receipt only
+    with _case(checks, "S3: one live rise confirms one receipt only"), \
+            send_portal() as portal, isolated_home():
+        base = {
+            "kind": "send", "copies": {ARTICUNO_SKU: 3}, "copies_total": 3,
+            "names": {ARTICUNO_SKU: "Articuno"}, "live_before": {ARTICUNO_SKU: 0},
+            "sold_before": {ARTICUNO_SKU: 0}, "pushed": {"upload_id": "u", "rows": 1, "accepted": 1},
+            "published_at": "2026-09-24T10:00:00+00:00", "check_after": "2000-01-01T00:00:00+00:00",
+            "phase": "done",
+        }
+        for stamp in ("20260924-100000-eeeeee", "20260924-100500-ffffff"):
+            send_routes._write(send_routes.sends_dir() / stamp, dict(base, stamp=stamp))
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 3})
+        send_routes.do_live_check({})
+        states = {s["stamp"]: (s["state"], (s["check"] or {}).get("found")) for s in send_routes.do_sends()["sends"]}
+        checks.equal(
+            states,
+            {"20260924-100000-eeeeee": ("checked", 3), "20260924-100500-ffffff": ("short", 0)},
+            "ONE RISE OF THREE confirms the older send's three, and never both sends",
+        )
+
+    # ----------------------------------------- S3: the first check fires past the lag
+    with _case(checks, "S3: the first check fires past the lag"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        gap = send_routes._parse(sent["check_after"]) - send_routes._parse(sent["published_at"])
+        checks.ok(
+            gap.total_seconds() > cmd_reprice.PUBLISH_LAG_S,
+            f"THE FIRST CHECK IS DUE PAST THE LAG, not at it: {gap.total_seconds()}s after the publish",
+        )
+
+    # ------------------------------------------- the mark-down: two presses at once
+    with _case(checks, "the mark-down: two presses at once"):
+        def markdown(home):
+            directory = home / "inventory" / "markdowns" / "20260924-130000"
+            directory.mkdir(parents=True)
+            source = tcgcsv.read_export(FIXTURE_EXPORT)
+            row = dict(
+                source.by_sku()[ARTICUNO_SKU],
+                **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: "19.99"},
+            )
+            tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+            return directory
+
+        with send_portal() as portal, isolated_home() as home:
+            directory = markdown(home)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+            portal["gate"] = threading.Barrier(2)
+            answers = {}
+            threads = [
+                _press_thread(
+                    lambda: send_routes.do_markdown_send(directory.name, {"confirm": True}),
+                    answers,
+                    index,
+                )
+                for index in (0, 1)
+            ]
+            for thread in threads:
+                thread.join(60)
+            checks.equal(
+                sorted(
+                    kind if kind == "sent" else f"{kind} {answer}"
+                    for kind, answer in answers.values()
+                ),
+                ["refused send_in_progress", "sent"],
+                f"TWO MARK-DOWN PRESSES AT ONCE: one sends, the other is refused by name: {answers}",
+            )
+            checks.equal(
+                (_posts(portal).count("initializeexportcsv"), _posts(portal).count("movetolive")),
+                (1, 1),
+                "and the price file is pushed and published once",
+            )
+
+        with send_portal() as portal, isolated_home() as home:
+            directory = markdown(home)
+            portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+            portal["published_then_5xx"] = True
+            checks.equal(
+                _route_refusal(lambda: send_routes.do_markdown_send(directory.name, {"confirm": True})),
+                "send_unknown",
+                "A MARK-DOWN WHOSE PUBLISH IS UNCLEAR is unknown, not failed",
+            )
+            record = pipeline_routes._read_push(directory) or {}
+            checks.ok(
+                bool(record.get("unknown")) and not record.get("published_at"),
+                f"and its receipt stays, saying so, rather than being removed: {sorted(record)}",
+            )
+
+
+@contextmanager
+def _patched(owner, name: str, value):
+    """Swap one attribute for one case, and put it back whatever the case did."""
+    before = getattr(owner, name)
+    setattr(owner, name, value)
+    try:
+        yield
+    finally:
+        setattr(owner, name, before)
+
+
+class _Died(BaseException):
+    """A server dying mid-press, as the code under test sees it: nothing after this line runs,
+    and no `except Exception` catches it."""
+
+
+def _markdown_dir(home: Path, stamp: str, price: str = "19.99") -> Path:
+    """A mark-down directory holding one price row for Articuno, as `reprice list` writes it."""
+    directory = home / "inventory" / "markdowns" / stamp
+    directory.mkdir(parents=True)
+    source = tcgcsv.read_export(FIXTURE_EXPORT)
+    row = dict(
+        source.by_sku()[ARTICUNO_SKU],
+        **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: price},
+    )
+    tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+    return directory
+
+
+def _live_export_priced(quantities: Dict[str, int], prices: Dict[str, str]) -> bytes:
+    """A live export holding these quantities, and these marketplace prices where named."""
+    source = tcgcsv.read_export(FIXTURE_EXPORT)
+    by_sku = source.by_sku()
+    rows = []
+    for sku, quantity in quantities.items():
+        row = dict(by_sku[sku], **{tcgcsv.LIVE_QUANTITY_COLUMN: str(quantity)})
+        if sku in prices:
+            row[tcgcsv.PRICE_COLUMN] = prices[sku]
+        rows.append(row)
+    path = Path(tempfile.mkdtemp()) / "live.csv"
+    tcgcsv.write_csv(path, source.header, rows)
+    return path.read_bytes()
+
+
+def _dead_pid() -> int:
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    return gone.pid
+
+
+def check_send_review_r3(checks: Checks) -> None:
+    """The round-2 adversarial review's failures (F1-F6, and three more), each red first.
+
+    EVERY CASE HERE WENT RED ON THE ROUND-2 BUILD. A failure after the receipt was written left
+    it "sending" for as long as the server lived; a mark-down press that died left a claim
+    nothing released; the check read a missing baseline as zero; a press that sent nothing
+    left a claim; the stale half of the claim had no case; a listing row could carry no copy;
+    and a downloaded file offered its copies back after one check, although the owner may have
+    uploaded it late. (Round 3's price wait had a case here too. Round 4 removed the wait, whose
+    premise was false, and `check_send_review_r4`'s H3 case proves the price a send carries.)
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 3 — what the round-2 review found, each red first")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    empty = {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0}
+    real_run_sync = pipeline_routes._run_sync
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def receipt(stamp):
+        return [s for s in send_routes.do_sends()["sends"] if s["stamp"] == stamp][0]
+
+    def press(run_dir):
+        return _route_refusal(
+            lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        )
+
+    # --------------------------- F1: the emit step times out after the receipt is written
+    with _case(checks, "F1: a timed-out step after the receipt"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+
+        def timed_out(argv, timeout):
+            code, console = real_run_sync(argv, timeout)
+            if len(argv) > 1 and argv[1] == "emit":
+                # THE CHILD COMMITTED, THEN THE WAIT RAN OUT: the copies are counted and the
+                # press never heard so.
+                raise pipeline_routes.PipelineRefusal(
+                    HTTPStatus.GATEWAY_TIMEOUT, "step_timed_out", "emit did not finish"
+                )
+            return code, console
+
+        with _patched(pipeline_routes, "_run_sync", timed_out):
+            code = press(run_dir)
+        checks.equal(
+            code, "send_unknown",
+            "F1: A STEP THAT TIMES OUT AFTER THE COPIES WERE COUNTED is unknown",
+        )
+        sends = send_routes.do_sends()["sends"]
+        stamp = sends[0]["stamp"] if sends else ""
+        checks.ok(
+            bool(sends) and sends[0]["state"] == "unknown" and sends[0]["held"],
+            f"F1: the receipt reads unknown and holds its cards, never 'sending': "
+            f"{[(s['state'], s['held']) for s in sends]}",
+        )
+        checks.equal(_posts(portal), [], "F1: and nothing reached TCGplayer's write side")
+        if stamp:
+            _age_receipt(stamp)
+            portal["live"] = _live_export_bytes(empty)
+            send_routes.do_live_check({})
+            after = receipt(stamp)
+            checks.ok(
+                after["state"] == "short" and after["takeable"] == 4 and not after["held"],
+                f"F1: THE CHECK PAST THE WAIT RESOLVES IT: none found, the hold released, all "
+                f"four offered back: {after['state']}, {after['takeable']}, held {after['held']}",
+            )
+
+    # --------------------------- F1: any other error before "sending"
+    with _case(checks, "F1: an error before sending"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+
+        def broken(_skus):
+            raise RuntimeError("the store read broke")
+
+        with _patched(send_routes, "_sold_by_sku", broken):
+            code = press(run_dir)
+        checks.equal(code, "send_unknown", "F1: AN ERROR AFTER THE COPIES WERE COUNTED is unknown")
+        sends = send_routes.do_sends()["sends"]
+        checks.ok(
+            bool(sends) and sends[0]["state"] == "unknown" and sends[0]["held"]
+            and bool(sends[0]["check_after"]),
+            f"F1: unknown, held, and it says when Banchi checks: "
+            f"{[(s['state'], s['held'], s['check_after']) for s in sends]}",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), 3, "F1: and the copies stay counted until the check")
+
+    # --------------------------- F1: a timeout before anything was counted leaves nothing
+    with _case(checks, "F1: a timeout before the count"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+
+        def never_ran(argv, timeout):
+            if len(argv) > 1 and argv[1] == "emit":
+                raise pipeline_routes.PipelineRefusal(
+                    HTTPStatus.GATEWAY_TIMEOUT, "step_timed_out", "emit did not finish"
+                )
+            return real_run_sync(argv, timeout)
+
+        with _patched(pipeline_routes, "_run_sync", never_ran):
+            code = press(run_dir)
+        checks.equal(code, "step_timed_out", "F1: a step that counted nothing is its own refusal")
+        checks.equal(
+            (send_routes.do_sends()["sends"], Store().read().send_claims.live(), pushed(ARTICUNO_SKU)),
+            ([], [], 0),
+            "F1: and it leaves no receipt, no claim and no copy counted",
+        )
+
+    # ------------- F2: a mark-down press that died leaves a claim the check resolves
+    for died_at, pushed_first in (("the live read", False), ("the publish", True)):
+        label = f"F2: a mark-down press that died at {died_at}"
+        with _case(checks, label), send_portal() as portal, isolated_home() as home:
+            directory = _markdown_dir(home, "20260924-130000")
+            if pushed_first:
+                pipeline_routes._write_push(
+                    directory,
+                    {"upload_id": "u-7", "rows": 1, "accepted": 1, "messages": [],
+                     "pushed_at": "2026-09-24T13:00:05+00:00", "published_at": None},
+                )
+            with Store().write() as writable:
+                claim = writable.send_claims.claim(
+                    "md-20260924-130000", "markdown", {ARTICUNO_SKU: 0}, pid=_dead_pid()
+                )
+                claim.started_at = "2026-09-01T13:00:00+00:00"
+                writable.send_claims.entries[claim.stamp] = claim
+            run_dir, _ = seam_run(checks, cards)
+            portal["live"] = _live_export_bytes(empty)
+            try:
+                send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+                code, said = None, ""
+            except pipeline_routes.PipelineRefusal as refusal:
+                code, said = refusal.code, str(refusal)
+            checks.ok(
+                code == "price_change_held" and "price change" in said and "13:00" in said,
+                f"{label}: THE LISTING SEND NAMES THE MARK-DOWN THAT BLOCKS IT: {code}: {said}",
+            )
+            checks.ok(
+                send_routes.do_sends()["due"],
+                f"{label}: A DEAD PRESS'S CLAIM IS AN UNKNOWN MARK-DOWN, and past its wait the "
+                f"check is due",
+            )
+            # TCGplayer's price is still the old one: the file never went live.
+            portal["live"] = _live_export_priced(empty, {ARTICUNO_SKU: "25.00"})
+            send_routes.do_live_check({})
+            checks.equal(
+                Store().read().send_claims.live(),
+                [],
+                f"{label}: THE CHECK RELEASES THE DEAD PRESS'S CLAIM, with no price re-sent",
+            )
+            checks.equal(
+                [name for name in _posts(portal) if name == "movetolive"],
+                [],
+                f"{label}: and nothing was published to clear it",
+            )
+            portal["live"] = _live_export_bytes(empty)
+            sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+            checks.equal(sent["copies"], 4, f"{label}: and the listing send goes through after it")
+
+    # ------------------------- F2: an error inside a mark-down press is held, not stuck
+    with _case(checks, "F2: an error inside a mark-down press"), send_portal() as portal, \
+            isolated_home() as home:
+        directory = _markdown_dir(home, "20260924-140000")
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+
+        def broken_push(rows, filename="import.csv", *, listing=False):
+            raise RuntimeError("the socket broke in a way nothing names")
+
+        with _patched(tcg_import, "push_to_staged", broken_push):
+            code = _route_refusal(
+                lambda: send_routes.do_markdown_send(directory.name, {"confirm": True})
+            )
+        checks.equal(code, "send_unknown", "F2: AN ERROR MID-PRESS is unknown, not a crash")
+        record = pipeline_routes._read_push(directory) or {}
+        checks.ok(
+            bool(record.get("unknown")) and bool(record.get("check_after")),
+            f"F2: and the receipt says so, with its wait: {sorted(record)}",
+        )
+        record["check_after"] = "2000-01-01T00:00:00+00:00"
+        pipeline_routes._write_push(directory, record)
+        send_routes.do_live_check({})
+        checks.equal(Store().read().send_claims.live(), [], "F2: and the check past the wait releases it")
+
+    # ------------------- F4: the server dies after emit counted, before the baseline
+    with _case(checks, "F4: a death before the baseline"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        # TCGplayer already holds two Articuno the store never recorded, so the guard sends one.
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0})
+
+        def died(_path):
+            raise _Died()
+
+        try:
+            with _patched(send_routes, "_copies", died):
+                send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        except _Died:
+            pass
+        stamp = send_routes._receipts()[0][0]
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        record["holder"] = {"pid": _dead_pid(), "proc_start": "gone"}
+        record["phase"] = "deciding"
+        record.pop("unknown", None)
+        record.pop("check_after", None)
+        send_routes._write(directory, record)
+        checks.equal(receipt(stamp)["state"], "unknown", "F4: a press that died after the count is unknown")
+        # NOTHING WAS PUSHED. TCGplayer still holds the two it held before.
+        _age_receipt(stamp)
+        send_routes.do_live_check({})
+        after = receipt(stamp)
+        checks.ok(
+            after["state"] == "short" and after["takeable"] == 2,
+            f"F4: THE CHECK READS THE BASELINE TAKEN BEFORE THE COUNT: two live before, two now, "
+            f"so neither copy this send counted went, and both come back: {after['state']}, "
+            f"{after['takeable']}, {after['check']}",
+        )
+
+    # ------------------------------------------ F5: a press that sends nothing claims nothing
+    with _case(checks, "F5: a press that sends nothing"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        before = sorted(Store().read().send_claims.entries.keys())
+        checks.equal(press(run_dir), "nothing_to_send", "F5: a second press has nothing to send")
+        after_rows = sorted(Store().read().send_claims.entries.keys())
+        checks.equal(
+            (after_rows, Store().read().send_claims.live()),
+            (before, []),
+            "F5: A PRESS THAT SENDS NOTHING WRITES NO CLAIM, live or released",
+        )
+
+    # --------------- F6: a hand emit between a press's plan and its save refuses the press
+    with _case(checks, "F6: the stale half of the claim"), isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        from cli import __main__ as entry
+        from cli import cmd_emit
+
+        real_guard = cmd_emit._apply_guard
+        own = Path(tempfile.mkdtemp())
+        interleaved: List[bool] = []
+
+        def plan_then_hand_emit(*args, **kwargs):
+            # `_apply_guard` RUNS AFTER THE PLAN IS DECIDED AND BEFORE THE STORE WRITE: the
+            # exact gap the stale check covers. The hand emit lands in it, once (it runs this
+            # same function itself).
+            if not interleaved:
+                interleaved.append(True)
+                with quiet():
+                    entry.main(["emit", str(run_dir.directory)])
+            return real_guard(*args, **kwargs)
+
+        with _patched(cmd_emit, "_apply_guard", plan_then_hand_emit), quiet() as said:
+            code = entry.main(
+                ["emit", str(run_dir.directory), "--send-dir", str(own),
+                 "--send-claim", "20260924-150000-cccccc"]
+            )
+        claim_line = send_routes._json_line(said.getvalue(), "send_claim") or {}
+        checks.ok(
+            code == 1 and ARTICUNO_SKU in (claim_line.get("stale") or []),
+            f"F6: A HAND EMIT THAT SAVED WHILE THE PRESS DECIDED makes the press refuse, naming "
+            f"the moved card: exit {code}, {claim_line}",
+        )
+        checks.equal(
+            (pushed(ARTICUNO_SKU), Store().read().send_claims.get("20260924-150000-cccccc")),
+            (3, None),
+            "F6: and the copies are counted once, by the hand emit, with no claim written",
+        )
+
+    # --------------------------- the listing door and a row that adds no copy
+    # REVERSED IN ROUND 5 ON THE OWNER'S RULING (2026-09-24, "Allow mixed"): the listing door
+    # takes a price-only row now, so a send can reprice live cards. `check_send_review_r5`.
+    with _case(checks, "the listing door: a zero row"):
+        good = {
+            "Id": 0, "ProductConditionId": "123", "CategoryName": "Pokemon", "SetName": "S",
+            "ProductName": "P", "ConditionName": "Near Mint", "AddToQuantity": "0",
+            "MyPrice": "1.00", "ProOnlineStoreReserveQuantity": "", "ProOnlineStorePrice": "",
+            "Number": "1/1",
+        }
+        checks.equal(
+            _refusal_code_transport([good], listing=True),
+            None,
+            "A LISTING ROW THAT ADDS NO COPY IS A PRICE-ONLY ROW, D100's own shape (the mixed "
+            "send, round 5)",
+        )
+        checks.equal(
+            _refusal_code_transport([good], listing=False),
+            None,
+            "and the same row still passes the price door",
+        )
+
+    # --------- the orchestrator's call: a downloaded file takes back after a second check
+    with _case(checks, "a downloaded file: take back after a second check"), \
+            send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        stamp = send_routes.do_send({"runs": [run_dir.name], "download": True})["send"]["stamp"]
+        _age_receipt(stamp)
+        send_routes.do_live_check({})
+        first = receipt(stamp)
+        checks.ok(
+            first["takeable"] == 0 and first["state"] == "written" and bool(first["take_back_after"]),
+            f"A DOWNLOADED FILE IS NOT OFFERED BACK AFTER ONE CHECK: the owner may upload it "
+            f"late. {first['state']}, {first['takeable']}, after {first['take_back_after']}",
+        )
+        checks.equal(
+            send_routes.do_live_check({})["ran"], False, "and the second check waits one more wait"
+        )
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        for key in ("checked_at", "first_checked_at"):
+            if record.get(key):
+                record[key] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        checks.ok(send_routes.do_sends()["due"], "one wait after the first check, the second is due")
+        send_routes.do_live_check({})
+        second = receipt(stamp)
+        checks.equal(
+            (second["state"], second["takeable"]),
+            ("short", 4),
+            "and a second check that still finds none offers all four back",
+        )
+
+
+class _GatedStore:
+    """`Store`, with the first two `write()` calls held at a barrier until both arrive. Two
+    presses at once then enter their store write together, which is the race a take-back must
+    survive. Reads pass straight through."""
+
+    gate: Optional[threading.Barrier] = None
+    arrived: List[int] = []
+
+    def __init__(self, *args, **kwargs):
+        self._real = Store(*args, **kwargs)
+
+    def read(self, *args, **kwargs):
+        return self._real.read(*args, **kwargs)
+
+    def write(self, *args, **kwargs):
+        if self.gate is not None and len(self.arrived) < 2:
+            self.arrived.append(1)
+            with contextlib.suppress(threading.BrokenBarrierError):
+                self.gate.wait()
+        return self._real.write(*args, **kwargs)
+
+
+def check_send_review_r4(checks: Checks) -> None:
+    """The round-3 adversarial review's failures (H1-H4), each red first on the round-3 build.
+
+    H1: the live check credited a SKU's rise to the OLDEST due receipt, whatever its kind and
+    whatever earlier checks had already credited. A download nobody uploaded took the credit
+    for a send that went live, so the live send was offered back (A), and two checks each
+    credited the same single copy (B). H3: the price wait held copies out of a listing send for
+    a reason that was never true, since a mark-down writes its price into the price file.
+    H4: two Take back presses at once both took the copies back. And a route shape the round-2
+    stamp outgrew: the screen's take-back and file routes matched no new receipt.
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 4 — what the round-3 review found, each red first")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+    empty = {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0}
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def receipt(stamp):
+        return [s for s in send_routes.do_sends()["sends"] if s["stamp"] == stamp][0]
+
+    def found(stamp, sku):
+        """Copies of `sku` the receipt's last check credited it with."""
+        summary = receipt(stamp)
+        sent = send_routes._read(send_routes.sends_dir() / stamp).get("copies", {}).get(sku, 0)
+        for row in (summary["check"] or {}).get("missing") or []:
+            if row["sku"] == sku:
+                return int(row["found"])
+        return int(sent) if summary["check"] else 0
+
+    def one_articuno(run_dir, **extra):
+        return dict(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}}, **extra
+        )
+
+    # ------------- H1-A: a download nobody uploaded never takes a live send's credit
+    with _case(checks, "H1-A: a download and a send, one check"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        download = send_routes.do_send(one_articuno(run_dir, download=True))["send"]["stamp"]
+        sent = send_routes.do_send(one_articuno(run_dir, confirm=True))["send"]["stamp"]
+        checks.equal(
+            [row["AddToQuantity"] for row in portal["rows"]],
+            ["1"],
+            "H1-A: one Articuno is written to a file and not uploaded, and one is sent",
+        )
+        # THE SEND WENT LIVE. The downloaded file never left the Mac.
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0})
+        _age_receipt(download)
+        _age_receipt(sent)
+        send_routes.do_live_check({})
+        live_send, file = receipt(sent), receipt(download)
+        checks.equal(
+            (live_send["state"], live_send["takeable"], found(sent, ARTICUNO_SKU)),
+            ("checked", 0, 1),
+            "H1-A: THE RISE IS THE SEND'S. Banchi saw its upload succeed, and the time of a "
+            "download's upload is not known, so the send is credited first and is never "
+            "offered back",
+        )
+        checks.equal(
+            (file["state"], found(download, ARTICUNO_SKU)),
+            ("written", 0),
+            "H1-A: and the download is found at none, and waits for its second check",
+        )
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_take_back(sent, {"confirm": True})),
+            "not_takeable",
+            "H1-A: TAKE BACK OF THE LIVE SEND IS REFUSED, so the next press cannot send its copy "
+            "again",
+        )
+        directory = send_routes.sends_dir() / download
+        record = send_routes._read(directory)
+        record["checked_at"] = record["first_checked_at"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        send_routes.do_live_check({})
+        checks.equal(
+            (receipt(download)["state"], receipt(download)["takeable"], receipt(sent)["state"]),
+            ("short", 1, "checked"),
+            "H1-A: THE SECOND CHECK STILL CREDITS THE SEND, not the file: the file's one copy "
+            "comes back, and the send stays found",
+        )
+        send_routes.do_take_back(download, {"confirm": True})
+        checks.equal(
+            pushed(ARTICUNO_SKU),
+            1,
+            "H1-A: and after the file's copy comes back the store counts one Articuno out, "
+            "which is what TCGplayer holds",
+        )
+
+    # ------------- H1-B: two checks never credit one copy twice
+    with _case(checks, "H1-B: two sends, two checks, one copy live"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        first = send_routes.do_send(one_articuno(run_dir, confirm=True))["send"]["stamp"]
+        # THE EXPORT HAS NOT SHOWN THE FIRST SEND YET (D106's lag), so the second press reads
+        # the same baseline of none.
+        second = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1},
+             "confirm": True}
+        )["send"]["stamp"]
+        # ONE ARTICUNO WENT LIVE, NOT TWO. The Dunsparce went too.
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1})
+        _age_receipt(first)
+        send_routes.do_live_check({})
+        checks.equal(
+            (receipt(first)["state"], found(first, ARTICUNO_SKU)),
+            ("checked", 1),
+            "H1-B: the first check credits the one live Articuno to the older send",
+        )
+        _age_receipt(second)
+        send_routes.do_live_check({})
+        checks.equal(
+            found(first, ARTICUNO_SKU) + found(second, ARTICUNO_SKU),
+            1,
+            "H1-B: ONE CREDIT LEDGER PER SKU ACROSS CHECKS: the second check does not credit "
+            "the same live Articuno again. TCGplayer holds one, and the two receipts together "
+            "claim one",
+        )
+        checks.equal(
+            (receipt(second)["state"], receipt(second)["takeable"], found(second, DUNSPARCE_SKU)),
+            ("short", 1, 1),
+            "H1-B: so the second send is short one Articuno, which can come back, and its "
+            "Dunsparce is found",
+        )
+
+    # ------------- H3: a listing send carries the price a mark-down just set
+    with _case(checks, "H3: a listing send after a mark-down"), send_portal() as portal, \
+            isolated_home() as home:
+        run_dir, _ = seam_run(checks, cards)
+        priced = home / "live-priced.csv"
+        priced.write_bytes(_live_export_priced({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "25.00"}))
+        command(checks, "reprice", "list", str(priced), "--days", "9999", "--write")
+        stamp = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1].name
+        applied = pipeline_routes.do_markdown_apply(
+            stamp, {"edits": [{"sku": ARTICUNO_SKU, "price": "20.00"}], "write": True}
+        )
+        checks.ok(applied["ok"] and applied["wrote"], f"H3: the mark-down to 20.00 is written: {applied.get('ok')}")
+        portal["live"] = priced.read_bytes()
+        send_routes.do_markdown_send(stamp, {"confirm": True})
+        # THE MARK-DOWN WENT LIVE MOMENTS AGO. The listing send comes straight after it.
+        portal["rows"].clear()
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True, "moves": [{"sku": ARTICUNO_SKU, "price": "20.00", "copies": 1}]})
+        rows = {row["ProductConditionId"]: row for row in portal["rows"]}
+        checks.equal(
+            (rows.get(ARTICUNO_SKU) or {}).get("MyPrice"),
+            "20.00",
+            "H3: A LISTING SEND RIGHT AFTER A MARK-DOWN CARRIES THE MARKED-DOWN PRICE. The "
+            "mark-down wrote it into the price file, so no row can put the old price back, and "
+            "no copy waits",
+        )
+
+    # ------------- H4: two Take back presses at once take the copies back once
+    with _case(checks, "H4: two take-backs at once"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        stamp = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]["stamp"]
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0})
+        _age_receipt(stamp)
+        send_routes.do_live_check({})
+        checks.equal(receipt(stamp)["takeable"], 3, "H4: the check offers three copies back")
+        _GatedStore.gate = threading.Barrier(2, timeout=5)
+        _GatedStore.arrived = []
+        answers: Dict[int, tuple] = {}
+        try:
+            with _patched(send_routes, "Store", _GatedStore):
+                threads = [
+                    _press_thread(
+                        lambda: send_routes.do_take_back(stamp, {"confirm": True}), answers, index
+                    )
+                    for index in (0, 1)
+                ]
+                for thread in threads:
+                    thread.join(30)
+        finally:
+            _GatedStore.gate = None
+        checks.equal(
+            sorted(kind if kind == "sent" else f"{kind} {answer}" for kind, answer in answers.values()),
+            ["refused not_takeable", "sent"],
+            f"H4: TWO TAKE BACK PRESSES AT ONCE: one takes the copies back, the other is "
+            f"refused: {answers}",
+        )
+        checks.equal(
+            (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+            (1, 0),
+            "H4: and the store still counts the one live Articuno out: the copies came back once",
+        )
+
+    # ------------- H2: a taken-back receipt keeps its warning until it is dismissed
+    with _case(checks, "H2: the warning a take-back keeps"), send_portal() as portal, \
+            isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        download = send_routes.do_send(one_articuno(run_dir, download=True))
+        # THE REST GO IN A SEND WHOSE PUBLISH AND ROLLBACK ARE BOTH REFUSED: its upload may
+        # still wait in Staged.
+        portal["refuse"] = {"movetolive"}
+        portal["fail"] = {"rollbackexportcsv"}
+        _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True}))
+        portal["refuse"], portal["fail"] = set(), set()
+        staged = [stamp for stamp, record in send_routes._receipts() if record.get("kind") == "send"][0]
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_dismiss(staged, {})),
+            "nothing_to_dismiss",
+            "H2: before Take back there is no taken-back warning to dismiss",
+        )
+        _age_receipt(staged)
+        send_routes.do_live_check({})
+        send_routes.do_take_back(staged, {"confirm": True})
+        checks.equal(
+            receipt(staged)["warning"],
+            "staged",
+            "H2: A SEND TAKEN BACK WHOSE UPLOAD MAY WAIT IN STAGED KEEPS SAYING SO: publishing "
+            "it now would list the copies twice",
+        )
+        # TWENTY NEWER SENDS, stamped a day later so none can sort before it.
+        for index in range(send_routes.SENDS_SHOWN):
+            stamp = f"29990101-{index:06d}-aaaaaa"
+            send_routes._write(
+                send_routes.sends_dir() / stamp,
+                {"stamp": stamp, "kind": "send", "phase": "done", "failure": {"code": "x", "message": "x"},
+                 "taken_back_at": "2026-09-24T12:00:00+00:00"},
+            )
+        listed = [s["stamp"] for s in send_routes.do_sends()["sends"]]
+        checks.ok(
+            staged in listed and len(listed) == send_routes.SENDS_SHOWN + 1,
+            "H2: and it is listed while it warns, however many newer sends there are",
+        )
+        dismissed = send_routes.do_dismiss(staged, {})["send"]
+        checks.equal(
+            (dismissed["warning"], staged in [s["stamp"] for s in send_routes.do_sends()["sends"]]),
+            (None, False),
+            "H2: until the owner dismisses it: then it warns no more, and ages off the list",
+        )
+        checks.equal(
+            download.get("send", {}).get("warning"),
+            None,
+            "H2: a written file carries no taken-back warning before it is taken back",
+        )
+        record = send_routes._read(send_routes.sends_dir() / download["send"]["stamp"])
+        record["taken_back_at"] = "2026-09-24T12:30:00+00:00"
+        checks.equal(
+            send_routes._warning(record),
+            "old_file",
+            "H2: A DOWNLOADED FILE TAKEN BACK WARNS: uploading the old file now would list its "
+            "copies twice",
+        )
+
+    # ------------- the screen's routes read the stamp a press now writes
+    with _case(checks, "the take-back and file routes read a round-2 stamp"), isolated_home():
+        stamp = "20260924-120000-abcdef"
+        directory = send_routes.sends_dir() / stamp
+        send_routes._write(
+            directory,
+            {"stamp": stamp, "kind": "download", "at": "2026-09-24T12:00:00+00:00",
+             "phase": "done", "files": ["import.csv"], "copies": {ARTICUNO_SKU: 1},
+             "copies_total": 1, "check_after": "2999-01-01T00:00:00+00:00"},
+        )
+        (directory / "import.csv").write_text("x\n", encoding="utf-8")
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            file_status, _, _ = request(port, "GET", f"/pipeline/sends/{stamp}/file?name=import.csv")
+            back_status, back_body, _ = request(
+                port, "POST", f"/pipeline/sends/{stamp}/take-back", payload={"confirm": True}
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+        checks.equal(
+            (file_status, back_status, (json.loads(back_body or b"{}").get("error") or {}).get("code")),
+            (200, 409, "take_back_not_yet"),
+            "THE SCREEN'S ROUTES MATCH THE STAMP A PRESS WRITES: the file is served, and Take "
+            "back answers for the receipt rather than 404",
+        )
+
+
+def check_send_review_r5(checks: Checks) -> None:
+    """Round 5: the mixed send (the owner's ruling, 2026-09-24: "Allow mixed"), and the order of
+    two presses in one second. Each case went red on the round-4 build before the fix.
+
+    ONE PRESS LISTS NEW COPIES AND REPRICES LIVE ONES. A card already live that this press adds
+    no copy of, whose TYPED price differs from TCGplayer's, rides the send as a price-only row
+    (Add to Quantity 0). It never claims, counts or takes back a copy. The check past the wait
+    compares its price with TCGplayer's. A rule price never reaches a live listing this way.
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 5 — the mixed send, and two presses in one second")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def receipt(stamp):
+        return [s for s in send_routes.do_sends()["sends"] if s["stamp"] == stamp][0]
+
+    def typed(sku, price):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value=price)
+        book.write()
+
+    def portal_rows(portal):
+        return {
+            row["ProductConditionId"]: (row["AddToQuantity"], row["MyPrice"]) for row in portal["rows"]
+        }
+
+    # ------------- M1: one press lists the new copy and reprices the live card
+    with _case(checks, "M1: a mixed send"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        # THE ARTICUNO WENT LIVE AT 22.03. The owner now types 30.00 for it, and the Dunsparce
+        # is still unsent.
+        portal["live"] = _live_export_priced(
+            {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"}
+        )
+        typed(ARTICUNO_SKU, "30.00")
+        portal["rows"].clear()
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": [{"sku": ARTICUNO_SKU, "price": "30.00", "was": "22.03"}]})["send"]
+        checks.equal(
+            portal_rows(portal).get(ARTICUNO_SKU),
+            ("0", "30.00"),
+            "M1: THE LIVE CARD'S NEW PRICE RIDES THE SEND as a price-only row: Add to Quantity 0, "
+            "at the typed 30.00",
+        )
+        checks.equal(
+            portal_rows(portal).get(DUNSPARCE_SKU, ("?",))[0],
+            "1",
+            "M1: and the same press lists the new Dunsparce copy",
+        )
+        checks.equal(
+            (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+            (3, 1),
+            "M1: A PRICE-ONLY ROW COUNTS NO COPY: the Articuno stays at three sent, the "
+            "Dunsparce is one",
+        )
+        claim = Store().read().send_claims.get(sent["stamp"])
+        checks.equal(
+            dict(claim.skus) if claim else None,
+            {DUNSPARCE_SKU: 1, ARTICUNO_SKU: 0},
+            "M1: and the press claimed the card it adds a copy of, and the repriced card at 0 copies (round 6, S3)",
+        )
+        checks.equal(
+            (sent["copies"], sent["prices"]),
+            (1, 1),
+            "M1: the receipt names one copy and one price change, apart",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            postings = [
+                entry
+                for entry in db.postings_for_sku(conn, ARTICUNO_SKU)
+                if entry["source"] == "emit-price"
+            ]
+        finally:
+            conn.close()
+        checks.equal(
+            [(entry["price"], entry["replaced"]) for entry in postings],
+            [("30.00", "22.03")],
+            "M1: the price change is a posting, and it names the live price it replaced (D243)",
+        )
+        # THE WAIT PASSES. TCGplayer shows the new price, and the Dunsparce never showed.
+        portal["live"] = _live_export_priced(
+            {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "30.00"}
+        )
+        _age_receipt(sent["stamp"])
+        send_routes.do_live_check({})
+        after = receipt(sent["stamp"])
+        checks.equal(
+            (after["price_check"] or {}).get("matched"),
+            1,
+            "M1: THE CHECK PAST THE WAIT COMPARES THE PRICE with TCGplayer's, as a mark-down's does",
+        )
+        checks.equal(
+            (after["state"], after["takeable"]),
+            ("short", 1),
+            "M1: and Take back offers only the copy it did not find, never the price row",
+        )
+
+    # ------------- M2: a price-only press; a rule price and an unchanged price send nothing
+    with _case(checks, "M2: prices only"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        live = {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 1}
+        portal["live"] = _live_export_priced(live, {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "9.99"})
+        typed(ARTICUNO_SKU, "22.03")
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": [{"sku": ARTICUNO_SKU, "price": "22.03", "was": "22.03"}]})),
+            "nothing_to_send",
+            "M2: A TYPED PRICE TCGPLAYER ALREADY SHOWS IS NO CHANGE, and a RULE price that differs "
+            "from the live one (the Dunsparce) never reaches a live listing: nothing is sent",
+        )
+        typed(ARTICUNO_SKU, "25.00")
+        portal["rows"].clear()
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": [{"sku": ARTICUNO_SKU, "price": "25.00", "was": "22.03"}]})["send"]
+        checks.equal(
+            portal_rows(portal),
+            {ARTICUNO_SKU: ("0", "25.00")},
+            "M2: A PRESS OF PRICE CHANGES ONLY SENDS AND MAKES LIVE, one price-only row",
+        )
+        checks.equal(
+            (sent["state"], sent["copies"], sent["prices"], pushed(ARTICUNO_SKU)),
+            ("waiting", 0, 1, 3),
+            "M2: its receipt waits for the check, and no copy was counted",
+        )
+        portal["live"] = _live_export_priced(live, {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "9.99"})
+        _age_receipt(sent["stamp"])
+        send_routes.do_live_check({})
+        after = receipt(sent["stamp"])
+        checks.equal(
+            (after["state"], after["takeable"], [row["sku"] for row in after["price_check"]["missing"]]),
+            ("short", 0, [ARTICUNO_SKU]),
+            "M2: A PRICE TCGPLAYER DOES NOT SHOW IS NAMED, and nothing is offered back: another "
+            "price change is the way a live price moves again",
+        )
+
+    # ------------- M3: a price change never races a mark-down over the same card
+    with _case(checks, "M3: a mark-down holds the card"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        typed(ARTICUNO_SKU, "30.00")
+        with Store().write() as writable:
+            writable.send_claims.claim(
+                f"{send_routes.MARKDOWN_CLAIM}20260924-110000",
+                sendclaims.KIND_MARKDOWN,
+                {ARTICUNO_SKU: 0},
+                pid=_dead_pid(),
+            )
+        portal["rows"].clear()
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": [{"sku": ARTICUNO_SKU, "price": "30.00", "was": "22.03"}]})),
+            "price_change_held",
+            "M3: A PRICE CHANGE OVER A CARD A MARK-DOWN HOLDS IS REFUSED by name, and the whole "
+            "press sends nothing",
+        )
+        checks.equal(portal["rows"], [], "M3: and TCGplayer receives no row")
+
+    # ------------- the listing door takes a price-only row, and never a negative one
+    with _case(checks, "the listing door"):
+        good = {
+            "Id": 0, "ProductConditionId": "123", "CategoryName": "Pokemon", "SetName": "S",
+            "ProductName": "P", "ConditionName": "Near Mint", "AddToQuantity": "0",
+            "MyPrice": "1.00", "ProOnlineStoreReserveQuantity": "", "ProOnlineStorePrice": "",
+            "Number": "1/1",
+        }
+        checks.equal(
+            _refusal_code_transport([good, dict(good, ProductConditionId="124", AddToQuantity="2")], listing=True),
+            None,
+            "THE LISTING DOOR TAKES A MIXED FILE: a price-only row beside a row that adds copies",
+        )
+        checks.equal(
+            _refusal_code_transport([dict(good, AddToQuantity="-1")], listing=True),
+            "tcg_import_moves_quantity",
+            "and still refuses a row that would take a copy away",
+        )
+
+    # ------------- two presses in one second are ordered by when they were pressed
+    with _case(checks, "two presses in one second"), isolated_home():
+        older, newer = "20260924-120000-ffffff", "20260924-120000-000000"
+        for stamp, ns in ((older, 1_000), (newer, 2_000)):
+            send_routes._write(
+                send_routes.sends_dir() / stamp,
+                {
+                    "stamp": stamp, "kind": "send", "at": "2026-09-24T12:00:00+00:00",
+                    "pressed_ns": ns, "phase": "done", "copies": {ARTICUNO_SKU: 1},
+                    "copies_total": 1, "live_before": {ARTICUNO_SKU: 0},
+                    "sold_before": {ARTICUNO_SKU: 0}, "published_at": "2026-09-24T12:00:05+00:00",
+                    "check_after": "2000-01-01T00:00:00+00:00", "files": ["import.csv"],
+                },
+            )
+        checks.equal(
+            [stamp for stamp, _ in send_routes._receipts()],
+            [newer, older],
+            "THE RECEIPT LIST IS NEWEST PRESS FIRST, not by the stamp's random tail",
+        )
+        receipts = send_routes._receipts()
+        credits = send_routes._credits(
+            receipts,
+            frozenset({older, newer}),
+            {older: {ARTICUNO_SKU: 1}, newer: {ARTICUNO_SKU: 1}},
+            {ARTICUNO_SKU: 1},
+            {ARTICUNO_SKU: 0},
+            datetime.now(timezone.utc),
+        )
+        checks.equal(
+            (credits[older].get(ARTICUNO_SKU), credits[newer].get(ARTICUNO_SKU)),
+            (1, 0),
+            "AND THE CREDIT LEDGER AGREES: one live copy goes to the send pressed first",
+        )
+
+
+def check_send_review_r6(checks: Checks) -> None:
+    """Round 6: the fresh review of round 5 (B1-B3, S1-S4, N2), each red first on the round-5
+    build. Probes P1-P7 are the reviewer's, turned into cases.
+
+    THE ORCHESTRATOR'S RULING ON THE OWNER'S WORDS: only a price the SCREEN named rides a send.
+    A corpus answer the owner did not type on the worklist never does. A named price whose live
+    figure moved since the screen drew it is refused by name; one TCGplayer already shows is
+    left out and named. A named price under the floor is refused, as the mark-down door does.
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 6 — only a named price rides; the reviewer's probes")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def receipt(stamp):
+        return [s for s in send_routes.do_sends()["sends"] if s["stamp"] == stamp][0]
+
+    def typed(sku, price):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value=price)
+        book.write()
+
+    def portal_rows(portal):
+        return {
+            row["ProductConditionId"]: (row["AddToQuantity"], row["MyPrice"]) for row in portal["rows"]
+        }
+
+    def named(price, was):
+        return [{"sku": ARTICUNO_SKU, "price": price, "was": was}]
+
+    def articuno_live(run_dir, portal, price="22.03"):
+        """Every Articuno sent and live at `price`; the Dunsparce still unsent."""
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: price})
+        portal["rows"].clear()
+
+    # ------------- P1 (S1): a named price under the store's floor is refused, by name
+    with _case(checks, "P1: under the floor"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "0.05")
+        refused = _refusal_text_route(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "prices": named("0.05", "22.03")}
+        ))
+        checks.equal(
+            (refused or ("", ""))[0],
+            "price_refused",
+            "P1: A NAMED PRICE UNDER THE FLOOR IS REFUSED, the mark-down door's own rule",
+        )
+        checks.ok("under the store's floor" in (refused or ("", ""))[1], f"P1: and named: {refused}")
+        checks.equal(portal["rows"], [], "P1: and TCGplayer receives no row")
+
+    # ------------- P2 (B1): the guard trims a listing to nothing; an unnamed price never rides
+    with _case(checks, "P2: an unnamed price after a trim"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        typed(ARTICUNO_SKU, "30.00")
+        portal["rows"].clear()
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send(
+                {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+            )),
+            "nothing_to_send",
+            "P2: A PRICE THE BUTTON DID NOT NAME NEVER RIDES: the guard held back every Articuno, "
+            "and its typed 30.00 does not go out as a price change",
+        )
+        checks.equal(portal["rows"], [], "P2: and TCGplayer receives no row")
+
+    # ------------- P3 (N1, kept): Qty 0 with a named price moves the price, and no copy
+    with _case(checks, "P3: Qty 0 and a named price"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        typed(ARTICUNO_SKU, "30.00")
+        portal["rows"].clear()
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 1},
+             "confirm": True, "prices": named("30.00", "22.03")}
+        )
+        checks.equal(
+            (portal_rows(portal).get(ARTICUNO_SKU), pushed(ARTICUNO_SKU)),
+            (("0", "30.00"), 1),
+            "P3: QTY 0 AND A NAMED PRICE is the owner's price-only edit: the price moves, no copy does",
+        )
+
+    # ------------- P4 (S2): a press that died mid-push reads as possibly staged
+    with _case(checks, "P4: a hard crash mid-push"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        portal["fail"] = {"movetolive", "rollbackexportcsv"}
+        _route_refusal(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        ))
+        portal["fail"] = set()
+        stamp = send_routes._receipts()[0][0]
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        record.update({
+            "phase": "sending", "unknown": None, "check_after": None, "publish_started_at": None,
+            "pushed": {"upload_id": "u-1", "rows": 1, "accepted": 1, "messages": []},
+            "holder": {"pid": _dead_pid(), "proc_start": "x"},
+        })
+        send_routes._write(directory, record)
+        checks.equal(
+            (receipt(stamp)["state"], receipt(stamp)["staged"]),
+            ("unknown", True),
+            "P4: A RECEIPT LEFT IN PHASE SENDING BY A DEAD SERVER READS AS POSSIBLY STAGED",
+        )
+        record = send_routes._read(directory)
+        record["at"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        send_routes.do_live_check({})
+        send_routes.do_take_back(stamp, {"confirm": True})
+        checks.equal(
+            receipt(stamp)["warning"],
+            "staged",
+            "P4: and after the check and Take back it keeps the Staged warning until dismissed",
+        )
+
+    # ------------- P5 (S3): an unconfirmed price change holds its card from a mark-down
+    with _case(checks, "P5: a held price change"), send_portal() as portal, isolated_home() as home:
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "30.00")
+        portal["fail"] = {"movetolive"}
+        code = _route_refusal(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "prices": named("30.00", "22.03")}
+        ))
+        portal["fail"] = set()
+        held = [claim for claim in Store().read().send_claims.live() if ARTICUNO_SKU in claim.skus]
+        checks.equal(
+            (code, [dict(claim.skus) for claim in held]),
+            ("send_unknown", [{ARTICUNO_SKU: 0}]),
+            "P5: AN UNCONFIRMED PRICE-ONLY SEND CLAIMS ITS CARD AT 0 COPIES",
+        )
+        markdown = _markdown_dir(home, "20260924-130000", "19.99")
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_markdown_send(markdown.name, {"confirm": True})),
+            "send_held",
+            "P5: so a mark-down over the same card is refused as held, not running, until the check says what happened (round 7, R6-4)",
+        )
+        _age_receipt(send_routes._receipts()[0][0])
+        send_routes.do_live_check({})
+        checks.equal(
+            [claim.stamp for claim in Store().read().send_claims.live()],
+            [],
+            "P5: and the check past the wait releases the claim",
+        )
+
+    # ------------- P7 (B1, B2): a price the screen did not name, or whose live price moved
+    with _case(checks, "P7: the live price moved"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "25.99")
+        refused = _refusal_text_route(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "confirm": True, "prices": named("25.99", "25.99")}
+        ))
+        checks.equal(
+            (refused or ("", ""))[0],
+            "price_refused",
+            "P7: A NAMED PRICE WHOSE LIVE FIGURE MOVED SINCE THE SCREEN DREW IT IS REFUSED, by name",
+        )
+        checks.ok("$22.03" in (refused or ("", ""))[1], f"P7: naming the live price: {refused}")
+        checks.equal(portal["rows"], [], "P7: and TCGplayer receives no row")
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.equal(
+            (sorted(portal_rows(portal)), sent["prices"]),
+            ([DUNSPARCE_SKU], 0),
+            "P7: AND A CORPUS ANSWER THE SCREEN DID NOT NAME NEVER RIDES: the send lists the "
+            "Dunsparce and leaves the Articuno's price alone",
+        )
+
+    # ------------- a named price TCGplayer already shows is left out and named, not refused
+    with _case(checks, "already live"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "22.03")
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "confirm": True, "prices": named("22.03", "19.99")}
+        )["send"]
+        checks.equal(
+            ([note["why"] for note in sent["prices_left"]], list(portal_rows(portal))),
+            (["already"], [DUNSPARCE_SKU]),
+            "A NAMED PRICE TCGPLAYER ALREADY SHOWS IS LEFT OUT AND NAMED, and the press still goes",
+        )
+
+    # ------------- N2: a price row on a card that sold out settles, named
+    with _case(checks, "N2: sold out after the send"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "30.00")
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "prices": named("30.00", "22.03")}
+        )["send"]
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        _age_receipt(sent["stamp"])
+        send_routes.do_live_check({})
+        after = receipt(sent["stamp"])
+        checks.equal(
+            (after["state"], [row["sku"] for row in (after["price_check"] or {}).get("gone") or []]),
+            ("checked", [ARTICUNO_SKU]),
+            "N2: A PRICE ROW ON A CARD THAT SOLD OUT SETTLES, and names the card, never short for ever",
+        )
+
+    # ------------- S4: a rollback's answer is not proof
+    with _case(checks, "S4: after a rollback"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        portal["refuse"] = {"movetolive"}
+        code = _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True}))
+        stamp = send_routes._receipts()[0][0]
+        checks.equal(
+            (code, receipt(stamp)["warning"]),
+            ("send_rolled_back", "rolled_back"),
+            "S4: A ROLLED-BACK PRESS IS `send_rolled_back`, never a retry, and it keeps a "
+            "'check the Staged list' warning",
+        )
+        send_routes.do_dismiss(stamp, {})
+        checks.equal(receipt(stamp)["warning"], None, "S4: until the owner dismisses it")
+
+    # ------------- B3 and S4: a mark-down's rollback is named for what it is
+    with _case(checks, "B3: a mark-down rolled back"), send_portal() as portal, isolated_home() as home:
+        directory = _markdown_dir(home, "20260924-140000", "19.99")
+        pipeline_routes._write_push(directory, {"upload_id": "u-9", "rows": 1, "accepted": 1})
+        answer = pipeline_routes.do_markdown_rollback(directory.name, {"confirm": True})
+        note = files.read_json(directory / send_routes.ROLLED_BACK_RECORD, {}) or {}
+        checks.equal(
+            (answer.get("check_staged"), note.get("live"), note.get("check_staged")),
+            (True, False, True),
+            "B3: A MARK-DOWN ROLLED BACK IS RECORDED AS NOT LIVE, AND 'CHECK THE STAGED LIST'",
+        )
+
+
+def check_send_review_r7(checks: Checks) -> None:
+    """Round 7: the review of round 6 (R6-1 to R6-4) and the owner's ruling on R6-3, each red
+    first on the round-6 build (9ee9b6e3).
+
+    THE OWNER'S RULING, 2026-09-24 (R6-3): a new copy of a card already live carries Banchi's
+    stored price, and TCGplayer lists every copy of one SKU at one price, so the live copies
+    move with it. The BUTTON names every live copy that moves and its new price, and the press
+    refuses a move it did not name. R6-1 (the orchestrator's call): the worklist names prices
+    against the newest live export on disk, and a refusal carries the live price as data, so
+    the screen can send again at the owner's price with the live price named.
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 7 — live copies that move are named; a refusal carries data")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def typed(sku, price):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value=price)
+        book.write()
+
+    def portal_rows(portal):
+        return {
+            row["ProductConditionId"]: (row["AddToQuantity"], row["MyPrice"]) for row in portal["rows"]
+        }
+
+    def refusal_of(fn):
+        try:
+            fn()
+        except pipeline_routes.PipelineRefusal as caught:
+            return caught
+        return None
+
+    # ------------- P11 (R6-3): a listing row moves live copies; the button must name the move
+    with _case(checks, "P11: live copies move"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        portal["rows"].clear()
+        typed(ARTICUNO_SKU, "19.99")
+        refused = refusal_of(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        ))
+        notes = ((getattr(refused, "data", None) or {}).get("refused")) or []
+        checks.equal(
+            (getattr(refused, "code", None), [(n["sku"], n["why"], n["live"], n["price"], n["copies"]) for n in notes]),
+            ("price_refused", [(ARTICUNO_SKU, "move_unnamed", "22.03", "19.99", 2)]),
+            "P11: A NEW COPY THAT WOULD MOVE TWO LIVE COPIES TO A PRICE THE BUTTON DID NOT NAME "
+            "IS REFUSED, and the refusal carries the live price and the new one as data",
+        )
+        checks.equal(portal["rows"], [], "P11: and TCGplayer receives no row")
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "moves": [{"sku": ARTICUNO_SKU, "price": "19.99", "copies": 2}]}
+        )["send"]
+        checks.equal(
+            (portal_rows(portal).get(ARTICUNO_SKU), [(m["sku"], m["copies"], m["price"], m["was"]) for m in sent["moves"]]),
+            (("1", "19.99"), [(ARTICUNO_SKU, 2, "19.99", "22.03")]),
+            "P11: NAMED, THE NEW COPY CARRIES THE STORED PRICE, and the receipt records the two "
+            "live copies it moves and from what",
+        )
+
+    # ------------- R6-1: a refused price carries the live price, and one press sends again
+    with _case(checks, "R6-1: send again at the live price"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        portal["rows"].clear()
+        typed(ARTICUNO_SKU, "30.00")
+        named = {"sku": ARTICUNO_SKU, "price": "30.00", "was": "25.99"}
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            status, body, _ = request(
+                port, "POST", "/pipeline/send",
+                payload={"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+                         "prices": [named]},
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+        error = json.loads(body or b"{}").get("error") or {}
+        notes = (error.get("data") or {}).get("refused") or []
+        checks.equal(
+            (status, error.get("code"), [(n["sku"], n["why"], n["live"], n["price"]) for n in notes]),
+            (409, "price_refused", [(ARTICUNO_SKU, "live_moved", "22.03", "30.00")]),
+            "R6-1: THE REFUSAL CARRIES {sku, live, price} AS DATA on the wire, so the screen can "
+            "say 'TCGplayer shows $22.03 now. Send $30.00?'",
+        )
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "prices": [dict(named, was="22.03")]}
+        )["send"]
+        checks.equal(
+            (portal_rows(portal), sent["prices"]),
+            ({ARTICUNO_SKU: ("0", "30.00")}, 1),
+            "R6-1: AND ONE PRESS WITH THE LIVE PRICE NAMED SENDS THE OWNER'S PRICE",
+        )
+
+    # ------------- R6-1: the worklist names what TCGplayer holds now, off the newest live export
+    with _case(checks, "R6-1: the worklist's live price"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        _age_receipt(send_routes._receipts()[0][0])
+        send_routes.do_live_check({})
+        work = pipeline_routes.do_pipeline_worklist([run_dir.name])
+        rows = {row["sku"]: row for row in work["skus"]}
+        live = rows.get(ARTICUNO_SKU, {}).get("live_now") or {}
+        checks.equal(
+            (live.get("price"), live.get("copies"), rows.get(ARTICUNO_SKU, {}).get("snap", {}).get("now")),
+            ("22.03", 3, "25.99"),
+            "R6-1: THE WORKLIST CARRIES TCGPLAYER'S PRICE FROM THE NEWEST LIVE EXPORT (22.03), not "
+            "only the join's (25.99)",
+        )
+
+
+def check_schema_eleven_then_twelve(checks: Checks) -> None:
+    """Two branches each took schema 11. Main's identity lane took it for `skus` and
+    `cards.identity_source`. The send lane took it for `send_claims`, which is now 12.
+
+    A store at 10 must pass through 11 and then 12. A store that main already moved to 11
+    must still get `send_claims`, and keep its `skus` rows. Each case builds the older shape
+    from a fresh store, stamps the older number, and lets the next ordinary read upgrade it.
+    """
+    def shape(store_path):
+        conn = sqlite3.connect(store_path)
+        try:
+            stamp = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+            tables = {
+                row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            views = {
+                row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='view'")
+            }
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+            skus_rows = (
+                conn.execute("SELECT COUNT(*) FROM skus").fetchone()[0] if "skus" in tables else None
+            )
+        finally:
+            conn.close()
+        return stamp, tables, views, columns, skus_rows
+
+    checks.equal(db.SCHEMA_VERSION, 12, "the current schema is 12: skus at 11, send_claims at 12")
+
+    # --- a store at 10 has neither table -------------------------------------------------
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        store_path = str(files.inventory_dir() / "store.sqlite")
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        try:
+            conn.execute("DROP VIEW IF EXISTS sku_products")
+            conn.execute("DROP VIEW IF EXISTS sku_printings")
+            conn.execute("DROP TABLE IF EXISTS skus")
+            conn.execute("DROP TABLE IF EXISTS send_claims")
+            conn.execute("ALTER TABLE cards DROP COLUMN identity_source")
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '10')")
+        finally:
+            conn.close()
+        stamp, tables, _views, columns, _rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns),
+            (("10",), False, False, False),
+            "the fixture really is a schema-10 store",
+        )
+        Store().read()
+        stamp, tables, views, columns, _rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
+             {"sku_products", "sku_printings"} <= views),
+            (("12",), True, True, True, True),
+            "a schema-10 store passes through 11 and then 12, and gains both tables",
+        )
+        checks.equal(
+            sorted(Store().read().inventory.cards), ["1/1"], "and its card survives the upgrade"
+        )
+
+    # --- a store main already moved to 11 has `skus` and no `send_claims` ----------------
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        store_path = str(files.inventory_dir() / "store.sqlite")
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        try:
+            conn.execute("DROP TABLE IF EXISTS send_claims")
+            conn.execute(
+                "INSERT INTO skus (key, product_name, payload) VALUES ('7777', 'Venusaur', ?)",
+                (json.dumps({"sku": "7777", "product_name": "Venusaur"}),),
+            )
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '11')")
+        finally:
+            conn.close()
+        stamp, tables, _views, _columns, rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, rows),
+            (("11",), True, False, 1),
+            "the fixture really is a schema-11 store from main, with one skus row",
+        )
+        Store().read()
+        stamp, tables, _views, _columns, rows = shape(store_path)
+        checks.equal(
+            (stamp, "send_claims" in tables, rows),
+            (("12",), True, 1),
+            "a schema-11 store from main gains send_claims at 12 and keeps its skus row",
+        )
+
+    # --- a store the UX branch stamped 11 has `send_claims` and no `skus` ----------------
+    # The UX branch took 11 for `send_claims` before the merge moved it to 12. Its stamp says
+    # 11, and it is not main's 11. It must still get `skus`, the views and
+    # `cards.identity_source`, or the first card write fails on the missing column.
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        store_path = str(files.inventory_dir() / "store.sqlite")
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        try:
+            conn.execute("DROP VIEW IF EXISTS sku_products")
+            conn.execute("DROP VIEW IF EXISTS sku_printings")
+            conn.execute("DROP TABLE IF EXISTS skus")
+            conn.execute("ALTER TABLE cards DROP COLUMN identity_source")
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '11')")
+        finally:
+            conn.close()
+        stamp, tables, _views, columns, _rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns),
+            (("11",), False, True, False),
+            "the fixture really is the UX branch's schema-11 store: send_claims and no skus",
+        )
+        Store().read()
+        stamp, tables, views, columns, _rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
+             {"sku_products", "sku_printings"} <= views),
+            (("12",), True, True, True, True),
+            "the UX branch's schema-11 store reaches 12 with skus, both views and "
+            "cards.identity_source",
+        )
+        try:
+            capture_server.do_capture(capture_payload(1))
+            wrote = None
+        except Exception as exc:  # the failure this case exists for is a sqlite error
+            wrote = f"{type(exc).__name__}: {exc}"
+        checks.equal(wrote, None, "and a card write on that store works")
+        checks.equal(
+            sorted(Store().read().inventory.cards), ["1/1", "1/2"],
+            "and both cards are in the store",
+        )
+
+
+def check_send_review_r8(checks: Checks) -> None:
+    """Round 8: the review of round 7 (R7-1, R7-3, R7-4), each red first on the round-7 build
+    (19c3bc3e). A move of live copies under the floor is refused and never offered back; a move
+    carries its count and the count must match; a live row with copies and no price moves."""
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 8 — a move's floor, its count, and a live row with no price")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def typed(sku, price):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value=price)
+        book.write()
+
+    def refusal_of(fn):
+        try:
+            fn()
+        except pipeline_routes.PipelineRefusal as caught:
+            return caught
+        return None
+
+    def notes(refused):
+        return [
+            (n["sku"], n["why"], n["live"], n["price"], n["copies"])
+            for n in ((getattr(refused, "data", None) or {}).get("refused") or [])
+        ]
+
+    def two_live(portal, run_dir, price):
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: price})
+        portal["rows"].clear()
+
+    # ------------- R7-1: a move of live copies under the floor is refused, and is data
+    with _case(checks, "R7-1: a move under the floor"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        two_live(portal, run_dir, "22.03")
+        typed(ARTICUNO_SKU, "0.05")
+        refused = refusal_of(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "moves": [{"sku": ARTICUNO_SKU, "price": "0.05", "copies": 2}]}
+        ))
+        checks.equal(
+            (getattr(refused, "code", None), notes(refused)),
+            ("price_refused", [(ARTICUNO_SKU, "below_floor", "22.03", "0.05", 2)]),
+            "R7-1: A NAMED MOVE THAT WOULD TAKE TWO LIVE COPIES UNDER THE FLOOR IS REFUSED "
+            "`below_floor`, as data",
+        )
+        checks.equal(portal["rows"], [], "R7-1: and TCGplayer receives no row")
+
+    # ------------- R7-3: the button's count of live copies must be TCGplayer's
+    with _case(checks, "R7-3: a move's count"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        two_live(portal, run_dir, "22.03")
+        typed(ARTICUNO_SKU, "19.99")
+        refused = refusal_of(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "moves": [{"sku": ARTICUNO_SKU, "price": "19.99", "copies": 1}]}
+        ))
+        checks.equal(
+            (getattr(refused, "code", None), notes(refused)),
+            ("price_refused", [(ARTICUNO_SKU, "move_count", "22.03", "19.99", 2)]),
+            "R7-3: A MOVE NAMED AT ONE LIVE COPY WHERE TCGPLAYER HOLDS TWO IS REFUSED, with "
+            "TCGplayer's count as data",
+        )
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "moves": [{"sku": ARTICUNO_SKU, "price": "19.99", "copies": 2}]}
+        )["send"]
+        checks.equal(
+            [(m["sku"], m["copies"]) for m in sent["moves"]],
+            [(ARTICUNO_SKU, 2)],
+            "R7-3: and named at TCGplayer's count, it sends",
+        )
+
+    # ------------- R7-4: a live row with copies and no price moves, and must be named
+    with _case(checks, "R7-4: a live row with no price"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        two_live(portal, run_dir, "")
+        typed(ARTICUNO_SKU, "19.99")
+        refused = refusal_of(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        ))
+        checks.equal(
+            (getattr(refused, "code", None), notes(refused)),
+            ("price_refused", [(ARTICUNO_SKU, "move_unnamed", None, "19.99", 2)]),
+            "R7-4: TWO LIVE COPIES WITH NO PRICE ARE A MOVE THE BUTTON MUST NAME, the safe side",
+        )
+        checks.equal(portal["rows"], [], "R7-4: and TCGplayer receives no row")
+
+
+def check_run_match(checks: Checks) -> None:
+    """Q4 of the flow interview: matching runs by itself when a reading finishes, and a problem
+    becomes the run's next step. Against the stand-in portal's catalogue export.
+
+    `POST /pipeline/runs/<name>/match` is what the screen calls when it sees a run reach the
+    match step. What is asserted: a finished reading is matched with nobody pressing anything;
+    a refusal is recorded as the run's `match_problem` and is NOT asked again by the next
+    automatic call; the door's own press (`retry`) asks again; and a run that is not waiting
+    for a match is left alone.
+    """
+    checks.note("")
+    checks.note("RUN MATCH — matching runs by itself when the reading finishes (Q4)")
+    cards = [(3, 1, "Dunsparce", "120/159", "normal"), (3, 2, "Articuno ex", "161/159", None)]
+
+    def reading_done(hinted):
+        """A run whose reading has finished: identified, collected, not yet matched."""
+        run, _ = seam_run(checks, cards, join=False)
+        path = run.directory / pipeline_routes.run_files.IDENTIFICATIONS
+        payload = json.loads(path.read_text())
+        for at, key in enumerate(sorted(payload["cards"])):
+            payload["cards"][key].pop("set_hint", None)
+            if at < hinted:
+                payload["cards"][key]["set_hint"] = "SV09"
+        path.write_text(json.dumps(payload))
+        run.set(collected=True)
+        return run
+
+    def exports(portal):
+        return [name for kind, name in portal["calls"] if kind == "POST" and name == "downloadexportcsv"]
+
+    with _case(checks, "Q4: a finished reading matches by itself"), send_portal() as portal, \
+            isolated_home():
+        run = reading_done(hinted=len(cards))
+        checks.equal(
+            pipeline_routes._summary(run.directory)["phase"],
+            "join",
+            "a finished reading waits for its match",
+        )
+        answer = pipeline_routes.do_run_match(run.name, {})
+        checks.ok(
+            answer["ran"] and answer["ok"],
+            f"THE MATCH RAN WITH NOBODY PRESSING: {answer.get('problem')}",
+        )
+        checks.equal(len(exports(portal)), 1, "it fetched the catalogue once")
+        checks.ok(
+            answer["summary"]["phase"] != "join" and answer["summary"]["match_problem"] is None,
+            f"and the run moved on to its next step: {answer['summary']['phase']}",
+        )
+        again = pipeline_routes.do_run_match(run.name, {})
+        checks.equal(
+            (again["ran"], again["reason"], len(exports(portal))),
+            (False, "not_waiting", 1),
+            "a run that is not waiting for a match is left alone",
+        )
+
+    with _case(checks, "Q4: a problem becomes the next step"), send_portal() as portal, \
+            isolated_home():
+        run = reading_done(hinted=0)
+        answer = pipeline_routes.do_run_match(run.name, {})
+        problem = answer["summary"]["match_problem"] or {}
+        checks.equal(
+            (answer["ok"], problem.get("code")),
+            (False, "export_needs_set_hint"),
+            "A CARD WITH NO SET is the run's next step, by name",
+        )
+        checks.equal(
+            pipeline_routes._summary(run.directory)["match_problem"]["code"],
+            "export_needs_set_hint",
+            "and every read of the run says so, until it is fixed",
+        )
+        calls = len(portal["calls"])
+        standing = pipeline_routes.do_run_match(run.name, {})
+        checks.equal(
+            (standing["ran"], standing["reason"], len(portal["calls"])),
+            (False, "problem_stands", calls),
+            "THE NEXT AUTOMATIC CALL DOES NOT ASK AGAIN over a problem that stands",
+        )
+        run = runs.open_run(run.directory)
+        path = run.directory / pipeline_routes.run_files.IDENTIFICATIONS
+        payload = json.loads(path.read_text())
+        for key in payload["cards"]:
+            payload["cards"][key]["set_hint"] = "SV09"
+        path.write_text(json.dumps(payload))
+        fixed = pipeline_routes.do_run_match(run.name, {"retry": True})
+        checks.ok(
+            fixed["ok"] and fixed["summary"]["match_problem"] is None,
+            "and the door's own press asks again, and the fixed run matches",
+        )
+
+    with _case(checks, "Q4: a signed-out session is the next step"), send_portal() as portal, \
+            isolated_home():
+        run = reading_done(hinted=len(cards))
+        portal["signed_out"] = True
+        answer = pipeline_routes.do_run_match(run.name, {})
+        checks.equal(
+            (answer["summary"]["match_problem"] or {}).get("code"),
+            "tcg_session_expired",
+            "A SIGN-IN THAT HAS EXPIRED is the run's next step, never a silent stall",
+        )
+
+
+def _refusal_code_transport(rows, *, listing: bool) -> Optional[str]:
+    try:
+        tcg_import._check(rows, listing=listing)
+    except tcg_import.FetchRefusal as refusal:
+        return refusal.code
+    return None
+
+
 def check_publish_lag(checks: Checks) -> None:
     """`reconcile --live` will not settle a SKU this pipeline just published (D106).
 
@@ -19530,7 +22723,7 @@ def check_pricing_labels(checks: Checks) -> None:
     run an immutable input, so that label is a snapshot of a rendering — and D56 states the rule
     one register up: never write down an answer nobody can correct; join it when it is read.
     `capture_server._queue_row` has obeyed it since D58 and this route did not, so a copy sold
-    after the join went on drawing `Box 3 · Section 1 · Card 1` at a slot whose occupant had
+    after the join went on drawing `Box 3, Section 1, Card 1` at a slot whose occupant had
     closed up behind it, under a photograph `photoUrl` addresses BY SLOT — the caption naming
     one card and the picture showing another.
 
@@ -19584,11 +22777,13 @@ def check_pricing_labels(checks: Checks) -> None:
         name = run_dir.directory.name
         joined_bytes = run_dir.path(runs.PRICING).read_bytes()
 
+        # The box was created with no name, so it carries its stored default, `Box 1`
+        # (D259): the first box in this store.
         at_join = {
-            "3/1": "Box 3 · Section 1 · Card 1",
-            "3/2": "Box 3 · Section 1 · Card 2",
-            "3/3": "Box 3 · Section 2 · Card 1",
-            "3/4": "Box 3 · Section 2 · Card 2",
+            "3/1": "Box 1, Section 1, Card 1",
+            "3/2": "Box 1, Section 1, Card 2",
+            "3/3": "Box 1, Section 2, Card 1",
+            "3/4": "Box 1, Section 2, Card 2",
         }
         checks.equal(
             written(run_dir),
@@ -19611,15 +22806,15 @@ def check_pricing_labels(checks: Checks) -> None:
         checks.equal(
             positions(name),
             {
-                "3/1": "Box 3 · departed · B3 #1",
-                "3/2": "Box 3 · Section 1 · Card 1",
-                "3/3": "Box 3 · Section 2 · Card 1",
-                "3/4": "Box 3 · Section 2 · Card 2",
+                "3/1": "Box 1, Section 1, Card 1",
+                "3/2": "Box 1, Section 1, Card 1",
+                "3/3": "Box 1, Section 2, Card 1",
+                "3/4": "Box 1, Section 2, Card 2",
             },
-            "SELL A COPY AND ITS CAPTION STOPS NAMING A SLOT — `Box 3 · departed · B3 #1`, with "
-            "the store key D68 put there so two departed copies of one SKU are not one string "
-            "— while the card behind it takes the number it vacated. The stored label said "
-            "`Section 1 · Card 1` for BOTH rows, which is the exact lie D58 refuses",
+            "SELL A COPY AND THE CARD BEHIND IT TAKES THE NUMBER IT VACATED (D58), while the "
+            "sold copy's caption names the place it LEFT (D259). The "
+            "two strings are equal on purpose: the screen tells them apart by the departed "
+            "mark it draws off a null `slot`, never by a word or a store key in the string",
         )
         checks.equal(
             run_dir.path(runs.PRICING).read_bytes(),
@@ -19637,10 +22832,10 @@ def check_pricing_labels(checks: Checks) -> None:
         checks.equal(
             positions(name),
             {
-                "3/1": "Box 3 · departed · B3 #1",
-                "3/2": "Box 3 · Section 1 · Card 1",
-                "3/3": "Box 3 · Section 1 · Card 2",
-                "3/4": "Box 3 · Section 2 · Card 1",
+                "3/1": "Box 1, Section 1, Card 1",
+                "3/2": "Box 1, Section 1, Card 1",
+                "3/3": "Box 1, Section 1, Card 2",
+                "3/4": "Box 1, Section 2, Card 1",
             },
             "MOVE A DIVIDER AND EVERY CAPTION BEHIND IT FOLLOWS — 3/3 crosses from section 2 "
             "into section 1 and 3/4 becomes the section's first card. This is the failure D58 "
@@ -19663,7 +22858,7 @@ def check_pricing_labels(checks: Checks) -> None:
             None,
             "a box `box_views` will not answer for — deleted out from under the run, or the "
             "store-wide degrade — answers NULL rather than an index-space label. A bare "
-            "`BoxView()` would render `Box 9 · Section 1 · Card 1` in the numbering D58 "
+            "`BoxView()` would render `Box 9, Section 1, Card 1` in the numbering D58 "
             "replaced, silently, beside three captions drawn in the other one",
         )
 
@@ -21580,10 +24775,10 @@ def check_boxes_and_listings(checks: Checks) -> None:
     checks.equal(
         [join.Position(1, i, migrated.sections_for(1)).label for i in (1, 25, 26, 53)],
         [
-            "Box 1 · Section 1 · Card 1",
-            "Box 1 · Section 1 · Card 25",
-            "Box 1 · Section 1 · Card 26",
-            "Box 1 · Section 1 · Card 53",
+            "Box 1, Section 1, Card 1",
+            "Box 1, Section 1, Card 25",
+            "Box 1, Section 1, Card 26",
+            "Box 1, Section 1, Card 53",
         ],
         "AN UNDECLARED BOX IS ONE SECTION, and `card` is the index: no divider exists "
         "until somebody puts one in (D10, amended 2026-08-29)",
@@ -21608,10 +24803,10 @@ def check_boxes_and_listings(checks: Checks) -> None:
     checks.equal(
         [join.Position(1, i, inventory.sections_for(1)).label for i in (30, 31, 55, 56)],
         [
-            "Box 1 · Section 1 · Card 30",
-            "Box 1 · Section 2 · Card 1",
-            "Box 1 · Section 2 · Card 25",
-            "Box 1 · Section 3 · Card 1",
+            "Box 1, Section 1, Card 30",
+            "Box 1, Section 2, Card 1",
+            "Box 1, Section 2, Card 25",
+            "Box 1, Section 3, Card 1",
         ],
         "a declared layout puts the divider exactly where it was declared",
     )
@@ -21628,7 +24823,7 @@ def check_boxes_and_listings(checks: Checks) -> None:
     after = join.Position(1, 40, inventory.sections_for(1)).label
     checks.equal(
         (before, after),
-        ("Box 1 · Section 2 · Card 10", "Box 1 · Section 1 · Card 40"),
+        ("Box 1, Section 2, Card 10", "Box 1, Section 1, Card 40"),
         "moving a divider RELABELS the cards behind it — the label is a view (D10 amended)",
     )
     checks.ok(
@@ -23140,7 +26335,7 @@ def check_open_section(checks: Checks) -> None:
         )
         checks.equal(
             join.Position(4, 41, (1, 41)).label,
-            "Box 4 · Section 2 · Card 1",
+            "Box 4, Section 2, Card 1",
             "so the next card captured is card 1 of section 2",
         )
 
@@ -27955,16 +31150,20 @@ def check_order_screen(checks: Checks) -> None:
             )
             checks.equal(
                 pulled["places"][0]["label"],
-                "Box 3 · Section 1 · Card 1",
+                join.place_label(
+                    join.box_title(Store().read().inventory.box(3).name, 3), 1, 1
+                ),
                 "THE RECEIPT IS COMPOSED BEFORE THE WRITE — where the operator just was",
             )
             checks.equal(
                 capture_server._Places(Store().read().inventory).of(3, 1)["label"],
-                join.departed_label(3, 1),
-                "AND A `_Places` BUILT AFTER THE CALL SAYS `Box 3 · departed · B3 #1` FOR THE SAME "
-                "POSITION. The two differ, and the response carries the FIRST: a sale moves "
-                "the box's occupancy (D58), so a receipt composed afterwards would name "
-                "where the box has closed up to rather than the slot the card came out of",
+                join.departed_label(
+                    join.box_title(Store().read().inventory.box(3).name, 3), 1, 1
+                ),
+                "AND A `_Places` BUILT AFTER THE CALL NAMES THE SAME PLACE THROUGH THE DEPARTED "
+                "COMPOSER (D259): the place the card left. Its `slot` "
+                "is null, which is what a screen draws the departure from, and the response "
+                "still carries the receipt composed before the write",
             )
             # ---------------------------------------------------- `refreshed`, the other way in time
             #
@@ -28074,6 +31273,9 @@ def check_order_screen(checks: Checks) -> None:
             "and the ledger still reads one, so the refusal cost the line nothing",
         )
 
+        # THE PLACE THIS REFUSAL NAMES, computed the same way `capture_id_mismatch`'s own
+        # message computes it — before the call, since the target is not sold by a refusal.
+        where_3_2 = join.said_place(Store().read().inventory, 3, 2)
         refused_aim = _refusal_text(
             lambda: capture_server.do_order_pull(
                 {
@@ -28091,6 +31293,15 @@ def check_order_screen(checks: Checks) -> None:
             "mid-box delete, a capture undo releasing an index or a re-shoot all change a "
             "slot's occupant, so a screen drawn a minute ago may aim at a different card",
             f"got {refused_aim!r}",
+        )
+        checks.ok(
+            refused_aim is not None
+            and f"The card at {where_3_2} is not the card the screen drew" in refused_aim[1]
+            and "3/2" not in refused_aim[1]
+            and "box 3" not in refused_aim[1].lower(),
+            "and the message NAMES THE PLACE, not the store position — the section and "
+            "card within it, never `3/2` or the box number (D259)",
+            f"where: {where_3_2!r}; got: {refused_aim!r}",
         )
         checks.equal(
             (Store().read().inventory.cards["3/2"].state,
@@ -28265,6 +31476,9 @@ def check_order_screen(checks: Checks) -> None:
 
         # THE AGGREGATE. Two good targets and one stale one, so the case can distinguish
         # 'the whole pull refused' from 'every target was bad anyway'.
+        before_agg = Store().read().inventory
+        where_3_3 = join.said_place(before_agg, 3, 3)
+        where_3_4 = join.said_place(before_agg, 3, 4)
         aggregate = _refusal_text(
             lambda: capture_server.do_order_pull(
                 {
@@ -28277,10 +31491,12 @@ def check_order_screen(checks: Checks) -> None:
         checks.ok(
             aggregate is not None
             and aggregate[0] == "pull_entry_refused"
-            and "3/3: capture_id_mismatch" in aggregate[1]
-            and "3/4: copy_not_identifiable" in aggregate[1],
-            "THREE TARGETS, TWO REFUSALS, AND EACH POSITION IS NAMED WITH ITS OWN CODE. A "
-            "per-position refusal is collected rather than raised and the whole set is "
+            and f"{where_3_3}: capture_id_mismatch" in aggregate[1]
+            and f"{where_3_4}: copy_not_identifiable" in aggregate[1]
+            and "3/3:" not in aggregate[1] and "3/4:" not in aggregate[1],
+            "THREE TARGETS, TWO REFUSALS, AND EACH IS NAMED BY ITS PLACE, WITH ITS OWN "
+            "CODE — never the store position `3/3` or `3/4` (D259). "
+            "A per-position refusal is collected rather than raised and the whole set is "
             "answered at once — `group_entry_refused`'s shape — because a pull half-refused "
             "is an operator holding cards with no record of which ones went",
             f"got {aggregate!r}",
@@ -28541,6 +31757,15 @@ def check_order_walk_plan_route(checks: Checks) -> None:
                 "condition" in take,
                 "and `condition` rides beside them even where nothing agrees (null here — "
                 "no listing recorded and no card carries one)",
+            )
+            checks.equal(
+                (take.get("listed"), take.get("sold_here"), take.get("live_as_of")),
+                ({stage: 0 for stage in master.LISTING_STAGES}, 0, None),
+                "AND `listed`/`sold_here`/`live_as_of` RIDE BESIDE THEM TOO — "
+                "`_listing_reading`, the one composer `_walk_plan_take` and `do_search`'s "
+                "`_group_row` both call now, off no listing record for this SKU: zero every "
+                "stage, zero sold here, null read time — the same shape a SKU with no "
+                "listing gets from `/search` (D115), never a fabricated absence",
             )
 
 
@@ -31808,7 +35033,7 @@ def check_shipping_stamps(checks: Checks) -> None:
             "space, not the `_Places` this route composed them with",
         )
         checks.ok(
-            all(part.startswith("Box 3 · Section ") and " · Card " in part for part in expected),
+            all(", Section " in part and ", Card " in part for part in expected),
             "and that formula really did produce a pick instruction rather than an empty "
             "string both sides agreed on — a comparison of two nulls passes and stamps "
             "nothing",
@@ -32492,7 +35717,7 @@ def check_value_table(checks: Checks) -> None:
         # --- the rest of the row ------------------------------------------------------------
         checks.equal(
             at[(1, 1)]["label"],
-            "Box 1 · Section 1 · Card 1",
+            "WB1 R2, Section 1, Card 1",
             "the label is composed against the box as it stands now (D58)",
         )
         checks.equal(at[(1, 1)]["live"], 2, "the row says how many copies TCGplayer holds")
@@ -32801,6 +36026,17 @@ def run() -> Result:
     check_markdown_floor(checks)
     check_markdown_lens(checks)
     check_markdown_push(checks)
+    check_send_guard(checks)
+    check_send_press(checks)
+    check_send_hazards(checks)
+    check_send_review_r3(checks)
+    check_send_review_r4(checks)
+    check_send_review_r5(checks)
+    check_send_review_r6(checks)
+    check_send_review_r7(checks)
+    check_send_review_r8(checks)
+    check_schema_eleven_then_twelve(checks)
+    check_run_match(checks)
     check_publish_lag(checks)
     check_withholding(checks)
     check_pricing_route(checks)
@@ -32853,6 +36089,7 @@ def run() -> Result:
     check_open_section(checks)
     check_section_names(checks)
     check_consolidated_numbering(checks)
+    check_box_names_and_place_labels(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
     check_photo_cache(checks)

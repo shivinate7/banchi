@@ -73,7 +73,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 
 from cli import resolve, runs
-from pipeline import corpus, decisions, games, join, merge, pricing, routing, tcgcsv
+from pipeline import corpus, decisions, games, join, merge, pricing, routing, sendguard, tcgcsv
 from pipeline import skus as skus_walk
 from pathlib import Path
 
@@ -322,6 +322,351 @@ def _say_quantities(quantities, matches, say) -> None:
             f"{', '.join(missing[:8])}{' ...' if len(missing) > 8 else ''}")
 
 
+class GuardRefused(Exception):
+    """The live export named for the double-send guard could not be read. Nothing is written."""
+
+
+class SendClaimRefused(Exception):
+    """Another press holds these SKUs, or moved them while this one was deciding.
+
+    RAISED INSIDE THE STORE WRITE, so the transaction that would have counted the copies sent
+    rolls back whole (D88) and nothing this press decided is recorded. D174's rule for a
+    purchase, applied to a send: the check and the claim are one transaction.
+    """
+
+    def __init__(self, conflicts, stale):
+        super().__init__("send claim refused")
+        self.conflicts = conflicts
+        self.stale = stale
+
+
+def _listing_basis() -> dict:
+    """SKU -> (pushed, staged) as this press's plan will read them. Taken BEFORE the resolve.
+
+    THE PLAN IS DECIDED OUTSIDE THE STORE LOCK and written inside it, so a second press can
+    finish deciding before the first has written. `cli/resolve.py:_committed_keys` reads these
+    two counts to decide which copies are still unsent; if either moved between this read and
+    the write, the plan is over copies another press has already sent, and the write refuses
+    rather than count them twice. This is D174's "recompute inside the transaction", reduced to
+    the two figures the recompute would read.
+    """
+    listings = Store().read().inventory.listings
+    return {sku: (int(entry.pushed), int(entry.staged)) for sku, entry in listings.items()}
+
+
+def _out(run_dir, name, args):
+    """Where one import file goes: the press's own directory when it has one, else the run's."""
+    own = getattr(args, "send_dir", None)
+    return Path(own) / name if own else run_dir.path(name)
+
+
+def _claim_or_refuse(writable, going, basis, args, priced=()) -> None:
+    """Check every live send claim and the plan's basis, then claim. One transaction.
+
+    `going` is SKU -> the copies this press's file adds. Called at the top of the store write
+    that counts them sent; raises `SendClaimRefused` to roll that write back.
+
+    `priced` is the SKUs of this press's PRICE-ONLY rows. They are CHECKED against every live
+    claim, so a price change never races a mark-down or a send still in flight over the same
+    card, and CLAIMED AT 0 COPIES, so a mark-down never races them either (round 6, S3).
+    """
+    from store import sendclaims
+
+    own = getattr(args, "send_claim", None)
+    conflicts = writable.send_claims.overlap(set(going) | set(priced), excluding=own)
+    stale = []
+    for sku in sorted(going):
+        entry = writable.inventory.listings.get(sku)
+        now = (int(entry.pushed), int(entry.staged)) if entry is not None else (0, 0)
+        if now != basis.get(sku, (0, 0)):
+            stale.append(sku)
+    if conflicts or stale:
+        raise SendClaimRefused(conflicts, stale)
+    # A PRESS THAT WRITES NO ROW CLAIMS NOTHING (the round-2 review, F5). An empty claim holds
+    # no card, and nothing would ever release it: the press that wrote it has no file to send.
+    # A PRICE-ONLY ROW IS CLAIMED AT 0 COPIES (round 6, S3): an unconfirmed price change holds
+    # its card out of a mark-down, as a mark-down's claim holds it out of a send.
+    held = dict(going)
+    for sku in priced:
+        held.setdefault(sku, 0)
+    if own and held:
+        writable.send_claims.claim(
+            own,
+            sendclaims.KIND_LISTING,
+            held,
+            pid=getattr(args, "claim_holder", None),
+        )
+
+
+def _say_claim_refusal(refusal, args, say) -> None:
+    """Name the refusal, then print its one JSON line for `server/send_routes.py` to read."""
+    import json
+
+    say("")
+    for claim, shared in refusal.conflicts:
+        say(
+            f"REFUSING: the send {claim.stamp} (started {claim.started_at}) is already sending "
+            f"{len(shared)} of these card(s): {', '.join(shared[:6])}"
+        )
+    if refusal.stale:
+        say(
+            f"REFUSING: another press sent {len(refusal.stale)} of these card(s) while this one "
+            f"was deciding: {', '.join(refusal.stale[:6])}. Press again to send what is left."
+        )
+    if not getattr(args, "send_dir", None):
+        say("The file written above was NOT counted as sent. Do not upload it.")
+    say("Nothing was counted as sent.")
+    say(
+        json.dumps(
+            {
+                "send_claim": {
+                    "conflicts": [
+                        {"stamp": claim.stamp, "started_at": claim.started_at, "skus": shared}
+                        for claim, shared in refusal.conflicts
+                    ],
+                    "stale": list(refusal.stale),
+                }
+            },
+            sort_keys=True,
+        )
+    )
+
+
+def _live_guard(args):
+    """The live export this send was guarded by, read once: `(name, SKU -> live copies)`, or
+    None when the press named no guard (`--live-guard`).
+
+    A FILE THAT CANNOT BE READ IS A REFUSAL, NEVER NO GUARD. A guard that failed open on a bad
+    file is the dry-run block-list this repo has already paid for once.
+    """
+    path = getattr(args, "live_guard", None)
+    if not path:
+        return None
+    target = Path(path)
+    try:
+        export = tcgcsv.read_export(target)
+        live = sendguard.live_by_sku(export.rows, export.header)
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        raise GuardRefused(f"the live export {target.name} could not be read: {exc}") from None
+    return target.name, live
+
+
+def _apply_guard(guard, matches_by_sku, inventory):
+    """Bound every matched SKU by the guard's room. Returns what `_say_guard` reads, or None.
+
+    `matches_by_sku` is SKU -> every match that sends it (one on the single-run path, one per
+    leg on the merged path). The room is computed ONCE over the union of their positions, and
+    every leg is bounded by it, so the merged plan's `min` over legs is the union's room and
+    never one leg's share of it.
+
+    IT WRITES `asked`, THE SEND QUANTITY `--quantity` ALREADY SETS, AND ONLY EVER LOWERS IT.
+    That is the existing primitive for "fewer copies of this card this press"
+    (`pipeline/join.py:SkuMatch.add_to_quantity`), so `live_keys` and `pushed` below read the
+    trimmed figure with no second code path.
+    """
+    if guard is None:
+        return None
+    name, live = guard
+    rooms = {}
+    held = {}
+    for sku, matches in matches_by_sku.items():
+        keys = sorted(
+            {
+                master.position_key(position.box, position.index)
+                for match in matches
+                for position in match.positions
+            }
+        )
+        held[sku] = sendguard.on_hand(inventory.copies_on_hand(sku), inventory.cards, keys)
+        rooms[sku] = sendguard.room(live.get(sku, 0), held[sku])
+        for match in matches:
+            if match.asked is None or match.asked > rooms[sku]:
+                match.asked = rooms[sku]
+    return {"name": name, "live": live, "held": held, "rooms": rooms}
+
+
+def _say_guard(applied, would_by_sku, names, say) -> None:
+    """Name what the guard trimmed, then print its one JSON line for the route to read.
+
+    `would_by_sku` is what each SKU would have added WITHOUT the guard: the send's own room,
+    bounded by any quantity the operator typed. NAMED PER SKU (D59): a trimmed copy is the one
+    line the operator is waiting for, and a trim nobody named is a silent drop.
+    """
+    if applied is None:
+        return
+    import json
+
+    trimmed = sendguard.trims(
+        applied["live"], would_by_sku, applied["rooms"], applied["held"], names
+    )
+    say("")
+    say(f"{'live guard':<16} {len(would_by_sku)} SKU(s) checked against {applied['name']}")
+    for trim in trimmed[:8]:
+        say(
+            f"{'':<16} {trim.sku} {trim.name} — TCGplayer holds {trim.live} of "
+            f"{trim.on_hand} on hand; {trim.would} would have gone, {trim.goes} goes"
+        )
+    if len(trimmed) > 8:
+        say(f"{'':<16} ...and {len(trimmed) - 8} more")
+    if not trimmed:
+        say(f"{'':<16} nothing trimmed")
+    say(json.dumps(sendguard.report(applied["name"], len(would_by_sku), trimmed), sort_keys=True))
+
+
+class PriceRefused(Exception):
+    """`--reprice-live` was asked for in a shape this press cannot honour. A sentence."""
+
+
+def _named_prices(path) -> tuple:
+    """`(prices, moves)` off the `--reprice-live` file. `prices` is SKU -> (price, the live price
+    the screen showed); `moves` is SKU -> the price the button said live copies move to.
+
+    THE SCREEN'S OWN LIST (round 6, B1 and B2): the SKUs the owner typed a price for on the
+    worklist, the price the button counted, and the live price the screen drew beside it. Since
+    round 7 it also names every live copy a listing row moves (the owner's ruling, R6-3). A
+    plain list is the round-6 shape: prices, and no move named. A file that is not that shape
+    is a refusal, never an empty list.
+    """
+    import json
+
+    try:
+        said = json.loads(Path(path).read_text(encoding="utf-8"))
+        if isinstance(said, list):
+            said = {"prices": said, "moves": []}
+        prices = {
+            str(row["sku"]): (str(row["price"]), None if row.get("was") in (None, "") else str(row["was"]))
+            for row in said.get("prices") or []
+        }
+        moves = {
+            str(row["sku"]): (
+                str(row["price"]),
+                None if row.get("copies") in (None, "") else int(row["copies"]),
+            )
+            for row in said.get("moves") or []
+        }
+        return prices, moves
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise PriceRefused(f"the named prices could not be read: {exc}") from None
+
+
+def _price_changes(args, guarded, candidates, going, floor, say):
+    """`(changes, left, moves)`: the price-only rows this press writes, the named prices it
+    leaves out, and the live copies its listing rows move, or empties when it asked for none
+    (`--reprice-live`).
+
+    `candidates` is SKU -> (name, the plan's price) for every SKU this press prices and adds
+    NO copy of, and `going` the same for every SKU it adds a copy of. A listing row that would
+    move live copies the button did not name refuses the press (`sendguard.live_moves`, the
+    owner's ruling of round 7). ONLY A SKU THE SCREEN NAMED CAN BECOME
+    A ROW (`pipeline/sendguard.py:price_changes`). The live figures come off the same export
+    the double-send guard read, so the two halves of one press never disagree about what
+    TCGplayer holds. A refusal prints its JSON line first, so the route can name each card.
+    """
+    if not getattr(args, "reprice_live", None):
+        return [], [], []
+    if guarded is None:
+        raise PriceRefused(
+            "--reprice-live needs --live-guard: a price change is only ever measured against "
+            "what TCGplayer holds right now"
+        )
+    named, told = _named_prices(args.reprice_live)
+    try:
+        prices = sendguard.live_prices(tcgcsv.read_export(Path(args.live_guard)).rows)
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        raise PriceRefused(f"the live export's prices could not be read: {exc}") from None
+    changes, left, refused = sendguard.price_changes(
+        named, candidates, guarded["live"], prices, floor, set(going)
+    )
+    moves, unnamed = sendguard.live_moves(going, told, guarded["live"], prices, floor)
+    refused = list(refused) + list(unnamed)
+    if refused:
+        import json
+
+        say(json.dumps(sendguard.price_report([], left, refused), sort_keys=True))
+        raise PriceRefused(
+            "a price the button named cannot be sent as it stands: "
+            + ", ".join(f"{note.sku} ({note.why})" for note in refused)
+        )
+    return changes, left, moves
+
+
+def _say_prices(changes, left, moves, args, say) -> None:
+    """Name every price-only row, every named price left out and every live copy a listing row
+    moves, then print the one JSON line the route reads."""
+    if not getattr(args, "reprice_live", None):
+        return
+    import json
+
+    say("")
+    say(f"{'price changes':<16} {len(changes)} card(s) already live, Add to Quantity 0")
+    for change in changes[:8]:
+        was = f"${change.was}" if change.was is not None else "no price"
+        say(f"{'':<16} {change.sku} {change.name} — {was} to ${change.price}")
+    if len(changes) > 8:
+        say(f"{'':<16} ...and {len(changes) - 8} more")
+    for note in left[:8]:
+        say(f"{'':<16} left out: {note.sku} {note.name} — {note.why}")
+    for move in moves[:8]:
+        was = f"${move.was}" if move.was is not None else "no price"
+        say(f"{'':<16} moves: {move.copies} live {move.sku} {move.name} — {was} to ${move.price}")
+    say(json.dumps(sendguard.price_report(changes, left, (), moves), sort_keys=True))
+
+
+def _record_prices(writable, changes, run) -> None:
+    """D243: a price that reached a file is a posting, and `replaced` is the live price it
+    moves. Inside the store write that commits the press, so a refused press posts nothing."""
+    for change in changes:
+        writable.postings.record(
+            sku=change.sku, price=change.price, source="emit-price", run=run, replaced=change.was
+        )
+
+
+def _price_row(match, price):
+    """One price-only row: the catalogue's own row, Add to Quantity 0, the plan's price."""
+    return tcgcsv.set_writable(match.row, add_to_quantity=0, marketplace_price=price)
+
+
+def _keep_listed(changes, sub_skus, args, say):
+    """`--listed-only` drops the sub-threshold rows, price-only rows too, and names them."""
+    if not args.listed_only:
+        return list(changes)
+    left = [change for change in changes if change.sku in sub_skus]
+    if left:
+        say(f"{'price changes':<16} {len(left)} under the cut-off left for a later emit "
+            "— --listed-only")
+    return [change for change in changes if change.sku not in sub_skus]
+
+
+def _zero_rows_single(resolved, priced, changes, args, say):
+    """The single-run path's price-only rows, per game and bucket: `(by_game, kept changes)`.
+
+    `by_game` is game -> {"listed": rows, "sub": rows}. The bucket is the SKU's own, read off the
+    same report the listing rows are partitioned by, so `--split-threshold` files a price-only
+    row beside the listing rows of its own bucket.
+    """
+    below = {
+        sku for game_join in resolved.joins.values() for sku in game_join.report.below_threshold.skus
+    }
+    changes = _keep_listed(changes, below, args, say)
+    wanted = {change.sku for change in changes}
+    by_game = {}
+    for game_join in resolved.joins.values():
+        game = game_join.game
+        rows = {"listed": [], "sub": []}
+        for sku, match in game_join.report.matches.items():
+            if sku in wanted and sku in priced[game]:
+                rows["sub" if sku in below else "listed"].append(_price_row(match, priced[game][sku]))
+        by_game[game] = rows
+    return by_game, changes
+
+
+def _would(match, typed) -> int:
+    """What one match adds with the operator's own figure applied and no guard."""
+    room = match.room
+    asked = typed.get(match.sku)
+    return room if asked is None else max(0, min(asked, room))
+
+
 def _warn_stale(run_dir, say) -> None:
     """Name any import file left by an EARLIER emit, at the moment this one refuses.
 
@@ -389,7 +734,7 @@ def _game_only(report, priced):
     return listed & writable, set(report.below_threshold.skus) & writable
 
 
-def _write(game_join, path, only, choice, say, label):
+def _write(game_join, path, only, choice, say, label, extra=()):
     """Write one import file, or leave it alone. Returns the SKUs that reached it.
 
     ROWS ARE COMPUTED, THEN LOOKED AT, THEN WRITTEN — never computed inside the writer. D54:
@@ -402,7 +747,7 @@ def _write(game_join, path, only, choice, say, label):
     it rather than assumes it. It is one branch against a file the operator has already been
     told to import.
     """
-    if not only:
+    if not only and not extra:
         say(f"{label:<16} nothing to write")
         return []
     rows = join.import_rows(
@@ -416,16 +761,24 @@ def _write(game_join, path, only, choice, say, label):
         # and scoping it would be machinery guarding nothing.
         withheld=set(choice.withheld()),
         only=only,
-    )
+    ) if only else []
+    # THE PRICE-ONLY ROWS OF THIS BUCKET, after the listing rows. Their SKUs are disjoint from
+    # `only` (a SKU in `only` adds a copy), so the file still holds one row per SKU.
+    rows = list(rows) + list(extra)
     if not rows:
         say(f"{label:<16} nothing new to write — {path.name} left as it is")
         return []
     data = join.write_import(game_join.catalog, path, rows)
     written = tcgcsv.parse(data)
-    skus = [row[tcgcsv.SKU_COLUMN] for row in written.rows]
     quantity = sum(int(row[tcgcsv.QUANTITY_COLUMN] or 0) for row in written.rows)
-    say(f"{label:<16} {len(skus)} row(s), {quantity} card(s) -> {path}")
-    return skus
+    say(f"{label:<16} {len(written.rows)} row(s), {quantity} card(s) -> {path}")
+    # THE SKUS THAT ADD A COPY, and only those: `emitted` raises `pushed` off this list, and a
+    # price-only row adds nothing to raise it by.
+    return [
+        row[tcgcsv.SKU_COLUMN]
+        for row in written.rows
+        if tcgcsv.parse_quantity(row[tcgcsv.QUANTITY_COLUMN]) > 0
+    ]
 
 
 class SplitRefused(Exception):
@@ -438,7 +791,7 @@ class SplitRefused(Exception):
     """
 
 
-def _merged_targets(rows_by_game, run_dir, split_games):
+def _merged_targets(rows_by_game, run_dir, split_games, out=None):
     """(path, catalog, rows) for each file one press should write, refusing an impossible one.
 
     `rows_by_game` is game -> the rows that game contributed, already priced and already
@@ -447,10 +800,11 @@ def _merged_targets(rows_by_game, run_dir, split_games):
     is malformed in a way no reader here would notice — so the headers are compared rather
     than assumed, and the refusal names the flag that fixes it.
     """
+    place = out or (lambda name: run_dir.path(name))
     if split_games:
         return [
             (
-                run_dir.path(runs.import_merged_name(game)),
+                place(runs.import_merged_name(game)),
                 game_join.catalog,
                 rows,
             )
@@ -469,10 +823,10 @@ def _merged_targets(rows_by_game, run_dir, split_games):
             "Re-run with --split-games. (" + ", ".join(g for g, _, _ in carrying) + ")"
         )
     merged = [row for _, _, rows in carrying for row in rows]
-    return [(run_dir.path(runs.import_merged_name()), carrying[0][1].catalog, merged)]
+    return [(place(runs.import_merged_name()), carrying[0][1].catalog, merged)]
 
 
-def _write_merged(resolved, priced, choice, run_dir, args, say):
+def _write_merged(resolved, priced, choice, run_dir, args, say, zero=None):
     """The default: one import file, both buckets in it. Returns (listed SKUs, sub SKUs).
 
     THE TWO BUCKETS ARE ONE `import_rows` CALL PER GAME, NOT TWO CONCATENATED. `only` is the
@@ -510,12 +864,18 @@ def _write_merged(resolved, priced, choice, run_dir, args, say):
             if only
             else []
         )
+        # THE PRICE-ONLY ROWS, after the listing rows (`_zero_rows_single`). `--listed-only`
+        # already left the sub-threshold ones out and named them.
+        extra = (zero or {}).get(game) or {}
+        rows = list(rows) + list(extra.get("listed") or []) + list(extra.get("sub") or [])
         rows_by_game[game] = (game_join, rows)
         if args.listed_only and sub:
             say(f"{'sub-threshold':<16} {len(sub)} SKU(s) left for a later emit "
                 "— --listed-only")
 
-    targets = _merged_targets(rows_by_game, run_dir, args.split_games)
+    targets = _merged_targets(
+        rows_by_game, run_dir, args.split_games, out=lambda name: _out(run_dir, name, args)
+    )
     if not targets:
         # THE SENTENCE `_write` GIVES, KEPT WORD FOR WORD. An operator pressing emit a second
         # time reads the same thing whichever shape they asked for, and the caller's D54
@@ -600,6 +960,8 @@ def run(args, say) -> int:
     named = args.run_dir if isinstance(args.run_dir, list) else [args.run_dir]
     if len(named) > 1:
         return run_merged(args, say)
+    # BEFORE THE RESOLVE, which is what makes it the plan's basis (`_listing_basis`).
+    basis = _listing_basis()
     run_dir = runs.open_run(named[0])
     if _legacy_refusal(run_dir, say):
         say("Nothing was written.")
@@ -720,6 +1082,25 @@ def run(args, say) -> int:
         unpriced=resolved.no_market_data_skus,
     )
 
+    # THE DOUBLE-SEND GUARD, BEFORE ANY GATE BELOW AND BEFORE ANY FILE. It lowers `asked` on
+    # the matches the file is built from, so every write below reads the trimmed figure.
+    try:
+        guarded = _apply_guard(
+            _live_guard(args),
+            {sku: [match] for sku, match in resolved.matches.items()},
+            snapshot.inventory,
+        )
+    except GuardRefused as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
+    typed = _quantities_for(args)
+    _say_guard(
+        guarded,
+        {sku: _would(match, typed) for sku, match in resolved.matches.items()},
+        {sku: match.name for sku, match in resolved.matches.items()},
+        say,
+    )
+
     # --------------------------------------------------- reported before any output exists
     missing = sorted(
         position
@@ -790,6 +1171,30 @@ def run(args, say) -> int:
                 withheld=withheld,
             )
 
+        # THE PRICE-ONLY ROWS (the owner's ruling, 2026-09-24: "Allow mixed"). A SKU this run
+        # prices and adds no copy of, already live, whose typed price differs from the live one.
+        # Built here, off the same `priced` mapping the listing rows use, so a price-only row
+        # and a listing row can never carry two prices for one card.
+        changes, left, moves = _price_changes(
+            args,
+            guarded,
+            {
+                sku: (resolved.matches[sku].name, price)
+                for by_game in priced.values()
+                for sku, price in by_game.items()
+                if resolved.matches[sku].add_to_quantity == 0
+            },
+            {
+                sku: (resolved.matches[sku].name, price)
+                for by_game in priced.values()
+                for sku, price in by_game.items()
+                if resolved.matches[sku].add_to_quantity > 0
+            },
+            pricing.check_threshold(policy["threshold"]),
+            say,
+        )
+        zero, changes = _zero_rows_single(resolved, priced, changes, args, say)
+
         # TWO SHAPES, ONE SET OF ROWS. Whichever branch runs, the rows come out of the same
         # `priced` mapping and the same `_game_only` partition, so the flag decides how many
         # files the rows are spread over and never which rows exist. That is what keeps
@@ -804,11 +1209,12 @@ def run(args, say) -> int:
                 listed, sub = _game_only(game_join.report, priced[game])
                 listed_skus += _write(
                     game_join,
-                    run_dir.path(runs.import_listed_name(game)),
+                    _out(run_dir, runs.import_listed_name(game), args),
                     listed,
                     choice,
                     say,
                     "listed",
+                    extra=zero[game]["listed"],
                 )
                 if args.listed_only:
                     # NAMED, NOT SILENTLY SKIPPED. `--listed-only` with `--split-threshold`
@@ -821,21 +1227,23 @@ def run(args, say) -> int:
                     continue
                 sub_skus += _write(
                     game_join,
-                    run_dir.path(runs.import_subthreshold_name(game)),
+                    _out(run_dir, runs.import_subthreshold_name(game), args),
                     sub,
                     choice,
                     say,
                     "sub-threshold",
+                    extra=zero[game]["sub"],
                 )
         else:
             listed_skus, sub_skus = _write_merged(
-                resolved, priced, choice, run_dir, args, say
+                resolved, priced, choice, run_dir, args, say, zero
             )
     except (
         join.OutputSuppressed,
         join.Undecided,
         tcgcsv.ReadOnlyColumn,
         SplitRefused,
+        PriceRefused,
     ) as exc:
         say("REFUSING to write. Nothing was written.")
         for line in str(exc).splitlines():
@@ -857,6 +1265,7 @@ def run(args, say) -> int:
         for match in at_cap[:8]:
             say(f"{'':<16} {match.sku} — {match.nothing_to_add}")
     _say_quantities(_quantities_for(args), resolved.matches, say)
+    _say_prices(changes, left, moves, args, say)
 
     # ---------------------------------------------------------- pushed, and the audit trail
     #
@@ -883,180 +1292,210 @@ def run(args, say) -> int:
 
     pushed = 0
     pushed_skus = 0
-    with store.write() as writable:
-        # THE WITHHELD POSITIONS' QUEUE ENTRY IS ALREADY WRITTEN, above, in its own
-        # transaction — before the "missing" check needed to see it on disk. Nothing else
-        # about them is written here or anywhere: see `_withhold_disputed`'s docstring for
-        # why they never reach the loop below at all.
-        for match in resolved.matches.values():
-            # IDENTITY IS WRITTEN FOR EVERY MATCHED SKU; ONLY THE COUNT WAITS FOR A FILE.
+    going = {
+        sku: int(resolved.matches[sku].add_to_quantity)
+        for sku in (set(listed_skus) | set(sub_skus))
+        if sku in resolved.matches and resolved.matches[sku].add_to_quantity > 0
+    }
+    try:
+        with store.write() as writable:
+            _claim_or_refuse(writable, going, basis, args, [c.sku for c in changes])
+            pushed, pushed_skus = _stamp_single(
+                writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source
+            )
+            _record_prices(writable, changes, run_dir.name)
+            queue_line = writable.queue_summary
+            stages = writable.inventory.listing_counts()
+    except SendClaimRefused as refusal:
+        _say_claim_refusal(refusal, args, say)
+        return 1
+    return _after_single(
+        args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus,
+        queue_line, stages, len(changes), disputed_positions,
+    )
+
+
+def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source):
+    """The single-run write: stamp every matched copy, count the sent ones. `(pushed, skus)`.
+
+    `sku_game` and `sku_source` are `run`'s per-SKU game and export source, which `bind_sku`
+    needs (identity-follows-sku.md §4.1)."""
+    pushed = 0
+    pushed_skus = 0
+    for match in resolved.matches.values():
+        # IDENTITY IS WRITTEN FOR EVERY MATCHED SKU; ONLY THE COUNT WAITS FOR A FILE.
+        #
+        # This was one `continue` doing two jobs, and it was right for exactly as long as
+        # "reached an import file" and "we know what this card is" meant the same thing.
+        # A withhold (D49) splits them for the first time: the join resolved the card to a
+        # catalog row, so the identity is known — and nothing was pushed, so the count must
+        # not move. Skipping both left a held card wearing `state: captured` with no `sku`,
+        # invisible to `GET /search` and every SKU-keyed surface until the hold was lifted
+        # and the run re-emitted. The owner's question, on being shown that: "Wait i want to
+        # be able to find it, why can't it be emitted?" It can.
+        #
+        # IT ALSO FIXES AN OLDER INSTANCE OF THE SAME BUG. A `no_market_data` SKU answered
+        # `"unlisted"` has never been stamped either, for this identical reason, since D9
+        # gave that field its `unlisted` answer. Fixing only the withhold would have left
+        # the same defect one door down.
+        #
+        # WHAT MUST NOT MOVE, and why this loop is worth reading twice: `pushed` is a
+        # commitment that a CSV was written, `docs/GATES.md` records a real post-import
+        # re-emit that double-counted staged copies, and `cli/resolve.py:_committed_keys`
+        # reads `pushed + staged` back as `committed` — which is where this command's
+        # idempotence actually lives. The bump below is gated on `emitted` and the stamp
+        # above it is not.
+        #
+        # THE CAP BOUNDS THE LISTING, NOT THE IDENTITY, AND THIS LOOP READ IT AS BOTH.
+        #
+        # It iterated `live_positions` — `uncommitted_positions[:add_to_quantity]`, so
+        # bounded by D7's THEN-STANDING `live_cap` of 4 — and did the identity write
+        # inside it. That bound is retired (no standing cap since 2026-09-08) but the
+        # defect it caused is the record here, so the figure stays named as it was at
+        # the time. D7 caps
+        # how many copies a SKU may have LIVE, on the envelope-buster and stale-price
+        # arguments it gives; it says nothing about how many copies we know the name of.
+        # Every copy past the fourth was left wearing `sku: null`, which is not backstock
+        # in D7's sense (`backstock_positions` is a real answer this command already has)
+        # but a copy that no SKU-keyed surface can see at all: `GET /search` misses it,
+        # `copies_on_hand` misses it, and `positions_for_sku` cannot map it back.
+        #
+        # Measured on the owner's store: Rengar, Trophy Hunter (9189797, $30.81) holds
+        # SEVEN copies at 3/1, 3/2, 3/4, 3/17, 3/20, 3/30 and 3/36. The first four carry
+        # the SKU and the last three carry null, so a card the owner has seven of reported
+        # four on hand — and the three invisible ones are the most valuable cards in the
+        # box. It is the same split the paragraph above already drew for a withhold, at a
+        # different seam: identity is known, and only the COUNT waits on a file.
+        #
+        # UNCOMMITTED AND NOT `positions`, WHICH IS THE ONE PLACE THIS COULD DESTROY DATA.
+        # `match.positions` includes `committed_positions`, and `cli/resolve.py` commits a
+        # copy on either of two grounds — a count read back off the `Listing`, or the copy
+        # being in a TERMINAL state. So every sold and retired copy of a matched SKU is in
+        # `positions`, and `set_state` has no terminal guard: it would move a sold card to
+        # `identified`, wiping D10's permanent gap and D26's terminal state. Measured on
+        # the owner's box-3 run, EIGHT of its 33 matched positions are sold today, so a
+        # re-emit would have resurrected all eight. `uncommitted_positions` is the honest
+        # set — every copy this run may still list, live and backstock together — and it
+        # cannot contain a departed card by construction.
+        #
+        # Nothing is lost by excluding the committed ones: a copy committed by COUNT was
+        # picked by `_committed_keys` out of `copies_on_hand`, which selects on `sku`, so
+        # it is already stamped. A copy committed by having LEFT is not this command's to
+        # relabel.
+        # THE SKU TABLE FILL, ONCE PER MATCH (identity-follows-sku.md §4.2's own row:
+        # "upsert the matched rows, then bind_sku(bound_by=join)"). `match.row` is the
+        # export row this SKU resolved to — the row `bind_sku` below is about to read
+        # back out of `writable.skus`, so it is put there first, in the same
+        # transaction, exactly as `bind_sku`'s own docstring requires of every caller.
+        # Once per SKU rather than once per position: every position under one match
+        # shares the identical row.
+        game_name = sku_game.get(match.sku)
+        entry = games.get(game_name) if game_name else None
+        if entry is not None:
+            at, source_name = _skus_stamp(sku_source[match.sku])
+            skus_walk.apply_rows(
+                [match.row], at=at, source=source_name,
+                skus=writable.skus, events=writable.inventory.events,
+            )
+
+        copies = 0
+        live_keys = {
+            master.position_key(p.box, p.index) for p in match.live_positions
+        }
+        for position in match.uncommitted_positions:
+            key = master.position_key(position.box, position.index)
+            # Upsert first. A position the store has never seen — a run joined from a
+            # recovered identifications file, say — would otherwise take a write that
+            # lands nowhere and is still reported as having happened.
+            writable.inventory.record_capture(
+                master.Card(
+                    box=position.box,
+                    index=position.index,
+                    cid=_name_for(key, resolved.photos.get(key)),
+                    photo=resolved.photos.get(key),
+                )
+            )
+            # `set_state(key, IDENTIFIED)` rather than assigning `sku` and `condition`
+            # straight onto the record, and the choice is not style. It is the only
+            # writer that returns False for a position with no record, which is what
+            # keeps v1 bug #5 — a transition reported as having happened that did not —
+            # out of this loop; and it is the only one that appends to `history.jsonl`,
+            # so the moment this pipeline committed to a SKU for this copy survives in
+            # the audit trail. `identified` is where the card already is and where it
+            # stays: `pushed` is not a state a card can wear any more, and passing it
+            # here now raises `UnknownState` rather than silently flagging a position.
             #
-            # This was one `continue` doing two jobs, and it was right for exactly as long as
-            # "reached an import file" and "we know what this card is" meant the same thing.
-            # A withhold (D49) splits them for the first time: the join resolved the card to a
-            # catalog row, so the identity is known — and nothing was pushed, so the count must
-            # not move. Skipping both left a held card wearing `state: captured` with no `sku`,
-            # invisible to `GET /search` and every SKU-keyed surface until the hold was lifted
-            # and the run re-emitted. The owner's question, on being shown that: "Wait i want to
-            # be able to find it, why can't it be emitted?" It can.
+            # THE FIVE IDENTITY KWARGS ARE GONE (identity-follows-sku.md §4.1, §4.2):
+            # `sku`, `condition`, `set_name`, `rarity` and `name` are now `bind_sku`'s
+            # own write, below, never `set_state`'s — this call moves STATE alone.
+            # D253's `name=resolved.name_corrections.get(key)` retires with it: the
+            # identity name is the row's by construction (`bind_sku` composes it
+            # through `store/numbers.strip_name_suffix`), so there is nothing left for
+            # a near-miss correction to do.
             #
-            # IT ALSO FIXES AN OLDER INSTANCE OF THE SAME BUG. A `no_market_data` SKU answered
-            # `"unlisted"` has never been stamped either, for this identical reason, since D9
-            # gave that field its `unlisted` answer. Fixing only the withhold would have left
-            # the same defect one door down.
-            #
-            # WHAT MUST NOT MOVE, and why this loop is worth reading twice: `pushed` is a
-            # commitment that a CSV was written, `docs/GATES.md` records a real post-import
-            # re-emit that double-counted staged copies, and `cli/resolve.py:_committed_keys`
-            # reads `pushed + staged` back as `committed` — which is where this command's
-            # idempotence actually lives. The bump below is gated on `emitted` and the stamp
-            # above it is not.
-            #
-            # THE CAP BOUNDS THE LISTING, NOT THE IDENTITY, AND THIS LOOP READ IT AS BOTH.
-            #
-            # It iterated `live_positions` — `uncommitted_positions[:add_to_quantity]`, so
-            # bounded by D7's THEN-STANDING `live_cap` of 4 — and did the identity write
-            # inside it. That bound is retired (no standing cap since 2026-09-08) but the
-            # defect it caused is the record here, so the figure stays named as it was at
-            # the time. D7 caps
-            # how many copies a SKU may have LIVE, on the envelope-buster and stale-price
-            # arguments it gives; it says nothing about how many copies we know the name of.
-            # Every copy past the fourth was left wearing `sku: null`, which is not backstock
-            # in D7's sense (`backstock_positions` is a real answer this command already has)
-            # but a copy that no SKU-keyed surface can see at all: `GET /search` misses it,
-            # `copies_on_hand` misses it, and `positions_for_sku` cannot map it back.
-            #
-            # Measured on the owner's store: Rengar, Trophy Hunter (9189797, $30.81) holds
-            # SEVEN copies at 3/1, 3/2, 3/4, 3/17, 3/20, 3/30 and 3/36. The first four carry
-            # the SKU and the last three carry null, so a card the owner has seven of reported
-            # four on hand — and the three invisible ones are the most valuable cards in the
-            # box. It is the same split the paragraph above already drew for a withhold, at a
-            # different seam: identity is known, and only the COUNT waits on a file.
-            #
-            # UNCOMMITTED AND NOT `positions`, WHICH IS THE ONE PLACE THIS COULD DESTROY DATA.
-            # `match.positions` includes `committed_positions`, and `cli/resolve.py` commits a
-            # copy on either of two grounds — a count read back off the `Listing`, or the copy
-            # being in a TERMINAL state. So every sold and retired copy of a matched SKU is in
-            # `positions`, and `set_state` has no terminal guard: it would move a sold card to
-            # `identified`, wiping D10's permanent gap and D26's terminal state. Measured on
-            # the owner's box-3 run, EIGHT of its 33 matched positions are sold today, so a
-            # re-emit would have resurrected all eight. `uncommitted_positions` is the honest
-            # set — every copy this run may still list, live and backstock together — and it
-            # cannot contain a departed card by construction.
-            #
-            # Nothing is lost by excluding the committed ones: a copy committed by COUNT was
-            # picked by `_committed_keys` out of `copies_on_hand`, which selects on `sku`, so
-            # it is already stamped. A copy committed by having LEFT is not this command's to
-            # relabel.
-            # THE SKU TABLE FILL, ONCE PER MATCH (identity-follows-sku.md §4.2's own row:
-            # "upsert the matched rows, then bind_sku(bound_by=join)"). `match.row` is the
-            # export row this SKU resolved to — the row `bind_sku` below is about to read
-            # back out of `writable.skus`, so it is put there first, in the same
-            # transaction, exactly as `bind_sku`'s own docstring requires of every caller.
-            # Once per SKU rather than once per position: every position under one match
-            # shares the identical row.
-            game_name = sku_game.get(match.sku)
-            entry = games.get(game_name) if game_name else None
+            # THE RETURN VALUE IS COUNTED ONLY FOR A COPY THAT REACHED THE FILE. The
+            # stamp now runs over a wider set than the count does, so the two can no
+            # longer share one increment: `pushed` is a commitment that a CSV row was
+            # written, and a backstock copy has no row. Bumping it here would push the
+            # count past `add_to_quantity` and double-stage on the next import, which is
+            # the failure `docs/GATES.md` records from the first real post-import
+            # re-emit. The membership test is what keeps the two apart, and it is on the
+            # key rather than on the index because `live_positions` is a slice of the
+            # same objects — identity would work and would break the day it is rebuilt.
+            stamped = writable.inventory.set_state(
+                key,
+                master.IDENTIFIED,
+                run=run_dir.name,
+            )
+            # THE ONE WRITER (§4.1). `bind_sku` reads `match.row` back out of
+            # `writable.skus`, which the upsert above just put there, and refuses
+            # `sku_unknown`/`game_mismatch` rather than writing a guess. A DISPUTING
+            # POSITION NEVER REACHES THIS LOOP AT ALL — `_withhold_disputed` (review
+            # finding, HIGH, on 1b5c90e5) already pulled it out of `match.positions`
+            # before the CSV was even written, so every position seen here is one this
+            # SKU's own evidence already agrees with.
             if entry is not None:
-                at, source_name = _skus_stamp(sku_source[match.sku])
-                skus_walk.apply_rows(
-                    [match.row], at=at, source=source_name,
-                    skus=writable.skus, events=writable.inventory.events,
-                )
-
-            copies = 0
-            live_keys = {
-                master.position_key(p.box, p.index) for p in match.live_positions
-            }
-            for position in match.uncommitted_positions:
-                key = master.position_key(position.box, position.index)
-                # Upsert first. A position the store has never seen — a run joined from a
-                # recovered identifications file, say — would otherwise take a write that
-                # lands nowhere and is still reported as having happened.
-                writable.inventory.record_capture(
-                    master.Card(
-                        box=position.box,
-                        index=position.index,
-                        cid=_name_for(key, resolved.photos.get(key)),
-                        photo=resolved.photos.get(key),
-                    )
-                )
-                # `set_state(key, IDENTIFIED)` rather than assigning `sku` and `condition`
-                # straight onto the record, and the choice is not style. It is the only
-                # writer that returns False for a position with no record, which is what
-                # keeps v1 bug #5 — a transition reported as having happened that did not —
-                # out of this loop; and it is the only one that appends to `history.jsonl`,
-                # so the moment this pipeline committed to a SKU for this copy survives in
-                # the audit trail. `identified` is where the card already is and where it
-                # stays: `pushed` is not a state a card can wear any more, and passing it
-                # here now raises `UnknownState` rather than silently flagging a position.
-                #
-                # THE FIVE IDENTITY KWARGS ARE GONE (identity-follows-sku.md §4.1, §4.2):
-                # `sku`, `condition`, `set_name`, `rarity` and `name` are now `bind_sku`'s
-                # own write, below, never `set_state`'s — this call moves STATE alone.
-                # D253's `name=resolved.name_corrections.get(key)` retires with it: the
-                # identity name is the row's by construction (`bind_sku` composes it
-                # through `store/numbers.strip_name_suffix`), so there is nothing left for
-                # a near-miss correction to do.
-                #
-                # THE RETURN VALUE IS COUNTED ONLY FOR A COPY THAT REACHED THE FILE. The
-                # stamp now runs over a wider set than the count does, so the two can no
-                # longer share one increment: `pushed` is a commitment that a CSV row was
-                # written, and a backstock copy has no row. Bumping it here would push the
-                # count past `add_to_quantity` and double-stage on the next import, which is
-                # the failure `docs/GATES.md` records from the first real post-import
-                # re-emit. The membership test is what keeps the two apart, and it is on the
-                # key rather than on the index because `live_positions` is a slice of the
-                # same objects — identity would work and would break the day it is rebuilt.
-                stamped = writable.inventory.set_state(
+                writable.inventory.bind_sku(
                     key,
-                    master.IDENTIFIED,
-                    run=run_dir.name,
+                    match.sku,
+                    bound_by="join",
+                    skus=writable.skus,
+                    number_strategy=entry["join_key"],
+                    expected_product_line=entry.get("product_line") or None,
                 )
-                # THE ONE WRITER (§4.1). `bind_sku` reads `match.row` back out of
-                # `writable.skus`, which the upsert above just put there, and refuses
-                # `sku_unknown`/`game_mismatch` rather than writing a guess. A DISPUTING
-                # POSITION NEVER REACHES THIS LOOP AT ALL — `_withhold_disputed` (review
-                # finding, HIGH, on 1b5c90e5) already pulled it out of `match.positions`
-                # before the CSV was even written, so every position seen here is one this
-                # SKU's own evidence already agrees with.
-                if entry is not None:
-                    writable.inventory.bind_sku(
-                        key,
-                        match.sku,
-                        bound_by="join",
-                        skus=writable.skus,
-                        number_strategy=entry["join_key"],
-                        expected_product_line=entry.get("product_line") or None,
-                    )
-                if stamped and key in live_keys:
-                    copies += 1
-            if copies and match.sku in emitted:
-                # Incremented, not set: two runs can push copies of one SKU, and the second
-                # must not erase the first. Re-emitting the SAME run adds nothing because
-                # `cli/resolve.py` reads these counts back as `committed`, so those copies
-                # are no longer in `match.uncommitted_positions` at all — the idempotence
-                # lives there rather than in a special case here, and it is untouched by the
-                # stamp above: `_committed_keys` reads the `Listing`, never `card.sku`.
-                writable.inventory.listing(
-                    match.sku, condition=match.condition
-                ).bump(master.PUSHED, copies)
-                pushed += copies
-                pushed_skus += 1
-                # THE PRICE THIS PRESS JUST PUT IN A FILE, RECORDED THE MOMENT THE PUSH IS
-                # COUNTED — never a proposal, because this gate is the one that already
-                # decides a row genuinely reached the file (D243). `emit`
-                # tracks no prior asking price, so `replaced` is left unset rather than
-                # guessed at.
-                writable.postings.record(
-                    sku=match.sku,
-                    price=tcgcsv.format_price(priced_flat[match.sku]),
-                    source="emit",
-                    run=run_dir.name,
-                )
-        queue_line = writable.queue_summary
-        stages = writable.inventory.listing_counts()
+            if stamped and key in live_keys:
+                copies += 1
+        if copies and match.sku in emitted:
+            # Incremented, not set: two runs can push copies of one SKU, and the second
+            # must not erase the first. Re-emitting the SAME run adds nothing because
+            # `cli/resolve.py` reads these counts back as `committed`, so those copies
+            # are no longer in `match.uncommitted_positions` at all — the idempotence
+            # lives there rather than in a special case here, and it is untouched by the
+            # stamp above: `_committed_keys` reads the `Listing`, never `card.sku`.
+            writable.inventory.listing(
+                match.sku, condition=match.condition
+            ).bump(master.PUSHED, copies)
+            pushed += copies
+            pushed_skus += 1
+            # THE PRICE THIS PRESS JUST PUT IN A FILE, RECORDED THE MOMENT THE PUSH IS
+            # COUNTED — never a proposal, because this gate is the one that already
+            # decides a row genuinely reached the file (D243). `emit`
+            # tracks no prior asking price, so `replaced` is left unset rather than
+            # guessed at.
+            writable.postings.record(
+                sku=match.sku,
+                price=tcgcsv.format_price(priced_flat[match.sku]),
+                source="emit",
+                run=run_dir.name,
+            )
+    return pushed, pushed_skus
 
+
+def _after_single(
+    args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus, queue_line, stages,
+    repriced=0, disputed_positions=(),
+) -> int:
+    """What the single-run path says once its write has committed."""
     # ONLY WHEN SOMETHING REACHED A FILE. D54: the record is created by the first emit that
     # writes a row and is afterwards only ever added to. Writing it unconditionally is what
     # blanked it on every second press — and `reconcile` reads it, so a blank record made a
@@ -1091,6 +1530,11 @@ def run(args, say) -> int:
         ) or runs.IMPORT_MERGED
     else:
         listed_names = runs.IMPORT_MERGED
+    if not wrote_any and repriced:
+        # A FILE OF PRICE CHANGES ONLY: every row carries Add to Quantity 0, so no copy was
+        # counted, and the file above is the one to send.
+        say(f"price changes only — {repriced} card(s) already live, no copy added.")
+        return 0
     if not wrote_any:
         # NOTHING NEW WENT ANYWHERE, AND SAYING SO IS THE POINT OF THIS BRANCH. Every copy
         # this run holds is already at `pushed`, so there is no row left to send and the
@@ -1219,6 +1663,8 @@ def run_merged(args, say) -> int:
     disposition. What it adds is one refusal of its own: two runs carrying different per-run
     policy overrides, which one file cannot honour.
     """
+    # BEFORE ANY RUN IS RESOLVED, which is what makes it the plan's basis (`_listing_basis`).
+    basis = _listing_basis()
     book = corpus.Corpus.read()
     # OLDEST FIRST, WHICH DECIDES WHICH COPIES GO. Run names are date-prefixed, so this is
     # chronological; `merge.plan` slices the cap off the front of the union, so the copies that
@@ -1265,6 +1711,19 @@ def run_merged(args, say) -> int:
     if disputed_positions:
         with store.write() as writable:
             _queue_withheld(writable, disputed_positions)
+    # THE DOUBLE-SEND GUARD, OVER THE UNION OF EVERY LEG (`_apply_guard` says why the union).
+    # Applied to the legs BEFORE `merge.plan`, which takes the tightest `asked` any leg names.
+    legs_by_sku: "OrderedDict[str, list]" = OrderedDict()
+    for resolved in resolved_by_run.values():
+        for sku, match in resolved.matches.items():
+            legs_by_sku.setdefault(sku, []).append(match)
+    try:
+        guarded = _apply_guard(
+            _live_guard(args), legs_by_sku, Store().read().inventory
+        )
+    except GuardRefused as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
 
     choice = book.scoped_to(matched)
     say(f"send             {len(dirs)} run(s): {', '.join(d.name for d in dirs)}")
@@ -1278,7 +1737,46 @@ def run_merged(args, say) -> int:
         say("REFUSING to write. Nothing was written.")
         return 1
 
+    # NAMED BEFORE THE EMPTY CHECK BELOW, so a send the guard trimmed to nothing still says
+    # which cards TCGplayer already holds. `room` ignores `asked`, so this is the unguarded
+    # figure over the merged union.
+    typed = _quantities_for(args)
+    _say_guard(
+        guarded,
+        {row.sku: _would(row.match, typed) for row in merged_plan.skus},
+        {row.sku: row.match.name for row in merged_plan.skus},
+        say,
+    )
+
     rows = merged_plan.rows(listed_only=args.listed_only)
+    # THE PRICE-ONLY ROWS OVER THE MERGED PLAN (the owner's ruling, 2026-09-24). Each is the
+    # plan's own row with `add_to_quantity` 0, so `merge.import_rows` writes it as Add to
+    # Quantity 0 at the plan's price, with no second code path.
+    try:
+        changes, left, moves = _price_changes(
+            args,
+            guarded,
+            {
+                row.sku: (row.match.name, row.price)
+                for row in merged_plan.skus
+                if row.match.add_to_quantity == 0
+            },
+            {
+                row.sku: (row.match.name, row.price)
+                for row in merged_plan.skus
+                if row.match.add_to_quantity > 0
+            },
+            pricing.check_threshold(book.policy_for()["threshold"]),
+            say,
+        )
+    except PriceRefused as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
+    changes = _keep_listed(
+        changes, {row.sku for row in merged_plan.skus if row.sub_threshold}, args, say
+    )
+    changed = {change.sku for change in changes}
+    rows = rows + [row for row in merged_plan.skus if row.sku in changed]
     if not rows:
         say("nothing to write — every matched SKU is held back, unlisted, or has no room")
         for sku, why in list(merged_plan.dropped.items())[:8]:
@@ -1318,6 +1816,7 @@ def run_merged(args, say) -> int:
     _say_quantities(
         _quantities_for(args), {row.sku: row.match for row in merged_plan.skus}, say
     )
+    _say_prices(changes, left, moves, args, say)
 
     by_game = {None: rows}
     if args.split_games:
@@ -1365,7 +1864,7 @@ def run_merged(args, say) -> int:
                 # send whose every row is above the threshold would otherwise write a
                 # header-only `import-subthreshold.csv` over an earlier good one.
                 continue
-            target = dirs[-1].path(name)
+            target = _out(dirs[-1], name, args)
             csv_rows = merge.import_rows(bucket)
             try:
                 # `write_import` OWNS THE DUPLICATE-SKU GATE, and it is reused rather than
@@ -1389,98 +1888,127 @@ def run_merged(args, say) -> int:
     # room toward `pushed`.
     pushed = 0
     pushed_skus = 0
-    shipped = {row.sku for _, group in written for row in group}
-    with store.write() as writable:
-        # THE WITHHELD POSITIONS' QUEUE ENTRY IS ALREADY WRITTEN, above, gathered across
-        # every leg, in its own transaction.
-        for row in merged_plan.skus:
-            if row.sku not in shipped:
-                continue
-            live_keys = merged_plan.live_keys.get(row.sku, set())
-            copies = 0
+    # A PRICE-ONLY ROW IS NOT SHIPPED: it adds no copy, so it stamps no copy and raises no
+    # count. Its posting is `_record_prices`, below.
+    shipped = {row.sku for _, group in written for row in group} - changed
+    going = {
+        row.sku: int(row.match.add_to_quantity)
+        for row in merged_plan.skus
+        if row.sku in shipped and row.match.add_to_quantity > 0
+    }
+    try:
+        with store.write() as writable:
+            _claim_or_refuse(writable, going, basis, args, sorted(changed))
+            pushed, pushed_skus = _stamp_merged(writable, merged_plan, shipped, resolved_by_run)
+            _record_prices(writable, changes, ",".join(d.name for d in dirs))
+            queue_line = writable.queue_summary
+            stages = writable.inventory.listing_counts()
+    except SendClaimRefused as refusal:
+        _say_claim_refusal(refusal, args, say)
+        return 1
+    # THE RUN'S EMIT RECORD NAMES THE SKUS THAT ADDED A COPY (D54), never a price-only row.
+    copied = [(target, [row for row in group if row.sku not in changed]) for target, group in written]
+    return _after_merged(
+        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions
+    )
 
-            # THE SKU TABLE FILL, ONCE PER SKU (identity-follows-sku.md §4.2's own row for
-            # this command). `row.match.row` is the NEWEST leg's export row
-            # (`pipeline/merge.py:_merged_match`, "THE ROW IS THE NEWEST LEG'S") — the same
-            # row `bind_sku` reads back below, put into `writable.skus` first, in the same
-            # transaction, as its own docstring requires of every caller. `row.game` is
-            # `MergedSku`'s own field (`pipeline/merge.py`), never re-derived.
-            entry = games.get(row.game) if row.game else None
+
+def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
+    """The merged write: stamp every copy once, count the sent ones. `(pushed, skus)`."""
+    pushed = 0
+    pushed_skus = 0
+    for row in merged_plan.skus:
+        if row.sku not in shipped:
+            continue
+        live_keys = merged_plan.live_keys.get(row.sku, set())
+        copies = 0
+
+        # THE SKU TABLE FILL, ONCE PER SKU (identity-follows-sku.md §4.2's own row for
+        # this command). `row.match.row` is the NEWEST leg's export row
+        # (`pipeline/merge.py:_merged_match`, "THE ROW IS THE NEWEST LEG'S") — the same
+        # row `bind_sku` reads back below, put into `writable.skus` first, in the same
+        # transaction, as its own docstring requires of every caller. `row.game` is
+        # `MergedSku`'s own field (`pipeline/merge.py`), never re-derived.
+        entry = games.get(row.game) if row.game else None
+        if entry is not None:
+            newest_run = row.legs[-1].run
+            source = resolved_by_run[newest_run].joins[row.game].source
+            at, source_name = _skus_stamp(source)
+            skus_walk.apply_rows(
+                [row.match.row], at=at, source=source_name,
+                skus=writable.skus, events=writable.inventory.events,
+            )
+
+        # ONE PASS PER POSITION, NOT PER LEG, AND THE DEDUPE IS THE COUNT. Box 3 has been
+        # joined three times on this machine, so its cards are in three of this send's
+        # runs and every one of them carries the same `(box, index)`. Walking the legs
+        # naively stamped each copy once per leg and counted it toward `pushed` each time
+        # — measured against a cleared ledger, that pushed 11 SKUs past the cap of 4 where
+        # three separate emits pushed 2. The merged path was WORSE than the thing it
+        # exists to fix, which is what a head-to-head against the old path is for.
+        #
+        # THE FIRST LEG HOLDING A COPY OWNS IT, and legs are in run order, so the stamp
+        # names the oldest run that could have listed it — the same first-come rule
+        # `merge.plan` spends the cap by.
+        owner = {}
+        for leg in row.legs:
+            for position in leg.match.uncommitted_positions:
+                key = master.position_key(position.box, position.index)
+                owner.setdefault(key, (leg.run, position))
+        for key, (run_name, position) in owner.items():
+            writable.inventory.record_capture(
+                master.Card(
+                    box=position.box,
+                    index=position.index,
+                    cid=_name_for(key, resolved_by_run[run_name].photos.get(key)),
+                    photo=resolved_by_run[run_name].photos.get(key),
+                )
+            )
+            # THE FIVE IDENTITY KWARGS ARE GONE, exactly as in `_stamp_single` above —
+            # `bind_sku` below is the one writer now, and D253's `name_corrections` read
+            # retires with it.
+            stamped = writable.inventory.set_state(
+                key,
+                master.IDENTIFIED,
+                run=run_name,
+            )
+            # A DISPUTING POSITION NEVER REACHES THIS LOOP EITHER — `_withhold_disputed`
+            # already pulled it out of `leg.match.positions` for every leg, before
+            # `merge.plan` ever built `row` (review finding, HIGH, on 1b5c90e5).
             if entry is not None:
-                newest_run = row.legs[-1].run
-                source = resolved_by_run[newest_run].joins[row.game].source
-                at, source_name = _skus_stamp(source)
-                skus_walk.apply_rows(
-                    [row.match.row], at=at, source=source_name,
-                    skus=writable.skus, events=writable.inventory.events,
-                )
-
-            # ONE PASS PER POSITION, NOT PER LEG, AND THE DEDUPE IS THE COUNT. Box 3 has been
-            # joined three times on this machine, so its cards are in three of this send's
-            # runs and every one of them carries the same `(box, index)`. Walking the legs
-            # naively stamped each copy once per leg and counted it toward `pushed` each time
-            # — measured against a cleared ledger, that pushed 11 SKUs past the cap of 4 where
-            # three separate emits pushed 2. The merged path was WORSE than the thing it
-            # exists to fix, which is what a head-to-head against the old path is for.
-            #
-            # THE FIRST LEG HOLDING A COPY OWNS IT, and legs are in run order, so the stamp
-            # names the oldest run that could have listed it — the same first-come rule
-            # `merge.plan` spends the cap by.
-            owner = {}
-            for leg in row.legs:
-                for position in leg.match.uncommitted_positions:
-                    key = master.position_key(position.box, position.index)
-                    owner.setdefault(key, (leg.run, position))
-            for key, (run_name, position) in owner.items():
-                writable.inventory.record_capture(
-                    master.Card(
-                        box=position.box,
-                        index=position.index,
-                        cid=_name_for(key, resolved_by_run[run_name].photos.get(key)),
-                        photo=resolved_by_run[run_name].photos.get(key),
-                    )
-                )
-                # THE FIVE IDENTITY KWARGS ARE GONE, exactly as in `run` above — `bind_sku`
-                # below is the one writer now, and D253's `name_corrections` read retires
-                # with it.
-                stamped = writable.inventory.set_state(
+                writable.inventory.bind_sku(
                     key,
-                    master.IDENTIFIED,
-                    run=run_name,
+                    row.sku,
+                    bound_by="join",
+                    skus=writable.skus,
+                    number_strategy=entry["join_key"],
+                    expected_product_line=entry.get("product_line") or None,
                 )
-                # A DISPUTING POSITION NEVER REACHES THIS LOOP EITHER — `_withhold_disputed`
-                # already pulled it out of `leg.match.positions` for every leg, before
-                # `merge.plan` ever built `row` (review finding, HIGH, on 1b5c90e5).
-                if entry is not None:
-                    writable.inventory.bind_sku(
-                        key,
-                        row.sku,
-                        bound_by="join",
-                        skus=writable.skus,
-                        number_strategy=entry["join_key"],
-                        expected_product_line=entry.get("product_line") or None,
-                    )
-                if stamped and key in live_keys:
-                    copies += 1
-            if copies:
-                writable.inventory.listing(row.sku, condition=row.match.condition).bump(
-                    master.PUSHED, copies
-                )
-                pushed += copies
-                pushed_skus += 1
-                # THE MERGED PLAN'S OWN PRICE, THE SAME `row.price` `merge.import_rows` WROTE
-                # INTO THE CSV CELL — never recomputed (D243). `run` names
-                # every run that contributed a leg to this SKU, since a merged send has no
-                # single run of its own.
-                writable.postings.record(
-                    sku=row.sku,
-                    price=tcgcsv.format_price(row.price),
-                    source="emit-merged",
-                    run=",".join(sorted({leg.run for leg in row.legs})),
-                )
-        queue_line = writable.queue_summary
-        stages = writable.inventory.listing_counts()
+            if stamped and key in live_keys:
+                copies += 1
+        if copies:
+            writable.inventory.listing(row.sku, condition=row.match.condition).bump(
+                master.PUSHED, copies
+            )
+            pushed += copies
+            pushed_skus += 1
+            # THE MERGED PLAN'S OWN PRICE, THE SAME `row.price` `merge.import_rows` WROTE
+            # INTO THE CSV CELL — never recomputed (D243). `run` names
+            # every run that contributed a leg to this SKU, since a merged send has no
+            # single run of its own.
+            writable.postings.record(
+                sku=row.sku,
+                price=tcgcsv.format_price(row.price),
+                source="emit-merged",
+                run=",".join(sorted({leg.run for leg in row.legs})),
+            )
+    return pushed, pushed_skus
 
+
+def _after_merged(
+    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=()
+) -> int:
+    """What the merged path says once its write has committed."""
     # THE RECEIPT IS PER RUN AND ADDS, NEVER SUBTRACTS (D54). Each run in the send records the
     # SKUs it contributed, so `reconcile` on any of them still knows what it sent.
     for run_dir in dirs:

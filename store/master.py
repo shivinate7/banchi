@@ -69,7 +69,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from typing import (
-    TYPE_CHECKING, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union,
+    TYPE_CHECKING, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union,
 )
 
 # `Skus` (`store/skus.py`) IS A TYPE-CHECKING-ONLY IMPORT, NEVER A RUNTIME ONE.
@@ -98,7 +98,7 @@ from store.rows import Rows, TableSpec, int_or_none
 # re-exports under the same names — so `_card_columns` reuses one fold (D55/D67) the same
 # as every other reader, without `store/` crossing the one edge it may not cross.
 from store.numbers import (
-    catalog_number_fields, display_number, join_key, strip_name_suffix,
+    box_title, catalog_number_fields, display_number, join_key, strip_name_suffix,
 )
 
 VERSION = 2
@@ -1871,7 +1871,7 @@ class Inventory:
         registered = self.boxes.get(str(box))
         if registered is not None and registered.closed:
             raise BoxClosed(
-                f"box {box} is sealed at {registered.capacity} cards. "
+                f"{self.box_title(box)} is sealed at {registered.capacity} cards. "
                 "Re-open it on the Boxes screen, or capture into another box."
             )
         self.ensure_box(box)
@@ -2563,7 +2563,7 @@ class Inventory:
         registered = self.boxes.get(str(to_box))
         if registered is not None and registered.closed:
             raise BoxClosed(
-                f"box {to_box} is sealed at {registered.capacity} cards. "
+                f"{self.box_title(to_box)} is sealed at {registered.capacity} cards. "
                 "Re-open it on the Boxes screen, or move into another box."
             )
         self.ensure_box(to_box)
@@ -2631,6 +2631,21 @@ class Inventory:
         self.events.append(record)
 
     # -------------------------------------------------------------- boxes and listings
+
+    def box_title(self, number) -> str:
+        """What a refusal calls this box: its stored name, or `Box <number>` without one.
+
+        The box number stays inside the store (D259), and a refusal
+        reaches a screen as a toast, so every message here names the box this way.
+        `store/numbers.py:box_title` is the one fallback, shared with the place labels in
+        `pipeline/join.py`. A card's whole place is `pipeline/join.py:said_place`, which the
+        server's refusals use and which the store cannot import (D63).
+        """
+        try:
+            entry = self.box(number)
+        except (TypeError, ValueError, BadPosition):
+            entry = None
+        return box_title(entry.name if entry is not None else None, number)
 
     def box(self, number) -> Optional[Box]:
         """The registry entry for this box, or None. Never invents one."""
@@ -2747,8 +2762,16 @@ class Inventory:
         number = _as_position_int(number, "box")
         entry = self.boxes.get(str(number))
         if entry is None:
-            if name is not None:
-                self._check_name_free(name, number)
+            if name is None:
+                # A BOX WITH NO NAME GETS A STORED ONE (D259). The
+                # owner's ruling, 2026-09-23: "If I choose to not name a box, it can default
+                # to count+1 Box as a default name". Stored at creation, not drawn at render,
+                # so it is a name like any other: it never renumbers when a box is deleted.
+                name = self.default_box_name()
+            # THE DEFAULT TAKES THE SAME CHECK A TYPED NAME TAKES. `default_box_name` picks a
+            # free name, and this is what proves it did: a default that clashes is refused
+            # here, never stored beside the box that already answers to it (D20).
+            self._check_name_free(name, number)
             entry = Box(box=number, bid=self._issue_box_id(), name=name, created_at=now())
             self.boxes[str(number)] = entry
             # `bid` ON THE EVENT, NOT ONLY ON THE ROW. The row is deleted when the drawer is;
@@ -2764,6 +2787,109 @@ class Inventory:
             self.set_name(number, name)
         return entry
 
+    def _name_taken(self, name: str, number: Optional[int] = None) -> bool:
+        """Whether another box already answers to `name`, folded and stripped as
+        `_check_name_free` compares. `number` is the box being written, which is skipped."""
+        wanted = name.strip().casefold()
+        return any(
+            entry.name is not None
+            and entry.box != number
+            and entry.name.strip().casefold() == wanted
+            for entry in self.boxes.values()
+        )
+
+    def default_box_name(self, count: Optional[int] = None, number: Optional[int] = None) -> str:
+        """`Box <count+1>`, or the next free `Box <n>` above it (D259).
+
+        `count` defaults to how many OTHER boxes the registry holds now. At creation `number`
+        is None and the new box is not in the registry yet, so `count` is every box that
+        exists and the first box is `Box 1`. At a clear, `number` is the box being cleared,
+        which the route ALREADY WROTE INTO THE REGISTRY before this runs (`ensure_box`) — so
+        without excluding it here, its own row inflated `count` by one and pushed the default
+        past its own number (a lone box cleared read `Box 2`, never back to `Box 1`).
+        ORCHESTRATOR CALL, 2026-09-24, on the locating review: `number`'s row does not count
+        as taken anywhere in this computation, not only in the collision loop below — so a
+        lone box stays `Box 1`, and a box that already carries its own default keeps it.
+        Names are unique (D20, `_check_name_free`), so when `Box <count+1>` is taken (a box
+        was deleted, or the owner named one that way) the next free number is used.
+        """
+        if count is None:
+            count = len(self.boxes)
+            if number is not None and str(number) in self.boxes:
+                count -= 1
+        n = int(count) + 1
+        while self._name_taken(f"Box {n}", number):
+            n += 1
+        return f"Box {n}"
+
+    def box_name_plan(self) -> List[Tuple[int, str]]:
+        """What `backfill_box_names` would write, as `(number, name)` pairs. Writes nothing.
+
+        THE BACKFILL OF THE OWNER'S RULING, 2026-09-23 (D259): every box
+        with no name gets the stored name `Box <number>`, today's number, so nothing visible
+        changes and the physical labels on the drawers still match. A box that has a name is
+        left alone, which is what makes the backfill idempotent: a second pass plans nothing.
+
+        THE REGISTRY ONLY, NEVER A WALK OF THE CARDS. Every path that puts a card in a box
+        registers the box first (`ensure_box`, and the v1 parse), so a box only cards name is
+        a legacy shape. Its cards still read `Box <number>` through `join.box_title`'s
+        fallback, which is the same string this plan would store for it.
+
+        TWO PASSES, SO A CLASH MOVES ONLY THE BOX THAT CLASHES. The first pass gives every
+        unnamed box its own `Box <number>` wherever that name is free. The second pass takes
+        the boxes left over, the ones whose `Box <number>` is already another box's name, and
+        gives each the next free `Box <n>` above its number (D20, names are unique). One pass
+        in number order was wrong: box 1 named `Box 4` by hand pushed box 4 to `Box 5`, and
+        that pushed box 5 to `Box 6`, although `Box 5` was free for box 5.
+        """
+        numbers: Set[int] = set()
+        for key in self.boxes:
+            try:
+                numbers.add(int(key))
+            except (TypeError, ValueError):
+                continue
+        taken = {
+            entry.name.strip().casefold()
+            for entry in self.boxes.values()
+            if entry.name is not None and entry.name.strip() != ""
+        }
+        unnamed: List[int] = []
+        for number in sorted(numbers):
+            entry = self.boxes.get(str(number))
+            if entry is not None and entry.name is not None and entry.name.strip() != "":
+                continue
+            unnamed.append(number)
+        planned: Dict[int, str] = {}
+        # Pass 1: each unnamed box's own `Box <number>`, where no box has it.
+        for number in unnamed:
+            own = f"Box {number}"
+            if own.casefold() not in taken:
+                taken.add(own.casefold())
+                planned[number] = own
+        # Pass 2: only the clashes, each to the next free name above its number.
+        for number in unnamed:
+            if number in planned:
+                continue
+            n = number
+            while f"Box {n}".casefold() in taken:
+                n += 1
+            wanted = f"Box {n}"
+            taken.add(wanted.casefold())
+            planned[number] = wanted
+        return [(number, planned[number]) for number in unnamed]
+
+    def backfill_box_names(self) -> List[Tuple[int, str]]:
+        """Apply `box_name_plan` to this inventory, and return the plan it applied.
+
+        Each name goes through `set_name`, so the uniqueness check and the `box_renamed` event
+        are the ones every other naming path takes. This changes the in-memory inventory only. The
+        caller commits it in one `Store().write()` transaction.
+        """
+        plan = self.box_name_plan()
+        for number, wanted in plan:
+            self.set_name(number, wanted)
+        return plan
+
     def _check_name_free(self, name: str, number: int) -> None:
         """Refuse a name another box already answers to. Folded and stripped to compare.
 
@@ -2778,7 +2904,7 @@ class Inventory:
             if entry.box == number or entry.name is None:
                 continue
             if entry.name.strip().casefold() == wanted:
-                raise BoxNameTaken(f"box {entry.box} is already called {entry.name!r}")
+                raise BoxNameTaken(f"another box is already called {entry.name!r}")
 
     def set_name(self, number, name: Optional[str]) -> Box:
         """Name a box, rename it, or clear the name. Logs both names; refuses a duplicate.
@@ -2797,9 +2923,17 @@ class Inventory:
         `docs/DESIGN.md` would ban anyway.
         """
         entry = self.ensure_box(number)
-        wanted = None if name is None or name.strip() == "" else name
-        if wanted is not None:
-            self._check_name_free(wanted, entry.box)
+        # A CLEARED NAME IS THE DEFAULT NAME, NEVER NONE (the orchestrator's call on the
+        # locating review, 2026-09-24, under D259). A box is shown by
+        # its name only, so a box with no name would have nothing to be shown by. Clearing
+        # stores `Box <count+1>`, the next free one, the name a box made with no name gets.
+        # The box's own name does not count as taken, so a box that already carries that
+        # default keeps it and nothing is logged.
+        if name is None or name.strip() == "":
+            wanted = self.default_box_name(number=entry.box)
+        else:
+            wanted = name
+        self._check_name_free(wanted, entry.box)
         before = entry.name
         if before == wanted:
             # A no-op writes no event, `do_put_card`'s rule: a log line for a request that
@@ -2932,7 +3066,7 @@ class Inventory:
                 raise BadSections(f"section {ordinal!r} is not a number") from None
             if at < 1 or at > len(layout):
                 raise BadSections(
-                    f"section {at} does not exist: box {entry.box} has "
+                    f"section {at} does not exist: {self.box_title(entry.box)} has "
                     f"{len(layout)} section{'s' if len(layout) != 1 else ''}"
                 )
             key = str(int(layout[at - 1]))
@@ -2985,7 +3119,7 @@ class Inventory:
         entry = self.ensure_box(number)
         if entry.closed:
             raise BoxClosed(
-                f"box {entry.box} is sealed, so it takes no more cards — and a section with "
+                f"{self.box_title(entry.box)} is sealed, so it takes no more cards — and a section with "
                 f"no cards to come is a divider in front of nothing. Re-open the box first."
             )
         at = self.next_index(entry.box)
@@ -2993,13 +3127,13 @@ class Inventory:
         last = layout[-1]
         if last == at:
             raise SectionEmpty(
-                f"section {len(layout)} of box {entry.box} already starts at card {at} and "
-                f"holds nothing yet. Capture a card into it before starting another."
+                f"section {len(layout)} of {self.box_title(entry.box)} holds nothing yet. "
+                f"Capture a card into it before starting another."
             )
         if last > at:
             raise SectionAhead(
-                f"box {entry.box} already declares a section starting at card {last}, which "
-                f"is past the next card ({at}). Edit the dividers instead."
+                f"{self.box_title(entry.box)} already has a divider past the next card. "
+                f"Edit the dividers instead."
             )
         return self.set_sections(entry.box, layout + [at])
 
@@ -3013,7 +3147,7 @@ class Inventory:
         """
         entry = self.ensure_box(number)
         if entry.closed:
-            raise BoxClosed(f"box {entry.box} is already sealed")
+            raise BoxClosed(f"{self.box_title(entry.box)} is already sealed")
         entry.capacity = self.box_fill(entry.box)
         entry.state = BOX_CLOSED
         entry.closed_at = now()

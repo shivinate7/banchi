@@ -1113,7 +1113,7 @@ def _check_game_partition(c, export) -> None:
         if caught is not None:
             message = str(caught)
             c.ok(
-                "Box 3 · Section 1 · Card 2" in message,
+                "Box 3, Section 1, Card 2" in message,
                 "the refusal names the card's position",
                 message,
             )
@@ -1839,7 +1839,7 @@ def run() -> Result:
         )
         c.equal(
             seven.backstock_positions[0].label,
-            "Box 3 · Section 1 · Card 5",
+            "Box 3, Section 1, Card 5",
             "backstock position is addressable",
         )
 

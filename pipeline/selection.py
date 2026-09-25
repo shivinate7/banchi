@@ -594,7 +594,7 @@ def narrow(
         if not (1 <= selection.section <= len(dividers)):
             raise SelectionError(
                 "selection_invalid",
-                f"Box {box} has {len(dividers)} section"
+                f"{inventory.box_title(box)} has {len(dividers)} section"
                 f"{'' if len(dividers) == 1 else 's'}, so there is no section "
                 f"{selection.section}. A box's sections are the dividers somebody put in it.",
             )

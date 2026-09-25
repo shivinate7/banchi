@@ -1,14 +1,15 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ComponentType, ErrorInfo, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
+import { Component, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot, onServerReachable } from './server'
+import { useSearch } from './useSearch'
 import { usePoll } from './usePoll'
-import { Button, Icon, Kbd, Lockup,
-  Logo,
-  applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
+import { Button, Icon, Kbd, KeyHint, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
+  applyTheme, openSheet, overlayOpen, readTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
+import { SearchField } from './SearchField'
 
 import { Home } from './Home'
 import { CaptureScreen } from './CaptureScreen'
@@ -36,6 +37,24 @@ import './App.css'
 type Persona = 'owner' | 'fulfiller'
 type Group = 'home' | 'work' | 'sell' | 'library' | 'aside'
 
+/** One row of the keyboard sheet. */
+type Binding = {
+  /** One entry per alternative that does the same thing; a chord is one string (`⌘K`, `,C`). */
+  readonly keys: readonly string[]
+  readonly does: string
+  /** The condition, when the key is armed by something narrower than the screen. One short line. */
+  readonly when?: string
+  /** Read the caps as a sequence rather than as alternatives. */
+  readonly seq?: boolean
+}
+
+/** A screen's own keys, registered on its `ROUTES` row. `where` defaults to "Only while <label>
+ *  is open." */
+type ScreenKeys = {
+  readonly where?: string
+  readonly rows: readonly Binding[]
+}
+
 export type Route = {
   readonly path: string
   readonly label: string
@@ -49,17 +68,143 @@ export type Route = {
   readonly tab?: boolean
   /** What a person might TYPE to find this screen in the palette — the verbs it holds. */
   readonly keywords?: string
+  /** The screen's own keys. The keyboard sheet draws them as the screen's own group. */
+  readonly keys?: ScreenKeys
 }
 
+/* ---- each screen's own keys ---------------------------------------------------------------
+   THE SHEET IS COMPLETE OR IT IS NOTHING: every binding, read out of the screen that owns it.
+   Each block is registered on its screen's `ROUTES` row below, so a new screen brings its keys
+   with it and the sheet needs no edit. */
+
+/* The capture screen's option keycaps, in its own order: `CaptureScreen.tsx` builds them by
+   striking its twelve reserved letters out of `1234567890a…z`. Written out rather than
+   summarised, because the nth key is the nth option and an operator counts along the row. */
+const CAPTURE_OPTION_KEYS = '1234567890adeijklmnqwxyz'.toUpperCase().split('')
+
+const CAPTURE_KEYS: ScreenKeys = {
+  rows: [
+    { keys: ['C'], does: 'Take the photograph', when: 'while the trigger is on Manual' },
+    { keys: ['S'], does: 'Put a divider in, at the card you are about to shoot' },
+    { keys: ['U'], does: 'Undo the newest capture' },
+    { keys: ['B'], does: 'Open or close the Box field' },
+    { keys: ['H'], does: 'Open or close the Set hint field' },
+    { keys: ['G'], does: 'Open or close the Game field' },
+    { keys: ['R'], does: 'Open or close the Rarity field', when: 'when the game has rarities' },
+    { keys: ['F'], does: 'Open or close the Finish field', when: 'when the game has finishes' },
+    { keys: ['P'], does: 'Open or close the Product field' },
+    { keys: ['V'], does: 'Open or close the Camera field' },
+    { keys: ['O'], does: 'Open or close the Rotation field' },
+    { keys: ['T'], does: 'Open or close the Trigger field' },
+    { keys: CAPTURE_OPTION_KEYS, seq: true, does: 'Choose the option with that keycap beside it', when: 'while a field is open' },
+    { keys: ['↵'], does: 'Take the box you typed, or make a new one', when: 'in the Box field' },
+    { keys: ['Esc'], does: 'Close the open field' },
+  ],
+}
+
+const RUNS_KEYS: ScreenKeys = {
+  rows: [
+    { keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a preview is on screen' },
+    { keys: ['Esc'], does: 'Close the open sheet', when: 'not while it is sending' },
+  ],
+}
+
+const REVIEW_KEYS: ScreenKeys = {
+  rows: [
+    { keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], seq: true, does: 'Answer with that candidate, or that row of the lookup' },
+    { keys: ['G'], does: 'Answer the whole group at once', when: 'when every card left asks the same question' },
+    { keys: ['↵'], does: 'Confirm the group', when: 'while the group offer is up' },
+    { keys: ['Esc'], does: 'Go back to one card at a time', when: 'while the group offer is up' },
+    { keys: ['S'], does: 'Skip this card and come back to it' },
+    { keys: ['C'], does: 'Clear the skips and start round again', when: 'when everything left is skipped' },
+    { keys: ['X'], does: 'Close this question without answering it' },
+    { keys: ['1', '2', '3', '4', '5', '6', '7'], seq: true, does: 'Pick the reason it is closed', when: 'while the close panel is up' },
+    { keys: ['L'], does: 'Look this card up' },
+    { keys: ['Esc'], does: 'Leave the lookup, the close panel or the queue drawer' },
+    { keys: ['R'], does: 'Reload the queue' },
+    { keys: ['U'], does: 'Undo the newest answer' },
+  ],
+}
+
+const PRICING_KEYS: ScreenKeys = {
+  where: 'Only while Pricing is open. Most keys work inside a price field.',
+  rows: [
+    { keys: ['R'], does: 'Reload the worklist', when: 'not on a phone' },
+    { keys: ['T'], does: 'Hold to read the price history of the row under the pointer' },
+    { keys: ['M'], does: 'Snap the price to Market' },
+    { keys: ['L'], does: 'Snap the price to Low' },
+    { keys: ['S'], does: 'Snap the price to Low with shipping' },
+    { keys: ['D'], does: 'Snap the price to Direct low' },
+    { keys: ['N'], does: 'Snap the price to what it is now', when: 'when the card is already listed' },
+    { keys: ['H'], does: 'Hold this card back instead of pricing it' },
+    { keys: ['P'], does: 'Show the photograph of this card' },
+    { keys: ['U'], does: 'Undo the last answer' },
+    { keys: ['↵'], does: 'Write this price and drop to the next card' },
+    { keys: ['⇧↵'], does: 'Write this price and go back up one' },
+    { keys: ['↑', '↓'], does: 'Write this price and move' },
+    { keys: ['Esc'], does: 'Put the standing answer back and leave the field' },
+    { keys: ['B'], does: 'Hold it because you are bullish', when: 'while the hold panel is up' },
+    { keys: ['K'], does: 'Hold it because you are keeping it', when: 'while the hold panel is up' },
+    { keys: ['X'], does: 'Hold it for a later batch', when: 'while the hold panel is up' },
+    { keys: ['↵'], does: 'Set the hold', when: 'while the hold panel is up' },
+    { keys: ['Esc'], does: 'Cancel the hold, or close the open panel' },
+  ],
+}
+
+const ORDERS_KEYS: ScreenKeys = {
+  where: 'Only while Orders is open, on a wide window.',
+  rows: [
+    { keys: ['/'], does: 'Jump into the search field' },
+    { keys: ['↓'], does: 'Select the next buyer' },
+    { keys: ['↑'], does: 'Select the buyer before it' },
+    { keys: ['J'], does: 'Step to the next card in the walk' },
+    { keys: ['K'], does: 'Step to the card before it in the walk' },
+    { keys: ['U'], does: 'Undo the newest sale' },
+  ],
+}
+
+const SALES_KEYS: ScreenKeys = {
+  rows: [{ keys: ['/'], does: 'Jump into the product search field' }],
+}
+
+const INVENTORY_KEYS: ScreenKeys = {
+  rows: [
+    { keys: ['/'], does: 'Jump into the search field' },
+    { keys: ['←', '→'], does: 'Step to the card before or after this one' },
+    { keys: ['PgUp', 'PgDn'], does: 'Jump by section', when: 'with the card list focused' },
+    { keys: ['Home', 'End'], does: 'Go to the first or last card', when: 'with the card list focused' },
+    { keys: ['X'], does: 'Tick the selected card', when: 'with the card list focused' },
+    { keys: ['Esc'], does: 'Close the open sheet or panel' },
+    { keys: ['U'], does: 'Undo the newest sale or retirement' },
+  ],
+}
+
+const CODES_KEYS: ScreenKeys = {
+  rows: [{ keys: ['Esc'], does: 'Close the open sheet' }],
+}
+
+const FULFILLMENT_KEYS: ScreenKeys = {
+  where: 'On that screen, where ? lists its own keys.',
+  rows: [{ keys: ['Esc'], does: 'Close the enlarged photograph' }],
+}
+
+/* THE ONE REGISTRATION POINT (D275). A new screen is one row here plus a view that
+   returns `<Page>` from the kit. From this row alone it gets its nav row (`nav: true`), its
+   "Go to" entry in the palette, its jump entry and its own keys in the keyboard sheet, its tab
+   title, the page scaffold through `PageRouteContext`, and the sheet host. The nav, the ring, the
+   phone tab bar and the Fulfiller's door in the sidebar and drawer foot all read this table.
+   Three places name a path on purpose, because each is a chosen door and not a list of screens:
+   the brand links to Home, the dead-end page offers Home and Inventory, and the crash page offers
+   Home. `app/tests/nav.spec.ts` proves the rest with a throwaway row. */
 export const ROUTES: readonly Route[] = [
   { path: '/', label: 'Home', icon: 'home', view: Home, persona: 'owner', group: 'home', hotkey: 'h', nav: true, keywords: 'start overview' },
-  { path: '/capture', label: 'Capture', icon: 'camera', view: CaptureScreen, persona: 'owner', group: 'work', hotkey: 'c', nav: true, tab: true, keywords: 'camera photograph scan feeder new box section' },
-  { path: '/runs', label: 'Runs', icon: 'play', view: Runs, persona: 'owner', group: 'work', hotkey: 'r', nav: true, keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing' },
-  { path: '/review', label: 'Review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked' },
-  { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist markdown stale reprice live listings mark down' },
-  { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger' },
+  { path: '/capture', label: 'Capture', icon: 'camera', view: CaptureScreen, persona: 'owner', group: 'work', hotkey: 'c', nav: true, tab: true, keywords: 'camera photograph scan feeder new box section', keys: CAPTURE_KEYS },
+  { path: '/runs', label: 'Runs', icon: 'play', view: Runs, persona: 'owner', group: 'work', hotkey: 'r', nav: true, keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing', keys: RUNS_KEYS },
+  { path: '/review', label: 'Review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked', keys: REVIEW_KEYS },
+  { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist markdown stale reprice live listings mark down', keys: PRICING_KEYS },
+  { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger', keys: ORDERS_KEYS },
   { path: '/shipping', label: 'Shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
-  { path: '/revenue', label: 'Sales', icon: 'dollar', view: Revenue, persona: 'owner', group: 'sell', hotkey: 'v', nav: true, keywords: 'revenue sold gross money history search by name retrospective' },
+  { path: '/revenue', label: 'Sales', icon: 'dollar', view: Revenue, persona: 'owner', group: 'sell', hotkey: 'v', nav: true, keywords: 'revenue sold gross money history search by name retrospective', keys: SALES_KEYS },
   /* THE STALE-LISTING MARKDOWN IS NOT A ROW HERE, AND IT MOVED SCREENS RATHER THAN GAINING ONE.
    *
    * D100 wanted `#/markdown` on D49's precedent — a worklist the operator sits in is what earned
@@ -87,20 +232,18 @@ export const ROUTES: readonly Route[] = [
    * Adding a row here also moves a count three mechanical checks reconcile (`route census`,
    * `route rosters`, and every spec's pinned roster), so it is a deliberate edit and never a
    * side effect. */
-  { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move' },
-  { path: '/graveyard', label: 'Graveyard', icon: 'history', view: Graveyard, persona: 'owner', group: 'library', hotkey: 'g', nav: true, keywords: 'sold retired moved buried departed history gone deleted box' },
-  { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box' },
-  { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside' },
-  { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside' },
-  /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D227). It is a deep link,
-   * not a destination anyone browses to cold — reached from a SKU typed or pasted into its
-   * own search field, or from a link another screen builds. `app/src/Revenue.tsx` is being
-   * edited by another branch at the moment this route was added, so this table carries NO
-   * link into it from that screen; the route's own SKU field is the control a person who
-   * lands here with no query string actually finds. `OFF_NAV` below is what keeps this from
-   * reading as an omission to `route rosters` and `route census`. No hotkey: a route with no
-   * nav entry earns no chord, per `App.tsx`'s own rule for `#/fulfillment` and `#/gallery`. */
-  { path: '/product', label: 'Product history', icon: 'history', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
+  { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move', keys: INVENTORY_KEYS },
+  { path: '/graveyard', label: 'Graveyard', icon: 'headstone', view: Graveyard, persona: 'owner', group: 'library', hotkey: 'g', nav: true, keywords: 'sold retired moved buried departed history gone deleted box' },
+  { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box', keys: CODES_KEYS },
+  { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside', keywords: 'hand-off pull fulfiller new tab', keys: FULFILLMENT_KEYS },
+  { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside', keywords: 'component kit design system tokens' },
+  /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D227). It is a deep link, not a destination
+   * anyone browses to cold: a product name on another screen opens it, and so does the
+   * palette's "Go to" and its card search (D276). `OFF_NAV` below is what keeps
+   * this from reading as an omission to `route rosters` and `route census`. No hotkey: a route
+   * with no nav entry earns no chord, per this file's own rule for `#/fulfillment` and
+   * `#/gallery`. */
+  { path: '/product', label: 'Product history', icon: 'chart', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
 ]
 
 const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] = [
@@ -129,6 +272,17 @@ const OFF_NAV: readonly Group[] = ['aside']
 function inNav(route: Route): boolean {
   return route.nav === true && !OFF_NAV.includes(route.group)
 }
+
+/** The rows the nav draws in one group, in table order. The sidebar, the drawer and the ring all
+ *  read this, so the ring cannot step in an order the nav does not draw (D51). */
+function navRows(group: Group): readonly Route[] {
+  return ROUTES.filter((route) => route.group === group && inNav(route))
+}
+
+/* THE FULFILLER'S DOOR, FROM THE TABLE. Each Fulfiller route opens in its own tab from the
+   sidebar foot and the drawer, as it does from the palette: his screen has no way back, so it
+   never replaces the owner's. */
+const OWN_TAB: readonly Route[] = ROUTES.filter((route) => route.persona === 'fulfiller')
 
 const CHROME_FREE: ReadonlySet<Persona> = new Set<Persona>(['fulfiller'])
 const LEADER = ','
@@ -176,6 +330,10 @@ function useLeader(enabled: boolean, path: string): number | null {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (isEditableTarget(event.target)) return
+      /* NO GLOBAL KEY ACTS UNDER AN OPEN LAYER. A sheet, a modal, the palette or the drawer owns
+         the keyboard while it is open (kit/overlay.tsx's one stack), so the chord never arms
+         behind one and never jumps the page out from under it. */
+      if (overlayOpen()) return
       if (event.key === LEADER) {
         event.preventDefault()
         event.stopPropagation()
@@ -216,7 +374,10 @@ const STEP_KEYS = [
   { key: 'ArrowUp', delta: -1 },
   { key: 'ArrowDown', delta: 1 },
 ] as const
-const RING: readonly Route[] = ROUTES.filter((r) => r.hotkey !== undefined)
+/* THE RING IS THE DRAWN ORDER (D51): the groups in the order the nav draws them, then the table
+   within each group. A row declared outside its group's block in `ROUTES` is still drawn in its
+   group, and the step reaches it there. Only a row with a letter is a step (D51's "which"). */
+const RING: readonly Route[] = GROUPS.flatMap((group) => navRows(group.id)).filter((r) => r.hotkey !== undefined)
 const STEP_SHORTCUTS = 'Meta+ArrowLeft Meta+ArrowRight'
 
 function useRouteStep(enabled: boolean, path: string): void {
@@ -226,6 +387,7 @@ function useRouteStep(enabled: boolean, path: string): void {
       if (event.altKey) return
       if (!event.metaKey && !event.ctrlKey) return
       if (isEditableTarget(event.target)) return
+      if (overlayOpen()) return
       const step = STEP_KEYS.find((candidate) => candidate.key === event.key)
       if (step === undefined) return
       const at = RING.findIndex((candidate) => candidate.path === path)
@@ -249,16 +411,14 @@ type ServerState = 'unknown' | 'online' | 'offline'
  *  `useServerPresence` still owns two things `usePoll` cannot: the ONLINE/OFFLINE verdict a
  *  failed request draws no distinction on, and the boot toast, which fires the poll's own
  *  `refresh()` rather than re-implementing a check. */
-function useServerPresence(enabled: boolean): { state: ServerState; cards: number | null; retry: () => void } {
+function useServerPresence(enabled: boolean): { state: ServerState; retry: () => void } {
   const [state, setState] = useState<ServerState>('unknown')
-  const [cards, setCards] = useState<number | null>(null)
+  /* THE FOOT SAYS "Server online" AND NOTHING MORE (TXT-45). It printed the store's card count
+     beside it, a third count in the chrome to compare against the screen's own. */
   const { refresh } = usePoll({
     enabled,
     fn: getStatus,
-    onData: (status) => {
-      setState('online')
-      setCards(status.cards)
-    },
+    onData: () => setState('online'),
     onError: () => setState('offline'),
     liveMs: 15000,
     idleMs: 15000,
@@ -284,7 +444,7 @@ function useServerPresence(enabled: boolean): { state: ServerState; cards: numbe
       else setState('offline')
     })
   }, [enabled, refresh])
-  return { state, cards, retry: refresh }
+  return { state, retry: refresh }
 }
 
 /* ---- theme ---------------------------------------------------------------------------- */
@@ -358,6 +518,28 @@ function useRailNarrow(): boolean {
   return narrow
 }
 
+/* ---- where focus goes on a screen ----------------------------------------------------------- */
+/** The screen's own heading: the kit page's h1, else any h1 in the page, else the page itself. */
+function screenHeading(): HTMLElement | null {
+  return (
+    document.querySelector<HTMLElement>('.bn-view [data-bn-page-title]') ??
+    document.querySelector<HTMLElement>('.bn-view main h1') ??
+    document.querySelector<HTMLElement>('.bn-view main')
+  )
+}
+
+/** Put focus on the screen's heading, so the next Tab reaches the screen's first control. */
+function focusScreen(): void {
+  const heading = screenHeading()
+  if (heading === null) return
+  if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1')
+  heading.focus({ preventScroll: true })
+}
+
+/* Focus that sits in the chrome, on nothing, or in a layer that is closing. After a navigation
+   it is focus nobody put in the new screen. */
+const CHROME_FOCUS = '.bn-side, .bn-topbar, .bn-tabbar, .bn-skip, [data-bn-overlay]'
+
 /* ---- error boundary ------------------------------------------------------------------ */
 class RouteBoundary extends Component<
   { readonly path: string; readonly plain?: boolean; readonly children: ReactNode },
@@ -393,29 +575,23 @@ class RouteBoundary extends Component<
       )
     }
 
+    /* The owner's crash page is a kit page like every other screen. What the browser said sits
+       behind a disclosure (D196): it is for a bug report, not for reading. */
     return (
-      <main className="no-such-view">
-        <div className="no-such-view-card bn-anim-in">
-          <Logo size={40} />
-          <h1 className="bn-title" style={{ marginTop: 16 }}>
-            This screen stopped.
-          </h1>
-          <p className="bn-lede" style={{ marginTop: 8 }}>
-            Reloading usually fixes it.
-          </p>
-          <p className="no-such-view-path" style={{ marginTop: 12 }}>
-            {this.state.error.message}
-          </p>
-          <div className="no-such-view-doors">
-            <button type="button" className="no-such-view-door" onClick={() => this.setState({ error: null })}>
-              <Icon name="refresh" /> Reload this screen <Icon name="arrowRight" />
-            </button>
-            <a className="no-such-view-door" href="#/">
-              <Icon name="home" /> Go home <Icon name="arrowRight" />
-            </a>
-          </div>
+      <Page title="This screen stopped." lede="Reloading usually fixes it." className="no-such-view">
+        <details className="no-such-view-detail">
+          <summary>What went wrong</summary>
+          <p className="no-such-view-path">{this.state.error.message}</p>
+        </details>
+        <div className="no-such-view-doors">
+          <button type="button" className="no-such-view-door" onClick={() => this.setState({ error: null })}>
+            <Icon name="refresh" /> Reload this screen <Icon name="arrowRight" />
+          </button>
+          <a className="no-such-view-door" href="#/">
+            <Icon name="home" /> Go home <Icon name="arrowRight" />
+          </a>
         </div>
-      </main>
+      </Page>
     )
   }
 }
@@ -423,34 +599,43 @@ class RouteBoundary extends Component<
 /* ---- unknown route -------------------------------------------------------------------- */
 function NoSuchView({ path }: { path: string }) {
   return (
-    <main className="no-such-view">
-      <div className="no-such-view-card bn-anim-in">
-        <Logo size={40} />
-        <h1 className="bn-title" style={{ marginTop: 16 }}>
-          Nothing lives at this address.
-        </h1>
-        <p className="bn-lede" style={{ marginTop: 8 }}>
+    <Page
+      title="Nothing lives at this address."
+      lede={
+        <>
           Banchi has no screen called <span className="no-such-view-path">#{path}</span>. Try one of these.
-        </p>
-        {/* No door to #/fulfillment here: this is the OWNER's dead end, and the Fulfiller's
-            screen is a different persona's view, not a spare exit — the owner already has
-            Home and Inventory, and D95's "the Fulfiller's crash has no door out" is about
-            HIS crash page, never a reason to hand him as an escape hatch from someone else's. */}
-        <div className="no-such-view-doors">
-          <a className="no-such-view-door" href="#/">
-            <Icon name="home" /> Home <Icon name="arrowRight" />
-          </a>
-          <a className="no-such-view-door" href="#/inventory">
-            <Icon name="box" /> Inventory <Icon name="arrowRight" />
-          </a>
-        </div>
+        </>
+      }
+      className="no-such-view"
+    >
+      {/* No door to #/fulfillment here: this is the OWNER's dead end, and the Fulfiller's
+          screen is a different persona's view, not a spare exit — the owner already has
+          Home and Inventory, and D95's "the Fulfiller's crash has no door out" is about
+          HIS crash page, never a reason to hand him as an escape hatch from someone else's. */}
+      <div className="no-such-view-doors">
+        <a className="no-such-view-door" href="#/">
+          <Icon name="home" /> Home <Icon name="arrowRight" />
+        </a>
+        <a className="no-such-view-door" href="#/inventory">
+          <Icon name="box" /> Inventory <Icon name="arrowRight" />
+        </a>
       </div>
-    </main>
+    </Page>
   )
 }
 
-/* ---- command palette -------------------------------------------------------------------- */
+/* ---- the palette: "Go to" (D276, amends D95) ------------------------------------
+   IT SAYS WHAT IT DOES. It was labelled "Search" and found only screens, so a card name typed
+   into it answered "Nothing matches" (UX-022). Now it is "Go to": every screen, the off-nav ones
+   included (UX-003), and the cards the store holds, which open their product history. It is the
+   kit's `Modal`, so it has one Close a thumb can press (UX-156), holds focus, and takes Escape
+   from the one stack of layers. */
 type Command = { readonly id: string; readonly group: string; readonly label: string; readonly icon: IconName; readonly hint?: string; readonly keywords?: string; readonly run: () => void }
+
+/** A card search starts at this many characters: one letter matches half the store. */
+const CARD_QUERY_MIN = 2
+/** At most this many cards. The palette jumps; the full list is Inventory's. */
+const CARD_LIMIT = 8
 
 /** Where a query hits, ranked so a match on the LABEL — the word a person actually typed for
  *  the screen — outranks one buried in a keyword list, null when the query hits nowhere at all.
@@ -471,29 +656,66 @@ function rankMatch(c: Command, q: string): number | null {
 function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: () => void; commands: readonly Command[] }) {
   const [query, setQuery] = useState('')
   const [cursor, setCursor] = useState(0)
-  const input = useRef<HTMLInputElement>(null)
+  const listId = useId()
+  const list = useRef<HTMLDivElement>(null)
+  const cards = useSearch()
+  const askCards = cards.setQuery
   useEffect(() => {
     if (!open) return
     setQuery('')
     setCursor(0)
-    const timer = window.setTimeout(() => input.current?.focus(), 10)
-    return () => window.clearTimeout(timer)
   }, [open])
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
+  const q = query.trim().toLowerCase()
+  const cardQuery = open && q.length >= CARD_QUERY_MIN ? query.trim() : ''
+  useEffect(() => {
+    askCards(cardQuery)
+  }, [askCards, cardQuery])
+
+  const screens = useMemo(() => {
     if (q === '') return commands
     return commands
       .map((c) => ({ c, rank: rankMatch(c, q) }))
       .filter((scored): scored is { c: Command; rank: number } => scored.rank !== null)
       .sort((a, b) => a.rank - b.rank)
       .map((scored) => scored.c)
-  }, [commands, query])
+  }, [commands, q])
+
+  /* A REFUSED CARD SEARCH HIDES THE CARDS GROUP, WITH ONE LINE. The published demo records no
+     search, so there the line says so; anywhere else the server did not answer. */
+  const refused = cardQuery !== '' && cards.failure !== null
+  const found = useMemo<Command[]>(() => {
+    if (cardQuery === '' || cards.results === null) return []
+    return cards.results.groups
+      .filter((group) => group.sku !== null)
+      .slice(0, CARD_LIMIT)
+      .map((group) => {
+        const sku = group.sku as string
+        const name = group.names[0] ?? sku
+        return {
+          id: `card:${sku}`,
+          group: 'Cards',
+          label: name,
+          icon: 'chart' as const,
+          hint: group.number_display ?? group.set ?? undefined,
+          run: () => openSheet('product', { sku, name }),
+        }
+      })
+  }, [cardQuery, cards.results])
+  const matches = refused ? screens : [...screens, ...found]
+
   useEffect(() => {
     setCursor((c) => Math.min(c, Math.max(0, matches.length - 1)))
   }, [matches.length])
-  const leave = useLeave(open)
-  if (!leave.mounted) return null
-  const leaving = leave.leaving ? 'true' : undefined
+  useEffect(() => {
+    list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [cursor])
+
+  const choose = (command: Command | undefined) => {
+    if (command === undefined) return
+    onClose()
+    command.run()
+  }
+
   const grouped: { group: string; items: Command[] }[] = []
   for (const command of matches) {
     const last = grouped[grouped.length - 1]
@@ -502,81 +724,79 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
   }
   let index = -1
   return (
-    <>
-      <div className="bn-scrim" onClick={onClose} data-leaving={leaving} />
-      <div className="bn-cmdk" role="dialog" aria-label="Command palette" data-leaving={leaving}>
-        <div className="bn-cmdk-input">
-          <Icon name="search" size={18} className="bn-muted" />
-          <input
-            ref={input}
-            value={query}
-            placeholder="Jump to a screen…"
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowDown') {
-                event.preventDefault()
-                setCursor((c) => Math.min(c + 1, matches.length - 1))
-              } else if (event.key === 'ArrowUp') {
-                event.preventDefault()
-                setCursor((c) => Math.max(c - 1, 0))
-              } else if (event.key === 'Enter') {
-                event.preventDefault()
-                const hit = matches[cursor]
-                if (hit !== undefined) {
-                  onClose()
-                  hit.run()
-                }
-              } else if (event.key === 'Escape') {
-                event.preventDefault()
-                onClose()
-              }
-            }}
-          />
-          <Kbd>esc</Kbd>
-        </div>
-        <div className="bn-cmdk-list" role="listbox">
-          {matches.length === 0 ? <div className="bn-cmdk-empty">Nothing matches “{query}”.</div> : null}
-          {grouped.map((section) => (
-            <div key={section.group}>
-              <div className="bn-cmdk-group">{section.group}</div>
-              {section.items.map((command) => {
-                index += 1
-                const at = index
-                return (
-                  <button
-                    key={command.id}
-                    type="button"
-                    role="option"
-                    aria-selected={at === cursor}
-                    className="bn-cmdk-item"
-                    onMouseEnter={() => setCursor(at)}
-                    onClick={() => {
-                      onClose()
-                      command.run()
-                    }}
-                  >
-                    <Icon name={command.icon} size={16} />
-                    <span>{command.label}</span>
-                    {command.hint ? <span className="bn-cmdk-item-hint">{command.hint}</span> : null}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-        <div className="bn-cmdk-foot">
-          <span>
-            <Kbd>↑</Kbd> <Kbd>↓</Kbd> move
-          </span>
-          <span>
-            <Kbd>↵</Kbd> open
-          </span>
-          <span>
-            <Kbd>,</Kbd> + letter jumps anywhere
-          </span>
-        </div>
+    <Modal open={open} onClose={onClose} title="Go to" className="bn-cmdk">
+      <div className="bn-cmdk-input">
+        <Icon name="search" size={18} className="bn-muted" />
+        {/* `autoFocus`, not only the kit's first-focus frame: a person types the moment the
+            palette opens, and a key that arrives before that frame would be lost. */}
+        <input
+          autoFocus
+          data-autofocus=""
+          role="combobox"
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-activedescendant={matches.length > 0 ? `${listId}-${cursor}` : undefined}
+          aria-label="A screen or a card"
+          autoComplete="off"
+          spellCheck={false}
+          value={query}
+          placeholder="A screen, or a card’s name"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault()
+              setCursor((c) => Math.min(c + 1, matches.length - 1))
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault()
+              setCursor((c) => Math.max(c - 1, 0))
+            } else if (event.key === 'Enter') {
+              event.preventDefault()
+              choose(matches[cursor])
+            }
+          }}
+        />
       </div>
-    </>
+      <div className="bn-cmdk-list" role="listbox" id={listId} aria-label="Results" ref={list}>
+        {matches.length === 0 && !cards.loading && !refused ? <div className="bn-cmdk-empty">Nothing matches “{query}”.</div> : null}
+        {grouped.map((section) => (
+          <div key={section.group}>
+            <div className="bn-cmdk-group">{section.group}</div>
+            {section.items.map((command) => {
+              index += 1
+              const at = index
+              /* AN OPTION IS NOT A TAB STOP. The field owns the keyboard and names the option it
+                 points at (`aria-activedescendant`), so the only stops are the field and Close,
+                 and the trap holds Tab between them. */
+              return (
+                <div
+                  key={command.id}
+                  id={`${listId}-${at}`}
+                  role="option"
+                  aria-selected={at === cursor}
+                  className="bn-cmdk-item"
+                  onMouseEnter={() => setCursor(at)}
+                  onClick={() => choose(command)}
+                >
+                  <Icon name={command.icon} size={16} />
+                  <span>{command.label}</span>
+                  {command.hint ? <span className="bn-cmdk-item-hint">{command.hint}</span> : null}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+        {refused ? (
+          <div>
+            <p className="bn-cmdk-note">{__BN_DEMO__ ? 'Card search is not in this demo.' : 'Card search did not answer.'}</p>
+          </div>
+        ) : null}
+      </div>
+      <div className="bn-cmdk-foot">
+        <KeyHint>
+          <Kbd>↑</Kbd> <Kbd>↓</Kbd> to move, <Kbd>↵</Kbd> to open, and <Kbd>,</Kbd> then a letter jumps anywhere
+        </KeyHint>
+      </div>
+    </Modal>
   )
 }
 
@@ -602,25 +822,14 @@ function WhichKey({ armed }: { armed: boolean }) {
 }
 
 /* ---- the shortcuts sheet ------------------------------------------------------------------
-   THE ONLY PLACE THE PRODUCT SAYS IT IS KEYBOARD-DRIVEN. The rebuild took the inline ⌘←/⌘→
-   keycaps out of the nav and the owner chose one reference over putting them back, so this
-   sheet has to be COMPLETE: every binding, read out of the screen that owns it, grouped by
-   where it applies. A screen's keys are dead while another screen is open and each group
-   says so in a sentence rather than leaving it to be discovered.
+   THE ONLY PLACE THE PRODUCT SAYS IT IS KEYBOARD-DRIVEN, so it is COMPLETE: every binding,
+   grouped by where it applies. It opens on its keys, with no paragraph about itself (UX-119).
+   The shell's own groups are written here. Every screen's group, and every jump entry, is
+   DERIVED from `ROUTES`, so a new screen appears here with no edit to this sheet.
 
    The caps here are written with a bare <kbd> rather than the kit's <Kbd>, which is
    aria-hidden — correct beside a labelled button, wrong here, where the key IS the content
    and a screen reader that skips it reads a list of verbs with no shortcuts in it. */
-
-type Binding = {
-  /** One entry per alternative that does the same thing; a chord is one string (`⌘K`, `,C`). */
-  readonly keys: readonly string[]
-  readonly does: string
-  /** The condition, when the key is armed by something narrower than the screen. */
-  readonly when?: string
-  /** Read the caps as a sequence rather than as alternatives. */
-  readonly seq?: boolean
-}
 
 type KeyGroup = {
   readonly id: string
@@ -632,209 +841,67 @@ type KeyGroup = {
   readonly rows: readonly Binding[]
 }
 
-/* The capture screen's option keycaps, in its own order: `CaptureScreen.tsx` builds them by
-   striking its twelve reserved letters out of `1234567890a…z`. Written out rather than
-   summarised, because the nth key is the nth option and an operator counts along the row. */
-const CAPTURE_OPTION_KEYS = '1234567890adeijklmnqwxyz'.toUpperCase().split('')
+const ANYWHERE_KEYS: KeyGroup = {
+  id: 'anywhere',
+  title: 'Anywhere',
+  icon: 'keyboard',
+  where: 'Works on every one of your screens.',
+  rows: [
+    { keys: ['?'], does: 'Open this sheet' },
+    { keys: ['⌘K', 'Ctrl K'], does: 'Go to a screen, or find a card' },
+    { keys: ['⌘←', '⌘→'], does: 'Step to the screen before or after this one, in workflow order' },
+    { keys: ['⌘↑', '⌘↓'], does: 'The same step, for a keyboard without arrow pairs' },
+    { keys: ['⌘.'], does: 'Collapse the sidebar to its rail, or open it again' },
+    { keys: ['R'], does: 'Reload the screen', when: 'where it has a Reload button' },
+    { keys: ['Esc'], does: 'Close whatever is over the screen' },
+  ],
+}
 
-const SHORTCUTS: readonly KeyGroup[] = [
-  {
-    id: 'anywhere',
-    title: 'Anywhere',
-    icon: 'keyboard',
-    where: 'Works on every one of your screens.',
-    rows: [
-      { keys: ['?'], does: 'Open this sheet' },
-      { keys: ['⌘K', 'Ctrl K'], does: 'Open the command palette' },
-      { keys: ['⌘←', '⌘→'], does: 'Step to the screen before or after this one, in workflow order' },
-      { keys: ['⌘↑', '⌘↓'], does: 'The same step, for a keyboard without arrow pairs' },
-      { keys: ['⌘.'], does: 'Collapse the sidebar to its rail, or open it again' },
-      { keys: ['Esc'], does: 'Close whatever is over the screen — this sheet, the palette, the phone menu', when: 'a sheet mid-request is the one thing that stays put; Runs says so below' },
-    ],
-  },
-  {
+/** Every screen, from `ROUTES`: its `,` letter, or the palette for a screen with none. */
+function jumpKeys(): KeyGroup {
+  const lettered = ROUTES.filter((route) => route.hotkey !== undefined)
+  const unlettered = ROUTES.filter((route) => route.hotkey === undefined)
+  return {
     id: 'jump',
     title: 'Jump to a screen',
     icon: 'zap',
-    where: 'Press the comma, then the letter. The letters appear on screen and you have a second to choose.',
+    where: 'Press the comma, then the letter.',
     rows: [
-      { keys: [',H'], does: 'Home' },
-      { keys: [',C'], does: 'Capture' },
-      { keys: [',R'], does: 'Runs' },
-      { keys: [',Q'], does: 'Review' },
-      { keys: [',P'], does: 'Pricing' },
-      { keys: [',O'], does: 'Orders' },
-      { keys: [',S'], does: 'Shipping' },
-      { keys: [',V'], does: 'Sales' },
-      { keys: [',I'], does: 'Inventory' },
-      { keys: [',G'], does: 'Graveyard' },
-      { keys: [',D'], does: 'Codes' },
+      ...lettered.map((route) => ({ keys: [`,${(route.hotkey ?? '').toUpperCase()}`], does: route.label })),
+      ...unlettered.map((route) => ({ keys: ['⌘K'], does: route.label, when: 'then type its name' })),
     ],
-  },
-  {
-    id: 'palette',
-    title: 'The command palette',
-    icon: 'command',
-    where: 'Only while the palette is open.',
-    rows: [
-      { keys: ['↑', '↓'], does: 'Move down the list' },
-      { keys: ['↵'], does: 'Run the highlighted command' },
-      { keys: ['Esc'], does: 'Close it and leave the screen as it was' },
-    ],
-  },
-  {
-    id: 'capture',
-    title: 'Capture',
-    icon: 'camera',
-    at: '/capture',
-    where: 'Only while Capture is open.',
-    rows: [
-      { keys: ['C'], does: 'Take the photograph', when: 'while the trigger is on Manual' },
-      { keys: ['S'], does: 'Put a divider in, at the card you are about to shoot' },
-      { keys: ['U'], does: 'Undo the newest capture' },
-      { keys: ['B'], does: 'Open or close the Box field' },
-      { keys: ['H'], does: 'Open or close the Set hint field' },
-      { keys: ['G'], does: 'Open or close the Game field' },
-      { keys: ['R'], does: 'Open or close the Rarity field', when: 'when the game has rarities' },
-      { keys: ['F'], does: 'Open or close the Finish field', when: 'when the game has finishes' },
-      { keys: ['P'], does: 'Open or close the Product field' },
-      { keys: ['V'], does: 'Open or close the Camera field' },
-      { keys: ['O'], does: 'Open or close the Rotation field' },
-      { keys: ['T'], does: 'Open or close the Trigger field' },
-      {
-        keys: CAPTURE_OPTION_KEYS,
-        seq: true,
-        does: 'Choose the option with that keycap beside it',
-        when: 'while a field is open — the caps run in this order, and options past the last one are mouse-only',
-      },
-      { keys: ['↵'], does: 'Take the box you typed, or make a new one', when: 'in the Box field' },
-      { keys: ['Esc'], does: 'Close the open field' },
-    ],
-  },
-  {
-    id: 'runs',
-    title: 'Runs',
-    icon: 'play',
-    at: '/runs',
-    where: 'Only while Runs is open.',
-    rows: [
-      { keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a preview is on screen' },
-      {
-        keys: ['Esc'],
-        does: 'Close the identify composer, the store-wide reconcile or the markdown sheet',
-        when: 'unless that sheet has a request in flight — it stays put until the answer lands',
-      },
-    ],
-  },
-  {
-    id: 'review',
-    title: 'Review',
-    icon: 'inbox',
-    at: '/review',
-    where: 'Only while Review is open.',
-    rows: [
-      { keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], seq: true, does: 'Answer with that candidate — or that row of the export, while the lookup is open' },
-      { keys: ['G'], does: 'Answer the whole group at once', when: 'when every card left asks the same question' },
-      { keys: ['↵'], does: 'Confirm the group', when: 'while the group offer is up' },
-      { keys: ['Esc'], does: 'Go back to one card at a time', when: 'while the group offer is up' },
-      { keys: ['S'], does: 'Skip this card and come back to it' },
-      { keys: ['C'], does: 'Clear the skips and start round again', when: 'when everything left is skipped' },
-      { keys: ['X'], does: 'Close this question without answering it' },
-      { keys: ['1', '2', '3', '4', '5', '6', '7'], seq: true, does: 'Pick the reason it is closed', when: 'while the close panel is up' },
-      { keys: ['L'], does: 'Look this card up in the export' },
-      { keys: ['Esc'], does: 'Leave the lookup, or the close panel, or the queue drawer' },
-      { keys: ['R'], does: 'Reload the queue' },
-      { keys: ['U'], does: 'Undo the newest answer' },
-    ],
-  },
-  {
-    id: 'pricing',
-    title: 'Pricing',
-    icon: 'tag',
-    at: '/pricing',
-    where: 'Only while Pricing is open. Everything but R and T is pressed inside a price field.',
-    rows: [
-      { keys: ['R'], does: 'Reload the worklist', when: 'not on a phone' },
-      { keys: ['T'], does: 'Hold to read the price history of the row under the pointer; let go and it closes' },
-      { keys: ['M'], does: 'Snap the price to Market' },
-      { keys: ['L'], does: 'Snap the price to Low' },
-      { keys: ['S'], does: 'Snap the price to Low with shipping' },
-      { keys: ['D'], does: 'Snap the price to Direct low' },
-      { keys: ['N'], does: 'Snap the price to what it is now', when: 'when the card is already listed' },
-      { keys: ['H'], does: 'Hold this card back instead of pricing it' },
-      { keys: ['P'], does: 'Show the photograph of this card' },
-      { keys: ['U'], does: 'Undo the last answer' },
-      { keys: ['↵'], does: 'Write this price and drop to the next card' },
-      { keys: ['⇧↵'], does: 'Write this price and go back up one' },
-      { keys: ['↑', '↓'], does: 'Write this price and move' },
-      { keys: ['Esc'], does: 'Put the standing answer back and leave the field' },
-      { keys: ['B'], does: 'Hold it because you are bullish', when: 'while the hold panel is up' },
-      { keys: ['K'], does: 'Hold it because you are keeping it', when: 'while the hold panel is up' },
-      { keys: ['X'], does: 'Hold it for a later batch', when: 'while the hold panel is up' },
-      { keys: ['↵'], does: 'Set the hold', when: 'while the hold panel is up' },
-      { keys: ['Esc'], does: 'Cancel the hold, or close the history, the photograph, the files dialog or the run picker' },
-    ],
-  },
-  {
-    id: 'inventory',
-    title: 'Inventory',
-    icon: 'box',
-    at: '/inventory',
-    where: 'Only while Inventory is open.',
-    rows: [
-      { keys: ['/'], does: 'Jump into the search field; Esc hands focus back and keeps what you typed' },
-      { keys: ['←', '→'], does: 'Step to the card before or after this one in the walk' },
-      { keys: ['PgUp', 'PgDn'], does: 'Jump by section', when: 'with the card list focused' },
-      { keys: ['Home', 'End'], does: 'Go to the first or last card the filter leaves', when: 'with the card list focused' },
-      { keys: ['X'], does: 'Tick the selected card', when: 'with the card list focused' },
-      { keys: ['Esc'], does: 'Close the open sheet or panel' },
-      { keys: ['U'], does: 'Undo the newest sale or retirement' },
-    ],
-  },
-  {
-    id: 'orders',
-    title: 'Orders',
-    icon: 'cart',
-    at: '/orders',
-    where: 'Only while Orders is open, in the two-pane layout on a wide window.',
-    rows: [
-      { keys: ['/'], does: 'Jump into the search field; Esc hands focus back and keeps what you typed' },
-      { keys: ['↓'], does: 'Select the next buyer' },
-      { keys: ['↑'], does: 'Select the buyer before it' },
-      { keys: ['J'], does: 'Step to the next card in the walk' },
-      { keys: ['K'], does: 'Step to the card before it in the walk' },
-      { keys: ['U'], does: 'Undo the newest sale', when: 'on the Pull stage' },
-    ],
-  },
-  {
-    id: 'codes',
-    title: 'Codes',
-    icon: 'qr',
-    at: '/codes',
-    where: 'Only while Codes is open.',
-    rows: [{ keys: ['Esc'], does: 'Close the open sheet' }],
-  },
-  {
-    id: 'revenue',
-    title: 'Sales',
-    icon: 'dollar',
-    at: '/revenue',
-    where: 'Only while Sales is open.',
-    rows: [{ keys: ['/'], does: 'Jump into the product search field' }],
-  },
-  {
-    id: 'fulfillment',
-    title: 'Cards to pull',
-    icon: 'hand',
-    where: 'The hand-off screen. It runs without this shell, so these two are all it answers to — and this sheet cannot be opened from it.',
-    rows: [
-      { keys: ['/'], does: 'Jump into the search field' },
-      { keys: ['Esc'], does: 'Close the enlarged photograph' },
-    ],
-  },
-]
+  }
+}
 
-const BINDING_COUNT = SHORTCUTS.reduce((total, group) => total + group.rows.length, 0)
+const PALETTE_KEYS: KeyGroup = {
+  id: 'palette',
+  title: 'Go to',
+  icon: 'command',
+  where: 'Only while Go to is open.',
+  rows: [
+    { keys: ['↑', '↓'], does: 'Move down the list' },
+    { keys: ['↵'], does: 'Open the highlighted screen or card' },
+    { keys: ['Esc'], does: 'Close it and leave the screen as it was' },
+  ],
+}
+
+/** Each screen's own keys, from its `ROUTES` row. */
+function screenKeys(): KeyGroup[] {
+  return ROUTES.flatMap((route) =>
+    route.keys === undefined
+      ? []
+      : [{
+          id: route.path,
+          title: route.label,
+          icon: route.icon,
+          at: route.persona === 'owner' ? route.path : undefined,
+          where: route.keys.where ?? `Only while ${route.label} is open.`,
+          rows: route.keys.rows,
+        }],
+  )
+}
+
+const SHORTCUTS: readonly KeyGroup[] = [ANYWHERE_KEYS, jumpKeys(), PALETTE_KEYS, ...screenKeys()]
 
 function Caps({ row }: { row: Binding }) {
   return (
@@ -859,9 +926,6 @@ function rowMatches(group: KeyGroup, row: Binding, q: string): boolean {
 }
 
 function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void; path: string }) {
-  const panel = useRef<HTMLDivElement>(null)
-  const search = useRef<HTMLInputElement>(null)
-  const leave = useLeave(open)
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
 
@@ -869,16 +933,15 @@ function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void
      session's search or expansion forward — a filter left on from last time is a sheet that
      looks broken the next time it opens. */
   useEffect(() => {
-    if (open) { setQuery(''); setShowAll(false) }
+    if (open) {
+      setQuery('')
+      setShowAll(false)
+    }
   }, [open])
 
   const q = query.trim().toLowerCase()
   /* DEFAULT VIEW: Anywhere, Jump to a screen, and whichever group belongs to the screen
-     already open — 78 entries across ten groups is a wall of text nobody reads top to bottom.
-     "Jump to a screen" stays in the default alongside Anywhere (never gated behind `at`, and
-     never behind a screen): the letters it lists are global navigation, not one screen's own
-     keys, so it belongs with Anywhere rather than behind "Show every screen". Typing a query,
-     or pressing "Show every screen", overrides all of it. */
+     already open. Typing a query, or pressing "Show every screen", overrides it. */
   const groups = q === ''
     ? (showAll
         ? SHORTCUTS
@@ -886,157 +949,57 @@ function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void
     : SHORTCUTS.map((group) => ({ ...group, rows: group.rows.filter((row) => rowMatches(group, row, q)) })).filter(
         (group) => group.rows.length > 0,
       )
-  const hiddenGroupCount = SHORTCUTS.length - groups.length
-
-  /* Focus comes back to whatever the operator was on. Keyed on `open` alone, so the restore
-     fires the moment it closes rather than after the leave animation. */
-  useEffect(() => {
-    if (!open) return
-    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const overflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = overflow
-      if (before !== null && document.contains(before)) before.focus({ preventScroll: true })
-    }
-  }, [open])
-
-  /* And focus goes INTO the sheet — on `leave.mounted` as well as `open`, because `useLeave`
-     raises `mounted` from an effect: on the first render after the press the dialog is not in
-     the document yet and the ref is still null. Focusing on `open` alone silently did nothing
-     and left the operator's focus on the page behind the scrim. Tab then cycles inside.
-     THE SEARCH FIELD IS THE LANDING SPOT, not the panel — the sheet exists to be typed into
-     now, and a fallback to the panel itself covers the one render where the input ref is not
-     attached yet. */
-  useEffect(() => {
-    if (!open || !leave.mounted) return
-    const frame = window.requestAnimationFrame(() =>
-      (search.current ?? panel.current)?.focus({ preventScroll: true }),
-    )
-    return () => window.cancelAnimationFrame(frame)
-  }, [open, leave.mounted])
-
-  if (!leave.mounted) return null
-  const leaving = leave.leaving ? 'true' : undefined
-
-  const trap = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Tab' || panel.current === null) return
-    const stops = [...panel.current.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')]
-    const first = stops[0]
-    const last = stops[stops.length - 1]
-    if (first === undefined || last === undefined) return
-    const active = document.activeElement
-    if (event.shiftKey && (active === first || active === panel.current)) {
-      event.preventDefault()
-      last.focus()
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault()
-      first.focus()
-    }
-  }
+  const hidden = q === '' && !showAll && SHORTCUTS.length > groups.length
 
   return (
-    <>
-      <div className="bn-scrim" onClick={onClose} data-leaving={leaving} />
-      <div
-        ref={panel}
-        className="bn-dialog app-keys"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="app-keys-title"
-        tabIndex={-1}
-        onKeyDown={trap}
-        data-leaving={leaving}
-      >
-        <header className="app-keys-head">
-          <div className="app-keys-head-top">
-            <h2 className="app-keys-title" id="app-keys-title">
-              <Icon name="keyboard" size={20} />
-              Keyboard shortcuts
-            </h2>
-            <Button variant="ghost" icon="x" kbd="Esc" onClick={onClose} className="app-keys-close">
-              Close
-            </Button>
-          </div>
-          {/* Its own line, at every width: beside the button it wrapped to five lines on a
-              phone and pushed the first real row off the screen. */}
-          <p className="app-keys-lede">
-            Banchi is meant to be driven from the keyboard. Everything it answers to is here, in {BINDING_COUNT} entries
-            — a row that shows several caps is a run of keys, not one. A screen’s own keys work only while that screen
-            is open.
-          </p>
-          <div className="app-keys-search">
-            <Icon name="search" size={14} />
-            <input
-              ref={search}
-              type="search"
-              className="app-keys-search-input"
-              placeholder="Search shortcuts…"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label="Search shortcuts"
-            />
-          </div>
-        </header>
-
-        <div className="app-keys-body">
-          {q === '' && !showAll && hiddenGroupCount > 0 ? (
-            <p className="app-keys-more">
-              Showing Anywhere, Jump to a screen{groups.length > 2 ? ', and this screen’s own keys' : ''}.{' '}
-              <button type="button" className="app-keys-show-all" onClick={() => setShowAll(true)}>
-                Show every screen’s shortcuts
-              </button>
-            </p>
-          ) : null}
-          {groups.length === 0 ? <p className="app-keys-none">No shortcut matches “{query}”.</p> : null}
-          {groups.map((group) => (
-            <section key={group.id} className="app-keys-group">
-              <h3 className="app-keys-group-title">
-                <Icon name={group.icon} size={15} />
-                {group.title}
-              </h3>
-              <p className="app-keys-where">
-                {group.where}
-                {group.at === undefined ? null : (
-                  <>
-                    {' '}
-                    <a className="app-keys-goto" href={`#${group.at}`} onClick={onClose}>
-                      Go there
-                      <Icon name="arrowRight" size={12} />
-                    </a>
-                  </>
-                )}
-              </p>
-              <dl className="app-keys-rows">
-                {group.rows.map((row, at) => (
-                  <div
-                    key={`${group.id}-${at}`}
-                    className={row.keys.length > 3 ? 'app-keys-row app-keys-row-wide' : 'app-keys-row'}
-                  >
-                    <dt>
-                      <Caps row={row} />
-                    </dt>
-                    <dd className="app-keys-does">
-                      {row.does}
-                      {row.when === undefined ? null : <span className="app-keys-when">{row.when}</span>}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ))}
-        </div>
-
-        <footer className="app-keys-foot">
-          <span>
-            <kbd className="bn-kbd">?</kbd> opens this sheet from anywhere, unless you are typing in a field.
-          </span>
-          <span className="app-keys-foot-end">
-            <kbd className="bn-kbd">Esc</kbd> closes it
-          </span>
-        </footer>
+    <Modal open={open} onClose={onClose} title="Keyboard shortcuts" icon="keyboard" className="app-keys">
+      <div className="app-keys-search">
+        <SearchField value={query} onChange={setQuery} persona="owner" label="Search shortcuts" placeholder="Search shortcuts" autoFocus />
       </div>
-    </>
+      <div className="app-keys-body">
+        {groups.length === 0 ? <p className="app-keys-none">No shortcut matches “{query}”.</p> : null}
+        {groups.map((group) => (
+          <section key={group.id} className="app-keys-group">
+            <h3 className="app-keys-group-title">
+              <Icon name={group.icon} size={15} />
+              {group.title}
+            </h3>
+            <p className="app-keys-where">
+              {group.where}
+              {group.at === undefined ? null : (
+                <>
+                  {' '}
+                  <a className="app-keys-goto" href={`#${group.at}`} onClick={onClose}>
+                    Go there
+                    <Icon name="arrowRight" size={12} />
+                  </a>
+                </>
+              )}
+            </p>
+            <dl className="app-keys-rows">
+              {group.rows.map((row, at) => (
+                <div key={`${group.id}-${at}`} className={row.keys.length > 3 ? 'app-keys-row app-keys-row-wide' : 'app-keys-row'}>
+                  <dt>
+                    <Caps row={row} />
+                  </dt>
+                  <dd className="app-keys-does">
+                    {row.does}
+                    {row.when === undefined ? null : <span className="app-keys-when">{row.when}</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
+        {hidden ? (
+          <p className="app-keys-more">
+            <button type="button" className="app-keys-show-all" onClick={() => setShowAll(true)}>
+              Show every screen’s keys
+            </button>
+          </p>
+        ) : null}
+      </div>
+    </Modal>
   )
 }
 
@@ -1057,34 +1020,36 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
   )
 }
 
+/* ---- the server line ------------------------------------------------------------------------ */
+function ServerLine({ state }: { state: ServerState }) {
+  return (
+    <div className="bn-server" data-state={state} title={state === 'offline' ? 'The capture server is not answering' : undefined}>
+      <span className={`bn-dot ${state === 'online' ? 'bn-dot-ok' : state === 'offline' ? 'bn-dot-danger' : ''}`} />
+      <span className="bn-side-foot-text">
+        {state === 'online' ? 'Server online' : state === 'offline' ? 'Server offline' : 'Checking server…'}
+      </span>
+    </div>
+  )
+}
+
+/* ---- the tab title ------------------------------------------------------------------------------
+   ONE FIXED TITLE: "番地 " and the screen's name in lowercase ("番地 pricing", "番地 home"). The
+   owner's ruling, 2026-09-23. It replaced a title that alternated on a timer between the screen and
+   "番地 banchi", and a second, joined form under reduced motion. `app/index.html` carries
+   "番地 banchi" for the moment before React boots.
+   LOWERCASED HERE AND NOWHERE ELSE. The nav, the palette and the keyboard sheet draw the label in
+   Title Case; this is the tab's own voice. `toLowerCase` rather than `toLocaleLowerCase`: the labels
+   are ASCII English and the locale form has a Turkish dotted-i behaviour nobody here wants.
+   THE FULFILLER'S TAB NAMES HIS TASK AND CARRIES NO BRAND (D5). */
+function tabTitle(route: Route | undefined): string {
+  const name = (route === undefined ? 'Not found' : route.title ?? route.label).toLowerCase()
+  return route?.persona === 'fulfiller' ? name : `番地 ${name}`
+}
+
 /* ---- sidebar ---------------------------------------------------------------------------------- */
 /* docs/specs/logo.md section 16: the open sidebar draws the lockup at kanji 40, and the rail keeps
    the mark at the 32 it already ships. Named here because they are the two numbers the shell
    chooses; everything derived from them comes out of `lockupGeometry.ts`. */
-/* What the browser tab says. `app/index.html`'s <title> is the same string, for the frame
-   before React runs; there is no way to share a constant with static HTML. */
-const BROWSER_TITLE = '番地 banchi'
-
-/* HOW LONG EACH HALF OF THE TAB TITLE HOLDS. Asymmetric, and slower than it started.
-   A second each was the owner's first ask and read as too frequent in use. THE ONE-SECOND FLIP IS
-   THE NOTIFICATION-FLASH TEMPO — the pattern that alternates a title to nag you back to a tab —
-   and every implementation of it in the wild sits at 1000-2000ms because it is MEANT to be hard
-   to ignore. This is not that: it is wayfinding, and it should be calm.
-   THE SCREEN DWELLS LONGER THAN THE NAME, which is a choice worth stating because the owner
-   floated the reverse. The name is confirmation you already have — you know which app you opened.
-   The screen is the news, so it holds longer; weighted the other way you would glance at a strip
-   of tabs and mostly see `番地 banchi`, having to wait to learn which page it is. Swapping the two
-   numbers is the whole change if that judgement is wrong.
-   THE RATIO SOFTENED WHEN THE PAIR SLOWED. It began 4000/2000 — the screen twice the name — and
-   the owner set 6000/4000, which is 1.5x. A longer floor matters more than the ratio here: at
-   four seconds the name is comfortably readable on its own, so the shorter half no longer needs
-   to be short to stay out of the way.
-   WCAG 2.2.2 asks that content auto-updating for more than five seconds can be paused, stopped or
-   hidden. A tab title is browser chrome rather than page content, so the criterion is arguably not
-   engaged — but the spirit is, and `prefers-reduced-motion` is the mechanism: it stops this dead
-   and shows both halves at once. */
-const TITLE_DWELL = { screen: 6000, name: 4000 } as const
-
 const SIDEBAR_KANJI = 40
 const RAIL_MARK = 32
 /* THE DRAWER IS THE SIDEBAR ON A PHONE, so it draws the sidebar's number (logo.md section 19).
@@ -1094,9 +1059,8 @@ const DRAWER_KANJI = 40
 
 /* AND 34 WHERE THE SCREEN IS SHORT (section 19, amended). The forced choice above was made on
    WIDTH; on a phone in Safari, whose toolbars take about 90px, the drawer's nav list runs past
-   the fold — 7 of 9 rows on an iPhone 14. The owner's ruling was to shrink the group labels to
-   fit rather than drop them, and the labels alone recover about 70px of the 85 needed; the last
-   15 come from here.
+   the fold. The owner's ruling was to shrink the group labels to fit rather than drop them, and
+   the last 15px come from here.
    THE HEIGHT IS THE CONDITION, not the width: a 430x932 Pro Max is a phone and has the room. */
 const DRAWER_KANJI_SHORT = 34
 const SHORT_SCREEN = '(max-height: 820px)'
@@ -1120,20 +1084,19 @@ function BrandSlot({ kanji = SIDEBAR_KANJI }: { readonly kanji?: number }) {
     >
       {/* ONE DRAWING, NOT TWO. The rail's empty slot is this same lockup with its bracket morphed
           and its type faded out — logo.md section 1: "with the card removed the same brackets
-          become an empty slot, which is the in-product mark." It was a second component
-          crossfading past this one until the generator was taught to emit both ends of the
-          bracket at one topology; section 16 records why that was thought impossible. */}
+          become an empty slot, which is the in-product mark." */}
       <Lockup size={kanji} railSize={RAIL_MARK} className="bn-brand-lockup" decorative />
     </span>
   )
 }
 
-/* THE TABLET RAIL IS A MEDIA QUERY AND REACT CANNOT SEE IT. App.css rails the shell between 768
+/* THE TABLET RAIL IS A MEDIA QUERY AND REACT CANNOT SEE IT. App.css rails the shell between 640
    and 1023 by breakpoint, ignoring `data-rail` entirely — so a toggle offered at that width would
-   set state the layout does not read and appear to do nothing. Worse than not offering one. This
-   is the same hook shape BoxBrowse.tsx and Orders.tsx already carry; it is not lifted into a
-   shared file here because that is a refactor of two other screens. */
-const TABLET_RAIL = '(min-width: 768px) and (max-width: 1023px)'
+   set state the layout does not read and appear to do nothing. Worse than not offering one.
+   THE RAIL STARTS AT 640, NOT 768 (the owner's ruling, 2026-09-23): half-width Chrome at 720 is a
+   desk, and gets the desktop rail rather than the phone's bars. This query and App.css's own
+   must name the same edge; `scripts/js-breakpoints.py` checks it. */
+const TABLET_RAIL = '(min-width: 640px) and (max-width: 1023px)'
 function useMedia(query: string): boolean {
   const [matches, setMatches] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia(query).matches)
@@ -1153,7 +1116,6 @@ function Sidebar({
   onToggleRail,
   armed,
   server,
-  cards,
   theme,
   onToggleTheme,
   onPalette,
@@ -1163,7 +1125,6 @@ function Sidebar({
   onToggleRail?: () => void
   armed: boolean
   server: ServerState
-  cards: number | null
   theme: Theme
   onToggleTheme: () => void
   onPalette: () => void
@@ -1173,26 +1134,12 @@ function Sidebar({
   return (
     <aside className="bn-side">
       {/* THE LOCKUP REPLACES THE MARK, THE WORDMARK AND THE TAGLINE TOGETHER (logo.md section 16).
-          It already says the name twice, in two scripts, so drawing it beside the text read as
-          twice as busy as it is and faked the sizing — the lockup was squeezed into what was left
-          after the words instead of owning the row.
-          BOTH DRAWINGS ARE MOUNTED AND CSS CHOOSES. A JSX branch on `rail` would be wrong at
-          768-1023px, where App.css rails the shell by media query and `data-rail` is inert; a
-          stylesheet reads the same condition the layout does.
-          Both are `aria-hidden`: whichever element wraps them carries the name, and two named
-          children would announce it twice. */}
-      {/* THE BRAND IS THE TOGGLE. It was a link to `#/` with a separate 22px chevron beside it,
-          and that chevron was barely clickable: `.bn-side` is `overflow: hidden` and the button
-          sat half outside the sidebar's right edge, so the outer half was CLIPPED — measured,
-          probes at 50%, 65% and 85% of its own box all missed it — and whatever occupied the
-          content column at y=18, an offline banner for instance, covered what was left. About
-          11px of a 22px control was real.
-          So the affordance moves onto the thing that is already 128 x 93. `Home` is a nav item
-          with its own key, so nothing is lost by the brand no longer being a link.
-          AT 768-1023 IT STAYS A LINK. That breakpoint rails the shell by media query and ignores
-          `data-rail` entirely, so a toggle there would silently do nothing — worse than not
-          offering one. `onToggleRail` is undefined at that width and the element renders as an
-          anchor, which is exactly what it does today. */}
+          Both ends of the brand are one drawing and CSS chooses: a JSX branch on `rail` would be
+          wrong at 640-1023px, where App.css rails the shell by media query and `data-rail` is
+          inert. The drawing is `aria-hidden`: the element that wraps it carries the name. */}
+      {/* THE BRAND IS THE TOGGLE. A separate 22px chevron beside it was half clipped by
+          `.bn-side`'s `overflow: hidden`. AT 640-1023 IT STAYS A LINK: that breakpoint rails the
+          shell by media query and ignores `data-rail`, so a toggle there would do nothing. */}
       {onToggleRail ? (
         <button
           type="button"
@@ -1205,7 +1152,7 @@ function Sidebar({
           <Icon name={rail ? 'chevronRight' : 'chevronLeft'} size={14} className="bn-brand-chevron" />
         </button>
       ) : (
-        <a className="bn-brand" href="#/" aria-label="Banchi home">
+        <a className="bn-brand" href="#/" aria-label="Home">
           {brandSlot}
         </a>
       )}
@@ -1213,32 +1160,30 @@ function Sidebar({
         {GROUPS.map((group) => (
           <div key={group.id} className="bn-nav-group">
             {group.label ? <div className="bn-nav-group-label">{group.label}</div> : null}
-            {ROUTES.filter((r) => r.group === group.id && inNav(r)).map((route) => (
+            {navRows(group.id).map((route) => (
               <NavLink key={route.path} route={route} current={route.path === path} />
             ))}
           </div>
         ))}
       </nav>
+      {/* ONE ICON COLUMN AND ONE ROW HEIGHT FOR THE WHOLE SIDEBAR (UX-134): the foot's rows are
+          sized to the nav's own in App.css. */}
       <div className="bn-side-foot">
-        <a className="bn-nav-link" href="#/fulfillment" target="_blank" rel="noopener" data-tip="Cards to pull">
-          <Icon name="hand" size={18} />
-          <span className="bn-nav-text">Cards to pull</span>
-          <Icon name="external" size={14} className="bn-faint" />
-        </a>
-        <Button variant="ghost" icon="command" onClick={onPalette} data-tip="Search">
-          <span className="bn-side-foot-text">Search</span>
+        {OWN_TAB.map((route) => (
+          <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" data-tip={route.label}>
+            <Icon name={route.icon} size={18} />
+            <span className="bn-nav-text">{route.label}</span>
+            <Icon name="external" size={14} className="bn-faint" />
+          </a>
+        ))}
+        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Go to" aria-haspopup="dialog">
+          <span className="bn-side-foot-text">Go to</span>
           <Kbd>⌘K</Kbd>
         </Button>
         <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
           <span className="bn-side-foot-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
         </Button>
-        <div className="bn-server" data-state={server} title={server === 'offline' ? 'The capture server is not answering' : 'Capture server'}>
-          <span className={`bn-dot ${server === 'online' ? 'bn-dot-ok' : server === 'offline' ? 'bn-dot-danger' : ''}`} />
-          <span className="bn-side-foot-text">
-            {server === 'online' ? 'Server online' : server === 'offline' ? 'Server offline' : 'Checking server…'}
-            {server === 'online' && cards !== null ? <span className="bn-server-detail">{cards.toLocaleString()} cards</span> : null}
-          </span>
-        </div>
+        <ServerLine state={server} />
       </div>
     </aside>
   )
@@ -1246,56 +1191,38 @@ function Sidebar({
 
 /* ---- phone chrome ------------------------------------------------------------------------------- */
 /* Every owner screen draws its own h1 directly under this bar, so the bar carries the
-   wordmark rather than repeating (or, on Codes, contradicting) the screen's name.
-   AN UNKNOWN HASH GETS THIS BAR TOO, NOW. `hasChrome` treats `route === undefined` as the
-   owner's shell rather than none, so `NoSuchView` draws inside it exactly like any other owner
-   screen — a fat-fingered URL costs no nav.
+   wordmark rather than repeating (or contradicting) the screen's name.
    THE MARK HERE IS THE EMPTY SLOT, NOT THE TILE (logo.md section 19). This bar is the rail's
-   own case one breakpoint down — 52px of height against the rail's 64px width — and the lockup
-   is refused by both for the same arithmetic: its floor is kanji 32, which is a 102 x 75 block
-   (section 11). So the bar draws what the rail draws, off the same `Lockup`, and App.css pins
-   the slot railed. It was a `Logo` tile until 2026-09-07, which made the shell speak two brands
-   depending on how wide the window was, and sank into the bar on dark. */
-function PhoneBar({ onMenu, onPalette }: { onMenu: () => void; onPalette: () => void }) {
+   own case one breakpoint down, so it draws what the rail draws, off the same `Lockup`, and
+   App.css pins the slot railed.
+   ONE DOOR TO THE DRAWER (UX-072). The bar had a Menu button that opened the same drawer as
+   the tab bar's More; More is the one door now, and the bar keeps Go to. */
+function PhoneBar({ onPalette }: { onPalette: () => void }) {
   return (
     <header className="bn-topbar">
-      <a className="bn-topbar-brand" href="#/" aria-label="Banchi home">
+      <a className="bn-topbar-brand" href="#/" aria-label="Home">
         <BrandSlot />
       </a>
-      {/* THE WORDMARK IS THE LOCKUP'S OWN ROMAN, SET AS TEXT (logo.md section 19, amended). It was
-          `Banchi` in Manrope 700 at 16px — the right face and the wrong voice: sentence case, no
-          tracking, full ink, beside a mark whose own name is drawn in caps at 45%.
-          EVERY VALUE COMES FROM THE GEOMETRY, and none is typed here. The roman is Manrope 700
-          (`lockupGeometry.ts`'s own header says so), its tracking is the width-match's SOLVED
-          answer rather than section 13's seed, and both are published to CSS the way `BrandSlot`
-          publishes the block. A number copied out of that file is the defect section 13 spent
-          thirty-seven rounds learning, and this is the same file it would be copied from.
-          THE TRACKING IS CONVERTED, WHICH IS THE ONE ARITHMETIC STEP. `ROMAN_TRACK_SOLVED` is a
-          fraction of the KANJI's size; `letter-spacing` is a fraction of the element's own. The
-          roman is `romanSize` of the kanji, so the em value is the ratio of the two.
-          THE TRAILING TRACKING IS LEFT IN THE BOX ON PURPOSE — see App.css, where it is measured
-          at 135px of gap either way, because this element grows to fill the bar. */}
+      {/* THE WORDMARK IS THE LOCKUP'S OWN ROMAN, SET AS TEXT (logo.md section 19, amended). Its
+          face, case and tracking come from the geometry and none is typed here. Its ink is the
+          shell's own muted text colour, so it reads at 4.5:1 (the drawing's 45% did not). */}
       <span
-          className="bn-topbar-wordmark"
-          style={{
-            ['--bn-roman-track' as string]: `${ROMAN_TRACK_SOLVED / PARAMS.romanSize}em`,
-            ['--bn-roman-opacity' as string]: String(PARAMS.romanOpacity),
-          }}
-        >
-          Banchi
-        </span>
-      <Button variant="ghost" icon="search" iconOnly onClick={onPalette}>
-        Search
-      </Button>
-      <Button variant="ghost" icon="menu" iconOnly onClick={onMenu}>
-        Menu
+        className="bn-topbar-wordmark"
+        style={{ ['--bn-roman-track' as string]: `${ROMAN_TRACK_SOLVED / PARAMS.romanSize}em` }}
+      >
+        Banchi
+      </span>
+      <Button variant="ghost" icon="search" iconOnly onClick={onPalette} aria-haspopup="dialog">
+        Go to
       </Button>
     </header>
   )
 }
 
-function TabBar({ path, onMore }: { path: string; onMore: () => void }) {
+function TabBar({ path, drawerOpen, onMore }: { path: string; drawerOpen: boolean; onMore: () => void }) {
   const tabs = ROUTES.filter((r) => r.tab)
+  /* MORE IS LIT WHEN THE SCREEN IS BEHIND IT (UX-046): every screen shows its place in the bar. */
+  const behindMore = !tabs.some((route) => route.path === path)
   return (
     <nav className="bn-tabbar" aria-label="Primary">
       {tabs.map((route) => (
@@ -1304,7 +1231,14 @@ function TabBar({ path, onMore }: { path: string; onMore: () => void }) {
           <span>{route.label}</span>
         </a>
       ))}
-      <button type="button" className="bn-tab-link" onClick={onMore}>
+      <button
+        type="button"
+        className="bn-tab-link"
+        onClick={onMore}
+        aria-current={behindMore ? 'page' : undefined}
+        aria-haspopup="dialog"
+        aria-expanded={drawerOpen}
+      >
         <Icon name="more" size={22} />
         <span>More</span>
       </button>
@@ -1312,66 +1246,54 @@ function TabBar({ path, onMore }: { path: string; onMore: () => void }) {
   )
 }
 
-function Drawer({ open, path, onClose, theme, onToggleTheme, server, cards }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void; server: ServerState; cards: number | null }) {
-  const leave = useLeave(open)
+/* THE DRAWER IS THE KIT'S SHEET (UX-014), on its own left edge (kit.css carves the drawer out of
+   the rise-from-the-bottom rule). So it is modal: focus moves in, stays in, and goes back to More
+   when it closes, and Escape is the one stack's. ITS FOOT JOINED THE LIST
+   (D266, amends D204): Cards to pull, the theme and the server line are the last rows of the one
+   scrolling list, so no row ever sits under a fixed block. */
+function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void; server: ServerState }) {
   /* THE ONE PLACE IN THIS SHELL WHERE THE SIZE IS CHOSEN IN JS RATHER THAN IN A STYLESHEET, and
-     the reason is the morph. `Lockup` reads the SLOT's measured width against the `size` it was
-     handed and interpolates the bracket between the two ends — so a media query that shrank the
-     slot without telling the component would leave the box at 34's width and the maths at 40's,
-     and the bracket would render a fifth of the way toward the rail. Measured: t = 0.2.
-     Everywhere else the stylesheet reads the condition the layout does (see `Sidebar`); here the
-     two cannot be allowed to disagree, so one source decides and both read it. */
+     the reason is the morph: `Lockup` reads the SLOT's measured width against the `size` it was
+     handed, so a media query that shrank the slot without telling the component would draw the
+     bracket part of the way toward the rail. One source decides and both read it. */
   const short = useMedia(SHORT_SCREEN)
-  if (!leave.mounted) return null
-  const leaving = leave.leaving ? 'true' : undefined
   return (
-    <>
-      <div className="bn-scrim" onClick={onClose} data-leaving={leaving} />
-      <div className="bn-sheet bn-sheet-left bn-drawer" role="dialog" aria-label="Screens" data-leaving={leaving}>
-        <div className="bn-drawer-head">
-          {/* THE LOCKUP REPLACES THE MARK, THE WORDMARK AND THE TAGLINE TOGETHER, here as in the
-              sidebar (logo.md section 16, extended by section 19). This drawer IS the sidebar at
-              a phone's width — the same nav, the same foot, one tap away instead of always on —
-              so it draws the sidebar's brand and the sidebar's number. `every card has an
-              address` left the product with this edit, on the owner's ruling; the lockup says the
-              name twice already, and Home's own lede still ends "Every one has an address." */}
-          <a className="bn-brand" href="#/" onClick={onClose} aria-label="Banchi home">
-            <BrandSlot kanji={short ? DRAWER_KANJI_SHORT : DRAWER_KANJI} />
-          </a>
-          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
-        </div>
-        <nav className="bn-nav" aria-label="All screens">
-          {GROUPS.map((group) => (
-            <div key={group.id} className="bn-nav-group">
-              {group.label ? <div className="bn-nav-group-label">{group.label}</div> : null}
-              {ROUTES.filter((r) => r.group === group.id && inNav(r)).map((route) => (
-                <NavLink key={route.path} route={route} current={route.path === path} onNavigate={onClose} />
-              ))}
-            </div>
-          ))}
-        </nav>
-        <div className="bn-side-foot">
-          <a className="bn-nav-link" href="#/fulfillment" target="_blank" rel="noopener">
-            <Icon name="hand" size={18} />
-            <span className="bn-nav-text">Cards to pull</span>
-            <Icon name="external" size={14} className="bn-faint" />
-          </a>
-          <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          </Button>
-          {/* THE SAME LINE THE SIDEBAR DRAWS, count and all. It said only `Server online` here
-              until 2026-09-07, so a phone could not see how big the store it was answering for
-              was — the one figure the shell carries at every width on a desktop. */}
-          <div className="bn-server" data-state={server}>
-            <span className={`bn-dot ${server === 'online' ? 'bn-dot-ok' : server === 'offline' ? 'bn-dot-danger' : ''}`} />
-            {server === 'online' ? 'Server online' : server === 'offline' ? 'Server offline' : 'Checking server…'}
-            {server === 'online' && cards !== null ? <span className="bn-server-detail">{cards.toLocaleString()} cards</span> : null}
+    <Sheet
+      open={open}
+      onClose={onClose}
+      className="bn-drawer"
+      title={
+        <>
+          <BrandSlot kanji={short ? DRAWER_KANJI_SHORT : DRAWER_KANJI} />
+          <span className="bn-sr">Screens</span>
+        </>
+      }
+    >
+      <nav className="bn-nav" aria-label="All screens">
+        {GROUPS.map((group) => (
+          <div key={group.id} className="bn-nav-group">
+            {group.label ? <div className="bn-nav-group-label">{group.label}</div> : null}
+            {navRows(group.id).map((route) => (
+              <NavLink key={route.path} route={route} current={route.path === path} onNavigate={onClose} />
+            ))}
           </div>
+        ))}
+        <div className="bn-nav-group bn-drawer-more">
+          {OWN_TAB.map((route) => (
+            <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" onClick={onClose}>
+              <Icon name={route.icon} size={18} />
+              <span className="bn-nav-text">{route.label}</span>
+              <Icon name="external" size={14} className="bn-faint" />
+            </a>
+          ))}
+          <button type="button" className="bn-nav-link" onClick={onToggleTheme}>
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
+            <span className="bn-nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          </button>
+          <ServerLine state={server} />
         </div>
-      </div>
-    </>
+      </nav>
+    </Sheet>
   )
 }
 
@@ -1396,64 +1318,11 @@ export function App() {
   const [palette, setPalette] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
-  const { state: server, cards, retry } = useServerPresence(chrome)
-
-  /* THE BROWSER HEADER READS `番地 banchi`, AND ON A NAMED SCREEN IT ALTERNATES WITH THE SCREEN.
-     The tab's own vocabulary and nothing on screen: the sidebar draws the lockup, the phone bar
-     and the drawer keep their own wordmark, and the Fulfiller's tab still says what he is doing
-     rather than whose product it is. `app/index.html` carries the plain string for the moment
-     before React boots.
-
-     WHY ALTERNATE RATHER THAN CONCATENATE. `Inventory · 番地 banchi` is 20 characters and a
-     browser tab shows perhaps a dozen, so the concatenation truncates and the half that survives
-     is whichever came first. Alternating shows each in full, in turn — the owner's call, at the
-     one-second cadence they asked for.
-
-     TWO THINGS IT COSTS, and neither is hypothetical:
-     · A screen reader may announce the document title when it changes, so this can become a
-       repeating announcement. `prefers-reduced-motion` is the opt-out and falls back to the
-       concatenation — the standard signal for "stop moving things", and the same one `base.css`
-       already honours everywhere else in this product.
-     · Anything that samples the title once — a bookmark, a history entry, a screenshot — catches
-       whichever phase was showing. There is no way around that; it is what alternating means.
-
-     AND IT IS SUBJECT TO THE BROWSER'S BACKGROUND THROTTLING, which is exactly the case this is
-     for: a tab you are not looking at is the one whose strip you read. Chrome throttles timers in
-     hidden tabs, and harder still after some minutes hidden without interaction, so the cadence
-     there is the browser's to decide rather than ours. NOT MEASURED — the harness could not
-     reproduce a genuinely hidden tab, so this is a documented behaviour rather than one this repo
-     has observed, and it is written here as the first thing to check if the alternation ever
-     looks wrong in a background tab. */
-  const stillTitle = useMedia('(prefers-reduced-motion: reduce)')
+  const { state: server, retry } = useServerPresence(chrome)
 
   useEffect(() => {
-    /* LOWERCASED HERE AND NOWHERE ELSE. The tab reads `inventory`, the nav still reads
-       `Inventory` — `route.label` is the nav's string and the sidebar, the palette and the
-       keyboard sheet all draw it. Lowercasing the label itself would rewrite every one of them;
-       this is the tab's own voice, applied where the tab's title is composed.
-       `toLowerCase` rather than `toLocaleLowerCase`: the labels are ASCII English and the locale
-       form has a Turkish dotted-i behaviour nobody here wants. */
-    const name = (route?.label ?? 'Not found').toLowerCase()
-    // The Fulfiller's tab names his task, and Home has nothing to alternate WITH — the screen and
-    // the product are the same word there. Both are one title and no timer.
-    if (route?.persona === 'fulfiller') { document.title = 'cards to pull'; return }
-    if (route?.path === '/') { document.title = BROWSER_TITLE; return }
-    if (stillTitle) { document.title = `${name} · ${BROWSER_TITLE}`; return }
-
-    /* the screen first: it is the half you are looking for when you scan a strip of tabs.
-       A chained timeout rather than an interval, because the two halves hold for different
-       lengths and one interval cannot express that. */
-    let showName = true
-    let timer = 0
-    document.title = name
-    const flip = () => {
-      showName = !showName
-      document.title = showName ? name : BROWSER_TITLE
-      timer = window.setTimeout(flip, showName ? TITLE_DWELL.screen : TITLE_DWELL.name)
-    }
-    timer = window.setTimeout(flip, TITLE_DWELL.screen)
-    return () => window.clearTimeout(timer)
-  }, [route, stillTitle])
+    document.title = tabTitle(route)
+  }, [route])
 
   useEffect(() => {
     setDrawer(false)
@@ -1469,6 +1338,25 @@ export function App() {
      scroller to reset. */
   useEffect(() => {
     window.scrollTo(0, 0)
+  }, [path])
+
+  /* AND FOCUS LANDS ON THE NEW SCREEN (UX-092). After a sidebar link, a `,` chord, the palette or
+     the drawer, focus was left in the chrome or on nothing, so the screen's first control was
+     fifteen Tabs away. On a navigation, focus that sits in the chrome moves to the screen's
+     heading, and one Tab reaches the screen. Focus a screen placed itself (a field it focuses)
+     is left alone. Not on the first load: nobody navigated. The last path is held rather than a
+     "mounted" flag, because StrictMode runs a mount effect twice and a flag reads the second run
+     as a navigation. */
+  const shownPath = useRef(path)
+  useEffect(() => {
+    if (shownPath.current === path) return
+    shownPath.current = path
+    const frame = window.requestAnimationFrame(() => {
+      const now = document.activeElement
+      const stray = now === null || now === document.body || (now instanceof HTMLElement && now.closest(CHROME_FOCUS) !== null)
+      if (stray) focusScreen()
+    })
+    return () => window.cancelAnimationFrame(frame)
   }, [path])
 
   const tabletRail = useMedia(TABLET_RAIL)
@@ -1489,24 +1377,19 @@ export function App() {
         return
       }
       if ((event.metaKey || event.ctrlKey) && event.key === '.') {
+        /* The rail is under the layer, so the key is the layer's (UX-014). */
+        if (overlayOpen()) return
         event.preventDefault()
         toggleRail()
         return
       }
-      /* `?` IS THE ONLY UNMODIFIED KEY THE SHELL TAKES, and it yields to typing. A question
-         mark is a legitimate character in a box name, a card name and a search — `keys.ts`
-         is the one place that judgement is made and every other handler in the app already
-         asks it. The palette's own input answers to the same test, so `?` typed there is
-         typed and not swallowed. */
-      if (event.key === '?' && !event.repeat && !isEditableTarget(event.target)) {
+      /* `?` IS THE ONLY UNMODIFIED KEY THE SHELL TAKES, and it yields to typing and to an open
+         layer. A question mark is a legitimate character in a box name, a card name and a
+         search — `keys.ts` is the one place that judgement is made. Escape is not handled here:
+         every layer takes its own from the kit's one stack (kit/overlay.tsx). */
+      if (event.key === '?' && !event.repeat && !isEditableTarget(event.target) && !overlayOpen()) {
         event.preventDefault()
         setKeysOpen(true)
-        return
-      }
-      if (event.key === 'Escape') {
-        setPalette(false)
-        setDrawer(false)
-        setKeysOpen(false)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -1514,23 +1397,23 @@ export function App() {
   }, [chrome, toggleRail])
 
   const commands = useMemo<Command[]>(() => {
-    const goTo: Command[] = ROUTES.filter((r) => r.nav).map((r) => ({
+    /* EVERY SCREEN, THE OFF-NAV ONES INCLUDED (UX-003). The Fulfiller's opens in its own tab,
+       as it does from the sidebar: his screen has no way back. */
+    const screens: Command[] = ROUTES.map((r) => ({
       id: `go:${r.path}`,
-      group: 'Go to',
+      group: 'Screens',
       label: r.label,
       icon: r.icon,
-      hint: r.hotkey ? `, ${r.hotkey.toUpperCase()}` : undefined,
+      hint: r.hotkey ? `, ${r.hotkey.toUpperCase()}` : r.persona === 'fulfiller' ? 'New tab' : undefined,
       keywords: r.keywords,
-      run: () => go(r.path),
+      run: r.persona === 'fulfiller' ? () => window.open(`#${r.path}`, '_blank', 'noopener') : () => go(r.path),
     }))
     const extras: Command[] = [
-      { id: 'pull', group: 'Hand-off', label: 'Open Cards to pull in a new tab', icon: 'hand', run: () => window.open('#/fulfillment', '_blank') },
       { id: 'theme', group: 'Appearance', label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', icon: theme === 'dark' ? 'sun' : 'moon', run: toggleTheme },
       { id: 'rail', group: 'Appearance', label: rail ? 'Expand the sidebar' : 'Collapse the sidebar', icon: 'columns', hint: '⌘ .', run: toggleRail },
       { id: 'keys', group: 'Help', label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: 'hotkeys bindings reference cheatsheet keys shortcut arrow leader', run: () => setKeysOpen(true) },
-      { id: 'kit', group: 'Developer', label: 'Component kit', icon: 'grid', run: () => go('/gallery') },
     ]
-    return [...goTo, ...extras]
+    return [...screens, ...extras]
   }, [theme, rail, toggleRail, toggleTheme])
 
   if (!chrome) {
@@ -1543,19 +1426,23 @@ export function App() {
 
   return (
     <div className="bn-shell" data-rail={rail ? 'true' : undefined} data-route={route?.path ?? 'none'}>
+      {/* THE FIRST TAB STOP ON EVERY SCREEN (UX-092): past the sidebar, to the screen. A button,
+          not an `#anchor` link: the hash is this app's router. */}
+      <button type="button" className="bn-skip" onClick={focusScreen}>
+        Skip to the screen
+      </button>
       <Sidebar
         path={path}
         rail={rail}
         onToggleRail={tabletRail ? undefined : toggleRail}
         armed={arm !== null}
         server={server}
-        cards={cards}
         theme={theme}
         onToggleTheme={toggleTheme}
         onPalette={() => setPalette(true)}
       />
       <div className="bn-shell-main">
-        <PhoneBar onMenu={() => setDrawer(true)} onPalette={() => setPalette(true)} />
+        <PhoneBar onPalette={() => setPalette(true)} />
         {server === 'offline' ? (
           <div className="bn-banner" role="alert">
             <Icon name="alert" size={16} />
@@ -1568,13 +1455,19 @@ export function App() {
           </div>
         ) : null}
         <div key={path} className="bn-view">
-          <RouteBoundary path={path}>{route === undefined ? <NoSuchView path={path} /> : <route.view />}</RouteBoundary>
+          {/* THE SCAFFOLD READS ITS ROUTE FROM HERE: a view that returns `<Page>` takes its h1
+              from the route's `title ?? label` with no prop (D275). */}
+          <PageRouteContext.Provider value={route ?? null}>
+            <RouteBoundary path={path}>{route === undefined ? <NoSuchView path={path} /> : <route.view />}</RouteBoundary>
+          </PageRouteContext.Provider>
         </div>
       </div>
-      <TabBar path={path} onMore={() => setDrawer(true)} />
-      <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} server={server} cards={cards} />
+      <TabBar path={path} drawerOpen={drawer} onMore={() => setDrawer(true)} />
+      <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} server={server} />
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
       <KeysSheet open={keysOpen} onClose={() => setKeysOpen(false)} path={path} />
+      {/* THE ONE PLACE A REGISTERED SHEET IS DRAWN: `openSheet('product', …)` from any screen. */}
+      <SheetHost />
       <WhichKey armed={arm !== null} />
       <Toaster />
     </div>

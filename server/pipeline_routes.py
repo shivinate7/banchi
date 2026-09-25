@@ -362,10 +362,14 @@ class PipelineRefusal(Exception):
     is imported BY that file. The seam is one `except` clause at the dispatch site.
     """
 
-    def __init__(self, status: HTTPStatus, code: str, message: str):
+    def __init__(self, status: HTTPStatus, code: str, message: str, data: Optional[dict] = None):
         super().__init__(message)
         self.status = status
         self.code = code
+        #: WHAT A SCREEN CAN ACT ON, beside the sentence (round 7): the refused rows of a send,
+        #: so it can offer to send again at the owner's price with the live price shown. Most
+        #: refusals carry none.
+        self.data = data
 
 
 # ------------------------------------------------------------------------------- scoping
@@ -1893,6 +1897,14 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         "joined": bool(manifest.get("joined")),
         "counts": manifest.get("counts") or {},
         "usage": _usage(manifest),
+        # WHAT STOPPED THE AUTOMATIC MATCH, while the run still waits for one (Q4). Null when
+        # nothing did, and null once the run has moved on: a problem is the run's next step
+        # only for as long as it is the thing in the way.
+        "match_problem": (
+            (_read_match(directory) or {}).get("problem")
+            if _phase(manifest, pid is not None) == "join"
+            else None
+        ),
     }
 
 
@@ -3017,6 +3029,19 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         else {"captured": 0, "in_review": 0, "unjoined": []}
     )
     unreachable["reallocated"] = reallocated
+
+    # WHAT TCGPLAYER HOLDS NOW, OFF THE NEWEST LIVE EXPORT ON DISK (round 7, R6-1). Every send
+    # and every check writes one, so this is minutes old where the join's export can be days.
+    # The screen names a price change and a move of live copies against it, and the send
+    # refuses if TCGplayer moved again since.
+    live_name, live_now = _newest_live_listing()
+    for row in merged.values():
+        held = live_now.get(str(row.get("sku")))
+        row["live_now"] = (
+            None
+            if live_name is None
+            else {"export": live_name, "copies": held[1] if held else 0, "price": held[0] if held else None}
+        )
 
     return {
         "runs": summaries,
@@ -4173,6 +4198,43 @@ LIVE_DIR = files.LIVE_DIRNAME
 LIVE_PREFIX = files.LIVE_PREFIX
 
 
+_NEWEST_LIVE: Dict[str, object] = {}
+
+
+def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str], int]]]:
+    """`(name, SKU -> (the asking price, live copies))` off the newest live export on disk, or
+    `(None, {})` when none was ever fetched. Read once per file: the name is the cache key, and a
+    fetch writes a new name (round 7, R6-1)."""
+    directory = files.inventory_dir() / LIVE_DIR
+    fetched = sorted(directory.glob(f"{LIVE_PREFIX}*.csv")) if directory.is_dir() else []
+    if not fetched:
+        return None, {}
+    newest = fetched[-1]
+    if _NEWEST_LIVE.get("name") != str(newest):
+        try:
+            rows = tcgcsv.read_export(newest).rows
+        except (tcgcsv.MalformedCsv, OSError):
+            return None, {}
+        listing: Dict[str, Tuple[Optional[str], int]] = {}
+        for row in rows:
+            sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+            if not sku:
+                continue
+            try:
+                price = tcgcsv.parse_price(str(row.get(tcgcsv.PRICE_COLUMN) or ""))
+            except ArithmeticError:
+                price = None
+            held = tcgcsv.parse_quantity(str(row.get(tcgcsv.LIVE_QUANTITY_COLUMN) or ""))
+            before = listing.get(sku, (None, 0))
+            listing[sku] = (
+                tcgcsv.format_price(price) if price is not None else before[0],
+                before[1] + max(0, held),
+            )
+        _NEWEST_LIVE.clear()
+        _NEWEST_LIVE.update({"name": str(newest), "listing": listing})
+    return newest.name, dict(_NEWEST_LIVE["listing"])  # type: ignore[arg-type]
+
+
 def do_live_export() -> dict:
     """`POST /pipeline/live-export` — fetch the operator's own live listings from TCGplayer.
 
@@ -4761,7 +4823,14 @@ def do_markdown_rollback(stamp: str, payload: dict) -> dict:
     # THE RECEIPT GOES WITH THE UPLOAD IT DESCRIBED. Leaving it would leave the screen
     # offering to publish rows TCGplayer has been told to forget.
     (directory / PUSH_RECORD).unlink(missing_ok=True)
-    return {"rolled_back": record.get("upload_id"), "stamp": stamp}
+    # AND THE ROLLBACK IS NAMED FOR WHAT IT IS (round 6, B3 and S4): not live, and not yet
+    # proved gone from Staged. `send_routes.markdown_rolled_back_note` writes its receipt.
+    from server import send_routes
+
+    note = send_routes.markdown_rolled_back_note(
+        directory, str(record.get("upload_id")), "rollback_pressed"
+    )
+    return {"rolled_back": record.get("upload_id"), "stamp": stamp, "check_staged": True, "note": note}
 
 
 PUSH_RECORD = "push.json"
@@ -7189,6 +7258,84 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
         }
     )
     return report
+
+
+MATCH_RECORD = "match.json"
+_MATCHING: Dict[str, bool] = {}
+_MATCHING_LOCK = threading.Lock()
+
+
+def _read_match(directory: Path) -> Optional[dict]:
+    target = directory / MATCH_RECORD
+    if not target.is_file():
+        return None
+    try:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+
+
+def _write_match(directory: Path, record: dict) -> None:
+    (directory / MATCH_RECORD).write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def do_run_match(name: str, payload: dict) -> dict:
+    """`POST /pipeline/runs/<name>/match` — match a run to TCGplayer once its reading is done.
+
+    THE OWNER'S RULING (flow interview, Q4): matching runs BY ITSELF when the reading finishes,
+    and a problem becomes the run's next step. The screen calls this the moment a run it is
+    showing reaches the match step — and, for a reading that finished while the app was
+    closed, on the next visit — so no job here runs unattended, exactly as Q3 rules for the
+    live check. It is the press `#/runs` already had, "fetch the export, then join against
+    it", with the default scope and nobody pressing it.
+
+    A PROBLEM IS RECORDED, NOT RETRIED. The fetch or the join refusing is written beside the
+    run (`match.json`) and read back by `_summary` as `match_problem`, so the run's next step
+    is the problem with its one door — add the sets, sign in again — and an automatic call
+    never asks TCGplayer again over a problem that stands. `retry: true` is the door's own
+    press.
+
+    ONE MATCH PER RUN AT A TIME. Two tabs that both see the reading finish would otherwise both
+    fetch and both join; the second is answered `running` and does nothing.
+    """
+    directory = _open_run(name)
+    manifest = _manifest(directory)
+    if _phase(manifest, _live_pid(directory) is not None) != "join":
+        return {"ran": False, "reason": "not_waiting", "summary": _summary(directory)}
+    standing = _read_match(directory) or {}
+    if standing.get("problem") and not bool(payload.get("retry")):
+        return {"ran": False, "reason": "problem_stands", "summary": _summary(directory)}
+    with _MATCHING_LOCK:
+        if _MATCHING.get(directory.name):
+            return {"ran": False, "reason": "running", "summary": _summary(directory)}
+        _MATCHING[directory.name] = True
+    try:
+        at = _now_iso()
+        try:
+            fetched = do_pipeline_export(name, {})
+        except PipelineRefusal as refusal:
+            problem = {"code": refusal.code, "message": str(refusal), "step": "fetch"}
+            _write_match(directory, {"at": at, "problem": problem})
+            return {"ran": True, "ok": False, "problem": problem, "summary": _summary(directory)}
+        result = do_pipeline_step(name, "join", {"fetched": [fetched["file"]]})
+        if not result["ok"]:
+            last = (result["console"].strip().splitlines() or [""])[-1]
+            problem = {"code": "match_refused", "message": last, "step": "join"}
+            _write_match(directory, {"at": at, "problem": problem, "fetched": fetched["file"]})
+            return {
+                "ran": True,
+                "ok": False,
+                "problem": problem,
+                "console": result["console"],
+                "summary": _summary(directory),
+            }
+        _write_match(directory, {"at": at, "problem": None, "fetched": fetched["file"]})
+        return {"ran": True, "ok": True, "console": result["console"], "summary": _summary(directory)}
+    finally:
+        with _MATCHING_LOCK:
+            _MATCHING.pop(directory.name, None)
 
 
 def do_pipeline_step(name: str, step: str, payload: dict) -> dict:

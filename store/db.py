@@ -147,7 +147,13 @@ PHOTOS_RELOCATED = "photos_relocated"
 # table is correctly empty until the first `pkmnscan skus adopt --write`, which — unlike
 # `price_history` — can answer for every export this machine has ever cached, because none of
 # them ages out the way the live price-history endpoint's own window does.
-SCHEMA_VERSION = 11
+# TWELVE, FOR `D273` (round 2). It was ELEVEN on its own branch,
+# and main's identity lane took ELEVEN first, so it moved up one. `_add_send_claims` adds
+# `send_claims` — D174's claim shape over a send to TCGplayer instead of a read at Anthropic
+# (`store/sendclaims.py`). Purely additive, `_add_submissions`'s case exactly: a table nothing
+# older has, so there is nothing to backfill, and an empty claim table is the correct state
+# for an upgraded store because a claim protects a press that is happening NOW.
+SCHEMA_VERSION = 12
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -197,6 +203,10 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     # value; the intersection is computed in Python over the handful of live rows, which is
     # what `Submissions.live` keeps small by filtering on the `state` column first.
     "submissions": ("pid", "state", "started_at", "run"),
+    # `D273`: the SKUs a press to TCGplayer is sending, held until
+    # its outcome is known (`store/sendclaims.py`). `skus` is the claim itself and, like
+    # `submissions.keys`, is not a column.
+    "send_claims": ("pid", "state", "started_at", "kind"),
     # D189: the market reading `pkmnscan readings adopt --write` last read for
     # each SKU, one row per SKU. `store/readings.py` is the module; `pipeline/readings.py`
     # is the two-source walk that fills it.
@@ -245,6 +255,7 @@ _INDEXES = (
     ("events", "position"),
     ("boxes", "bid"),
     ("submissions", "state"),
+    ("send_claims", "state"),
     # D219: `PriceArchive.for_sku` filters on `sku`, and a table this
     # never deletes from grows without bound, so a scan-per-lookup would only get worse.
     ("price_history", "sku"),
@@ -490,6 +501,12 @@ def _upgrade(
                 _add_price_postings(conn)    # D243
             if stored < 11:
                 _add_skus(conn)              # LANE 0, identity-follows-sku.md
+            if stored < 12:
+                # A store stamped 11 by the UX branch has `send_claims` and no `skus`. Its
+                # stamp reads as main's 11, so `_add_skus` runs here again. It is idempotent,
+                # so main's 11 loses nothing.
+                _add_skus(conn)
+                _add_send_claims(conn)       # D273
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1327,6 +1344,16 @@ def _add_skus(conn: sqlite3.Connection) -> None:
         conn.execute(statement)
     for statement in _SKU_VIEWS:
         conn.execute(statement)
+
+
+def _add_send_claims(conn: sqlite3.Connection) -> None:
+    """Schema 12: the `send_claims` table (`store/sendclaims.py`).
+
+    `_add_submissions`'s step one purchase over: a table nothing older has, so there is nothing
+    to backfill and nothing to read wrong. No receipt file, for `_add_submissions`'s reason.
+    """
+    conn.execute(_ddl("send_claims", TABLES["send_claims"]))
+    conn.execute("CREATE INDEX IF NOT EXISTS send_claims_state ON send_claims(state)")
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:

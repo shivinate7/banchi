@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { filterByQuery, type MatchFields } from './kit/match'
 import type { SearchResult } from './types'
 import type { Failure } from './server'
 import { describeFailure, search } from './server'
@@ -150,4 +151,16 @@ export function useSearch(options: { debounceMs?: number } = {}): SearchState {
   const reload = useCallback(() => setReloads((n) => n + 1), [])
 
   return { query, setQuery, results, loading, failure, reload }
+}
+
+/** A list the BROWSER already holds, narrowed by what is typed, by the one forgiving matcher in
+ *  `kit/match.ts` (every word, any order, case, accents, punctuation and the zeros in front of
+ *  a card number folded away). The store's own search above asks the server instead, and
+ *  does not use this matcher.
+ *
+ *  `fieldsOf` says what each row DRAWS, because what the row shows is what the search must find
+ *  (FLT-07). Keep it stable (a module-level function, or `useCallback`), or the list is
+ *  filtered again on every render. */
+export function useQueryFilter<T>(rows: readonly T[], query: string, fieldsOf: (row: T) => MatchFields): T[] {
+  return useMemo(() => filterByQuery(rows, query, fieldsOf), [rows, query, fieldsOf])
 }

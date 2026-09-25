@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { CAPTURE_PORT, CAPTURE_URL, DEV_PORT } from './devPort'
+import { checkoutIdentityPlugin } from './checkoutIdentity'
 
 // THE RECORDING WHEN THERE IS ONE, THE TYPE-ONLY STUB WHEN THERE IS NOT — the same ordered
 // fallback `app/tsconfig.json` gives the `#demo-bundle` alias, spelled a second time because
@@ -49,7 +50,9 @@ export default defineConfig({
   // subdirectory. `photoUrl` composes the demo's photographs against `import.meta.env.BASE_URL`
   // for the same reason.
   base: process.env.DEMO_BASE ?? '/',
-  plugins: [react()],
+  // `checkoutIdentityPlugin` answers `GET /__checkout` with this checkout's path, so a test
+  // run that reuses a server can prove it is this tree's (checkoutIdentity.ts).
+  plugins: [react(), checkoutIdentityPlugin()],
   server: {
     port: DEV_PORT,
     strictPort: true,

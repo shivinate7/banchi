@@ -236,20 +236,66 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 30px;
-  padding: 0 12px 0 10px;
-  border-radius: var(--bn-r-full);
+  /* The kit's large control height, because the pill is a link to the card (LOC-26: it was 30px,
+     with a 12px path and a 15px figure, the one place cue while the owner judges a card). */
+  min-height: var(--bn-control-h-lg);
+  padding: var(--bn-1) 14px var(--bn-1) 12px;
+  border-radius: var(--bn-r-lg);
   background: var(--bn-surface-glass);
   backdrop-filter: saturate(1.3) blur(10px);
   -webkit-backdrop-filter: saturate(1.3) blur(10px);
   box-shadow: var(--bn-shadow-1);
   color: var(--bn-ink);
-  --pos-slot: 15px;
-  white-space: nowrap;
+  --pos-slot: 18px;
   max-width: calc(100% - var(--bn-5) * 2);
-  overflow: hidden;
 }
+/* THE PLACE WRAPS BETWEEN ITS PARTS, NEVER INSIDE ONE, AND NEVER CLIPS. A box is named now, not
+   numbered (D259), so the pill is as long as the name: at 390 the card's
+   own number fell off the end under `overflow: hidden`. Each part keeps one line. */
+.review-caption .position-run { white-space: normal; line-height: var(--bn-lh-snug); }
+.review-caption .position-run-path,
+.review-caption .position-run-num { white-space: nowrap; }
 .review-caption > .bn-icon { color: var(--bn-accent); flex: none; }
+/* THE LABEL AND, UNDER IT, WHICH WAY THE BOX RUNS (UX-228): `back`, the neighbour toward the
+   back, this card, the neighbour toward the front, `front`. One compact line that wraps between
+   its parts when the pill is narrow; a long name is cut with an ellipsis here only, because the
+   whole sentence rides the screen-reader text. */
+.review-caption-body { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
+.review-caption-order {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--bn-1-5);
+  min-width: 0;
+  font-size: var(--bn-fs-sm);
+  line-height: var(--bn-lh-snug);
+  color: var(--bn-ink-2);
+  white-space: nowrap;
+}
+/* `--bn-ink-3` READS 2.8:1 HERE IN LIGHT, NOT ITS DOCUMENTED 4.85:1 (F3, round 3 of the
+   locating review). That figure is measured against `--bn-bg`; this pill sits on
+   `--bn-surface-glass` over `--rv-well`, the dark neutral behind the photo — a lighter,
+   translucent ground the token was never measured against. `--bn-ink-2` is: ~5.46:1 in
+   light, ~9.99:1 in dark, composited the same way `app/tests/kit-data.spec.ts`'s
+   `contrastOf` composites it. `app/tests/review.spec.ts` asserts the floor. */
+.review-caption-end {
+  flex: none;
+  font-size: var(--bn-fs-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bn-ink-2);
+}
+/* Whole or cut, never squeezed: the line wraps between its parts at 390 (like the label above
+   it), and only a name longer than 16 characters is cut. */
+.review-caption-nb {
+  flex: none;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.review-caption-nb.is-unread { font-style: italic; color: var(--bn-ink-2); }
+.review-caption-this { flex: none; font-weight: 600; color: inherit; }
+.review-caption-arrow { flex: none; color: var(--bn-ink-2); }
 .review-caption .position-run {
   font-size: var(--pos-slot); line-height: 1; letter-spacing: 0;
   /* repainted by `.review-caption-link:hover`; a <span> is outside the floor's reach. */
@@ -553,7 +599,7 @@
   background: var(--bn-surface);
   font-family: var(--bn-font-mono);
   line-height: 1;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 
 /* ---- actions ------------------------------------------------------------------- */
@@ -787,6 +833,9 @@
 .review-row-price { font-family: var(--bn-font-display); font-size: var(--bn-fs-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bn-ink); white-space: nowrap; }
 .review-row-sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .review-row-position { white-space: nowrap; }
+/* The current card's place shows once, on the photo caption. The selected row keeps the
+   slot and hides the text, so the row does not change height when it is selected (D118). */
+.review-row[aria-current='true'] .review-row-position { visibility: hidden; }
 .review-row-reason { color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .review-row-pill { font-size: var(--bn-fs-2xs); font-weight: 600; padding: 1px 6px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); color: var(--bn-ink-3); line-height: 1.5; }
 

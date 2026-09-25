@@ -217,3 +217,33 @@ timer: only one row ever carries `Undo`, because only one pull is ever the newes
 newest pull still stands after the OLD twenty-second window would have closed it. The clock is
 faked and only advanced, never slept through. A second case proves a later pull is what removes
 an older row's `Undo`, mutation-tested against the granularity the owner declined.
+
+## 11. Open: the undo session (the owner's ruling, 2026-09-24)
+
+The 2026-09-23 UX review found undo defects on four screens. The owner moved all of them out of
+the screen lanes and into one session of their own:
+
+```
+undo in general is buggy everywhere, probably better to have an overall undo session at a
+later time than diagnosing it
+```
+
+STATE: RECORDED, NOT STARTED. No lane holds these findings. Each id below resolves in
+`docs/reviews/ux-2026-09-23/CONSOLIDATED.md`.
+
+| Finding | Screen | What is wrong |
+|---|---|---|
+| UX-195 (HOR-07) | Orders | The pull receipt offers Undo, and Undo then refuses with `sold_origin_unknown`. |
+| UX-204 (HIR-10) | Review | At 390 the receipt and its Undo land below the fold. |
+| UX-205 (HIR-11) | Review | An answer that cannot be taken back writes with no warning. |
+| UX-249 (HIR-20) | Inventory | After a sale, the card's control becomes a static chip, and the phone bar loses its action. |
+| UX-252 (HIR-23) | Inventory | Retire commits on the first tap of a reason, with no undo. |
+| (carried) | Inventory | The sale toast's Undo misbehaves. The inventory lane recorded it and did not fix it. |
+
+**Related, and decided already.** The owner accepted the risk that Orders' Mark sold is an icon
+while its Undo still refuses. A wrong press needs a fix by hand until this session lands.
+
+**Where to start.** Read sections 1 to 10 first. The session diagnoses each finding against the
+two mechanisms in section 2 before it changes either one. Its first measurement is whether
+UX-195 happens on a real store or only on the seeded one. The seeded store can lack the sale's
+origin record.

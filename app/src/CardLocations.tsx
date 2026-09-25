@@ -5,7 +5,7 @@ import { isDeparted, photoUrl, placeSentence } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
-import { sayPlace, type Persona } from './position'
+import { placePartsOf, sayPlace, type Persona } from './position'
 import { PositionLabel } from './PositionLabel'
 import { collectorNumber } from './cardNumber'
 import { Button, Chip, Icon, Pill } from './kit'
@@ -511,7 +511,7 @@ function OwnerRows({
                         caller offers a walk-to, the same rendering sits inside a button. */}
                     <span className="card-locations-label">
                       {label === null ? null : goesTo === null ? (
-                        <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} />
+                        <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} departed={departed} />
                       ) : (
                         <button
                           className="card-locations-goto"
@@ -519,12 +519,12 @@ function OwnerRows({
                           aria-label={`Walk to ${sayPlace(label)}`}
                           onClick={goesTo}
                         >
-                          <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} />
+                          <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} departed={departed} />
                           <Icon name="arrowUpRight" size={14} className="card-locations-goto-icon" />
                         </button>
                       )}
                     </span>
-                    <PlaceNeighbors place={copy.place} />
+                    <PlaceNeighbors place={copy.place} departed={departed} />
                   </>
                 )}
               </span>
@@ -609,6 +609,23 @@ function OwnerRows({
 }
 
 // --------------------------------------------------------------------- the Fulfiller's skin
+
+/* THE LABEL AS WORDS, each part unbreakable. The text is the server's label exactly (its commas
+ * included), so a reader, a copy and a spec see the same string; only the wrap points change.
+ * A label of any other shape is drawn whole. */
+function PlaceWords({ label }: { label: string }) {
+  const parts = placePartsOf(label)
+  if (parts === null || parts.section === null || parts.card === null) return <>{label}</>
+  return (
+    <>
+      <span className="card-locations-place-part">{parts.box}</span>
+      {', '}
+      <span className="card-locations-place-part">Section {parts.section}</span>
+      {', '}
+      <span className="card-locations-place-part">Card {parts.card}</span>
+    </>
+  )
+}
 
 /* Every copy is its own card: a photo to confirm against, a position label he can read at
  * arm's length, a bar saying how far in, and its own control. Unchanged by the owner-side
@@ -715,9 +732,13 @@ function FulfillerCard({
                   />
                 )}
 
-                {where === null ? null : <p className="card-locations-place-large">{where}</p>}
-                {copy.place.box_name === null ? null : (
-                  <p className="card-locations-say">{copy.place.box_name}</p>
+                {/* THE SERVER'S LABEL, WHOLE, which already names the box (D259),
+                    so the box's name is no longer a second line under it. Each part is kept on one
+                    line (LOC-27): at 390 the address wraps between parts, never inside one. */}
+                {where === null ? null : (
+                  <p className="card-locations-place-large">
+                    <PlaceWords label={where} />
+                  </p>
                 )}
                 {between === null ? null : <p className="card-locations-say">{between}</p>}
 

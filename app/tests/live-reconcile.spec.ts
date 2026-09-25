@@ -40,14 +40,14 @@ unexplained      55 copy(ies) across 32 SKU(s)
 `.trim()
 
 /** The sheet itself. A dialog, so a screen reader is told the rest of the page is behind it. */
-const panel = (page: Page) => page.getByRole('dialog', { name: 'Reconcile the whole store' })
+const panel = (page: Page) => page.getByRole('dialog', { name: 'Check what is live' })
 
 /** The control on the Runs header that opens it — the only way in, and the reachability claim. */
-const opener = (page: Page) => page.getByRole('button', { name: 'Reconcile the whole store' })
+const opener = (page: Page) => page.getByRole('button', { name: 'Check what is live' })
 
 /** The press that settles. Named apart from the opener above: the opener's accessible name is
- *  "Reconcile the whole store" and this one's is "Reconcile the store", so the anchors matter. */
-const settle = (page: Page) => page.getByRole('button', { name: /^Reconcile the store$/ })
+ *  "Check what is live" and this one's is "Match the store" (UX-102: one name per job). */
+const settle = (page: Page) => page.getByRole('button', { name: /^Match the store$/ })
 
 async function open(page: Page): Promise<Wire[]> {
   const wire: Wire[] = []

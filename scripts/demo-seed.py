@@ -17,10 +17,13 @@ WHAT IS REAL AND WHAT IS NOT, because the distinction is the whole design:
   INVENTED   which of those cards are in which box at which index, what sold, what is
             held back and to whom it shipped. None of it describes a physical object.
 
-  SYNTHETIC  the photographs. `card_image()` draws them. NOT real card art and not real
-            photographs: a published demo carries neither somebody else's illustration
-            nor a picture of the owner's desk, and a drawn card is reproducible from this
-            file, which a photograph never is.
+  CURATED    the photographs. Real photographs of the owner's own cards, on the owner's
+            ruling (see `write_photo`), read from `demo-assets/` — the one tracked-image
+            exception — and QR-cleared twice: at full resolution when `make demo-photos`
+            curates them, and again on the published bytes when `demo-record.py` copies
+            them. A live code card is a bearer instrument (D70). This paragraph said
+            SYNTHETIC, drawn by `card_image()`, until 2026-09-24; that function was gone
+            since 2026-09-06 (`docs/specs/demo.md` §3).
 
 DETERMINISTIC. One RNG, seeded from a constant, so re-running writes the same store. The
 recorder downstream turns this into a fixture bundle, and a bundle that changed every time
@@ -521,6 +524,14 @@ def build_store(force: bool) -> dict:
                 % (home, len(inventory.cards))
             )
 
+        # EVERY BOX HAS A NAME. The owner ruled that a box number is never shown, so a demo box
+        # with no name would draw whatever fallback a screen invents for one.
+        box_names = {spec["box"]: str(spec.get("name") or "").strip() for spec in BOXES}
+        unnamed = sorted(box for box, name in box_names.items() if not name)
+        if unnamed:
+            raise SystemExit("every demo box needs a name; box(es) %s have none" % unnamed)
+        if len(set(box_names.values())) != len(box_names):
+            raise SystemExit("two demo boxes share a name, and D20 makes a name unique")
         seed_skus(inventory, snapshot.skus)
 
         for spec in BOXES:
@@ -734,7 +745,10 @@ def build_store(force: bool) -> dict:
                     position=card.key,
                     box=card.box,
                     index=card.index,
-                    label="Box %d · Card %d" % (card.box, card.index),
+                    # BY THE BOX'S NAME, NEVER ITS NUMBER (the owner's ruling: a box number
+                    # is never shown). `/queues` re-labels every entry through the server's
+                    # own place formula, so this string is a fallback nothing draws today.
+                    label="%s, card %d" % (box_names[card.box], card.index),
                     photo=card.photo,
                     read={
                         "name": row.name,
@@ -887,6 +901,99 @@ def write_corpus(placed: List[Tuple[Card, "Row"]]) -> int:
     return len(skus)
 
 
+# --------------------------------------------------------------------- the price archive
+
+# THE DEMO'S PRICE HISTORIES, RECORDED ONCE ON THE OWNER'S MAC (the owner's ruling, 2026-09-24).
+# Every history this product draws is read from a host that refuses an honest User-Agent (D216),
+# and the owner allows the browser signature from the owner's own machine only, never from CI.
+# So `make demo-histories` records them there, into a new dated directory under
+# `fixtures/demo-price-history/`, and this reads the newest one. Real readings, never invented.
+HISTORIES_ROOT = FIXTURES / "demo-price-history"
+
+
+def history_directory() -> Optional[Path]:
+    """The newest recorded directory, or None when nobody has recorded one."""
+    if not HISTORIES_ROOT.is_dir():
+        return None
+    dated = sorted(p for p in HISTORIES_ROOT.iterdir() if (p / "index.json").is_file())
+    return dated[-1] if dated else None
+
+
+class FixtureMarket:
+    """`pipeline/pricearchive.py:_MarketLike`, answered from the recorded histories only.
+
+    THE REAL SWEEP DOES THE WORK. `write_archive` hands this to `pricearchive.sweep`, so the
+    buckets the archive holds are built by the same code `pkmnscan archive sweep --write`
+    runs. This class replaces only the network. A SKU the recording does not carry is a
+    refusal, named, never an invented series.
+    """
+
+    def __init__(self, directory: Path) -> None:
+        from pipeline import pricehistory
+
+        self.pricehistory = pricehistory
+        self.directory = directory
+        self.products: Dict[str, int] = {
+            str(sku): int(pid)
+            for sku, pid in json.loads((directory / "index.json").read_text()).get("skus", {}).items()
+        }
+
+    def readings_for_rows(self, rows, ranges=(), *, product_ids=None):
+        from pipeline import tcgcsv
+
+        readings: Dict[str, object] = {}
+        refusals: Dict[str, str] = {}
+        for row in rows:
+            sku = str(row.get(tcgcsv.SKU_COLUMN) or "")
+            product = self.products.get(sku)
+            series = {}
+            for range_ in ranges or self.pricehistory.RANGES:
+                path = self.directory / "history" / ("%d-%s.json" % (product or 0, range_))
+                if product is None or not path.is_file():
+                    continue
+                found = self.pricehistory.parse_history(
+                    json.loads(path.read_text()), product, range_
+                ).get(sku)
+                if found is not None:
+                    series[range_] = found
+            if not series:
+                refusals[sku] = "no recorded reading for this SKU"
+                continue
+            readings[sku] = self.pricehistory.Reading(sku=sku, product_id=product, series=series)
+        return readings, refusals
+
+
+def write_archive() -> int:
+    """The price-history archive (D219), from the recorded histories. Returns buckets written.
+
+    Read by `#/product` (archive first, D227) and by `#/revenue`'s "Value my stock" (D236), so
+    both draw real ranges on the published page. The export rows are the committed exports, and
+    `at` is the demo's own clock, so a rebuild is byte-identical.
+    """
+    from pipeline import pricearchive, pricehistory, tcgcsv
+
+    directory = history_directory()
+    if directory is None:
+        return 0
+    market = FixtureMarket(directory)
+    rows: Dict[str, dict] = {}
+    for name in ("riftbound_export_untouched.csv", "sv09_export_untouched.csv",
+                 "onepiece_export_untouched.csv", "pokemon_wide_export_untouched.csv"):
+        for row in tcgcsv.read_export(FIXTURES / name).rows:
+            sku = str(row.get(tcgcsv.SKU_COLUMN))
+            if sku in market.products and sku not in rows:
+                rows[sku] = dict(row)
+    if not rows:
+        return 0
+    buckets, sources, refusals, _ = pricearchive.sweep(
+        rows, market, pricehistory.RANGES, now=int(NOW.timestamp())
+    )
+    with Store().write() as snapshot:
+        snapshot.archive.upsert(buckets)
+        snapshot.archive.record_pass(sources)
+    return len(buckets)
+
+
 # ------------------------------------------------------------------------------- entry
 
 
@@ -908,6 +1015,7 @@ def main() -> int:
 
     counts, placed = build_store(args.force)
     counts["answers"] = write_corpus(placed)
+    counts["archived"] = write_archive()
 
     home = store_files.home()
     counts["runs"] = 0
@@ -916,7 +1024,7 @@ def main() -> int:
             counts["runs"] += 1
 
     print("demo store seeded at %s" % home)
-    for key in ("boxes", "cards", "photos", "listings", "answers", "review",
+    for key in ("boxes", "cards", "photos", "listings", "answers", "archived", "review",
                 "runs", "orders", "sold", "retired", "moved", "captured"):
         print("  %-9s %d" % (key, counts.get(key, 0)))
     return 0

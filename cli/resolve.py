@@ -593,10 +593,14 @@ def box_views(
             # A layout that will not validate means the section and card numbers are
             # unknown, which is `_Places.view`'s call and not a new one.
             sections = ()
+        entry = inventory.box(number)
         views[number] = join.BoxView(
             sections=sections,
             occupied=tuple(i for i, on_hand in sorted(rows) if on_hand),
             departed=tuple(i for i, on_hand in sorted(rows) if not on_hand),
+            # The label says the box's name (D259), read at the same
+            # moment as the layout, so the report and the screen spell one address.
+            name=entry.name if entry is not None else None,
         )
     return views
 

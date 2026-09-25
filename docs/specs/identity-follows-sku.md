@@ -285,8 +285,8 @@ takes `read_*` from the `identifications` entry. It recovers the model's read fo
 including the four.
 
 **D36's warning, answered.** D36 calls the identification cache "another derived copy a future
-defect could leave stale". `read_*` is a fourth copy. It is never a key and never binds a slot;
-the photograph digest does that, untouched. `Inventory.record_identification` writes `read_*`
+defect could leave stale". `read_*` is a fourth copy. It is never a key and never binds a slot.
+The photograph digest does that, untouched. `Inventory.record_identification` writes `read_*`
 in the same call that writes the reading today, so the copy moves with its source.
 
 ## 4. The writers
@@ -370,8 +370,8 @@ enforced) requires a mechanism, not a sentence. Three, each proving a different 
 2. **The store's own audit, part of the one merged report (ruling 6).**
    +`./pkmnscan cards identity` reads the store and the SKU table, never an export file. Three
    verdicts, D172's shape: pass, fail, not known. It fails on any of these:
-   - a card bound `sku` whose identity fields differ from its table row;
-   - a card or a `listings` row whose SKU is absent from the table;
+   - a card bound `sku` whose identity fields differ from its table row.
+   - a card or a `listings` row whose SKU is absent from the table.
    - a product whose SKUs disagree on `rarity`.
    It is a read-only press, never on the commit path, because no commit check reads the
    owner's store.
@@ -470,7 +470,7 @@ halves compare `read_*` against the SKU table's row, through the join's own test
 off the photograph has already answered the report's question. Without the exclusion, the
 report flags `Rell, Noxus` under `Rell, Magnetic` forever, after the owner confirmed it. A guard
 that goes red when nothing is wrong is spent. The report also carries the residue count and the
-three audit failures of 4.3. `cards sku-names` and `cards contradictions` retire; each prints
+three audit failures of 4.3. `cards sku-names` and `cards contradictions` retire. Each prints
 one line that names `cards identity`.
 
 ### 5.6 The D239 checks
@@ -478,7 +478,7 @@ one line that names `cards identity`.
 `pipeline/identity_checks.py` flags misread shapes in the `name`, `number` and `set_name` it is
 given (D239, four stored-data checks). It takes plain records, so it needs no change. Its one
 caller, `_checks` in `cli/cmd_cards.py`, builds the records from `card.name` and `card.number`.
-The caller moves to `read_*`. `set_name` stays on identity; it is a SKU fact since D213.
+The caller moves to `read_*`. `set_name` stays on identity. It is a SKU fact since D213.
 
 ### 5.7 The review queue
 
@@ -566,7 +566,7 @@ Each card lands in exactly one class, tested in this order.
 | T6 | no SKU | 8 | nothing to derive | | | unchanged |
 
 The classes sum to 3,510. 3,450 cards derive. The 52 held cards are 42 identified and 10 sold.
-T5 is 22 identified and 6 sold; 2 of the sold carry a blank read name. T4s is 20 identified
+T5 is 22 identified and 6 sold. 2 of the sold carry a blank read name. T4s is 20 identified
 and 4 sold. Every SKU a card carries is in the SKU table after the backfill (3.2), so no card
 falls to `sku_unknown`.
 
@@ -603,6 +603,14 @@ falls to `sku_unknown`.
    count is then one probe. The new card fields otherwise live in the payload and need no
    column. FTS is unchanged (5.2). The DDL runs inside `_upgrade`'s one transaction, the shape
    D213 used for version 8.
+   **Two branches took version 11 (merge of 2026-09-24).** The UX branch used 11 for
+   `send_claims`, and that step is now version 12. A store stamped 11 by the UX branch has
+   `send_claims` and no `skus`. Its stamp reads as this lane's 11, so `_upgrade` skipped
+   `_add_skus`. The store then reached 12 with no `skus`, no views and no
+   `cards.identity_source`, and the first card write failed. The fix runs `_add_skus` again
+   in the version-12 step, before `_add_send_claims`. `_add_skus` is idempotent, so a store
+   at this lane's 11 loses nothing. T7's `check_schema_eleven_then_twelve` builds all three
+   older shapes: 10, this lane's 11, and the UX branch's 11.
 2. **Fill the table (lane 0): `skus adopt --write`.** Section 3.2.
 3. **The press (lane 2): `./pkmnscan cards identity --write`.** It previews by default. It never
    runs at open time, for D213's reason: its answer depends on what the table holds, and that
@@ -702,7 +710,7 @@ and `set_name`. `unbind_sku` ignores them and derives the identity from the SKU.
    (3.2). The report names the bound cards that now differ, and the press derives them again.
    Measured frequency: 0 over 13 files and one fixture pair.
 4. **The table only grows.** It holds every SKU any export ever carried: 12,052 rows today.
-   It grows only by SKUs it has not seen; a fetch of a known set adds no row. Disk cost on the
+   It grows only by SKUs it has not seen. A fetch of a known set adds no row. Disk cost on the
    owner's store: unmeasured. That is the price of never deleting.
 5. **Filling on a fetch adds work to the press.** Upserting about 10,000 rows inside the fetch's
    write: cost unmeasured. Lane 0 times it on a copy of the store.
@@ -749,14 +757,14 @@ outcome now.
   instead of merging cached exports on each call. The tier order and the owner's ruling stand.
 - **D15 (catalog data is vendored). CITED, NOT A SOURCE.** Measured: the vendored snapshot
   carries no TCGplayer id, so it cannot fill a SKU row.
-- **D64, D104, D166 (the Filtered Export and the live export are fetched; the export is a
+- **D64, D104, D166 (the Filtered Export and the live export are fetched, and the export is a
   property of the game). CITED.** They are the table's sources. Their files stay on disk as the
   evidence for a reading, unchanged. The join keeps reading its candidates from them (D65).
 - **D189 (the market reading is a table). CITED.** Its full-replace shape is refused for the
   SKU table, because a replace drops a row a card may point at. Its newest-wins rule is reused.
 - **D219 (the archive never deletes). CITED.** The SKU table takes its never-delete rule.
 - **D21 (game is a per-card claim). CITED.** The table holds a product line, never a game.
-- **D36 (the run owns what the model read; the store owns the slot). CITED, NOT AMENDED.** The
+- **D36 (the run owns what the model read, and the store owns the slot). CITED, NOT AMENDED.** The
   read stays durable and stays evidence. The digest binding of run to slot is untouched. The
   store gains a copy of the read (3.4), never used as a key.
 - **D183 (a number a person reads is never a key). CITED, NOT AMENDED.** Its spirit extends: a
@@ -765,8 +773,8 @@ outcome now.
 - **D172 (the first photograph is the name). CITED.** The binding's evidence rides on the card,
   bound to its `cid`, because a position key is reused (`6/53`).
 - **D67 (the number a screen draws is composed once). CITED.** It keeps governing the drawn
-  read. It argued against normalizing the RECORD of the read; `read_number` stays raw.
-- **D162, D146 (a unique name decides; two signals release a claim). CITED, unchanged.** D162's
+  read. It argued against normalizing the RECORD of the read. `read_number` stays raw.
+- **D162, D146 (a unique name decides, and two signals release a claim). CITED, unchanged.** D162's
   standing is the argument for class T4u, and the owner applied it to the migration.
 - **D137 (the catalog is Near Mint by rule). CITED.** It is why grade is constant on this store.
   If it lifts, grade already lives where it must: in the SKU table and in `condition`.
@@ -797,7 +805,7 @@ writer moves.
 
 **On the owner's store.** Lane 0's schema step runs the first time a merged build opens the
 store. The two presses run only on the owner's word, in this order. First, `skus adopt
---write`. Second, the replay; the owner reads its table on the day. Third, `cards identity
+--write`. Second, the replay. The owner reads its table on the day. Third, `cards identity
 --write`.
 
 ## 12. The owner's rulings, 2026-09-24

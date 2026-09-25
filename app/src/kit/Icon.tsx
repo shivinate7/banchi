@@ -79,7 +79,24 @@ const PATHS = {
      (`trash`) or shipping it (`package`/`box`). Added for the Retire control (owner's ruling,
      2026-09-20, "clearer icon only"): the bare `minus` read as unclear icon-only. */
   archive: 'M3 4h18v4H3z M4 8h16v11H4z M10 12h4',
+  /* ONE ICON, ONE MEANING (UX-118). `history` meant four things: the graveyard, a product's
+     history, the run list and a row's price history. These two take two of them over; the
+     table under PATHS says which name means what. */
+  headstone: 'M6 21V10a6 6 0 0 1 12 0v11 M4 21h16 M10 12h4 M12 10v5',
+  chart: 'M4 4v16h16 M7 15l4-5 3 3 5-6',
 } as const
+
+/** WHAT AN ICON MEANS, where a meaning was ever in doubt (UX-118). A screen that draws one of
+ *  these draws it for this meaning and no other; a new meaning is a new path. */
+export const ICON_MEANINGS: Partial<Record<keyof typeof PATHS, string>> = {
+  history: 'A log of past events, newest first: the run list',
+  headstone: 'Cards that have left the store: the graveyard',
+  chart: 'A price over time: a product or a row',
+  archive: 'Retire a card: put it away, not delete it',
+  refresh: 'Read again from the server: reload',
+  undo: 'Take back the last press',
+  trash: 'Delete for good',
+}
 
 export type IconName = keyof typeof PATHS
 

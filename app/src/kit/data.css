@@ -1,0 +1,385 @@
+/* THE KIT'S DATA PRIMITIVES (`kit/data.tsx`): a figure, a card, a box, a place, a status, a
+   filter. One drawing each. `--bn-*` tokens only.
+
+   MONO IS FOR MACHINE STRINGS ONLY: SKUs, run ids, card numbers, key caps and money. A count,
+   a date, a box number and a name are Inter. `.bn-money` itself lives in `kit.css`. */
+
+/* ---- Sep: the one separator, drawn and never typed (D218) ---------------------------------- */
+.bn-sep {
+  display: inline-block;
+  margin-inline: var(--bn-1-5);
+  color: var(--bn-ink-4);
+  font-weight: 400;
+}
+.bn-sep::before {
+  content: '·';
+  content: '·' / '';
+}
+
+/* ---- Money: an empty figure is faint, never a zero -------------------------------------------- */
+.bn-money[data-empty='true'] { color: var(--bn-ink-3); font-weight: 400; }
+
+/* ---- Count: ONE count style, a quiet badge in tabular figures ---------------------------------- */
+.bn-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--bn-1-5);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.bn-count-strong { background: var(--bn-ink); color: var(--bn-bg); }
+
+/* ---- FilterCount: "12 of 40 cards, filtered by …" and a Clear press ---------------------------- */
+/* CENTERED IN A LINE HELD AT THE CONTROL FLOOR, never on the Clear press's baseline: on a phone
+   the press is 40px, and a baseline row put the words where the press put them, so they moved
+   when the last filter cleared and the press went (D118). */
+.bn-filtercount {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0 var(--bn-2);
+  min-width: 0;
+  min-height: var(--bn-control-h-sm);
+  font-size: var(--bn-fs-md);
+  line-height: var(--bn-lh-base);
+  color: var(--bn-ink-3);
+}
+.bn-filtercount-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bn-filtercount-clear { flex: none; }
+.bn-filtercount-figure { color: var(--bn-ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.bn-filtercount-clear {
+  padding: 0 var(--bn-1);
+  border-radius: var(--bn-r-xs);
+  font: inherit;
+  font-weight: 600;
+  color: var(--bn-accent);
+  transition: color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-filtercount-clear:hover { color: var(--bn-accent-hover); background: var(--bn-accent-tint); }
+
+/* ---- StatusBadge: a pill in its meaning's one tone -------------------------------------------- */
+.bn-status { font-family: var(--bn-font-ui); }
+
+/* ---- ProductLink and OrderLink: a name you can open ------------------------------------------- */
+.bn-datalink {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  border-radius: var(--bn-r-xs);
+  transition: color var(--bn-t-fast) var(--bn-ease), text-decoration-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-datalink:hover { color: var(--bn-accent); text-decoration-color: currentColor; }
+.bn-datalink:focus-visible { outline: 2px solid var(--bn-line-focus); outline-offset: 2px; }
+
+/* ---- CardLine: the name, then set, number, finish, rarity ------------------------------------- */
+.bn-cardline { display: inline-flex; min-width: 0; max-width: 100%; }
+.bn-cardline-stack { flex-direction: column; gap: var(--bn-0-5); }
+.bn-cardline-inline { flex-direction: row; align-items: baseline; flex-wrap: wrap; }
+.bn-cardline-name {
+  font-size: var(--bn-fs-base);
+  font-weight: 600;
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
+.bn-cardline-name.is-unknown { color: var(--bn-ink-3); font-weight: 400; font-style: italic; }
+.bn-cardline-facts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}
+.bn-cardline-fact { display: inline-flex; align-items: baseline; }
+/* A card number is a machine string, so it is mono (and money is the only other figure that is). */
+.bn-cardline-number { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); font-variant-numeric: tabular-nums; }
+.bn-cardline-finish { color: var(--bn-ink-2); font-weight: 500; }
+
+/* ---- CardThumb: a card-shaped frame, and ONE "no photo" state at every size ------------------ */
+.bn-thumb {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--bn-1);
+  flex: none;
+  aspect-ratio: 63 / 88;
+  overflow: hidden;
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+}
+.bn-thumb-sm { width: 40px; border-radius: var(--bn-r-xs); }
+.bn-thumb-md { width: 64px; }
+.bn-thumb-lg { width: 128px; border-radius: var(--bn-r); }
+.bn-thumb-img { width: 100%; height: 100%; object-fit: cover; }
+.bn-thumb[data-missing='true'] { box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.bn-thumb-none {
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
+  text-align: center;
+  line-height: var(--bn-lh-snug);
+}
+
+/* ---- BoxLabel: the name, and never the number ------------------------------------------------- */
+.bn-boxlabel { display: inline-flex; align-items: baseline; min-width: 0; max-width: 100%; }
+.bn-boxlabel-name { font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bn-boxlabel-name.is-unnamed { font-weight: 400; font-style: italic; color: var(--bn-ink-3); }
+
+/* ---- Location ------------------------------------------------------------------------------------ */
+.bn-location { display: inline-flex; min-width: 0; }
+.bn-location-none { color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+
+/* ======================================================================================================
+   THE PICK LIST: Select, FilterChips and SortControl.
+
+   ONE HEIGHT FOR EVERY CONTROL IN A FILTER BAR: `--bn-control-h`, which the thumb floor raises on a
+   coarse pointer. ONE WIDTH SYSTEM: a trigger is as wide as its words, never narrower than the floor
+   and never wider than the cap, and a cut value ellipsizes rather than wrapping the bar.
+   ====================================================================================================== */
+.bn-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1-5);
+  height: var(--bn-control-h);
+  min-width: 96px;
+  max-width: 280px;
+  padding: 0 0 0 var(--bn-3);
+  /* A field's edge reads 3:1 against the page (WCAG 1.4.11): the kit's `--bn-field-edge`, and
+     the faint ink until the kit defines it. */
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  color: var(--bn-ink-2);
+  font: inherit;
+  font-size: var(--bn-fs-md);
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    border-color var(--bn-t-fast) var(--bn-ease),
+    background-color var(--bn-t-fast) var(--bn-ease),
+    color var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.bn-pick:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
+.bn-pick:focus-visible { outline: none; border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
+.bn-pick[aria-expanded='true'] { border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
+.bn-pick-icon { flex: none; color: var(--bn-ink-3); }
+.bn-pick-label { flex: none; font-weight: 500; color: var(--bn-ink-3); }
+/* THE VALUE SLOT IS AS WIDE AS THE WIDEST VALUE IT CAN SHOW. Every possible value sits in the
+   one grid cell, all but the current one invisible, so a pick changes the words and never the
+   width (D118). The cap above still holds: past it, the current value ellipsizes. */
+.bn-pick-slot {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, auto);
+  min-width: 0;
+  text-align: left;
+}
+.bn-pick-value,
+.bn-pick-sizer {
+  grid-area: 1 / 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.bn-pick-value { color: var(--bn-ink); }
+.bn-pick-sizer { visibility: hidden; }
+.bn-pick-placeholder { font-weight: 400; color: var(--bn-ink-3); }
+/* The chevron sits in a slot one control wide, which is the slot a filter's clear press takes
+   over once the filter is on. */
+.bn-pick-chev {
+  flex: none;
+  box-sizing: content-box;
+  padding-inline: calc((var(--bn-control-h) - 14px) / 2);
+  margin-left: auto;
+  color: var(--bn-ink-3);
+}
+
+/* An ACTIVE filter reads as picked from across the room: the accent edge and tint, with its clear
+   press joined to it. */
+.bn-fchip { position: relative; display: inline-flex; align-items: stretch; max-width: 100%; }
+.bn-fchip[data-active='true'] > .bn-pick {
+  border-color: var(--bn-accent);
+  background: var(--bn-accent-tint);
+}
+/* The hover ink, not the accent: the accent on its own tint over the page is 4.29:1 in light,
+   and the label is text. */
+.bn-fchip[data-active='true'] > .bn-pick .bn-pick-label { color: var(--bn-accent-hover); }
+.bn-fchip[data-active='true'] > .bn-pick .bn-pick-chev { visibility: hidden; }
+.bn-fchip-more { font-weight: 500; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.bn-fchip-clear {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: var(--bn-control-h);
+  height: 100%;
+  border-radius: 0 var(--bn-r) var(--bn-r) 0;
+  background: transparent;
+  color: var(--bn-accent-hover);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-fchip-clear:hover { background: var(--bn-accent-tint-2); color: var(--bn-accent-hover); }
+
+.bn-filterchips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); min-width: 0; }
+.bn-filterchips-clear {
+  height: var(--bn-control-h);
+  padding: 0 var(--bn-2);
+  border-radius: var(--bn-r);
+  font: inherit;
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-accent);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-filterchips-clear:hover { background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
+/* Off until two facets are on: it keeps its place in the bar and is not drawn. */
+.bn-filterchips-clear[data-off='true'] { visibility: hidden; }
+
+/* SortControl: the key, then which way, both in words, one height. */
+.bn-sort { display: inline-flex; align-items: center; gap: var(--bn-1); }
+.bn-sort-dir {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  height: var(--bn-control-h);
+  padding: 0 var(--bn-3);
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  font: inherit;
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-ink-2);
+  white-space: nowrap;
+  transition: border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-sort-dir:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
+
+/* The panel: Capture's open-field body, floating. Above a sheet (61), below a toast (80). */
+.bn-pick-panel {
+  position: fixed;
+  z-index: 75;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-3), inset 0 0 0 1px var(--bn-line-strong);
+  animation: bn-pop var(--bn-t) var(--bn-ease-spring) both;
+}
+.bn-pick-entry {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex: none;
+  padding: 0 var(--bn-3);
+  border-bottom: 1px solid var(--bn-line);
+  color: var(--bn-ink-3);
+}
+.bn-pick-entry-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--bn-control-h);
+  border: 0;
+  background: transparent;
+  color: var(--bn-ink);
+  font: inherit;
+  font-size: var(--bn-fs-md);
+}
+.bn-pick-entry-input:focus { outline: none; }
+.bn-pick-entry-input::placeholder { color: var(--bn-ink-3); }
+.bn-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--bn-1-5);
+}
+.bn-pick-list:focus { outline: none; }
+.bn-pick-opt {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--bn-2);
+  min-height: max(30px, var(--bn-control-h-sm));
+  padding: 0 var(--bn-1-5);
+  border-radius: var(--bn-r-sm);
+  color: var(--bn-ink-2);
+  font-size: var(--bn-fs-md);
+  user-select: none;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-pick-opt[data-active='true'] { background: var(--bn-hover); color: var(--bn-ink); box-shadow: inset 0 0 0 1px var(--bn-line-focus); }
+.bn-pick-opt[aria-selected='true'] { color: var(--bn-ink); font-weight: 600; }
+.bn-pick-opt[data-zero='true'] { color: var(--bn-ink-3); }
+.bn-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bn-pick-count {
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+/* The mark: an empty square for a list that takes several picks, a bare tick for a list of one —
+   Capture's own mark, filled with the accent once picked. */
+.bn-pick-mark {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--bn-r-xs);
+  color: var(--bn-accent);
+}
+.bn-pick-mark .bn-icon { opacity: 0; transform: scale(0.4); transition: transform var(--bn-t-fast) var(--bn-ease-spring), opacity var(--bn-t-fast) var(--bn-ease); }
+.bn-pick-opt[data-multiple='true'] .bn-pick-mark {
+  border: 1.5px solid var(--bn-field-edge, var(--bn-ink-4));
+  background: var(--bn-surface);
+  color: var(--bn-on-accent);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-pick-opt[data-multiple='true'][aria-selected='true'] .bn-pick-mark { background: var(--bn-accent); border-color: var(--bn-accent); }
+.bn-pick-opt[aria-selected='true'] .bn-pick-mark .bn-icon { opacity: 1; transform: none; }
+.bn-pick-empty { padding: var(--bn-2); font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+
+/* THE THUMB FLOOR (D117) for the kit-data controls that are not already a control's height.
+   The same pointer-and-width test `tokens.css` raises `--bn-control-h-sm` on. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .bn-datalink { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
+  .bn-filtercount-clear { display: inline-flex; align-items: center; min-height: var(--bn-control-h-sm); }
+}
+
+/* A phone: the floor and the cap give way to the column, so a bar of three never scrolls sideways. */
+@media (max-width: 639px) {
+  .bn-pick { min-width: 0; max-width: 100%; }
+  /* A PHONE STACKS THE FILTERS, ONE A ROW AND ALL ONE WIDTH (D195): each trigger already holds
+     the width of its widest value, so three of them no longer share a row at 390, and a stack of
+     three different widths is the ragged column D195 refuses. */
+  .bn-filterchips > .bn-fchip { flex: 1 1 100%; }
+  .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bn-pick-panel { animation: none; }
+}

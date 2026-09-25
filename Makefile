@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -21,6 +21,18 @@ NPM_GUARD = @[ -d app/node_modules ] || { \
 	echo "app/ dependencies are not installed."; \
 	echo "  Fix: npm --prefix app install"; \
 	exit 1; }
+
+# A LINKED CHECKOUT CLAIMS ITS OWN PORT SLOT BEFORE IT SERVES OR TESTS
+# (D-a-claimed-slot-and-a-server-that-names-its-checkout). A hash into 300 slots put two live
+# worktrees on one port. The claim records one slot per checkout in ~/.pkmnscan/port-slots.json,
+# and server/ports.py and app/devPort.ts read it. The primary checkout claims nothing. It fails
+# open and says so: the ports then fall back to the hash, and app/checkoutIdentity.ts still
+# refuses a test run against another checkout's server.
+# `.claude/launch.json` names a port too, so `scripts/launch-config.py` claims BEFORE it writes
+# that file. `make launch-config`, `make venv` and `make worktree-setup` reach the claim
+# through it, and so does the SessionStart hook. A file written from the hash port before a
+# claim moved the tree would open ANOTHER tree's server in the Browser pane.
+PORT_CLAIM = @python3 scripts/port-slots.py claim --quiet
 
 # `venv` is already idempotent — the venv module tolerates an existing dir and pip happily
 # reinstalls — so the gap was never the install, it was that nothing said to re-run it.
@@ -61,9 +73,15 @@ help:
 	@echo "  make harness      T1-T8 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
 	@echo "  make map-fix      add the ids a file cites to its governed_by in docs/map.py."
-	@echo "                    THE ONE GENERATOR: it writes and gates nothing (D18)."
+	@echo "                    THE ONE GENERATOR INTO A DOC: it gates nothing (D18)."
 	@echo "                    Previews. ARGS=--write applies. ARGS=--selftest proves it."
 	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
+	@echo "  make offenders-prune  delete stale entries from the two offender lists, and"
+	@echo "                    re-key a renamed file. Never adds one. Gates nothing (D18)."
+	@echo "                    Previews. ARGS=--write applies."
+	@echo "  make offenders-prune-selftest  that pruner, in memory and in a throwaway repo."
+	@echo "  make text-density  on-demand cut table over the text checks' own seeded screens"
+	@echo "                    (D-text-shape-checks). Never a gate. ARGS=\"--route '#/x'\"."
 	@echo "  make orient       which component renders the thing, and what selects it."
 	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
 	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
@@ -196,6 +214,8 @@ help:
 	@echo "  make guard-scope-selftest  that gate, both-ways wiring included."
 	@echo "  make sync-selftest  the primary checkout's self-sync, proved by violating it."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
+	@echo "  make port-slots-selftest  two throwaway trees forced into one port slot: a test run in"
+	@echo "                    one refuses the other's server, and a claim gives each its own."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make readiness-agreement  app/src/readiness.ts against pipeline/decisions.py:blocking."
 	@echo "  make mutate-anchors  every mutation anchor still present in the guard it targets. 0.03s."
@@ -212,6 +232,9 @@ help:
 	@echo "                    in its own property family — should have been var(...)."
 	@echo "                    Ratcheted per file; PKMNSCAN_TOKEN_LITERALS=off skips it."
 	@echo "  make token-literal-check-selftest  that checker, on fixtures in both directions."
+	@echo "  make kit-adoption  every route renders <Page> from the kit, and no screen hand-rolls"
+	@echo "                    a kit primitive (D-page-scaffold). A shrinking allow list."
+	@echo "  make kit-adoption-selftest  that checker, on in-memory fixtures in both directions."
 	@echo "  make demo-determinism-selftest  scripts/demo-determinism.py's own path-matcher,"
 	@echo "                    on fixtures — no subprocess, no \`make demo\`."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
@@ -236,7 +259,7 @@ help:
 	@echo "                    screen-freshness +"
 	@echo "                    screen-freshness-selftest + sigil-check +"
 	@echo "                    css-var-check + css-var-check-selftest + token-literal-check +"
-	@echo "                    ignore-check +"
+	@echo "                    kit-adoption + ignore-check +"
 	@echo "                    lint + vale + typecheck + audit-self-test +"
 	@echo "                    mutate-anchors +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
@@ -258,6 +281,7 @@ help:
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
 	@echo "                    guard-scope-selftest + token-literal-check-selftest +"
+	@echo "                    kit-adoption-selftest + port-slots-selftest +"
 	@echo "                    demo-determinism-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
@@ -289,6 +313,8 @@ help:
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
 	@echo "  make demo-photos  curate real card photographs into the tracked set. Needs a"
 	@echo "                    store: SOURCE=<checkout>. Refuses any photo carrying a QR."
+	@echo "  make demo-histories  record the demo's price histories into new fixtures. The"
+	@echo "                    owner's Mac only, with PKMNSCAN_TCG_USER_AGENT set. Never CI."
 	@echo "  make demo-seed    the store alone, built on the curated photographs."
 	@echo "  make demo-record  the bundle alone — sweep every GET the client can build."
 	@echo "  make demo-static  the two above, then a static build to dist-demo/."
@@ -537,7 +563,7 @@ docs-audit:
 	status=$$?; \
 	if [ $$status -eq 1 ]; then exit 1; fi
 
-# THE ONE GENERATOR IN THIS REPO, AND IT GATES NOTHING (D18, amended 2026-09-17). It adds
+# THE ONE GENERATOR INTO A DOC, AND IT GATES NOTHING (D18, amended 2026-09-17). It adds
 # the decision ids a file cites to that file's `governed_by` in docs/map.py — the answer
 # `make docs-audit`'s `repo map` row already computes to decide the commit. It imports that
 # row's own `cited_decisions()` rather than reimplementing it, so the two cannot disagree.
@@ -554,6 +580,34 @@ map-fix:
 
 map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
+
+# A DELETING GENERATOR, AND IT GATES NOTHING (D18; D-ratchets-become-offender-lists). It deletes
+# the STALE entries from the two shrinking offender lists, scripts/ste-offenders.json and
+# scripts/typed-interpunct-allow.json, and re-keys a file that git's rename detection says
+# moved. It never adds an entry. It reads with the rows' own functions, imported, so the two
+# cannot disagree about what is stale. Previews. ARGS=--write applies.
+#
+# NOT A PREREQUISITE OF ANYTHING, never wired to a hook, and its self-test is not in
+# `make check`, on `map-fix`'s precedent above: the rows that read these lists already run on
+# every commit.
+offenders-prune:
+	@python3 scripts/offenders-prune.py $(ARGS)
+
+offenders-prune-selftest:
+	@python3 scripts/offenders-prune.py --selftest
+
+# THE THIRD PIECE OF THE OWNER'S 2026-09-23 RULING (D-text-shape-checks, supersedes D194): a
+# REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one
+# receipt, `.serve/text-density.json`, gitignored). NOT A PREREQUISITE OF ANYTHING and never
+# wired to a hook, `map-fix`'s own standing. It runs `app/tests/text-shape.spec.ts` with
+# `TEXT_DENSITY=1`, so it reads the SAME populated fixture and the same loaded screens as the
+# two gates, at 1440 and 390, whatever this checkout's own store holds. Playwright starts or
+# reuses this checkout's own Vite (D43); every read is stubbed, so no store is read. One
+# worker, `line` reporter, so `.serve/design-check.json` is never touched. ARGS reaches the
+# script raw, e.g. `ARGS="--route '#/pricing' --top 8"`.
+text-density:
+	$(NPM_GUARD)
+	@node scripts/text-density/density.mjs $(ARGS)
 
 # WHICH COMPONENT RENDERS THE THING, AND WHAT SELECTS IT. A RENDERER — it writes nothing and
 # gates nothing, so D18 does not reach it, the same standing `make map` has.
@@ -599,6 +653,7 @@ check:
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
 	@$(MAKE) --no-print-directory token-literal-check
+	@$(MAKE) --no-print-directory kit-adoption
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory vale
@@ -641,6 +696,8 @@ check:
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory token-literal-check-selftest
+	@$(MAKE) --no-print-directory kit-adoption-selftest
+	@$(MAKE) --no-print-directory port-slots-selftest
 	@$(MAKE) --no-print-directory demo-determinism-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
@@ -705,6 +762,8 @@ ci-check:
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory token-literal-check-selftest
+	@$(MAKE) --no-print-directory kit-adoption-selftest
+	@$(MAKE) --no-print-directory port-slots-selftest
 	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -715,6 +774,7 @@ ci-check:
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
 	@$(MAKE) --no-print-directory token-literal-check
+	@$(MAKE) --no-print-directory kit-adoption
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
@@ -804,6 +864,41 @@ token-literal-check:
 # self-tests, `make check`'s own D161 order, beside `guard-scope-selftest`.
 token-literal-check-selftest:
 	@python3 scripts/token-literal-check.py --self-test
+
+# EVERY SCREEN INHERITS THE PAGE SCAFFOLD (D-page-scaffold). The owner, 2026-09-23: a new page
+# in the sidebar inherits the properties of the other pages. R1: every ROUTES view renders
+# <Page> from the kit. R2: outside app/src/kit/, no screen hand-rolls a dialog, a search input,
+# a <select>, a kit class, a date format or a money format. Read from the TypeScript AST, like
+# scripts/user-strings.mjs. The exceptions are scripts/kit-adoption-allow.json, a SHRINKING
+# offender list (file -> rule -> lane): an unlisted violation fails, and so does a stale entry,
+# and so does a key the list at the merge-base with origin/main does not hold, unless its rule
+# is not defined at the merge-base: a rule born on the branch, printed with its reason
+# (read-only git; fails open, printed, with no merge-base). Never a pinned count. Writes nothing. Needs app/node_modules for typescript, so it is in
+# `make check` and not the git hook: a fresh clone has no node_modules until `npm ci`.
+kit-adoption:
+	$(NPM_GUARD)
+	@node scripts/kit-adoption.mjs
+
+# THE GUARD IS NOT TRUSTED UNTIL IT HAS GONE RED ON THE DEFECT IT GUARDS: a route view without
+# <Page>, a component named Page that is not the kit's, role="dialog" in a screen (and green
+# inside app/src/kit/), a stale allow entry, an unlisted violation, each R2 shape both ways,
+# R1's order, depth and cycles, a default-import view, and a new allow key against the base.
+# The fixtures are in-memory maps of path -> source, so it writes nothing (D18). Wired last among
+# the guard self-tests, `make check`'s own D161 order.
+kit-adoption-selftest:
+	$(NPM_GUARD)
+	@node scripts/kit-adoption.mjs --self-test
+
+# TWO THROWAWAY TREES FORCED INTO ONE PORT SLOT, AND A REAL VITE AND A REAL PLAYWRIGHT IN EACH
+# (D-a-claimed-slot-and-a-server-that-names-its-checkout). It goes red on the 2026-09-24
+# incident: with the identity check removed, a run in one tree passes against the other's
+# server. Then both claim, each gets its own slot on both sides, and the run passes on its own
+# server. It starts processes, binds ports and writes a registry under `mktemp -d`, so it is
+# here and never in the commit hook (D18). It picks a slot whose ports are free, so it never
+# reaches a real checkout's server, and it stops only the processes it started.
+port-slots-selftest:
+	$(NPM_GUARD)
+	@python3 scripts/port-slots.py selftest
 
 # identity-follows-sku.md, lane 7: scripts/demo-determinism.py's own ALLOWED_PATTERNS
 # matcher, proved on fixtures rather than by spending two full `make demo` runs. Pure
@@ -1542,6 +1637,7 @@ lan-check:
 #
 # `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
 up:
+	$(PORT_CLAIM)
 	@$(PYTHON) scripts/serve.py up $(ARGS)
 
 down:
@@ -1564,6 +1660,7 @@ launch-agent:
 # building and operating actually needs.
 dev:
 	$(NPM_GUARD)
+	$(PORT_CLAIM)
 	@npm --prefix app run dev
 
 # Foreground and blocking, like any server. An agent that runs this in the foreground hangs
@@ -1584,6 +1681,7 @@ dev:
 # every other route is unaffected and that one says what to do.
 server:
 	@$(PYTHON) scripts/serve.py guard-foreground
+	$(PORT_CLAIM)
 	@$(PYTHON) server/capture_server.py
 
 # The manifest is an INPUT and lives beside the script that reads it. It used to point at
@@ -1641,6 +1739,7 @@ screenshot:
 # Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
 design-check:
 	$(NPM_GUARD)
+	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
 	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
@@ -1681,6 +1780,7 @@ subagent-override-selftest:
 # verdict file should ask for this one.
 design-check-quiet:
 	$(NPM_GUARD)
+	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
 	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
@@ -1821,6 +1921,16 @@ demo-photos:
 		exit 1; }
 	@$(PYTHON) scripts/demo-photos.py --source "$(SOURCE)" \
 	  --count $(DEMO_PHOTO_COUNT) --joinable $(DEMO_PHOTO_JOINABLE)
+
+# Record the demo's price histories into NEW committed fixtures, on the owner's Mac only.
+#
+# The history host refuses the honest User-Agent (D216), and the owner allows the browser
+# signature from the owner's own machine, never from CI. So this runs by hand, when the owner
+# chooses, with PKMNSCAN_TCG_USER_AGENT set, and writes a new dated directory under
+# fixtures/demo-price-history/. It refuses to overwrite one. The seed and the recorder read the
+# newest. NO WORKFLOW CALLS THIS TARGET.
+demo-histories:
+	@$(PYTHON) scripts/demo-histories.py $(ARGS)
 
 demo-seed:
 	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force

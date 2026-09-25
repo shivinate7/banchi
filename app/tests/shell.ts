@@ -157,14 +157,14 @@ function card(over: {
   return {
     box: over.box,
     index: over.index,
-    label: `Box ${over.box} · Section ${over.section} · Card ${over.card}`,
+    label: `${over.boxName ?? `Box ${over.box}`}, Section ${over.section}, Card ${over.card}`,
     section: over.section,
     card: over.card,
     place: {
       located: true,
-      label: gone
-        ? `Box ${over.box} · departed`
-        : `Box ${over.box} · Section ${over.section} · Card ${over.card}`,
+      /* THE SERVER'S LABEL (D259): the box's name, the section and the card
+         within it, a departed card naming the place it left. `slot` null is what marks it gone. */
+      label: `${over.boxName ?? `Box ${over.box}`}, Section ${over.section}, Card ${over.card}`,
       box: over.box,
       index: over.index,
       section: over.section,
@@ -298,6 +298,37 @@ async function stubShell(page: Page, cards: number): Promise<void> {
       next_index: {},
     }),
   )
+  /* THE SEND STATUS, BESIDE `/status` AND FOR ITS REASON (`D273`,
+     Q3). Every visit to Home and to Pricing reads it to learn whether the live check after a
+     send is due, so it is as much a shell read as `/status` is. The answer is the empty one —
+     nothing sent, nothing due — so no spec sees a check it did not ask for. A spec about sends
+     registers its own handler after this one, and Playwright matches most-recent first. */
+  /* THE AUTOMATIC MATCH (flow interview, Q4). `#/runs` calls it for every run it sees waiting
+     for a match, and the shared fixtures' default run IS one — so every spec that draws the
+     list would otherwise meet the seal over a press nobody made. The answer is "not waiting",
+     which changes nothing on screen; a spec about the match registers its own handler after
+     this one, and Playwright matches most-recent first. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/match$/, (route) =>
+    json(route, { ran: false, reason: 'not_waiting', summary: {} }),
+  )
+  await page.route(/\/pipeline\/sends$/, (route) =>
+    json(route, { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }),
+  )
+  /* THE PALETTE'S CARD SEARCH IS THE SHELL'S OWN READ NOW (D276): typing two letters
+     into "Go to" asks `GET /search`. It is answered EMPTY, and ONLY while the palette is open.
+     A screen's own search falls back to the seal, so a spec that forgot to stub its screen's
+     search is still named rather than handed a shared answer. A spec that wants cards in the
+     palette registers its own `/search` handler, which is newer and wins. */
+  await page.route(/\/search\?/, async (route) => {
+    const fromPalette = await route
+      .request()
+      .frame()
+      .evaluate(() => document.querySelector('.bn-cmdk') !== null)
+      .catch(() => false)
+    if (!fromPalette) return route.fallback()
+    const q = new URL(route.request().url()).searchParams.get('q') ?? ''
+    return json(route, { query: q, groups: [] })
+  })
 }
 
 /* ---------------------------------------------------------------------- the small store */
@@ -359,6 +390,23 @@ async function stubCropPreview(page: Page): Promise<void> {
 async function stubStore(page: Page): Promise<void> {
   await page.route(/\/photo\/\d+\/\d+/, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
+  )
+  /* THE FREE COST CHECK, WHICH IS A POST AND STILL A READ (the crop window's reason, below).
+     The Identify sheet runs it the moment it opens (the owner's Q5 ruling), so a spec that only
+     opens the sheet reaches it. The answer is a small, believable quote; nothing here spends —
+     `POST /pipeline/identify` stays unstubbed, so the seal reports any spec that presses it. */
+  await page.route(/\/pipeline\/preflight$/, (route) =>
+    json(route, {
+      ok: true,
+      exit_code: 0,
+      selection: { state: 'captured' },
+      sentence: '14 cards waiting to be identified',
+      scope: null,
+      capture_dirs: [],
+      console: '',
+      claimed: null,
+      total: { photographs: 14, cache_hits: 3, to_send: 11, estimate_usd: 0.46, cards: 14 },
+    }),
   )
 
   /* TWO BOXES, SO A PICKER HAS SOMETHING TO PICK BETWEEN. One named and one not — a name is
@@ -484,10 +532,10 @@ async function stubStore(page: Page): Promise<void> {
     json(route, {
       review: [
         {
-          position: 'Box 2 · Section 1 · Card 1',
+          position: 'Box 2, Section 1, Card 1',
           box: 2,
           index: 1,
-          label: 'Box 2 · Section 1 · Card 1',
+          label: 'Box 2, Section 1, Card 1',
           photo: 'photos/2/1.jpg',
           read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
           confidence: null,

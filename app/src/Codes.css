@@ -482,7 +482,7 @@
   margin: -4px 0 -4px -8px;
   padding: 0 8px;
   border-radius: var(--bn-r-sm);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .codes-code-btn:hover { background: var(--bn-accent-tint); color: var(--bn-accent); }
@@ -510,7 +510,7 @@
     font-weight: 600;
     letter-spacing: var(--bn-tracking-caps);
     text-transform: uppercase;
-    color: var(--bn-ink-4);
+    color: var(--bn-ink-3);
   }
   .codes-table td[data-th='Products'] { grid-column: 1 / -1; }
   .codes-table td.num { text-align: left; }
@@ -539,7 +539,7 @@
     font-weight: 600;
     letter-spacing: var(--bn-tracking-caps);
     text-transform: uppercase;
-    color: var(--bn-ink-4);
+    color: var(--bn-ink-3);
   }
   .codes-entries td[data-th='Position'] { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
   /* a row with no set or no order draws nothing for it, rather than a labelled blank */

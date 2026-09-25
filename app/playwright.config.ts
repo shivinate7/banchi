@@ -20,8 +20,15 @@ import { DEV_URL } from './devPort'
 // one port, turning a silent wrong answer into a hard failure, and it would break the case
 // where you already have `make dev` up in the tree you are testing. The port was the
 // fault; the flag was doing its job.
+//
+// THE PORT WAS NOT ENOUGH, AND ON 2026-09-24 THE PREMISE ABOVE FAILED
+// (D261). A slot is a hash into 300, and two
+// live worktrees shared one. Design-check in one of them reused the other's Vite and passed.
+// So reuse now needs proof, not a port: `globalSetup` runs after the `webServer` is up and
+// refuses the whole run unless that server names THIS checkout (`checkoutIdentity.ts`).
 export default defineConfig({
   testDir: './tests',
+  globalSetup: './checkoutIdentity.ts',
   fullyParallel: true,
   // TWO REPORTERS, AND THE SECOND ONE IS FOR A READER WHO IS NOT WATCHING.
   //

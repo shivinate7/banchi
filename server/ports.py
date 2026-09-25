@@ -26,8 +26,17 @@ tree reads as a pair — 5285 beside 8185. An allocator handing out the next fre
 answer differently every run, and `strictPort` could then not tell "someone else is here"
 from "I moved".
 
+A HASH IS NOT ONE SLOT PER CHECKOUT, SO A SLOT MAY BE CLAIMED
+(D261). Two live worktrees hashed into one
+slot on 2026-09-24. `scripts/port-slots.py claim` records a checkout's slot ONCE in a
+machine-wide registry, and `slot_for` reads it before the hash. A claimed slot never moves,
+so the answer stays as stable as the hash was.
+
 THE MAIN WORKING TREE KEEPS 8000, exactly as it keeps 5173, so nothing about the ordinary
-single-checkout workflow changes and every doc that names the number stays true.
+single-checkout workflow changes and every doc that names the number stays true. ONLY the
+main working tree keeps them: a tree must show a `.git` DIRECTORY to get the base ports, and
+a tree with no `.git` takes a slot like a linked worktree (D268, a copied
+tree never gets the live port).
 
 TWO IMPLEMENTATIONS OF ONE ALGORITHM, WHICH IS A DRIFT RISK AND IS TESTED RATHER THAN
 TRUSTED. Python serves and TypeScript addresses, and neither can import the other. They agree
@@ -39,8 +48,10 @@ prompt field that would have parsed cleanly and joined nothing.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
+from typing import Optional
 
 PORT_ENV = "PKMNSCAN_PORT"
 
@@ -57,15 +68,29 @@ CAPTURE_LOW = 8100
 DEV_LOW = 5200
 SLOTS = 300
 
+# THE SLOT REGISTRY (D261). A hash into 300
+# slots is not "every checkout has its own ports". Two live worktrees on this Mac hashed into
+# one slot on 2026-09-24, and a design-check in one of them tested the other's code, green.
+# So a checkout may CLAIM a slot, once, in one machine-wide file keyed by its resolved path.
+# The derivation READS the file and never writes it. `scripts/port-slots.py claim` is the one
+# writer. A missing, unreadable or malformed file, or no entry for this path, reads as "not
+# claimed", and the hash answers as before. `app/devPort.ts` reads the same file the same way.
+SLOT_REGISTRY_ENV = "PKMNSCAN_SLOT_REGISTRY"
+SLOT_REGISTRY_NAME = "port-slots.json"
+
 
 def is_linked_worktree(root: Path) -> bool:
     """A linked worktree's `.git` is a FILE, not a directory.
 
-    The same one fact `app/devPort.ts`, `scripts/worktree-guard.sh` and
-    `scripts/docs-audit.py` all detect on, spelled the same way on purpose. No `.git` at all
-    — a tarball, a container copy, a CI checkout that stripped it — behaves like the main
-    tree, because inventing a port for a checkout with no identity to derive one from is
-    worse than the documented default.
+    The same one fact `scripts/worktree-guard.sh` and `scripts/docs-audit.py` detect on,
+    spelled the same way on purpose. `scripts/serve.py` and `scripts/status.py` call it to
+    ask "is this a linked worktree?" and nothing else.
+
+    THE PORT DOES NOT ASK THIS QUESTION ANY MORE (D268, a copied tree never
+    gets the live port). A tree with no `.git` is not a linked worktree, and this answers
+    False for it, as it always did. The port used to read that False as "the primary
+    checkout" and gave such a tree 8000. `is_primary_checkout` below is the question the
+    port asks now.
     """
     try:
         return (root / ".git").is_file()
@@ -73,8 +98,55 @@ def is_linked_worktree(root: Path) -> bool:
         return False
 
 
-def slot_for(root: Path) -> int:
-    """This checkout's slot, 0..SLOTS-1.
+def is_primary_checkout(root: Path) -> bool:
+    """The primary checkout's `.git` is a DIRECTORY. Only this tree keeps 8000 and 5173.
+
+    D268, a copied tree never gets the live port. On 2026-09-23 a scratch
+    copy of main with no `.git` built an app. The old rule read "no `.git`" as "the primary
+    checkout", so that app called 8000, the owner's LIVE capture server, and read the real
+    store. Any press there would have written to it.
+
+    So the base port is kept by the one tree that proves it is a primary checkout: a
+    `.git` directory. Everything else takes a slot from its own path, as a linked worktree
+    does. That covers a tarball, a container copy, a copy without its `.git`, and a failed
+    stat. A wrong guess here now costs a moved port, never a write to the owner's store.
+
+    A plain `cp -r` copies `.git` too, and so does a second clone. Such a tree IS a primary
+    checkout of its own and still gets 8000. That is an accepted risk, recorded in the
+    decision entry.
+
+    `app/devPort.ts:isPrimaryCheckout` is its twin, and `make port-agreement` asks both
+    of them over a copy of each kind of tree.
+    """
+    try:
+        return (root / ".git").is_dir()
+    except OSError:
+        return False
+
+
+def slot_registry() -> Optional[Path]:
+    """Where the claimed slots are recorded. `PKMNSCAN_SLOT_REGISTRY` overrides.
+
+    The default sits beside the machine-wide suite lock, under `~/.pkmnscan/`, because a
+    slot is a fact about this machine and not about any one checkout. None when there is no
+    home directory to find, and then nothing is claimed.
+    """
+    override = os.environ.get(SLOT_REGISTRY_ENV, "").strip()
+    if override:
+        return Path(override)
+    try:
+        return Path.home() / ".pkmnscan" / SLOT_REGISTRY_NAME
+    except (RuntimeError, KeyError, OSError):
+        return None
+
+
+def canonical(root: Path) -> str:
+    """The one spelling of a checkout's path that the hash and the registry both key on."""
+    return str(root.resolve())
+
+
+def hashed_slot(root: Path) -> int:
+    """The slot the path alone derives, 0..SLOTS-1. Used when no slot is claimed.
 
     sha256 of the resolved absolute path, first four bytes big-endian, modulo the band. The
     TypeScript twin does exactly this, and `scripts/port-agreement.py` is what proves it
@@ -82,12 +154,56 @@ def slot_for(root: Path) -> int:
     hashes the same as the path itself — `/tmp` is a symlink to `/private/tmp` on this
     machine and one worktree genuinely lives under it.
     """
-    digest = hashlib.sha256(str(root.resolve()).encode("utf-8")).digest()
+    digest = hashlib.sha256(canonical(root).encode("utf-8")).digest()
     return int.from_bytes(digest[:4], "big") % SLOTS
 
 
+def refuse_json_constant(constant: str) -> float:
+    """`NaN`, `Infinity` and `-Infinity` are not JSON, and JSON.parse refuses them."""
+    raise ValueError(f"{constant} is not JSON")
+
+
+def read_claims(registry: Optional[Path] = None) -> dict:
+    """Every claimed slot, `{canonical path: slot}`. Empty when the file cannot be read.
+
+    Only whole-number slots inside the band are kept, so a hand-edited or damaged entry reads
+    as "not claimed" and never as a port outside the band. A slot written `149.0` is a float
+    here and is refused; `app/devPort.ts:wholeNumbersOnly` refuses it on the other side.
+    NaN and Infinity make the whole file unreadable, because JSON.parse refuses them there.
+    """
+    path = registry if registry is not None else slot_registry()
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"), parse_constant=refuse_json_constant)
+    except (OSError, ValueError):
+        return {}
+    slots = data.get("slots") if isinstance(data, dict) else None
+    if not isinstance(slots, dict):
+        return {}
+    return {
+        key: value for key, value in slots.items()
+        if isinstance(key, str) and type(value) is int and 0 <= value < SLOTS
+    }
+
+
+def claimed_slot(root: Path) -> Optional[int]:
+    """This checkout's claimed slot, or None when it has claimed none."""
+    return read_claims().get(canonical(root))
+
+
+def slot_for(root: Path) -> int:
+    """This checkout's slot, 0..SLOTS-1: the claimed slot if there is one, else the hash.
+
+    `app/devPort.ts:slotFor` is the twin, and `scripts/port-agreement.py` proves the two
+    answer the same over the same registry.
+    """
+    claimed = claimed_slot(root)
+    return claimed if claimed is not None else hashed_slot(root)
+
+
 def _port(root: Path, base: int, low: int) -> int:
-    return base if not is_linked_worktree(root) else low + slot_for(root)
+    return base if is_primary_checkout(root) else low + slot_for(root)
 
 
 def capture_port(root: Path = REPO_ROOT) -> int:

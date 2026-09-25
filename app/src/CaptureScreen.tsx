@@ -42,6 +42,7 @@ import { captureBoxLabel } from './runScope'
 import { GAP_MINUTES } from './storeHistory'
 import { Button, Icon, Kbd, Notice, Pill, Stat } from './kit'
 import { toast } from './kit/toast'
+import { placePartsOf } from './position'
 import type { IconName, PillTone } from './kit'
 import './CaptureScreen.css'
 
@@ -754,9 +755,10 @@ function Track({
  *  left the box; the guard costs a character class and does not depend on that staying true. */
 function undoFigure(target: UndoTarget): string {
   if (target.label !== null) {
-    const tail = target.label.split(' · ').pop() ?? ''
-    const match = /^\D+ (\d+)$/.exec(tail)
-    if (match !== null && match[1] !== undefined) return `#${match[1]}`
+    /* The card number the label names, off the one label reader (`position.ts:placePartsOf`),
+       which reads the server's comma form and the old dotted one alike. */
+    const card = placePartsOf(target.label)?.card ?? null
+    if (card !== null) return `#${card}`
   }
   return storeKeyText(target.box, target.index)
 }
@@ -3574,14 +3576,14 @@ export function CaptureScreen() {
           </div>
 
           {/* The way onward: once the box holds cards, the run hands it to the pipeline. Runs
-              reads only `?run=` today, so the box is picked there. */}
+              reads `?box=` and opens the Identify sheet on this box (UX-030). */}
           {box !== null && !boxIsEmpty ? (
             <div className="capture-onward">
               <Button
                 icon="zap"
                 iconRight="arrowRight"
                 block
-                onClick={() => (window.location.hash = '#/runs')}
+                onClick={() => (window.location.hash = `#/runs?box=${box}`)}
               >
                 {/* THE NAME HERE TOO (D142), even though the destination
                     draws `Box 4 · Mixed Singles`. This button is read on THIS screen, by

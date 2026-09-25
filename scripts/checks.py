@@ -322,6 +322,33 @@ CHECKS = (
         "governed_by": ("D18", "D173", "D229"),
     },
     {
+        "target": "kit-adoption",
+        "runs": "node scripts/kit-adoption.mjs",
+        "asserts": "Every screen inherits the page scaffold (D275). R1: every "
+                   "`ROUTES` view in app/src/App.tsx renders `<Page>` from the kit, directly "
+                   "or through a screen component it renders, at any depth. R2: outside "
+                   "app/src/kit/, no dialog role or native `<dialog>`, no search input "
+                   "outside SearchField.tsx, no raw `<select>`, no kit-reserved class name, "
+                   "no hand-rolled date format outside dates.ts, no hand-rolled dollar "
+                   "amount outside money.ts. Read from the TypeScript AST, with each "
+                   "heuristic's edge stated in the script's header. "
+                   "scripts/kit-adoption-allow.json is a SHRINKING offender list, file -> "
+                   "rule -> lane: an unlisted violation fails, a stale entry fails, and a "
+                   "key the list at the merge-base with origin/main does not hold fails, "
+                   "unless its rule is not defined at the merge-base (a rule born on the "
+                   "branch; printed with its reason) and no rule the merge-base defines is "
+                   "missing at HEAD. Read-only git; fails open, printed, "
+                   "with no merge-base or no list there. Never a pinned count.",
+        "needs": ("node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It needs app/node_modules for typescript, which a fresh "
+                               "clone does not have until `npm ci`. `make check` is where "
+                               "it runs.",
+        "gates": True,
+        "governed_by": ("D18", "D173"),
+    },
+    {
         "target": "ignore-check",
         "runs": "sh scripts/ignore-check.sh",
         "asserts": "Every path a worktree provisions is gitignored — as a file, as a directory "
@@ -1174,9 +1201,10 @@ CHECKS = (
         "needs": ("python3",),
         "writes": "two throwaway checkouts, their `.serve/` directories and the supervisors "
                   "and capture servers running under them, all inside `mktemp -d`. The "
-                  "capture port is PINNED with `PKMNSCAN_PORT` rather than derived: a copied "
-                  "tree is not a linked worktree, so it would call itself the main checkout "
-                  "and claim :8000 — the owner's live server.",
+                  "capture port is PINNED with `PKMNSCAN_PORT` to a free socket rather than "
+                  "derived: a copy with no `.git` takes a slot from its path "
+                  "(D268), and a slot can collide with another worktree's "
+                  "where a free socket cannot.",
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it starts and signals real processes.",
         "gates": True,
@@ -1329,6 +1357,48 @@ CHECKS = (
                                "scripts/githooks/pre-commit, `make check` only.",
         "gates": True,
         "governed_by": ("D18", "D173", "D229"),
+    },
+    {
+        "target": "kit-adoption-selftest",
+        "runs": "node scripts/kit-adoption.mjs --self-test",
+        "asserts": "the guard sees its own subject before it is trusted: a route view "
+                   "without `<Page>` fails, a component called Page that is not the kit's "
+                   "fails, `<Page>` reached through a local or an imported screen component "
+                   "passes, `role=\"dialog\"` in a screen fails and inside app/src/kit/ "
+                   "passes, a stale allow entry fails, an unlisted violation fails, each R2 "
+                   "shape fails and its home file passes, an unknown rule or an empty lane is "
+                   "refused, and an unreadable or empty ROUTES table is a loud failure. R1's "
+                   "answer does not depend on JSX order, follows any depth and ends a cycle, "
+                   "and a default-import view resolves. A new allow key fails against the "
+                   "base list for an existing rule, passes for a rule born on the branch, a "
+                   "removed one passes, an unread rule definition excuses nothing, and the "
+                   "git read sees the committed list and rules at HEAD. The fixtures are in-memory maps, never files.",
+        "needs": ("node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "kit-adoption's reason exactly: it needs app/node_modules.",
+        "gates": True,
+        "governed_by": ("D18", "D173"),
+    },
+    {
+        "target": "port-slots-selftest",
+        "runs": "python3 scripts/port-slots.py selftest",
+        "asserts": "two throwaway trees forced into one port slot, each with a real Vite and a "
+                   "real Playwright. With nothing claimed, a test run in one tree refuses the "
+                   "other tree's server by name (red with the identity check removed: the run "
+                   "passes against the wrong code). After both claim, each holds its own slot, "
+                   "server/ports.py and app/devPort.ts answer it alike, a second claim does not "
+                   "move it, and the run passes on its own server. A removed tree frees its "
+                   "slot, and a damaged registry reads as nothing claimed on both sides.",
+        "needs": ("python3", "node", "app deps"),
+        "writes": "two throwaway trees and a slot registry under `mktemp -d`, reached through "
+                  "PKMNSCAN_SLOT_REGISTRY so the real registry is never touched.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, starts a Vite and a Playwright run, binds "
+                               "ports and stops the processes it started.",
+        "gates": True,
+        "governed_by": ("D18", "D43", "D268",
+                        "D261"),
     },
     {
         "target": "demo-determinism-selftest",

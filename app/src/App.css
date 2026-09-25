@@ -22,10 +22,21 @@
    code never gave it one to pair, before or after this file changed. */
 :root { --bn-rail-break-px: 1280; }
 
+/* THE SHELL'S BARS ARE NUMBERS A SCREEN READS, AND THEY ARE ZERO WHERE THE SHELL DRAWS NO BAR.
+   A screen that sits under the phone's top bar or above its tab bar reads `--bn-topbar-h` and
+   `--bn-tabbar-h`. Those are facts about what this sheet draws at a width, so this sheet sets
+   them: zero from 640 up, where the rail is drawn and no bar is (the owner's ruling, 2026-09-23:
+   half-width Chrome at 720 gets the desktop rail). A screen's own phone rule at 767 then leaves no
+   gap for a bar that is not there. The phone block below sets the tab bar's real height. */
+:root { --bn-tabbar-h: 0px; }
+@media (min-width: 640px) {
+  :root { --bn-topbar-h: 0px; }
+}
+
 /* ---- the brand's collapse: ONE SWITCH, ONE CLOCK ------------------------------------------- */
 
 /* `--bn-brand-open` is 1 open and 0 railed, and the two rail conditions set THAT and nothing
-   else — so the 768-1023px media rail, which has no `data-rail` at all, cannot drift from the
+   else — so the 640-1023px media rail, which has no `data-rail` at all, cannot drift from the
    button's. Sizes read it through `calc`; opacities read it directly.
    ONE CLOCK: the shell's column already slides over --bn-t-slow, and every delay below is a
    position inside that same 320ms rather than time added to it. The gesture does not get slower,
@@ -92,7 +103,7 @@
 :root[data-theme='dark'] .bn-side { background: var(--bn-surface-2); }
 
 /* ONE RULE, TWO ELEMENTS. `.bn-brand` is a <button> in the sidebar — it collapses the rail —
-   and an <a> in the phone drawer and at the 768-1023px media rail, where `data-rail` is inert
+   and an <a> at the 640-1023px media rail, where `data-rail` is inert
    and a toggle would press nothing. The reset is what keeps the two indistinguishable: a button
    brings its own background, border, font and centred text, and none of those are wanted. */
 .bn-brand {
@@ -224,7 +235,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   white-space: nowrap;
   transition: opacity var(--bn-t) var(--bn-ease);
 }
@@ -295,8 +306,9 @@
   background: var(--bn-accent);
 }
 .bn-nav-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--bn-t) var(--bn-ease); }
-.bn-nav-link .bn-kbd { opacity: 0.55; transition: opacity var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease); }
-.bn-nav-link:hover .bn-kbd, .bn-nav[data-armed='true'] .bn-nav-link .bn-kbd { opacity: 1; }
+/* THE KEYCAPS READ AT FULL INK (the kit-frame review): at 55% they measured under 4.5:1. The
+   kit's own keycap colour is already the quiet one. */
+.bn-nav-link .bn-kbd { transition: color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease); }
 .bn-nav[data-armed='true'] .bn-nav-link .bn-kbd { color: var(--bn-accent); border-color: var(--bn-accent); }
 .bn-nav-badge { margin-left: auto; }
 
@@ -393,28 +405,33 @@
   padding-top: var(--bn-2);
   border-top: 1px solid var(--bn-line);
 }
-.bn-side-foot .bn-btn { justify-content: flex-start; box-shadow: none; background: transparent; color: var(--bn-ink-2); font-weight: 500; height: 34px; }
+/* ONE ICON COLUMN AND ONE ROW HEIGHT FOR THE WHOLE SIDEBAR (UX-134). The foot's buttons were
+   34px rows with a 16px icon at x = 29, against the nav's 36px rows and 18px icon at x = 24. They
+   take the nav link's own height, gap, inset and icon size, so every glyph sits on one column. */
+.bn-side-foot .bn-btn { justify-content: flex-start; gap: var(--bn-3); padding: 0 var(--bn-3); box-shadow: none; background: transparent; color: var(--bn-ink-2); font-size: var(--bn-fs-md); font-weight: 500; height: 36px; }
+.bn-side-foot .bn-btn > .bn-icon { width: 18px; height: 18px; }
+/* the label takes the row, so a keycap sits at the row's end, as it does on a nav row */
+.bn-side-foot .bn-side-foot-text { flex: 1 1 auto; text-align: left; }
 .bn-side-foot .bn-btn:hover { background: var(--bn-hover); color: var(--bn-ink); }
 .bn-side-foot .bn-btn .bn-icon { color: var(--bn-ink-3); }
 .bn-server {
   display: flex;
   align-items: center;
   gap: var(--bn-2);
-  height: 34px;
+  height: 36px;
   padding: 0 var(--bn-3);
   border-radius: var(--bn-r);
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
   white-space: nowrap;
 }
+/* the dot sits in an 18px cell, on the same column as every icon above it */
+.bn-server .bn-dot { margin: 0 5px; flex: none; }
 .bn-server[data-state='offline'] { color: var(--bn-danger); background: var(--bn-danger-tint); }
-.bn-server-detail { font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
-/* D218: the card count is its own span; the seam before it is CSS, never typed. */
-.bn-server-detail::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 
 /* ---- mobile top bar + sheet ------------------------------------------------ */
 .bn-topbar { display: none; }
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (min-width: 640px) and (max-width: 1023px) {
   /* the same switch, not a duplicated choreography — this breakpoint has no `data-rail` */
   .bn-shell, .bn-shell[data-rail='true'] {
     grid-template-columns: var(--bn-rail-w) minmax(0, 1fr);
@@ -439,7 +456,7 @@
   .bn-side .bn-side-foot .bn-server { width: 48px; padding: 0; justify-content: center; }
   .bn-side .bn-nav-link[data-tip]:hover::after { opacity: 1; transform: translateY(-50%); }
 }
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   .bn-shell, .bn-shell[data-rail='true'] { grid-template-columns: minmax(0, 1fr); }
   .bn-side { display: none; }
   .bn-topbar {
@@ -480,8 +497,10 @@
        kept, and then measured: the gap to the search button is 135px with it and 135px without.
        It would be needed the day this stops growing — if the word is ever right-aligned or set
        `flex: none`, take the trailing track back off. */
-    color: var(--bn-ink);
-    opacity: var(--bn-roman-opacity);
+    /* THE INK IS THE SHELL'S MUTED TEXT AT FULL STRENGTH, NOT THE DRAWING'S 45% (the kit-frame
+       review). The lockup's roman is quiet at 45% because the kanji carries the name; set as
+       text alone in the bar, 45% of the ink measured under 4.5:1. */
+    color: var(--bn-ink-3);
   }
   /* THE BAR IS THE RAIL, ONE BREAKPOINT DOWN (logo.md section 19). `--bn-brand-open: 0` is what
      makes the shared slot draw the empty brackets rather than the lockup — the variable is
@@ -491,48 +510,56 @@
      The typography that used to sit on this rule went with the wordmark it styled. */
   .bn-topbar-brand { --bn-brand-open: 0; display: flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; margin-left: -4px; color: var(--bn-ink); text-decoration: none; }
 }
+/* THE DRAWER IS THE KIT'S SHEET, ON ITS OWN LEFT EDGE (UX-014). kit.css raises every other sheet
+   from the bottom on a phone and carves `.bn-drawer` out of that rule; this is where the edge is
+   set. It is PORTALLED to <body>, outside `.bn-shell`, so it names its own brand switch: the
+   drawer is the sidebar at a phone's width, and draws the brand open. */
 .bn-drawer {
+  left: 0;
+  right: auto;
   width: min(300px, 86vw);
+  animation-name: bn-sheet-in-left;
+  --bn-brand-open: 1;
+  --bn-brand-kanji-delay: 0ms;
+  --bn-brand-roman-delay: 0ms;
+}
+.bn-drawer[data-leaving] { animation-name: bn-sheet-out-left; }
+/* THE HEAD HOLDS A BLOCK, NOT A ROW: the lockup is 128 x 93, and Close belongs at its top. */
+.bn-drawer .bn-overlay-head {
+  align-items: flex-start;
+  padding: calc(var(--bn-4) + env(safe-area-inset-top)) var(--bn-3) var(--bn-3) var(--bn-4);
+  border-bottom: 0;
+}
+.bn-drawer .bn-overlay-title { display: flex; line-height: 0; }
+/* ONE SCROLLING LIST AND NO FIXED FOOT (D266, amends D204). The body is
+   the frame; the nav inside it is the one scroller, so every row, the old foot's included, passes
+   under the thumb and none sits under a fixed block. */
+.bn-drawer .bn-overlay-body {
   display: flex;
   flex-direction: column;
-  padding: var(--bn-4) var(--bn-3);
-  padding-top: calc(var(--bn-4) + env(safe-area-inset-top));
-  /* A PROPERTY OF THE FOOT, NOT OF THE NAV (D204). Three fixed
-     rows — Cards to pull, the theme toggle, the server line — at the drawer's own 44px, plus
-     the two gaps between them, the head's own top padding and its border. This is NOT a
-     row-count arithmetic the way the two breakpoints below it are: it does not grow or shrink
-     with how many SCREENS the nav lists, only with how many rows the FOOT itself draws, so it
-     never has to be re-derived when a route is added. `.bn-nav` reads it below rather than
-     assuming the two boxes happen to sum to the drawer's height, which is what `flex: 1 1 auto`
-     already guarantees on its own — this is the belt beside that suspender, so a scroll that
-     lands programmatically (a jump key, a focus move) still opens a hair of daylight above the
-     foot instead of landing the last row flush on the boundary. */
-  --bn-drawer-foot-h: calc(44px * 3 + var(--bn-1) * 2 + var(--bn-2) + 1px);
+  padding: 0 var(--bn-3) calc(var(--bn-4) + env(safe-area-inset-bottom));
+  overflow: hidden;
 }
 .bn-drawer .bn-nav-link { height: 44px; font-size: var(--bn-fs-base); }
 .bn-drawer .bn-nav-link .bn-kbd { opacity: 1; }
-.bn-drawer .bn-nav { scroll-padding-bottom: var(--bn-drawer-foot-h); }
-.bn-drawer .bn-side-foot .bn-btn, .bn-drawer .bn-server { height: 44px; }
-/* THE HEAD HOLDS A BLOCK, NOT A ROW. It was a 30px mark beside two lines of type, so
-   `align-items: center` was right; the lockup is 128 x 93 and the Close button belongs at the
-   top of it rather than halfway down its side. `.bn-brand` keeps `width: 100%` from its own
-   reset, which would push Close off the edge here — the drawer's brand is a link to `#/` and
-   not the collapse control, so it takes only the width its slot needs. */
-.bn-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-2); padding: 0 var(--bn-2) var(--bn-3); }
-.bn-drawer-head .bn-brand { width: auto; min-height: 0; }
+.bn-drawer .bn-server { height: 44px; }
+/* The old foot's rows, at the end of the list, under one rule like the groups above them. */
+.bn-drawer-more { border-top: 1px solid var(--bn-line); padding-top: var(--bn-2); }
+/* A <button> wearing a nav row: the theme toggle. */
+button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 
-/* ---- command palette ---------------------------------------------------------- */
+/* ---- the palette: "Go to" (D276) ------------------------------------------------------
+   The kit's `Modal`, set at the top of the window where a typed list grows downward. */
 .bn-cmdk {
-  position: fixed;
-  z-index: 70;
-  left: 50%;
   top: 14vh;
+  bottom: auto;
+  left: 50%;
+  right: auto;
   transform: translateX(-50%);
   width: min(600px, calc(100vw - 32px));
+  max-height: min(640px, 80dvh);
   border-radius: var(--bn-r-xl);
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-3);
-  overflow: hidden;
+  padding-bottom: 0;
   animation: bn-cmdk-in var(--bn-t) var(--bn-ease-spring) backwards;
 }
 @keyframes bn-cmdk-in {
@@ -544,7 +571,9 @@
   from { opacity: 1; transform: translateX(-50%); }
   to { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.98); }
 }
+.bn-cmdk .bn-overlay-body { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .bn-cmdk-input {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--bn-3);
@@ -553,15 +582,16 @@
 }
 .bn-cmdk-input input {
   flex: 1;
+  min-width: 0;
   border: 0;
   background: transparent;
   font-size: var(--bn-fs-lg);
   color: var(--bn-ink);
   outline: none;
 }
-.bn-cmdk-input input::placeholder { color: var(--bn-ink-4); }
-.bn-cmdk-list { max-height: 50vh; overflow: auto; padding: var(--bn-2); }
-.bn-cmdk-group { padding: var(--bn-2) var(--bn-3) var(--bn-1); font-size: var(--bn-fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bn-ink-4); }
+.bn-cmdk-input input::placeholder { color: var(--bn-ink-3); }
+.bn-cmdk-list { flex: 1 1 auto; min-height: 0; max-height: 50vh; overflow: auto; padding: var(--bn-2); }
+.bn-cmdk-group { padding: var(--bn-2) var(--bn-3) var(--bn-1); font-size: var(--bn-fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bn-ink-3); }
 .bn-cmdk-item {
   display: flex;
   align-items: center;
@@ -572,17 +602,21 @@
   font-size: var(--bn-fs-base);
   color: var(--bn-ink);
   text-align: left;
+  /* an option is pressed with the pointer too (D50's cursor floor), though it is not a Tab stop */
+  cursor: pointer;
 }
 .bn-cmdk-item .bn-icon { color: var(--bn-ink-3); }
 .bn-cmdk-item[aria-selected='true'] { background: var(--bn-accent-tint); color: var(--bn-ink); }
 .bn-cmdk-item[aria-selected='true'] .bn-icon { color: var(--bn-accent); }
-.bn-cmdk-item-hint { margin-left: auto; color: var(--bn-ink-4); font-size: var(--bn-fs-sm); }
-.bn-cmdk-foot { display: flex; gap: var(--bn-4); padding: var(--bn-2) var(--bn-4); border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+.bn-cmdk-item-hint { margin-left: auto; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.bn-cmdk-foot { flex: none; padding: var(--bn-2) var(--bn-4); border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+/* its one line is a `KeyHint`, which leaves on a touch screen; the empty rule leaves with it */
+@media (hover: none) and (pointer: coarse) { .bn-cmdk-foot { display: none; } }
 .bn-cmdk-empty { padding: var(--bn-6); text-align: center; color: var(--bn-ink-3); }
+.bn-cmdk-note { padding: var(--bn-2) var(--bn-3); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
-/* ---- unknown route ---------------------------------------------------------------- */
-.no-such-view { display: grid; place-items: center; min-height: 70vh; padding: var(--bn-6); }
-.no-such-view-card { max-width: 480px; width: 100%; }
+/* ---- unknown route, and the owner's crash page -------------------------------------------------
+   Both are kit pages now (`Page`), so they share every screen's width, edge and top gap. */
 .no-such-view-path { font-family: var(--bn-font-mono); font-size: 20px; color: var(--bn-ink-2); overflow-wrap: anywhere; }
 
 /* THE FLOORS APPLY HERE, AND ONLY HERE, ON THE OWNER'S GROUND. This is the one page the
@@ -591,7 +625,10 @@
    targets govern it rather than the owner's dense scale. */
 .no-such-view .bn-lede { font-size: 20px; color: var(--bn-ink-2); }
 .no-such-view-doors .no-such-view-door { font-size: 20px; min-height: 56px; }
-.no-such-view-doors { display: grid; gap: var(--bn-2); margin-top: var(--bn-4); }
+.no-such-view-doors { display: grid; gap: var(--bn-2); margin-top: var(--bn-4); max-width: 480px; }
+.no-such-view-detail { margin-top: var(--bn-3); color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.no-such-view-detail summary { cursor: pointer; }
+.no-such-view-detail .no-such-view-path { margin-top: var(--bn-2); font-size: var(--bn-fs-sm); }
 .no-such-view-door {
   display: flex;
   align-items: center;
@@ -610,6 +647,24 @@
 .no-such-view-door:hover { text-decoration: none; transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
 .no-such-view-door .bn-icon { color: var(--bn-accent); }
 .no-such-view-door .bn-icon:last-child { margin-left: auto; color: var(--bn-ink-4); }
+
+/* ---- the skip link (UX-092) ----------------------------------------------------------------
+   The first Tab stop on every screen. Off the page until it has focus; fixed, so showing it moves
+   nothing (D118). */
+.bn-skip {
+  position: fixed;
+  z-index: 90;
+  top: var(--bn-2);
+  left: var(--bn-2);
+  padding: var(--bn-2) var(--bn-4);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-2);
+  color: var(--bn-ink);
+  font-weight: 600;
+  transform: translateY(calc(-100% - var(--bn-4)));
+}
+.bn-skip:focus-visible, .bn-skip:focus { transform: none; }
 
 /* Legacy names some specs look for. */
 .app-nav { display: contents; }
@@ -631,7 +686,7 @@
 }
 .bn-banner .bn-btn { background: color-mix(in srgb, currentColor 16%, transparent); color: inherit; box-shadow: none; }
 .bn-banner .bn-btn:hover { background: color-mix(in srgb, currentColor 28%, transparent); }
-@media (max-width: 767px) { .bn-banner { top: var(--bn-topbar-h); } }
+@media (max-width: 639px) { .bn-banner { top: var(--bn-topbar-h); } }
 
 /* ---- which-key overlay ------------------------------------------------------------- */
 .bn-whichkey {
@@ -668,7 +723,7 @@
 
 /* ---- bottom tab bar (phones) --------------------------------------------------------- */
 .bn-tabbar { display: none; }
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   /* THE BAR HAS ONE HEIGHT, DECLARED ONCE, HERE, WHERE IT IS DRAWN (D205).
      `calc(64px + env(safe-area-inset-bottom))` used to be written twice in this file and a third
      time as a plain `356px` budget in CaptureScreen.css that assumed the bar was 64px flat — on
@@ -687,9 +742,9 @@
     grid-template-columns: repeat(5, 1fr);
     height: var(--bn-tabbar-h);
     padding-bottom: env(safe-area-inset-bottom);
-    background: var(--bn-surface-glass);
-    backdrop-filter: saturate(1.4) blur(14px);
-    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    /* THE LABELS SIT ON A QUIET GROUND (UX-143). The bar was 72% glass with a 14px blur, and a
+       large heading scrolled under it showed as letter shapes between the 10px labels. */
+    background: var(--bn-surface);
     border-top: 1px solid var(--bn-line);
   }
   .bn-tab-link {
@@ -763,60 +818,22 @@
    a wide window, one on a phone, and the body is the only thing that scrolls so the heading
    and the way out never leave. */
 .app-keys {
-  display: flex;
-  flex-direction: column;
   width: min(940px, calc(100vw - 32px));
-  max-height: min(840px, calc(100vh - 48px));
-  overflow: hidden;
+  max-height: min(840px, calc(100dvh - 48px));
 }
-.app-keys:focus-visible { outline: none; }
-
-.app-keys-head {
-  padding: var(--bn-5) var(--bn-6) var(--bn-4);
+/* The kit's frame: its head is the title and Close. Inside the body, the search stays put and only
+   the groups scroll, so the way out and the field never leave. */
+.app-keys .bn-overlay-body { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.app-keys-search {
+  flex: none;
+  padding: var(--bn-3) var(--bn-6);
   border-bottom: 1px solid var(--bn-line);
 }
-.app-keys-head-top { display: flex; align-items: center; gap: var(--bn-4); }
-.app-keys-title {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-2);
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-xl);
-  font-weight: 700;
-  letter-spacing: var(--bn-tracking-tight);
-  color: var(--bn-ink);
-}
-.app-keys-title .bn-icon { color: var(--bn-accent); }
-.app-keys-lede { margin-top: var(--bn-2); max-width: 78ch; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
-.app-keys-close { margin-left: auto; flex: none; }
-
-.app-keys-search {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-2);
-  margin-top: var(--bn-3);
-  padding: 0 var(--bn-3);
-  height: 36px;
-  max-width: 340px;
-  border: 1px solid var(--bn-line);
-  border-radius: var(--bn-r-sm);
-  background: var(--bn-surface-2);
-  color: var(--bn-ink-4);
-}
-.app-keys-search:focus-within { border-color: var(--bn-accent); color: var(--bn-ink-3); }
-.app-keys-search-input {
-  flex: 1;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: var(--bn-fs-sm);
-  color: var(--bn-ink);
-}
-.app-keys-search-input:focus { outline: none; }
+.app-keys-search .search-field { max-width: 340px; }
 .app-keys-more, .app-keys-none {
   margin: 0 0 var(--bn-4);
   font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
   columns: 1;
 }
 .app-keys-show-all {
@@ -857,7 +874,7 @@
   margin: 4px 0 var(--bn-3);
   font-size: var(--bn-fs-xs);
   line-height: 1.5;
-  color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
 }
 .app-keys-goto {
   display: inline-flex;
@@ -880,61 +897,39 @@
 .app-keys-row { display: contents; }
 .app-keys-caps { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .app-keys-cap { display: inline-flex; align-items: center; gap: 4px; }
-.app-keys-join { font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
+.app-keys-join { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
 .app-keys-does { font-size: var(--bn-fs-md); line-height: 1.45; color: var(--bn-ink-2); }
-.app-keys-when { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+.app-keys-when { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 
 /* A run of caps long enough to be its own line takes the full width rather than stretching
    the column every other row is measured against. */
 .app-keys-row-wide > dt, .app-keys-row-wide > dd { grid-column: 1 / -1; }
 .app-keys-row-wide > dd { margin-top: -3px; }
 
-.app-keys-foot {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-4);
-  padding: var(--bn-3) var(--bn-6);
-  border-top: 1px solid var(--bn-line);
-  background: var(--bn-surface-2);
-  font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-4);
-}
-.app-keys-foot .bn-kbd { margin-right: 3px; }
-.app-keys-foot-end { margin-left: auto; white-space: nowrap; }
 
 @media (max-width: 1023px) {
   .app-keys-body { columns: 1; }
 }
+/* 767, NOT THE SHELL'S 639: this follows the kit's own edge, where every modal becomes a sheet
+   that rises from the bottom (kit.css). */
 @media (max-width: 767px) {
   .app-keys { width: auto; max-height: 92dvh; }
-  .app-keys-head { padding: var(--bn-4) var(--bn-4) var(--bn-3); }
+  .app-keys-search { padding: var(--bn-3) var(--bn-4); }
   .app-keys-body { padding: var(--bn-4); }
-  .app-keys-foot { padding: var(--bn-3) var(--bn-4); }
 }
 @media (max-width: 479px) {
   /* The caps keep their own column even here — the widest run in any group is about 100px,
      which still leaves a readable measure, and stacking every row made the nine jump keys
      eighteen lines long. */
   .app-keys-rows { gap: 9px var(--bn-3); }
-  .app-keys-foot-end { display: none; }
 }
 
-
-/* THE SHELL'S DEFAULT AT THIS WIDTH IS OPEN, AND THE BAR OPTS OUT OF IT. `Drawer` mounts INSIDE
-   .bn-shell, so without this a user who collapsed the sidebar on desktop would inherit a railed
-   switch into the drawer's brand row. What changed on 2026-09-07 is that a phone DOES have a
-   rail now — the top bar is one (logo.md section 19) — and it says so itself, on
-   `.bn-topbar-brand`, rather than being carved out here. Two surfaces, one variable, each
-   naming its own state where that state is read. */
-@media (max-width: 767px) {
-  .bn-shell, .bn-shell[data-rail='true'] { --bn-brand-open: 1; }
-}
 
 /* ================================================================================
    THE DRAWER ON A SHORT SCREEN (logo.md section 19, amended)
 
-   A phone in Safari gets about 90px less than its own height, and the drawer holds nine nav
-   rows, three group headings and a foot. Measured at 390 x 754 — an iPhone 14 with the toolbars
+   A phone in Safari gets about 90px less than its own height, and the drawer holds the nav
+   rows, three group headings and the old foot's three rows. Measured at 390 x 754 — an iPhone 14 with the toolbars
    up — the list ran 85px past the fold and showed 7 of the 9.
 
    THE OWNER RULED TO SHRINK THE HEADINGS RATHER THAN DROP THEM, and the arithmetic is why this
@@ -944,20 +939,21 @@
    here, and cannot do it from a stylesheet — the morph reads the size it was given).
 
    THE CONDITION IS HEIGHT, NOT WIDTH. A 430 x 932 Pro Max is a phone with the room to spare, and
-   a short window on a desktop is not a phone at all — but the drawer only exists below 768px
+   a short window on a desktop is not a phone at all — but the drawer only exists below 640px
    wide, so this query cannot reach one.
 
    WHAT THE TWO STEPS BELOW BUY IS FEWER ROWS BEHIND A SCROLL, NEVER REACHABILITY
    (D204). Read `754px` and the row counts in the next block's own
    comment as a COSMETIC arithmetic, not a correctness one: `.bn-nav`'s `overflow-y: auto` plus
    its explicit `min-height: 0` (above, at the base rule) means the last row of the last group —
-   Codes today, whatever route lands after it tomorrow — is always inside the nav's own scroll
-   range, never under `.bn-side-foot`, regardless of how many rows a future route adds. Nobody
+   the old foot's rows since D266 — is always inside the nav's own
+   scroll range, and no fixed block sits over any row, regardless of how many rows a future
+   route adds. Nobody
    has to come back here and re-derive a THIRD step the day an eleventh row makes 40px rows
    overflow too; the rows just cost one more swipe. `phone.spec.ts`'s drawer-reachability sweep
    is what actually stands behind that claim now, not this comment. */
-@media (max-width: 767px) and (max-height: 820px) {
-  .bn-drawer-head { padding-bottom: var(--bn-2); }
+@media (max-width: 639px) and (max-height: 820px) {
+  .bn-drawer .bn-overlay-head { padding-bottom: var(--bn-2); }
   /* THE HEADING ITSELF IS UNTOUCHED — same 10px, same caps, same 0.1em. What closes is the AIR
      around it: 4px of padding above and below, and a line box that was 1.5. Measured, the three
      labels' own padding is 24px of the 70 these rules recover, the line-height is 6, the group
@@ -994,7 +990,7 @@
    is CLAUDE.md's thumb rule exactly; there is no third step that shrinks a row further, because
    the next one would break it — see the fade fallback below for what covers a phone this cannot
    reach. */
-@media (max-width: 767px) and (max-height: 754px) {
+@media (max-width: 639px) and (max-height: 754px) {
   .bn-drawer .bn-nav-link { height: var(--bn-control-h-sm); }
 }
 
@@ -1014,7 +1010,7 @@
     50% { mask-image: linear-gradient(180deg, transparent 0, black 32px, black calc(100% - 32px), transparent 100%); }
     to { mask-image: linear-gradient(180deg, transparent 0, black 32px, black 100%); }
   }
-  @media (max-width: 767px) {
+  @media (max-width: 639px) {
     .bn-drawer .bn-nav {
       animation: bn-navfade linear both;
       animation-timeline: scroll(self block);
@@ -1026,7 +1022,7 @@
    THE THUMB FLOOR OVER THE SHELL (D117). Last in this sheet for the reason `kit.css`'s own
    block gives: every rule here lifts a base rule ABOVE it at the same specificity.
    ================================================================================ */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
   /* THE PALETTE IS A PHONE CONTROL, and on a phone it is the only way to reach `#/gallery` and
      the fastest way to reach the six screens behind More. Its field measured 24px and its rows
      37 — both under the floor, on the surface a thumb uses most after the tab bar. */

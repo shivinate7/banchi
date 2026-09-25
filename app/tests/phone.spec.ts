@@ -311,7 +311,10 @@ async function phoneRoutes(page: Page): Promise<string[]> {
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
   await expect(page.locator('.bn-drawer')).toBeVisible()
-  const hrefs = await page.locator('.bn-drawer .bn-nav a.bn-nav-link').evaluateAll((els) =>
+  /* The Fulfiller's link opens his screen in its own tab; it is not an owner screen, so it is
+     not on this roster (the old drawer foot held it outside the nav until
+     D266). */
+  const hrefs = await page.locator('.bn-drawer .bn-nav a.bn-nav-link:not([target="_blank"])').evaluateAll((els) =>
     els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? '').filter((h) => h.startsWith('#/')))
   expect(hrefs.length, 'the drawer drew no nav links — the harvest is broken, not the app').toBeGreaterThan(5)
   /* AND THE KIT SHEET, WHICH THE DRAWER DELIBERATELY DOES NOT HOLD. `#/gallery` is `OFF_NAV` and
@@ -563,7 +566,7 @@ test.skip('every drawer route is reachable by tap, at two phone heights', async 
        — a hash with no drawer link would make this loop look for an element that cannot exist.
        This is the roster of rows actually drawn inside `.bn-drawer .bn-nav`, so it needs no
        hand-typed exclusion list and pins no route by name. */
-    const owned = await page.locator('.bn-drawer .bn-nav a.bn-nav-link').evaluateAll((els) =>
+    const owned = await page.locator('.bn-drawer .bn-nav a.bn-nav-link:not([target="_blank"])').evaluateAll((els) =>
       els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? '').filter((h) => h.length > 0))
     expect(owned.length, 'the drawer drew no nav rows to sweep').toBeGreaterThan(5)
 
@@ -588,6 +591,34 @@ test.skip('every drawer route is reachable by tap, at two phone heights', async 
     }
     await page.keyboard.press('Escape')
   }
+})
+
+/* THE DRAWER HAS NO FIXED FOOT (D266, amends D204; UX-037).
+ * Cards to pull, the theme and the server line are the last rows of the one scrolling list, so
+ * nothing covers the end of it. And on this file's own phone every SCREEN in the drawer shows
+ * without a scroll: before, Graveyard and Codes sat under the foot with a 32px fade as the only
+ * cue. Not skipped, unlike the tap sweep above: it navigates nowhere, so it has none of that
+ * sweep's race. */
+test('the drawer has no fixed foot, and every screen in it shows without a scroll', async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  await page.goto('/')
+  await page.getByText('More', { exact: true }).click()
+  const drawer = page.locator('.bn-drawer')
+  await expect(drawer).toBeVisible()
+  await expect(drawer.locator('.bn-side-foot'), 'the drawer drew a fixed foot again').toHaveCount(0)
+
+  const nav = drawer.locator('.bn-nav')
+  await expect(nav.getByRole('link', { name: /Cards to pull/ })).toHaveCount(1)
+  await expect(nav.getByRole('button', { name: /mode$/ })).toHaveCount(1)
+  await expect(nav.locator('.bn-server')).toHaveCount(1)
+
+  const screens = nav.locator('a.bn-nav-link:not([target="_blank"])')
+  expect(await screens.count(), 'the drawer drew no screens').toBeGreaterThan(5)
+  for (const link of await screens.all()) await expect(link).toBeInViewport({ ratio: 1 })
+
+  // and the last row of all is reached by scrolling the one list
+  await nav.locator('.bn-server').scrollIntoViewIfNeeded()
+  await expect(nav.locator('.bn-server')).toBeInViewport()
 })
 
 /* THE SWEEP ABOVE COULD NOT HAVE CAUGHT THIS. It reads `#/graveyard` off the shared empty

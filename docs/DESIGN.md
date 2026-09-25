@@ -47,14 +47,19 @@ INK
                                                          4.16:1 on --bn-surface-2, failing this
                                                          row's own job at 4.5:1. #666c76 clears
                                                          both (4.85:1, 4.55:1).
---bn-ink-4                      #7f8791      #707886     icons, separators, disabled — 3.6:1 light,
-                                                         4.0:1 dark. THE FLOOR A WORD MAY SIT AT,
-                                                         never a caption; data-bearing text is ink-3
+--bn-ink-4                      #7f8791      #707886     NOT FOR TEXT: icons, separators, rules,
+                                                         a field's edge. At least 3:1 on every
+                                                         ground (3.13:1 on --bn-surface-2 light).
+                                                         A word is ink-3 at the faintest; every
+                                                         ink-4 text use moved to ink-3, 2026-09-23
 
 LINE                            (all three are ink at an alpha, so they ride the ground)
 --bn-line                       ink 8%       white 8%    the hairline. Every separation.
 --bn-line-strong                ink 16%      white 16%   the boundary of a control you type into
 --bn-line-focus                 accent 55%   accent 60%  a field that has focus
+--bn-field-edge                 = --bn-ink-4 in both themes: the edge of a field or a checkbox,
+                                                         at 3:1 on every ground (UX-094;
+                                                         --bn-line-strong is 1.41:1 on white)
 
 BRAND
 --bn-accent                     #3d5af1      #7f90ff     action: buttons, links, selection, focus
@@ -72,6 +77,15 @@ SEMANTIC                        (the kit paints these as TEXT — pills, buttons
 --bn-warn / --bn-warn-tint      #b45309 5.0:1             #f5a524
 --bn-danger / --bn-danger-tint  #b91c1c 6.5:1             #ff5c5c
 --bn-money                      = ink in both themes: money is not a color, it is a weight
+PILL INKS                       a tone's word on that tone's tint, at 4.5:1 over --bn-bg,
+                                --bn-surface, --bn-surface-2 AND a selected (accent-tinted) row's
+                                own ground (UX-047, kit-frame-2). Dark reads the tone ink itself
+                                for ok and warn, which clear 5:1 on their tints.
+--bn-pill-ink-ok                #11733a
+--bn-pill-ink-warn              #a14b09
+--bn-pill-ink-live              #a53f12      #ffab70     vermilion toward orange; light in dark
+--bn-pill-ink-danger            #b3123e      #f6799c     crimson, so live and danger read apart
+--bn-pill-ink-accent            = --bn-accent-hover in both themes: darker in light, lighter in dark
 
 ELEVATION                       (three steps, each a hairline ring plus a shadow, so a panel
                                  is separated in dark where a 1px line alone disappears)
@@ -135,6 +149,17 @@ SHELL                           --bn-sidebar-w 236 · --bn-rail-w 64 · --bn-top
 --bn-control-h 34 · -lg 40 · -sm 28      → 42 · 46 · 40 under a coarse pointer
 PAGE WIDTH                      --bn-page-w 1600 · -rows 1344
                                 a CAP, not a breakpoint: 1536 and 1280 of content
+--bn-page-top                   = --bn-6 (24), = --bn-4 (16) below 768. The one gap above
+                                every `Page`'s title (UX-133).
+                                A `Page` reads --bn-page-w alone; -rows is for the screens
+                                not yet on `Page` (D272)
+
+TYPE ROLES                      aliases onto the scale, never new sizes (UX-067, UX-115)
+--bn-fs-h1                      = --bn-fs-3xl (28)  the page title, `.bn-title`
+--bn-fs-h2                      = --bn-fs-xl (18)   a section, `.bn-h2`
+--bn-fs-h3                      = --bn-fs-lg (16)   a part of a section, `.bn-h3`, an overlay title
+--bn-fs-read                    = --bn-fs-md (13)   the floor for a sentence a person must read
+--bn-fs-label                   = --bn-fs-xs (11)   a caps label, a pill. Never a sentence
 ```
 
 **Three registers, and the third one is two colors rather than one.** `--bn-accent` is
@@ -237,9 +262,18 @@ button and never has to redraw one.**
 | `Chip` | choose one of a set, or filter a list. Pressed is ink-on-page, not accent | a button with a rounded corner |
 | `Pill` | a state, a count, a lane — something the row IS | anything pressable |
 | `Kbd` | the key that does this thing, owner-side only | the Fulfiller's screens, which are touch |
-| `PageHeader` | every owner screen's first element: eyebrow, title, lede, actions | a panel heading — that is `.bn-section-title` |
+| `Page` | every screen, from now on: one width, one top gap, one h1, the verdict, the toolbar, the status slot, the loading and empty states (D272) | a panel inside a screen |
+| `Section` | a titled part of a page. Its title is an h2 | a heading inside a card, which is `.bn-h3` |
+| `PageHeader` | a screen not yet on `Page`. It stays for backward compatibility | a new screen, which uses `Page` |
 | `EmptyState` | a list with nothing in it, saying what would put something there | an error |
-| `Notice` | a refusal, a warning, a standing condition, with the server's own code under it | a receipt of something that worked — that is a toast |
+| `Notice` | a warning or a standing condition. The code and any server text go behind "What the server said" (D269) | a receipt of something that worked — that is a toast |
+| `Refusal` / `Retry` | a press that cannot be done here, with no retry / a failure that may pass, with a busy "Try again" | a warning that asks for nothing |
+| `ReloadButton` | the one reload: in the page's actions, labelled, on `R`, busy while it reads | a second reload with a key on the same page |
+| `Loading` | the one loading style, in the shape of what replaces it: `rows`, `cards` or `summary` | a spinner and a sentence |
+| `Sheet` / `Modal` / `Popover` | work beside the page / one decision that stops it / a small menu under its control. One header, one "Close". Focus stays inside and goes back | a screen's own `role="dialog"` |
+| `useOverlayLayer` | any other layer over the page (the shell's palette, keys sheet and drawer): it joins the one stack, and only the top layer traps focus and takes Escape | a layer with its own Escape listener |
+| `ConfirmSheet` | a press that cannot be undone. An `alertdialog`, first focus on Cancel. While it is busy nothing closes it, and a held Enter presses nothing | a press that can be undone, which acts and puts Undo on its toast |
+| `KeyHint` | a phrase that names keys. On a touch screen the whole phrase hides | a bare `Kbd` in a sentence, which stays |
 | `Segmented` | two to four exclusive views of the same thing | navigation between screens |
 | `Stat` | one figure with its label, on a dashboard row | a value in a key/value list (`.bn-kv`) |
 | `Logo` | the mark, in the shell and on the crash page | decoration inside a screen |
@@ -250,12 +284,37 @@ button and never has to redraw one.**
 | `useLeave` | keeping an overlay mounted one beat so it can animate out | delaying a write |
 | `cropStyle` | turning `POST /pipeline/crop-preview`'s rectangle into a picture of the card rather than of the stand | deciding WHEN to ask for one — that is a screen's policy |
 
-**The icon set is 70 paths in `app/src/kit/Icon.tsx`**, on a 24-unit grid at 1.75 stroke with
+**The icon set is 73 paths in `app/src/kit/Icon.tsx`**, on a 24-unit grid at 1.75 stroke with
 round caps and joins, drawn in one idiom so the whole product speaks a single line weight.
 They inherit `currentColor` and are `aria-hidden`, so an icon is never the accessible name of
 anything. **Add an icon by adding a path**; a screen that draws its own `<svg>` inline is the
 drift the file exists to prevent, and `ICON_NAMES` is what draws the whole set on
 `#/gallery`.
+
+**One icon, one meaning** (UX-118). `ICON_MEANINGS` in `app/src/kit/Icon.tsx` names what each
+contested icon means. `history` is a log of past events. `headstone` is the graveyard. `chart`
+is a price over time. A new meaning gets a new path.
+
+**One place for a keycap** (UX-145). A keycap sits after its label, on the same line. On a
+touch screen a keycap inside a control hides, and a `KeyHint` hides as a whole phrase (UX-040).
+A bare keycap in a sentence does not hide by itself, because the sentence around it would break.
+A screen wraps that phrase in `KeyHint` instead.
+
+**Ask first, or undo after** (UX-099). A press that cannot be undone asks first, in a
+`ConfirmSheet` that names the count. A press that can be undone acts at once, and its receipt
+toast carries Undo. No press does both. No destructive press does neither.
+
+**The answer to a press lands where the press was** (D118, UX-058). A screen that answers in
+place passes `status` to `Page`. The status slot is at least one notice high, full or empty, so
+a one-line answer moves nothing. A longer answer grows the slot, and the sentence is never cut:
+a notice appearing is a change of state, not a press moving the page. "What the server said"
+opens over the page, the full width of the notice, inside the gutter.
+
+**Only the top layer listens** (UX-090). Every layer over the page joins one stack. The top
+layer traps focus and takes Escape. When it closes, focus goes back to the control that opened
+it, even when that control is inside the layer beneath. A popover also closes when Tab passes
+its last item. It opens above its control when there is no room below, and stays clear of the
+phone's tab bar.
 
 **Every primitive is on one page, at `#/gallery`.** It is the kit rather than a component
 sheet now, it is reachable from the command palette (never the nav), `make screenshot`
@@ -342,9 +401,17 @@ chrome at all on the Fulfiller's route — not-rendered rather than hidden. `⌘
 command palette over any of them and `?` opens the one keyboard reference sheet, which is
 where a binding is documented now that the inline key hints are gone.
 
-**The widths this build was walked at are 390, 820 and 1440.** A phone, an iPad in portrait,
-and the owner's Mac. **820 is the width that catches the mistake**: it is above every phone
-breakpoint and all thumb, which is why the control heights follow the pointer instead.
+**The widths this build is walked at are 390, 720, 820 and 1440.** They are a phone, the
+owner's half-width Chrome window, an iPad in portrait, and the owner's Mac. **820 is the width
+that catches the mistake**: it is above every phone breakpoint and all thumb, which is why the
+control heights follow the pointer instead. **720 is the owner's own second view** (ruling,
+2026-09-23): two Chrome tabs side by side at 1440. It gets the DESKTOP rail, not the phone
+chrome. So a page at 720 is a desktop page in a narrow column, and it must look designed. The
+page is a query container, so its tiers follow that column and not the window.
+
+**One width for every page** (D272, amends D197). A `Page` is 1600 px at most, and
+fluid below that, under one top gap, `--bn-page-top`. It ignores `--bn-page-max`. That token
+stays for the screens not yet on `Page`, and goes when the last of them moves.
 
 **Every width the shell reacts at is named below, and `make docs-audit`'s `breakpoints` row
 reads this block.** It replaced a sentence that published two counts — "54 media blocks hang
@@ -398,6 +465,9 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   pricing 939   Pricing — the row becomes a compact two-line row
   pricing 1040  Pricing — the DIRECT column joins the table
   (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
+  bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line;
+                Gallery — the specimen grids go to one column
+  bn-page 879   Gallery — the section index becomes a strip over the specimens
 
 COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
   Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column
@@ -848,22 +918,21 @@ rather than disabled until its preflight has answered. What changed is reading o
 zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-named strings and the screen labels every live one — the variant ladder in
-`pipeline/variant.py`
-(`no_catalog_row`, `metadata_not_stocked`,
-`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
-`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and
-routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
-`set_ambiguous`, `card_not_detected`, `no_market_data`, `name_disputed` — the name read off
-the photograph matching none of the rows its number found, which is D23's cross-check run
-backwards and the only signal that catches a confidently misread number — D35's
-`number_unread_name_matched` — the only reason the JOIN writes over a successful ladder
-resolution, keeping that row so the entry offers exactly one candidate, which is what makes a
-queue of them one D29 group — and `listing_disputed`. It is *not* the only reason sitting on a
-card the ladder resolved:
-`low_confidence` and `no_market_data` do too, and the difference is that they reach
-`routing.route` still resolved and are re-routed there, where this one arrives already
-un-resolved).
+named strings, and the screen labels every live one. Six come from the variant ladder in
+`pipeline/variant.py` (`no_catalog_row`, `metadata_not_stocked`,
+`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition` and D23's
+`rarity_claim_mismatch`). D23's reason is the stack claim contradicting every candidate row.
+The rest come from routing in `pipeline/routing.py` (`low_confidence`, `no_position`,
+`identification_failed`, `set_ambiguous`, `card_not_detected`, `no_market_data`,
+`name_disputed`, D35's `number_unread_name_matched` and `listing_disputed`).
+`name_disputed` is the name read off the photograph matching none of the rows its number
+found. It is D23's cross-check run backwards. It is the only signal that catches a
+confidently misread number. `number_unread_name_matched` is the only reason the JOIN writes
+over a successful ladder resolution. It keeps that row, so the entry offers exactly one
+candidate, and a queue of them is one D29 group. It is *not* the only reason sitting on a
+card the ladder resolved. `low_confidence` and `no_market_data` do too. The difference is
+that they reach `routing.route` still resolved and are re-routed there. This one arrives
+already un-resolved.
 
 identity-follows-sku.md §7.3 (lane 2) opens `listing_disputed`. `./pkmnscan cards identity
 --write` opens it for a held, identified card. `routing.route` never opens it.
@@ -1173,7 +1242,10 @@ Mechanized past the reason-string exception: `scripts/docs-audit.py`'s `no mecha
 screen` row (D196) refuses a decision citation, a repository path, or a
 pipeline-internal noun in any other user-visible string in `app/src`.
 
-Less text is always better than more, and it is a ratchet rather than an opinion: a route's
-visible word count may only go down. Mechanized by `app/tests/copy-budget.spec.ts`
-(D194), run by `make design-check`, against the ceilings pinned in
-`app/tests/copy-budget.json`.
+Less text is always better than more. D194's pinned-ceiling ratchet is retired, on the owner's
+ruling (`D284`, 2026-09-23): no more stagnant static pin. Three checks replace
+it, run by `make design-check`: `app/tests/text-shape.spec.ts` (a repetition and a sentence-
+shape check), `app/tests/machine-words.spec.ts` (D196's own gap, over rendered text) and
+`app/tests/money-face.spec.ts` (D221, over the mono face). `make text-density`
+(`scripts/text-density/`) is the third piece, a repeatable on-demand reviewer rather than a
+gate.

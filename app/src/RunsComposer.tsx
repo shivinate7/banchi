@@ -70,26 +70,26 @@ const READINGS = [
     label: 'Measured best',
     crop: true,
     maxEdge: 1200,
-    says: 'Crops to the card, sent at 1200px: $0.62 on box 2 and sharpest on the number. Photographs on disk are never touched.',
+    says: 'Crops to the card, 1200px.',
   },
   {
     key: 'cheapest',
     label: 'Cheapest',
     crop: true,
     maxEdge: 900,
-    says: 'The same crop at 900px: $0.44 on box 2, about 13% fewer pixels on the number.',
+    says: 'Crops to the card, 900px. Costs less, and the card number is a little softer.',
   },
   {
     key: 'whole',
     label: 'Whole frame',
     crop: false,
     maxEdge: 1568,
-    says: 'The whole photograph at 1568px: $0.72 on box 2, the command’s own default.',
+    says: 'The whole photograph, 1568px. Costs the most.',
   },
 ] as const
 
 const CUSTOM_SAYS =
-  'Crop and max edge are one decision: a crop at an unchanged 1568 cost 26% more when measured, and the rig’s useful range is 900 to 1400.'
+  'Your own crop and size. Between 900 and 1400px works best.'
 
 type ReadingKey = (typeof READINGS)[number]['key'] | 'custom'
 
@@ -270,11 +270,11 @@ export function selectionLine(
   if (draft.start === 'needed') {
     parts.push('Every card waiting to be identified')
   } else if (draft.start === 'drawers') {
-    if (draft.boxes.length === 0) return 'Pick a drawer. You can pick several.'
+    if (draft.boxes.length === 0) return 'Pick a box. You can pick several.'
     parts.push(
       draft.boxes.length === 1
         ? (named(draft.boxes[0] ?? 0) ?? '')
-        : `${draft.boxes.length} drawers · ${draft.boxes.map((box) => `Box ${box}`).join(', ')}`,
+        : `${draft.boxes.length} boxes: ${draft.boxes.map((box) => named(box) ?? '').join(', ')}`,
     )
   } else if (draft.start === 'ticked') {
     if (carried === null || carried.keys.length === 0) return 'No cards were handed over.'
@@ -289,19 +289,19 @@ export function selectionLine(
   }
   if (draft.game !== null) parts.push(draft.game)
   if (draft.since !== null) parts.push(`photographed since ${draft.since.replace('T', ' ')}`)
-  return parts.join(' · ')
+  return parts.join(', ')
 }
 
 type StageKey = 'select' | 'read' | 'quote' | 'started'
 const ORDER: readonly StageKey[] = ['select', 'read', 'quote', 'started']
 const STAGE_LIST: readonly { readonly key: StageKey; readonly n: string; readonly label: string }[] = [
   { key: 'select', n: '1', label: 'Cards' },
-  { key: 'read', n: '2', label: 'Reading' },
+  { key: 'read', n: '2', label: 'Photos' },
   { key: 'quote', n: '3', label: 'Cost' },
 ]
 const TITLES: Record<StageKey, string> = {
   select: 'Which cards',
-  read: 'How they are read',
+  read: 'How the photos are sent',
   quote: 'What it costs',
   started: 'Started',
 }
@@ -641,15 +641,34 @@ export function RunsComposer({
     }
   }, [])
 
-  const doQuote = () =>
-    guard('quote', async () => {
-      const answer = await preflightRun(send)
-      setQuote(answer)
-      setTicket(sendKey)
-      setShowPreflight(false)
-      setRaised(null)
-      setStage('quote')
-    })
+  const doQuote = useCallback(
+    () =>
+      guard('quote', async () => {
+        const answer = await preflightRun(send)
+        setQuote(answer)
+        setTicket(sendKey)
+        setShowPreflight(false)
+        setRaised(null)
+        setStage('quote')
+      }),
+    [guard, send, sendKey],
+  )
+
+  /* OPEN, THEN SPEND (the owner's Q5 ruling, D33 kept). The cost check is free, so it runs the
+     moment the sheet opens over cards it can already name: the press that carried the scope
+     (Capture's box, Home's waiting cards) is the first press, and Spend is the second. The
+     spend press still does not exist until the figure is on screen. Once per opening: going
+     back to change the cards does not re-run it behind the operator's back. */
+  const autoQuoted = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      autoQuoted.current = false
+      return
+    }
+    if (autoQuoted.current || !scoped || stage !== 'select' || quote !== null || busy !== null) return
+    autoQuoted.current = true
+    void doQuote()
+  }, [open, scoped, stage, quote, busy, doQuote])
 
   const doStart = () =>
     guard('start', async () => {
@@ -720,7 +739,7 @@ export function RunsComposer({
      (`runHandoff.ts` has the argument), so once it is dropped the way back is that screen. */
   const startOptions = [
     { value: 'needed' as StartKey, label: 'Everything that needs it', icon: 'layers' as const },
-    { value: 'drawers' as StartKey, label: 'Drawers', icon: 'box' as const },
+    { value: 'drawers' as StartKey, label: 'Boxes', icon: 'box' as const },
     ...(carried === null
       ? []
       : [{ value: 'ticked' as StartKey, label: 'The cards I ticked', icon: 'check' as const }]),
@@ -811,26 +830,18 @@ export function RunsComposer({
               <div className="runs-pick">
                 {draft.start === 'needed' ? (
                   <div className="runs-pick-said">
-                    <p className="runs-pick-lede">
-                      Every photograph in the store whose card has not been identified yet — whatever drawer it
-                      is in.
-                    </p>
-                    <p className="run-step-fine">
-                      A card that has already been read is not read again, and the cost check says how many of
-                      each there are before anything is spent. Most of the time that figure is nothing: on this
-                      store every one of 2,535 cards was already answered and cached.
-                    </p>
+                    <p className="runs-pick-lede">Every card photographed and not yet identified, in any box.</p>
                   </div>
                 ) : null}
 
                 {draft.start === 'drawers' ? (
-                  <div className="runs-boxes" role="group" aria-label="Which drawers to run">
+                  <div className="runs-boxes" role="group" aria-label="Which boxes to identify">
                     {boxes === null && boxesFailure === null ? (
                       Array.from({ length: 6 }, (_, i) => <div key={i} className="bn-skeleton runs-box-skel" />)
                     ) : rows.length === 0 ? (
                       <EmptyState
                         icon="box"
-                        title="No drawers yet"
+                        title="No boxes yet"
                         body="Capture a card to start a run."
                         actions={
                           <Button
@@ -909,7 +920,7 @@ export function RunsComposer({
                           <div className="runs-handoff">
                             <Button size="sm" variant="quiet" onClick={onDropCarried}>
                               {only === undefined
-                                ? 'Identify every drawer instead'
+                                ? 'Identify every box instead'
                                 : `Identify all of box ${only.box} instead`}
                             </Button>
                           </div>
@@ -932,7 +943,7 @@ export function RunsComposer({
                       <EmptyState
                         icon="history"
                         title="No runs yet"
-                        body="Identify a drawer to read its run again."
+                        body="Identify a box first."
                       />
                     ) : (
                       <>
@@ -995,7 +1006,7 @@ export function RunsComposer({
                       onDraft({ section: event.target.value === '' ? null : Number(event.target.value) })
                     }
                   >
-                    <option value="">Whole drawer</option>
+                    <option value="">Whole box</option>
                     {(sectionsOf?.sections_detail ?? []).map((row) => (
                       <option key={row.section} value={row.section}>
                         Section {row.section}
@@ -1030,7 +1041,7 @@ export function RunsComposer({
 
                 {sectionsOf === null && draft.section === null ? (
                   <p className="run-step-fine runs-narrow-note">
-                    A section is a divider inside one drawer, so it needs exactly one drawer picked above.
+                    Pick one box above to pick a section in it.
                   </p>
                 ) : null}
               </div>
@@ -1100,10 +1111,7 @@ export function RunsComposer({
                       drawer. Measured on this store, 12 of 15 runs share one `max_edge` and the
                       three that differ are three presses on three days — so a press that wants
                       two readings is two presses, which is what it always was in practice. */}
-                  <p className="run-step-fine">
-                    This reading reaches every card in the press. Two drawers that want two readings are two
-                    presses.
-                  </p>
+
                 </div>
               </div>
 
@@ -1273,7 +1281,7 @@ export function RunsComposer({
                 <p className="runs-quote-sentence">{quote.sentence}</p>
                 <p className="run-step-fine">
                   {quote.scope === null
-                    ? 'These cards are in more than one drawer, so the run records no single drawer of its own.'
+                    ? 'These cards are in more than one box.'
                     : quote.scope.whole_box
                       ? `The run will record all of ${boxLabel(
                           quote.scope.box,
@@ -1483,7 +1491,7 @@ export function RunsComposer({
                 Cancel
               </Button>
               <Button variant="primary" iconRight="arrowRight" disabled={!scoped} onClick={() => setStage('read')}>
-                Continue to the reading
+                Next: photos
               </Button>
             </>
           ) : null}
@@ -1507,7 +1515,7 @@ export function RunsComposer({
           {stage === 'quote' ? (
             <>
               <Button variant="ghost" icon="arrowLeft" onClick={() => setStage('read')}>
-                Reading
+                Photos
               </Button>
               <span className="runs-composer-note">{line} (quoted for exactly these cards)</span>
               <Button variant="ghost" onClick={close}>

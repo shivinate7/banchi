@@ -3,8 +3,8 @@
 
     python3 scripts/token-literal-check-pin.py --pin
 
-D229's own discipline, mirrored exactly (`scripts/typed-interpunct-pin.mjs`'s header says why
-a generator is the one thing allowed to write this file): `make token-literal-check`'s row
+D229's own discipline, mirrored exactly (D18 says why a generator is the one thing allowed to
+write this file): `make token-literal-check`'s row
 only ever READS the pin — D18 forbids it writing, since it runs on the commit path (`make
 check`) — and this script is the one thing that may, run by a person choosing, on purpose, to
 accept today's count as the new ceiling. Never pin quietly: `git diff

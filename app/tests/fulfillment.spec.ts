@@ -1,6 +1,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 
 /* docs/DESIGN.md's Fulfillment constraints table, every row of it, as assertions.
  *
@@ -109,7 +110,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 26,
     state: 'identified',
     name: 'Pidgeot ex',
-    label: 'Box 3 · Section 2 · Card 1',
+    label: 'Box 3, Section 2, Card 1',
     photo: '/captures/3/026.jpg',
   },
   '3/7': {
@@ -117,7 +118,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 7,
     state: 'identified',
     name: 'Charizard ex',
-    label: 'Box 3 · Section 1 · Card 7',
+    label: 'Box 3, Section 1, Card 7',
     photo: '/captures/3/007.jpg',
   },
   '1/3': {
@@ -125,7 +126,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 3,
     state: 'identified',
     name: 'Iono',
-    label: 'Box 1 · Section 1 · Card 3',
+    label: 'Box 1, Section 1, Card 3',
     photo: '/captures/1/003.jpg',
   },
   /* TWO COPIES OF ONE CARD, IN TWO BOXES, and they are the whole reason the search path can be
@@ -145,7 +146,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 2,
     state: 'captured',
     name: 'Eiscue',
-    label: 'Box 4 · Section 1 · Card 2',
+    label: 'Box 4, Section 1, Card 2',
     photo: '/captures/4/002.jpg',
   },
   '2/9': {
@@ -153,7 +154,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 9,
     state: 'identified',
     name: 'Eiscue',
-    label: 'Box 2 · Section 1 · Card 9',
+    label: 'Box 2, Section 1, Card 9',
     photo: '/captures/2/009.jpg',
   },
   // ALREADY SOLD, and it must never appear. This row used to be `captured` and carry the
@@ -161,7 +162,7 @@ const CARDS: Record<string, FixtureCard> = {
   // buyer could have ordered". D7's amendment retired that reasoning rather than this case:
   // copies are fungible, every UNSOLD copy is sellable, and `captured` now means a card that
   // is on the shelf and perfectly pullable. `sold` is what "must not appear" is made of now.
-  '2/4': { box: 2, index: 4, state: 'sold', name: null, label: 'Box 2 · Section 1 · Card 4', photo: null },
+  '2/4': { box: 2, index: 4, state: 'sold', name: null, label: 'Box 2, Section 1, Card 4', photo: null },
   // For sale, and undecorated — `do_inventory` leaves a row bare when its box or index will
   // not coerce. It must be counted on screen rather than dropped in silence.
   '9/12': { box: 9, index: 12, state: 'identified', name: 'Great Ball', photo: '/captures/9/012.jpg' },
@@ -414,54 +415,32 @@ type Mood = {
    *  one sentence this view gained: his count is the estimate, so it moves the moment a copy
    *  is pulled, and the sentence is what says why. */
   soldHere?: number
-  /** THE LEDGER, WHICH THIS VIEW NOW READS BESIDE THE CARDS. `GET /orders` resolves every open
-   *  order to the copies that fill it, and the view draws those as "Orders to fill" above the
-   *  boxes. It defaults to a ledger with nothing open — the world every case below was written
-   *  in, where the boxes ARE the walk — so a case that wants an order says so. Stubbed rather
-   *  than left to fall through: an unrouted `/orders` reaches the real capture server, and this
-   *  file would then be measuring the owner's real open orders. */
+  /** THE LEDGER, WHICH THIS VIEW NOW READS BESIDE THE CARDS. `GET /orders` names what is open;
+   *  `resolution` on this fixture is field-for-field what `do_orders` answers, but as of
+   *  2026-09-16 it is never what draws a card here (`OrdersPayload.resolution.orders[].lines[]
+   *  .picks` is always `[]` on the wire, and `Fulfillment.tsx` never reads it) — `plan`, below,
+   *  is the real source, over `POST /orders/walk-plan`. It defaults to a ledger with nothing
+   *  open — the world every case below was written in, where the boxes ARE the walk — so a
+   *  case that wants an order says so. Stubbed rather than left to fall through: an unrouted
+   *  `/orders` reaches the real capture server, and this file would then be measuring the
+   *  owner's real open orders. */
   orders?: unknown
+  /** THE REAL PICKS, `plan` being `WalkPlan`-shaped over `POST /orders/walk-plan` (D212/D93,
+   *  the owner's own ruling — see `Fulfillment.tsx`'s file header). Every open order named in
+   *  `orders` above should have a matching take here, or the screen draws an order with
+   *  nothing under it, which is the S1 defect this file exists to catch (UX-001). Defaults to
+   *  an empty plan, matching `orders` defaulting to none open. */
+  plan?: unknown
 }
 
 /** THE ONE OPEN ORDER, waiting for the copy the fixture holds at 3/7.
  *
- *  Field for field the shape `do_orders` answers with — `pickSellable` refuses a copy that is
- *  missing any of `label`, `located`, `state` or `capture_id`, so a partial fixture here does
- *  not fail partially: it draws an order with no cards under it, which reads exactly like the
- *  feature being broken. The one line resolves to one pick, which is the ordinary case. */
+ *  Field for field the shape `do_orders` answers with. `resolution` here is realistic but
+ *  UNREAD by the screen (see `Mood.orders`'s own comment); `ONE_OPEN_ORDER_PLAN`, below, is
+ *  what the screen actually draws from. */
 const ORDER_NUMBER = 'A2FFC195-0000F4-006AC'
 const ORDER_SKU = '9191486'
 const ORDER_KEY = `TCGplayer:${ORDER_NUMBER}`
-
-const ORDER_PICK = {
-  box: 3,
-  index: 7,
-  capture_id: 'cap-charizard',
-  source: 'card',
-  run: null,
-  card_name: 'Charizard ex',
-  card_number: '006',
-  condition: 'Near Mint',
-  state: 'identified',
-  held_by: null,
-  place: {
-    label: 'Box 3 · Section 1 · Card 7',
-    located: true,
-    box: 3,
-    index: 7,
-    slot: 7,
-    section: 1,
-    card: 7,
-    box_name: null,
-    section_start: 1,
-    section_end: 25,
-    box_total: 25,
-    box_closed: true,
-    fraction: 0.28,
-    neighbors: null,
-    section_gaps: 0,
-  },
-}
 
 const ORDER_LINE = {
   sku: ORDER_SKU,
@@ -519,7 +498,12 @@ const ONE_OPEN_ORDER = {
             retired: 0,
             pooled: 0,
             line: ORDER_LINE,
-            picks: [ORDER_PICK],
+            // THE REAL SHAPE SINCE 2026-09-16: `GET /orders` answers no picks at all, on
+            // ANY server — `do_orders`'s own docstring, `OrdersPayload`'s own comment. A
+            // fixture that sent `[ORDER_PICK]` here was exercising a read this screen no
+            // longer makes, which is why the old walk-based tests passed against a bug the
+            // real server has had for a week: they proved the mock, not the app.
+            picks: [],
           },
         ],
       },
@@ -595,6 +579,221 @@ const NO_ORDERS = {
   },
 }
 
+/** `POST /orders/walk-plan`'s own empty answer — no keys asked, nothing to plan. The screen
+ *  never sends this request with no order open (`Fulfillment.tsx`'s own effect skips the
+ *  call), so this is only ever the stub's DEFAULT for a case that sets `orders` without `plan`
+ *  and has no order that owes anything, and for `NO_ORDERS`. */
+const EMPTY_PLAN = {
+  cost: 'sections',
+  stops: [],
+  shortfall: [],
+  counts: { stops: 0, boxes: 0, copies: 0, sections_considered: 0, sections_candidate: 0, exact: true, solve_ms: 0 },
+}
+
+/** The real place `ONE_OPEN_ORDER`'s SKU resolves to — the box and index the store holds it
+ *  at, the only fixture that carries it now that `GET /orders`'s own `picks` are `[]`. */
+const ORDER_COPY_PLACE = {
+  label: 'Box 3, Section 1, Card 7',
+  located: true,
+  box: 3,
+  index: 7,
+  slot: 7,
+  section: 1,
+  card: 7,
+  box_name: null,
+  section_start: 1,
+  section_end: 25,
+  box_total: 25,
+  box_closed: true,
+  fraction: 0.28,
+  neighbors: null,
+  section_gaps: 0,
+}
+
+/** One `WalkPlanCopy` — `_walk_plan_copy`'s own shape, field for field: `_copy_row` plus
+ *  `here`. NO PRESELECTION READS THIS SHAPE AS SPECIAL: `here` says whether the solver would
+ *  reach it from the stop it is filed under, never whether it is offered — the screen offers
+ *  every copy in the list the same way (D212, D93). */
+const ORDER_WALK_COPY = {
+  key: '3/7',
+  state: 'identified',
+  has_photo: true,
+  capture_id: 'cap-charizard',
+  cid: null,
+  place: ORDER_COPY_PLACE,
+  here: true,
+}
+
+/** One `WalkPlanTake` — the SKU `ONE_OPEN_ORDER` owes, one copy wide, one order owing it. */
+const ORDER_TAKE = {
+  sku: ORDER_SKU,
+  name: 'Charizard ex',
+  number_display: '006',
+  set: null,
+  rarity: null,
+  condition: 'Near Mint',
+  wanted: 1,
+  for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+  copies: [ORDER_WALK_COPY],
+  listed: { pushed: 0, staged: 0, live: 0 },
+  sold_here: 0,
+  live_as_of: null,
+}
+
+/** `ONE_OPEN_ORDER`'s own plan — one stop, one take, one copy, fully fillable. */
+const ONE_OPEN_ORDER_PLAN = {
+  cost: 'sections',
+  stops: [
+    {
+      key: 'box/3/section/1',
+      box: 3,
+      box_name: null,
+      section: 1,
+      section_name: null,
+      pooled: false,
+      game: null,
+      game_display: null,
+      order: 1,
+      span: { start: 1, end: 25 },
+      box_total: 25,
+      takes: [ORDER_TAKE],
+    },
+  ],
+  shortfall: [],
+  counts: { stops: 1, boxes: 1, copies: 1, sections_considered: 1, sections_candidate: 1, exact: true, solve_ms: 1 },
+}
+
+/** `ORDER_WITH_ELSEWHERE`'s own plan — the same fillable take, plus a SKU the store holds
+ *  none of at all: `on_hand: 0`, so it is `shortfall` and never a stop (`pipeline/walkplan.py:
+ *  plan`'s own doc comment — demand is capped at availability before the solve). This is the
+ *  shape UX-001's own direction asks for: "if the screen cannot place a copy, it says how
+ *  many" — never a card drawn with nothing under it. */
+const ORDER_WITH_ELSEWHERE_PLAN = {
+  ...ONE_OPEN_ORDER_PLAN,
+  shortfall: [
+    {
+      sku: ELSEWHERE_SKU,
+      name: 'Charizard ex',
+      wanted: 8,
+      on_hand: 0,
+      short: 8,
+      for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+    },
+  ],
+}
+
+/** THE OWNER'S OWN CASE, VERBATIM (2026-09-23 ruling): "if an order has 2 of card X but I
+ *  have 14 in inventory, I shouldn't just see 2 cards that are preselected — I should be told
+ *  I need to pick 2, and here's where all the copies are." One SKU, wanted 2, THREE copies on
+ *  hand in three different places — the fixture the ruling itself describes, at a size a test
+ *  can hold. */
+const MULTI_ORDER_NUMBER = 'M-PICK-2'
+const MULTI_ORDER_KEY = `TCGplayer:${MULTI_ORDER_NUMBER}`
+const MULTI_SKU = '9199001'
+
+function multiCopy(key: string, box: number, section: number, card: number, sectionEnd: number): {
+  key: string
+  state: string
+  has_photo: boolean
+  capture_id: string
+  cid: null
+  place: Record<string, unknown>
+  here: boolean
+} {
+  return {
+    key,
+    state: 'identified',
+    has_photo: true,
+    capture_id: `cap-${key.replace('/', '-')}`,
+    cid: null,
+    place: {
+      label: `Box ${box}, Section ${section}, Card ${card}`,
+      located: true,
+      box,
+      index: card,
+      slot: card,
+      section,
+      card,
+      box_name: null,
+      section_start: 1,
+      section_end: sectionEnd,
+      box_total: sectionEnd,
+      box_closed: true,
+      fraction: 0.4,
+      neighbors: null,
+      section_gaps: 0,
+    },
+    here: box === 1,
+  }
+}
+
+const MULTI_COPIES = [
+  multiCopy('1/5', 1, 1, 5, 20),
+  multiCopy('2/9', 2, 1, 9, 15),
+  multiCopy('4/2', 4, 2, 2, 10),
+]
+
+const MULTI_ORDER = {
+  summary: '1 order',
+  orders: [
+    {
+      key: MULTI_ORDER_KEY,
+      source: 'TCGplayer',
+      number: MULTI_ORDER_NUMBER,
+      buyer: 'Priya Nair',
+      placed_at: '2026-09-20T10:00:00+00:00',
+      status: 'Ready to ship',
+      first_seen: '2026-09-21T09:00:00+00:00',
+      changed_at: null,
+      wanted: 2,
+      recorded: 0,
+      open: true,
+      lines: [{ ...ORDER_LINE, sku: MULTI_SKU, quantity: 2, name: 'Promising Future' }],
+      progress: [
+        { sku: MULTI_SKU, wanted: 2, recorded: 0, outstanding: 2, over: 0, copies: [], at: null },
+      ],
+    },
+  ],
+  resolution: { orders: [], counts: { resolved: 0, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 } },
+}
+
+const MULTI_PLAN = {
+  cost: 'sections',
+  stops: [
+    {
+      key: 'box/1/section/1',
+      box: 1,
+      box_name: null,
+      section: 1,
+      section_name: null,
+      pooled: false,
+      game: null,
+      game_display: null,
+      order: 1,
+      span: { start: 1, end: 20 },
+      box_total: 20,
+      takes: [
+        {
+          sku: MULTI_SKU,
+          name: 'Promising Future',
+          number_display: '115/298',
+          set: 'Riftbound',
+          rarity: null,
+          condition: 'Near Mint',
+          wanted: 2,
+          for: [{ key: MULTI_ORDER_KEY, number: MULTI_ORDER_NUMBER, buyer: 'Priya Nair' }],
+          copies: MULTI_COPIES,
+          listed: { pushed: 0, staged: 0, live: 0 },
+          sold_here: 0,
+          live_as_of: null,
+        },
+      ],
+    },
+  ],
+  shortfall: [],
+  counts: { stops: 1, boxes: 1, copies: 2, sections_considered: 1, sections_candidate: 1, exact: true, solve_ms: 1 },
+}
+
 async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<Store> {
   const states: Store = {}
   for (const [key, card] of Object.entries(CARDS)) {
@@ -623,6 +822,40 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
       status: answer.status,
       contentType: 'application/json',
       body: JSON.stringify(answer.body),
+    })
+  })
+
+  /* `POST /orders/pull` — a card an owed take names is sold THROUGH the order (`claim`,
+     `Fulfillment.tsx`), never through `/inventory/<box>/<index>/sold` above. One target at a
+     time is all this screen ever sends (D93: one press per copy), so the stub answers for
+     the first and only one, field for field what a real pull returns on success. */
+  await page.route(/\/orders\/pull$/, async (route) => {
+    const request = route.request()
+    const sent = request.postDataJSON() as {
+      undo?: unknown
+      targets?: { box: number; index: number; capture_id: string }[]
+    } | null
+    const undo = sent?.undo === true
+    const target = sent?.targets?.[0]
+    const key = target === undefined ? '' : `${target.box}/${target.index}`
+    wire.push({ method: request.method(), url: request.url(), undo })
+    if (key !== '') states[key] = undo ? 'identified' : 'sold'
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        undone: undo,
+        order_key: ORDER_KEY,
+        sku: ORDER_SKU,
+        newly: undo ? 0 : 1,
+        recorded: undo ? 0 : 1,
+        outstanding: undo ? 1 : 0,
+        places: target === undefined ? [] : [ORDER_COPY_PLACE],
+        sales:
+          target === undefined
+            ? []
+            : [{ position: key, undone: undo, restores_to: undo ? null : 'identified', order_released: null }],
+      }),
     })
   })
 
@@ -660,6 +893,17 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(mood.orders ?? NO_ORDERS),
+    })
+  })
+
+  /* The second tier `GET /orders` names in its own comment (S1, UX-001): the screen's real
+     picks. `POST` because a key is `source:number` and a number may legally carry a colon —
+     the same reason the real route takes a body rather than a query string. */
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mood.plan ?? EMPTY_PLAN),
     })
   })
 
@@ -758,11 +1002,26 @@ type Run = { text: string; where: string; size: number; color: string; ground: s
  * same call the nav rule in Fulfillment.css relies on, and the destructive-route test below
  * is where it is made honest.
  *
+ * `checkVisibility()` alone still says yes to the kit's own `.bn-sr` (`kit.css`): visible per
+ * `display`/`visibility`, clipped to a 1x1 box on purpose (the accessible name an icon-only
+ * `Button` gives a screen reader — the "?" sheet's own Close button, since it moved onto the
+ * kit's `Modal`, is the first place this file draws one). `checkVisibility()` has no option
+ * for `clip`, so the box itself is read: on-screen text is never 1px in both directions.
+ *
  * The ground is resolved by walking up to the first opaque background, which is what the eye
  * does: `.pull-confirm-label` is white on nothing, sitting on a button filled with --accent.
  */
 async function runsIn(view: Locator): Promise<Run[]> {
   return view.evaluate((root) => {
+    /* `checkVisibility()` alone, not the box: see the comment above this function. KNOWN GAP,
+     * not this screen's shape: a 0x0 wrapper with `overflow: visible` holding text that
+     * paints outside its own box is read as unpainted here too — the box checked is the
+     * TEXT'S OWN PARENT, never where its content actually renders. */
+    const painted = (element: Element): boolean => {
+      if (!element.checkVisibility()) return false
+      const box = element.getBoundingClientRect()
+      return box.width > 1 && box.height > 1
+    }
     /* THE GROUND, COMPOSITED RATHER THAN THE FIRST COLOUR FOUND.
      *
      * A translucent layer is a real ground — what the eye reads is it painted over whatever is
@@ -820,7 +1079,7 @@ async function runsIn(view: Locator): Promise<Run[]> {
     while (node !== null) {
       const text = (node.textContent ?? '').trim()
       const parent = node.parentElement
-      if (text !== '' && parent !== null && parent.checkVisibility()) {
+      if (text !== '' && parent !== null && painted(parent)) {
         const style = window.getComputedStyle(parent)
         out.push({
           text,
@@ -964,15 +1223,22 @@ async function paintedPhoto(
  * a 12px line on any of those was invisible.
  */
 
+/* Page-wide, like `targets` and `noWayOut` below — not `view(page)`. The kit's `Modal`
+ * (`kit/overlay.tsx`) portals to `document.body`, a sibling of `main.fulfillment`, so a
+ * `view(page)`-scoped walk would silently stop seeing the "?" sheet's own text the moment it
+ * moved onto the kit. This route draws nothing else outside `main.fulfillment` (no shell,
+ * D5), so scanning the body reads exactly the view plus whatever overlay sits on top of it. */
+const PAGE_ROOT = 'body'
+
 async function noSmallText(page: Page, where: string): Promise<void> {
-  const runs = await runsIn(view(page))
+  const runs = await runsIn(page.locator(PAGE_ROOT))
   expect(runs.length, `${where}: nothing rendered, so nothing was measured`).toBeGreaterThan(0)
   const small = runs.filter((run) => run.size < BODY_FLOOR)
   expect(small, `${where}: below the ${BODY_FLOOR}px floor`).toEqual([])
 }
 
 async function noThinContrast(page: Page, where: string): Promise<void> {
-  const runs = await runsIn(view(page))
+  const runs = await runsIn(page.locator(PAGE_ROOT))
   expect(runs.length, `${where}: nothing rendered`).toBeGreaterThan(0)
   for (const run of runs) {
     const ink = parseRgb(run.color)
@@ -1050,6 +1316,13 @@ const BANNED_RE = new RegExp(`\\b(${BANNED.join('|')})(s|d|es|ed|ing)?\\b`, 'i')
 
 async function copyIn(view: Locator): Promise<{ text: string; where: string }[]> {
   return view.evaluate((root) => {
+    /* Same reason as `runsIn`'s own `painted`: `checkVisibility()` alone says yes to the
+     * kit's `.bn-sr` (an icon-only button's accessible name, clipped to 1x1 on purpose). */
+    const painted = (element: Element): boolean => {
+      if (!element.checkVisibility()) return false
+      const box = element.getBoundingClientRect()
+      return box.width > 1 && box.height > 1
+    }
     const describe = (element: Element): string => {
       const classes = element.getAttribute('class')
       return `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}`
@@ -1061,7 +1334,7 @@ async function copyIn(view: Locator): Promise<{ text: string; where: string }[]>
     while (node !== null) {
       const text = (node.textContent ?? '').trim()
       const parent = node.parentElement
-      if (text !== '' && parent !== null && parent.checkVisibility()) {
+      if (text !== '' && parent !== null && painted(parent)) {
         out.push({ text, where: describe(parent) })
       }
       node = walker.nextNode()
@@ -1080,7 +1353,8 @@ async function copyIn(view: Locator): Promise<{ text: string; where: string }[]>
 }
 
 async function noJargon(page: Page, where: string): Promise<void> {
-  const copy = await copyIn(view(page))
+  // Page-wide too — see PAGE_ROOT's own comment above `noSmallText`.
+  const copy = await copyIn(page.locator(PAGE_ROOT))
   expect(copy.length, `${where}: no copy to read`).toBeGreaterThan(0)
   for (const line of copy) {
     const found = BANNED_RE.exec(line.text)
@@ -1272,8 +1546,9 @@ async function cardRow(page: Page, name: string): Promise<Locator> {
  *  web-first assertion that can only wait for the second half. */
 /** D218: the seam between `PlaceText`'s parts is CSS now (`.ff-place-elem::before`), which
  *  `allTextContents` never sees — generated content is not part of an element's `textContent`.
- *  `expected` keeps the server's own spelling, dot and all, because that is still what a caller
- *  reads and what `aria-label` would carry; this strips the same seam from it before comparing,
+ *  `expected` keeps the server's own spelling, commas and all (the label has typed no dot since
+ *  D259), because that is what a caller reads and what `aria-label`
+ *  would carry; this strips the same seam from it before comparing,
  *  so the assertion is about which PARTS are drawn and in what order, not about a character this
  *  component was told to stop typing. */
 async function expectWalk(page: Page, expected: readonly string[]): Promise<void> {
@@ -1281,7 +1556,7 @@ async function expectWalk(page: Page, expected: readonly string[]): Promise<void
     await openEveryBox(page)
     const drawn = await view(page).locator('.fulfillment-row .fulfillment-place').allTextContents()
     expect(drawn.map((one) => one.replace(/\s+/g, ' ').trim())).toEqual(
-      expected.map((one) => one.replace(/\s*·\s*/g, '')),
+      expected.map((one) => one.replace(/\s*[·,]\s*/g, '')),
     )
   }).toPass({ timeout: 20_000 })
 }
@@ -1404,7 +1679,7 @@ async function sellOpenCard(page: Page): Promise<void> {
  *  still passes the server's own spelling, dot and all, so it reads like the label everywhere
  *  else in this file; this is the one place that strips it before the match. */
 function receiptFor(page: Page, place: string): Locator {
-  return view(page).locator('.fulfillment-panel', { hasText: place.replace(/\s*·\s*/g, '') })
+  return view(page).locator('.fulfillment-panel', { hasText: place.replace(/\s*[·,]\s*/g, '') })
 }
 
 // ------------------------------------------------------------------------------ the table
@@ -1416,11 +1691,11 @@ function receiptFor(page: Page, place: string): Locator {
  *  putting a card back. Three hand-written copies of the same five strings is three places for
  *  a fixture row to be added to two of them. */
 const WALK = [
-  'Box 1 · Section 1 · Card 3',
-  'Box 2 · Section 1 · Card 9',
-  'Box 3 · Section 1 · Card 7',
-  'Box 3 · Section 2 · Card 1',
-  'Box 4 · Section 1 · Card 2',
+  'Box 1, Section 1, Card 3',
+  'Box 2, Section 1, Card 9',
+  'Box 3, Section 1, Card 7',
+  'Box 3, Section 2, Card 1',
+  'Box 4, Section 1, Card 2',
 ]
 
 /* NOTHING HERE MAY REACH THE CAPTURE SERVER — `app/tests/shell.ts` carries the argument. The
@@ -1481,64 +1756,240 @@ test('the cards for sale are listed in box-walk order, and nothing else is liste
   await expect(view(page)).toContainText('1 card for sale is not shown here')
 })
 
-/* THE ORDERS, WHICH ARE THE SCREEN'S FIRST ANSWER NOW. `GET /orders` resolves every open order
- * to the copies that fill it, and those copies are drawn above the boxes with the order number
- * on them — so the walk starts from what a buyer is waiting for rather than from the store.
+/* THE ORDERS, WHICH ARE THE SCREEN'S FIRST ANSWER NOW. `POST /orders/walk-plan` resolves every
+ * open order's own demand to every on-hand copy of each SKU, and those copies are drawn above
+ * the boxes as "Cards to pick" -- one entry per SKU, "Pick N", and every copy the store holds,
+ * NONE PRESELECTED (the owner's own ruling, 2026-09-23: "I shouldn't just see 2 cards that are
+ * preselected. I should be told I need to pick 2, and here's where all the copies are." D212,
+ * D93). This is the S1 defect's own test (UX-001): the screen used to build this list from
+ * `GET /orders`'s `picks`, which have answered `[]` since 2026-09-16 -- so it showed a green
+ * "No orders are waiting" while 71 open orders on the owner's real store owed 216 copies. This
+ * case asserts the list ACTUALLY DRAWS what the orders owe, and it holds the whole floor table
+ * to it, for the reason the file's header gives: the copy on a screen nobody renders is the
+ * copy nobody proofreads.
  *
  * The rest of this file runs against a ledger with nothing open, which is the same screen with
- * that section absent; this case is the one that renders it, and it holds the whole table to it
- * for the reason the file's header gives: the copy on a screen nobody renders is the copy
- * nobody proofreads.
+ * that section absent; this case is the one that renders it.
  */
-test('a card an order is waiting for is drawn under that order, and the floors hold there', async ({
+test('a card an open order owes is drawn as "Pick N" with every copy the store holds, none preselected', async ({
   page,
 }) => {
-  await openList(page, [], { orders: ONE_OPEN_ORDER })
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
 
-  // The figure he reads first, and it counts cards rather than orders.
-  await expect(view(page)).toContainText('1 card to pull')
+  // The figure he reads first, and it counts copies rather than orders.
+  await expect(view(page)).toContainText('1 copy to pick')
 
-  /* The copy is on screen WITHOUT opening a box: an order's cards are the list, and the boxes
+  /* The card is on screen WITHOUT opening a box: an order's demand is the list, and the boxes
      below it are the other way in. */
-  const order = view(page).locator('.ff-order', { hasText: ORDER_BUYER })
-  // D218: the seam is CSS now (`.ff-place-elem::before`), never part of `textContent`.
-  await expect(order.locator('.fulfillment-place')).toHaveText(['Box 3Section 1Card 7'])
-  // D193: the buyer's name leads, and the raw order id never stands alone -- it is present,
-  // but only ever paired with the name that made this one findable.
-  await expect(order.locator('.ff-order-title')).toContainText(ORDER_BUYER)
-  await expect(order.locator('.ff-order-id')).toContainText(ORDER_NUMBER)
-  await battery(page, 'orders to fill')
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' })
+  await expect(card.locator('.ff-owed-pick')).toContainText('Pick 1')
+  /* NONE PRESELECTED: this is `CardLocations`' own copies list, the same one a search result
+     draws, with a two-step Pull/Mark-sold control on the copy itself -- not a single card that
+     opens on its own screen. D218: the seam is CSS now (`.ff-place-elem::before` /
+     `.card-locations-place-large`'s own render), never part of `textContent`. */
+  // `CardLocations`' own place text is the server's label, whole: box name, section, card within
+  // the section, joined by commas (D259). No separator dot is typed into
+  // it any more (D218), so none can reach the Fulfiller's screen.
+  const placeLarge = card.locator('.card-locations-place-large')
+  await expect(placeLarge).toHaveText('Box 3, Section 1, Card 7')
+  expect(await placeLarge.textContent()).not.toMatch(/[·•]/)
+  await expect(card.getByRole('button', { name: 'Pull' })).toBeVisible()
+  await battery(page, 'cards to pick')
 
-  // And the card he opens from it says which order is waiting, so he can match the slip.
-  await order.getByRole('button', { name: 'Charizard ex' }).click()
-  await expect(view(page)).toContainText(`For ${ORDER_BUYER}`)
-  await expect(view(page).locator('.ff-card-order-id')).toContainText(ORDER_NUMBER)
-  await expect(view(page).locator('.fulfillment-photo')).toBeVisible()
-  await battery(page, 'card for an order')
+  // And pulling it sells THROUGH the order, so the owner's ledger counts it.
+  await card.getByRole('button', { name: 'Pull' }).click()
+  await card.getByRole('button', { name: 'Mark it sold' }).click()
+  await expect(view(page)).toContainText('Marked sold.')
+  // D193: the buyer's name leads, and the raw order id never stands alone.
+  await expect(view(page)).toContainText(`Order ${ORDER_NUMBER}`)
+  await battery(page, 'sold through an order')
 })
 
-test('an order with no buyer name reads "No name", never the raw id alone', async ({ page }) => {
+/* THE OWNER'S OWN CASE. `MULTI_PLAN`'s own comment has the ruling verbatim: two wanted,
+ * three on hand, three different boxes -- and the screen must say "Pick 2" and offer every
+ * one of the three, never two preselected copies standing in for the SKU. */
+test('a SKU owed 2 with 3 copies on hand shows "Pick 2" and every copy, none preselected', async ({
+  page,
+}) => {
+  await openList(page, [], { orders: MULTI_ORDER, plan: MULTI_PLAN })
+
+  const card = view(page).locator('.ff-owed-card', { hasText: 'Promising Future' })
+  await expect(card.locator('.ff-owed-pick')).toContainText('Pick 2')
+
+  // ALL THREE, not two -- the wanted count never caps the copies list (D212, D93).
+  await expect(card.locator('.card-locations-copy')).toHaveCount(3)
+  await expect(card.locator('.card-locations-place-large')).toHaveText([
+    'Box 1, Section 1, Card 5',
+    'Box 2, Section 1, Card 9',
+    'Box 4, Section 2, Card 2',
+  ])
+
+  // NONE PRESELECTED: every one of the three offers the same first-step control, none of
+  // them already "Pulled." or otherwise singled out.
+  await expect(card.getByRole('button', { name: 'Pull' })).toHaveCount(3)
+  await expect(card.locator('.card-locations-copy', { hasText: 'Pulled.' })).toHaveCount(0)
+  await battery(page, 'owed SKU with 3 copies')
+})
+
+/* THE SORT, PROVED AGAINST THE WIRE'S OWN DELIVERY ORDER, not against a fixture that already
+ * happens to agree with it. `pipeline/walkplan.py:plan` sorts stops by the solver's own cost,
+ * never by box number (`docs/specs/order-walk-plan.md` §7 — sections counted flat, boxes
+ * free), so a plan naming Box 5 before Box 1 is a real, legal answer the solver can send.
+ * This plan does exactly that; the screen must still draw Box 1 first. */
+const WALK_ORDER_PLAN = {
+  cost: 'sections',
+  stops: [
+    {
+      key: 'box/5/section/1', box: 5, box_name: null, section: 1, section_name: null,
+      pooled: false, game: null, game_display: null, order: 1,
+      span: { start: 1, end: 10 }, box_total: 10,
+      takes: [{
+        sku: '9199010', name: 'Xerneas', number_display: null, set: null, rarity: null,
+        condition: null, wanted: 1,
+        for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+        copies: [{
+          key: '5/1', state: 'identified', has_photo: true, capture_id: 'cap-x', cid: null,
+          place: {
+            label: 'Box 5, Section 1, Card 1', located: true, box: 5, index: 1, slot: 1,
+            section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
+            box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
+          },
+          here: true,
+        }],
+        listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null,
+      }],
+    },
+    {
+      key: 'box/1/section/1', box: 1, box_name: null, section: 1, section_name: null,
+      pooled: false, game: null, game_display: null, order: 2,
+      span: { start: 1, end: 10 }, box_total: 10,
+      takes: [{
+        sku: '9199011', name: 'Aerodactyl', number_display: null, set: null, rarity: null,
+        condition: null, wanted: 1,
+        for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+        copies: [{
+          key: '1/1', state: 'identified', has_photo: true, capture_id: 'cap-a', cid: null,
+          place: {
+            label: 'Box 1, Section 1, Card 1', located: true, box: 1, index: 1, slot: 1,
+            section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
+            box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
+          },
+          here: true,
+        }],
+        listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null,
+      }],
+    },
+  ],
+  shortfall: [],
+  counts: { stops: 2, boxes: 2, copies: 2, sections_considered: 2, sections_candidate: 2, exact: true, solve_ms: 2 },
+}
+
+test('two owed cards delivered out of walk order are drawn IN walk order', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: WALK_ORDER_PLAN })
+  // The wire named Box 5 (Xerneas) before Box 1 (Aerodactyl); the screen draws Box 1 first.
+  await expect(view(page).locator('.ff-owed-card h2')).toHaveText(['Aerodactyl', 'Xerneas'])
+})
+
+/* `compareNullable`'s own case: a box the server COULD NOT COUNT answers `section: null,
+ * card: null` on an on-hand copy (`Place`'s own type comment — null there means "the server
+ * could not count", not "departed", which is a different field entirely). Both copies sit in
+ * the same box, so the sort falls through to the section comparator, where the old
+ * `Infinity - Infinity` read as `NaN` — `0 || NaN || ...`, the LAST term in the chain
+ * returning `NaN` straight to `Array.sort`. This never throws either way; what it proves is
+ * the ORDER: the countable section sorts first, the uncounted one after it, not whatever a
+ * `NaN` comparator would have left standing. */
+const UNCOUNTED_SECTION_PLAN = {
+  cost: 'sections',
+  stops: [
+    {
+      key: 'box/6/section/degraded', box: 6, box_name: null, section: null, section_name: null,
+      pooled: false, game: null, game_display: null, order: 1,
+      span: null, box_total: 0,
+      takes: [{
+        sku: '9199020', name: 'Uncounted', number_display: null, set: null, rarity: null,
+        condition: null, wanted: 1,
+        for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+        copies: [{
+          key: '6/9', state: 'identified', has_photo: true, capture_id: 'cap-u', cid: null,
+          place: {
+            label: 'Box 6 · departed', located: true, box: 6, index: 9, slot: null,
+            section: null, card: null, box_name: null, section_start: 1, section_end: null,
+            box_total: 0, box_closed: false, fraction: null, neighbors: null, section_gaps: null,
+          },
+          here: true,
+        }],
+        listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null,
+      }],
+    },
+    {
+      key: 'box/6/section/1', box: 6, box_name: null, section: 1, section_name: null,
+      pooled: false, game: null, game_display: null, order: 2,
+      span: { start: 1, end: 10 }, box_total: 10,
+      takes: [{
+        sku: '9199021', name: 'Countable', number_display: null, set: null, rarity: null,
+        condition: null, wanted: 1,
+        for: [{ key: ORDER_KEY, number: ORDER_NUMBER, buyer: ORDER_BUYER }],
+        copies: [{
+          key: '6/2', state: 'identified', has_photo: true, capture_id: 'cap-c', cid: null,
+          place: {
+            label: 'Box 6, Section 1, Card 2', located: true, box: 6, index: 2, slot: 2,
+            section: 1, card: 2, box_name: null, section_start: 1, section_end: 10,
+            box_total: 10, box_closed: true, fraction: 0.2, neighbors: null, section_gaps: 0,
+          },
+          here: true,
+        }],
+        listed: { pushed: 0, staged: 0, live: 0 }, sold_here: 0, live_as_of: null,
+      }],
+    },
+  ],
+  shortfall: [],
+  counts: { stops: 2, boxes: 1, copies: 2, sections_considered: 2, sections_candidate: 2, exact: true, solve_ms: 2 },
+}
+
+test('a copy whose section could not be counted sorts after a countable one in the same box, and never crashes the sort', async ({
+  page,
+}) => {
+  // Delivered uncounted-first on the wire, same as the walk-order case above.
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: UNCOUNTED_SECTION_PLAN })
+  await expect(view(page).locator('.ff-owed-card h2')).toHaveText(['Countable', 'Uncounted'])
+})
+
+/* A card the same order also claims, reached by browsing a box instead of through "Cards to
+ * pick" -- the walk-in case (`claim`, `Fulfillment.tsx`): a copy an order is waiting for is
+ * sold through the order however he reaches it. This is also where "No name" is asserted now:
+ * the buyer's name is not drawn on the owed card itself (D212 -- the card is fungible, not
+ * "for" one buyer to look at), but the card he opens from a box still says which order is
+ * waiting, so he can match the packing slip. */
+test('a card an order is waiting for still says which order, opened from a box', async ({
+  page,
+}) => {
   const noBuyerOrder = {
     ...ONE_OPEN_ORDER,
     orders: [{ ...ONE_OPEN_ORDER.orders[0], buyer: null }],
   }
-  await openList(page, [], { orders: noBuyerOrder })
-  const order = view(page).locator('.ff-order')
-  await expect(order.locator('.ff-order-title')).toContainText('No name')
-  await expect(order.locator('.ff-order-id')).toContainText(ORDER_NUMBER)
-  await battery(page, 'orders to fill, no buyer name')
+  const noBuyerPlan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [
+      { ...ONE_OPEN_ORDER_PLAN.stops[0]!, takes: [{ ...ORDER_TAKE, for: [{ ...ORDER_TAKE.for[0]!, buyer: null }] }] },
+    ],
+  }
+  await openList(page, [], { orders: noBuyerOrder, plan: noBuyerPlan })
+  await openCard(page, 'Charizard ex')
+  await expect(view(page)).toContainText('For No name')
+  await expect(view(page).locator('.ff-card-order-id')).toContainText(ORDER_NUMBER)
+  await expect(view(page).locator('.fulfillment-photo')).toBeVisible()
+  await battery(page, 'card for an order, no buyer name')
 })
 
-/* fulfiller.md finding 5: "8 things on this order are not in the boxes" named a real gap
- * and answered nothing. The sentence now ends in a concrete instruction rather than a
- * question, and it stays a sentence -- `noWayOut` inside `battery` still asserts nothing
- * here routes him off this screen. */
-test('a line the boxes cannot fill gets an instruction, not a dead end', async ({ page }) => {
-  await openList(page, [], { orders: ORDER_WITH_ELSEWHERE })
-  await expect(view(page)).toContainText(
-    '8 things on this order are not in the boxes yet — tell the owner before you seal this one',
-  )
-  await battery(page, 'order with an unfilled line')
+/* fulfiller.md finding 5, restated for D212: "8 things on this order are not in the boxes"
+ * named a real gap and answered nothing. UX-001's own direction: "if the screen cannot place a
+ * copy, it says how many" -- a SKU the store holds none of at all is `plan.shortfall`, drawn as
+ * a warm note beside the figure rather than a dead end, and `noWayOut` inside `battery` still
+ * asserts nothing here routes him off this screen. */
+test('a SKU the boxes cannot fill at all gets a count, not a dead end', async ({ page }) => {
+  await openList(page, [], { orders: ORDER_WITH_ELSEWHERE, plan: ORDER_WITH_ELSEWHERE_PLAN })
+  await expect(view(page)).toContainText('8 more copies are not in the boxes')
+  await battery(page, 'order with a shortfall SKU')
 })
 
 /* fulfiller.md finding 2: "Charizard" names a game (Pokemon) that may hold none of this
@@ -1554,18 +2005,147 @@ test('the search hint names a real card from this store, not a fixed example', a
   )
 })
 
-/* fulfiller.md finding 4 / the plan's item 3: two counters read "Card N of M" for two
- * unrelated numbers on one screen. The walk counter -- his progress across every OPEN
- * ORDER'S cards, not a day's work -- now says "Pull", leaving "Card N of M" to the one
- * counter left that means a card: his position inside the box (`PositionBar`, untouched
- * here). NOT "Pull N of M today": the walk is every open order's cards, which is not
- * bounded to a day, and "today" claimed a scope the number does not carry. */
-test('the walk counter reads "Pull N of M", not "Card N of M" and not "today"', async ({
+/* UX-055: the placeholder is a card's own name and has no length ceiling — "Promising Future"
+ * measured long enough at 390px, 24px font, to hard-clip mid-word ("Piercing Li") before this
+ * fix. `overflow`/`text-overflow: ellipsis` reaches a placeholder the same way it reaches
+ * typed text, so this asserts the computed style directly rather than a screenshot: the fix
+ * is the STYLE, and it holds regardless of which card's name happens to be the example. */
+test('the search placeholder ends in an honest ellipsis at 390px, never a raw mid-word cut', async ({
   page,
 }) => {
-  await openList(page, [], { orders: ONE_OPEN_ORDER })
-  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
-  await expect(view(page).locator('.ff-card-step')).toHaveText('Pull 1 of 1')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openList(page, [], { orders: MULTI_ORDER, plan: MULTI_PLAN })
+  const input = page.getByPlaceholder(/^For example, /)
+  await expect(input).toHaveAttribute('placeholder', 'For example, Promising Future')
+  // `overflow` ALONE IS NOT ASSERTED: Chromium normalizes a text `<input>`'s COMPUTED
+  // `overflow` to `clip` regardless of the author's declared value (a quirk over form
+  // controls' own internal scrolling), so a check against `hidden` can never go red —
+  // reverting the rule entirely still reads `clip`. `text-overflow` is the one property that
+  // actually reports whether the fix is in effect.
+  const textOverflow = await input.evaluate((node) => window.getComputedStyle(node).textOverflow)
+  expect(textOverflow).toBe('ellipsis')
+})
+
+/* UX-101: this screen has no shell (D5), so the owner's own `?` sheet (`App.tsx`) cannot open
+ * here at all -- and the dead `/` row that once claimed otherwise for this screen is deleted
+ * from `App.tsx`'s own `SHORTCUTS` table. This is the screen's own small answer to `?`,
+ * proved end to end: it opens, it names what this screen actually takes, and it closes. */
+test('"?" opens this screen\'s own keyboard reference, and closes it again', async ({ page }) => {
+  await openList(page)
+  // Unscoped, not `view(page)`: the kit's `Modal` (`kit/overlay.tsx`) portals to
+  // `document.body`, a sibling of `main.fulfillment` and not a descendant of it.
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
+
+  await page.keyboard.press('?')
+  const sheet = page.locator('.ff-keys')
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toContainText('Esc')
+  await expect(sheet).toContainText('Close the enlarged photograph')
+  // THE MODAL'S OWN ENTRANCE ANIMATION (`bn-dialog-in`/`bn-sheet-up`, kit.css) SCALES AND
+  // TRANSLATES IT IN over `--bn-t-slow` — a transform, so `getBoundingClientRect()` reads the
+  // TRANSIENT painted size mid-animation, not the settled one. `toBeVisible()` above passes
+  // from the animation's first frame, well before that. Measured: the Close button's own
+  // 44px floor read 43.79px under load, mid-scale. `settleMotion` (`motionSettled.ts`) is the
+  // fix `orders.spec.ts`'s D118 guard already uses for the same shape of reading.
+  await settleMotion(page)
+  // THE FLOOR TABLE REACHES THE SHEET TOO — its key caps and text are on screen exactly
+  // like any other card, and `battery` holds them to the same nine rows while it is open.
+  await battery(page, 'keyboard shortcuts sheet')
+
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
+
+  // And the close button works the same way.
+  await page.keyboard.press('?')
+  await expect(page.locator('.ff-keys')).toBeVisible()
+  await page.getByRole('button', { name: 'Close' }).click()
+  await expect(page.locator('.ff-keys')).toHaveCount(0)
+})
+
+/* THE ZOOM AND THE "?" SHEET ARE BOTH REACHABLE AT ONCE — zoom a photo, then press "?" — and
+ * before this test neither knew about the other. The zoom answered its own Escape with a
+ * plain `document` listener; the kit `Modal`'s own listener is on `window`, in the CAPTURE
+ * phase, and stops the event once it decides it is the top layer — which it always was,
+ * being the only thing on the kit's stack. So Escape closed the sheet BEHIND the photo and
+ * the photo, visually on top the whole time, never moved: a real regression, since the
+ * screen never told him which of the two his key press had just answered.
+ *
+ * Both now join the kit's one stack (`kit/overlay.tsx`) through `useOverlayLayer`, so the
+ * sheet — opened SECOND — is the one Escape closes first, and paints above the zoom for the
+ * same reason: a stack position, not a class-wide constant, decides both. */
+test('a zoomed photo and the "?" sheet share one Escape and one order, and each gives focus back', async ({
+  page,
+}) => {
+  await openList(page)
+  await openCard(page, 'Charizard ex')
+  const photoBtn = view(page).getByRole('button', { name: 'Show the photo bigger' })
+  await photoBtn.click()
+  const zoomEl = page.locator('.ff-zoom')
+  await expect(zoomEl).toBeVisible()
+  await expect(zoomEl).toBeFocused()
+
+  await page.keyboard.press('?')
+  const sheet = page.locator('.ff-keys')
+  await expect(sheet).toBeVisible()
+  // BOTH REACHABLE: opening the sheet did not close the photo behind it.
+  await expect(zoomEl).toBeVisible()
+
+  // THE SHEET OPENED LAST, SO IT PAINTS ON TOP — read off the two layers' own z-index
+  // rather than a point on screen, which is what `useOverlayLayer` actually sets.
+  const [zoomZ, sheetZ] = await Promise.all([
+    zoomEl.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+    sheet.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+  ])
+  expect(sheetZ, `zoom z-index ${zoomZ}, sheet z-index ${sheetZ}`).toBeGreaterThan(zoomZ)
+
+  // FIRST ESCAPE closes the sheet — the shared stack's own top — and gives focus back to
+  // the photo, which is what had focus the moment "?" opened it.
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await expect(zoomEl).toBeVisible()
+  await expect(zoomEl).toBeFocused()
+
+  // SECOND ESCAPE closes the zoom, now the stack's own top on its own, and gives focus back
+  // to the card's own photo button.
+  await page.keyboard.press('Escape')
+  await expect(zoomEl).toHaveCount(0)
+  await expect(photoBtn).toBeFocused()
+})
+
+/* ONE COLUMN FOR THE KEYS, MEASURED — a `display: grid` on each `<li>` looked right and was
+ * not: grid tracks size PER CONTAINER, so "Esc" (3 characters) and "?" (1) each sized their
+ * OWN first column, and the two rows' sentences landed about 18px apart (612 vs 594 at
+ * 1440px). `.ff-keys-key`'s fixed `width` is the fix; this is what proves it, at both a
+ * width where the dialog is centered (1440) and one where it is a full-bleed bottom sheet
+ * (390) — the two layouts this sheet actually draws. */
+async function keysSentenceXs(page: Page): Promise<number[]> {
+  await page.keyboard.press('?')
+  // Unscoped: the kit's `Modal` portals `.ff-keys` to `document.body`, not into `main.fulfillment`.
+  const rows = page.locator('.ff-keys-list li .fulfillment-say')
+  await expect(rows).toHaveCount(2)
+  // The Modal's own entrance animation transforms the whole panel; an x read mid-scale is a
+  // transient one, not the settled layout this test is about (see the comment beside the
+  // other `settleMotion` call above).
+  await settleMotion(page)
+  return rows.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().x))
+}
+
+test('the keyboard sheet\'s two rows start their sentences at the same x — 1440px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await openList(page)
+  const xs = await keysSentenceXs(page)
+  expect(Math.abs(xs[1]! - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
+})
+
+test('the keyboard sheet\'s two rows start their sentences at the same x — 390px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openList(page)
+  const xs = await keysSentenceXs(page)
+  expect(Math.abs(xs[1]! - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
@@ -1689,8 +2269,11 @@ test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figur
  * the phone already uses. */
 test('the position label does not wrap to three lines at 768px', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 })
-  await openList(page, [], { orders: ONE_OPEN_ORDER })
-  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
+  // Browsed from a box, not from an order: `.fulfillment-place-large` is the single-card
+  // panel's own class, unchanged by the Owed rebuild, and drawn on every card that flow opens
+  // regardless of whether an order is waiting for it.
+  await openList(page)
+  await openCard(page, 'Charizard ex')
   const place = view(page).locator('.fulfillment-place-large')
   await expect(place).toBeVisible()
   const lines = await place.evaluate((node) => {
@@ -1704,7 +2287,7 @@ test('the position label does not wrap to three lines at 768px', async ({ page }
 /* THE COORDINATOR'S OWN CHECK ON THIS FIX: 820px is one of the three widths docs/DESIGN.md's
  * "Verifying a screen" section names, and a first attempt at this fix moved the breakpoint to
  * exactly 820px -- which measured fine on the store's ORDINARY labels and still wrapped to
- * three lines on the longest one the store can emit ("Box 9999 · Section 99 · Card 50000":
+ * three lines on the longest one the store can emit ("Box 9999, Section 99, Card 50000":
  * docs/specs/store-scaling.md's 50,000-card target, in one undeclared box with no dividers,
  * D10 -- so a single section holding that many cards is a real shape and not a fabricated
  * string). The breakpoint moved again, to 900 -- the ladder's own "a two-column body becomes
@@ -1712,30 +2295,29 @@ test('the position label does not wrap to three lines at 768px', async ({ page }
 test('the longest label the store can emit does not wrap to three lines at 820px', async ({
   page,
 }) => {
-  const MAX_LABEL = 'Box 9999 · Section 99 · Card 50000'
-  const maxLabelOrder = {
-    ...ONE_OPEN_ORDER,
-    resolution: {
-      ...ONE_OPEN_ORDER.resolution,
-      orders: [
-        {
-          ...ONE_OPEN_ORDER.resolution.orders[0]!,
-          lines: [
-            {
-              ...ONE_OPEN_ORDER.resolution.orders[0]!.lines[0]!,
-              picks: [{ ...ORDER_PICK, place: { ...ORDER_PICK.place, label: MAX_LABEL } }],
-            },
-          ],
-        },
-      ],
-    },
+  const MAX_LABEL = 'Box 9999, Section 99, Card 50000'
+  // Drawn on an owed card's own copy now (`CardLocations`' `.card-locations-place-large`),
+  // since that is the live path a long label reaches this screen through — the Owed section
+  // draws every on-hand copy of a SKU, ranked, and the label is whatever the store composed
+  // for that copy's position.
+  const maxLabelPlan = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [
+      {
+        ...ONE_OPEN_ORDER_PLAN.stops[0]!,
+        takes: [
+          {
+            ...ORDER_TAKE,
+            copies: [{ ...ORDER_WALK_COPY, place: { ...ORDER_WALK_COPY.place, label: MAX_LABEL } }],
+          },
+        ],
+      },
+    ],
   }
   await page.setViewportSize({ width: 820, height: 1024 })
-  await openList(page, [], { orders: maxLabelOrder })
-  await view(page).getByRole('button', { name: 'Charizard ex' }).click()
-  const place = view(page).locator('.fulfillment-place-large')
-  // D218: the seam is CSS now (`.ff-place-elem::before`), never part of `textContent`.
-  await expect(place).toHaveText(MAX_LABEL.replace(/\s*·\s*/g, ''))
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: maxLabelPlan })
+  const place = view(page).locator('.card-locations-place-large')
+  await expect(place).toHaveText(MAX_LABEL)
   const lines = await place.evaluate((node) => {
     const style = window.getComputedStyle(node)
     const lineHeight = parseFloat(style.lineHeight)
@@ -1852,7 +2434,7 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
   expect(wire.map((call) => call.undo), 'the sale reached the server as a sale').toEqual([false])
   expect(wire[0]!.url, 'the sale named the card').toContain('/inventory/3/7/sold')
 
-  const undo = receiptFor(page, 'Box 3 · Section 1 · Card 7').getByRole('button', { name: 'Undo' })
+  const undo = receiptFor(page, 'Box 3, Section 1, Card 7').getByRole('button', { name: 'Undo' })
   await expect(undo).toBeVisible()
   // The sold card leaves the list while the sale stands, and stays gone across the re-read
   // the sale triggers — the stub store moved with the sale, so this is the server agreeing.
@@ -1892,15 +2474,15 @@ test('a second sale does not take the first sale undo away', async ({ page }) =>
 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
-  await expect(receiptFor(page, 'Box 3 · Section 1 · Card 7')).toBeVisible()
+  await expect(receiptFor(page, 'Box 3, Section 1, Card 7')).toBeVisible()
 
   await openCard(page, 'Iono')
   await sellOpenCard(page)
 
   // Both receipts stand, each with its own Undo. One slot held one of these and dropped the
   // other with no trace, on a screen whose only other route to recovery is the owner.
-  const first = receiptFor(page, 'Box 3 · Section 1 · Card 7')
-  const second = receiptFor(page, 'Box 1 · Section 1 · Card 3')
+  const first = receiptFor(page, 'Box 3, Section 1, Card 7')
+  const second = receiptFor(page, 'Box 1, Section 1, Card 3')
   await expect(first.getByRole('button', { name: 'Undo' })).toBeVisible()
   await expect(second.getByRole('button', { name: 'Undo' })).toBeVisible()
 
@@ -1921,7 +2503,7 @@ test('the undo is still there after walking into another card', async ({ page })
 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
 
   // The card panel used to return before the receipt was rendered, so this navigation hid the
@@ -1956,7 +2538,7 @@ test('a sale the server cannot reverse offers no undo, and says why', async ({ p
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
 
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await expect(receipt).toContainText('Marked sold.')
   await expect(
     receipt.getByRole('button', { name: 'Undo' }),
@@ -1986,7 +2568,7 @@ test('an undo the server refuses with no remedy stops asking', async ({ page }) 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
 
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await receipt.getByRole('button', { name: 'Undo' }).click()
 
   await expect(receipt).toContainText('This card stays sold. Ask for help to put it back.')
@@ -2019,7 +2601,7 @@ test('a card the other device already sold is not this device sale, and gets no 
    * have reached the server and reversed somebody else's real sale, putting a card a buyer has
    * paid for back on TCGplayer. It is a receipt for a card leaving his list, not for anything
    * he did, so it says so and offers nothing to press. */
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await expect(receipt).toContainText('Already sold.')
   await expect(receipt).toContainText('Somebody else sold this card')
   await expect(view(page), 'a sale this device did not make was reported as one').not.toContainText(
@@ -2044,7 +2626,7 @@ test('an undo of a sale the other device already reversed reads as done', async 
 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
 
   // The other device puts it back first. `not_sold` then means the card is in the state the
@@ -2202,6 +2784,36 @@ test('a body this screen cannot read fails the same way a dead server does', asy
   await battery(page, 'unreadable body')
 })
 
+test('the card says which neighbour is at the back and which at the front, in a sentence', async ({ page }) => {
+  /* UX-186. The sentence was "It sits between X and Y", which never said which of the two is at
+     the back. Card 1 is at the far back (the owner's orientation), so the card toward the back
+     is the one this card sits IN FRONT OF, and the card toward the front is the one it sits
+     BEHIND. An unread neighbour counts, said as "an unread card" or "2 unread cards" (LOC-28). */
+  const states = await stubServer(page, [])
+  await page.route(/\/inventory$/, async (route) => {
+    const body = inventoryBody(states) as { version: number; cards: Record<string, Record<string, unknown>> }
+    body.cards['3/7'] = {
+      ...body.cards['3/7'],
+      place: {
+        ...ORDER_COPY_PLACE,
+        neighbors: {
+          prev: { index: 6, slot: 6, name: 'Pidgeot ex', unread: 0 },
+          next: { index: 8, slot: 8, name: null, unread: 2 },
+        },
+      },
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await openCard(page, 'Charizard ex')
+
+  await expect(view(page).locator('.ff-where-between')).toHaveText(
+    'It sits in front of Pidgeot ex and behind 2 unread cards.',
+  )
+  await battery(page, 'the neighbour sentence')
+})
+
 test('the screen with nothing to pull is his too', async ({ page }) => {
   await openList(page, [], { empty: true })
   await expect(view(page)).toContainText('No cards are for sale right now.')
@@ -2278,7 +2890,7 @@ test('the failed-undo message leaves with the undo it tells him to press', async
 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await receipt.getByRole('button', { name: 'Undo' }).click()
 
   /* Held in screen-wide state, this sentence outlived the control it named: the window closed,
@@ -2335,7 +2947,7 @@ async function settlePhotos(page: Page): Promise<void> {
 }
 
 /** The two copies of the fixture's one repeated card, in box-walk order. */
-const EISCUE = ['Box 2 · Section 1 · Card 9', 'Box 4 · Section 1 · Card 2']
+const EISCUE = ['Box 2, Section 1, Card 9', 'Box 4, Section 1, Card 2']
 const [EISCUE_FIRST, EISCUE_SECOND] = EISCUE as [string, string]
 
 test('the search narrows to the copies of one card, and clearing it gives the whole walk back', async ({
@@ -2563,14 +3175,21 @@ test('the screen with no card of that name is his too', async ({ page }) => {
   await expectWalk(page, WALK)
 })
 
-test('a search that does not answer says what happened and what to do, in his words', async ({
+/* UX-049: the old sentence, "Type the name again," was a remedy that cannot work — the
+ * search FAILED, and retyping asks the same broken thing again. It also read the same for a
+ * real failure and for a genuine no-match ("zzzz"), which `found.total === 0`'s own branch
+ * already answers correctly and is untouched here. The fix says the search itself could not
+ * run and points at the one control on screen that helps: clearing it. */
+test('a search that cannot run says so and offers a step that helps, in his words', async ({
   page,
 }) => {
   const mood: Mood = { searchFail: true }
   await openList(page, [], mood)
   await searchBox(page).fill('Eiscue')
 
-  await expect(view(page)).toContainText('The search did not finish. Type the name again.')
+  await expect(view(page)).toContainText(
+    'The search could not run right now. Clear it to look through a box instead.',
+  )
   /* None of the server's own words. `useSearch` hands this screen a `Failure` carrying the
    * server's sentence and its code, and `server.ts:describeFailure` says in its own comment
    * that this view does not use it — those strings name a file and a state, and every one of

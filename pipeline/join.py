@@ -85,8 +85,10 @@ from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 # zfill/set-code-strip rules a third time. Every existing caller of `join.join_key` /
 # `join.display_number` / `join.strip_set_code` is unaffected — the names still resolve on
 # this module, they just live one file over.
+from store import master
 from store.numbers import (  # noqa: F401
     NAME_NUMBER_SUFFIX,
+    box_title,
     display_number,
     join_key,
     split_catalog_number,
@@ -214,6 +216,12 @@ class Position:
     # together with `occupied`, and only to tell the part of the box that exists from the
     # part that does not: see `high_water`.
     departed: Tuple[int, ...] = ()
+    # THE BOX'S NAME, AS THE REGISTRY HOLDS IT, OR None WHEN THE CALLER HAS NO REGISTRY TO ASK
+    # (D259). The owner's ruling, 2026-09-23: a box is shown by its
+    # name only, and the number stays inside the store. `box_title` below is what the label
+    # says. `compare=False` because a name is a label and never part of the card's identity:
+    # a rename must not make two positions of one card unequal.
+    box_name: Optional[str] = field(default=None, compare=False)
 
     @property
     def consolidated(self) -> bool:
@@ -308,10 +316,14 @@ class Position:
     def section(self) -> int:
         at = self.slot
         if at is None:
-            # A departed card is in no section. `label` never asks — it answers with
-            # `departed_label` first — and a caller that reaches here anyway gets the
-            # section its slot would have fallen in rather than an exception.
-            at = bisect.bisect_left(self.occupied or (), self.index) + 1
+            # A DEPARTED CARD IS COUNTED IN INDEX SPACE, AGAINST THE DECLARED DIVIDERS. It is in
+            # no slot, so the count-space answer (the slot it would take) is wrong at a
+            # section's end: a sold last card of section 1 would take the number section 2's
+            # divider maps to, and read as section 2. The declared dividers are indices, and
+            # the index never moves (D10), so the section it left is the one whose divider is
+            # the last at or before its index.
+            count = sum(1 for start in (self.sections or (1,)) if start <= self.index)
+            return max(1, count)
         count = 0
         for start in self.layout:
             if at >= start:
@@ -350,11 +362,166 @@ class Position:
         return at - self.section_start + 1
 
     @property
+    def was_card(self) -> Optional[int]:
+        """Where a departed card stood, as a number in its section today, or None when the
+        card is on hand (`card` answers then).
+
+        THE NUMBER THE CARD WOULD HOLD IF IT WENT BACK WHERE IT WAS: one more than the cards
+        on hand in its section in front of it. The owner's ruling, 2026-09-23: a departed
+        card's label keeps its place (box name, section, card within the section), and a
+        visual mark, not a word, says that it left. D58 still holds for every LIVE number:
+        this card is in no slot, and the card that closed up behind it now answers to the same
+        number. The screen draws the two apart by the mark, never by the string.
+        """
+        if self.card is not None:
+            return None
+        at = bisect.bisect_left(self.occupied or (), self.index) + 1
+        return max(1, at - self.section_start + 1)
+
+    @property
+    def box_title(self) -> str:
+        """What the label calls this box: its name, or the default name when it has none."""
+        return box_title(self.box_name, self.box)
+
+    @property
     def label(self) -> str:
+        """`Mixed Singles, Section 2, Card 17`: the box's NAME, the section, and the card's
+        number within its section (D260).
+
+        NO TYPED SEPARATOR (D218). The parts are joined by a comma and a space, which is
+        punctuation in a sentence a person reads aloud, so the string is the accessible name
+        as it stands. A screen that draws the parts apart reads them with
+        `app/src/position.ts:placePartsOf`, which parses from the right end, because a box
+        name is free text and may hold a comma of its own.
+        """
         at = self.card
         if at is None:
-            return departed_label(self.box, self.index)
-        return f"Box {self.box} · Section {self.section} · Card {at}"
+            return departed_label(self.box_title, self.section, self.was_card or 1)
+        return place_label(self.box_title, self.section, at)
+
+
+# `box_title` lives in `store/numbers.py` (imported above), so the store's own refusals and
+# every label here share one fallback.
+
+
+def place_within_section(section: int, card: int) -> str:
+    """`Section 2, Card 17`: the section and the card's number within it, with NO box name.
+
+    For a list of many cards from ONE box (`renumber_blocked`, `claim_not_stocked_by_game`,
+    `box_not_empty_of_commitments`), where the box's name is already said once in the
+    sentence the list sits inside — repeating it on every line would be the box number's
+    own defect one word over. `place_within_box` is the caller that reaches this per card.
+    """
+    return f"Section {int(section)}, Card {int(card)}"
+
+
+def place_label(box_name: str, section: int, card: int) -> str:
+    """The one place label formula (D58, D259): name, section, card."""
+    return f"{box_name}, {place_within_section(section, card)}"
+
+
+def box_view(inventory, box) -> Tuple[str, "BoxView"]:
+    """The box's title and its `BoxView` — on-hand indices, departed indices and declared
+    sections, scanned ONCE. `said_place` and `place_within_box` both build a `Position`
+    through the `BoxView` this returns, so every place a refusal names — the box alone, one
+    card, or a whole list of a box's cards — comes from the one scan and the one formula.
+
+    NEVER RAISES. An unreadable index, a layout that will not validate, or a box the
+    registry has never seen all degrade to the box's title over an empty `BoxView` — the
+    same fallback a caller with nothing to build from gets, never a second exception that
+    hides the first (a refusal is already the error path).
+    """
+    try:
+        number = int(box)
+    except (TypeError, ValueError):
+        return str(box), BoxView()
+    try:
+        entry = inventory.box(number)
+    except Exception:  # noqa: BLE001 — a refusal must not raise a second error
+        entry = None
+    title = box_title(entry.name if entry is not None else None, number)
+    try:
+        on_hand: List[int] = []
+        gone: List[int] = []
+        for _key, (raw_index, raw_game, state) in inventory.cards.select(
+            ("idx", "game", "state"), box=number
+        ):
+            if not is_located(str(raw_game or games.DEFAULT_GAME)):
+                continue
+            position = int(raw_index)
+            (gone if state in master.TERMINAL_STATES else on_hand).append(position)
+        try:
+            sections = tuple(inventory.sections_for(number))
+        except Exception:  # noqa: BLE001 — an unreadable layout reads as one section
+            sections = ()
+        view = BoxView(
+            sections=sections,
+            occupied=tuple(sorted(on_hand)),
+            departed=tuple(sorted(gone)),
+            name=title,
+        )
+    except Exception:  # noqa: BLE001 — a refusal must not raise a second error
+        view = BoxView(name=title)
+    return title, view
+
+
+def said_place(inventory, box, index=None) -> str:
+    """Where a refusal says a box or a card is: the box's NAME, and for a card its section
+    and its card number within the section. THE ONE HELPER every server refusal speaks
+    through (the orchestrator's call on the locating review, 2026-09-24).
+
+    THE OWNER'S RULING, 2026-09-23 (D259): the box number and the
+    store index stay inside the store. A refusal reaches a screen as a toast, so a message
+    that prints `Box 3, card 17` shows the owner both numbers the ruling hides. This builds
+    the same `Position` the screens draw, through `box_view`, so the refusal and the card
+    row spell one place.
+
+    `index=None` answers the box alone: its name. So does an index that holds no record,
+    because a place with no card has no section and no card number to say.
+
+    IT NEVER RAISES. A refusal is already the error path; a store too broken to place the
+    card (an unreadable index, a layout that will not validate) degrades to the box's name,
+    never to a second exception that hides the first.
+    """
+    title, view = box_view(inventory, box)
+    if index is None:
+        return title
+    try:
+        number = int(box)
+        at = int(index)
+    except (TypeError, ValueError):
+        return title
+    if at not in (view.occupied or ()) and at not in (view.departed or ()):
+        return title
+    try:
+        return view.at(number, at).label
+    except Exception:  # noqa: BLE001 — a refusal must not raise a second error
+        return title
+
+
+def place_within_box(view: "BoxView", box, index) -> str:
+    """`Section 2, Card 17`: the same numbers `said_place` would give this card, with no box
+    name — for a caller labelling MANY cards from one already-scanned `box_view`.
+
+    Falls back to `card <index>`, the pre-ruling shape, only where a `Position` cannot be
+    built for it — the index is not one `box_view` found, or the layout will not resolve. A
+    refusal is already the error path and must not raise a second one over a label.
+    """
+    try:
+        number = int(box)
+        at = int(index)
+    except (TypeError, ValueError):
+        return f"card {index}"
+    if at not in (view.occupied or ()) and at not in (view.departed or ()):
+        return f"card {index}"
+    try:
+        position = view.at(number, at)
+    except Exception:  # noqa: BLE001 — a refusal must not raise a second error
+        return f"card {index}"
+    card = position.card
+    if card is None:
+        card = position.was_card or 1
+    return place_within_section(position.section, card)
 
 
 # --------------------------------------------------------------- pooled, not located
@@ -419,6 +586,9 @@ class BoxView:
     sections: Tuple[int, ...] = ()
     occupied: Optional[Tuple[int, ...]] = None
     departed: Tuple[int, ...] = ()
+    # The box's registry name, carried to every `Position` built here, so a label says the
+    # name (D259). None where the caller has no registry to ask.
+    name: Optional[str] = None
 
     @property
     def on_hand(self) -> int:
@@ -426,7 +596,9 @@ class BoxView:
         return len(self.occupied or ())
 
     def at(self, box: int, index: int) -> "Position":
-        return Position(int(box), int(index), self.sections, self.occupied, self.departed)
+        return Position(
+            int(box), int(index), self.sections, self.occupied, self.departed, box_name=self.name
+        )
 
 
 def divider_index(
@@ -468,75 +640,33 @@ def divider_index(
     return high + (ordinal - len(occupied))
 
 
-def departed_label(box: int, index: int) -> str:
-    """What a screen shows where a position label would have gone, for a card that has left.
+def departed_label(box_name: str, section: Optional[int], card: int) -> str:
+    """What a screen shows for a card that has left its box: the place it left.
 
-    D58: once a box's numbers count the cards in it, a departed card is in no slot — the
-    number it used to hold belongs to the card that closed up behind it. So it gets the
-    box it belongs to and the word `departed`, never `Box N · Section N · Card N`.
+    THE OWNER'S RULING, 2026-09-23 (D259), REPLACES D68's FORM. That
+    form was `Box 3 · departed · B3 #96`: the box number, the word, and the store key. The
+    ruling reads: box NAME, section, and the card's number within the section, so the place
+    stays; sold, retired and moved are shown by a visual mark, not by a word. So the string
+    has the shape of `place_label`, and it stays a function of its own so that one composer
+    answers for departed records (D68's protected outcome: a departed record names itself).
 
-    AND THEN THE STORE KEY, WHICH IS D68 AND IS THE HALF D58 LEFT OUT. Two sold copies of one
-    card in one box drew the identical string with nothing beside it to tell them apart — the
-    owner read it as `I'm seeing two box 1's`, and on this store **11 of 12 departed records**
-    sit in a group that does exactly that. The key is what separates them and it was already in
-    the payload: `Place.index` came back 67 and 106 on those two rows and the label threw it
-    away. **It is not the slot D58 refuses to print.** That entry draws the distinction itself —
-    the stored index never moves, it is the `/inventory/<box>/<index>` path and the `<index>.jpg`
-    the photograph is named after — while `Place.slot` is the countable number that shifts. This
-    prints the one that cannot lie about a shelf.
+    THE NUMBER IS `Position.was_card`: where the card would go back. D58 is kept for every
+    live number. The card behind closed up and holds that number now, and the screen tells
+    the two apart by the mark it draws for a departed copy (`Place.slot` is null on the wire,
+    which is what every client reads, via `app/src/server.ts:isDeparted`).
 
-    THE SPELLING IS `B3 #96`, AND IT WAS `3/96` UNTIL THE OWNER READ ONE AS A FRACTION
-    (2026-08-31, the two departed Kharoxes in box 3). That form was `place_text`'s pooled key,
-    borrowed one function down on the argument that this is one vocabulary rather than a second
-    — and the borrowing is exactly what broke. A pooled label names no card number; this one is
-    drawn beside `NUMBER 114/166` in `#/inventory`'s card panel and inside a copies list whose
-    live rows carry printed numbers of that shape. `<box>/<index>` in that company reads as
-    `<number>/<total>`, and the two facts it separates are a card's identity and a card's shelf.
+    WHAT THE STORE KEY PROTECTED. D68 added `B3 #96` because two sold copies of one card in
+    one box drew one identical string. With this form, two departed copies that stood next to
+    each other read the same place, which is true: they left the same place. The owner's
+    ruling of 2026-09-24 accepts that they may look the same; nothing on screen tells them
+    apart. The key stays on the wire (`Place.index`) and in the route path.
 
-    THE BOX HALF SURVIVES, WHICH IS WHY IT IS NOT A BARE `#96`. A copies list crosses boxes —
-    that is the whole reason it exists — so an index alone cannot say which shelf the departed
-    copy left, and the owner's own test of the form was reading one while standing in box 10.
-    `B` is then the sigil no COUNT on these screens carries: `Card 17` counts cards,
-    `Section 1 · #1–#108` counts cards, and `#41` in the neighbour rows is an index in a
-    sentence that says so. A key that says a box out loud is the one shape none of them can be
-    confused with.
-
-    THE POOLED FORM IS DELIBERATELY LEFT AT `5/12`, SO THIS IS TWO VOCABULARIES NOW. It never
-    shares a column with this one — `BoxBrowse.shelvesOf` gives pooled records a shelf of their
-    own — and it carries its box for a different reason: a pooled label names a game where this
-    one names a box, so there is nothing in front of the key restating it. Respelling it too
-    would be changing a string on the strength of a misreading nobody has had of it.
-
-    IT ENDS ON A KEY AND NEVER ON A BARE NUMBER, and that is load-bearing rather than a taste
-    call. `PositionLabel.tsx` promotes the last `·`-part of a label to a slot figure whenever it
-    is all digits, so `Box 1 · departed · 67` would draw **67 at 44px in the slot column** — the
-    exact lie D58 refuses, reintroduced by a renderer. `B1 #67` is not all digits, so it is
-    peeled off as a store key before anything is promoted, and `app/tests/inventory.spec.ts`
-    asserts that nothing in the panel is drawn at the figure's size. The renderer's `STORE_KEY`
-    is the guard, and it matches THIS shape and the pooled one and nothing else — a respelling
-    that slips past it does not fail, it silently draws the key as a position part.
-
-    WHAT THE RENDERER DOES WITH THE REST CHANGED IN D71, AND THIS STRING DID NOT. Until then the
-    word `departed` made the whole label unrankable and every screen drew it raw at its payload
-    size — the pre-D41 plain string, back on `#/inventory` for exactly the cards that had been
-    sold. The client ranks it now (`BOX 1` / `DEPARTED B1 #67`, and no figure at all), which was
-    a change of VIEW only: D71 left this function's output byte-for-byte what it was. The
-    respelling above is the first change to the string itself, and it moves no part — coarse
-    parts first, the state where a slot number would be, the store key last is the ordering the
-    renderer relies on and the ordering it still gets.
-
-    IT NAMES NO DOOR, AND THAT IS DELIBERATE. `sold` and `retired` are different departures
-    with different reversals, and both are already on the record beside this string — every
-    screen that draws a copy draws its `state`. Threading the state in here would put a
-    second spelling of it inside the one label formula, and this is the same answer
-    `pooled_label` gives one paragraph up: a label names a place, and the reason there is
-    no place is a different field.
-
-    A RECEIPT IS UNAFFECTED AND MUST STAY SO. `Inventory.tsx` and `Fulfillment.tsx` both
-    snapshot the label BEFORE the write, so "Sold Box 3 · Section 1 · Card 7" still names
-    where the operator just was. This string is for the record afterwards, not the moment.
+    `section` is None only for a caller that could not read the layout, and then the label
+    says the box and the card count within the box, which is what `Position` answers there.
     """
-    return f"Box {int(box)} · departed · B{int(box)} #{int(index)}"
+    if section is None:
+        return f"{box_name}, Card {int(card)}"
+    return place_label(box_name, int(section), int(card))
 
 
 def place_text(game: str, position: Position) -> str:
@@ -562,12 +692,9 @@ def where_phrase(game: str, position: Position) -> str:
     if not is_located(game):
         return f"in the {game} pool ({position.box}/{position.index})"
     if position.card is None:
-        # D58 — a departed card is at nothing. "at Box 3 · departed" is the same sentence
-        # that stopped meaning anything for a pooled card two lines up. The key is spelled
-        # `departed_label`'s way and not the pooled branch's: a report sentence sits beside
-        # printed card numbers exactly as the panel does, which is the misreading D68's
-        # amendment ended, and this is the second place that key is composed.
-        return f"in box {position.box}, departed (B{position.box} #{position.index})"
+        # D58: a departed card is at nothing now, so the sentence is in the past tense and
+        # names the place it left (D259).
+        return f"formerly at {position.label}"
     return f"at {position.label}"
 
 

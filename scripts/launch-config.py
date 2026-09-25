@@ -31,6 +31,12 @@ THREE CALLERS, THREE APPETITES, AND THE DIFFERENCE IS DELIBERATE:
   make status          READS (`--check`). Never writes, and is what makes a hook that
                        failed open still visible.
 
+THE TWO WRITERS CLAIM FIRST (D261). A claim
+in `scripts/port-slots.py` can move a linked checkout off its hash slot. A file written
+before that claim names the hash port, which another checkout holds, and the Browser pane
+then reuses that checkout's server. `make port-slots-selftest` proves the order for both
+writers. `--check` claims nothing.
+
 WHAT "STALE" MEANS, AND WHY IT IS NOT "ANY FILE WITH THE WRONG PORT". A file is rewritable
 only when it is byte-for-byte the shape this script writes except for the port. Anything
 else — a second configuration, a different command, a `url`, an attach-only entry, JSON
@@ -57,6 +63,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -137,6 +144,24 @@ def write(port: int) -> bool:
         return False
 
 
+def claim_slot() -> None:
+    """Run `scripts/port-slots.py claim --quiet` for this checkout. Never raises."""
+    claimer = ROOT / "scripts" / "port-slots.py"
+    if not claimer.exists():
+        return
+    try:
+        done = subprocess.run(
+            [sys.executable, str(claimer), "claim", "--quiet"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=120, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"launch-config: the port claim did not run ({exc}); the port is the path hash")
+        return
+    said = (done.stdout + done.stderr).strip()
+    if said:
+        print(said)
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -155,6 +180,16 @@ def main(argv: list[str]) -> int:
         help="say nothing when the file is already correct",
     )
     args = parser.parse_args(argv)
+
+    # THE CLAIM COMES FIRST (D261). A claim
+    # can move a linked checkout off its hash slot. A file written before the claim names the
+    # hash port, and that port belongs to another checkout. The Browser pane then reuses THAT
+    # tree's server and previews its code. So every writer of this file claims first: the
+    # SessionStart hook, `make launch-config`, and `make venv` and `make worktree-setup`
+    # through it. `--check` writes nothing and claims nothing. The claim fails open and never
+    # stops this script; the primary checkout claims nothing.
+    if not args.check:
+        claim_slot()
 
     # A broken derivation is not a reason to fail a session or a build. Same rule
     # `scripts/status.py` keeps around this import.

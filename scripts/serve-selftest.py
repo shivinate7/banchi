@@ -13,12 +13,13 @@ gives: this script starts and stops supervisors, writes pidfiles and swaps direc
 checkout it runs in may have the owner's live server in it. A copy has its own `.serve/`, its
 own ports and nothing anybody is using.
 
-THE PORT IS PINNED WITH `PKMNSCAN_PORT`, AND THE OBVIOUS ALTERNATIVE IS A BUG. Letting the copy
-derive its own looks right — that is what D43 does for every tree — but the derivation asks
-whether the directory is a LINKED WORKTREE, and a `shutil.copytree` of this repo is not one. So
-the copy calls itself the main checkout and claims :8000, which on the owner's Mac is their live
-capture server over their real store. Measured, the first time this script was run: `up` in the
-copy refused with ":8000 is already held". Pinned to a free socket the OS hands out instead.
+THE PORT IS PINNED WITH `PKMNSCAN_PORT`, TO A FREE SOCKET THE OS HANDS OUT. The first time this
+script ran, the derivation asked whether the directory was a LINKED WORKTREE. A
+`shutil.copytree` of this repo is not one, so the copy called itself the main checkout and
+claimed :8000, the owner's live capture server over their real store. Measured: `up` in the copy
+refused with ":8000 is already held". Since D268 (a copied tree never gets the
+live port), only a `.git` DIRECTORY keeps :8000, so a copy with no `.git` takes a slot from its
+path. The pin stays: a slot can collide with another worktree's, and a free socket cannot.
 
 IN `make check`, NEVER IN THE GIT HOOK. D18: it writes, and nothing that writes may gate a
 commit. Same placement and same reason as `audit-self-test`, `githooks-selftest`,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
-import { sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { placePartsOf, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'
 import type {
   BoxRecord,
@@ -200,9 +200,14 @@ function copyDeparted(copy: SearchCopy): boolean {
   return isDeparted(copy.place)
 }
 
-function shelfLabel(shelf: Shelf): string {
+/* A SHELF BY ITS NAME (D259): the owner ruled the box number an index the
+ * store keeps, never a label. Every box carries a stored name since the backfill, so `Box <n>`
+ * is only the fallback for a registry the screen has not read yet, and it is the same string
+ * the backfill stores for that box. */
+function shelfLabel(shelf: Shelf, name?: string | null): string {
   if (shelf === 'pooled') return 'Pooled'
   if (shelf === 'unplaced') return 'No box'
+  if (name !== undefined && name !== null && name.trim() !== '') return name.trim()
   return `Box ${shelf}`
 }
 
@@ -329,9 +334,14 @@ function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = nul
  * `card` decoration; the fallbacks for a departed, pooled or unlabelled record. */
 function rowSlot(row: Row): string {
   if (row.card.card !== undefined) return `#${row.card.card}`
-  /* The key alone. The row's muted register and its badge say departed, so a state is never
-     drawn as a mono string beside a number. */
-  if (hasDeparted(row.card)) return departedKey(row.card)
+  /* A DEPARTED ROW KEEPS THE NUMBER OF THE PLACE IT LEFT (the owner's ruling, 2026-09-23,
+     D259): the server's departed label carries it, and the row's own
+     mark (`.is-departed`, struck through by the stylesheet) says it left, never a word or the
+     store key. A label from before the ruling names no card, so the store key is the fallback. */
+  if (hasDeparted(row.card)) {
+    const was = placePartsOf(positionLabel(row.card))?.card ?? null
+    return was === null ? departedKey(row.card) : `#${was}`
+  }
   const label = positionLabel(row.card)
   if (label !== null) return label
   return isPooled(row.card) ? pooledText(row.card, row.key) : `no label, ${row.key}`
@@ -531,6 +541,17 @@ function boxParam(): number | null {
   if (value === null) return null
   const n = Number.parseInt(value, 10)
   return Number.isInteger(n) && n > 0 ? n : null
+}
+
+/** The card named on the hash, by its stable name (D172): `#/inventory?box=3&card=<cid>`, the
+ *  way Review's place pill links here (LOC-12: a place link opens that card, not the box's
+ *  first). Null when the hash names none. */
+function cardParam(): string | null {
+  const hash = window.location.hash
+  const at = hash.indexOf('?')
+  if (at === -1) return null
+  const value = new URLSearchParams(hash.slice(at + 1)).get('card')
+  return value === null || value.trim() === '' ? null : value.trim()
 }
 
 function useMediaQuery(query: string): boolean {
@@ -1592,6 +1613,43 @@ export function BoxBrowse({
    * switch shelves, and giving it its own state would be a second trigger for the same
    * effect to chase. */
   const jumpBox = useRef<number | null>(null)
+
+  /* THE CARD THE HASH NAMED, walked to once its box's rows have landed. The same `jump` a
+     copies-list press takes, so the box, the fold, the mark and the scroll arrive together.
+
+     READ ON EVERY HASH CHANGE INSIDE `#/inventory`, NOT ONLY ON MOUNT. Review's pill is a link,
+     and a second pill pressed while this screen is already open changes the hash without a new
+     mount; reading the hash once left the walk on the first card. A card in another box moves
+     the walk to that box first (its `box=`), and this runs again when that box's rows land. */
+  const [wantedCard, setWantedCard] = useState<{ cid: string; box: number | null } | null>(() => {
+    const cid = cardParam()
+    return cid === null ? null : { cid, box: boxParam() }
+  })
+  useEffect(() => {
+    const onHash = () => {
+      if (!window.location.hash.startsWith('#/inventory')) return
+      const cid = cardParam()
+      if (cid !== null) setWantedCard({ cid, box: boxParam() })
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  useEffect(() => {
+    if (wantedCard === null || rows === null) return
+    const row = rows.find((candidate) => candidate.card.cid === wantedCard.cid)
+    if (row === undefined) {
+      const box = wantedCard.box
+      if (box !== null && box !== shelf && shelves.includes(box)) {
+        /* A NAMED CARD, NEVER A RE-RANK — `selectShelf`'s own reason (D118). */
+        shelfSource.current = 'manual'
+        setShelf(box)
+      }
+      return
+    }
+    setWantedCard(null)
+    jumpBox.current = typeof row.card.box === 'number' ? row.card.box : null
+    setJump(row.key)
+  }, [rows, wantedCard, shelf, shelves])
   useEffect(() => {
     if (goTo === undefined || goTo === null) return
     if (askedAt.current === goTo.at) return
@@ -1718,7 +1776,7 @@ export function BoxBrowse({
 
   const shelfName = shelfBox?.name ?? null
   const shelfChip =
-    shelf === null ? 'Boxes' : `${shelfLabel(shelf)}${shelfName ? ` (${shelfName})` : ''}`
+    shelf === null ? 'Boxes' : shelfLabel(shelf, shelfName)
 
   /* D213's dropdown options, off `facets` (never a hardcoded list — see `_card_facets`'s own
    * docstring for which of the two the brief asked for). Set and rarity are scoped to the
@@ -1829,7 +1887,7 @@ export function BoxBrowse({
                          (S16). SEALED STAYS LAST: `inventory.spec.ts`'s own sealed-row case
                          reads `/sealed$/` off this string, so the captured count is inserted
                          before it rather than appended after. */
-                        `Box ${cell}${record ? `, ${record.cards.toLocaleString()} captured` : ''}${sealed ? ', sealed' : ''}`
+                        `${shelfLabel(cell, record?.name)}${record ? `, ${record.cards.toLocaleString()} captured` : ''}${sealed ? ', sealed' : ''}`
                 }
                 aria-current={cell === shelf ? 'true' : undefined}
                 disabled={!reachable}
@@ -2021,7 +2079,7 @@ export function BoxBrowse({
               <EmptyState
                 icon="search"
                 title="Nothing matches here"
-                body={`No card in ${shelfLabel(shelf)} matches “${query.trim()}”.`}
+                body={`No card in ${shelfLabel(shelf, shelfName)} matches “${query.trim()}”.`}
                 actions={
                   <Button size="sm" icon="x" onClick={() => setQuery('')}>
                     Clear the search
@@ -2039,7 +2097,7 @@ export function BoxBrowse({
               <EmptyState
                 icon="filter"
                 title="Nothing here matches the filter"
-                body={`No card in ${shelfLabel(shelf)} matches the game, set or rarity chosen.`}
+                body={`No card in ${shelfLabel(shelf, shelfName)} matches the game, set or rarity chosen.`}
                 actions={
                   <Button size="sm" icon="x" onClick={() => setFacetFilter({})}>
                     Clear the filter
@@ -2230,8 +2288,8 @@ export function BoxBrowse({
             key={String(cell)}
             type="button"
             className="browse-boxcell-mini"
-            aria-label={`Box ${cell}`}
-            title={boxMap.get(cell)?.name ?? `Box ${cell}`}
+            aria-label={shelfLabel(cell, boxMap.get(cell)?.name)}
+            title={shelfLabel(cell, boxMap.get(cell)?.name)}
             aria-current={cell === shelf ? 'true' : undefined}
             onClick={() => {
               selectShelf(cell)
@@ -2415,7 +2473,7 @@ export function BoxBrowse({
                   ) : (
                     <EmptyState
                       icon="box"
-                      title={shelf === null ? 'Pick a box' : `Nothing in ${shelfLabel(shelf)} yet`}
+                      title={shelf === null ? 'Pick a box' : `Nothing in ${shelfLabel(shelf, shelfName)} yet`}
                       body="Choose a box on the left, or capture a card into this one."
                       actions={
                         <Button icon="camera" onClick={() => (window.location.hash = '#/capture')}>
@@ -2953,7 +3011,7 @@ function CardOps({
         <Overlay kind="dialog" label="Remove this card" onClose={() => setOpen(null)}>
           <div className="inv-dialog-head">
             <span className="bn-eyebrow bn-facts">
-              <span>Box {row.card.box}</span> <span>{row.key}</span>
+              <span>{positionLabel(row.card) ?? row.key}</span>
             </span>
             <h2 className="inv-dialog-title">Remove this card and slide the box down?</h2>
           </div>

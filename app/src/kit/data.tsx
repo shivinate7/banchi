@@ -1,0 +1,1143 @@
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react'
+import { createPortal } from 'react-dom'
+
+import { Icon, type IconName } from './Icon'
+import { cropStyle, type Crop } from './index'
+import { STATUS_TONES, UNNAMED_BOX, type StatusKind } from './dataRules'
+import { hasSheet, openSheet, sheetHref } from './sheets'
+import { useOverlayLayer } from './overlay'
+import { moneyGrouped, moneySigned } from '../money'
+import { PositionLabel } from '../PositionLabel'
+import { isDeparted } from '../server'
+import type { Place } from '../types'
+import './data.css'
+
+/* The pure half — the status tones and the box order — lives in `dataRules.ts`, so a spec and a
+ * non-React caller can import it without a stylesheet. It is re-exported here: this file is
+ * still the one place a screen imports a data primitive from. */
+export { STATUS_TONES, UNNAMED_BOX, boxesMostRecentFirst } from './dataRules'
+export type { BoxRecency, StatusKind, StatusTone } from './dataRules'
+
+/* THE KIT'S DATA PRIMITIVES: how a figure, a card, a box, a place, a status and a filter are
+ * drawn, ONE WAY EACH, on every screen.
+ *
+ * WHY THIS FILE EXISTS (the owner, 2026-09-23): "say a new page in the sidebar gets built
+ * tomorrow, it should be able to autocall/inherit the properties of the other pages". A page
+ * built tomorrow imports these and inherits every rule below without knowing it. A screen that
+ * draws one of these things by hand is the drift the UX review measured: money in four faces,
+ * dates in seven formats, a box named six ways, a missing photo drawn four ways.
+ *
+ * THE RULES EACH PRIMITIVE CARRIES, so a caller never has to remember them:
+ *  - MONEY IS MONO, always with `$`, inside inputs and chips too (D221, the owner's ruling
+ *    2026-09-23). `Money` is the only way a dollar figure is drawn.
+ *  - MONO IS FOR MACHINE STRINGS ONLY: SKUs, run ids, card numbers, key caps, and money. A
+ *    count, a date, a box number and a name are Inter.
+ *  - A SEPARATOR IS DRAWN BY CSS, NEVER TYPED (D218). `Sep` is the one separator.
+ *  - A BOX IS ITS NAME AND NEVER ITS NUMBER, and a list of boxes is MOST RECENT FIRST (the
+ *    owner's rulings, 2026-09-23). `BoxLabel` and `boxesMostRecentFirst`.
+ *  - A CARD'S LINE NAMES ITS FINISH, so two printings of one card never look the same.
+ *  - A PRODUCT OPENS BY SKU, NEVER BY ONE COPY (D212: every copy is fungible).
+ *  - A FILTER COMBINES WITH EVERY OTHER, IN ANY ORDER, and a pick list NEVER opens the native OS
+ *    menu (the owner's rulings, 2026-09-23). `Select`, `FilterChips` and `SortControl` draw
+ *    Capture's own option rows: a check mark, the name, the count on the right.
+ *  - EVERY FILTER CONTROL IN ONE BAR IS ONE HEIGHT (`--bn-control-h`), and its width sits
+ *    between one floor and one cap, in `data.css`.
+ *
+ * NOT A SCREEN'S FILE. A screen passes data in and gets the drawing back. Nothing here fetches.
+ */
+
+/* ============================================================================================
+ * Sep — the one separator between two facts on a line.
+ * ============================================================================================ */
+
+/** The dot between two facts, drawn by CSS (D218). A screen reader hears a comma, so two facts
+ *  never run together into one word. */
+export function Sep() {
+  return (
+    <span className="bn-sep">
+      <span className="bn-sr">, </span>
+    </span>
+  )
+}
+
+/* ============================================================================================
+ * Money and Count — a figure, drawn one way.
+ * ============================================================================================ */
+
+/** A dollar figure: mono, tabular, always `$`, grouped past a thousand. `—` where there is none.
+ *  `signed` draws a change (`+$1.20`, `−$0.35`). */
+export function Money({
+  value,
+  signed,
+  className,
+}: {
+  readonly value: number | null | undefined
+  readonly signed?: boolean
+  readonly className?: string
+}) {
+  const empty = typeof value !== 'number'
+  return (
+    <span className={['bn-money', className].filter(Boolean).join(' ')} data-empty={empty ? 'true' : undefined}>
+      {signed ? moneySigned(value) : moneyGrouped(value)}
+    </span>
+  )
+}
+
+/** `1,179` in Inter tabular figures. */
+function countText(value: number): string {
+  return Number.isFinite(value) ? Math.round(value).toLocaleString('en-US') : '—'
+}
+
+/** How many of a thing: ONE count style everywhere, a quiet badge in tabular figures, never
+ *  `(1179)` in brackets. `label` is what a screen reader hears after the number. */
+export function Count({
+  value,
+  label,
+  tone,
+  className,
+}: {
+  readonly value: number
+  readonly label?: string
+  /** `strong` is the one count on a row that asks for attention. */
+  readonly tone?: 'strong'
+  readonly className?: string
+}) {
+  const text = countText(value)
+  return (
+    <span className={['bn-count', tone === 'strong' ? 'bn-count-strong' : '', className ?? ''].filter(Boolean).join(' ')}>
+      {label === undefined ? (
+        text
+      ) : (
+        <>
+          <span aria-hidden="true">{text}</span>
+          <span className="bn-sr">{`${text} ${label}`}</span>
+        </>
+      )}
+    </span>
+  )
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+function listWords(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? ''
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] ?? ''}`
+}
+
+/** What a narrowed list says above itself: `12 of 40 cards, filtered by Pokémon and Rare` and a
+ *  Clear press. With no filter and nothing hidden it says only `40 cards`. Every narrowed list
+ *  states how many it hides (the filtering review, FLT-13). */
+export function FilterCount({
+  shown,
+  total,
+  noun = { one: 'card', many: 'cards' },
+  filters = [],
+  onClear,
+  className,
+}: {
+  readonly shown: number
+  readonly total: number
+  readonly noun?: { readonly one: string; readonly many: string }
+  /** The active filters, in words: `['Pokémon', 'Rare']`. */
+  readonly filters?: readonly string[]
+  readonly onClear?: () => void
+  readonly className?: string
+}) {
+  const narrowed = filters.length > 0 || shown !== total
+  const word = (narrowed ? total : shown) === 1 ? noun.one : noun.many
+  /* The Clear press removes itself, so focus moves to the line it sat on before it goes: a
+   * press never leaves focus on nothing. */
+  const line = useRef<HTMLParagraphElement | null>(null)
+  const figure = narrowed ? `${countText(shown)} of ${countText(total)} ${word}` : `${countText(shown)} ${word}`
+  const by = filters.length > 0 ? `, filtered by ${listWords(filters)}` : ''
+  return (
+    <p
+      ref={line}
+      className={['bn-filtercount', className].filter(Boolean).join(' ')}
+      role="status"
+      aria-live="polite"
+      tabIndex={-1}
+    >
+      {/* ONE LINE, ALWAYS: a long filter list ellipsizes rather than wrapping, so a pick never
+          pushes what is under the line (D118). The whole sentence stays in the DOM, so a screen
+          reader hears all of it, and the title shows it on hover. */}
+      <span className="bn-filtercount-text" title={figure + by}>
+        <span className="bn-filtercount-figure">{figure}</span>
+        {by === '' ? null : by}
+      </span>
+      {narrowed && onClear !== undefined ? (
+        <button
+          type="button"
+          className="bn-filtercount-clear"
+          onClick={() => {
+            line.current?.focus()
+            onClear()
+          }}
+        >
+          Clear
+        </button>
+      ) : null}
+    </p>
+  )
+}
+
+/* ============================================================================================
+ * StatusBadge — one tone per meaning.
+ * ============================================================================================ */
+
+const STATUS_ICONS: Readonly<Record<StatusKind, IconName | null>> = {
+  needs: 'alert',
+  working: 'refresh',
+  done: 'check',
+  failed: 'x',
+  waiting: 'clock',
+  neutral: null,
+}
+
+/** A state as a pill, in its meaning's one tone, with the icon that says the same thing in a
+ *  second channel for a reader who cannot tell the colours apart. */
+export function StatusBadge({
+  status,
+  children,
+  size,
+  className,
+}: {
+  readonly status: StatusKind
+  readonly children: ReactNode
+  readonly size?: 'sm'
+  readonly className?: string
+}) {
+  const tone = STATUS_TONES[status]
+  const icon = STATUS_ICONS[status]
+  return (
+    <span
+      className={[
+        'bn-pill',
+        'bn-status',
+        tone === 'default' ? '' : `bn-pill-${tone}`,
+        size === 'sm' ? 'bn-pill-sm' : '',
+        className ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      data-status={status}
+    >
+      {icon === null ? null : <Icon name={icon} size={size === 'sm' ? 10 : 12} />}
+      {children}
+    </span>
+  )
+}
+
+/* ============================================================================================
+ * ProductLink and OrderLink — a name that opens where the thing lives.
+ * ============================================================================================ */
+
+/** True for a press the browser should handle itself: a new tab, a new window, a download. */
+function modified(event: ReactMouseEvent): boolean {
+  return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
+}
+
+/** A product's name that opens the product, by SKU (D212: never one copy). It opens the product
+ *  sheet where one is registered, and the product page where none is. It is a real link, so a
+ *  middle-click opens the page in a new tab either way. */
+export function ProductLink({
+  sku,
+  name,
+  children,
+  className,
+}: {
+  readonly sku: string
+  /** A caption the sheet may show while it loads. Defaults to the text of `children`. */
+  readonly name?: string
+  readonly children: ReactNode
+  readonly className?: string
+}) {
+  const props = name === undefined ? { sku } : { sku, name }
+  return (
+    <a
+      className={['bn-datalink', className].filter(Boolean).join(' ')}
+      href={sheetHref('product', props)}
+      onClick={(event) => {
+        if (modified(event) || !hasSheet('product')) return
+        event.preventDefault()
+        openSheet('product', props)
+      }}
+    >
+      {children}
+    </a>
+  )
+}
+
+/** An order's number that opens the order. `orderKey` is the STORE KEY (`source:number`), the
+ *  one `#/orders` can resolve; a bare number resolves to nothing there. */
+export function OrderLink({
+  orderKey,
+  children,
+  className,
+}: {
+  readonly orderKey: string
+  readonly children: ReactNode
+  readonly className?: string
+}) {
+  return (
+    <a
+      className={['bn-datalink', className].filter(Boolean).join(' ')}
+      href={sheetHref('order', { orderKey })}
+      onClick={(event) => {
+        if (modified(event) || !hasSheet('order')) return
+        event.preventDefault()
+        openSheet('order', { orderKey })
+      }}
+    >
+      {children}
+    </a>
+  )
+}
+
+/* ============================================================================================
+ * CardLine and CardThumb — one card, drawn one way.
+ * ============================================================================================ */
+
+/** A card's identity on one line: its name, then set, number, finish and rarity. THE FINISH IS
+ *  ALWAYS SAID when it is known, so a foil and a normal printing of one card never read as the
+ *  same row. With `sku`, the name opens the product. */
+export function CardLine({
+  name,
+  sku,
+  set,
+  number,
+  condition,
+  finish,
+  rarity,
+  layout = 'stack',
+  className,
+}: {
+  /** Null for a card nothing has identified yet. */
+  readonly name: string | null
+  readonly sku?: string | null
+  readonly set?: string | null
+  /** The collector number as `cardNumber.ts:collectorNumber` composes it. */
+  readonly number?: string | null
+  /** The TCGplayer condition, which carries the finish (`Near Mint Holofoil`). Drawn whole:
+   *  the grade stays on every row (the owner's ruling, 2026-09-23). */
+  readonly condition?: string | null
+  /** The finish on its own (`Reverse holo`), for a card with no condition string, or one whose
+   *  condition does not already say it. */
+  readonly finish?: string | null
+  readonly rarity?: string | null
+  /** `stack`: the name, then the facts under it. `inline`: one line. */
+  readonly layout?: 'stack' | 'inline'
+  readonly className?: string
+}) {
+  const facts: { readonly key: string; readonly node: ReactNode }[] = []
+  if (set) facts.push({ key: 'set', node: <span className="bn-cardline-set">{set}</span> })
+  if (number) facts.push({ key: 'number', node: <span className="bn-cardline-number">{number}</span> })
+  if (condition) facts.push({ key: 'condition', node: <span className="bn-cardline-finish">{condition}</span> })
+  if (finish && !(condition ?? '').toLowerCase().includes(finish.toLowerCase())) {
+    facts.push({ key: 'finish', node: <span className="bn-cardline-finish">{finish}</span> })
+  }
+  if (rarity) facts.push({ key: 'rarity', node: <span className="bn-cardline-rarity">{rarity}</span> })
+
+  const title =
+    name === null ? (
+      <span className="bn-cardline-name is-unknown">Not identified yet</span>
+    ) : sku ? (
+      <ProductLink sku={sku} name={name} className="bn-cardline-name">
+        {name}
+      </ProductLink>
+    ) : (
+      <span className="bn-cardline-name">{name}</span>
+    )
+
+  return (
+    <span className={['bn-cardline', `bn-cardline-${layout}`, className ?? ''].filter(Boolean).join(' ')}>
+      {title}
+      {facts.length === 0 ? null : (
+        <span className="bn-cardline-facts">
+          {layout === 'inline' ? <Sep /> : null}
+          {/* The dot TRAILS its fact, so a line that wraps ends on a dot rather than opening
+              on one. */}
+          {facts.map((fact, at) => (
+            <span key={fact.key} className="bn-cardline-fact">
+              {fact.node}
+              {at === facts.length - 1 ? null : <Sep />}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
+export type CardThumbSize = 'sm' | 'md' | 'lg'
+
+/** A card's photograph at one of three sizes, in a card-shaped frame. A card with no photograph,
+ *  or one that will not load, draws THE ONE "no photo" state at every size. */
+export function CardThumb({
+  src,
+  alt,
+  size = 'md',
+  crop = null,
+  focus,
+  className,
+}: {
+  /** The photograph's URL, or null when there is none. */
+  readonly src: string | null
+  /** What the photograph shows, usually the card's name. */
+  readonly alt: string
+  readonly size?: CardThumbSize
+  /** Where the card sits inside the rig's frame (`POST /pipeline/crop-preview`). */
+  readonly crop?: Crop | null
+  readonly focus?: number
+  readonly className?: string
+}) {
+  const [failed, setFailed] = useState<string | null>(null)
+  const missing = src === null || failed === src
+  const style = missing ? undefined : cropStyle(crop, focus)
+  return (
+    <span
+      className={['bn-thumb', `bn-thumb-${size}`, className ?? ''].filter(Boolean).join(' ')}
+      data-missing={missing ? 'true' : undefined}
+      role={missing ? 'img' : undefined}
+      aria-label={missing ? `${alt}: no photo` : undefined}
+    >
+      {missing ? (
+        <>
+          <Icon name="image" size={size === 'sm' ? 14 : size === 'md' ? 18 : 24} />
+          {size === 'sm' ? null : (
+            <span className="bn-thumb-none" aria-hidden="true">
+              No photo
+            </span>
+          )}
+        </>
+      ) : (
+        <img
+          className={style === undefined ? 'bn-thumb-img' : 'bn-thumb-img bn-crop'}
+          data-cropped={style === undefined ? undefined : 'true'}
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          style={style}
+          onError={() => setFailed(src)}
+        />
+      )}
+    </span>
+  )
+}
+
+/* ============================================================================================
+ * BoxLabel and the box order.
+ * ============================================================================================ */
+
+/** A box as every screen names it: its NAME, and nothing else.
+ *
+ *  THE BOX NUMBER IS NEVER SHOWN (the owner's ruling, 2026-09-23: "those box numbers are
+ *  arbitrary index values that you get to keep on the back end, having a count of boxes is
+ *  great, having each box labeled with a number is not ok"). Every box carries a stored name:
+ *  a new one defaults to `Box <count+1>`, and the server backfills the old ones. So this
+ *  composes nothing. A box whose name is still missing reads `Unnamed box`.
+ *
+ *  `box` is kept for the caller's own key and rides a data attribute; it is never drawn. */
+export function BoxLabel({
+  box,
+  name,
+  className,
+}: {
+  readonly box?: number
+  readonly name?: string | null
+  readonly className?: string
+}) {
+  const named = typeof name === 'string' && name.trim() !== ''
+  return (
+    <span className={['bn-boxlabel', className].filter(Boolean).join(' ')} data-box={box}>
+      <span className={named ? 'bn-boxlabel-name' : 'bn-boxlabel-name is-unnamed'}>{named ? name : UNNAMED_BOX}</span>
+    </span>
+  )
+}
+
+/* ============================================================================================
+ * Location — where a card is.
+ * ============================================================================================ */
+
+/** Where a card is, as the server's place label says it, drawn by `PositionLabel`. The card
+ *  number in that label counts WITHIN THE SECTION (the owner's ruling, 2026-09-23;
+ *  `pipeline/join.py:Position.card`). Give `place` and the box and section names come with it.
+ *
+ *  A DEPARTED PLACE IS MARKED HERE TOO. A card that has left keeps the place it left in its label
+ *  (D259), and only the mark tells it apart: the struck figure and the
+ *  past-tense accessible name `PositionLabel` draws for `departed`. Read off the place block by
+ *  `isDeparted` unless the caller says, so every screen that draws a place through the kit marks
+ *  a departed one without being told. */
+export function Location({
+  place,
+  label,
+  boxName,
+  sectionName,
+  flow,
+  lead,
+  fallback = 'No place on record',
+  departed,
+  className,
+}: {
+  readonly place?: Place | null
+  /** The server's label, when there is no `place` block to hand over. */
+  readonly label?: string | null
+  readonly boxName?: string | null
+  readonly sectionName?: string | null
+  readonly flow?: 'stack' | 'run'
+  readonly lead?: 'path' | 'slot'
+  /** What is drawn where there is no label: a card kept as a count, or one not placed yet. */
+  readonly fallback?: ReactNode
+  /** The card has left its box. Defaults to `isDeparted(place)`. */
+  readonly departed?: boolean
+  readonly className?: string
+}) {
+  const text = place?.label ?? label ?? null
+  const gone = departed ?? (place != null && isDeparted(place))
+  const usable = typeof text === 'string' && text.trim() !== ''
+  return (
+    <span className={['bn-location', className].filter(Boolean).join(' ')}>
+      {usable ? (
+        <PositionLabel
+          label={text}
+          flow={flow}
+          lead={lead}
+          boxName={place?.box_name ?? boxName ?? null}
+          sectionName={place?.section_name ?? sectionName ?? null}
+          departed={gone}
+        />
+      ) : (
+        <span className="bn-location-none">{fallback}</span>
+      )}
+    </span>
+  )
+}
+
+/* ============================================================================================
+ * The pick list: Select, FilterChips and SortControl draw from this one panel.
+ *
+ * CAPTURE'S OPTION ROWS, LIFTED (the owner, 2026-09-23: its picker is "pretty decent"): a check
+ * mark, the name, and a figure on the right. A long list gets Capture's type-to-narrow entry at
+ * its top. The panel is the kit's own and never the native OS menu (the owner's ruling).
+ *
+ * FIXED, IN A PORTAL, so no scrolling or clipping parent can cut it, and it covers the page
+ * rather than pushing it: opening a list never moves what is under it (D118).
+ * ============================================================================================ */
+
+/** One choice in a pick list. */
+export type PickOption<T extends string = string> = {
+  readonly value: T
+  readonly label: ReactNode
+  /** What the type-to-narrow entry matches. Defaults to `label` when that is a string. */
+  readonly text?: string
+  /** How many rows this choice would show, under the other active filters. */
+  readonly count?: number
+}
+
+/** A list longer than this gets the type-to-narrow entry. */
+const NARROW_FROM = 8
+
+function optionText<T extends string>(option: PickOption<T>): string {
+  if (option.text !== undefined) return option.text
+  return typeof option.label === 'string' ? option.label : option.value
+}
+
+type PanelPlace = { readonly top: number; readonly left: number; readonly width: number; readonly maxHeight: number }
+
+const GUTTER = 16
+const PANEL_MIN_W = 224
+const PANEL_MAX_H = 360
+
+/** Where the panel goes: under its trigger, or above when there is more room there, never past
+ *  the viewport's 16px gutter. */
+function placePanel(anchor: HTMLElement): PanelPlace {
+  const rect = anchor.getBoundingClientRect()
+  const vw = document.documentElement.clientWidth
+  const vh = window.innerHeight
+  const width = Math.min(Math.max(rect.width, PANEL_MIN_W), vw - GUTTER * 2)
+  const left = Math.min(Math.max(rect.left, GUTTER), vw - GUTTER - width)
+  const below = vh - rect.bottom - GUTTER
+  const above = rect.top - GUTTER
+  const down = below >= Math.min(PANEL_MAX_H, 200) || below >= above
+  const room = Math.max(120, (down ? below : above) - 4)
+  const maxHeight = Math.min(PANEL_MAX_H, room)
+  return { top: down ? rect.bottom + 4 : rect.top - 4 - maxHeight, left, width, maxHeight }
+}
+
+function useAnchoredPlace(open: boolean, anchor: RefObject<HTMLElement | null>): PanelPlace | null {
+  const [place, setPlace] = useState<PanelPlace | null>(null)
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlace(null)
+      return
+    }
+    const update = () => {
+      if (anchor.current !== null) setPlace(placePanel(anchor.current))
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [open, anchor])
+  return place
+}
+
+function PickPanel<T extends string>({
+  id,
+  label,
+  options,
+  selected,
+  multiple,
+  anchor,
+  onPick,
+  onClose,
+}: {
+  readonly id: string
+  readonly label: string
+  readonly options: readonly PickOption<T>[]
+  readonly selected: ReadonlySet<T>
+  readonly multiple: boolean
+  readonly anchor: RefObject<HTMLElement | null>
+  readonly onPick: (value: T) => void
+  /** `true` hands focus back to the trigger. */
+  readonly onClose: (returnFocus: boolean) => void
+}) {
+  const place = useAnchoredPlace(true, anchor)
+  const panel = useRef<HTMLDivElement | null>(null)
+  const list = useRef<HTMLDivElement | null>(null)
+  const entry = useRef<HTMLInputElement | null>(null)
+  const [narrow, setNarrow] = useState('')
+  const searchable = options.length >= NARROW_FROM
+
+  const shown = useMemo(() => {
+    const needle = narrow.trim().toLowerCase()
+    if (needle === '') return options
+    return options.filter((option) => optionText(option).toLowerCase().includes(needle))
+  }, [options, narrow])
+
+  const firstSelected = shown.findIndex((option) => selected.has(option.value))
+  const [active, setActive] = useState(firstSelected === -1 ? 0 : firstSelected)
+  const activeAt = shown.length === 0 ? -1 : Math.min(active, shown.length - 1)
+
+  /* Focus lands inside once the panel is drawn: the entry when the list is long, the list
+   * itself otherwise. Not before: the first render places nothing, so there is nothing to hold
+   * focus yet, and a key pressed then would land on the trigger and close the list. */
+  const drawn = place !== null
+
+  /* THE LIST IS A LAYER IN THE ONE OVERLAY STACK (`kit/overlay.tsx:useOverlayLayer`), joined
+   * the moment it is drawn. It is portalled to <body>, so inside a Sheet (FilterBar's phone
+   * sheet) it sits OUTSIDE the sheet's panel. While the sheet was the top layer, its trap saw
+   * focus land in the list and pulled it back into the sheet: the arrows moved nothing, and
+   * Escape closed the whole sheet. As the top layer the list keeps focus, Escape closes the
+   * list only, and focus goes back to its trigger inside the sheet. `trap: false`: Tab closes
+   * the list (below), as a popover does. The stack also sets its z-index above the sheet's. */
+  useOverlayLayer(panel, { active: drawn, onEscape: () => onClose(true), trap: false })
+
+  useEffect(() => {
+    if (!drawn) return
+    if (searchable) entry.current?.focus()
+    else list.current?.focus()
+  }, [drawn, searchable])
+
+  /* The active row stays in view as the arrows move it. */
+  useEffect(() => {
+    if (activeAt < 0) return
+    document.getElementById(`${id}-opt-${activeAt}`)?.scrollIntoView({ block: 'nearest' })
+  }, [id, activeAt])
+
+  /* A press anywhere outside the panel and its trigger closes it, and leaves focus where the
+   * press put it. */
+  useEffect(() => {
+    const onDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (target === null) return
+      if (panel.current?.contains(target) || anchor.current?.contains(target)) return
+      onClose(false)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [anchor, onClose])
+
+  const onKey = (event: ReactKeyboardEvent) => {
+    const last = shown.length - 1
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault()
+        setActive(activeAt >= last ? 0 : activeAt + 1)
+        return
+      case 'ArrowUp':
+        event.preventDefault()
+        setActive(activeAt <= 0 ? last : activeAt - 1)
+        return
+      case 'Home':
+        if (event.target === entry.current) return
+        event.preventDefault()
+        setActive(0)
+        return
+      case 'End':
+        if (event.target === entry.current) return
+        event.preventDefault()
+        setActive(last)
+        return
+      case 'Enter': {
+        event.preventDefault()
+        const option = shown[activeAt]
+        if (option !== undefined) onPick(option.value)
+        return
+      }
+      case ' ': {
+        if (event.target === entry.current) return
+        event.preventDefault()
+        const option = shown[activeAt]
+        if (option !== undefined) onPick(option.value)
+        return
+      }
+      case 'Escape':
+        event.preventDefault()
+        event.stopPropagation()
+        onClose(true)
+        return
+      case 'Tab':
+        /* Back to the trigger, so the next Tab reaches the control after it. Letting the
+         * browser move on from inside a portal at the end of the page would send focus to
+         * the page's first control. */
+        event.preventDefault()
+        onClose(true)
+        return
+      default:
+    }
+  }
+
+  if (place === null) return null
+
+  const style: CSSProperties = { top: place.top, left: place.left, width: place.width, maxHeight: place.maxHeight }
+  const activeId = activeAt >= 0 ? `${id}-opt-${activeAt}` : undefined
+
+  return createPortal(
+    <div ref={panel} className="bn-pick-panel" style={style} onKeyDown={onKey} data-bn-pick-panel>
+      {searchable ? (
+        <div className="bn-pick-entry">
+          <Icon name="search" size={14} />
+          <input
+            ref={entry}
+            className="bn-pick-entry-input"
+            type="text"
+            value={narrow}
+            placeholder="Type to narrow"
+            aria-label={`Narrow ${label}`}
+            aria-controls={`${id}-list`}
+            aria-activedescendant={activeId}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => {
+              setNarrow(event.target.value)
+              setActive(0)
+            }}
+          />
+        </div>
+      ) : null}
+      <div
+        ref={list}
+        id={`${id}-list`}
+        className="bn-pick-list"
+        role="listbox"
+        aria-label={label}
+        aria-multiselectable={multiple ? true : undefined}
+        aria-activedescendant={searchable ? undefined : activeId}
+        tabIndex={searchable ? -1 : 0}
+      >
+        {shown.map((option, at) => {
+          const on = selected.has(option.value)
+          return (
+            <div
+              key={option.value}
+              id={`${id}-opt-${at}`}
+              className="bn-pick-opt"
+              role="option"
+              aria-selected={on}
+              data-active={at === activeAt ? 'true' : undefined}
+              data-zero={option.count === 0 ? 'true' : undefined}
+              data-multiple={multiple ? 'true' : undefined}
+              onPointerDown={(event) => event.preventDefault()}
+              onPointerMove={() => {
+                if (at !== activeAt) setActive(at)
+              }}
+              onClick={() => onPick(option.value)}
+            >
+              <span className="bn-pick-mark" aria-hidden="true">
+                <Icon name="check" size={11} strokeWidth={3} />
+              </span>
+              <span className="bn-pick-name">{option.label}</span>
+              {option.count === undefined ? null : <span className="bn-pick-count">{countText(option.count)}</span>}
+            </div>
+          )
+        })}
+        {shown.length === 0 ? <p className="bn-pick-empty">Nothing matches that.</p> : null}
+      </div>
+      {/* NO CLEAR INSIDE THE LIST. Tab closes the list (so the next Tab reaches the next
+          control), which left an in-list Clear with no keyboard path. The filter's own clear
+          press, beside its trigger, is the one way to clear a facet, by pointer or by key. */}
+    </div>,
+    document.body,
+  )
+}
+
+/** Open and close a pick list, with focus handed back to the trigger on Escape and on a pick. */
+function usePick(): {
+  readonly open: boolean
+  readonly toggle: () => void
+  readonly close: (returnFocus: boolean) => void
+  readonly trigger: RefObject<HTMLButtonElement | null>
+} {
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement | null>(null)
+  const close = useCallback((returnFocus: boolean) => {
+    setOpen(false)
+    if (returnFocus) trigger.current?.focus()
+  }, [])
+  const toggle = useCallback(() => setOpen((was) => !was), [])
+  return { open, toggle, close, trigger }
+}
+
+/** The trigger every pick list shares: the label, the current value, a chevron. */
+function PickTrigger({
+  id,
+  triggerRef,
+  open,
+  label,
+  value,
+  sizer,
+  icon,
+  active,
+  onToggle,
+  onKeyDown,
+  className,
+}: {
+  readonly id: string
+  readonly triggerRef: RefObject<HTMLButtonElement | null>
+  readonly open: boolean
+  readonly label: string
+  readonly value: ReactNode
+  /** EVERY VALUE THE TRIGGER CAN SHOW, drawn invisibly in the same cell as `value`, so the
+   *  slot is as wide as the widest of them from the first paint and a pick never widens the
+   *  trigger or moves the control beside it (D118). */
+  readonly sizer: readonly ReactNode[]
+  readonly icon?: IconName
+  readonly active: boolean
+  readonly onToggle: () => void
+  readonly onKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void
+  readonly className?: string
+}) {
+  return (
+    <button
+      ref={triggerRef}
+      type="button"
+      className={['bn-pick', className].filter(Boolean).join(' ')}
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      aria-controls={open ? `${id}-list` : undefined}
+      data-active={active ? 'true' : undefined}
+      onClick={onToggle}
+      onKeyDown={onKeyDown}
+    >
+      {icon === undefined ? null : <Icon name={icon} size={14} className="bn-pick-icon" />}
+      <span className="bn-pick-label">{label}</span>
+      <span className="bn-pick-slot">
+        <span className="bn-pick-value">{value}</span>
+        {sizer.map((one, at) => (
+          <span key={at} className="bn-pick-sizer" aria-hidden="true">
+            {one}
+          </span>
+        ))}
+      </span>
+      <Icon name={open ? 'chevronUp' : 'chevronDown'} size={14} className="bn-pick-chev" />
+    </button>
+  )
+}
+
+/** Arrow keys on a closed trigger open its list, as a native select does. */
+function openOnArrow(open: boolean, toggle: () => void) {
+  return (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (open) return
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    toggle()
+  }
+}
+
+/** Pick one of a list. The kit's own panel, never the native OS menu (the owner's ruling,
+ *  2026-09-23). The trigger says what it is (`label`) and what is picked. */
+export function Select<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  placeholder = 'Any',
+  icon,
+  className,
+}: {
+  readonly label: string
+  /** Null when nothing is picked; the trigger then shows `placeholder`. */
+  readonly value: T | null
+  readonly options: readonly PickOption<T>[]
+  readonly onChange: (next: T) => void
+  readonly placeholder?: string
+  readonly icon?: IconName
+  readonly className?: string
+}) {
+  const id = useId().replace(/:/g, '')
+  const pick = usePick()
+  const current = options.find((option) => option.value === value)
+  const selected = useMemo(() => new Set(value === null ? [] : [value]), [value])
+  const sizer = useMemo(() => [placeholder, ...options.map((option) => option.label)], [placeholder, options])
+  return (
+    <>
+      <PickTrigger
+        id={id}
+        triggerRef={pick.trigger}
+        open={pick.open}
+        label={label}
+        value={current === undefined ? <span className="bn-pick-placeholder">{placeholder}</span> : current.label}
+        sizer={sizer}
+        icon={icon}
+        active={false}
+        onToggle={pick.toggle}
+        onKeyDown={openOnArrow(pick.open, pick.toggle)}
+        className={className}
+      />
+      {pick.open ? (
+        <PickPanel
+          id={id}
+          label={label}
+          options={options}
+          selected={selected}
+          multiple={false}
+          anchor={pick.trigger}
+          onPick={(next) => {
+            onChange(next)
+            pick.close(true)
+          }}
+          onClose={pick.close}
+        />
+      ) : null}
+    </>
+  )
+}
+
+/** One facet of a filter bar: its name, its choices, and whether several may be picked. */
+export type FilterFacet<T extends string = string> = {
+  readonly key: string
+  readonly label: string
+  readonly options: readonly PickOption<T>[]
+  /** Several at once (the default), or one. */
+  readonly multiple?: boolean
+  readonly icon?: IconName
+}
+
+/** What every facet has picked, by facet key. A facet with nothing picked may be absent. */
+export type FilterValue = Readonly<Record<string, readonly string[]>>
+
+/** The words for what a facet has picked: `Pokémon`, or `Pokémon +2`. */
+function pickedWords(facet: FilterFacet, picked: readonly string[]): ReactNode {
+  const first = facet.options.find((option) => option.value === picked[0])
+  const head = first === undefined ? (picked[0] ?? '') : first.label
+  return picked.length <= 1 ? head : <MoreWords head={head} more={picked.length - 1} />
+}
+
+function MoreWords({ head, more }: { readonly head: ReactNode; readonly more: number }) {
+  return (
+    <>
+      {head}
+      <span className="bn-fchip-more">{` +${more}`}</span>
+    </>
+  )
+}
+
+/** What a facet's trigger may ever show: `Any`, every label, and for a multiple facet every
+ *  label with the widest `+N` it can carry. */
+function facetSizer(facet: FilterFacet): ReactNode[] {
+  const more = facet.options.length - 1
+  const labels = facet.options.map((option) => option.label)
+  if (facet.multiple === false || more < 1) return [ANY, ...labels]
+  return [ANY, ...labels.map((label, at) => <MoreWords key={at} head={label} more={more} />)]
+}
+
+const ANY = 'Any'
+
+function FacetChip({
+  facet,
+  picked,
+  onChange,
+}: {
+  readonly facet: FilterFacet
+  readonly picked: readonly string[]
+  readonly onChange: (next: readonly string[]) => void
+}) {
+  const id = useId().replace(/:/g, '')
+  const pick = usePick()
+  const multiple = facet.multiple !== false
+  const selected = useMemo(() => new Set(picked), [picked])
+  const sizer = useMemo(() => facetSizer(facet), [facet])
+  const active = picked.length > 0
+  return (
+    <span className="bn-fchip" data-active={active ? 'true' : undefined}>
+      <PickTrigger
+        id={id}
+        triggerRef={pick.trigger}
+        open={pick.open}
+        label={facet.label}
+        value={active ? pickedWords(facet, picked) : <span className="bn-pick-placeholder">{ANY}</span>}
+        sizer={sizer}
+        icon={facet.icon}
+        active={active}
+        onToggle={pick.toggle}
+        onKeyDown={openOnArrow(pick.open, pick.toggle)}
+      />
+      {/* Drawn over the chevron's own slot, so the trigger is one width picked or not (D118). */}
+      {active ? (
+        <button
+          type="button"
+          className="bn-fchip-clear"
+          aria-label={`Clear ${facet.label}`}
+          onClick={() => {
+            onChange([])
+            pick.trigger.current?.focus()
+          }}
+        >
+          <Icon name="x" size={12} />
+        </button>
+      ) : null}
+      {pick.open ? (
+        <PickPanel
+          id={id}
+          label={facet.label}
+          options={facet.options}
+          selected={selected}
+          multiple={multiple}
+          anchor={pick.trigger}
+          onPick={(value) => {
+            if (!multiple) {
+              onChange(selected.has(value) ? [] : [value])
+              pick.close(true)
+              return
+            }
+            /* The order the owner picked in is kept: the first pick names the chip. */
+            onChange(selected.has(value) ? picked.filter((one) => one !== value) : [...picked, value])
+          }}
+          onClose={pick.close}
+        />
+      ) : null}
+    </span>
+  )
+}
+
+/** A filter bar: one chip per facet. EVERY FACET WORKS IN ANY ORDER AND COMBINES WITH THE
+ *  OTHERS — no facet waits on another (the owner's ruling, 2026-09-23, against Inventory's forced
+ *  game, then set, then rarity). The caller gives each option the count it would show under the
+ *  OTHER active facets, and a choice with none is drawn faint but still offered. */
+export function FilterChips({
+  facets,
+  value,
+  onChange,
+  label = 'Filters',
+  className,
+}: {
+  readonly facets: readonly FilterFacet[]
+  readonly value: FilterValue
+  readonly onChange: (next: FilterValue) => void
+  readonly label?: string
+  readonly className?: string
+}) {
+  const activeCount = facets.filter((facet) => (value[facet.key] ?? []).length > 0).length
+  const group = useRef<HTMLDivElement | null>(null)
+  return (
+    <div ref={group} className={['bn-filterchips', className].filter(Boolean).join(' ')} role="group" aria-label={label}>
+      {facets.map((facet) => (
+        <FacetChip
+          key={facet.key}
+          facet={facet}
+          picked={value[facet.key] ?? []}
+          onChange={(next) => onChange({ ...value, [facet.key]: next })}
+        />
+      ))}
+      {/* Always drawn, so its arrival never wraps the bar (D118); hidden, and out of the tab
+          order, until two facets are on. The press hides itself, so focus goes back to the
+          first facet's trigger before it does. */}
+      <button
+        type="button"
+        className="bn-filterchips-clear"
+        data-off={activeCount < 2 ? 'true' : undefined}
+        tabIndex={activeCount < 2 ? -1 : undefined}
+        aria-hidden={activeCount < 2 ? true : undefined}
+        onClick={() => {
+          group.current?.querySelector<HTMLButtonElement>('.bn-pick')?.focus()
+          onChange({})
+        }}
+      >
+        Clear all
+      </button>
+    </div>
+  )
+}
+
+/** The words a sort direction is said in, per key: a price reads `High to low`, a name `Z to A`. */
+export type SortOption<K extends string = string> = {
+  readonly key: K
+  readonly label: string
+  /** What ascending means for this key. Default `Low to high`. */
+  readonly asc?: string
+  /** What descending means for this key. Default `High to low`. */
+  readonly desc?: string
+  /** The direction a first pick of this key starts in. Default `desc`. */
+  readonly first?: 'asc' | 'desc'
+}
+
+export type SortValue<K extends string = string> = { readonly key: K; readonly dir: 'asc' | 'desc' }
+
+/** How a list is ordered: WHAT it is sorted by, and WHICH WAY, both in words on the control, so
+ *  the current order is never hidden in an icon (the filtering review, FLT-19). */
+export function SortControl<K extends string>({
+  options,
+  value,
+  onChange,
+  label = 'Sort',
+  className,
+}: {
+  readonly options: readonly SortOption<K>[]
+  readonly value: SortValue<K>
+  readonly onChange: (next: SortValue<K>) => void
+  readonly label?: string
+  readonly className?: string
+}) {
+  const current = options.find((option) => option.key === value.key)
+  const asc = current?.asc ?? 'Low to high'
+  const desc = current?.desc ?? 'High to low'
+  return (
+    <span className={['bn-sort', className].filter(Boolean).join(' ')}>
+      <Select
+        label={label}
+        value={value.key}
+        options={options.map((option) => ({ value: option.key, label: option.label }))}
+        onChange={(key) => {
+          if (key === value.key) return
+          const next = options.find((option) => option.key === key)
+          onChange({ key, dir: next?.first ?? 'desc' })
+        }}
+      />
+      <button
+        type="button"
+        className="bn-sort-dir"
+        aria-label={`Order: ${value.dir === 'asc' ? asc : desc}. Press to reverse.`}
+        onClick={() => onChange({ key: value.key, dir: value.dir === 'asc' ? 'desc' : 'asc' })}
+      >
+        <span className="bn-sort-dir-words" aria-hidden="true">
+          {value.dir === 'asc' ? asc : desc}
+        </span>
+      </button>
+    </span>
+  )
+}

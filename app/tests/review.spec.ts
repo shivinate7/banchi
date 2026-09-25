@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import type { Place } from '../src/types'
 
 /* THE REVIEW QUEUE, ASSERTED — AND UNTIL THIS FILE EXISTED, NOTHING ASSERTED IT AT ALL.
  *
@@ -96,6 +97,11 @@ type Entry = {
   first_seen: string
   age_days: number
   cleared_by_human: boolean
+  /* Optional, like the wire's own field (`QueueEntryWire.place`): absent on every entry
+     above, present on the F3 fixture below, which is the one place this file exercises
+     `CaptionOrder` — the pill's "back … this card … front" line was otherwise never
+     rendered by any test in this file at all. */
+  place?: Place
 }
 
 function entry(
@@ -1030,3 +1036,117 @@ test('the group-answer confirmation types no interpunct', async ({ page }) => {
   const text = await page.locator('.bn-view').innerText()
   expect(text).not.toMatch(/[·•]/)
 })
+
+/* --------------------------------------------------------- F3: the order line's contrast */
+
+/* THE PILL SITS ON `--bn-surface-glass` OVER `--rv-well`, NEVER OVER `--bn-bg` — the ground
+ * every `--bn-*` ink token's documented ratio in `tokens.css` is measured against. `--bn-ink-3`
+ * reads 4.85:1 there and only 2.8:1 here in light, which is how `back`, `front`, the arrows
+ * and an unread neighbour's name went under the 4.5:1 floor (found in the locating review,
+ * round 3). This fixture is the ONLY place in this file `CaptionOrder` renders at all — every
+ * other entry above carries no `place`, so the pill's order line has never been on screen for
+ * any other test here.
+ *
+ * `PlaceNeighbor` per `app/src/types.ts`: `prev` (toward the back) named, `next` (toward the
+ * front) unread, so both `.review-caption-nb` states are on screen at once. */
+const ORDER_LINE_PLACE: Place = {
+  label: 'Rares, Section 1, Card 14',
+  located: true,
+  box: 2,
+  index: 14,
+  slot: 14,
+  section: 1,
+  card: 14,
+  box_name: 'Rares',
+  section_start: 1,
+  section_end: null,
+  box_total: 20,
+  box_closed: false,
+  fraction: 0.7,
+  neighbors: {
+    prev: { slot: 13, index: 13, name: 'Charmander' },
+    next: { slot: 15, index: 15, name: null, unread: 1 },
+  },
+}
+
+/** The WCAG contrast of an element's text against the ground under it, both read from the
+ *  computed style of the element and its painted ancestors, alpha composited in order —
+ *  `app/tests/kit-data.spec.ts:contrastOf`'s own method, duplicated rather than imported
+ *  (every spec file in this repo carries its own contrast helper; `pull-confirm.spec.ts`
+ *  and `fulfillment.spec.ts` each do too). This one is the right shape for a TRANSLUCENT
+ *  ground — `noThinContrast` in `fulfillment.spec.ts` refuses one by design (`docs/DESIGN.md`'s
+ *  floor is for an opaque owner-facing panel), and this pill is glass over a photograph. */
+async function contrastOf(page: Page, selector: string): Promise<number> {
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().map((one) => one.finished.catch(() => undefined))),
+  )
+  return page.locator(selector).first().evaluate((el) => {
+    const parse = (value: string): number[] => {
+      const m = value.match(/rgba?\(([^)]+)\)/)
+      if (m === null) return [0, 0, 0, 0]
+      const parts = (m[1] ?? '').match(/[\d.]+/g)?.map(Number) ?? []
+      return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0, parts[3] ?? 1]
+    }
+    const over = (top: number[], under: number[]): number[] => {
+      const a = top[3] ?? 1
+      return [0, 1, 2].map((i) => (top[i] ?? 0) * a + (under[i] ?? 0) * (1 - a)).concat(1)
+    }
+    const layers: number[][] = []
+    for (let node: Element | null = el; node !== null; node = node.parentElement) {
+      const bg = parse(getComputedStyle(node).backgroundColor)
+      if ((bg[3] ?? 0) > 0) layers.push(bg)
+      if ((bg[3] ?? 0) >= 1) break
+    }
+    let ground = [255, 255, 255, 1]
+    for (const layer of layers.reverse()) ground = over(layer, ground)
+    const ink = over(parse(getComputedStyle(el).color), ground)
+    const lum = (c: number[]) => {
+      const [r, g, b] = [0, 1, 2].map((i) => {
+        const v = (c[i] ?? 0) / 255
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0)
+    }
+    const [hi, lo] = [lum(ink), lum(ground)].sort((x, y) => y - x)
+    return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05)
+  })
+}
+
+const ORDER_LINE_FLOOR = 4.5
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`the pill's order line reads ${ORDER_LINE_FLOOR}:1 in ${theme}: back, the neighbours, front`, async ({
+    page,
+  }) => {
+    const withPlace: Entry = { ...entry(14, 'set_ambiguous', '84.50', [candidate(0, '84.50')]), place: ORDER_LINE_PLACE }
+    await open(page, [withPlace])
+    if (theme === 'dark') {
+      await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+    }
+    await expect(page.locator('.review-caption-order')).toBeVisible()
+
+    // `back` and `front`, `.review-caption-end` — the low-contrast pair the finding named.
+    const ends = page.locator('.review-caption-end')
+    await expect(ends).toHaveCount(2)
+    for (let i = 0; i < 2; i += 1) {
+      const c = await contrastOf(page, `.review-caption-end >> nth=${i}`)
+      expect(c, `.review-caption-end[${i}] in ${theme}`).toBeGreaterThanOrEqual(ORDER_LINE_FLOOR)
+    }
+
+    // The two arrows between `back`/`this card`/`front`.
+    const arrows = page.locator('.review-caption-arrow')
+    await expect(arrows).toHaveCount(2)
+    for (let i = 0; i < 2; i += 1) {
+      const c = await contrastOf(page, `.review-caption-arrow >> nth=${i}`)
+      expect(c, `.review-caption-arrow[${i}] in ${theme}`).toBeGreaterThanOrEqual(ORDER_LINE_FLOOR)
+    }
+
+    // The unread neighbour toward the front — the dimmer, italic state.
+    const unread = await contrastOf(page, '.review-caption-nb.is-unread')
+    expect(unread, `.review-caption-nb.is-unread in ${theme}`).toBeGreaterThanOrEqual(ORDER_LINE_FLOOR)
+
+    // The named neighbour toward the back, for completeness — never regressed by this fix.
+    const named = await contrastOf(page, '.review-caption-nb:not(.is-unread)')
+    expect(named, `.review-caption-nb (named) in ${theme}`).toBeGreaterThanOrEqual(ORDER_LINE_FLOOR)
+  })
+}

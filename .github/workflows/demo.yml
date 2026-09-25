@@ -108,6 +108,31 @@ jobs:
         # Derived from the repo name so a rename cannot leave it pointing at the old one.
         run: make demo-static DEMO_BASE="/${GITHUB_REPOSITORY#*/}/"
 
+      # THE TWO GUARDS OVER WHAT IS ABOUT TO BE PUBLISHED. A red one stops the job before the
+      # upload, so nothing reaches the page. The recorder's self-test proves its QR refusal still
+      # goes red on a photograph carrying a code (a live code card is a bearer instrument, D70).
+      # The coverage spec reads the dist-demo/ this job just built. DEMO_REQUIRED=1 turns its
+      # "no build" skip into a failure, so a build that produced nothing cannot pass.
+      # Neither step calls `make demo-histories`: that target runs on the owner's Mac only.
+      - name: Prove the QR refusal still refuses
+        run: python3 scripts/demo-record.py --self-test
+
+      - name: Cache the browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
+
+      - name: Install chromium
+        working-directory: app
+        run: npx playwright install --with-deps chromium
+
+      - name: Prove the built demo draws what reviewers grade
+        working-directory: app
+        env:
+          DEMO_REQUIRED: '1'
+        run: npx playwright test tests/demo-coverage.spec.ts --reporter=line
+
       # RUNS NOWHERE ELSE (D173: a rule with no reader is advice). `demo-freshness` proves
       # the bundle still fits the WIRE SHAPE; it cannot see the seed rewriting its own DATA
       # on every run, which is exactly what happened before `Inventory.bind_sku` took an

@@ -87,10 +87,34 @@ async function open(
     /** What the apply route answers. A function so a case can differ between the check and
      *  the write, which is the pair this screen's two presses are about. */
     apply?: (body: Record<string, unknown>) => Record<string, unknown>
+    /** What `POST /pipeline/markdowns/<stamp>/send` answers: 200 with a receipt that went
+     *  live, or a refusal code. Nothing here reaches TCGplayer. */
+    send?: () => { status: number; code?: string }
+    /** HOLD THE SEND OPEN THIS LONG, so a case can measure the bar while the press runs
+     *  (round 9, D118). */
+    sendDelayMs?: number
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   const skus = options.skus ?? [live()]
+
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/send$/, async (route) => {
+    wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs))
+    const answer = options.send?.() ?? { status: 200 }
+    await route.fulfill({
+      status: answer.status,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        answer.status === 200
+          ? {
+              stamp: STAMP,
+              published: { upload_id: 'u-1', rows: 1, accepted: 1, messages: [], pushed_at: '2026-09-24T12:00:00+00:00', published_at: '2026-09-24T12:00:05+00:00' },
+            }
+          : { error: { code: answer.code ?? 'refused', message: 'The server said no.' } },
+      ),
+    })
+  })
 
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>
@@ -322,14 +346,14 @@ test('the press sends only the rows a hand priced, and carries the revision it r
   await field.blur()
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
 
-  await page.getByRole('button', { name: 'Check these prices' }).click()
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
 
   const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
   /* ONE ROW, NOT TWO. The untouched listing is simply absent, which `read_back` reports as
      `dropped` — "left alone, which is what deleting a line means". */
   expect(sent.edits).toEqual([{ sku: '8608859', price: '17.50' }])
-  expect(sent.write).toBe(false)
+  expect(sent.write).toBe(true)
   /* AND NO `worklist`. This client writes no CSV — `app/package.json` carries two runtime
      dependencies and PapaParse is not one — so the pairs go as JSON and the ROUTE materialises
      them with the repo's own writer. */
@@ -339,7 +363,7 @@ test('the press sends only the rows a hand priced, and carries the revision it r
   expect(typeof sent.revision).toBe('string')
 })
 
-test('the write press does not exist until a check has answered', async ({ page }) => {
+test('one press writes the file, sends it and makes it live', async ({ page }) => {
   const wire = await open(page)
 
   const field = page.locator('.pricing-input').first()
@@ -348,42 +372,31 @@ test('the write press does not exist until a check has answered', async ({ page 
   await field.type('17.50')
   await field.blur()
 
-  /* AN ABSENCE AND NOT A DISABLED BUTTON, which is `Markdown.tsx`'s own three-step register:
-     the press that spends is not drawn until the free one has answered. */
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(0)
-
-  await page.getByRole('button', { name: 'Check these prices' }).click()
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(1)
-
-  await page.getByRole('button', { name: 'Write the upload file' }).click()
-  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(2)
-  expect((wire.filter((row) => row.path.includes('/apply'))[1]?.body as Record<string, unknown>).write).toBe(true)
-  await expect(page.getByRole('link', { name: 'import.csv' })).toHaveCount(1)
+  /* ONE PRESS (`D273`, Q7): the file is written, then the server
+     reads what is live, sends it and makes it live. No check press and no second press. */
+  await expect(page.getByRole('button', { name: 'Check these prices' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.endsWith('/send')).length).toBe(1)
+  const order = wire.filter((row) => row.path.includes('/apply') || row.path.endsWith('/send')).map((row) => row.path.split('/').pop())
+  expect(order).toEqual(['apply', 'send'])
+  expect(wire.find((row) => row.path.endsWith('/send'))?.body).toEqual({ confirm: true })
 })
 
-test('changing a price after a check withdraws the write press', async ({ page }) => {
-  await open(page)
-
+test('Download the file instead writes it and sends nothing', async ({ page }) => {
+  const wire = await open(page)
   const field = page.locator('.pricing-input').first()
   await field.click()
   await field.fill('')
   await field.type('17.50')
   await field.blur()
-  await page.getByRole('button', { name: 'Check these prices' }).click()
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(1)
 
-  /* A CHECK THAT DESCRIBED A DIFFERENT SET OF EDITS IS WORSE THAN NONE — it would offer a
-     write over rows the operator has since changed, which on this path is the file that moves
-     money at a marketplace. */
-  await field.click()
-  await field.fill('')
-  await field.type('16.00')
-  await field.blur()
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Download the file instead' }).click()
+  await expect(page.getByRole('link', { name: 'import.csv' })).toHaveCount(1)
+  expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
 })
 
-test('a refused check keeps the check press and offers no write', async ({ page }) => {
-  await open(page, {
+test('a refused write sends nothing and says so', async ({ page }) => {
+  const wire = await open(page, {
     apply: () => ({
       ok: false,
       exit_code: 1,
@@ -399,11 +412,22 @@ test('a refused check keeps the check press and offers no write', async ({ page 
   await field.fill('')
   await field.type('17.50')
   await field.blur()
-  await page.getByRole('button', { name: 'Check these prices' }).click()
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
 
-  await expect(page.locator('.pricing-ship pre')).toContainText('REFUSED')
-  await expect(page.getByRole('button', { name: 'Check these prices' })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(0)
+  await expect(page.locator('.pricing-ship-trouble')).toContainText('These prices could not be written, so nothing was sent.')
+  expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
+})
+
+test('a send the live read refuses says nothing changed, and offers Try again', async ({ page }) => {
+  await open(page, { send: () => ({ status: 502, code: 'live_check_failed' }) })
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('')
+  await field.type('17.50')
+  await field.blur()
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect(page.getByText('Nothing was sent. The prices at TCGplayer did not change.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(1)
 })
 
 test('the cut-off is the run\'s own control, and on a lens it is spent by a press', async ({
@@ -528,6 +552,164 @@ test('neither run ship bar is drawn on a lens', async ({ page }) => {
      fetches, so both run bars hide themselves with no edit. Asserted because "the run path is
      untouched" is the claim this whole build rests on. */
   await expect(page.getByRole('region', { name: 'Ship these runs' })).toHaveCount(0)
-  await expect(page.getByRole('region', { name: 'Push these prices' })).toHaveCount(1)
+  await expect(page.getByRole('region', { name: 'Send these prices' })).toHaveCount(1)
+  await expect(page.getByRole('region', { name: 'Send to TCGplayer' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Write the import file/ })).toHaveCount(0)
 })
+
+/* ---- UX-002, THE LENS'S OWN THIRD GRID AXIS: `data-copies='none'` --------------------------------
+ *
+ * `Pricing.css`'s `--pricing-cols` templates are shared with `pricing.spec.ts`'s run path, and
+ * `data-copies='none'` is the one variant only this screen ever draws — a live listing carries no
+ * thumbnail and no quantity cell (see this file's own header), so the section drops those two
+ * tracks. TWO SEPARATE BUGS lived in that variant, at two tiers, and this file is the only one
+ * that can catch either: the table tier's `--pricing-cols` still ended in the same `132px 68px`
+ * pair UX-002's anchor fixed for every source, but the COMPACT tier (600-939px) hard-coded
+ * `.pricing-price { grid-column: 3 }` / `.pricing-actions { grid-column: 4 }` against the
+ * FOUR-track `data-copies='some'` template, and never noticed the three-track `none` one two
+ * lines above it — price landed in the actions track, actions fell into an implicit fourth
+ * column the template never declared, and the row grew past its own container by about the
+ * width of a price field. Fixed the same way UX-002 was: anchored to the grid's last two
+ * lines, which both templates share.
+ */
+
+const LONG_PRICE = '1234.56'
+
+/** No horizontal clipping — the same measurement `pricing.spec.ts`'s own `legible()` makes,
+ *  duplicated rather than imported: this file's own header states its independence from that
+ *  suite on purpose. */
+async function legible(page: Page, name: string): Promise<void> {
+  const clipped = await page
+    .getByRole('textbox', { name })
+    .evaluate((el: HTMLInputElement) => el.scrollWidth > el.clientWidth + 1)
+  expect(clipped, `the ${name} field clips its own value`).toBe(false)
+}
+
+test('the row and caption tracks agree at the table tier, and the price is not clipped (data-copies=none)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page)
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect(page.locator('.pricing-section')).toHaveAttribute('data-copies', 'none')
+  await expect(page.locator('.pricing-thumb')).toHaveCount(0) // the absence this screen's own header states
+
+  const [row, caption] = await Promise.all([
+    page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+    page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+  ])
+  expect(row, `row tracks "${row}" disagree with caption tracks "${caption}"`).toBe(caption)
+
+  const field = page.getByRole('textbox', { name: 'Price for Articuno' })
+  await field.click()
+  await field.fill(LONG_PRICE)
+  await expect(field).toHaveValue(LONG_PRICE)
+  await legible(page, 'Price for Articuno')
+})
+
+test('the compact-tier price and actions land in their own tracks, not an implicit fourth column, at 700px (data-copies=none)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 700, height: 900 })
+  await open(page)
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect(page.locator('.pricing-section')).toHaveAttribute('data-copies', 'none')
+  await expect(page.locator('.pricing-caption')).toBeHidden() // the compact tier, confirmed
+
+  /* THE GEOMETRIC PROOF, MEASURED RATHER THAN GUESSED: the row's OWN width does not overflow
+     even when broken, because `minmax(0, 1fr)` (the id/facts column) absorbs the deficit by
+     shrinking — the defect is a GAP, not a scrollbar. Measured on origin/main's CSS before
+     this fix: the empty reserved 132px track plus the column-gap left 156px of dead space
+     between `.pricing-facts` and `.pricing-price`, against `column-gap: var(--bn-3)` (12px)
+     plus `.pricing-price`'s own `margin-left: var(--bn-2)` (8px) — 20px, measured with the
+     fix in place — the row asks for everywhere else. The floor is comfortably under 156px and
+     comfortably over the 20px the fix itself measures. */
+  const gap = await page.evaluate(() => {
+    const facts = document.querySelector('.pricing-facts')!.getBoundingClientRect()
+    const price = document.querySelector('.pricing-price')!.getBoundingClientRect()
+    return price.x - facts.right
+  })
+  expect(gap, `${gap}px of dead space sits between the facts column and the price field`).toBeLessThanOrEqual(24)
+
+  const field = page.getByRole('textbox', { name: 'Price for Articuno' })
+  await field.click()
+  await field.fill(LONG_PRICE)
+  await expect(field).toHaveValue(LONG_PRICE)
+  await legible(page, 'Price for Articuno')
+})
+
+async function boxesOf(locators: Record<string, import('@playwright/test').Locator>) {
+  const out: Record<string, { x: number; y: number; width: number; height: number } | null> = {}
+  /* A SHORT WAIT, AND GONE IS NULL: an element that vanished during the press is the finding,
+     never a timeout. */
+  for (const [key, locator] of Object.entries(locators)) {
+    out[key] = await locator.boundingBox({ timeout: 1000 }).catch(() => null)
+  }
+  return out
+}
+
+function expectStill(
+  before: Record<string, { x: number; y: number; width: number; height: number } | null>,
+  during: Record<string, { x: number; y: number; width: number; height: number } | null>,
+) {
+  for (const key of Object.keys(before)) {
+    const a = before[key]
+    const b = during[key]
+    expect(b, `${key} is drawn during the press`).not.toBeNull()
+    for (const side of ['x', 'y', 'width', 'height'] as const) {
+      expect(Math.abs((b?.[side] ?? 0) - (a?.[side] ?? 0)), `${key} ${side}`).toBeLessThanOrEqual(0.5)
+    }
+  }
+}
+
+/* ROUND 9, D118: A PRESS CHANGES WHAT IS ON THE SCREEN, NEVER WHERE THE REST OF IT IS. The lens's
+   press read "Send 1 price to TCGplayer" and became "Checking TCGplayer, then sending…" while it
+   ran, so it changed its size under the finger and moved the door beside it. Measured before and
+   during a press held open. */
+for (const width of [390, 820]) {
+  test(`r9: the lens press keeps its place and size while it runs (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    const wire = await open(page, { sendDelayMs: 1500 })
+    const field = page.locator('.pricing-input').first()
+    await field.click()
+    await field.fill('')
+    await field.type('17.50')
+    await field.blur()
+    const bar = page.getByRole('region', { name: 'Send these prices' })
+    await expect(bar.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+    /* BY ITS PLACE AND NOT ITS NAME: the name is what changed under the finger. */
+    const press = bar.locator('.pricing-emit')
+    const locators = { press, door: bar.getByRole('button', { name: /Download/ }) }
+    const before = await boxesOf(locators)
+    await press.click()
+    await expect.poll(() => wire.filter((row) => row.path.endsWith('/send')).length).toBe(1)
+    await expect(press).toHaveAttribute('data-busy', 'true')
+    expectStill(before, await boxesOf(locators))
+  })
+}
+
+/* ROUND 9, R9-1: THE FILE'S LINK ALREADY ON SCREEN STAYS THROUGH THE PRESS. "Download the file
+   instead" first puts the link beside the press; the link used to vanish when Send started, and
+   the bar, set to the right, moved the press under the finger. */
+for (const width of [390, 820]) {
+  test(`r9: a file link already on screen holds its place through the send (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    const wire = await open(page, { sendDelayMs: 1500 })
+    const field = page.locator('.pricing-input').first()
+    await field.click()
+    await field.fill('')
+    await field.type('17.50')
+    await field.blur()
+    const bar = page.getByRole('region', { name: 'Send these prices' })
+    await bar.getByRole('button', { name: 'Download the file instead' }).click()
+    await expect(bar.getByRole('link', { name: 'import.csv' })).toBeVisible()
+    const press = bar.locator('.pricing-emit')
+    const locators = { press, door: bar.getByRole('button', { name: /Download/ }), link: bar.getByRole('link', { name: 'import.csv' }) }
+    const before = await boxesOf(locators)
+    await press.click()
+    await expect.poll(() => wire.filter((row) => row.path.endsWith('/send')).length).toBe(1)
+    await expect(press).toHaveAttribute('data-busy', 'true')
+    expectStill(before, await boxesOf(locators))
+  })
+}
+

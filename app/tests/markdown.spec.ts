@@ -368,12 +368,12 @@ test('the sheet states the two things the operator must not get wrong', async ({
      `Add to Quantity`-is-0 mechanism sentence is gone from the sheet's own words (it is still
      true and still in `docs/specs/stale-listings.md` §2), so this only asserts the guarantee
      that remains on screen. */
-  await expect(sheet(page)).toContainText('Nothing is deleted at TCGplayer')
+  await expect(sheet(page)).toContainText('Deletes nothing')
 
   /* THE PROXY, WHERE IT IS ACTED ON. The store cannot say how long a listing has been live —
      `Listing` has no first-listed stamp — so what is ranked is how long the card has been
      owned. A screen that stopped saying so would be one that quietly started lying. */
-  await expect(page.locator('.markdown-caveat')).toContainText('owned')
+  await expect(page.locator('.markdown-caveat')).toContainText('photographed')
 })
 
 test('picking the export previews, and the preview asks for no write', async ({ page }) => {
@@ -915,3 +915,61 @@ test('a refused fetch names the reason and leaves the drop zone open', async ({ 
   await expect(page.locator('.markdown .runs-drop input[type=file]')).toBeEnabled()
   LIVE_FETCH = 'ok'
 })
+
+function expectStill(
+  before: Record<string, { x: number; y: number; width: number; height: number } | null>,
+  during: Record<string, { x: number; y: number; width: number; height: number } | null>,
+) {
+  for (const key of Object.keys(before)) {
+    const a = before[key]
+    const b = during[key]
+    expect(b, `${key} is drawn during the press`).not.toBeNull()
+    for (const side of ['x', 'y', 'width', 'height'] as const) {
+      expect(Math.abs((b?.[side] ?? 0) - (a?.[side] ?? 0)), `${key} ${side}`).toBeLessThanOrEqual(0.5)
+    }
+  }
+}
+
+/* ROUND 9, D118: THE SHEET'S SEND PRESS KEEPS ITS PLACE AND SIZE WHILE IT RUNS. It read "Send
+   these prices to TCGplayer" and became "Checking TCGplayer, then sending…" under the finger.
+   Measured before and during a press held open. */
+for (const width of [390, 820]) {
+  test(`r9: the sheet's send press keeps its place and size while it runs (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    const wire = await stub(page)
+    await stubTheLens(page)
+    await page.route(/\/pipeline\/markdowns\/[^/]+\/send$/, async (route) => {
+      wire.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+      await new Promise((r) => setTimeout(r, 1500))
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          published: { upload_id: 'u-1', rows: 1, accepted: 1, messages: [], published_at: '2026-09-24T12:00:00+00:00' },
+          stamp: STAMP,
+        }),
+      })
+    })
+    await page.getByRole('button', { name: /^Mark down stale listings$/ }).click()
+    await expect(sheet(page)).toBeVisible()
+    await pickExport(page)
+    await worklistPress(page).click()
+    await checkPress(page).click()
+    await importPress(page).click()
+    const named = page.getByRole('button', { name: 'Send these prices to TCGplayer' })
+    await expect(named).toBeVisible()
+    /* HOVER FIRST, SO ANY SCROLL THAT BRINGS THE PRESS UNDER THE POINTER HAPPENS BEFORE THE
+       MEASUREMENT: a locator's own click scrolls again, and at 390 it scrolled the sheet itself,
+       which is the test moving the press rather than the screen. The press is then pressed where
+       it was measured. */
+    await named.hover()
+    /* BY THE ELEMENT AND NOT ITS NAME: the name is what changed under the finger. */
+    const press = await named.elementHandle()
+    const before = { press: await press?.boundingBox() ?? null }
+    const at = before.press
+    await page.mouse.click((at?.x ?? 0) + (at?.width ?? 0) / 2, (at?.y ?? 0) + (at?.height ?? 0) / 2)
+    await expect.poll(() => wire.filter((row) => row.path.endsWith('/send')).length).toBe(1)
+    await expect.poll(async () => press?.getAttribute('data-busy')).toBe('true')
+    expectStill(before, { press: await press?.boundingBox() ?? null })
+  })
+}

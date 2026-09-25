@@ -18,11 +18,14 @@ import type {
 } from './types'
 import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
-import { standing, type Standing } from './standing'
+import { runsOwingPrice, standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
+import { placeWordsOf } from './position'
 import { runBoxLabel } from './runScope'
 import { hubState } from './OrdersHubStore'
+import { useLiveCheck } from './liveCheck'
+import { matchWaiting } from './autoMatch'
 import './Home.css'
 
 /* BANCHI HOME — the one page where the product is drawn as a picture: the six-stage spine
@@ -34,7 +37,7 @@ import './Home.css'
 
 type Loaded<T> = { state: 'loading' } | { state: 'ready'; value: T } | { state: 'failed' }
 
-function useLoad<T>(load: () => Promise<T>): Loaded<T> {
+function useLoad<T>(load: () => Promise<T>, again = 0): Loaded<T> {
   const [result, setResult] = useState<Loaded<T>>({ state: 'loading' })
   useEffect(() => {
     let alive = true
@@ -48,8 +51,9 @@ function useLoad<T>(load: () => Promise<T>): Loaded<T> {
     return () => {
       alive = false
     }
+    // `again` is the one reason to read twice: a write this screen made (the automatic match).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [again])
   return result
 }
 
@@ -407,9 +411,22 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
 export function Home() {
   const status = useLoad<ServerStatus>(getStatus)
   const boxes = useLoad<BoxRecord[]>(async () => (await getBoxes()).boxes)
-  const runs = useLoad<RunSummary[]>(getRuns)
+  const [runsRead, setRunsRead] = useState(0)
+  const runs = useLoad<RunSummary[]>(getRuns, runsRead)
   const orders = useLoad<OrdersPayload>(getOrders)
   const pricing = useLoad<PricingWorklist>(() => getPricingWorklist())
+  /* A VISIT TO HOME RUNS A DUE LIVE CHECK (the owner's Q3 ruling): a send whose wait ended
+     while the app was closed is checked here, by itself. */
+  const liveCheck = useLiveCheck()
+  /* AND A VISIT TO HOME MATCHES A FINISHED READING (the owner's Q4 ruling, on Q3's two halves):
+     a run whose reading ended while the app was closed is matched here, by itself. */
+  useEffect(() => {
+    if (runs.state !== 'ready') return
+    void matchWaiting(runs.value).then((asked) => {
+      /* THE RUN MOVED ON (or stopped on a problem), so the spine reads the runs again. */
+      if (asked) setRunsRead((n) => n + 1)
+    })
+  }, [runs])
   /* The hero's own newest-captured cards, off a lean top-K route rather than the whole card
      map (D192, item 2) — on its own load so no panel above waits on it, and `deckFromCards`
      below applies exactly the same filter/sort/slice it always has over the smaller result. */
@@ -460,7 +477,7 @@ export function Home() {
       : 0
 
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
-  const runsToPrice = pricing.state === 'ready' ? pricing.value.roster.filter((r) => r.open && r.owes.length > 0).length : null
+  const runsToPrice = pricing.state === 'ready' ? runsOwingPrice(pricing.value.roster) : null
   /* And the copies every joined run still holds that TCGplayer does not (D156)
      — the same `unsent` the picker draws per run, summed, so this note and that chip agree. */
   const unsentCopies = pricing.state === 'ready' ? pricing.value.roster.reduce((n, r) => n + (r.unsent ?? 0), 0) : null
@@ -477,6 +494,7 @@ export function Home() {
     pricingFailed: pricing.state === 'failed',
     runs: runs.state === 'ready' ? runs.value : null,
     runsFailed: runs.state === 'failed',
+    unconfirmed: liveCheck.status?.unconfirmed.copies ?? null,
   })
 
   /* Shipping: the export the hub last read, if one is in hand. */
@@ -523,7 +541,7 @@ export function Home() {
             : 'reading the worklist…'
           : runsToPrice === 0
             ? unsentCopies !== null && unsentCopies > 0
-              ? `nothing to price and ${plural(unsentCopies, 'copy', 'copies')} unsent`
+              ? `${plural(unsentCopies, 'copy', 'copies')} ready to send`
               : 'nothing to price'
             : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
       tone: runsToPrice ? 'warn' : runsToPrice === 0 ? 'ok' : undefined,
@@ -644,7 +662,7 @@ export function Home() {
                   // above never saw it. Same server string, same aria-hidden badge; the seam
                   // between its parts is CSS now (`.home-deck-card-no > span::before`).
                   <span className="home-deck-card-no">
-                    {frontCard.place.label.split(' · ').map((part, at) => (
+                    {placeWordsOf(frontCard.place.label).map((part, at) => (
                       <span key={at}>{part}</span>
                     ))}
                   </span>

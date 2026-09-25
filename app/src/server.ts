@@ -1,5 +1,7 @@
 import type {
   AnswerResult,
+  LiveMove,
+  PriceChange,
   ConfirmResult,
   CorrectResult,
   CodeExportResult,
@@ -45,6 +47,10 @@ import type {
   ExportScope,
   MarkdownAnswer,
   MarkdownPublish,
+  LiveCheckAnswer,
+  SendAnswer,
+  SendsStatus,
+  SendSummary,
   MarkdownPush,
   LiveExportFetched,
   MarkdownTable,
@@ -94,6 +100,7 @@ import type {
   ClaimRelease,
   HoldingsRange,
   HoldingsValuePayload,
+  RunMatchAnswer,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -136,9 +143,12 @@ import type {
  * inventory from a branch, in the other writing real capture photographs into a directory
  * that is deleted with the worktree.
  *
- * The literal below is the last-resort fallback for a bundle built without that define — a
- * bare `tsc`, a test harness, an editor's type server. It is the main tree's port, which is
- * the right guess when nothing has told us which tree this is.
+ * A bundle built without that define — a bare `tsc`, a test harness, an editor's type server,
+ * a bundler that never read `vite.config.ts` — cannot know its tree's port: the browser cannot
+ * hash a path. It used to guess `http://localhost:8000`, the primary checkout's LIVE server,
+ * which is the guess that must never be made (D268, a copied tree never gets
+ * the live port). It now has NO address. `about:invalid` opens no socket, so a photo or file
+ * link built on it loads nothing, and `request` refuses by name before any fetch.
  *
  * THE HOST IS RESOLVED AT RUNTIME AND ONLY THE PORT IS BAKED, WHICH IS WHAT LETS THIS PAGE BE
  * OPENED FROM ANOTHER DEVICE. `VITE_CAPTURE_DEFAULT` is a whole URL and its host is
@@ -158,7 +168,7 @@ import type {
  * exists because the default could not follow the address bar; it still wins, and it is still
  * the answer for pointing a device at a DIFFERENT machine. What it is no longer needed for is
  * the ordinary case of reaching this one by its own name. */
-const FALLBACK_BASE = 'http://localhost:8000'
+const FALLBACK_BASE = 'about:invalid'
 const derivedUrl: unknown = import.meta.env.VITE_CAPTURE_DEFAULT
 const derivedPort: unknown = import.meta.env.VITE_CAPTURE_PORT
 
@@ -225,8 +235,8 @@ let demoModule: Promise<typeof import('./demoServer')> | null = null
  */
 export class ServerError extends Error {
   /** The server's own code (`box_invalid`, `store_busy`, `card_not_found`, …), or one of
-   *  the three this client invents when there is no server answer to quote: `unreachable`,
-   *  `origin_blocked` and `bad_response`. Codes are stable strings and are worth branching
+   *  the four this client invents when there is no server answer to quote: `unreachable`,
+   *  `origin_blocked`, `bad_response` and `no_server_address`. Codes are stable strings and are worth branching
    *  on; messages are worth showing.
    *
    *  `origin_blocked` is the newest and the only one that is a CLAIM ABOUT THE SERVER rather
@@ -241,17 +251,40 @@ export class ServerError extends Error {
    *  is the case where nothing was sent. */
   readonly status: number
 
-  constructor(code: string, message: string, status: number) {
+  /** What a screen can act on beside the sentence, when the refusal carries any (round 7):
+   *  a send's refused rows, so it can offer to send again with the live price named. */
+  readonly data: unknown
+
+  constructor(code: string, message: string, status: number, data?: unknown) {
     super(message)
     this.name = 'ServerError'
     this.code = code
     this.status = status
+    this.data = data
   }
 }
 
 /** A refusal in the shape an owner-side screen draws it: the sentence it shows, and the code
  *  it prints small beneath — docs/DESIGN.md's human-label-large, machine-string-small rule. */
-export type Failure = { code: string; message: string }
+export type Failure = {
+  code: string
+  message: string
+  /** Which of the kit's two shapes draws it (UX-041). `retry` may pass on a second press: the
+   *  server was not reached, it failed inside, or it was busy. `refusal` is a "no" that the
+   *  same press will get again. Optional, so a failure a screen builds by hand still types. */
+  kind?: 'refusal' | 'retry'
+  /** What the refusal carries beside its sentence, when it carries any (round 7). */
+  data?: unknown
+}
+
+/** The codes a second press can clear: nothing answered, or the store was mid-write. */
+const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
+
+function failureKind(code: string, status: number): 'refusal' | 'retry' {
+  if (RETRY_CODES.has(code)) return 'retry'
+  if (status >= 500 || status === 429 || status === 423) return 'retry'
+  return 'refusal'
+}
 
 /**
  * Any thrown thing, as an owner-side screen shows it.
@@ -281,9 +314,10 @@ export type Failure = { code: string; message: string }
  * "finish the job" by wiring this into it.
  */
 export function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message }
+  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), data: err.data }
   const detail = err instanceof Error ? err.message : String(err)
   return {
+    kind: 'refusal',
     code: 'client_bug',
     message:
       `The app failed before the capture server could answer: ${detail}. That is a bug in ` +
@@ -413,8 +447,9 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
 /** D30's neighbours, as records rather than as substrings of an English sentence.
  *
  * `Card 19` is the nineteenth card in the box, and the neighbours are what let a hand count
- * to it without anyone learning that rule. `prev` is the card in front of this one and `next`
- * the card behind it; either is null past the box's ends, and both null together when the
+ * to it without anyone learning that rule. `prev` is the card toward the BACK of the box (the
+ * lower number: card 1 is at the far back, the owner's ruling of 2026-09-23) and `next` the
+ * card toward the FRONT; either is null past the box's ends, and both null together when the
  * server sent no decoration (an older server) or nulled it — a record in the store whose
  * position will not read, the same event that nulls the denominator. A sentence naming a
  * possibly-wrong neighbour would send a hand to the wrong slot, which is the one thing a
@@ -442,50 +477,50 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
  * void. Measured on the owner's store before it went: it cost 15px on every copy row in a box
  * that had ever had a sale, and it was the reason the line wrapped to three lines at all.
  *
- * A NEIGHBOUR NOTHING HAS IDENTIFIED IS NO LONGER A NEIGHBOUR AT ALL (D116). It used to
- * degrade to its slot — `#41`, and to its INDEX before D92 — which is a live card at a real
- * count and was read as a sold card leaking into the ladder. It is neither: it is a card on
- * the shelf that no identification ever named, seven of them on the owner's store, all seven
- * queued and closed under D37. The server now walks past it to the nearest card it CAN name
- * and says how many it passed, so the fallback below fires only for an older server.
+ * A NEIGHBOUR NOTHING HAS IDENTIFIED was drawn as its slot (`#41`) until D116, and the owner
+ * read that figure as a sold card leaking into the ladder. D116 then walked past it to a
+ * named card, which dropped a real card from the sentence (UX-264).
  *
- * THE SKIP IS SAID RATHER THAN SWALLOWED. A landmark two cards away instead of one is a
- * sentence somebody counts slots against and comes out one short, which is the one thing
- * D30 says this sentence may never cause — so `said` carries the count, in the joined form
- * the Fulfiller reads at 20px, and the ranked block draws it per side. */
+ * AN UNREAD CARD IS A NEIGHBOUR AGAIN (the owner's ruling, 2026-09-24, LOC-28, amending
+ * D116). The server sends the ADJACENT card on each side, named or not, and `unread` is the
+ * run of unread cards starting there. So a side reads "an unread card" or "3 unread cards",
+ * never a bare figure (D116's complaint) and never a name further along (UX-264's).
+ *
+ * `said` IS A WHOLE SENTENCE WITH BACK AND FRONT IN IT (UX-186). It used to be a clause,
+ * "between X and Y", which never said which neighbour stands at the back. Now it reads
+ * "It sits in front of X and behind Y.": X is toward the back, Y toward the front, in the
+ * owner's own orientation. A departed card's sentence is in the past tense ("It was ..."). */
 export type PlaceParts = {
   prev: PlaceNeighbor | null
   next: PlaceNeighbor | null
   said: string
 }
 
-export function placeParts(place: Place | undefined): PlaceParts | null {
+/** What one side of the card is, in words: the neighbour's name, or the unread run
+ *  ("an unread card", "3 unread cards"). An older server's nameless side with no `unread`
+ *  reads as one unread card, never as a bare figure. */
+export function neighborWords(side: PlaceNeighbor): string {
+  if (side.name !== null) return side.name
+  const run = Math.max(1, side.unread ?? 1)
+  return run === 1 ? 'an unread card' : `${run} unread cards`
+}
+
+export function placeParts(place: Place | undefined, departed = false): PlaceParts | null {
   if (place === undefined || place.located === false) return null
 
   const neighbors = place.neighbors
   if (neighbors === undefined || neighbors === null) return null
 
   const { prev, next } = neighbors
-  const name = (side: PlaceNeighbor): string => side.name ?? `#${side.slot}`
+  const verb = departed ? 'was' : 'sits'
 
   let said: string
-  if (prev !== null && next !== null) said = `between ${name(prev)} and ${name(next)}`
-  else if (prev !== null) said = `after ${name(prev)}`
-  else if (next !== null) said = `before ${name(next)}`
-  /* The one card whose box holds nothing else — and, since D116, a card with no NAMED card
-     either side of it. No neighbours is no content, and null lets a screen render nothing
-     rather than chrome. */
+  if (prev !== null && next !== null) said = `It ${verb} in front of ${neighborWords(prev)} and behind ${neighborWords(next)}.`
+  else if (prev !== null) said = `It ${verb} in front of ${neighborWords(prev)}.`
+  else if (next !== null) said = `It ${verb} behind ${neighborWords(next)}.`
+  /* The one card whose box holds nothing else. No neighbours is no content, and null lets a
+     screen render nothing rather than chrome. */
   else return null
-
-  /* THE SKIPPED CARDS ARE STATED, AND ONE CLAUSE COVERS BOTH SIDES: every card the walk
-     passed over lies strictly between the two landmarks named above, whichever side it was
-     on, so "with 1 unidentified card in between" is exact for a one-sided skip and for a
-     two-sided one alike. Drawn only when it fires — 27 rows on the owner's store — because a
-     clause on every row is the gap clause the owner had removed in 2026-08-30. */
-  const skipped = (prev?.skipped ?? 0) + (next?.skipped ?? 0)
-  if (skipped > 0) {
-    said += `, with ${skipped} unidentified card${skipped === 1 ? '' : 's'} in between`
-  }
 
   return { prev, next, said }
 }
@@ -498,10 +533,10 @@ export function placeParts(place: Place | undefined): PlaceParts | null {
  * `aria-label`. Kept as its own export rather than inlined at the call sites: it is the shape
  * three screens have imported since 2026-08-13.
  *
- * At the box's ends there is one neighbour and it says which side (`after Mantine` /
- * `before Thievul`) rather than pretending a between. */
-export function placeSentence(place: Place | undefined): string | null {
-  return placeParts(place)?.said ?? null
+ * At the box's ends there is one neighbour and it says which side (`It sits in front of
+ * Mantine.` / `It sits behind Thievul.`) rather than pretending a between. */
+export function placeSentence(place: Place | undefined, departed = false): string | null {
+  return placeParts(place, departed)?.said ?? null
 }
 
 // ------------------------------------------------------------------------------ the wire
@@ -526,13 +561,13 @@ function parseJson(text: string): unknown {
  * the operator as "undefined is not an object". Returns null and lets the caller fall back
  * to the status line instead.
  */
-function errorEnvelope(body: unknown): { code: string; message: string } | null {
+function errorEnvelope(body: unknown): { code: string; message: string; data?: unknown } | null {
   if (typeof body !== 'object' || body === null) return null
   const wrapped: unknown = (body as { error?: unknown }).error
   if (typeof wrapped !== 'object' || wrapped === null) return null
-  const { code, message } = wrapped as { code?: unknown; message?: unknown }
+  const { code, message, data } = wrapped as { code?: unknown; message?: unknown; data?: unknown }
   if (typeof code !== 'string' || typeof message !== 'string') return null
-  return { code, message }
+  return { code, message, data }
 }
 
 /* WHICH PROCESS IS ANSWERING, observed on traffic the app is already making (D73).
@@ -637,6 +672,17 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
     return (await demoModule).demoRequest(path, init)
   }
 
+  /* A bundle that does not know its server's address refuses, and never guesses the live
+   * port. See `FALLBACK_BASE`. */
+  if (base === FALLBACK_BASE) {
+    throw new ServerError(
+      'no_server_address',
+      'This copy of the app was built without the address of its capture server, so it ' +
+        'will not guess one. Nothing was sent. Build it again with `make up`.',
+      0,
+    )
+  }
+
   const url = `${base}${path}`
 
   let response: Response
@@ -710,7 +756,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
 
   if (!response.ok) {
     const named = errorEnvelope(body)
-    if (named !== null) throw new ServerError(named.code, named.message, response.status)
+    if (named !== null) throw new ServerError(named.code, named.message, response.status, named.data)
     /* Not from this server, then — a proxy, or a dev-server 404 from a misconfigured base
      * URL. The status line is all there is, so quote it with the URL that produced it
      * rather than inventing an explanation for a response nobody in this repo wrote. */
@@ -2367,6 +2413,95 @@ export async function publishMarkdown(stamp: string): Promise<MarkdownPublish> {
 }
 
 /**
+ * ONE PRESS for a mark-down: read what is live, then push and publish this markdown's file
+ * (`D273`). **This changes what buyers pay.** A failed publish
+ * rolls the push back server-side, so no half-sent state is left for a screen to explain.
+ */
+export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
+  return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as MarkdownPublish
+}
+
+/**
+ * THE ONE PRESS for listings (`D273`): the server reads what is
+ * live first and refuses whole if it cannot, writes the file behind the double-send guard,
+ * sends it and makes it live. **This changes what buyers see.**
+ *
+ * `download: true` is "Download the file instead": the same live read and the same guard, then
+ * it stops at the file. `confirm` is sent only on the real press, never defaulted.
+ */
+export async function sendCopies(
+  runs: readonly string[],
+  options: {
+    download?: boolean
+    splitThreshold?: boolean
+    quantities?: Record<string, number>
+    /** The price changes the button named. Only these may ride the send (round 6). */
+    prices?: readonly PriceChange[]
+    /** The live copies the button said listing rows move (round 7). */
+    moves?: readonly LiveMove[]
+  } = {},
+): Promise<SendAnswer> {
+  return (await request('/pipeline/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      runs,
+      ...(options.download ? { download: true } : { confirm: true }),
+      ...(options.download && options.splitThreshold ? { split_threshold: true } : {}),
+      ...quantitiesClaim(options.quantities),
+      ...(options.prices !== undefined && options.prices.length > 0 ? { prices: options.prices } : {}),
+      ...(options.moves !== undefined && options.moves.length > 0
+        ? { moves: options.moves.map((move) => ({ sku: move.sku, price: move.price, copies: move.copies })) }
+        : {}),
+    }),
+  })) as SendAnswer
+}
+
+/** Every send's receipt, what is written and not confirmed, and whether the live check is due. */
+export async function sendsStatus(): Promise<SendsStatus> {
+  return (await request('/pipeline/sends')) as SendsStatus
+}
+
+/** A written file's copies back on the list (the owner's ruling on unconfirmed copies). */
+export async function takeBackSend(stamp: string): Promise<{ send: SendSummary; moved: number }> {
+  return (await request(`/pipeline/sends/${encodeURIComponent(stamp)}/take-back`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { send: SendSummary; moved: number }
+}
+
+/** The owner has read a taken-back receipt's warning, so the card stops drawing it. */
+export async function dismissSendWarning(stamp: string): Promise<{ send: SendSummary }> {
+  return (await request(`/pipeline/sends/${encodeURIComponent(stamp)}/dismiss`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })) as { send: SendSummary }
+}
+
+/**
+ * Read what is live and confirm every send that is due. The server runs it only when asked:
+ * `force` is the manual "Check what is live" press, which runs with nothing due.
+ */
+export async function liveCheck(force = false): Promise<LiveCheckAnswer> {
+  return (await request('/pipeline/live-check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(force ? { force: true } : {}),
+  })) as LiveCheckAnswer
+}
+
+/** The bytes of one file a send wrote, for "Download the file instead". */
+export function sendFileUrl(stamp: string, file: string): string {
+  return `${base}/pipeline/sends/${encodeURIComponent(stamp)}/file?name=${encodeURIComponent(file)}`
+}
+
+/**
  * Fetch the operator's own live listings from TCGplayer, and keep the file (D104).
  *
  * FREE. It starts no child and can put no number on an invoice — but it reads a secret and
@@ -2944,6 +3079,20 @@ export async function fetchExport(
       set_ids: options.setIds,
     }),
   })) as ExportFetched
+}
+
+/**
+ * THE AUTOMATIC MATCH (flow interview, Q4): fetch the catalogue and match the run to it, the
+ * moment its reading is done. The screen calls it for every run it sees waiting for a match;
+ * a problem is recorded server-side as the run's next step and is not asked again unless
+ * `retry` is the door's own press.
+ */
+export async function matchRun(name: string, retry = false): Promise<RunMatchAnswer> {
+  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/match`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(retry ? { retry: true } : {}),
+  })) as RunMatchAnswer
 }
 
 export async function runStep(

@@ -55,12 +55,19 @@
   --bn-ink-3: #666c76;           /* metadata, captions, placeholders — 4.85:1 on --bn-bg,
                                     4.55:1 on --bn-surface-2 (was #6b7280, 4.43:1 / 4.16:1,
                                     failing this token's own documented job; measured 2026-09-20) */
-  --bn-ink-4: #7f8791;           /* faint: icons, separators, disabled — 3.6:1 on the page. Data-bearing
-                                    text reads ink-3; this is the floor a word may sit at, never a caption */
+  --bn-ink-4: #7f8791;           /* NOT FOR TEXT (2026-09-23): icons, separators, rules, a field's edge.
+                                    3.33:1 on --bn-bg, 3.64:1 on --bn-surface, 3.13:1 on --bn-surface-2 —
+                                    the 3:1 a graphic needs, and a visible step below ink-3. A word is
+                                    ink-3 at the faintest (UX-047) */
 
   --bn-line: rgba(15, 18, 23, 0.08);
   --bn-line-strong: rgba(15, 18, 23, 0.16);
   --bn-line-focus: rgba(61, 90, 241, 0.55);
+  /* THE EDGE OF A CONTROL YOU TYPE INTO OR TICK, at 3:1 on every ground (UX-094).
+     `--bn-line-strong` is 1.41:1 on a white field, which D50 set at 3.36:1 before the legacy
+     `--field` moved onto it. A name of its own, so every hairline that reads `--bn-line-strong`
+     keeps its weight. It is ink-4, because a field's edge is exactly ink-4's job: a graphic. */
+  --bn-field-edge: var(--bn-ink-4);
 
   /* ---- brand ------------------------------------------------------------- */
   --bn-accent: #3d5af1;          /* action. Buttons, links, selection, focus ring */
@@ -95,6 +102,17 @@
   --bn-danger-tint: rgba(220, 38, 38, 0.10);
   --bn-money: #0f1217;
 
+  /* PILL INKS: a word in a tone, drawn on that tone's tint (UX-047). The tone inks above are
+     4.0-4.4:1 once the tint is under them, at 10-11px. These clear 4.5:1 on the tint over
+     --bn-bg, --bn-surface and --bn-surface-2. Dark keeps the tone ink itself, which already
+     clears 5:1 on its tint. */
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09;
+  /* danger is crimson and live is vermilion, so the two pills read apart at a glance */
+  --bn-pill-ink-danger: #b3123e;
+  --bn-pill-ink-live: #a53f12;
+
   /* ---- elevation --------------------------------------------------------- */
   --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
   --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18),
@@ -113,6 +131,15 @@
   --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
   --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* TYPE ROLES — aliases onto the scale below, never new sizes (UX-067, UX-115). A heading is
+     one of three steps; a sentence a person must read is at least 13px; a label (a caps word,
+     a pill, a keycap) is 10-11px and is never a sentence. */
+  --bn-fs-h1: var(--bn-fs-3xl);
+  --bn-fs-h2: var(--bn-fs-xl);
+  --bn-fs-h3: var(--bn-fs-lg);
+  --bn-fs-read: var(--bn-fs-md);
+  --bn-fs-label: var(--bn-fs-xs);
 
   --bn-fs-2xs: 10px;
   --bn-fs-xs: 11px;
@@ -245,6 +272,12 @@
      to 330px on the owner's own rig; `app/tests/page-edge.spec.ts` asserts the anchor. */
   --bn-page-w: 1600px;
   --bn-page-w-rows: 1344px;
+  /* ONE WIDTH AND ONE TOP GAP FOR EVERY PAGE BUILT ON `Page` (D272, amends D197).
+     A page drawn by `Page` carries `data-bn-page` and ignores `--bn-page-max`: the width is
+     `--bn-page-w` at every screen, fluid below it, and the title sits `--bn-page-top` below the
+     shell's own edge. `--bn-page-max` and `--bn-page-w-rows` stay for the screens that have not
+     moved onto `Page` yet, and go dead one screen at a time as they do. */
+  --bn-page-top: var(--bn-6);    /* 16px below 768: the phone's own page inset */
 
   --bn-control-h: 34px;
   --bn-control-h-lg: 40px;
@@ -293,7 +326,7 @@
   --bn-ink: #eef0f4;
   --bn-ink-2: #b9bfc9;
   --bn-ink-3: #838b98;
-  --bn-ink-4: #707886;           /* 4.0:1 on the dark page */
+  --bn-ink-4: #707886;           /* not for text: 4.34:1 on the dark page, 3.71:1 on --bn-surface-3 */
 
   --bn-line: rgba(255, 255, 255, 0.08);
   --bn-line-strong: rgba(255, 255, 255, 0.16);
@@ -317,6 +350,19 @@
   --bn-danger-tint: rgba(255, 92, 92, 0.14);
   --bn-money: #eef0f4;
 
+  --bn-pill-ink-accent: var(--bn-accent-hover);  /* a pill on an accent-tinted row is two tints deep */
+  --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn);
+  /* live is a light orange-vermilion and danger a deeper crimson-rose: apart in hue and in
+     lightness, each over 4.5:1 on its tint on every dark ground, INCLUDING a selected
+     (accent-tinted) row (kit-frame-2, 2026-09-24): a danger pill drawn on a selected row is a
+     second tint over a first one, and the review found it at 4.08:1 there against this token's
+     former #f7608a — lighter than the plain-row floor needed, so nobody had reason to raise it
+     until a row could tint under it. gallery.spec.ts now composites the row's own tint into the
+     ground it checks every pill against. */
+  --bn-pill-ink-danger: #f6799c;
+  --bn-pill-ink-live: #ffab70;
+
   --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(255, 255, 255, 0.07);
@@ -331,6 +377,11 @@
 
 /* A thumb needs 40px. Every kit control reads these, so the floor is raised once — and it
    follows the POINTER, not the width: an iPad in portrait is 820px wide and all thumb. */
+/* The gap above a page's title follows the page's own side inset: 16px on a phone. */
+@media (max-width: 767px) {
+  :root { --bn-page-top: var(--bn-4); }
+}
+
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
   :root {
     --bn-control-h-sm: 40px;

@@ -380,10 +380,10 @@ COMPONENTS = [
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
-                                            "D87", "D100", "D145", "D172", "D180",
-                                            "D189", "D210",
-                                            "D213", "D219", "D239",
-                                            "D242"],
+                                            "D87", "D100", "D145", "D172", "D180", "D189", "D210",
+                                            "D213", "D219", "D239", "D242",
+                                            "D259",
+                                            "D273"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -457,6 +457,14 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
+            "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
+                                     "gives every unnamed box the stored name `Box <number>` "
+                                     "(`store/master.py:Inventory.box_name_plan`). Previews by "
+                                     "default; `--write` plans again inside the store lock and "
+                                     "applies it in one transaction. Idempotent: a named box is "
+                                     "never touched.",
+                             "governed_by": ["D259", "D20"],
+                             "tested_by": ["T7"]},
             # THE BACKFILL PRESS OVER EVERY EXPORT ALREADY ON DISK (identity-follows-sku.md
             # §3.2, lane 0). `store/skus.py`'s never-delete argument means this is a FOLD
             # onto whatever the table already holds, never `readings adopt`'s full replace.
@@ -680,8 +688,8 @@ COMPONENTS = [
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58",
-                                            "D59", "D86", "D99", "D172", "D213", "D243",
-                                            "D253"], "tested_by": ["T7"]},
+                                            "D59", "D86", "D88", "D99", "D172", "D174", "D213",
+                                            "D243", "D253"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
@@ -747,7 +755,7 @@ COMPONENTS = [
                                            "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49",
                                            "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D137",
                                            "D145", "D147", "D150", "D156", "D166", "D180", "D183",
-                                           "D188", "D253"], "tested_by": ["T7"]},
+                                           "D188", "D253", "D259"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -949,7 +957,9 @@ COMPONENTS = [
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
                                         "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
                                         "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D162", "D213", "D253"], "tested_by": ["T3"]},
+                                        "D137", "D146", "D162", "D213", "D218", "D253",
+                                        "D259",
+                                        "D260"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -1474,6 +1484,18 @@ COMPONENTS = [
                                              "D48", "D56", "D58", "D65", "D76", "D145", "D165",
                                              "D172", "D174", "D180"],
                              "tested_by": ["T7"]},
+            "sendguard.py": {"does": "THE DOUBLE-SEND GUARD. After a send, live at TCGplayer "
+                                     "plus Add to Quantity may never pass the copies on hand, "
+                                     "per SKU. It reads the fresh live export and the shelf, "
+                                     "never the store's listing bookkeeping, so a wrong "
+                                     "`pushed` cannot open it. On hand is the store's unsold "
+                                     "copies of the SKU union this send's matched positions. "
+                                     "It only ever takes copies OUT of a file. Pure: "
+                                     "`cli/cmd_emit.py --live-guard` supplies the inputs and "
+                                     "prints one JSON line of trims.",
+                             "governed_by": ["D7", "D59", "D87", "D100",
+                                             "D273"],
+                             "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and any cap the send asked for spent ONCE "
                                  "over that union. There is NO standing cap since D7 was "
@@ -1745,7 +1767,7 @@ COMPONENTS = [
                                    "for a different job (matching, uppercased) and keeps its own "
                                    "copy for now, since lane 1's fence does not reach that file.",
                            "governed_by": ["D36", "D55", "D63", "D67",
-                                           "D234", "D252"], "tested_by": ["T7"]},
+                                           "D234", "D252", "D259"], "tested_by": ["T7"]},
             "master.py": {"does": "the cards, boxes and listings tables — cards, positions, SKUs, "
                                   "listing states, `open_section`, which puts one divider in front "
                                   "of the next card at the index only the store can read (D10), and "
@@ -1787,7 +1809,7 @@ COMPONENTS = [
                                           "D23", "D24", "D26", "D28", "D30", "D34", "D36", "D55",
                                           "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88",
                                           "D89", "D100", "D115", "D132", "D145", "D146", "D167",
-                                          "D172", "D173", "D183", "D192", "D213", "D253"], "tested_by": ["T7"]},
+                                          "D172", "D173", "D183", "D192", "D213", "D253", "D259"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -1859,6 +1881,19 @@ COMPONENTS = [
             # `_run_box` answers None for one. The cache cannot stand in for either: an entry
             # is written AFTER collection, so two presses racing both see an empty cache and
             # both pay.
+            "sendclaims.py": {"does": "the `send_claims` table — D174's claim shape over a send "
+                                      "to TCGplayer. One row per press, holding the SKUs it "
+                                      "adds (0 for a price file). `cli/cmd_emit.py` checks every "
+                                      "live claim and writes its own INSIDE the store write that "
+                                      "counts the copies sent, so two presses cannot both decide "
+                                      "first, whatever process each came from. A claim is ALSO "
+                                      "THE HOLD: a send whose outcome is unknown keeps its row, "
+                                      "and every later send is refused over its SKUs until the "
+                                      "live check past the wait releases it. A dead holder is "
+                                      "reported, never acted on. Schema 11.",
+                              "governed_by": ["D174", "D88", "D192",
+                                              "D273"],
+                              "tested_by": ["T7"]},
             "submissions.py": {"does": "the `submissions` table — one row per press, holding the "
                                        "position keys that press is about to pay to read. "
                                        "`claim_or_refuse` is the guard and it is ONE ACT: it "
@@ -2003,8 +2038,9 @@ COMPONENTS = [
                                    "loads only the rows a caller names. `buried()` (D134) is "
                                    "`history()`'s narrower sibling: the `buried` events alone, "
                                    "for `#/graveyard`'s read.",
-                           "governed_by": ["D145", "D13", "D53", "D63", "D88", "D134", "D174",
-                                           "D189", "D191", "D219", "D243"],
+                           "governed_by": ["D13", "D53", "D63", "D88", "D134", "D145", "D174",
+                                           "D189", "D191", "D219", "D243",
+                                           "D273"],
                            "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
@@ -2020,8 +2056,9 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D145", "D20", "D26", "D86", "D88", "D134", "D140", "D166", "D172",
-                                      "D174", "D189", "D192", "D213", "D219", "D243"],
+                      "governed_by": ["D20", "D26", "D86", "D88", "D134", "D140", "D145", "D166",
+                                      "D172", "D174", "D189", "D192", "D213", "D219", "D243",
+                                      "D273"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -2440,7 +2477,7 @@ COMPONENTS = [
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D141", "D215"],
+                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D275", "D284", "D261"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -2608,10 +2645,11 @@ COMPONENTS = [
                         "the previous bundle byte-identical, the build in flight that answers "
                         "200 throughout, and a PATH with no node on it — the API up, `GET /` "
                         "503, the log naming `make launch-agent`. THE PORT IS PINNED with "
-                        "`PKMNSCAN_PORT` and that is not a shortcut: a copied tree is not a "
-                        "LINKED worktree, so the derivation calls it the main checkout and it "
-                        "claims :8000 — measured, against the owner's live server, the first "
-                        "time this ran. In `check`, never in the git hook (D18). "
+                        "`PKMNSCAN_PORT` and that is not a shortcut: the first time this ran, a "
+                        "copied tree claimed :8000 — measured, against the owner's live server. "
+                        "A copy with no `.git` now takes a slot (D268), and a "
+                        "free socket still cannot collide the way a slot can. "
+                        "In `check`, never in the git hook (D18). "
                         "IT ALSO REPRODUCES BOTH OF D158\'s INCIDENTS in a third "
                         "tree that is a REAL git checkout with a real `main`: a tree moving "
                         "under a live supervisor, and a cold start through `serve.py run` — "
@@ -2619,7 +2657,7 @@ COMPONENTS = [
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
                         "reload is scheduled and the guard is never reached.",
-                "governed_by": ["D18", "D43", "D53", "D127", "D138", "D158", "D176"],
+                "governed_by": ["D18", "D43", "D53", "D127", "D138", "D158", "D176", "D268"],
                 "tested_by": [],
             },
             "primary_sync.py": {
@@ -3506,8 +3544,8 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D28", "D58", "D62", "D76", "D79", "D83",
                                 "D86", "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D165", "D167", "D168", "D174", "D189", "D192",
-                                "D193", "D203", "D210", "D225", "D227", "D236",
-                                "D252"],
+                                "D193", "D203", "D210", "D225", "D227", "D236", "D252",
+                                "D273"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -3550,7 +3588,22 @@ COMPONENTS = [
                 # node, and the git hook runs bare python3 with nothing installed, so it lives
                 # in `make check` beside the other two self-tests rather than on the commit
                 # path.
-                "governed_by": ["D18", "D43"],
+                "governed_by": ["D18", "D43", "D268", "D261"],
+            },
+            "port-slots.py": {
+                "does": "the port slot registry's one writer. `claim` records one slot per "
+                        "checkout in `~/.pkmnscan/port-slots.json`, which `server/ports.py` "
+                        "and `app/devPort.ts` read before the path hash. A claimed slot never "
+                        "moves; a new claim starts at the hash slot and steps past a slot "
+                        "another checkout claimed or whose port another checkout's server "
+                        "holds. `make dev`, `server`, `up`, `design-check` and "
+                        "`scripts/launch-config.py` claim first. Over a damaged registry, a "
+                        "claim keeps a `.bad-<stamp>` copy and says so. Fails open, loudly. "
+                        "`selftest` forces two throwaway trees into one slot and proves, with "
+                        "a real Vite and a real Playwright, that a run refuses the other "
+                        "tree's server and that the claim gives each its own slot, and that "
+                        "`.claude/launch.json` names the claimed port.",
+                "governed_by": ["D18", "D43", "D122", "D268", "D261"],
             },
             "set-hint-agreement.py": {
                 "does": "port-agreement.py's shape, one decision over: proves "
@@ -3589,42 +3642,63 @@ COMPONENTS = [
                         "a case. Never writes. WIDENED, OFF BY DEFAULT, FOR ONE "
                         "CALLER: `--include-code-attr` and `--join-literals` "
                         "(D218) — see the header for what each "
-                        "adds and why neither reaches `no mechanism on screen`'s own call.",
-                "governed_by": ["D134", "D196", "D218"],
+                        "adds and why neither reaches `no mechanism on screen`'s own call. "
+                        "Every hit also carries `scope`, the nearest named function, class, "
+                        "arrow binding or module-level constant (`scopeOf`), which `typed "
+                        "interpunct` keys its list by.",
+                "governed_by": ["D134", "D196", "D218", "D280"],
             },
             "build-mark.mjs": {"does": "generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo. Asserts on what it extracted (the tile is 221 points, the display bracket is an outlined polygon, the small bracket is a stroked path) before writing 25KB of path data into app/. D18: a generator may write and nothing that writes may gate a commit — this is run by hand, never on the commit path.",
                                 "governed_by": ["D18", "D94", "D102"]},
             "build-lockup.mjs": {"does": "generates the LOCKUP — app/src/kit/lockupGeometry.ts — by reading docs/specs/logo.md section 13's settled table and running docs/specs/logo/sheets/lockup-core.js in a real browser. It reads the table rather than re-declaring it, unlike build-mark.mjs, because the lockup's eleven parameters ARE in a machine-readable table and the mark's are not; a third copy would be a third thing to drift. It needs a browser where build-mark.mjs needs only `new Function`, because `frame()` solves the roman's tracking with document.createRange() and that solve is what gets baked. IT OUTLINES THE TYPE: 番地 in IBM Plex Sans JP 400 and BANCHI in Manrope 700, both OFL and both devDependencies read at build time and never committed, so no font ships and a blocked CDN cannot draw a fallback CJK face at letter-spacing solved for Plex. Asserts what build-mark.mjs cannot: it renders the generated outlines against the live text they replace and refuses to write when more than 8% of inked pixels differ — the measured residual is 6.2%, which is hinting. D18: run by hand, never on the commit path.",
                                  "governed_by": ["D18", "D102"]},
-            "copy-budget.mjs": {"does": "`node scripts/copy-budget.mjs --pin` re-measures the "
-                                        "visible word count `app/tests/copy-budget.spec.ts` "
-                                        "asserts on every owner route and rewrites "
-                                        "`app/tests/copy-budget.json`. CONTAINS NO COUNTING "
-                                        "LOGIC OF ITS OWN — it sets `COPY_BUDGET_PIN=1` and "
-                                        "runs that one spec through Playwright directly (not "
-                                        "`make design-check`: it is a generator, D18, and does "
-                                        "not take the suite lock), so the pin path and the "
-                                        "assert path are one file exercising one measurement "
-                                        "and cannot drift apart. Written exactly, no slack — "
-                                        "slack is how a ratchet leaks.",
-                                "governed_by": ["D18", "D194"]},
-            "typed-interpunct-pin.mjs": {
-                "does": "`node scripts/typed-interpunct-pin.mjs --pin` re-measures the "
-                        "typed-dot count `scripts/docs-audit.py`'s `typed interpunct` row "
-                        "asserts and rewrites `scripts/typed-interpunct.json`. Mirrors "
-                        "copy-budget.mjs's own discipline: shells out to "
-                        "`scripts/user-strings.mjs --join-literals --include-code-attr`, "
-                        "the same extraction the row itself reads, so the pin path and the "
-                        "assert path cannot drift apart. Written exactly, no slack.",
-                "governed_by": ["D18", "D194", "D196", "D218"]},
-            "typed-interpunct.json": {
-                "does": "the ratchet's pinned ceiling, one field, `count`. Written only by "
-                        "`typed-interpunct-pin.mjs --pin`; `scripts/docs-audit.py`'s `typed "
-                        "interpunct` row only reads it, since that row sits on the commit "
-                        "path (D18).",
-                "governed_by": ["D18", "D194", "D218"]},
+            "machine-words.json": {
+                "does": "D196's word list, `NO_MECHANISM_WORDS`, moved out of "
+                        "`docs-audit.py` on 2026-09-23 (`D284`) once a "
+                        "second reader — `app/tests/machine-words.spec.ts`, the rendered-"
+                        "text browser check — needed it too. Also holds `repoTopDirs`, the "
+                        "one list both the Python path check and the browser path check "
+                        "build their regex from. Read, never written; growing the list is "
+                        "a hand edit.",
+                "governed_by": ["D1", "D2", "D9", "D11", "D24", "D58", "D63", "D86", "D87",
+                                "D99", "D106", "D174", "D181", "D196",
+                                "D260", "D284"]},
+            "machine-words-allow.json": {
+                "does": "the shrinking offender list for `no mechanism on screen` (D196), "
+                        "file -> word -> lane, on `kit-adoption-allow.json`'s own shape. "
+                        "Exists because growing `machine-words.json`'s word list put ten new "
+                        "hits in front of screens no wave-2 lane had reached yet. Read by "
+                        "`scripts/docs-audit.py:check_no_mechanism_on_screen`, which fails "
+                        "on an unlisted hit and on a listed entry that matches nothing.",
+                "governed_by": ["D196", "D284"]},
+            "text-density/density.mjs": {
+                "does": ("`make text-density` — the third piece of `D284`, a "
+                    "REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate "
+                    "(D18: it writes one receipt, `.serve/text-density.json`, gitignored). It "
+                    "runs `app/tests/text-shape.spec.ts` with `TEXT_DENSITY=1`, one worker, "
+                    "`line` reporter, so it reads the SAME populated fixture and loaded screens "
+                    "as the two gates, at 1440 and 390, whatever this checkout's own store holds, "
+                    "and never touches `.serve/design-check.json`. Playwright starts or reuses "
+                    "this checkout's own Vite (D43). Per route and width it prints the largest "
+                    "prose blocks with word counts (a block of six or more visible words, "
+                    "`textShape.ts`'s ruler), the repeated sentences and facts, the sentences over "
+                    "25 words and the captions that repeat their heading."),
+                "governed_by": ["D18", "D43", "D194", "D284"],
+            },
+            "typed-interpunct-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `typed "
+                        "interpunct` row (D218): file -> lane and `interpunct` -> every "
+                        "user-visible string in that file that types a middle dot or bullet, "
+                        "as `<scope>: <string>`, once per occurrence. The scope is the named "
+                        "function around the string, so a bare `·` excuses one place and not "
+                        "the file. The row fails on a typed dot the list does not "
+                        "name, on a stale entry, and on an entry the list at the merge-base "
+                        "with origin/main did not hold. Replaced a pinned count "
+                        "(D280). Shrunk by hand or by "
+                        "`make offenders-prune`, which only deletes. Never grown by a tool.",
+                "governed_by": ["D41", "D218", "D280"]},
             "ste/ste_lint.py": {
-                "does": "the STE ratchet's linter, VENDORED verbatim from $HOME/.claude/"
+                "does": "the STE prose check's linter, VENDORED verbatim from $HOME/.claude/"
                         "lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) on 2026-09-19 — a "
                         "COPY, never a symlink (D47): a fresh clone, a CI runner and this "
                         "repo's own git history all lack $HOME/.claude, so a gate here cannot "
@@ -3638,51 +3712,57 @@ COMPONENTS = [
                         "beside it — the license's one condition for reuse.",
                 "governed_by": ["D226"]},
             "ste_measure.py": {
-                "does": "the STE ratchet's ONE measurer, called by both "
-                        "`scripts/docs-audit.py`'s `ste ratchet` row (read-only) and "
-                        "`scripts/ste-ratchet-pin.py --pin` (the writer, D18) — no counting "
-                        "logic is duplicated between them. Runs the vendored linter's four "
-                        "ERROR-severity rules over caller-supplied (path, text) pairs, drops "
-                        "findings a named `EXEMPTIONS` recognizer proves are an artifact of "
-                        "the text's shape (a table cell, a verbatim quotation, a decision "
-                        "citation, the literal \"VS Code\") rather than its prose, and reports "
-                        "the total, the per-code counts, and errors-per-1,000-PLAIN-words "
-                        "(matching `wc -w`, not `ste_lint.py`'s own STE-adjusted count) per "
-                        "directory bucket and repo-wide. Never touches disk itself.",
-                "governed_by": ["D18", "D218", "D226"]},
-            "ste-ratchet-pin.py": {
-                "does": "`python3 scripts/ste-ratchet-pin.py --pin` re-measures every tracked "
-                        "markdown file via `ste_measure.py:measure()` — the same function the "
-                        "row itself calls — and rewrites `scripts/ste-ratchet.json`. Contains "
-                        "no counting logic of its own. D18: a generator may write, on no "
-                        "`make` target and no hook; `git diff scripts/ste-ratchet.json` is "
-                        "the receipt, mirroring `copy-budget.mjs` and "
-                        "`typed-interpunct-pin.mjs`'s own discipline exactly.",
-                "governed_by": ["D18", "D194", "D218", "D226"]},
-            "ste-ratchet.json": {
-                "does": "the ratchet's pinned ceiling: `total`, `by_code` (the four "
-                        "ERROR-severity rule counts, post-exemption), and "
-                        "`ratio_per_1k_words` (per bucket and repo-wide). Written only by "
-                        "`ste-ratchet-pin.py --pin`; `scripts/docs-audit.py`'s `ste ratchet` "
-                        "row only reads it, since that row sits on the commit path (D18).",
-                "governed_by": ["D18", "D226"]},
-            "line-anchors-pin.py": {
-                "does": "`python3 scripts/line-anchors-pin.py --pin` re-measures every "
-                        "tracked markdown file's RAW `path:N`/`path:N-M` line-anchor count "
-                        "via `docs-audit.py`'s own `_line_anchor_counts()` — the same "
-                        "function the `line anchor ratchet` row calls — and rewrites "
-                        "`scripts/line-anchors.json`. Contains no counting logic of its "
-                        "own. D18: a generator may write, on no `make` target and no hook; "
-                        "`git diff scripts/line-anchors.json` is the receipt, mirroring "
-                        "`ste-ratchet-pin.py`'s own discipline exactly, one ruler over.",
-                "governed_by": ["D18", "D218", "D226", "D229"]},
-            "line-anchors.json": {
-                "does": "the line-anchor ratchet's pinned ceiling: one `path -> count` "
-                        "entry per tracked markdown file carrying at least one line "
-                        "anchor. Written only by `line-anchors-pin.py --pin`; "
-                        "`scripts/docs-audit.py`'s `line anchor ratchet` row only reads "
-                        "it, since that row sits on the commit path (D18).",
-                "governed_by": ["D18", "D111", "D149", "D163", "D180", "D221", "D225", "D229"]},
+                "does": "the STE prose check's ONE measurer, read by `scripts/docs-audit.py`'s "
+                        "`ste offenders` row. Runs the vendored linter's four ERROR-severity "
+                        "rules over caller-supplied (path, text) pairs, drops findings a named "
+                        "`EXEMPTIONS` recognizer proves are an artifact of the text's shape (a "
+                        "table cell, a decision citation, the literal \"VS Code\", `via`), and "
+                        "names each remaining one as an OFFENDER: one sentence per rule, keyed "
+                        "by a hash of its folded text (`offender_identity`), so a reflow, a "
+                        "code-span edit or a claim moves nothing. A code span, decision "
+                        "citation or `VS Code` that crosses a line break is read over the "
+                        "joined paragraph (`join_span_breaks`), never line by line. Also "
+                        "reports the per-code "
+                        "counts and errors-per-1,000-plain-words per bucket, printed and never "
+                        "gated. Never touches disk itself.",
+                "governed_by": ["D18", "D140", "D218", "D226", "D229",
+                                "D280"]},
+            "ste-offenders.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `ste offenders` "
+                        "row (D226): `rules` (the vendored linter's ERROR-severity codes) and "
+                        "file -> lane and rule -> `<hash> <label>` entries, one per offending "
+                        "sentence, only the hash compared. A decision entry is keyed by its "
+                        "file tail, so a claim moves nothing. The row fails on an unlisted "
+                        "sentence, a stale entry, and growth over the merge-base, so a new "
+                        "file starts clean. Replaced D229's per-file pinned ratio "
+                        "(D280). Shrunk by hand or by "
+                        "`make offenders-prune`, which only deletes. Never grown by a tool.",
+                "governed_by": ["D226", "D229", "D280"]},
+            "line-anchor-offenders.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `line anchor "
+                        "offenders` row (D245): file -> lane and `line-anchor` -> every "
+                        "`path:N`/`path:N-M` line anchor that file cites, as written, once per "
+                        "occurrence. A decision entry's number is folded out of its file key "
+                        "and out of an anchor's decision path, so a claim moves nothing. The "
+                        "row fails on an unlisted anchor, a stale entry, and growth over the "
+                        "merge-base (`only_shrinks.py`), so a new file starts clean. Replaced "
+                        "D229's per-file pinned count (D280). "
+                        "Shrunk by hand or by `make offenders-prune`, which only deletes. Never "
+                        "grown by a tool.",
+                "governed_by": ["D229", "D245", "D280"]},
+            "only_shrinks.py": {
+                "does": "THE ONE only-shrinks helper for every shrinking offender list "
+                        "(D280). `list_at_merge_base` reads a list "
+                        "(and, on request, other files) as it stood at the merge-base with "
+                        "origin/main, and fails open with the reason. `growth` counts every "
+                        "`(rule, identity)` pair HEAD holds more often than the merge-base, "
+                        "refuses it under a rule the merge-base defines, allows it under a rule "
+                        "born on the branch, and refuses all growth when a rule the merge-base "
+                        "defines is missing at HEAD. `docs-audit.py`'s three offender rows "
+                        "import it. `kit-adoption.mjs` runs it as a command (`base`, `growth`) "
+                        "and reads JSON back. Two plain git reads, so D18 holds. Stdlib only. "
+                        "`--self-test` proves it in memory and in a throwaway repository.",
+                "governed_by": ["D18", "D280"]},
             "derived_numbers.py": {
                 "does": "a named registry of tree-descriptive numbers: one pure "
                         "`compute(root) -> int` function per figure, called by both "
@@ -3702,8 +3782,7 @@ COMPONENTS = [
                         "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)` — "
                         "the same call the row itself makes. Contains no counting logic of "
                         "its own. D18: a generator may write, on no `make` target and no "
-                        "hook; `git diff` is the receipt, mirroring `ste-ratchet-pin.py`'s "
-                        "own discipline exactly.",
+                        "hook; `git diff` is the receipt.",
                 "governed_by": ["D18"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
@@ -3780,7 +3859,8 @@ COMPONENTS = [
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
                                 "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226", "D229", "D247"],
+                                "D213", "D215", "D218", "D226", "D229", "D245", "D247",
+                                "D280", "D284"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3941,9 +4021,9 @@ COMPONENTS = [
                 # D160, D186 and D188 are the same worked example claim-ids.py's own entry
                 # carries — the fixture's directory-corpus arms build a real D160 shape, and
                 # the incident arm's own prose names the two real, landed entries it replays.
-                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D136", "D140", "D141", "D143",
-                                "D148", "D151", "D160", "D185", "D186", "D188", "D190",
-                                "D249"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D47", "D80", "D135", "D136", "D140",
+                                "D141", "D143", "D148", "D151", "D160", "D185", "D186", "D188",
+                                "D190", "D249"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -3960,7 +4040,9 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D218"],
+                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D194", "D218", "D226", "D229",
+                                "D245", "D248", "D280",
+                                "D284"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -4027,8 +4109,8 @@ COMPONENTS = [
                 # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
-                "governed_by": ["D16", "D18", "D43", "D47", "D42", "D53", "D139",
-                                "D176", "D257"],
+                "governed_by": ["D16", "D18", "D42", "D43", "D47", "D53", "D139", "D176", "D257",
+                                "D261"],
             },
             "worktree-provision.sh": {
                 "does": "the cache-copy, image-mirror-symlink and node_modules provisioning "
@@ -4356,7 +4438,7 @@ COMPONENTS = [
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
                 "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85", "D127", "D138",
-                                "D139", "D158", "D176"],
+                                "D139", "D158", "D176", "D268"],
                 "tested_by": ["T7"],
                 "status": "built",
             },
@@ -4512,8 +4594,9 @@ COMPONENTS = [
             },
             "map-fix.py": {
                 "does": "`make map-fix` — add the decision ids a file cites to that file's "
-                        "`governed_by` here. THE ONE GENERATOR IN THE REPO, and it gates "
-                        "nothing: D18's seam list names this one location and nothing else. "
+                        "`governed_by` here. THE ONE GENERATOR THAT WRITES INTO A DOC, and it "
+                        "gates nothing: D18's seam list names this one location and nothing "
+                        "else. "
                         "Previews by default; `--write` applies. It imports "
                         "`docs-audit.py:cited_decisions()` rather than reimplementing it, so "
                         "the writer and the gate cannot disagree about what a file cites. "
@@ -4532,6 +4615,22 @@ COMPONENTS = [
                         "in `make check`, on `catalog-index-selftest`'s precedent: what it "
                         "writes is already verified by a gate that runs on every commit.",
             },
+            "offenders-prune.py": {
+                "does": "`make offenders-prune` — delete the STALE entries from the two "
+                        "shrinking offender lists (`ste-offenders.json`, "
+                        "`typed-interpunct-allow.json`), and re-key a listed file that git's "
+                        "rename detection (`git diff -M` from the merge-base with origin/main) "
+                        "says moved. It NEVER ADDS an entry, and it refuses to write a plan "
+                        "that holds any identity more often than the list it read. Reads with "
+                        "the rows' own `_offender_list_shape`, `_offender_diff`, "
+                        "`ste_measure.measure` and `_typed_interpunct_found`, imported, so the "
+                        "pruner and the gate cannot disagree about what is stale. Previews; "
+                        "`--write` applies. A generator that gates nothing (D18): on no hook, "
+                        "and its selftest is not in `make check`, on `map-fix.py`'s precedent. "
+                        "It writes a data file under scripts/, as `line-anchors-pin.py` does, "
+                        "so it opens no seam in D18's list.",
+                "governed_by": ["D18", "D218", "D226", "D229",
+                                "D280"]},
             "map-view.py": {
                 "does": "`make map` — docs/map.py rendered for a person, in four views: the "
                         "shape, one package, one module, everything a decision governs, and "
@@ -4639,6 +4738,33 @@ COMPONENTS = [
                         "person choosing to accept today's count as the new ceiling, never by "
                         "the check itself.",
                 "governed_by": ["D18", "D229", "D256"]},
+            "kit-adoption.mjs": {
+                "does": "`make kit-adoption` — does every screen inherit the page scaffold "
+                        "(D275)? Reads the TypeScript AST, like user-strings.mjs. "
+                        "R1: every `ROUTES` view in App.tsx renders `<Page>` from the kit, "
+                        "directly or through a screen component it renders (named or default "
+                        "import), at any depth, with no cap (Shipping reaches OrdersHub in "
+                        "Orders.tsx). R2: outside app/src/kit/, no `role=\"dialog\"`/"
+                        "`\"alertdialog\"` or native `<dialog>`, no `<input type=\"search\">` or "
+                        "text input labelled like a search box outside SearchField.tsx, no raw "
+                        "`<select>`, no kit-reserved class name (Gallery.tsx, the specimen "
+                        "sheet, is exempt from that one rule), no hand-rolled date format "
+                        "(`toLocaleDateString`/`toLocaleTimeString`/`Intl.DateTimeFormat`, or "
+                        "`toLocaleString` with date options) outside dates.ts, no hand-rolled "
+                        "dollar amount (a `$` before a template or JSX interpolation, `'$' + x`, "
+                        "a currency `Intl.NumberFormat`) outside money.ts. The heuristic edges "
+                        "are stated in its header. "
+                        "`scripts/kit-adoption-allow.json` is a SHRINKING offender list, file -> "
+                        "rule -> lane: it fails on an unlisted violation, on a stale entry, AND "
+                        "on any key the list at the merge-base with origin/main does not hold, "
+                        "unless that key's rule is not defined at the merge-base (a rule born "
+                        "on the branch, read from RULES and scaffold.spec.ts's PER_ROUTE and "
+                        "SHELL_WIDE there, and printed with its reason). Plain git reads; fails "
+                        "open, printed, with no merge-base or no list there. Never a pinned count. `--self-test` proves each rule on in-memory "
+                        "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
+                        "app/tests/scaffold.spec.ts, so the spec and the check read one table "
+                        "with one reader.",
+                "governed_by": ["D18", "D173", "D275", "D280"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -4669,7 +4795,7 @@ COMPONENTS = [
                                 "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
                                 "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
                                 "D247", "D250", "D252", "D253", "D254", "D255",
-                                "D256"],
+                                "D256", "D261", "D268", "D275"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -4764,7 +4890,9 @@ COMPONENTS = [
                         "unasked at session start, and `make status` passes `--check` and "
                         "writes nothing. Only an ABSENT file or this repo's own shape at "
                         "the wrong port is rewritten; anything a person edited is reported "
-                        "and left alone, which is D44's asymmetry rather than a new one.",
+                        "and left alone, which is D44's asymmetry rather than a new one. "
+                        "Both writers claim the port slot FIRST, so the file never names a "
+                        "hash port another checkout holds.",
                 # D43 is the whole subject — the port follows the checkout's PATH, and this
                 # file was the sixth reader that entry found after the other five moved. The
                 # amendment naming it says why it is the worst to get wrong: a stale port
@@ -4775,7 +4903,8 @@ COMPONENTS = [
                 # icloud-sweep` deletes only what is provably a duplicate and only ever
                 # reports what differs, because guessing is the one way a cleanup tool
                 # destroys work. A provisioner running unasked has more reason, not less.
-                "governed_by": ["D18", "D43", "D44"],
+                "governed_by": ["D18", "D43", "D44",
+                                "D261"],
                 "note": "STDLIB ONLY, AND BARE `python3` MUST RUN IT. The hook calls this "
                         "BEFORE it builds `.venv`, because the port is wanted whether or "
                         "not the pip install ever succeeds — so an import needing a package "
@@ -4813,6 +4942,17 @@ COMPONENTS = [
                 # number this copies across so the caption matches the picture.
                 "governed_by": ["D24", "D25", "D67", "D70"],
             },
+            "demo-histories.py": {
+                "does": "`make demo-histories`: records every demo card's price history, all "
+                        "four ranges, from infinite-api into a NEW dated directory under "
+                        "`fixtures/demo-price-history/`, on the owner's Mac only, with the "
+                        "browser User-Agent the owner allows there (D216) and never from CI. "
+                        "Refuses without that variable, refuses an existing directory (a "
+                        "fixture is never modified), and refuses any answer carrying a key "
+                        "outside its allow list of public market figures. The seed and the "
+                        "recorder read the newest directory.",
+                "governed_by": ["D62", "D216", "D219"],
+            },
             "demo-seed.py": {
                 "does": "writes a demo store — real catalogue rows out of fixtures/, invented "
                         "positions, drawn card photographs, a corpus with three deliberate "
@@ -4826,9 +4966,9 @@ COMPONENTS = [
                 # a first version wrote a top-level `answers` map that `Corpus.parse` kept as
                 # `unknown` and no reader ever saw. D25 is the per-game number split, which
                 # the export carries whole and a card record carries in halves.
-                "governed_by": ["D3", "D4", "D7", "D10", "D13", "D21", "D25", "D26", "D39",
-                                "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86",
-                                "D87", "D172"],
+                "governed_by": ["D3", "D4", "D7", "D10", "D13", "D20", "D21", "D25", "D26", "D39",
+                                "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86", "D87",
+                                "D172", "D213", "D216", "D219", "D227", "D236"],
             },
             "demo-record.py": {
                 "does": "spawns its own capture server over the demo store on its own port, "
@@ -4839,7 +4979,8 @@ COMPONENTS = [
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D76"],
+                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D159", "D172",
+                                "D183", "D213", "D216", "D227"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "
@@ -4916,7 +5057,8 @@ COMPONENTS = [
                         "derivation — and substitutes a worktree's own port before rendering, "
                         "saying so as it goes. Before that, `make screenshot` in a worktree "
                         "photographed the MAIN tree's app over the owner's real store, and the "
-                        "renders looked perfectly correct. A linked worktree that cannot "
+                        "renders looked perfectly correct. Any tree whose `.git` is not a "
+                        "DIRECTORY (a linked worktree, or a copy with no `.git`) that cannot "
                         "derive its port renders NOTHING rather than falling back to a port "
                         "that would be another tree's.",
                 # D5 is why the loop exists: the agent cannot see its own output, and the
@@ -4926,7 +5068,9 @@ COMPONENTS = [
                 # the store, and this script had been the one caller that did not follow it.
                 # D18 is the rule that keeps it off `make check`: it writes, and nothing
                 # that writes may run on the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18", "D43", "D129"],
+                "governed_by": ["D5", "D13", "D18", "D43", "D129",
+                                "D261",
+                                "D268"],
             },
             "screenshot.mjs": {
                 "does": "the browser half of `make screenshot`: one render, and the proof "
@@ -5038,14 +5182,19 @@ COMPONENTS = [
         "modules": {
             "ports.py": {
                 "does": "which ports THIS checkout serves on, derived from where the checkout "
-                        "is. The main tree keeps :8000 and :5173; a linked worktree gets its "
-                        "own pair from one slot off its path. `PKMNSCAN_PORT` overrides and an "
+                        "is. The main tree keeps :8000 and :5173, and only a tree whose `.git` "
+                        "is a DIRECTORY is the main tree; a linked worktree, or a copy with no "
+                        "`.git`, gets its own pair from one slot: the slot it claimed in "
+                        "`~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`), else a hash "
+                        "of its path. It reads that registry and never writes it. "
+                        "`PKMNSCAN_PORT` overrides and an "
                         "out-of-range value is ignored rather than obeyed.",
                 # D43 is the decision. D13 is why it matters: one truth on the Mac, and the
                 # store already defaults per-checkout — so a shared port meant one tree's UI
                 # writing into another tree's store, which is that entry's promise broken by
                 # a socket rather than by a design.
-                "governed_by": ["D13", "D43"],
+                "governed_by": ["D13", "D43", "D268",
+                                "D261"],
                 "note": "Stdlib only, like the server it serves. `scripts/status.py` imports "
                         "it and the git hook never does.",
             },
@@ -5142,7 +5291,7 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D166", "D168", "D172", "D174", "D183", "D189",
                                 "D191", "D192", "D193", "D203", "D212", "D213", "D219", "D225",
-                                "D227", "D251", "D252"],
+                                "D227", "D251", "D252", "D259", "D268", "D273"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5167,12 +5316,39 @@ COMPONENTS = [
                                       "what their server reads and what urlencode alone "
                                       "cannot express. `_check` runs their own validators — "
                                       "price 0.01-200000, integer quantity — plus D100's "
-                                      "invariant that AddToQuantity is 0 on every row, before "
-                                      "a transaction is opened, so a bad file is a refusal "
-                                      "with nothing sent. THE PUSH IS MEASURED; movetolive is "
-                                      "read and has never been called from here.",
+                                      "invariant that AddToQuantity is 0 on every row of a "
+                                      "price file, before a transaction is opened, so a bad "
+                                      "file is a refusal with nothing sent. A LISTING file "
+                                      "(`listing=True`, the send press only) may add 0 or more "
+                                      "copies and never fewer; whether that door should exist "
+                                      "is the owner's open question. THE PUSH IS MEASURED; "
+                                      "movetolive is read and has never been called from here.",
                                "governed_by": ["D13", "D16", "D64", "D87", "D100", "D103",
-                                               "D104", "D106"],
+                                               "D104", "D106", "D273"],
+                               "tested_by": ["T7"]},
+            "send_routes.py": {"does": "THE ONE PRESS that sends listings to TCGplayer and makes "
+                                       "them live, and the checks around it. One press at a "
+                                       "time in the server, refused by name. In order: fetch "
+                                       "the live export (a failure refuses the whole press), "
+                                       "`reconcile --live --write`, `emit --live-guard` into the "
+                                       "press's OWN directory with a store claim on its SKUs "
+                                       "(`store/sendclaims.py`), push, publish. Copies go back "
+                                       "on the list ONLY when no upload was opened or TCGplayer "
+                                       "answered the rollback; an unclear publish, a slow "
+                                       "answer or a refused rollback is UNKNOWN, holds its SKUs "
+                                       "and is resolved by the live check past the wait. Take "
+                                       "them back is offered only after that check, for the "
+                                       "copies it did not find. Receipts live under "
+                                       "`inventory/sends/<stamp>/`, written before the first "
+                                       "byte leaves. Also the live check (runs only when a "
+                                       "request asks; no timer here; one rise confirms one "
+                                       "receipt) and the mark-down's one press. Never called "
+                                       "against the real portal: T7 proves every path on a "
+                                       "loopback one with slow, partial, 5xx and "
+                                       "rollback-refused modes.",
+                               "governed_by": ["D33", "D54", "D86", "D87", "D99", "D100", "D104",
+                                               "D105", "D106", "D174",
+                                               "D273"],
                                "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "
@@ -5557,19 +5733,34 @@ COMPONENTS = [
                                    "configs hardcoding 5173 is what let design-check attach "
                                    "to the MAIN tree's server from a worktree and assert "
                                    "DESIGN.md's floors against code the branch never had — "
-                                   "green, and meaningless. Detects a worktree the way "
-                                   "scripts/worktree-guard.sh does: `.git` is a file",
-                           "governed_by": ["D5", "D13", "D43"]},
+                                   "green, and meaningless. Only a tree whose `.git` is a "
+                                   "DIRECTORY keeps 5173; a linked worktree and a copy with "
+                                   "no `.git` both take a slot. The slot is the one this "
+                                   "checkout CLAIMED in `~/.pkmnscan/port-slots.json` when "
+                                   "there is one, and the path hash when there is not",
+                           "governed_by": ["D5", "D13", "D43", "D268", "D261"]},
+            "checkoutIdentity.ts": {"does": "a reused dev server must name this checkout. "
+                                            "The Vite plugin answers `GET /__checkout` with the "
+                                            "checkout's resolved path; the default export is "
+                                            "Playwright's `globalSetup`, which runs after the "
+                                            "`webServer` is up and refuses the whole run unless "
+                                            "that server names THIS checkout. Two worktrees "
+                                            "once shared a port and a design-check passed "
+                                            "against the other tree's code. "
+                                            "`PKMNSCAN_CHECKOUT_IDENTITY=off` skips it",
+                                    "governed_by": ["D43", "D261"]},
             "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
                                        "Makefile and scripts/views.txt would all three be wrong. "
                                        "The port comes from devPort.ts: :5173 in the main tree, "
-                                       "per-worktree elsewhere",
-                               "governed_by": ["D13", "D43"]},
+                                       "per-worktree elsewhere. Its plugin list carries "
+                                       "checkoutIdentity.ts's `/__checkout` answer",
+                               "governed_by": ["D13", "D43", "D261"]},
             "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
                                              "Vite it starts for itself. reuseExistingServer stays "
-                                             "ON and is safe only because devPort.ts makes the port "
-                                             "per-checkout. `expect.timeout` is 15s rather than "
+                                             "ON, and `globalSetup` (checkoutIdentity.ts) refuses "
+                                             "the run unless the server names this checkout. "
+                                             "`expect.timeout` is 15s rather than "
                                              "Playwright's 5s: fullyParallel puts every worker's "
                                              "first visibility wait against a cold Vite, and that "
                                              "wait — never an assertion — was the whole of the "
@@ -5578,7 +5769,7 @@ COMPONENTS = [
                                              "and check.yml uploads it: the one-test runner red "
                                              "has never reproduced on the rig (D128), so the run "
                                              "that fails is the only witness there is",
-                                     "governed_by": ["D5", "D16", "D128"]},
+                                     "governed_by": ["D5", "D16", "D128", "D261"]},
             "design-check-reporter.ts": {"does": "THE VERDICT, AS ONE SMALL FILE. A Playwright "
                                                  "reporter that writes `.serve/design-check.json` "
                                                  "— pass/fail, the counts, and every failing title "
@@ -5639,7 +5830,7 @@ COMPONENTS = [
                                        "POINTER decides, not the width, because an iPad in portrait "
                                        "is 820px wide and all thumb.",
                                "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94", "D110",
-                                               "D197"],
+                                               "D197", "D272"],
                                "note": "`scripts/docs-audit.py`'s `design tokens` row reads "
                                        "docs/DESIGN.md's fenced block as hexes, three typefaces, a "
                                        "spacing row and one radius, and merges every `:root` in this "
@@ -5720,7 +5911,8 @@ COMPONENTS = [
                                     "exactly one place, `[data-leaving]`, where the node is about to "
                                     "unmount.",
                             "governed_by": ["D5", "D13", "D26", "D32", "D41", "D50", "D94", "D117",
-                                            "D125", "D195", "D197", "D218"]},
+                                            "D118", "D125", "D195", "D197", "D218",
+                                            "D269", "D272"]},
             "src/kit/markGeometry.ts": {"does": "the Banchi mark's two optical cuts as static path data, GENERATED by scripts/build-mark.mjs out of docs/specs/logo/sheets/small-cut.html. Never hand-edited: the sheet is the one implementation of the drawing, so the app cannot drift from the spec by being edited. Two cuts because a 1.7 stroke is a scratch at 32px and absent at 16px (logo.md section 3, swept in section 11) — `SMALL` is what ships, since every surface in this product is below 64px, and `DISPLAY` is what #/gallery shows. The geometry does not vary across the six marks; all six generate byte-identical paths.",
                                           "governed_by": ["D94", "D102"]},
             "src/kit/lockupGeometry.ts": {"does": "the lockup as static path data — 番地 and BANCHI OUTLINED, the bracket's arm and its two end discs, the block's dimensions and section 13's eleven settled parameters. GENERATED by scripts/build-lockup.mjs and never hand-edited. Every number is a ratio of the kanji size and the paths are drawn in a 319 x 233 box at kanji 100, so ONE geometry serves every size through a viewBox — which is not only smaller than per-size data but more correct, since a vector scaled by a viewBox cannot re-layout and live text could, and did: the width match had to be SOLVED per size. Carries no `fill`: the component's own <g> supplies it by inheritance so a stylesheet can switch section 16's dark metal, which a fill attribute on the child would make unreachable.",
@@ -5746,8 +5938,10 @@ COMPONENTS = [
                                           "remember the choice in `localStorage` under "
                                           "`banchi.theme` — device-local like the camera's "
                                           "deviceId (D27), and nothing about a card.",
-                                  "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95", "D125"]},
-            "src/kit/Icon.tsx": {"does": "one icon set, 70 paths on a 24-unit grid at 1.75 stroke "
+                                  "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
+                                                  "D118", "D125", "D196", "D269",
+                                                  "D272"]},
+            "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
                                          "`aria-hidden`, so an icon is never the accessible name of "
@@ -5756,6 +5950,53 @@ COMPONENTS = [
                                          "that inlines its own <svg> is the drift this file exists "
                                          "to prevent.",
                                  "governed_by": ["D5", "D13", "D94"]},
+            "src/kit/data.tsx": {"does": "THE KIT'S DATA PRIMITIVES, one drawing each for every "
+                                         "screen (UX overhaul wave 0, 2026-09-23, the owner's "
+                                         "durability ask: a page built tomorrow inherits the rest). "
+                                         "Money (mono, always `$`), Count, FilterCount (`12 of 40 "
+                                         "cards, filtered by`), StatusBadge, ProductLink and "
+                                         "OrderLink (open by SKU or order key, a sheet when one is "
+                                         "registered, the page otherwise), CardLine (the finish is "
+                                         "always said), CardThumb (one no-photo state), BoxLabel "
+                                         "(the name only, never the number), Location (over PositionLabel), Sep "
+                                         "(the one CSS separator), and the pick list Select, "
+                                         "FilterChips and SortControl draw: Capture's option rows, "
+                                         "in the kit's own panel, never the native OS menu, every "
+                                         "facet usable in any order.",
+                                 "governed_by": ["D5", "D118", "D132", "D212", "D218", "D221",
+                                                 "D259"]},
+            "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
+                                         "in a filter bar (`--bn-control-h`) and one width floor "
+                                         "and cap. Mono for machine strings only.",
+                                 "governed_by": ["D50", "D117", "D118", "D195", "D218"]},
+            "src/kit/dataRules.ts": {"does": "the pure half of `data.tsx`: STATUS_TONES (amber is "
+                                             "only 'needs the owner', blue only 'moving now') and "
+                                             "`boxesMostRecentFirst` (this browser's hand, then the "
+                                             "newest box by `bid`, then the number). No React, so a "
+                                             "spec can import it.",
+                                     "governed_by": ["D132", "D142", "D145"]},
+            "src/kit/data.specimens.tsx": {"does": "every data primitive in every state a screen "
+                                                   "can put it in, on invented data. The kit page "
+                                                   "mounts `DataSpecimens`; `tests/kit-data/` "
+                                                   "mounts it too.",
+                                           "governed_by": ["D5", "D218"]},
+            "src/kit/sheets.ts": {"does": "one way to open a thing from wherever it is named: "
+                                          "`registerSheet`, `openSheet`, `closeSheet`, and "
+                                          "`useOpenSheet` for the shell's host. With no sheet "
+                                          "registered, a kind opens its own page (`product` to "
+                                          "`#/product?sku=`, `order` to `#/orders?order=`). A "
+                                          "product opens by SKU, never by one copy.",
+                                  "governed_by": ["D212", "D227"]},
+            "src/kit/match.ts": {"does": "ONE FORGIVING MATCHER for every search the browser runs "
+                                         "(the owner's ruling, 2026-09-23): every word in any "
+                                         "order; case, accents and punctuation folded; a card "
+                                         "number with or without its leading zeros, split by a "
+                                         "space, a hyphen or a slash; a box by its name only, "
+                                         "never by its number; a SKU by "
+                                         "its start. The rules are stated in its header, so "
+                                         "another search can be checked against them. The "
+                                         "server's own search does not use it.",
+                                 "governed_by": ["D5"]},
             "src/kit/toast.tsx": {"does": "one toast stack for the product: any screen calls "
                                           "`toast()`, the shell renders `<Toaster/>` once. FOUR "
                                           "KINDS AND THE DIFFERENCE IS THE RULE — a `receipt` "
@@ -5768,6 +6009,85 @@ COMPONENTS = [
                                           "server-restart notice went when `ServerReloaded` was "
                                           "deleted.",
                                   "governed_by": ["D5", "D28", "D53", "D57", "D94"]},
+            "src/kit/Page.tsx": {"does": "the page scaffold every screen is built from: `Page` draws "
+                                         "`<main class=\"bn-page\" data-bn-page>` with one h1 (the "
+                                         "route's title by default, read from `PageRouteContext`), "
+                                         "the verdict, the toolbar, the status slot, and the list "
+                                         "region with its loading and empty states. One width, one "
+                                         "top gap, one left edge, and the page is the `bn-page` "
+                                         "query container. `Section` draws an h2. A new screen is "
+                                         "one ROUTES entry plus a view that returns `<Page>`.",
+                                 "governed_by": ["D94", "D118", "D197", "D272"]},
+            "src/kit/overlay.tsx": {"does": "the kit's overlays: `Sheet`, `Modal`, `Popover` and "
+                                            "`ConfirmSheet`, each with one header and one Close, "
+                                            "focus kept inside and given back, Escape for the top "
+                                            "one only, portalled to <body>. `SheetHost` draws the "
+                                            "sheet that `openSheet` opened, read through "
+                                            "`useOpenSheet` (kit/sheets.ts). Seeded from the local "
+                                            "sheet on the code-card screen.",
+                                    "governed_by": ["D94", "D95", "D118"]},
+            "src/kit/filters.tsx": {"does": "THE ONE FILTER BAR (FLT-15, the owner's gripes about "
+                                            "Inventory's game-then-set-then-rarity lock and Orders' "
+                                            "four-width strip): `FilterBar` composes `Select`, "
+                                            "`FilterChips`, `FilterCount`, `SortControl` and "
+                                            "`SearchField` into one toolbar. It draws \"N of M\" by "
+                                            "construction and names every narrowing in it (the "
+                                            "picks, the search, the hide toggle), with the one "
+                                            "clear-all. Every facet trigger in one bar is one width. "
+                                            "It opens a popover in a wide bar and one sheet behind a "
+                                            "single trigger in a narrow one, by the bar's own width. "
+                                            "A slot beside the search takes a screen's own control, "
+                                            "and the search takes `useSearch`'s busy and failure "
+                                            "states. Also the quiet `HideToggle` (one shape for "
+                                            "\"Hide sold\" / \"Hide never-seen\" / \"Holding\", "
+                                            "FLT-16) and `SortHeader` (the `<th>` that carries "
+                                            "`aria-sort` and marks itself active, FLT-19, with a "
+                                            "per-column first direction, re-sorting at once, "
+                                            "FLT-01).",
+                                    "governed_by": ["D118", "D132", "D209", "D270"]},
+            "src/kit/filters.css": {"does": "the filter bar's styles. A container query on the "
+                                            "bar's own width: below 480px of bar (a phone column, "
+                                            "Inventory's rail) the wide row hides and the compact "
+                                            "trigger and its sheet take over — both trees are always "
+                                            "mounted, CSS alone decides which is visible. The facet "
+                                            "triggers share one grid track width.",
+                                    "governed_by": ["D50", "D118", "D195", "D270"]},
+            "src/kit/filters.specimens.tsx": {"does": "`FilterBar` (full width, and in a 280px "
+                                                       "rail), `HideToggle`, `SortHeader` and "
+                                                       "`Highlight`, on invented rows whose counts "
+                                                       "come from `kit/facets.ts`. The kit page mounts "
+                                                       "`FilterSpecimens`; `tests/filters/` mounts it "
+                                                       "too.",
+                                               "governed_by": ["D5", "D270"]},
+            "src/kit/highlight.tsx": {"does": "THE MATCH HIGHLIGHT (FLT-08: \"no search result shows "
+                                              "what matched\"). `Highlight` marks only a row "
+                                              "`kit/match.ts:matchQuery` accepts. Text is marked where "
+                                              "a query's words are found, folded the same way the "
+                                              "matcher folds, with its compact fallback. A card number "
+                                              "is marked by its canonical form, so `54/132` marks "
+                                              "`054/132`. A SKU-only hit draws no mark.",
+                                      "governed_by": ["D5"]},
+            "src/kit/viewState.ts": {"does": "THE ONE URL VIEW STATE (D285, the "
+                                             "owner's ruling: filter memory lives in the URL on every "
+                                             "screen). `useViewQuery`/`patchViewQuery` read and write "
+                                             "the current hash's own query string via "
+                                             "`history.replaceState`, read back through "
+                                             "`useSyncExternalStore`; `useViewParam`, `useViewFlag`, "
+                                             "`useFacetParams` and `useSortParam` are the typed hooks "
+                                             "over it. A value at its own default writes no key; a "
+                                             "flag away from it writes `1` or `0`. The URL is read as "
+                                             "untrusted: a malformed escape is ignored, a facet keeps "
+                                             "only its known values once each (one for a single-choice "
+                                             "facet), and an unknown sort key falls back to the "
+                                             "default.",
+                                     "governed_by": ["D132", "D217", "D285"]},
+            "src/kit/facets.ts": {"does": "THE FACET COUNTS, one way: given the rows, the facets and "
+                                          "the picks, each option's count under the OTHER active "
+                                          "filters and the screen's own `keep` (its search, its "
+                                          "Hide sold). `filterRows` gives the rows shown; "
+                                          "`withCounts` copies a server's counts onto the options. "
+                                          "Pure, no React.",
+                                  "governed_by": ["D270"]},
             # ---- the shell ----
             "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens, then base, "
                                      "then the kit — every later sheet resolves against tokens, and "
@@ -5848,8 +6168,9 @@ COMPONENTS = [
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28",
                                             "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61",
                                             "D63", "D66", "D69", "D70", "D94", "D95", "D100",
-                                            "D105", "D109", "D120", "D123", "D134", "D159", "D207",
-                                            "D227"]},
+                                            "D105", "D109", "D120", "D123", "D134", "D159", "D196",
+                                            "D204", "D207", "D227", "D266",
+                                            "D275", "D276"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -5895,7 +6216,8 @@ COMPONENTS = [
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51",
                                             "D94", "D95", "D110", "D117", "D118", "D123", "D134",
-                                            "D152", "D204", "D205", "D218"]},
+                                            "D152", "D204", "D205", "D218",
+                                            "D266", "D276"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -5963,7 +6285,9 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236", "D252"]},
+                                              "D225", "D227", "D236", "D252",
+                                              "D268",
+                                              "D273"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6056,7 +6380,7 @@ COMPONENTS = [
                                              "D104", "D113", "D114", "D115", "D116", "D118", "D132",
                                              "D134", "D142", "D145", "D147", "D156", "D159", "D165",
                                              "D166", "D168", "D172", "D174", "D180", "D183", "D193",
-                                             "D212", "D213", "D225", "D227", "D236", "D252"]},
+                                             "D212", "D213", "D225", "D227", "D236", "D252", "D273"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6302,7 +6626,8 @@ COMPONENTS = [
                         "the whole treatment over it is what put the pre-D41 plain string back "
                         "on two screens for exactly the cards that had been sold.",
                 "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71",
-                                "D92", "D119", "D132", "D218"]},
+                                "D92", "D119", "D132", "D218", "D259",
+                                "D260"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
@@ -6353,7 +6678,8 @@ COMPONENTS = [
                         "can name, so the bare `#270` the owner read as a sold card leaking "
                         "into the ladder is gone \u2014 it never was one \u2014 and `Skipped` "
                         "draws what the walk cost on the rows where it cost anything.",
-                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116"]},
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116",
+                                "D260"]},
             "src/PlaceNeighbors.css": {
                 "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
                         "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
@@ -6422,7 +6748,7 @@ COMPONENTS = [
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218", "D252"]},
+                            "D192", "D213", "D218", "D252", "D259"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6481,8 +6807,8 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D137", "D162", "D167", "D172", "D194",
-                                "D253", "D252"],
+                                "D87", "D137", "D162", "D167", "D172", "D194", "D218", "D252",
+                                "D253", "D259"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -6501,7 +6827,8 @@ COMPONENTS = [
                         "(`.review-recheck-*`), which is the reconcile sheet's — a scrolling "
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
-                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41", "D46", "D50", "D117", "D162"],
+                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41",
+                                "D46", "D50", "D117", "D118", "D162", "D259"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -6713,7 +7040,7 @@ COMPONENTS = [
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
-                                "D93", "D125", "D172", "D192", "D193", "D218"],
+                                "D83", "D93", "D125", "D172", "D192", "D193", "D212", "D218"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -6721,7 +7048,7 @@ COMPONENTS = [
                         "none is restated as a comment — they are asserted next door instead. "
                         "The temporary rule that hid the shell nav is gone: src/App.tsx stopped "
                         "rendering it on this route, which is the fix that rule named.",
-                "governed_by": ["D5", "D10", "D218"],
+                "governed_by": ["D5", "D10", "D93", "D97", "D212", "D218"],
             },
 
             # ---- step 6's component and the sheet that renders it ----
@@ -6734,7 +7061,8 @@ COMPONENTS = [
                                 "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95", "D102", "D118", "D119", "D117"],
                                 "note": "THE SHEET DREW FOUR REAL CARDS OUT OF THE OWNER'S STORE UNTIL 2026-09-06. Its `CardLocations` fixtures carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the Fulfiller skin sourced each `<img>` from `photoUrl(box, index)` — so the one page whose entire purpose is being compared against a reference was the one page whose contents depended on which capture server was up and what was in boxes 3, 4 and 7 that day, and `GET /photo/<box>/<index>` serves stored bytes without knowing a code card from a Thievul (D24). The one-line fix — `has_photo: false` on all four — was NOT taken: it buys a closed sheet by deleting the photo-bearing shell from the page whose job is drawing every shell, which is the trade `app/tests/gallery.spec.ts` exists to refuse. The image names its own colors, which is the same exception `src/kit/markPalettes.ts` argues at D102: an illustration's colors, on stage ground that is dark in both themes."},
             "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
-                                "governed_by": ["D5", "D94", "D118", "D119", "D117"]},
+                                "governed_by": ["D5", "D94", "D117", "D118", "D119",
+                                                "D272"]},
 
             # ---- the search-and-sell core: one set of components, two densities ----
             #
@@ -6742,30 +7070,29 @@ COMPONENTS = [
             # sentence: each takes a `persona` and renders owner-dense or Fulfiller-large from
             # ONE implementation. The alternative — a second component per screen — is what
             # docs/DESIGN.md rejected when it declined two visual worlds.
-            "src/PositionBar.tsx": {"does": "D20's sentence drawn, at two scales — and the SECTION is "
-                                            "the instrument. A graduated 26px ruler with a fill, a pin "
-                                            "that crosses it and the section's own bounds written "
-                                            "inside its two ends; under it an 8px strip of chips for "
-                                            "the box, with a caret on the chip this card is in. Says "
-                                            "'#40 of 250 · 16% in' for a sealed box and '#12 of 62' "
-                                            "for an open one — NO 'SO FAR' ANYWHERE (owner's ruling, "
-                                            "2026-09-19: the words trailed unconditionally on every "
-                                            "open box, an opt-out flag nothing ever set, now deleted). "
-                                            "THE SVG TRAPEZOID IS DELETED "
-                                            "(D155): its two legs' slope ratio "
-                                            "carried neither a width nor a height term and its "
-                                            "arithmetic pointed at the wrong chip by up to 42px. THE "
-                                            "ZOOM BLOCK MOUNTS ON THE `sectionDepth` PROP and never on "
-                                            "whether the depth resolved, so all four owner states are "
-                                            "one DOM at one height (D118).",
+            "src/PositionBar.tsx": {"does": "where a card sits: its SECTION drawn as a graduated "
+                                            "ruler that marks the exact card (its own cell filled, the "
+                                            "pin at the cell's centre) with section numbers at both "
+                                            "ends, and under it a strip of the box's sections, "
+                                            "numbered, with this section outlined, so the sections "
+                                            "before and after show. `back` and `front` are written "
+                                            "under both, because card 1 is at the far back (the "
+                                            "owner's ruling, 2026-09-23, amending D155; "
+                                            "D260). The strip's caption "
+                                            "is `Section 2 of 3`; without the ruler it is the card's "
+                                            "`Card 5 of 12`. THE ZOOM BLOCK MOUNTS ON THE "
+                                            "`sectionDepth` PROP and never on whether the depth "
+                                            "resolved, so every owner state is one DOM at one height "
+                                            "(D118).",
                                     "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41",
-                                                    "D58", "D68", "D118", "D132", "D155", "D218"]},
-            "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST, in two "
-                                             "parts: `#/inventory`'s shelf and `#/orders`' walk both "
-                                             "draw it. The section's name shrinks and ellipsizes; its "
-                                             "card count keeps its own width, so a narrow column cuts "
-                                             "the name and never the count a hand checks the rows "
-                                             "against. The comma rides the count's span, so the text is "
+                                                    "D58", "D68", "D118", "D132", "D155", "D218",
+                                                    "D260"]},
+            "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST: "
+                                             "`#/inventory`'s shelf and `#/orders`' walk both draw "
+                                             "it. The section's name is whole (it wraps, never cut: it "
+                                             "is the divider's own label), and its count is spoken and "
+                                             "not drawn, because both lists draw the count in a pill "
+                                             "beside it (LOC-21). The text is still "
                                              "`position.ts:sectionTitleText`'s whole sentence. A "
                                              "component alone in its file so React Refresh can "
                                              "hot-reload it.",
@@ -6789,7 +7116,9 @@ COMPONENTS = [
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
-                                                "D68", "D118", "D132", "D155", "D194", "D218"]},
+                                                "D68", "D118", "D132", "D155", "D194", "D218",
+                                                "D259",
+                                                "D260"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -6886,9 +7215,9 @@ COMPONENTS = [
                                               "under a headroom promise nothing can keep.",
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24",
                                                       "D26", "D28", "D30", "D31", "D38", "D41",
-                                                      "D45", "D58", "D67", "D68", "D71",
-                                                      "D92", "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D218"]},
+                                                      "D45", "D58", "D67", "D68", "D71", "D92",
+                                                      "D115", "D118", "D119", "D132", "D172",
+                                                      "D181", "D218", "D259"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -7043,7 +7372,7 @@ COMPONENTS = [
                                           "identifying` and both were wrong together — which is "
                                           "the argument for one reader rather than a defence of "
                                           "it: there was one place to fix, and it was not here.",
-                                  "governed_by": ["D33", "D39", "D48", "D56", "D94"]},
+                                  "governed_by": ["D33", "D39", "D48", "D56", "D94", "D194"]},
             "src/RunsComposer.tsx": {"does": "THE IDENTIFY COMPOSER: the one press in this product "
                                              "that spends money, as a staged dialog — which "
                                              "boxes, how each is read, what it costs, and a "
@@ -7096,6 +7425,41 @@ COMPONENTS = [
                                         "be grepped, and a summary is the second vocabulary that "
                                         "rule exists to refuse.",
                                 "governed_by": ["D33", "D39", "D94"]},
+            "src/SendCard.tsx": {"does": "THE SEND CARD on Pricing's send bar: one press from "
+                                         "priced to live (D273). The "
+                                         "press waits for the screen's own save, then one request "
+                                         "reads what is live, writes the file behind the "
+                                         "double-send guard, sends it and makes it live. It draws "
+                                         "what the guard held back by card, a refusal with Try "
+                                         "again when the live read cannot run, the download door "
+                                         "with the split behind it, copies written and not "
+                                         "confirmed with Take them back, and the check after the "
+                                         "lag. No pipeline word reaches the screen (D196).",
+                                 "governed_by": ["D86", "D99", "D105", "D106", "D118", "D196",
+                                                 "D269",
+                                                 "D273"]},
+            "src/SendCard.css": {"does": "the send card's own rows: the press and its two quiet "
+                                         "doors on one line that wraps as a unit, the download "
+                                         "door, and the card lists under a notice. On a phone "
+                                         "the press takes the whole first line (UX-007).",
+                                 "governed_by": ["D117", "D118", "D273"]},
+            "src/liveCheck.ts": {"does": "WHEN THE LIVE CHECK AFTER A SEND RUNS (the owner's Q3 "
+                                         "ruling). A visit to Pricing or Home reads the send "
+                                         "status and runs a due check at once; otherwise one "
+                                         "module-level timer waits for the moment the next check "
+                                         "is due, measured on the server's clock, and outlives "
+                                         "the screen that started it. No server job runs "
+                                         "unattended. A failed automatic check waits for the "
+                                         "next visit rather than retrying.",
+                                 "governed_by": ["D106", "D273"]},
+            "src/autoMatch.ts": {"does": "MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the "
+                                         "owner's Q4 ruling). `#/runs` and Home hand it the runs "
+                                         "they read; every run waiting for its match is asked "
+                                         "once per sitting (`matchRun`). A run whose match "
+                                         "stopped carries `match_problem` and is skipped: only "
+                                         "the door's own press asks again. No server job runs "
+                                         "unattended.",
+                                 "governed_by": ["D65", "D273"]},
             "src/RunsDrop.tsx": {"does": "the file controls, as controls that look like the "
                                          "product: a native file input cannot be styled to sit "
                                          "beside a kit button, so the input is visually hidden "
@@ -7129,10 +7493,10 @@ COMPONENTS = [
                                            "shape of a figure. It WRITES NOTHING on the owner's "
                                            "ruling; every row is a link into #/inventory, where "
                                            "the store already learns a card has left.",
-                                   "governed_by": ["D9", "D10", "D27", "D31", "D41", "D49", "D56", "D58",
-                                                   "D71", "D86", "D94", "D95", "D103", "D105",
-                                                   "D109", "D110", "D118", "D132", "D147",
-                                                   "D159"],
+                                   "governed_by": ["D9", "D10", "D27", "D31", "D41", "D49", "D56",
+                                                   "D58", "D71", "D86", "D94", "D95", "D103",
+                                                   "D105", "D109", "D110", "D118", "D132", "D147",
+                                                   "D159", "D259"],
                                    # `app/tests/value-bands.spec.ts` is the check, and it runs
                                    # under `make design-check` rather than at turn end — named
                                    # here in prose for `Markdown.tsx`'s reason. Two arms were
@@ -7195,7 +7559,7 @@ COMPONENTS = [
                                          "on is OWNERSHIP age.",
                                  "governed_by": ["D7", "D9", "D13", "D33", "D49", "D64", "D86",
                                                  "D87", "D94", "D95", "D100", "D103", "D104",
-                                                 "D105"],
+                                                 "D105", "D118", "D273"],
                                  # `app/tests/markdown.spec.ts` is the check the hard rule says
                                  # does not otherwise exist — it runs under `make design-check`,
                                  # not at turn end, so it is named here in prose rather than in
@@ -7278,7 +7642,8 @@ COMPONENTS = [
                                                 "D78", "D79", "D85", "D86", "D89", "D98", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
                                                 "D115", "D117", "D118", "D125", "D156", "D159",
-                                                "D168", "D172", "D208", "D210", "D218"]},
+                                                "D168", "D172", "D208", "D210", "D218",
+                                                "D273"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
                                             "header (D168). The operator's "
                                             "own ask - \"after several emits a lot of pricing "
@@ -7343,7 +7708,8 @@ COMPONENTS = [
                                         "control and nothing has to win a stacking order.",
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
                                                 "D54", "D56", "D62", "D78", "D79", "D85", "D86",
-                                                "D103", "D105", "D117", "D125", "D208", "D218"]},
+                                                "D103", "D105", "D117", "D125", "D197", "D208",
+                                                "D218"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -7407,9 +7773,8 @@ COMPONENTS = [
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
                                                "never plotted.",
-                                       "governed_by": ["D227", "D62",
-                                                       "D219", "D212",
-                                                       "D196", "D50"],
+                                       "governed_by": ["D50", "D62", "D196", "D212", "D218", "D219",
+                                                       "D227", "D278"],
                                        "note": "No harness test -- a Playwright spec would be "
                                                "the honest coverage and none exists yet, named "
                                                "rather than silently absent."},
@@ -7420,8 +7785,8 @@ COMPONENTS = [
                                                "screen that is a fact rather than a reading, "
                                                "and never a color standing in for beat-or-miss "
                                                "(D62: direction is a sign and a word).",
-                                       "governed_by": ["D227", "D62", "D94",
-                                                       "D41", "D218"]},
+                                       "governed_by": ["D41", "D62", "D94", "D212", "D218", "D227",
+                                                       "D278"]},
             # D79 is the batched half of D62, and D62 is why this file is separate from
             # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
             # has and the strip draws a shape and a sign, which are two answers to two
@@ -7833,7 +8198,8 @@ COMPONENTS = [
                                 # condition is read from; D63 is the two-map ledger behind it;
                                 # D114 is the no-status-vocabulary rule the `open`-keyed join
                                 # obeys instead of reading `status`.
-                                "governed_by": ["D63", "D69", "D114", "D121", "D202"]},
+                                "governed_by": ["D63", "D69", "D114", "D121", "D198", "D202",
+                                                "D273"]},
             "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
                                             "`captured_at` by a 30-minute gap, and the ribbon "
                                             "geometry Home's foot draws from them. The unit is a "
@@ -7977,7 +8343,11 @@ COMPONENTS = [
                                      "different sentences.",
                              # D33 is the money gate, whose receipt this now carries.
                              "governed_by": ["D33"]},
-            "src/dates.ts": {"does": "A SALE DATE, SAID THE SAME WAY EVERYWHERE — `saleDate`. "
+            "src/dates.ts": {"does": "A DATE, SAID ONE OF TWO WAYS — `relativeDate` (`5 minutes "
+                                     "ago`, `yesterday`, then the absolute form past a week) and "
+                                     "`absoluteDate` (`Sep 4, 2026`, no leading zero). "
+                                     "`saleDate`, the older padded form, stays until its two "
+                                     "callers move. "
                                      "Extracted 2026-09-20, a UX review follow-up: Revenue.tsx "
                                      "had padded its own 'Last sold' column against a jittering "
                                      "un-padded `toLocaleDateString()`, and ProductHistory.tsx "
@@ -8130,16 +8500,20 @@ COMPONENTS = [
             },
             "src/SearchField.tsx": {"does": "the debounced query box. Owner gets a `/` hotkey and a key "
                                             "hint; the Fulfiller gets neither — his screens are touch "
-                                            "and show no keys.",
-                                    "governed_by": ["D5", "D13"]},
-            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5", "D50", "D117"]},
+                                            "and show no keys. With `onSubmit`, Enter or its "
+                                            "button runs the search, and an empty press says what "
+                                            "to type in a line reserved from the first paint.",
+                                    "governed_by": ["D5", "D13", "D118"]},
+            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5", "D50", "D117", "D118"]},
             "src/keys.ts": {"does": "isEditableTarget, hoisted at its fourth copy — the one "
                                      "question every keyboard handler asks first. The three "
                                      "prior copies each recorded the hoist as due; this is "
                                      "the debt paid.",
                             "governed_by": ["D5", "D13"]},
             "src/useSearch.ts": {"does": "GET /search behind a debounce, with an out-of-order guard so a "
-                                         "slow early answer cannot overwrite a fast later one",
+                                         "slow early answer cannot overwrite a fast later one; and "
+                                         "`useQueryFilter`, a list the browser holds narrowed by "
+                                         "the one matcher in `kit/match.ts`",
                                  "governed_by": ["D5", "D13"]},
             # ---- what checks the above ----
             "eslint.config.js": {
@@ -8287,6 +8661,42 @@ COMPONENTS = [
                         "red — \"Open the camera\" 147.3px against \"Pick a box\" 107.0px — and "
                         "restoring both files turned it green again.",
             },
+            "tests/scaffold.spec.ts": {
+                "does": "every screen inherits the page scaffold, in a browser "
+                        "(D275). Reads ROUTES through `scripts/kit-adoption.mjs "
+                        "--routes`, the static check's own reader, and cross-checks it against "
+                        "`routesFromNav`. Per route, at 1440, 820, 720 and 390: one "
+                        "`[data-bn-page]`, one visible h1 equal to `title ?? label`, max-width "
+                        "`--bn-page-w` (a `max-width` that is not a finite length, like "
+                        "`none`, fails), h1 gap `--bn-page-top`, no sideways scroll. On a fake "
+                        "clock, with normal and with reduced motion, read every 500ms for 30s: "
+                        "one fixed `document.title`, \"番地 \" and the screen name in lowercase. "
+                        "Two fixture tests prove the width and title judges fail on their "
+                        "defect. "
+                        "A Fulfiller route is exempt from width, top and title by name "
+                        "(`EXEMPT`, D5), never by allow entry. Once, at "
+                        "1440: the palette's Go to group and the keyboard sheet name every "
+                        "route. Exceptions are `scripts/kit-adoption-allow.json`'s `runtime` "
+                        "block, route -> assertion -> lane: an unlisted failure is red and an "
+                        "entry that now passes at every width is red (stale). Writes nothing. "
+                        "Run by `make design-check`.",
+                "governed_by": ["D5", "D173", "D275", "D276"],
+            },
+            "tests/locating.spec.ts": {
+                "does": "where a card is, said one way (the locating lane): at 1440, 820, 720 "
+                        "and 390 in both themes, `#/inventory?box=N&card=<cid>` opens that card; "
+                        "its place names the box by name and never by number; the ruler's ends "
+                        "are section numbers, `back` sits before `front` (card 1 at the far "
+                        "back), and the pin's centre lies inside the card's own cell; the strip "
+                        "numbers the sections before and after; neighbours draw back, this, "
+                        "front; a departed copy is struck through with a past-tense accessible "
+                        "name and no word; section titles are whole with one drawn count; and "
+                        "Review's pill links to the card and reads as a sentence. Its fixture is "
+                        "`pipeline/join.py:Position`'s arithmetic written out. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D58", "D116", "D155", "D218", "D259",
+                                "D260"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "
@@ -8307,32 +8717,114 @@ COMPONENTS = [
                         "1920, because Home also centers a narrower cap. `margin: 0` on "
                         "`.bn-page` turned it green.",
             },
-            "tests/copy-budget.spec.ts": {
-                "does": "the visible word count on every owner screen may only go down "
-                        "(`D194`), blind to WHICH words a screen uses and asserting "
-                        "only their volume — the complement to `no mechanism on screen`'s "
-                        "content check rather than a second pass over it. Discovers its routes "
-                        "off `routesFromNav`, excludes `#/fulfillment`, renders each at 1440 in "
-                        "the small store `wide.spec.ts`/`phone.spec.ts` already use, waits for "
-                        "`.bn-view`'s own text to stop changing (two reads 150ms apart "
-                        "agreeing) rather than trusting the instant `<main>` appears, counts "
-                        "words (splits on whitespace, drops a token with no letter), and "
-                        "asserts each route's count against `copy-budget.json`'s pinned "
-                        "ceiling — no slack, since the only way a ceiling rises is "
-                        "`scripts/copy-budget.mjs --pin`, run by a person on purpose. "
-                        "`COPY_BUDGET_MUTATE=<hash>` injects a 30-plus-word sentence into one "
-                        "route via `page.evaluate` for the mutation proof, never by editing "
-                        "`app/src`. Run by `make design-check`.",
-                "governed_by": ["D194", "D196",
-                                "D195"],
-                "note": "THE FIRST BUILD MEASURED `#/inventory` AT EITHER 156 OR 158 WORDS "
-                        "ACROSS RUNS, because `await expect(main).toBeVisible()` passes the "
-                        "instant the shell paints \"Reading the inventory…\" — a real `<main>`, "
-                        "well before the mocked store read resolves. The stabilized-text wait "
-                        "fixed it: 8 of 8 runs agreed at 158 afterward. Mutation-tested: "
-                        "`COPY_BUDGET_MUTATE='#/pricing'` failed naming exactly that route (91 "
-                        "words against a ceiling of 46) with every other route still under its "
-                        "own ceiling; unset, the suite passed clean again.",
+            "tests/routeSweep.ts": {
+                "does": ("`sweepEveryRoute`, the one sweep `text-shape.spec.ts`, "
+                    "`machine-words.spec.ts` and `money-face.spec.ts` run, and `make "
+                    "text-density` through the first. Registers every "
+                    "`routeFixtures.ts:POPULATED_ROUTE_SEEDS` seed ONCE, before the first "
+                    "navigation, so every screen reads the same store at both widths. Harvests "
+                    "routes off the nav at 1440 and the phone drawer at 390, and appends "
+                    "`#/product` WITH a SKU. `openSettled` reads a screen only once it is "
+                    "LOADED: `.bn-shell[data-route]` names the route, one `.bn-view`, nothing "
+                    "`[aria-busy=\"true\"]`, no `fetch`/`xhr` read open or started, and `.bn-view`'s "
+                    "text still, all for 450ms together. It throws, naming the route, when a screen never "
+                    "settles. Reads only each route's landing state: no sheet, modal, toast, "
+                    "drawer or palette."),
+                "governed_by": ["D194", "D284"],
+                "note": ("MEASURED 2026-09-24: with every `/inventory` read held 900ms, a "
+                         "text-stability wait alone measured `#/inventory` at 4 words (\"Reading "
+                         "the inventory…\"); with the open-read count it measured the painted 197. The "
+                         "started-read count makes a request loop fail every run: with "
+                         "`stubStore`'s empty `/orders/picks` answer, `#/orders` asked 4,934 "
+                         "times in 10s and the sweep failed 3 runs of 3.")
+            },
+            "tests/textShape.ts": {
+                "does": ("`measureTextShape`, the one measurement `text-shape.spec.ts` runs "
+                    "through `page.evaluate` — a self-contained function (Playwright "
+                    "serialises it by `toString()`, so it closes over nothing outside "
+                    "itself). Four signals: a repeated sentence of 4+ words on 3+ "
+                    "elements sharing one BASE class (a BEM modifier and an `is-`/`has-` "
+                    "state token are ignored, so a modified card still groups); a "
+                    "number-plus-noun fact stated twice across prose blocks; a sentence over "
+                    "25 words; a caption repeating 60%+ of a multi-token heading's own words, "
+                    "the caption found after a `<header>` that wraps the heading alone. Every "
+                    "hit carries a `key`, the text the pending list is keyed by. Also returns "
+                    "the view's word count and largest prose blocks, for `make text-density` "
+                    "only. `injectRepeatedSentence` is the mutation hook, and trips all four."),
+                "governed_by": ["D194", "D269", "D284"],
+            },
+            "tests/text-shape.spec.ts": {
+                "does": ("D194's word-ceiling ratchet is superseded (`D284`, "
+                    "2026-09-23): a repetition check and a sentence-shape check, over "
+                    "`textShape.ts:measureTextShape`, replace it — no count is pinned. "
+                    "Sweeps through `routeSweep.ts:sweepEveryRoute`. `text-shape-allow.json` "
+                    "is the shrinking pending list, route -> assertion -> finding key -> lane; "
+                    "fails on an unlisted finding and on a stale entry. "
+                    "`TEXT_SHAPE_MUTATE=<hash>` is the mutation proof. `TEXT_DENSITY=1` is "
+                    "`make text-density`'s report mode: it writes the measurements and asserts "
+                    "nothing. Run by `make design-check`."),
+                "governed_by": ["D194", "D284"],
+            },
+            "tests/text-shape-allow.json": {
+                "does": ("the shrinking pending list `text-shape.spec.ts` reads, route -> "
+                    "assertion -> finding key -> lane. The finding key is the finding's own "
+                    "text, so an entry excuses one finding and no other."),
+                "governed_by": ["D194", "D284"],
+            },
+            "tests/machineWords.ts": {
+                "does": ("`scanMachineWords`, the one measurement `machine-words.spec.ts` "
+                    "runs, self-contained the same way `measureTextShape` is. Takes the "
+                    "word list and `repoTopDirs` as its argument (read once from "
+                    "`scripts/machine-words.json` by the spec) rather than closing over "
+                    "them. Matches a bare word with a LETTER boundary on both sides, not "
+                    "`\\b`: rendered `innerText` joins adjacent spans with no space "
+                    "(\"Pushed 0Staged 0\"). A phrase or path-shaped entry matches as a plain "
+                    "literal. `injectMachineWord` is the mutation hook."),
+                "governed_by": ["D196", "D269", "D284"],
+            },
+            "tests/machine-words.spec.ts": {
+                "does": ("D196's own gap: `no mechanism on screen` reads JSX literals only, "
+                    "so a server response, demo text or a composed string passes it "
+                    "clean. This reads `.bn-view`'s rendered `innerText` instead, through "
+                    "`routeSweep.ts:sweepEveryRoute`. A closed `<details>` "
+                    "(`D269`) contributes nothing to `innerText`, unlike "
+                    "`textContent`, with no special-casing needed. "
+                    "`machine-words-allow.json` is the shrinking pending list, route -> "
+                    "word -> lane, with no wildcard route. `MACHINE_WORDS_MUTATE=<hash>` is "
+                    "the mutation proof. Run by `make design-check`."),
+                "governed_by": ["D196", "D269", "D284"],
+            },
+            "tests/machine-words-allow.json": {
+                "does": ("the shrinking pending list `machine-words.spec.ts` reads, route -> "
+                    "word/path -> lane, no wildcard. A separate list from `scripts/machine-"
+                    "words-allow.json` on purpose: rendered text carries no source file."),
+                "governed_by": ["D196", "D284"],
+            },
+            "tests/moneyFace.ts": {
+                "does": ("`scanMoneyFace`, the one measurement `money-face.spec.ts` runs, "
+                    "self-contained. Matches `$1.23`, `$66,334.71`, `+$1.20`, `−$0.35` and a "
+                    "whole-dollar `$50` in `.bn-view`'s text nodes, and a cents- or `$`-shaped "
+                    "value in every visible `<input>`/`<textarea>`, and checks each match's "
+                    "RESOLVED `font-family` (via `getComputedStyle`) for JetBrains Mono, "
+                    "rather than the `.bn-money` class name — the requirement is visual, and "
+                    "an inheriting descendant still satisfies it. `injectInterMoney` is the "
+                    "mutation hook."),
+                "governed_by": ["D221", "D284"],
+            },
+            "tests/money-face.spec.ts": {
+                "does": ("D221 (money stays mono, confirmed 2026-09-23: inputs and chips "
+                    "included) over `moneyFace.ts:scanMoneyFace`, through "
+                    "`routeSweep.ts:sweepEveryRoute`. `money-face-allow.json` is the "
+                    "shrinking pending list, route -> amount -> lane: the fixture is "
+                    "deterministic, so a route draws the same figures every run. "
+                    "`MONEY_FACE_MUTATE=<hash>` is the mutation proof. Run by "
+                    "`make design-check`."),
+                "governed_by": ["D221", "D284"],
+            },
+            "tests/money-face-allow.json": {
+                "does": ("the shrinking pending list `money-face.spec.ts` reads, route -> amount "
+                    "-> lane. An entry excuses one figure on one route, and no other."),
+                "governed_by": ["D221", "D284"],
             },
             "tests/cursor.spec.ts": {
                 "does": "what every control says to the pointer, in two cases that cover "
@@ -8383,7 +8875,7 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117", "D204"],
+                "governed_by": ["D50", "D95", "D117", "D204", "D266"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
                         "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "
@@ -8456,7 +8948,8 @@ COMPONENTS = [
                         "found the specimens had never drawn the rule at all: `.kit-poslabel` set "
                         "`--pos-slot` without the `font-size` every real site pairs with it, so "
                         "the em-relative re-rank clamped to the same 11px a live path gets.",
-                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119"],
+                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119",
+                                "D269", "D272"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
                         "2026-09-05. DEBT5 recorded the departed row as "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "
@@ -8467,6 +8960,74 @@ COMPONENTS = [
                         "that renders nothing, which is this repo's vacuous green. Only a "
                         "browser can say the row was drawn. Not a harness test and not in "
                         "harness/run.py:TESTS; it runs with the other Playwright specs.",
+            },
+            "tests/kit-data.spec.ts": {
+                "does": "the kit's data primitives and the one matcher. Pure half: the matcher's "
+                        "rules, the two date formats, money's words, the box order, the status "
+                        "tones. Browser half: every specimen at 1440, 820, 720 and 390 in both "
+                        "themes with no sideways scroll and one control height, money in mono, a "
+                        "drawn separator, two printings told apart, one no-photo state, a product "
+                        "link landing on `#/product?sku=`, the pick list never native and keyed, "
+                        "filters in any order, the empty search press. Run by `make design-check`.",
+                "governed_by": ["D118", "D195", "D212", "D218", "D221"],
+            },
+            "tests/kit-data/index.html": {
+                "does": "a test page the dev server serves and the build never ships: it mounts "
+                        "`DataSpecimens` alone, so `kit-data.spec.ts` does not wait on the kit "
+                        "page to mount them.",
+                "governed_by": ["D5"],
+            },
+            "tests/kit-data/harness.tsx": {
+                "does": "the test page's entry: the tokens, the kit styles and the specimens, "
+                        "with `?theme=dark` for the dark theme.",
+                "governed_by": ["D5"],
+            },
+            "tests/match.spec.ts": {
+                "does": "`kit/match.cases.json`'s case table, run data-driven, one Playwright test "
+                        "per row: `matchQuery` against every case, pure, no browser. The other half "
+                        "of `matchQuery`'s coverage — the hand-written, narrated cases — is "
+                        "`kit-data.spec.ts`'s. Run by `make design-check`.",
+                "governed_by": ["D5"],
+            },
+            "src/kit/match.cases.json": {
+                "does": "the one case table for `kit/match.ts`: query, `MatchFields` and the "
+                        "expected verdict, one row per rule the matcher's own header states. Read "
+                        "by `tests/match.spec.ts`; meant for `search-server`'s Python side too, so "
+                        "the browser's matcher and the server's candidate step are checked against "
+                        "the same table.",
+                "governed_by": ["D5"],
+            },
+            "tests/filters.spec.ts": {
+                "does": "`FilterBar`, `HideToggle`, `SortHeader`, `Highlight`, `kit/facets.ts` "
+                        "and `kit/viewState.ts`'s hooks, each guard shown red on its own defect. "
+                        "Every specimen at 1440, 820, 720 and 390 in "
+                        "both themes with no sideways scroll; one control height across the wide "
+                        "row; \"N of M\" drawn by construction and changing as a facet narrows; a "
+                        "zero count drawn, not hidden; no facet disabled; single vs multi marked "
+                        "differently; the phone's compact trigger opening a sheet with nothing "
+                        "outside it moving (D118); the active sort column marked and re-sorting at "
+                        "once; the match highlight; and the URL view state — a press writes the "
+                        "URL, a default writes no key, a reload restores every value, and a path "
+                        "change leaves a place for Back. Also: equal facet widths, the counts under "
+                        "the other filters, the pick list working by keyboard inside the phone "
+                        "sheet, `aria-sort` on the `<th>` with axe clean, a quiet one-height hide "
+                        "toggle, compact mode by the bar's own width, and a hand-edited URL read "
+                        "safely. Run by `make design-check`.",
+                "governed_by": ["D118", "D132", "D270", "D285"],
+            },
+            "tests/filters/index.html": {
+                "does": "a test page the dev server serves and the build never ships: it mounts "
+                        "`FilterSpecimens` and a small view-state demo, so `filters.spec.ts` does "
+                        "not wait on a real screen to mount either.",
+                "governed_by": ["D5"],
+            },
+            "tests/filters/harness.tsx": {
+                "does": "the test page's entry: the tokens, the kit styles, `FilterSpecimens`, and "
+                        "`ViewStateDemo` — a real `FilterBar` bound to every `viewState.ts` hook, "
+                        "with a few presses and a readout of what each hook thinks the URL says — "
+                        "plus a bar with a failed search and a bar handed an unknown pick. "
+                        "`?theme=dark` draws the dark theme.",
+                "governed_by": ["D5", "D132"],
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "
@@ -8513,7 +9074,9 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86", "D124", "D125", "D134", "D174", "D192"]},
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
+                                "D124", "D125", "D134", "D174", "D192", "D276", "D259",
+                                "D273"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -8557,7 +9120,9 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105", "D109", "D134", "D174", "D192", "D20"],
+                "governed_by": ["D5", "D20", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D95",
+                                "D100", "D105", "D109", "D134", "D174", "D192", "D275",
+                                "D276"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -8576,6 +9141,21 @@ COMPONENTS = [
                         "Playwright presses keys through the debugging protocol, which never "
                         "fires a browser shortcut at all.",
             },
+            "tests/routeExclusions.ts": {
+                "does": "`EXCLUDED_FROM_SWEEP` (`#/fulfillment`, `#/gallery`), a REGEX rather "
+                        "than a quoted `'#/…'` string literal, shared by `text-shape.spec.ts`, "
+                        "`machine-words.spec.ts` and `money-face.spec.ts`. "
+                        "`scripts/docs-audit.py`'s `route rosters` row reads three or more "
+                        "distinct quoted `#/…` literals in one spec as a hand-typed roster; "
+                        "these two deliberate exclusions are not one, and a regex avoids "
+                        "tripping the row over something it was not built to catch. Read by "
+                        "`routeSweep.ts`, the one sweep all three run. ONLY safe in plain "
+                        "Node-context code — `routeSweep.ts:drawerRoutes` needs the identical "
+                        "`#/`-shape test INSIDE a `page.locator(...).evaluateAll` callback too, "
+                        "which Playwright serialises into the browser, so that one is written "
+                        "inline there instead, never imported from here.",
+                "governed_by": ["D69", "D70", "D284"],
+            },
             "tests/routeFixtures.ts": {
                 "does": "the fixture BUILDERS `run-panel.spec.ts`, `orders.spec.ts` and "
                         "`shipping.spec.ts` already wrote — `runRow`, `place`/`pick`/`line`/"
@@ -8585,28 +9165,25 @@ COMPONENTS = [
                         "`#/codes` and `#/graveyard`, which no existing spec seeded at all. The "
                         "three specs above now import from here rather than defining their own "
                         "(unchanged behaviour — all 112 of their cases still pass). Also exports "
-                        "one `seedPopulated*` function per one of D194's five under-fixtured "
-                        "routes (`#/runs`, `#/orders`, `#/shipping`, `#/codes`, `#/graveyard`): "
-                        "each registers a `page.route` stub with several real-shaped rows, "
-                        "registered AFTER `shell.ts:stubStore`'s own empty answer for the same "
-                        "path so the richer one wins (Playwright matches newest-first). Read "
-                        "only by `copy-budget.spec.ts`, which is where the gap these seeds close "
-                        "is argued at length.",
-                "governed_by": ["D20", "D83", "D134", "D194"],
-                "note": "CLOSES D194'S OWN NAMED GAP: its ceilings on the five routes above were "
-                        "pinned against `stubStore`'s empty-ish answer — no run, no order, no "
-                        "export, no code, no departed record — so a sentence added to any of the "
-                        "five could grow in its POPULATED state without the ratchet ever seeing "
-                        "it. `#/runs`'s ceiling fell (68 to 63: a populated list is real rows, "
-                        "not empty-state prose) while the other four rose (`#/orders` 82 to 84, "
-                        "`#/shipping` 80 to 135, `#/codes` 35 to 139, `#/graveyard` 21 to 66) — "
-                        "every rise is a real screen drawing real content, not copy creep, and "
-                        "`git log` on `app/tests/copy-budget.json` is the receipt. The owner's "
-                        "own alternative — pin against the live `:8000` store instead of a "
-                        "checked-in fixture — was rejected: order numbers, buyer names and run "
-                        "ids change daily on a real store, so a live-pinned ceiling would not "
-                        "reproduce in CI and a later `--pin` would silently ratchet to whatever "
-                        "that day's store happened to hold, which is the opposite of a ratchet.",
+                        "one `seedPopulated*` function per one of six under-fixtured "
+                        "routes (`#/runs`, `#/orders`, `#/shipping`, `#/codes`, `#/graveyard`, "
+                        "and `#/product` WITH a SKU, `PRODUCT_ROUTE`): each registers a "
+                        "`page.route` stub with real-shaped rows, registered AFTER "
+                        "`shell.ts:stubStore`'s own empty answer for the same path so the "
+                        "richer one wins (Playwright matches newest-first). Nothing in it is "
+                        "random. Read by `routeSweep.ts:sweepEveryRoute`, which registers "
+                        "every seed ONCE before its sweep — `copy-budget.spec.ts` read them "
+                        "first, before D194 was superseded.",
+                "governed_by": ["D20", "D83", "D134", "D194", "D284"],
+                "note": "CLOSED D194'S OWN NAMED GAP, and the argument still holds for its "
+                        "successors. Its ceilings on the five routes above were pinned "
+                        "against `stubStore`'s empty-ish answer — no run, no order, no "
+                        "export, no code, no departed record — so a sentence added to any of "
+                        "the five could grow in its POPULATED state without a check reading "
+                        "only the empty one ever seeing it. The owner's own alternative — pin "
+                        "against the live `:8000` store instead of a checked-in fixture — was "
+                        "rejected: order numbers, buyer names and run ids change daily on a "
+                        "real store, so nothing pinned against it would reproduce in CI.",
             },
             "tests/orders.spec.ts": {"does": "the order screen in a browser: that the six-way "
                                              "counts render including the zeros, that a pick "
@@ -8727,7 +9304,9 @@ COMPONENTS = [
                                                "press is scoped to the filter rather than to "
                                                "the whole survey (D62). Not a harness test.",
                                                "governed_by": ["D28", "D54", "D62", "D99", "D100",
-                                                               "D101", "D103", "D107", "D218"]},
+                                                               "D101", "D103", "D107", "D118",
+                                                               "D218",
+                                                               "D273"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "
@@ -8754,7 +9333,8 @@ COMPONENTS = [
                                                       "D51", "D54", "D56", "D57", "D58", "D59",
                                                       "D62", "D68", "D78", "D79", "D85", "D86",
                                                       "D92", "D98", "D99", "D103", "D115", "D117",
-                                                      "D118", "D156", "D168", "D208", "D218"]},
+                                                      "D118", "D156", "D168", "D196", "D208",
+                                                      "D218", "D273"]},
             "tests/revenue.spec.ts": {
                 "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
                         "states, every column's sort and its reverse, the search field, the "
@@ -8770,6 +9350,22 @@ COMPONENTS = [
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
                                 "D217", "D225"],
             },
+            "tests/demo-coverage.spec.ts": {
+                "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "
+                        "origin under its base path as a static host serves it, or read from a "
+                        "running preview when `DEMO_PREVIEW_URL` is set. Every recorded card has "
+                        "its photograph in the build; Inventory, Review, Pricing, Capture, Home "
+                        "and Cards to pull draw photographs that answer 200; Mark sold then Undo restores the box "
+                        "count; a Game pick draws counts; a typed search, the order walk, a "
+                        "review answer and its undo, the graveyard, product history, the value "
+                        "band and 'Value my stock' all draw without the demo refusal. Every "
+                        "screen is reached from the root by the sidebar or a control, except "
+                        "the `#/product` deep link (D227). Proved to fail: 13 of 17 cases went "
+                        "red on the previous `demoServer.ts` with no photographs. SKIPS BY NAME "
+                        "with no `dist-demo/`; `DEMO_REQUIRED=1` makes that a failure, and "
+                        "`.github/workflows/demo.yml` runs it that way before it publishes.",
+                "governed_by": ["D52", "D126", "D183", "D213", "D227"],
+            },
             "tests/product-history.spec.ts": {
                 "does": "`#/product`'s own hard rule (D227): the market "
                         "series and the owner's own fills draw as two different SVG shapes, "
@@ -8781,8 +9377,7 @@ COMPONENTS = [
                         "requests are intercepted (the product history and the orders "
                         "payload); no real request is made and no store is touched. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D227", "D62", "D212",
-                                 "D219"],
+                "governed_by": ["D62", "D212", "D219", "D227", "D278"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
@@ -8802,7 +9397,7 @@ COMPONENTS = [
                         "intercepted and their bodies read; no real request is made and no store "
                         "is touched.",
                 "governed_by": ["D7", "D9", "D33", "D64", "D86", "D100", "D103", "D104", "D105",
-                                "D218"],
+                                "D118", "D218"],
                 "note": "ONE OF ITS CASES IS A GEOMETRY ASSERTION AND IT WAS WRITTEN FROM A "
                         "DEFECT. The survey console rendered 512px wide and 0px TALL — "
                         "`.runslog` sets `overflow: hidden`, which makes a flex item's automatic "
@@ -8888,7 +9483,7 @@ COMPONENTS = [
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
                                 "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D213",
-                                "D218"],
+                                "D218", "D259"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
@@ -9013,8 +9608,9 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D115", "D125",
-                                "D136", "D193", "D218"],
+                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
+                                "D118", "D125", "D136", "D193", "D212", "D218",
+                                "D259"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "
