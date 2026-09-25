@@ -65,7 +65,9 @@ own "Add orders" sheet. The panel's `Manage` keeps only that buyer's own orders.
 - **The card pane is the photograph, the pick and every copy** with its place and Mark sold.
   The card's details table stays on `#/inventory`. This amends one sentence above: "The card
   pane is inventory's own, with inventory's words." The words stay inventory's (the kit
-  `Location` draws each place). The pane is no longer inventory's whole pane (UX-169).
+  `Location` draws each place). The pane is no longer inventory's whole pane (UX-169). The owner
+  looked at three mockups and picked one quiet line under the card: the market reading and the
+  live count, a dash when there is none, linking to the product view (2026-09-24).
 - **The list uses the kit `FilterBar`**, and its view lives in the URL (D-view-state-in-url).
   A sort press re-sorts at once (FLT-01, D-a-press-reorders-and-nothing-else-moves).
 - **The stand-down backlog** (D203) names its cutoff, its span and every order TCGplayer still
@@ -89,8 +91,19 @@ own "Add orders" sheet. The panel's `Manage` keeps only that buyer's own orders.
 `app/tests/orders.spec.ts` and `app/tests/order-walk.spec.ts` assert each part. They check
 the widths 1440, 820, 720 and 390.
 
+### Planned, not built
+
+**The two header presses become small square icon buttons.** The owner's words, 2026-09-24:
+
+```
+add orders and cards to pull ought to be mini square buttons that'll fit on the same line
+eventually i'd imagine, but that can happen later (as long as you RECORD taht somewhere)
+```
+
+The plan: once the kit's `IconButton` merges (the kit-icons lane), "Add orders" and "Cards to
+pull" become small square `IconButton`s, each with a tooltip and an accessible name. They sit on
+the same line as the one-line filter bar, and the page header keeps only the title.
+
 ### What is still open
 
-- The Details table (the market reading and the listing counts) left the Orders card pane, per
-  the held-orders cut list. The owner once asked for that parity on this screen. Confirm.
 - CLAUDE.md's hub note changes in the docs-sweep lane, not here.
