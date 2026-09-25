@@ -557,3 +557,15 @@
 - PR 2 scope rule (orchestrator, process-only): search-server or b-pricing may not pass by
   the time the integration branch is otherwise green. Then that lane moves to PR 3, and PR 2
   goes without it.
+- Existing off-by-one places (owner, 2026-09-25, paraphrased): the existing ones are not
+  worth a repair, because the store is still usable, but prevention from now on is wanted. No
+  repair of existing data. Prevention is the box map lane's fix: dividers stay with their
+  physical card after a delete. PR 3's checkpoint must also prove two things on today's code.
+  A plain "Move to box" (D83) can no longer shift a divider or a label, and neither can a
+  mid-box delete.
+- Deferred (orchestrator): the emit exit-code split. After a full send, `emit --listed-only`
+  exits 0 over one run and 1 over several, and the route answers the same for both. It is
+  older than b-pricing, and b-pricing's send matrix records it. It is its own item after PR
+  2. DEBT35 records it (emit exits differently on one run and several runs).
+- Demo box name (owner, 2026-09-25, verbatim): "Demo Box". No "owner" wording about these
+  cards appears anywhere on the public page.
