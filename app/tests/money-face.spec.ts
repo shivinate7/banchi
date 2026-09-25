@@ -98,3 +98,18 @@ test('a dollar figure drawn through the kit Stat is in the mono face', async ({ 
   const face = await stat.locator('.bn-stat-value').evaluate((el) => getComputedStyle(el).fontFamily)
   expect(face, `"$184 to list" drawn as "${face}"`).toContain('JetBrains Mono')
 })
+
+/* EVERY DOLLAR FIGURE ON THE KIT SHEET (the PR 2 delta review, D221). The sweep skips
+ * `#/gallery`, and the Stat case above read one specimen, so the primary button's
+ * "Push 12 listings, $184.20" sat in Inter unseen. This reads every dollar text node and money
+ * field in the gallery's `.bn-view` through the sweep's own scanner. */
+test('every dollar figure on the kit sheet is drawn in the mono face', async ({ page }) => {
+  await page.goto('/#/gallery')
+  await expect(page.locator('main.gallery')).toBeVisible()
+  const result = await page.evaluate(scanMoneyFace)
+  const misses = [
+    ...result.text.map((hit) => `'${hit.amount}' drawn as "${hit.fontFamily}" in "${hit.sample}"`),
+    ...result.fields.map((hit) => `'${hit.amount}' in a <${hit.tag}> drawn as "${hit.fontFamily}"`),
+  ]
+  expect(misses, misses.join('\n')).toEqual([])
+})

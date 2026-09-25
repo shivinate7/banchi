@@ -140,6 +140,9 @@
 .bn-muted { color: var(--bn-ink-3); }
 .bn-faint { color: var(--bn-ink-3); }
 .bn-money { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-money); }
+/* A Money inside a kit Button keeps the mono face (D221) but takes the button's own ink and
+   weight: `--bn-money` on a primary button's accent fill would fail its contrast. */
+.bn-btn .bn-money { color: inherit; font-weight: inherit; }
 
 /* ---- the heading scale: three steps (UX-067) ----------------------------------------------
    h1 is `.bn-title` (--bn-fs-h1). A section is `.bn-h2`, a part of a section `.bn-h3`. */

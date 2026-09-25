@@ -910,7 +910,7 @@ export function Gallery() {
                   </Button>
                 </div>
                 <Button variant="primary" block icon="dollar">
-                  Push 12 listings, $184.20
+                  Push 12 listings, <Money value={184.2} />
                 </Button>
               </Spec>
             </div>
@@ -1082,7 +1082,7 @@ export function Gallery() {
                 <SelectSpecimen />
                 <label className="bn-field">
                   <span className="bn-field-label">Note</span>
-                  <textarea className="bn-textarea" defaultValue="Held back: bullish above $5." />
+                  <textarea className="bn-textarea" defaultValue="Held back: the market is still moving." />
                 </label>
               </Spec>
               <Spec label="large, mono, disabled">
