@@ -167,6 +167,7 @@ export function Graveyard() {
     <Page
       title="Graveyard"
       icon="history"
+      className="graveyard"
       lede="Sold, retired and moved cards."
       actions={<ReloadButton onReload={() => void load()} busy={retrying} />}
       loading={rows === null && failure === null}

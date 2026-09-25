@@ -207,16 +207,6 @@
       "width": "inventory",
       "top": "inventory"
     },
-    "/graveyard": {
-      "page": "library",
-      "width": "library",
-      "top": "library"
-    },
-    "/codes": {
-      "page": "library",
-      "width": "library",
-      "top": "library"
-    },
     "/fulfillment": {
       "page": "fulfillment"
     }
