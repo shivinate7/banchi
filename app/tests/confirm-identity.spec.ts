@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
+import { whatMoved, settled } from './motionSettled'
 
 /* THE CONFIRM CONTROL — identity-follows-sku.md §8.1, the sibling `correct-answer.spec.ts`
  * cannot reach. `app/src/CardHero.tsx:ListingCorrection` gains a second press, "The listing
@@ -293,72 +294,17 @@ test('the confirm control is reachable on #/inventory for a held card, and its u
   await expect(undoneToast).not.toContainText('Box 2, Card 1')
 })
 
-/* THE D118 SWEEP OVER THIS PRESS, `inventory.spec.ts`'s own shape (the file's own header
- * explains why this is not an import of it) over the smallest fixture that draws the confirm
- * control: pressing "The listing is right" writes its own receipt inside `.card-correction`'s
- * reserved slot, inside `.browse-card`, and that growth may move nothing OUTSIDE the card
- * panel — the same floor `inventory.spec.ts`'s "the press that sells a copy moves nothing
- * outside the panel it lands in" proves for Mark sold. */
-async function outsideThePanel(page: Page): Promise<Record<string, string>> {
-  return await page.evaluate(() => {
-    const out: Record<string, string> = {}
-    const stamp = () => `n${Math.random().toString(36).slice(2)}`
-    for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
-      if (el.closest('.browse-card') !== null) continue
-      let fixed = false
-      for (let a: HTMLElement | null = el; a !== null && a !== document.body; a = a.parentElement) {
-        if (getComputedStyle(a).position === 'fixed') {
-          fixed = true
-          break
-        }
-      }
-      if (fixed) continue
-      const r = el.getBoundingClientRect()
-      if (r.width === 0 && r.height === 0) continue
-      if (el.dataset.stableId === undefined) el.dataset.stableId = stamp()
-      const cls =
-        typeof el.className === 'string' && el.className !== '' ? `.${el.className.trim().split(/\s+/)[0]}` : ''
-      out[el.dataset.stableId] = `${el.tagName.toLowerCase()}${cls} @ ${Math.round(r.x)},${Math.round(r.y)} h${Math.round(r.height)}`
-    }
-    return out
-  })
-}
-
-function whatMoved(before: Record<string, string>, after: Record<string, string>): string[] {
-  const moved: string[] = []
-  for (const [id, was] of Object.entries(before)) {
-    const now = after[id]
-    if (now === undefined || now === was) continue
-    moved.push(`${was}   ->   ${now}`)
-  }
-  return moved
-}
-
-/** `outsideThePanel`, held until two reads 75ms apart agree, or `tries` runs out.
- *
- *  THE RACE THIS CLOSES: the box rail opens the walk's first section as a consequence of
- *  landing on it (`BoxBrowse.tsx`, the effect keyed on `selected`) — including on the very
- *  first render, so the walk never arrives with its own selection hidden. That fold's chevron
- *  (`.browse-sectmark`) rotates in over `.2s`, entirely on MOUNT and independent of the
- *  confirm press. This file's `open()` waits only for the card hero's name, not for
- *  `.browse-sectfold` the way `inventory.spec.ts`'s own `open()` does, so on a slow enough
- *  runner a "before" sample taken right after can still catch that rotation mid-flight.
- *  MEASURED (CI run 36089115485's trace, reproduced locally by throttling the CPU 6x): the
- *  chevron's own svg and path, unsettled — `svg @ 303,477 h16 -> svg @ 304,478 h14` — settled
- *  into the SAME shape by the next sample, and the confirm press never touched it. Sampling
- *  twice and requiring agreement reads the chevron once it has stopped moving, on its own,
- *  never on the press's schedule — so a press that genuinely moves something still fails this
- *  every time, because two samples of a REAL move never agree either. */
-async function settled(page: Page, tries = 40): Promise<Record<string, string>> {
-  let last = await outsideThePanel(page)
-  for (let i = 0; i < tries; i += 1) {
-    await page.waitForTimeout(75)
-    const next = await outsideThePanel(page)
-    if (JSON.stringify(next) === JSON.stringify(last)) return next
-    last = next
-  }
-  return last
-}
+/* THE D118 SWEEP OVER THIS PRESS, `inventory.spec.ts`'s own shape — `outsideThePanel`,
+ * `whatMoved` and `settled` now live in `./motionSettled` rather than as a second copy here,
+ * over the smallest fixture that draws the confirm control: pressing "The listing is right"
+ * writes its own receipt inside `.card-correction`'s reserved slot, inside `.browse-card`, and
+ * that growth may move nothing OUTSIDE the card panel — the same floor `inventory.spec.ts`'s
+ * "the press that sells a copy moves nothing outside the panel it lands in" proves for Mark
+ * sold. `settled`'s own doc comment in `motionSettled.ts` carries the race both specs share:
+ * the box rail's section-fold chevron rotates in on MOUNT, independent of either press, and
+ * this file's `open()` waits only for the card hero's name, not for `.browse-sectfold` the way
+ * `inventory.spec.ts`'s own `open()` does, so on a slow enough runner a "before" sample taken
+ * right after can still catch that rotation mid-flight. */
 
 test('the confirm press moves nothing outside the panel it lands in', async ({ page }) => {
   await open(page)

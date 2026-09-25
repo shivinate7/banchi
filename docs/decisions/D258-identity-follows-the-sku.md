@@ -29,13 +29,20 @@ binds.
 it. The identity stays the read, not the row nothing trusts yet. All four live in
 `store/master.py`, and nowhere else.
 
-**Seven writers are sanctioned, not four.** Two more keep writing directly, and each one was
+**Six writers are sanctioned, not four.** Two more keep writing directly, and each one was
 already argued in the code before this lane touched it. `record_identification` is continuous
-with `bind_sku`, in its own words — "the same writer... the moment a binding exists." `set_state`
-is a flagged, temporary deviation. It waits on a later lane to trim its five identity
-parameters. `move_card` is the seventh. It is D83's tombstone clear, unrelated to choosing an
-identity, and unchanged by this lane. `make docs-audit`'s new `identity writers` row reads all
-seven off `store/master.py`'s own `IDENTITY_WRITERS` constant, never a copy of it. It fails a
+with `bind_sku`, in its own words — "the same writer... the moment a binding exists."
+`move_card` is the sixth. It is D83's tombstone clear, unrelated to choosing an identity, and
+unchanged by this lane.
+
+`set_state` WAS A THIRD HOLDOVER, AND IS NOT ANY MORE. It took `sku`, `condition`, `set_name`,
+`rarity` and `name` as a flagged, temporary deviation. Commit `66442b32` closed it. Every test
+fixture that still passed them moved to `bind_sku` or `hold_sku`. A few write the `Card` field
+directly, where neither sanctioned writer can build the fixture's own state. `set_state` now
+moves state and `run` only, and it is no longer in `IDENTITY_WRITERS`.
+
+`make docs-audit`'s new `identity writers` row reads all
+six off `store/master.py`'s own `IDENTITY_WRITERS` constant, never a copy of it. It fails a
 commit that assigns `sku`, `condition`, `name`, `number`, `printed_total`, `rarity` or
 `set_name` anywhere else under `server/`, `store/`, `pipeline/`, `cli/`, `codes/` or
 `scripts/`. Its `IDENTITY_WRITERS_ALLOWED` exception list is empty and pinned at zero. Lane 7
@@ -81,6 +88,20 @@ this lane, citing this entry.
    (D167/D4's own protection against re-asking an already-cleared position).
 
 No step here runs on its own. Each one waits for the owner to say go.
+
+**Run on the owner's store, 2026-09-24.** The runbook above, executed. Numbers are evidence
+and are never rewritten to match a later tree.
+
+- PR #461 merged as `19d56c65`.
+- `skus adopt --write`: 13 files read, 12,052 SKUs, 0 changed, 0 conflicts, 916 of 916 card
+  SKUs covered.
+- The replay, on a `.backup` copy with `.exports/` and `.live/` beside it: all six checks
+  pass. T1 2,609, T2 159, T3 612, T4u 70 (3,450 derive), T4s 24, T5 28 (52 held), T6 8,
+  `sku_unknown` 0. 247 identity moves, all in T3 and T4u.
+- `cards identity --write`: 3,450 bound (`bound_by=migration`), 52 held, 38
+  `listing_disputed` entries opened, 4 already human-cleared and so skipped (3/747, 3/811,
+  3/968, 3/987), 10 sold cards reported only. The write took 1.52s.
+- Rell, Magnetic (1/5, 4/654) and Jax, Unmatched (1/14, 4/624) now read correctly.
 
 Governs `store/master.py` (`IDENTITY_FIELDS`, `IDENTITY_WRITERS`, `Inventory.hold_sku`),
 `scripts/docs-audit.py` (the `identity writers` row), `scripts/demo-seed.py`,

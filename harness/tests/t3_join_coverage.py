@@ -289,12 +289,15 @@ def _stock_at(box, sku, condition, copies, *, pushed=0, staged=0, live=0, sold=(
     _capture_at(box, copies)
     with Store().write() as snapshot:
         for index in range(1, copies + 1):
-            snapshot.inventory.set_state(
-                master.position_key(box, index),
-                master.IDENTIFIED,
-                sku=sku,
-                condition=condition,
-            )
+            # DIRECT FIELD WRITE, NOT `bind_sku`: this file's own join/resolve ladder reads
+            # `card.sku`/`card.condition` straight off the card against an EXPORT FILE
+            # (`resolve.load`), never against `store/skus.py`'s identity table, so a real
+            # `Skus` row would prove nothing extra here and every caller of this helper
+            # would need one built to match.
+            key = master.position_key(box, index)
+            snapshot.inventory.set_state(key, master.IDENTIFIED)
+            card = snapshot.inventory.cards[key]
+            card.sku, card.condition = sku, condition
         for index in sold:
             snapshot.inventory.set_state(master.position_key(box, index), master.SOLD)
         entry = snapshot.inventory.listing(sku, condition=condition)
@@ -945,13 +948,14 @@ def _check_answer_off_the_record(c, export) -> None:
             ("a SKU this export no longer carries", "0000000", "Near Mint Holofoil"),
             ("a SKU carried under a different Condition", SECRET_RARE_SKU, "Near Mint"),
         ):
+            # DIRECT FIELD WRITE, NOT `bind_sku`: this proves `cli/resolve.py`'s own
+            # ladder against the EXPORT FILE, never against `store/skus.py`'s table —
+            # `bind_sku` validates against the wrong thing for this case, and one of the
+            # two SKUs here is deliberately not in ANY table.
             with Store().write() as snapshot:
-                snapshot.inventory.set_state(
-                    master.position_key(BOX, 1),
-                    master.IDENTIFIED,
-                    sku=sku,
-                    condition=condition,
-                )
+                snapshot.inventory.set_state(master.position_key(BOX, 1), master.IDENTIFIED)
+                card = snapshot.inventory.cards[master.position_key(BOX, 1)]
+                card.sku, card.condition = sku, condition
             fell = resolve.load(run, _export_file(home / "export.csv", export))
             c.equal(
                 [q.destination.reason for q in fell.report.queued],
