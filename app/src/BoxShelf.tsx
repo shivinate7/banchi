@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Button, FailureNotice, Icon, IconButton, Segmented } from './kit'
 import { Page } from './kit/Page'
-import { describeFailure, getBoxes, moveSections, undoSectionMove } from './server'
+import { describeFailure, getBoxes, getInventoryBox, moveRange, moveSections, undoSectionMove } from './server'
 import type { Failure } from './server'
 import { isEditableTarget } from './keys'
-import type { BoxRecord, SectionDetail, SectionMoveResult, SectionMoveTarget } from './types'
+import type { BoxRecord, InventoryCard, SectionDetail, SectionMoveResult } from './types'
 import './BoxShelf.css'
 
 /* THE SHELF: every box drawn from above, and a section moved as one object (D264).
@@ -16,6 +16,9 @@ import './BoxShelf.css'
  * after section i want of the other box". So the acts are three: pick up a section, pick the box,
  * then drop it into a gap of that box, drawn beside the box it came from.
  *
+ * THE NEXT SLICE (owner, 2026-09-25): a lifted section also shows its cards, and one card or a
+ * range moves by itself, to a gap in front of any card or at the end of any section.
+ *
  * CARD 1 IS AT THE FAR BACK, AT THE TOP (`docs/specs/box-map.md` section 5.2). A block's height
  * follows its count, with a 44px floor so a small section is still a target. COUNTS ONLY: the
  * owner ruled no money on the map in v1.
@@ -24,7 +27,7 @@ import './BoxShelf.css'
  * keyboard tabs to a gap and presses Enter. Esc puts the section down. The save is at once; the
  * receipt under the map is the physical instruction, with Undo on `U`. */
 
-type Scope = 'one' | 'after' | 'all'
+type Scope = 'one' | 'after' | 'all' | 'cards'
 
 type Lifted = {
   readonly box: number
@@ -33,6 +36,10 @@ type Lifted = {
 }
 
 type Dest = number | 'new'
+
+/** A gap's id on the page: `s:<n>` in front of a section, `end`, `c:<index>` in front of a
+ *  card, `e:<n>` at a section's end. */
+type GapId = string
 
 /** One view of Inventory: the walk or the shelf. The switch lives in both headers. */
 export function ShelfSwitch({ view, onView }: { readonly view: 'walk' | 'shelf'; readonly onView: (next: 'walk' | 'shelf') => void }) {
@@ -62,6 +69,25 @@ function boxName(record: BoxRecord): string {
   return record.name ?? 'Unnamed box'
 }
 
+function cardName(card: InventoryCard): string {
+  return card.name ?? 'An unread card'
+}
+
+const onHand = (card: InventoryCard) => card.state !== 'sold' && card.state !== 'retired' && card.state !== 'moved'
+
+/** A box's on-hand cards by section, in the order they stand (the card's order key, D265). */
+function bySection(cardsOf: readonly InventoryCard[]): Map<number, InventoryCard[]> {
+  const out = new Map<number, InventoryCard[]>()
+  const sorted = [...cardsOf].filter(onHand).sort((a, b) => (a.place?.order ?? a.index) - (b.place?.order ?? b.index))
+  for (const card of sorted) {
+    const section = card.place?.section ?? 1
+    const list = out.get(section) ?? []
+    list.push(card)
+    out.set(section, list)
+  }
+  return out
+}
+
 /** The sections a lift takes, first and last ordinal. */
 function rangeOf(record: BoxRecord, lifted: Lifted): { first: number; last: number } {
   const count = record.sections_detail.length
@@ -89,23 +115,46 @@ function aimOf(record: BoxRecord, first: number, last: number) {
 }
 
 /** A block's height: its count against the fullest section on the shelf, floored at 44px. */
-function blockStyle(count: number, fullest: number) {
+function blockStyle(count: number, fullest: number): CSSProperties {
   const share = fullest > 0 ? count / fullest : 0
   return { '--shelf-share': share.toFixed(3) } as CSSProperties
+}
+
+/** One box's cards, read when a lift or a destination needs them. */
+function useBoxCards(box: number | null, reload: number): readonly InventoryCard[] | null {
+  const [read, setRead] = useState<{ box: number; cards: InventoryCard[] } | null>(null)
+  useEffect(() => {
+    if (box === null) return
+    let live = true
+    getInventoryBox(box)
+      .then((inv) => {
+        if (live) setRead({ box, cards: Object.values(inv.cards) })
+      })
+      .catch(() => {
+        if (live) setRead({ box, cards: [] })
+      })
+    return () => {
+      live = false
+    }
+  }, [box, reload])
+  return read !== null && read.box === box ? read.cards : null
 }
 
 export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf') => void }) {
   const [records, setRecords] = useState<readonly BoxRecord[] | null>(null)
   const [readFailure, setReadFailure] = useState<Failure | null>(null)
   const [lifted, setLifted] = useState<Lifted | null>(null)
+  const [picked, setPicked] = useState<{ from: number; to: number } | null>(null)
   const [dest, setDest] = useState<Dest | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [receipt, setReceipt] = useState<SectionMoveResult | null>(null)
   const [undone, setUndone] = useState(false)
-  const [over, setOver] = useState<string | null>(null)
+  const [over, setOver] = useState<GapId | null>(null)
+  const [reads, setReads] = useState(0)
 
   const load = useCallback(() => {
+    setReads((n) => n + 1)
     getBoxes()
       .then((summary) => {
         setRecords(summary.boxes)
@@ -124,21 +173,37 @@ export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf')
   const range = source !== null && lifted !== null ? rangeOf(source, lifted) : null
   const liftedDetail = source !== null && lifted !== null ? source.sections_detail[lifted.section - 1] : undefined
   const liftedName = liftedDetail === undefined ? '' : sectionName(liftedDetail)
+  const cardMode = lifted?.scope === 'cards'
+
+  const sourceCards = useBoxCards(cardMode && lifted !== null ? lifted.box : null, reads)
+  const destCards = useBoxCards(cardMode && typeof dest === 'number' ? dest : null, reads)
+  const sectionCards = useMemo(
+    () => (sourceCards === null || lifted === null ? [] : (bySection(sourceCards).get(lifted.section) ?? [])),
+    [sourceCards, lifted],
+  )
+  const chosen = useMemo(() => {
+    if (picked === null) return []
+    const lo = Math.min(picked.from, picked.to)
+    const hi = Math.max(picked.from, picked.to)
+    return sectionCards.slice(lo, hi + 1)
+  }, [picked, sectionCards])
+  const chosenName =
+    chosen.length === 0 ? '' : chosen.length === 1 ? cardName(chosen[0] as InventoryCard) : `${chosen.length} cards`
 
   const putDown = useCallback(() => {
     setLifted(null)
     setDest(null)
     setOver(null)
+    setPicked(null)
   }, [])
 
-  const drop = useCallback(
-    async (target: SectionMoveTarget) => {
-      if (source === null || range === null || busy) return
+  const run = useCallback(
+    async (write: () => Promise<SectionMoveResult>) => {
+      if (busy) return
       setBusy(true)
       setFailure(null)
       try {
-        const result = await moveSections(source.box, range.first, range.last, target, aimOf(source, range.first, range.last))
-        setReceipt(result)
+        setReceipt(await write())
         setUndone(false)
         putDown()
       } catch (err) {
@@ -148,7 +213,28 @@ export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf')
         load()
       }
     },
-    [source, range, busy, putDown, load],
+    [busy, putDown, load],
+  )
+
+  /* One drop, whichever input made it. A section lands in front of a section or at the end; a
+     card or a range lands in front of a card or at a section's end. */
+  const dropAt = useCallback(
+    (gap: GapId) => {
+      if (source === null || range === null || dest === null) return
+      if (cardMode) {
+        if (chosen.length === 0 || dest === 'new') return
+        const beforeCard = gap.startsWith('c:') ? Number(gap.slice(2)) : null
+        const sectionEnd = gap.startsWith('e:') ? Number(gap.slice(2)) : null
+        const first = chosen[0]
+        const last = chosen[chosen.length - 1]
+        const aim = { count: chosen.length, first: first?.cid ?? null, last: last?.cid ?? null }
+        void run(() => moveRange(source.box, chosen.map((c) => c.index), { toBox: dest, beforeCard, sectionEnd }, aim))
+        return
+      }
+      const before = gap === 'end' ? null : Number(gap.slice(2))
+      void run(() => moveSections(source.box, range.first, range.last, { toBox: dest, before }, aimOf(source, range.first, range.last)))
+    },
+    [source, range, dest, cardMode, chosen, run],
   )
 
   const undo = useCallback(async () => {
@@ -191,24 +277,23 @@ export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf')
     const hit = document.elementFromPoint(x, y)
     return hit instanceof Element ? (hit.closest('[data-shelf-gap]') as HTMLElement | null) : null
   }
-  const onDragStart = (event: ReactPointerEvent<HTMLElement>) => {
-    if (dest === null || busy) return
-    drag.current = { id: event.pointerId }
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
-  const onDragMove = (event: ReactPointerEvent<HTMLElement>) => {
-    if (drag.current?.id !== event.pointerId) return
-    setOver(gapAt(event.clientX, event.clientY)?.dataset.shelfGap ?? null)
-  }
-  const onDragEnd = (event: ReactPointerEvent<HTMLElement>) => {
-    if (drag.current?.id !== event.pointerId) return
-    drag.current = null
-    const gap = gapAt(event.clientX, event.clientY)
-    setOver(null)
-    if (gap?.dataset.shelfGap && dest !== null) {
-      const before = gap.dataset.shelfGap === 'end' ? null : Number(gap.dataset.shelfGap)
-      void drop({ toBox: dest, before })
-    }
+  const dragHandlers = {
+    onDragStart: (event: ReactPointerEvent<HTMLElement>) => {
+      if (dest === null || busy) return
+      drag.current = { id: event.pointerId }
+      event.currentTarget.setPointerCapture(event.pointerId)
+    },
+    onDragMove: (event: ReactPointerEvent<HTMLElement>) => {
+      if (drag.current?.id !== event.pointerId) return
+      setOver(gapAt(event.clientX, event.clientY)?.dataset.shelfGap ?? null)
+    },
+    onDragEnd: (event: ReactPointerEvent<HTMLElement>) => {
+      if (drag.current?.id !== event.pointerId) return
+      drag.current = null
+      const gap = gapAt(event.clientX, event.clientY)?.dataset.shelfGap
+      setOver(null)
+      if (gap) dropAt(gap)
+    },
   }
 
   const verdict =
@@ -216,11 +301,10 @@ export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf')
       ? null
       : `${records.length === 1 ? '1 box' : `${records.length} boxes`}, drawn from above. Card 1 is at the far back, at the top.`
 
-  const status = (
-    <>
-      {failure === null ? null : <FailureNotice failure={failure} title="That move did not happen." />}
-    </>
-  )
+  const moving = cardMode ? chosenName : lifted?.scope === 'all' && source !== null ? boxName(source) : liftedName
+  const gaps: Gaps = { over, name: moving, onPut: dropAt, busy }
+  const destRecord = dest === null || dest === 'new' ? null : (byBox.get(dest) ?? null)
+  const pairReady = dest !== null && source !== null && range !== null && (!cardMode || chosen.length > 0)
 
   return (
     <Page
@@ -229,11 +313,11 @@ export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf')
       lede="Every box and its sections. Pick up a section to move it to another box or another place."
       verdict={verdict}
       actions={<ShelfSwitch view="shelf" onView={onView} />}
-      status={status}
+      status={failure === null ? null : <FailureNotice failure={failure} title="That move did not happen." />}
       loading={records === null && readFailure === null}
       empty={readFailure === null ? null : <FailureNotice failure={readFailure} title="The boxes could not be read." onRetry={load} />}
     >
-      {records === null ? null : lifted !== null && source !== null && range !== null ? (
+      {records !== null && lifted !== null && source !== null && range !== null ? (
         <LiftBar
           name={liftedName}
           source={source}
@@ -241,27 +325,47 @@ export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf')
           range={range}
           records={records}
           dest={dest}
-          onScope={(scope) => setLifted({ ...lifted, scope })}
+          chosenName={cardMode ? chosenName : null}
+          onScope={(scope) => {
+            setLifted({ ...lifted, scope })
+            setPicked(null)
+            if (scope === 'cards' && dest === 'new') setDest(null)
+          }}
           onDest={setDest}
           onCancel={putDown}
         />
       ) : null}
 
-      {records === null ? null : dest !== null && source !== null && range !== null ? (
+      {records !== null && cardMode && dest === null ? (
+        <CardPicker
+          cards={sectionCards}
+          loading={sourceCards === null}
+          picked={picked}
+          onPick={(at) =>
+            setPicked((was) => (was === null || was.from !== was.to ? { from: at, to: at } : { from: was.from, to: at }))
+          }
+        />
+      ) : null}
+
+      {records === null ? null : pairReady && source !== null && range !== null ? (
         <div className="shelf-pair" aria-label="The two boxes, side by side">
-          <BoxColumn record={source} fullest={fullest} range={range} lifted={lifted} onLift={() => undefined} dragHandlers={{ onDragStart, onDragMove, onDragEnd }} busy={busy} />
+          <BoxColumn
+            record={source}
+            fullest={fullest}
+            range={range}
+            lifted={lifted}
+            dragHandlers={dragHandlers}
+            busy={busy}
+            gaps={dest === source.box ? gaps : undefined}
+            reorder={dest === source.box}
+            cardGaps={dest === source.box && cardMode ? sourceCards : null}
+            skip={chosen.map((c) => c.index)}
+          />
           {dest === source.box ? null : (
-            <BoxColumn
-              record={dest === 'new' ? null : (byBox.get(dest) ?? null)}
-              fullest={fullest}
-              gaps={{ over, name: liftedName, onPut: (before) => void drop({ toBox: dest, before }), busy }}
-            />
+            <BoxColumn record={destRecord} fullest={fullest} gaps={gaps} cardGaps={cardMode ? destCards : null} />
           )}
-          {dest === source.box ? (
-            <BoxColumn record={source} fullest={fullest} range={range} reorder gaps={{ over, name: liftedName, onPut: (before) => void drop({ toBox: dest, before }), busy }} />
-          ) : null}
         </div>
-      ) : records === null ? null : (
+      ) : (
         <div className="shelf-boxes">
           {records.map((record) => (
             <BoxColumn
@@ -274,6 +378,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf')
               onLift={(section) => {
                 setReceipt(null)
                 setFailure(null)
+                setPicked(null)
                 setLifted({ box: record.box, section, scope: 'one' })
                 setDest(null)
               }}
@@ -296,6 +401,7 @@ function LiftBar({
   range,
   records,
   dest,
+  chosenName,
   onScope,
   onDest,
   onCancel,
@@ -306,6 +412,7 @@ function LiftBar({
   readonly range: { first: number; last: number }
   readonly records: readonly BoxRecord[]
   readonly dest: Dest | null
+  readonly chosenName: string | null
   readonly onScope: (scope: Scope) => void
   readonly onDest: (dest: Dest) => void
   readonly onCancel: () => void
@@ -316,23 +423,28 @@ function LiftBar({
   const scopes: { value: Scope; label: string }[] = [{ value: 'one', label: 'This section' }]
   if (after > 0) scopes.push({ value: 'after', label: after === 1 ? 'This and the next' : `This and the ${after} after it` })
   if (total > 1) scopes.push({ value: 'all', label: 'The whole box' })
+  scopes.push({ value: 'cards', label: 'Some cards' })
   const others = records.filter((r) => r.box !== source.box)
+  const cardMode = lifted.scope === 'cards'
+  const what = cardMode ? chosenName || 'No card picked' : lifted.scope === 'all' ? boxName(source) : name
   return (
     <section className="shelf-lift" aria-label="Move sections">
       <p className="shelf-lift-line" aria-live="polite">
-        {dest === null ? (
+        {cardMode && !chosenName ? (
           <>
-            <strong>{lifted.scope === 'all' ? boxName(source) : name}</strong>, {cards(count)}. Which box does it go to?
+            <strong>{name}</strong>. Pick a card, or a first and a last card.
+          </>
+        ) : dest === null ? (
+          <>
+            <strong>{what}</strong>{cardMode ? '' : `, ${cards(count)}`}. Which box does it go to?
           </>
         ) : (
           <>
-            <strong>{lifted.scope === 'all' ? boxName(source) : name}</strong>, {cards(count)}. Drag it to a gap, or press a gap.
+            <strong>{what}</strong>{cardMode ? '' : `, ${cards(count)}`}. Drag it to a gap, or press a gap.
           </>
         )}
       </p>
-      {scopes.length > 1 && dest === null ? (
-        <Segmented value={lifted.scope} label="What moves" options={scopes} onChange={onScope} />
-      ) : null}
+      {dest === null ? <Segmented value={lifted.scope} label="What moves" options={scopes} onChange={onScope} /> : null}
       <div className="shelf-dests" role="group" aria-label="Which box">
         {others.map((r) => {
           const sealed = r.state === 'closed'
@@ -341,7 +453,7 @@ function LiftBar({
               key={r.box}
               variant={dest === r.box ? 'primary' : 'default'}
               aria-pressed={dest === r.box}
-              disabled={sealed}
+              disabled={sealed || (cardMode && !chosenName)}
               icon={sealed ? 'lock' : undefined}
               onClick={() => onDest(r.box)}
             >
@@ -350,14 +462,21 @@ function LiftBar({
             </Button>
           )
         })}
-        {total > 1 && lifted.scope !== 'all' ? (
-          <Button variant={dest === source.box ? 'primary' : 'default'} aria-pressed={dest === source.box} onClick={() => onDest(source.box)}>
+        {(total > 1 && lifted.scope !== 'all') || cardMode ? (
+          <Button
+            variant={dest === source.box ? 'primary' : 'default'}
+            aria-pressed={dest === source.box}
+            disabled={cardMode && !chosenName}
+            onClick={() => onDest(source.box)}
+          >
             Another place in {boxName(source)}
           </Button>
         ) : null}
-        <Button variant={dest === 'new' ? 'primary' : 'default'} aria-pressed={dest === 'new'} icon="plus" onClick={() => onDest('new')}>
-          New box
-        </Button>
+        {cardMode ? null : (
+          <Button variant={dest === 'new' ? 'primary' : 'default'} aria-pressed={dest === 'new'} icon="plus" onClick={() => onDest('new')}>
+            New box
+          </Button>
+        )}
         <Button variant="quiet" onClick={onCancel} kbd="Esc">
           Cancel
         </Button>
@@ -366,15 +485,50 @@ function LiftBar({
   )
 }
 
+/* THE LIFTED SECTION'S CARDS (the next slice). One press picks a card; a second press picks the
+ * last card of a range; a third starts again. */
+function CardPicker({
+  cards: list,
+  loading,
+  picked,
+  onPick,
+}: {
+  readonly cards: readonly InventoryCard[]
+  readonly loading: boolean
+  readonly picked: { from: number; to: number } | null
+  readonly onPick: (at: number) => void
+}) {
+  const lo = picked === null ? -1 : Math.min(picked.from, picked.to)
+  const hi = picked === null ? -1 : Math.max(picked.from, picked.to)
+  if (loading) return <p className="shelf-cards-empty">Reading the cards…</p>
+  if (list.length === 0) return <p className="shelf-cards-empty">This section holds no cards.</p>
+  return (
+    <ol className="shelf-cards" aria-label="The cards in this section">
+      {list.map((card, at) => (
+        <li key={card.index}>
+          <Button
+            variant={at >= lo && at <= hi ? 'primary' : 'default'}
+            aria-pressed={at >= lo && at <= hi}
+            className="shelf-card"
+            onClick={() => onPick(at)}
+          >
+            <span className="shelf-card-number">{card.place?.card ?? at + 1}</span>
+            <span className="shelf-card-name">{cardName(card)}</span>
+          </Button>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 type Gaps = {
-  readonly over: string | null
+  readonly over: GapId | null
   readonly name: string
-  readonly onPut: (before: number | null) => void
+  readonly onPut: (gap: GapId) => void
   readonly busy: boolean
 }
 
-function Gap({ gaps, before, where }: { readonly gaps: Gaps; readonly before: number | null; readonly where: string }) {
-  const id = before === null ? 'end' : String(before)
+function Gap({ gaps, id, where }: { readonly gaps: Gaps; readonly id: GapId; readonly where: string }) {
   return (
     <Button
       variant="ghost"
@@ -383,7 +537,7 @@ function Gap({ gaps, before, where }: { readonly gaps: Gaps; readonly before: nu
       data-over={gaps.over === id ? 'true' : undefined}
       disabled={gaps.busy}
       aria-label={`Put ${gaps.name} ${where}`}
-      onClick={() => gaps.onPut(before)}
+      onClick={() => gaps.onPut(id)}
     >
       <Icon name="plus" size={14} />
       <span className="shelf-gap-text">Put here</span>
@@ -401,6 +555,8 @@ function BoxColumn({
   reorder,
   dragHandlers,
   busy,
+  cardGaps,
+  skip,
 }: {
   readonly record: BoxRecord | null
   readonly fullest: number
@@ -415,6 +571,9 @@ function BoxColumn({
     onDragEnd: (e: ReactPointerEvent<HTMLElement>) => void
   }
   readonly busy?: boolean
+  /** Card mode: this box's cards, so a gap sits in front of each one. */
+  readonly cardGaps?: readonly InventoryCard[] | null
+  readonly skip?: readonly number[]
 }) {
   if (record === null) {
     return (
@@ -423,21 +582,50 @@ function BoxColumn({
           <h2 className="shelf-box-name">New box</h2>
           <span className="shelf-box-count">Empty</span>
         </header>
-        <div className="shelf-box-body">{gaps ? <Gap gaps={gaps} before={null} where="into a new box" /> : null}</div>
+        <div className="shelf-box-body">{gaps ? <Gap gaps={gaps} id="end" where="into a new box" /> : null}</div>
       </section>
     )
   }
   const sealed = record.state === 'closed'
   const sections = record.sections_detail
-  const inRange = (s: number) => range != null && s >= range.first && s <= range.last
-  /* In a reorder, no gap is offered inside or right after the moved sections: it would put them
-     where they already are. */
+  const cardMode = cardGaps !== undefined && cardGaps !== null
+  const perSection = cardMode ? bySection(cardGaps) : null
+  const inRange = (s: number) => range != null && s >= range.first && s <= range.last && !(cardMode && reorder)
+  /* In a section reorder, no gap is offered inside or right after the moved sections: it would
+     put them where they already are. */
   const offered = (before: number | null) => {
-    if (!reorder || range == null) return true
+    if (!reorder || range == null || cardMode) return true
     if (before === null) return range.last < sections.length
     return before < range.first || before > range.last + 1
   }
   const where = (d: SectionDetail) => `just on the far side of ${sectionName(d)}, in ${boxName(record)}`
+  const block = (d: SectionDetail) => (
+    <div
+      className="shelf-block"
+      data-lifted={inRange(d.section) ? 'true' : undefined}
+      data-empty={d.count === 0 ? 'true' : undefined}
+      style={blockStyle(d.count, fullest)}
+      onPointerDown={inRange(d.section) && dragHandlers ? dragHandlers.onDragStart : undefined}
+      onPointerMove={inRange(d.section) && dragHandlers ? dragHandlers.onDragMove : undefined}
+      onPointerUp={inRange(d.section) && dragHandlers ? dragHandlers.onDragEnd : undefined}
+      onPointerCancel={inRange(d.section) && dragHandlers ? dragHandlers.onDragEnd : undefined}
+    >
+      <span className="shelf-block-text">
+        <span className="shelf-block-name">{sectionName(d)}</span>
+        <span className="shelf-block-count">{cards(d.count)}</span>
+      </span>
+      {onLift && !gaps && d.count > 0 ? (
+        <IconButton
+          icon="grip"
+          label="Move section"
+          name={`Move section ${sectionName(d)} of ${boxName(record)}`}
+          pressed={lifted != null && lifted.box === record.box && lifted.section === d.section}
+          disabled={busy}
+          onClick={() => onLift(d.section)}
+        />
+      ) : null}
+    </div>
+  )
   return (
     <section className="shelf-box" data-sealed={sealed ? 'true' : undefined} aria-label={boxName(record)}>
       <header className="shelf-box-head">
@@ -450,37 +638,28 @@ function BoxColumn({
       <ol className="shelf-box-body">
         {sections.map((d) => (
           <li key={d.section} className="shelf-slot">
-            {gaps && offered(d.section) ? <Gap gaps={gaps} before={d.section} where={where(d)} /> : null}
-            <div
-              className="shelf-block"
-              data-lifted={inRange(d.section) ? 'true' : undefined}
-              data-empty={d.count === 0 ? 'true' : undefined}
-              style={blockStyle(d.count, fullest)}
-              onPointerDown={inRange(d.section) && dragHandlers ? dragHandlers.onDragStart : undefined}
-              onPointerMove={inRange(d.section) && dragHandlers ? dragHandlers.onDragMove : undefined}
-              onPointerUp={inRange(d.section) && dragHandlers ? dragHandlers.onDragEnd : undefined}
-              onPointerCancel={inRange(d.section) && dragHandlers ? dragHandlers.onDragEnd : undefined}
-            >
-              <span className="shelf-block-text">
+            {gaps && !cardMode && offered(d.section) ? <Gap gaps={gaps} id={`s:${d.section}`} where={where(d)} /> : null}
+            {cardMode && gaps ? (
+              <div className="shelf-card-gaps" aria-label={sectionName(d)}>
                 <span className="shelf-block-name">{sectionName(d)}</span>
-                <span className="shelf-block-count">{cards(d.count)}</span>
-              </span>
-              {onLift && !gaps && d.count > 0 ? (
-                <IconButton
-                  icon="grip"
-                  label="Move section"
-                  name={`Move section ${sectionName(d)} of ${boxName(record)}`}
-                  pressed={lifted != null && lifted.box === record.box && lifted.section === d.section}
-                  disabled={busy}
-                  onClick={() => onLift(d.section)}
-                />
-              ) : null}
-            </div>
+                {(perSection?.get(d.section) ?? [])
+                  .filter((card) => !(skip ?? []).includes(card.index))
+                  .map((card) => (
+                    <div key={card.index} className="shelf-card-row">
+                      <Gap gaps={gaps} id={`c:${card.index}`} where={`just on the far side of ${cardName(card)}, in ${boxName(record)}`} />
+                      <span className="shelf-card-line">{cardName(card)}</span>
+                    </div>
+                  ))}
+                <Gap gaps={gaps} id={`e:${d.section}`} where={`at the end of ${sectionName(d)}, in ${boxName(record)}`} />
+              </div>
+            ) : (
+              block(d)
+            )}
           </li>
         ))}
-        {gaps && offered(null) ? (
+        {gaps && !cardMode && offered(null) ? (
           <li className="shelf-slot">
-            <Gap gaps={gaps} before={null} where={`at the end of ${boxName(record)} nearest you`} />
+            <Gap gaps={gaps} id="end" where={`at the end of ${boxName(record)} nearest you`} />
           </li>
         ) : null}
       </ol>

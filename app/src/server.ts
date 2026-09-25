@@ -38,6 +38,7 @@ import type {
   MoveCardsResult,
   SectionMoveResult,
   SectionMoveTarget,
+  CardMoveTarget,
   SectionUndoResult,
   BoxDeleteResult,
   GraveyardPayload,
@@ -1964,6 +1965,30 @@ export async function moveSections(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ first, last, ...where, aim }),
+  })) as SectionMoveResult
+}
+
+/**
+ * Move one card, or a range of cards from one section, to a gap in a box (D264): in front of
+ * a card, or at a section's end. No divider moves. The same one write, receipt and undo as a
+ * section move (`undoSectionMove`).
+ */
+export async function moveRange(
+  box: number,
+  indices: number[],
+  target: CardMoveTarget,
+  aim: { count: number; first: string | null; last: string | null } | null,
+): Promise<SectionMoveResult> {
+  return (await request(`/boxes/${box}/cards/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      indices,
+      to_box: target.toBox,
+      before_card: target.beforeCard,
+      section_end: target.sectionEnd,
+      aim,
+    }),
   })) as SectionMoveResult
 }
 

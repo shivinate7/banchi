@@ -1717,6 +1717,14 @@ export type SectionMoveTarget = {
   before: number | null
 }
 
+/** Where a card or a range lands (D264): in front of a card of `toBox` (its stored index),
+ *  or after the last card of one of its sections. */
+export type CardMoveTarget = {
+  toBox: number
+  beforeCard: number | null
+  sectionEnd: number | null
+}
+
 /** What `POST /boxes/sections/undo` answers. */
 export type SectionUndoResult = {
   move: string

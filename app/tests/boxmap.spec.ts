@@ -177,3 +177,65 @@ test('every press on the shelf is 40px or more', async ({ page }) => {
   expect(sizes.length).toBeGreaterThan(0)
   for (const size of sizes) expect(size).toBeGreaterThanOrEqual(40)
 })
+
+/* THE NEXT SLICE (owner, 2026-09-25): one card or a range from a lifted section. */
+function inv(box: number, rows: Array<[number, string, number, number]>) {
+  const cardsOf: Record<string, unknown> = {}
+  for (const [index, name, section, order] of rows) {
+    cardsOf[`${box}/${index}`] = {
+      box, index, name, state: 'identified', cid: `${box}-${index}`,
+      place: { box, index, order, section, card: index, label: name, slot: index },
+    }
+  }
+  return { version: 2, cards: cardsOf }
+}
+
+async function stubCards(page: Page): Promise<Sent[]> {
+  const sent: Sent[] = []
+  await page.route(/\/inventory\/1$/, (route) =>
+    route.fulfill({ json: inv(1, [[1, 'c1', 1, 1], [12, 'u1', 2, 12], [13, 'u2', 2, 13], [14, 'u3', 2, 14], [30, 's1', 3, 30]]) }),
+  )
+  await page.route(/\/inventory\/2$/, (route) =>
+    route.fulfill({ json: inv(2, [[1, 'm1', 1, 1], [2, 'm2', 1, 2], [16, 'p1', 2, 16]]) }),
+  )
+  await page.route(/\/boxes\/\d+\/cards\/move$/, async (route) => {
+    sent.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    await route.fulfill({ json: { ...RESULT, receipt: { ...RESULT.receipt, heading: 'Move 2 cards from RB Origins to Mixed Singles.' } } })
+  })
+  return sent
+}
+
+test('a lifted section shows its cards; a range drops in front of a card of the other box', async ({ page }) => {
+  const sent = await stubCards(page)
+  await openShelf(page)
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await page.getByRole('button', { name: 'Some cards' }).click()
+  const list = page.getByRole('list', { name: 'The cards in this section' })
+  await expect(list.getByRole('button')).toHaveText([/u1/, /u2/, /u3/])
+  await list.getByRole('button', { name: /u2/ }).click()
+  await list.getByRole('button', { name: /u3/ }).click()
+  await expect(list.getByRole('button', { pressed: true })).toHaveCount(2)
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  await page.getByRole('button', { name: /Put 2 cards just on the far side of m2/ }).click()
+  await expect(page.locator('.shelf-receipt')).toContainText('Move 2 cards from RB Origins to Mixed Singles.')
+  expect(sent[0]).toEqual({
+    path: '/boxes/1/cards/move',
+    body: { indices: [13, 14], to_box: 2, before_card: 2, section_end: null, aim: { count: 2, first: '1-13', last: '1-14' } },
+  })
+})
+
+test('one card drops at the end of a section, and the keyboard alone can do it', async ({ page }) => {
+  const sent = await stubCards(page)
+  await openShelf(page)
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await page.getByRole('button', { name: 'Some cards' }).click()
+  const u1 = page.getByRole('list', { name: 'The cards in this section' }).getByRole('button', { name: /u1/ })
+  await u1.focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).press('Enter')
+  const gap = page.getByRole('button', { name: /Put u1 at the end of Promos, in Mixed Singles/ })
+  await gap.focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => sent.length).toBe(1)
+  expect(sent[0]?.body).toMatchObject({ indices: [12], to_box: 2, before_card: null, section_end: 2 })
+})

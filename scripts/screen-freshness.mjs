@@ -273,6 +273,7 @@ const RECORDED = {
                                                // the response into `written` the identical
                                                // way `correctAnswer`/`undoCorrectAnswer` do
     'moveSections', 'undoSectionMove',        // D264, the box map's section move and its undo
+    'moveRange',                              // D264, one card or a range, the next slice
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.

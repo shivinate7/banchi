@@ -221,3 +221,59 @@
   gap: var(--bn-2);
   align-items: center;
 }
+
+/* THE NEXT SLICE: a lifted section's cards, and a gap in front of every card of a box. */
+.shelf-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: var(--bn-1);
+  margin: 0 0 var(--bn-4);
+  padding: 0;
+  list-style: none;
+}
+
+.shelf-card.bn-btn {
+  width: 100%;
+  min-height: var(--bn-8);
+  justify-content: flex-start;
+  gap: var(--bn-2);
+}
+
+.shelf-card-number {
+  min-width: var(--bn-6);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.shelf-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-cards-empty {
+  margin: 0 0 var(--bn-4);
+  color: var(--bn-ink-3);
+}
+
+.shelf-card-gaps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  padding: var(--bn-2);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r);
+}
+
+.shelf-card-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+}
+
+.shelf-card-line {
+  padding: 0 var(--bn-2);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
