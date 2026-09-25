@@ -2050,6 +2050,7 @@ class Inventory:
         expected_product_line: Optional[str] = None,
         read_disputes: bool = False,
         event: str = "sku_bound",
+        at: Optional[str] = None,
     ) -> Optional[Card]:
         """THE ONE WRITER (docs/specs/identity-follows-sku.md §4.1): the only code that
         sets `sku` together with the identity fields (`name`, `number`, `printed_total`,
@@ -2102,6 +2103,13 @@ class Inventory:
         `event` lets a caller name a more specific line where the spec does (§8.1's own
         `identity_confirmed` for the confirm press); every other caller leaves it as
         `sku_bound`.
+
+        `at` OVERRIDES `now()` FOR `bound_at` ALONE — every other write in this class still
+        stamps the moment it runs (`state_at`, `bound_at`'s own default). The one caller that
+        needs this is `scripts/demo-seed.py`: `bind_sku` is called ~90 times per `make demo`
+        run and a real `now()` there would put a different `bound_at` in every rebuild,
+        against this repo's own rule that an unchanged tree rebuilds byte-identically
+        (`SEED`/`NOW` in that file). `None` (the default, every other caller) keeps `now()`.
         """
         check_bound_by(bound_by)
         card = self.cards.get(key)
@@ -2129,7 +2137,7 @@ class Inventory:
         card.set_name = row.set_name
         card.condition = row.condition
         card.bound_by = bound_by
-        card.bound_at = now()
+        card.bound_at = now() if at is None else at
         card.identity_source = IDENTITY_SKU
         card.read_disputes = bool(read_disputes)
         self._log(
@@ -2149,11 +2157,16 @@ class Inventory:
         expected_product_line: Optional[str] = None,
         read_disputes: bool = False,
         event: str = "sku_unbound",
+        at: Optional[str] = None,
     ) -> Optional[Card]:
         """`bind_sku`'s companion, for an undo (§4.1). Takes the `(sku, bound_by)` pair a
         `bind_sku` history line's own `restores_to` recorded and restores THAT binding —
         or, when `sku` is falsy, restores "no binding at all", the state before any
         `bind_sku` ever ran.
+
+        `at` IS `bind_sku`'s OWN ESCAPE HATCH, CARRIED HERE FOR THE SAME REASON: `None` (the
+        default) stamps `now()`; a caller that needs a reproducible `bound_at` — none does
+        today, `scripts/demo-seed.py` never calls this — passes one.
 
         DERIVES THE IDENTITY AGAIN FROM `skus` RATHER THAN TRUSTING STORED FIELDS A LINE
         MAY CARRY (§8.3: "A line written before the change still carries name, number,
@@ -2219,7 +2232,7 @@ class Inventory:
             card.bound_by = None
             card.identity_source = IDENTITY_READ
             card.read_disputes = False
-        card.bound_at = now()
+        card.bound_at = now() if at is None else at
         self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run)
         return card
 

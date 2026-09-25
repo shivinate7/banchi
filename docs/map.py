@@ -4875,6 +4875,26 @@ COMPONENTS = [
                 # erroring.
                 "governed_by": ["D16", "D18"],
             },
+            "demo-determinism.py": {
+                "does": "whether two full `make demo` runs write the same app/demo/bundle.json "
+                        "CONTENT — the one thing demo-freshness.py's wire-shape digest cannot "
+                        "see. Two scratch PKMNSCAN_HOMEs, the bundle diffed as JSON, every moved "
+                        "value checked against a small vocabulary of known request/process-time "
+                        "stamps (an order's own ingest moment, a run directory's real mtime, the "
+                        "recording server's boot id). A pointer that moves for any other reason "
+                        "fails the run — found once, before Inventory.bind_sku took an `at` "
+                        "parameter: 97 bound_at values differed between two runs and "
+                        "demo-freshness was green throughout.",
+                # D18: two full seed-and-record passes write only scratch demo homes and a
+                # scratch bundle copy, both removed before the process exits, so nothing
+                # tracked moves — the same exemption demo-freshness.py already carries, for
+                # the same reason. D16 is the shape: a mechanical check for a claim
+                # (byte-identical rebuild) that fails silently rather than loudly otherwise.
+                # D43 is why each scratch home is its own directory rather than the
+                # checkout's real demo/ — a shared store over two runs is the data-loss shape
+                # that decision names, generalized from "the owner's store" to "either run's".
+                "governed_by": ["D16", "D18", "D43"],
+            },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
