@@ -119,6 +119,11 @@ async function open(
     boxes?: readonly unknown[]
     /** Section 6: the index a single-card remove refuses over (`renumber_blocked`). */
     blockRemoveOf?: number
+    /** D58: the box's on-hand count BEFORE this sitting, keyed by box. Defaults to 0 — a
+     *  fresh box, where on-hand after the Nth capture is simply N. A box carrying a
+     *  departed card starts here above 0, so the stub's on_hand answers stay correct
+     *  through a sitting that captures on top of one. */
+    onHandStart?: Record<string, number>
   } = {},
 ): Promise<Wire> {
   const wire: Wire = { deletes: [], removes: [], captures: 0 }
@@ -175,6 +180,14 @@ async function open(
      store does not have — and the `serverNewest` comparison the blind arm turns on reads one
      drawer's high-water mark, so a shared counter would quietly change which arm fires. */
   const allocated: Record<string, number> = { ...(options.nextIndex ?? {}) }
+  /* D58: this sitting's own capture COUNT per box, separate from `allocated`'s stored
+   * index — the two only coincide when nothing was ever departed. On-hand after the Nth
+   * capture into a box is `onHandStart + N`. */
+  const capturedThisSitting: Record<string, number> = {}
+  const onHandAfterCapture = (box: string): number => {
+    capturedThisSitting[box] = (capturedThisSitting[box] ?? 0) + 1
+    return (options.onHandStart?.[box] ?? 0) + capturedThisSitting[box]
+  }
   await page.route(/\/capture$/, (route) => {
     wire.captures += 1
     const asked = route.request().postDataJSON() as { box?: number }
@@ -195,10 +208,9 @@ async function open(
         created: true,
         photo: `/tmp/${box}-${index}.jpg`,
         capture_id: null,
-        // D58, R1d: `place.box_total`, the box's on-hand count after this capture. Every
-        // box this file captures into starts empty with nothing ever departed, so the
-        // count is the same number as the index this stub just allocated.
-        place: { box_total: index },
+        // D58, R1d: `place.box_total`, the box's on-hand count after this capture —
+        // `onHandStart` plus this sitting's own capture count, never the stored index.
+        place: { box_total: onHandAfterCapture(String(box)) },
       }),
     })
   })
@@ -750,6 +762,46 @@ test('the counted number stays true across a sitting: every capture, every undo 
   await expect(rows(page)).toHaveCount(2)
   const afterUndo = await nextCardEverywhere(page)
   expect(afterUndo).toBe(afterSecond)
+})
+
+test('a departed card in the box and several live captures in the same sitting (D58, R2)', async ({
+  page,
+}) => {
+  /* THE TWO BUGS TOGETHER, NOT SEPARATELY. R1c proved the STATIC divergence (a box that
+   * already carries a sold card shows the counted number, not the stored slot) and R1d
+   * proved the DYNAMIC tracking (the number moves with every capture). Neither alone
+   * proves the box starts already offset AND keeps counting correctly on top of that
+   * offset — a box with a departed card, on_hand 4 of 5 stored, where three fresh
+   * captures must read 5, 6, 7, never 6, 7, 8 (which is what the stored slot, still
+   * climbing from 6, would answer) and never 5, 5, 5 (which is what a `boxRecords` read
+   * with no per-capture patch — the R1d bug — would answer). */
+  const DEPARTED_BOX = {
+    ...BOX,
+    cards: 5,
+    sold: 1,
+    on_hand: 4,
+    next_index: 6,
+  }
+  await open(page, {
+    boxes: [DEPARTED_BOX, BOX4],
+    nextIndex: { '3': 6 },
+    onHandStart: { '3': 4 },
+  })
+
+  // BEFORE ANY CAPTURE: on_hand 4, so the upcoming card — the 5th on hand — reads 5.
+  expect(await nextCardEverywhere(page)).toBe(5)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 6$/)
+  expect(await nextCardEverywhere(page)).toBe(6)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 7$/)
+  expect(await nextCardEverywhere(page)).toBe(7)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 8$/)
+  expect(await nextCardEverywhere(page)).toBe(8)
 })
 
 test('the strip does not change height when the drawer label appears (D118)', async ({
