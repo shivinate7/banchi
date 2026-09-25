@@ -78,3 +78,25 @@ export function relativeDate(at: Date | string | number | null | undefined, now:
 export function saleDate(d: Date): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })
 }
+
+const MONTH_YEAR = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' })
+const MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+
+/** `Sep 2026` for a `YYYY-MM` bucket key — `#/revenue`'s month strip (D-sales-rows-by-sku).
+ *  The ONE place a calendar-month label is built, so a bucket label and `absoluteDate` never
+ *  drift onto two different month spellings. */
+export function monthOf(key: string): string {
+  const [y, m] = key.split('-').map(Number)
+  return MONTH_YEAR.format(new Date(y ?? 0, (m ?? 1) - 1, 1))
+}
+
+/** `Aug 28–Sep 3` for a week — `#/revenue`'s weekly strip below the month threshold. `end` is
+ *  the EXCLUSIVE bound `weekStart` + 7 days already used everywhere else in this repo, so the
+ *  label reads the day before it. Same month: the second date drops its own month name. */
+export function weekOf(start: Date, end: Date): string {
+  const last = new Date(end)
+  last.setDate(last.getDate() - 1)
+  const sameMonth = start.getMonth() === last.getMonth() && start.getFullYear() === last.getFullYear()
+  const lastStr = sameMonth ? String(last.getDate()) : MONTH_DAY.format(last)
+  return `${MONTH_DAY.format(start)}–${lastStr}`
+}

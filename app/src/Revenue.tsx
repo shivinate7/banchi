@@ -1,11 +1,16 @@
-import { Fragment, useEffect, useId, useMemo, useState, type CSSProperties } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 
-import { describeFailure, getHoldingsValue, getOrders, getSoldPrices, type Failure, type SoldPricesLookup } from './server'
+import {
+  describeFailure, getHoldingsValue, getOrders, getSkuPhotos, getSoldPrices,
+  photoUrl, type Failure, type SkuPhotoEntry, type SoldPricesLookup,
+} from './server'
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderLineWire, OrderRow } from './types'
-import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented } from './kit'
-import { money, moneyGrouped } from './money'
-import { saleDate } from './dates'
-import { sparkSegments } from './PriceHistory'
+import {
+  Button, CardThumb, EmptyState, IconButton, Money, Notice, Page, Pill,
+  ProductLink, ReloadButton, Segmented, SortHeader, type SortValue,
+} from './kit'
+import { moneyGrouped } from './money'
+import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import './Revenue.css'
@@ -38,6 +43,13 @@ import './Revenue.css'
  * CHANGED (D214's counting rules stand): what is new is what a person can do with the same
  * rows once they are on screen — sort them, filter them, cross-filter by month, drill into
  * one product's own orders, and share the exact view as a link. See D217.
+ *
+ * ONE ROW PER PRINTING, NOT PER NAME (D-sales-rows-by-sku). A foil and a normal printing of
+ * the same card share a display name and used to collapse into one row, comparing the wrong
+ * printing's price half the time. `products` now groups by SKU. Direction B (the owner's
+ * choice, RULINGS.md "## Sales") replaces the flat table with a summary band, a podium of the
+ * best sellers and a foil/rarity mix tile — the table stays underneath for the full,
+ * sortable, drillable list D217 asked for.
  */
 
 /** The one word this screen treats as "not a sale" — folded the way `is_terminal_status`
@@ -64,7 +76,10 @@ type SortDir = 'asc' | 'desc'
  *  column just flips it. */
 const DEFAULT_DIR: Record<SortKey, SortDir> = { name: 'asc', copies: 'desc', gross: 'desc', last: 'desc' }
 const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Gross', last: 'Last sold' }
-const SORT_KEYS: readonly SortKey[] = ['name', 'copies', 'gross', 'last']
+/** The podium's own segmented labels — the mock's own wording ("A to Z", "Latest") next to
+ *  the same four keys the table's own column headers already sort by. One state, two faces. */
+const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'A to Z', copies: 'Copies', gross: 'Gross', last: 'Latest' }
+const SORT_KEYS: readonly SortKey[] = ['gross', 'copies', 'last', 'name']
 
 type Granularity = 'week' | 'month'
 
@@ -73,10 +88,18 @@ type Granularity = 'week' | 'month'
  *  measured: roughly two months is where a week-wide bar stops being the more legible one. */
 const GRANULARITY_THRESHOLD_DAYS = 60
 
+/** How many printings the podium and board draw before "Show all" — the podium's own top 3
+ *  plus seven bar rows, the mock's own count. */
+const BOARD_SIZE = 10
+/** How many printings' thumbnails this screen asks the server about at once — bounded so a
+ *  long "Show all" list cannot turn into hundreds of lookups in one press. */
+const PHOTO_LOOKUP_CAP = 40
+
 /** One line, with its order's placed-at date and a real number for `unit_price` — the one
  *  arithmetic step this screen performs, over a string the wire sends because money crosses
- *  it as text (`OrderLineWire`'s own comment). A line with no price or no date cannot be
- *  placed on the sparkline or the verdict and is left out, counted once in `dropped`. */
+ *  it as text (`OrderLineWire`'s own comment). A line with no usable DATE cannot be placed on
+ *  the sparkline at all and is left out, counted once in `dropped`. A line with no usable
+ *  PRICE is kept — `priceKnown` says so, and `salesOf`'s own header explains why. */
 type Sale = {
   /** The order's identity (`OrderRow.key`) — never shown, only counted and grouped by. */
   readonly order: string
@@ -88,12 +111,18 @@ type Sale = {
    *  the fact `nameIsSku` at the render site draws in mono rather than guessing from the
    *  string's own shape. */
   readonly nameIsSku: boolean
-  /** The line's own SKU — never shown here, only used to ask `getSoldPrices` what this exact
-   *  name is worth today (D225). */
   readonly sku: string
   readonly quantity: number
+  /** `0` where `priceKnown` is false — never read on its own without checking that flag. */
   readonly unitPrice: number
+  /** `false` where TCGplayer's own feed carried no usable price on this line
+   *  (D-sales-rows-by-sku, finding 1: `unit_price: ""`, not `null`, is how the feed says
+   *  so). */
+  readonly priceKnown: boolean
+  /** `0` where `priceKnown` is false. */
   readonly gross: number
+  readonly condition: string | null
+  readonly rarity: string | null
 }
 
 /** `true` where the OPERATOR closed this line as never shipping — a refund or a
@@ -105,6 +134,18 @@ type Sale = {
  *  never got around to closing, and this can only ever undercount, never overcount. */
 function isClosedNotShipping(order: OrderRow, sku: string): boolean {
   return order.progress.some((p) => p.sku === sku && p.closed_reason === 'not_shipping')
+}
+
+/** `null` for a `unit_price` this screen cannot read as a real number: TCGplayer's `null`
+ *  ("said nothing") and its `""` (D-sales-rows-by-sku, finding 1) read the same way — both
+ *  mean the feed carried no price on this line, never a guessed one. `Number('')` is `0` in
+ *  JavaScript, which is the bug this guards: an empty string must never reach `Number()`. */
+function parsePrice(raw: string | null): number | null {
+  if (raw === null) return null
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
+  const n = Number(trimmed)
+  return Number.isFinite(n) ? n : null
 }
 
 function salesOf(
@@ -138,11 +179,8 @@ function salesOf(
         refundExcluded += 1
         continue
       }
-      const price = line.unit_price === null ? NaN : Number(line.unit_price)
-      if (!Number.isFinite(price)) {
-        dropped += 1
-        continue
-      }
+      const price = parsePrice(line.unit_price)
+      const priceKnown = price !== null
       sales.push({
         order: order.key,
         orderNumber: order.number,
@@ -151,12 +189,21 @@ function salesOf(
         nameIsSku: line.name === null,
         sku: line.sku,
         quantity: line.quantity,
-        unitPrice: price,
-        gross: price * line.quantity,
+        unitPrice: priceKnown ? price : 0,
+        priceKnown,
+        gross: priceKnown ? price * line.quantity : 0,
+        condition: line.condition,
+        rarity: line.rarity,
       })
     }
   }
   return { sales, dropped, refundExcluded, canceledOrders }
+}
+
+/** The condition string carries the finish (CLAUDE.md: "the grade stays on every row"). A
+ *  foil printing is one whose condition names it — never a guess off the card's own name. */
+function isFoil(condition: string | null): boolean {
+  return condition !== null && condition.toLowerCase().includes('foil')
 }
 
 function pad2(n: number): string {
@@ -195,13 +242,6 @@ function monthKey(at: Date): string {
   return `${at.getFullYear()}-${pad2(at.getMonth() + 1)}`
 }
 
-function monthLabel(key: string): string {
-  const parts = key.split('-').map(Number)
-  const year = parts[0] ?? 0
-  const month = parts[1] ?? 1
-  return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-}
-
 /** Monday-start, matching the physical convention this repo already keeps for a week
  *  elsewhere in the store rather than inventing a Sunday-start one here. */
 function weekStart(d: Date): Date {
@@ -210,22 +250,6 @@ function weekStart(d: Date): Date {
   const s = startOfDay(d)
   s.setDate(s.getDate() + diff)
   return s
-}
-
-function weekLabel(start: Date, end: Date): string {
-  const last = new Date(end)
-  last.setDate(last.getDate() - 1)
-  const sameMonth = start.getMonth() === last.getMonth() && start.getFullYear() === last.getFullYear()
-  const startStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  const lastStr = sameMonth
-    ? String(last.getDate())
-    : last.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  return `${startStr}–${lastStr}`
-}
-
-function formatShort(iso: string): string {
-  const d = parseIsoDate(iso)
-  return d === null ? iso : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function sum(sales: readonly Sale[]): number {
@@ -322,11 +346,11 @@ function bucketRangeOf(at: Date, granularity: Granularity): { readonly key: stri
   if (granularity === 'month') {
     const start = new Date(at.getFullYear(), at.getMonth(), 1)
     const end = new Date(at.getFullYear(), at.getMonth() + 1, 1)
-    return { key: monthKey(at), start, end, label: monthLabel(monthKey(at)) }
+    return { key: monthKey(at), start, end, label: monthOf(monthKey(at)) }
   }
   const start = weekStart(at)
   const end = dayAfter(new Date(start.getTime() + 6 * 86_400_000))
-  return { key: isoDate(start), start, end, label: weekLabel(start, end) }
+  return { key: isoDate(start), start, end, label: weekOf(start, end) }
 }
 
 /** ONLY THE BUCKETS THAT HAVE A SALE, same as the screen this replaces always drew — a
@@ -366,18 +390,23 @@ function buildBuckets(sales: readonly Sale[], granularity: Granularity, forceNow
     }))
 }
 
+/** One printing (SKU), never one name (D-sales-rows-by-sku). A foil and a normal printing
+ *  that share a display name draw as two of these, `name` leading both. */
 type Product = {
+  readonly sku: string
   readonly name: string
   readonly nameIsSku: boolean
   readonly copies: number
   readonly gross: number
   readonly last: Date
-  /** The SKU and unit price of the MOST RECENT sale under this name — what `getSoldPrices` is
-   *  asked about, and the "then" half of "then against now" (D225). Two SKUs can
-   *  share a display name (a reprint, a different printing the feed named the same); this
-   *  is deliberately the latest one sold, not an average across them. */
-  readonly lastSku: string
   readonly lastPrice: number
+  /** From the most recent sale under this SKU. A SKU's condition is stable across its own
+   *  sales in practice; the last one sold is what this row shows either way. */
+  readonly condition: string | null
+  readonly rarity: string | null
+  /** Copies sold with NO recorded price (`Sale.priceKnown === false`) — never silently
+   *  folded into `gross`, which only ever sums the priced ones. */
+  readonly unpriced: number
 }
 
 /** "Then against now" for one already-sold name (D225) — a market observation and
@@ -387,10 +416,9 @@ type MarketCompare = { readonly market: number; readonly at: number; readonly di
 
 /** `null` for a SKU `prices` was never asked about or never has an entry for — NEVER
  *  drawn as a zero (D189's own rule, restated for this screen: "a name with no reading
- *  shows no figure"). `prices[row.lastSku]` is a lookup against the LAST sale's own SKU
- *  (`Product.lastSku`), not an average across every SKU this name has ever sold under. */
+ *  shows no figure"). */
 function marketCompareOf(row: Product, prices: SoldPricesLookup): MarketCompare | null {
-  const entry = prices[row.lastSku]
+  const entry = prices[row.sku]
   if (entry === undefined) return null
   const market = Number(entry.market)
   if (!Number.isFinite(market)) return null
@@ -448,8 +476,8 @@ function plotHoldings(segment: readonly (readonly [number, number])[]): string {
 }
 
 function HoldingsSpark({ totals }: { totals: readonly HoldingsTotal[] }) {
-  const W = 560
-  const H = 72
+  const W = 220
+  const H = 56
   const runs = useMemo(() => holdingsSegments(totals, W, H), [totals])
   if (runs === null) {
     return <div className="revenue-spark revenue-holdings-spark-empty" aria-hidden="true" />
@@ -552,13 +580,19 @@ function writeUrlState(state: UrlState): void {
   if (window.location.hash !== next) window.history.replaceState(null, '', next)
 }
 
-function Loading() {
-  return (
-    <main className="revenue bn-page">
-      <PageHeader title="Sales" icon="dollar" lede="Your gross-revenue retrospective." />
-      <p className="bn-lede">Reading your orders…</p>
-    </main>
-  )
+/** A printing's thumbnail: `photos[sku]` when the lookup answered, a plain tile otherwise —
+ *  never a guess. `src`/`crop` are deliberately not the same shape `CardLocations.tsx`'s own
+ *  crop-aware thumbnails use: this is ANOTHER copy's photo (D89), never the copy that sold,
+ *  so there is no crop-preview rectangle to place it by. */
+function RowThumb({ sku, name, photos, size }: { readonly sku: string; readonly name: string; readonly photos: Readonly<Record<string, SkuPhotoEntry>>; readonly size: 'sm' | 'md' | 'lg' }) {
+  const entry = photos[sku]
+  const src = entry === undefined ? null : photoUrl(entry.box, entry.index, entry.cid)
+  return <CardThumb src={src} alt={name} size={size} />
+}
+
+function MetaLine({ product }: { readonly product: Product }) {
+  if (product.rarity === null) return null
+  return <p className="revenue-tile-meta">{product.rarity}</p>
 }
 
 export function Revenue() {
@@ -573,6 +607,7 @@ export function Revenue() {
   const [customFrom, setCustomFrom] = useState<string | null>(() => readUrlState().from)
   const [customTo, setCustomTo] = useState<string | null>(() => readUrlState().to)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+  const [boardExpanded, setBoardExpanded] = useState(false)
 
   const fromId = useId()
   const toId = useId()
@@ -642,19 +677,25 @@ export function Revenue() {
   const [pricesLoading, setPricesLoading] = useState(false)
   const [pricesFailure, setPricesFailure] = useState<string | null>(null)
 
-  // UNSOLD STOCK (D236) — same posture: a press, never a mount, own loading/failure state,
-  // never touching `prices`/`pricesLoading` above (that is D225's SOLD figure and this is
-  // never allowed to merge with it). `holdingsOpened` is the explicit opt-in; once true, a
-  // range change re-reads (a plain, bounded read, D236's own header — no socket, no run, no
-  // write), so the range control does not need its own second press.
-  const [holdingsOpened, setHoldingsOpened] = useState(false)
+  // THE SKU THUMBNAIL LOOKUP (D-sales-rows-by-sku). A plain read, unlike `prices`/`holdings`
+  // above: a thumbnail is not a number a reader could mistake for live market data, so it is
+  // called on arrival rather than gated behind a press. `asked` is a ref, not state — it
+  // tracks which SKUs this screen has already requested so a re-render never repeats a call,
+  // without making the fetch effect depend on its own answer.
+  const [photos, setPhotos] = useState<Readonly<Record<string, SkuPhotoEntry>>>({})
+  const asked = useRef<Set<string>>(new Set())
+
+  // UNSOLD STOCK (D236) — same posture as `prices`, own loading/failure state, never touching
+  // `prices`/`pricesLoading` (that is D225's SOLD figure and this is never allowed to merge
+  // with it). UNLIKE `prices`, this now loads ON ARRIVAL (sales-directions.md, finding 3,
+  // the owner's ruling: "On the shelf" loads on arrival) — `range` still re-reads on its own
+  // change, a plain, bounded read with no socket and no write.
   const [holdingsRange, setHoldingsRange] = useState<HoldingsRange>('month')
   const [holdings, setHoldings] = useState<HoldingsValuePayload | null>(null)
   const [holdingsLoading, setHoldingsLoading] = useState(false)
   const [holdingsFailure, setHoldingsFailure] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!holdingsOpened) return
     let live = true
     setHoldingsLoading(true)
     setHoldingsFailure(null)
@@ -671,7 +712,7 @@ export function Revenue() {
     return () => {
       live = false
     }
-  }, [holdingsOpened, holdingsRange])
+  }, [holdingsRange])
 
   const { start: windowStart, nominalEnd, previousStart } = useMemo(
     () => windowsOf(period, now, { from: customFrom, to: customTo }),
@@ -706,34 +747,37 @@ export function Revenue() {
     [inPeriod, granularity, nowInScope, now],
   )
 
-  const spark = useMemo(() => sparkSegments(buckets.map((b) => b.gross), 560, 64), [buckets])
-
   const activeRange = activeBucket === null ? null : buckets.find((b) => b.key === activeBucket) ?? null
   const scopeSales = activeRange === null ? inPeriod : inPeriod.filter((s) => s.at >= activeRange.start && s.at < activeRange.end)
 
   const products = useMemo(() => {
     const by = new Map<string, Product>()
     for (const sale of scopeSales) {
-      const existing = by.get(sale.name)
+      const existing = by.get(sale.sku)
       if (existing) {
         const newer = sale.at > existing.last
-        by.set(sale.name, {
+        by.set(sale.sku, {
           ...existing,
           copies: existing.copies + sale.quantity,
           gross: existing.gross + sale.gross,
+          unpriced: existing.unpriced + (sale.priceKnown ? 0 : sale.quantity),
           last: newer ? sale.at : existing.last,
-          lastSku: newer ? sale.sku : existing.lastSku,
           lastPrice: newer ? sale.unitPrice : existing.lastPrice,
+          condition: newer ? sale.condition : existing.condition,
+          rarity: newer ? sale.rarity : existing.rarity,
         })
       } else {
-        by.set(sale.name, {
+        by.set(sale.sku, {
+          sku: sale.sku,
           name: sale.name,
           nameIsSku: sale.nameIsSku,
           copies: sale.quantity,
           gross: sale.gross,
+          unpriced: sale.priceKnown ? 0 : sale.quantity,
           last: sale.at,
-          lastSku: sale.sku,
           lastPrice: sale.unitPrice,
+          condition: sale.condition,
+          rarity: sale.rarity,
         })
       }
     }
@@ -746,14 +790,29 @@ export function Revenue() {
     })
   }, [scopeSales, query, sortKey, sortDir])
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortKey(key)
-      setSortDir(DEFAULT_DIR[key])
+  // THE THUMBNAIL PRESS, ON ARRIVAL, NOT GATED. Asks only about the SKUs this screen is
+  // about to draw (the podium and board window, bounded by `PHOTO_LOOKUP_CAP`), and never
+  // asks about a SKU twice.
+  useEffect(() => {
+    const skus = products.slice(0, PHOTO_LOOKUP_CAP).map((p) => p.sku).filter((sku) => !asked.current.has(sku))
+    if (skus.length === 0) return
+    skus.forEach((sku) => asked.current.add(sku))
+    let alive = true
+    getSkuPhotos(skus)
+      .then((found) => {
+        if (alive) setPhotos((prev) => ({ ...prev, ...found }))
+      })
+      .catch(() => {
+        // A failed thumbnail lookup falls back to the plain tile CardThumb already draws for
+        // a missing photo — the same shape a photographed SKU with no on-hand copy gets, so
+        // this screen never needs a second failure state for it.
+      })
+    return () => {
+      alive = false
     }
-  }
+  }, [products])
+
+  const sortValue: SortValue<SortKey> = { key: sortKey, dir: sortDir }
 
   const handlePeriod = (next: Period) => {
     setPeriod(next)
@@ -772,12 +831,13 @@ export function Revenue() {
     })
   }
 
-  /** THE PRESS. Asks only about the names on screen right now — a filtered or bucket-narrowed
+  /** THE PRESS, NEVER THE MOUNT (D225, over D189's/D219's own
+   *  tables). Asks only about the SKUs on screen right now — a filtered or bucket-narrowed
    *  view presses a smaller list, and merging the answer onto whatever `prices` already
-   *  held (rather than replacing it) means widening the filter back out does not blank a name
+   *  held (rather than replacing it) means widening the filter back out does not blank a SKU
    *  this press already answered. */
   const refreshReadings = () => {
-    const skus = Array.from(new Set(products.map((p) => p.lastSku)))
+    const skus = Array.from(new Set(products.map((p) => p.sku)))
     if (skus.length === 0) return
     setPricesLoading(true)
     setPricesFailure(null)
@@ -789,7 +849,7 @@ export function Revenue() {
 
   const noReading = useMemo(() => {
     if (prices === null) return 0
-    return products.filter((p) => prices[p.lastSku] === undefined).length
+    return products.filter((p) => prices[p.sku] === undefined).length
   }, [products, prices])
 
   const earliestSale = useMemo(
@@ -797,105 +857,115 @@ export function Revenue() {
     [sales],
   )
 
+  // THE MIX TILE (Direction B): foil against normal gross, and gross by rarity, both read off
+  // `products` — the same rows the podium and the board already draw, so the mix always
+  // agrees with what is on screen under the current search, bucket and period.
+  const mix = useMemo(() => {
+    let foilGross = 0
+    const byRarity = new Map<string, number>()
+    for (const p of products) {
+      if (isFoil(p.condition)) foilGross += p.gross
+      const label = p.rarity ?? 'Unknown rarity'
+      byRarity.set(label, (byRarity.get(label) ?? 0) + p.gross)
+    }
+    const rarity = Array.from(byRarity.entries())
+      .map(([label, gross]) => ({ label, gross }))
+      .sort((a, b) => b.gross - a.gross)
+    return { foilGross, rarity }
+  }, [products])
+
   const latestHoldingsTotal: HoldingsTotal | null =
     holdings === null || holdings.totals.length === 0 ? null : (holdings.totals[holdings.totals.length - 1] ?? null)
   const holdingsHistoryLabel =
-    holdings?.history_begins == null ? null : new Date(`${holdings.history_begins}T00:00:00`).toLocaleDateString()
+    holdings?.history_begins == null ? null : absoluteDate(`${holdings.history_begins}T00:00:00`)
 
-  const holdingsSection = (
+  const shelfColumn = (
     /* WHAT'S STILL ON THE SHELF (D236) — UNSOLD stock, valued off the price-history
-     archive, one range at a time (D62: never merged with another range). A press,
-     never a mount, own loading/failure state, same posture as "Compare to today's
-     market" above and NEVER the same figure — that section is what already sold.
-     COMPUTED ONCE, REFERENCED FROM EVERY EARLY RETURN BELOW (finding 1): the sold-only
-     empty state and the orders-failure banner must not make this section unreachable —
-     the route this section reads has nothing to do with whether anything has sold. */
-    <section className="revenue-holdings">
-      <div className="revenue-holdings-head">
-        <h2 className="bn-label">On the shelf</h2>
-        <Segmented
-          value={holdingsRange}
-          options={HOLDINGS_RANGE_OPTIONS}
-          onChange={setHoldingsRange}
-          label="Time range"
+     archive, one range at a time (D62: never merged with another range). Loads on arrival
+     (sales-directions.md, finding 3); a range change re-reads (a plain, bounded read, D236's
+     own header — no socket, no run, no write). NEVER the same figure as what already sold. */
+    <div className="revenue-shelf">
+      <div className="revenue-shelf-head">
+        <p className="bn-eyebrow">On the shelf</p>
+        <ReloadButton
+          onReload={() => setHoldingsRange((r) => r)}
+          busy={holdingsLoading}
+          label="Refresh what's on the shelf"
+          hotkey={false}
         />
-        <Button
-          variant="ghost"
-          size="sm"
-          icon="package"
-          onClick={() => setHoldingsOpened(true)}
-          disabled={holdingsLoading}
-        >
-          {holdingsLoading ? 'Reading…' : holdingsOpened ? 'Refresh' : 'Value my stock'}
-        </Button>
       </div>
-
+      <Segmented
+        value={holdingsRange}
+        options={HOLDINGS_RANGE_OPTIONS}
+        onChange={setHoldingsRange}
+        label="Time range"
+        size="sm"
+      />
       {holdingsFailure === null ? null : (
         <Notice tone="danger" title="Could not read what's on the shelf">
           {holdingsFailure}
         </Notice>
       )}
-
-      {!holdingsOpened || holdingsFailure !== null || holdings === null ? null : (
-        <div className="revenue-holdings-body">
-          {latestHoldingsTotal === null ? (
-            <p className="revenue-holdings-note">Nothing on hand has a price yet.</p>
-          ) : (
-            <>
-              <div className="revenue-holdings-figure">
-                <span className="bn-money">{moneyGrouped(Number(latestHoldingsTotal.value))}</span>
-                <span className="revenue-holdings-note">
-                  {`Priced for ${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} names on hand, ${latestHoldingsTotal.unpriced_names} not yet.`}
-                </span>
-              </div>
-              <HoldingsSpark totals={holdings.totals} />
-            </>
-          )}
-          {/* THE TWO COUNTED EXCLUSIONS (D236) RENDER WHETHER OR NOT `totals` HAS A
-              POINT — an unpriced store is exactly when a reader most needs to be told
-              how much is unpriced. Neither may vanish behind the empty-totals branch
-              above; both stay stated sentences, never a zero and never omitted. */}
-          <p className="revenue-holdings-meta">
+      {holdingsFailure !== null || holdings === null ? null : latestHoldingsTotal === null ? (
+        <p className="revenue-shelf-note">Nothing on hand has a price yet.</p>
+      ) : (
+        <>
+          <Money value={Number(latestHoldingsTotal.value)} className="revenue-shelf-figure" />
+          <p className="revenue-shelf-note">
+            {`Priced for ${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} names on hand, ${latestHoldingsTotal.unpriced_names} not yet.`}
+          </p>
+          <HoldingsSpark totals={holdings.totals} />
+        </>
+      )}
+      {holdingsFailure !== null || holdings === null ? null : (
+        <>
+          <p className="revenue-shelf-note">
             {holdingsHistoryLabel === null
               ? 'No history recorded for these names yet.'
               : `History since ${holdingsHistoryLabel}, ${holdings.width_days === 1 ? 'read daily' : `read every ${holdings.width_days} days`}.`}
           </p>
-          <p className="revenue-holdings-meta">
+          <p className="revenue-shelf-note">
             {`${holdings.unmarked.names} names on hand have never been priced.`}
           </p>
-          <p className="revenue-holdings-meta">
+          <p className="revenue-shelf-note">
             {`${holdings.sealed_excluded.names} sealed items are not counted here. Sales of sealed items are known; what is still on the shelf is not.`}
           </p>
-        </div>
+        </>
       )}
-    </section>
+    </div>
   )
 
   if (failure !== null) {
     return (
-      <main className="revenue bn-page">
-        <PageHeader title="Sales" icon="dollar" lede="Your gross-revenue retrospective." />
-        <Notice tone="danger" title="Could not read your orders">
-          {failure.message}
-        </Notice>
-        {holdingsSection}
-      </main>
+      <Page
+        title="Sales"
+        icon="dollar"
+        lede="Your gross-revenue retrospective."
+        status={
+          <Notice tone="danger" title="Could not read your orders">
+            {failure.message}
+          </Notice>
+        }
+      >
+        {shelfColumn}
+      </Page>
     )
   }
 
-  if (orders === null) return <Loading />
+  if (orders === null) {
+    return <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective." loading />
+  }
 
   if (sales.length === 0) {
     return (
-      <main className="revenue bn-page">
-        <PageHeader title="Sales" icon="dollar" lede="Your gross-revenue retrospective." />
+      <Page title="Sales" icon="dollar" lede="Your gross-revenue retrospective.">
         <EmptyState
           icon="dollar"
           title="Nothing has sold yet."
           body="Once an order comes in with a price on it, this screen adds it up by month and by name — the search TCGplayer's own Orders page will not do for you."
         />
-        {holdingsSection}
-      </main>
+        {shelfColumn}
+      </Page>
     )
   }
 
@@ -904,303 +974,356 @@ export function Revenue() {
   const periodPhrase =
     period === 'custom'
       ? customFrom !== null && customTo !== null
-        ? `from ${formatShort(customFrom)} to ${formatShort(customTo)}`
+        ? `from ${absoluteDate(customFrom)} to ${absoluteDate(customTo)}`
         : 'over the selected range'
       : `over ${periodLabel.toLowerCase()}`
   const rangeInvalid = customFrom !== null && customTo !== null && customFrom > customTo
   const activeBucketLabel = activeRange?.label ?? null
+  const bmax = Math.max(...buckets.map((b) => b.gross), 1)
+  const podium = products.slice(0, 3)
+  const board = products.slice(3, boardExpanded ? products.length : BOARD_SIZE)
+  const boardMax = products[0]?.gross ?? 1
+  const pct = (g: number) => (total === 0 ? 0 : Math.round((g / total) * 100))
+  const copyWord = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'copy' : 'copies'}`
 
   return (
-    <main className="revenue bn-page">
-      <PageHeader
-        title="Sales"
-        icon="dollar"
-        lede="Your gross-revenue retrospective — what sold, for how much, by name. Gross only: no fees, no cost, no profit."
-        actions={
-          <div className="revenue-period">
-            <Segmented label="Period" value={period} options={PERIODS} onChange={handlePeriod} />
-            {period === 'custom' ? (
-              <div className="revenue-range">
-                <div className="bn-field">
-                  <label className="bn-field-label" htmlFor={fromId}>
-                    From
-                  </label>
-                  <input
-                    className="bn-input"
-                    id={fromId}
-                    type="date"
-                    value={customFrom ?? ''}
-                    max={customTo ?? isoDate(now)}
-                    min={earliestSale !== null ? isoDate(earliestSale) : undefined}
-                    onChange={(event) => setCustomFrom(event.target.value === '' ? null : event.target.value)}
-                  />
-                </div>
-                <div className="bn-field">
-                  <label className="bn-field-label" htmlFor={toId}>
-                    To
-                  </label>
-                  <input
-                    className="bn-input"
-                    id={toId}
-                    type="date"
-                    value={customTo ?? ''}
-                    min={customFrom ?? undefined}
-                    max={isoDate(now)}
-                    onChange={(event) => setCustomTo(event.target.value === '' ? null : event.target.value)}
-                  />
-                </div>
-                {rangeInvalid ? <p className="bn-field-hint">Pick an end on or after the start.</p> : null}
+    <Page
+      title="Sales"
+      icon="dollar"
+      lede="Your gross-revenue retrospective — what sold, for how much, by name. Gross only: no fees, no cost, no profit."
+      actions={
+        <div className="revenue-period">
+          <Segmented label="Period" value={period} options={PERIODS} onChange={handlePeriod} />
+          {period === 'custom' ? (
+            <div className="revenue-range">
+              <div className="bn-field">
+                <label className="bn-field-label" htmlFor={fromId}>
+                  From
+                </label>
+                <input
+                  className="bn-input"
+                  id={fromId}
+                  type="date"
+                  value={customFrom ?? ''}
+                  max={customTo ?? isoDate(now)}
+                  min={earliestSale !== null ? isoDate(earliestSale) : undefined}
+                  onChange={(event) => setCustomFrom(event.target.value === '' ? null : event.target.value)}
+                />
               </div>
-            ) : null}
-          </div>
-        }
-      />
-
-      <section className="revenue-verdict">
-        <p className="revenue-verdict-said">
-          {'You grossed '}
-          <strong>{moneyGrouped(total)}</strong>
-          {` ${periodPhrase}, across ${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}.`}
-        </p>
-        <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
-        {dropped === 0 ? null : (
-          <p className="revenue-verdict-dropped">
-            {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable price or date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}
-          </p>
-        )}
-        {/* TWO SEPARATE EXCLUSIONS, TWO SEPARATE SENTENCES, EACH STATED EVEN AT ZERO
-            (D225). Measured on the owner's real store: 56 Canceled orders
-            ($3,059.07) and, as of this build, ZERO lines marked `not_shipping` — this
-            screen never claims the second mechanism has caught anything until it counts
-            one. Collapsing the two into one sentence, or hiding either at zero, would say
-            more than this store actually knows. */}
-        <p className="revenue-verdict-canceled">
-          {`${canceledOrders.toLocaleString()} ${canceledOrders === 1 ? 'order was' : 'orders were'} canceled by the marketplace and left out.`}
-        </p>
-        <p className="revenue-verdict-refunded">
-          {`${refundExcluded.toLocaleString()} ${refundExcluded === 1 ? 'line was' : 'lines were'} marked refunded or canceled during fulfilment and left out — your own note, not TCGplayer's, so treat it as a habit rather than a guarantee.`}
-        </p>
-      </section>
-
-      <section className="revenue-months">
-        <h2 className="bn-label">{granularity === 'week' ? 'By week' : 'By month'}</h2>
-        {spark === null ? null : (
-          <>
-            <svg
-              className="revenue-spark"
-              viewBox="0 0 560 64"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-              focusable="false"
-            >
-              {spark.map((segment, at) => (
-                <polyline key={at} points={segment.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')} />
-              ))}
-            </svg>
-            {/* THE AXIS, NAMED RATHER THAN LEFT TO GUESSING. Oldest-left is the direction a
-                reader already expects of a line chart, but the row list right below runs the
-                other way on purpose (a retrospective reads "what happened lately" first) --
-                so the two ends are said in words, not just drawn. */}
-            {buckets.length > 0 ? (
-              <div className="revenue-spark-axis" aria-hidden="true">
-                <span>{buckets[0]!.label}</span>
-                <span>{buckets[buckets.length - 1]!.label}</span>
+              <div className="bn-field">
+                <label className="bn-field-label" htmlFor={toId}>
+                  To
+                </label>
+                <input
+                  className="bn-input"
+                  id={toId}
+                  type="date"
+                  value={customTo ?? ''}
+                  min={customFrom ?? undefined}
+                  max={isoDate(now)}
+                  onChange={(event) => setCustomTo(event.target.value === '' ? null : event.target.value)}
+                />
               </div>
-            ) : null}
-          </>
-        )}
-        <div
-          className="revenue-month-rows bn-stagger"
-          role="group"
-          aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}
-        >
-          {buckets
-            .slice()
-            .reverse()
-            .map((b, i) => (
-              <button
-                type="button"
-                className="revenue-month-row"
-                key={b.key}
-                data-current={b.inProgress}
-                aria-pressed={activeBucket === b.key}
-                style={{ '--i': i } as CSSProperties}
-                onClick={() => setActiveBucket((cur) => (cur === b.key ? null : b.key))}
-              >
-                <span className="revenue-month-name">
-                  {b.label}
-                  {b.inProgress ? (
-                    <Pill size="sm" tone="accent">
-                      ongoing
-                    </Pill>
-                  ) : null}
-                </span>
-                <span className="bn-money revenue-month-gross">{moneyGrouped(b.gross)}</span>
-                <span className="revenue-month-orders">{`${b.orders.toLocaleString()} ${b.orders === 1 ? 'order' : 'orders'}`}</span>
-              </button>
-            ))}
-        </div>
-      </section>
-
-      <section className="revenue-products">
-        <div className="revenue-products-head">
-          <h2 className="bn-label">By product</h2>
-          {activeBucketLabel !== null ? (
-            <div className="revenue-active-filter">
-              <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
-              <Button variant="ghost" size="sm" icon="x" onClick={() => setActiveBucket(null)}>
-                Clear
-              </Button>
+              {rangeInvalid ? <p className="bn-field-hint">Pick an end on or after the start.</p> : null}
             </div>
           ) : null}
-          <div className="revenue-search">
-            <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Find what you sold" />
-          </div>
         </div>
-
-        {/* THEN AGAINST NOW (D225). A press, never a mount — see `getSoldPrices`'s
-            own header. `noReading` counts by NAME on screen right now, so widening the
-            filter can only ever raise it, never silently shrink what it claims to cover. */}
-        <div className="revenue-market-refresh">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="refresh"
-            onClick={refreshReadings}
-            disabled={pricesLoading || products.length === 0}
-          >
-            {pricesLoading ? 'Reading…' : "Compare to today's market"}
-          </Button>
-          {prices === null ? null : (
-            <p className="revenue-market-note">
-              {`Blind to what any of this cost you. ${products.length - noReading} of ${products.length} names have a price today, ${noReading} do not.`}
+      }
+    >
+      <section className="revenue-summary">
+        <div className="revenue-summary-lead">
+          <p className="bn-eyebrow">{`Gross, ${periodPhrase}`}</p>
+          <Money value={total} className="revenue-summary-figure" />
+          <p className="revenue-verdict-said">
+            {`${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}, ${inPeriod.reduce((n, s) => n + s.quantity, 0).toLocaleString()} copies`}
+          </p>
+          <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
+          {dropped === 0 ? null : (
+            <p className="revenue-verdict-dropped">
+              {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}
             </p>
           )}
+          {/* TWO SEPARATE EXCLUSIONS, TWO SEPARATE SENTENCES, EACH STATED EVEN AT ZERO
+              (D225). Measured on the owner's real store: 56 Canceled orders
+              ($3,059.07) and, as of this build, ZERO lines marked `not_shipping` — this
+              screen never claims the second mechanism has caught anything until it counts
+              one. Collapsing the two into one sentence, or hiding either at zero, would say
+              more than this store actually knows. */}
+          <p className="revenue-verdict-canceled">
+            {`${canceledOrders.toLocaleString()} ${canceledOrders === 1 ? 'order was' : 'orders were'} canceled by the marketplace and left out.`}
+          </p>
+          <p className="revenue-verdict-refunded">
+            {`${refundExcluded.toLocaleString()} ${refundExcluded === 1 ? 'line was' : 'lines were'} marked refunded or canceled during fulfilment and left out.`}
+            {' Your own note, not TCGplayer’s — treat it as a habit, not a guarantee.'}
+          </p>
         </div>
-        {pricesFailure === null ? null : (
-          <Notice tone="danger" title="Could not read today's prices">
-            {pricesFailure}
-          </Notice>
-        )}
 
-        {products.length === 0 ? (
-          <EmptyState icon="search" title="Nothing sold under that name in this period." />
-        ) : (
-          <div className="revenue-table-wrap">
-          <table className="bn-table revenue-table">
-            <thead>
-              <tr>
-                <th className="revenue-disclosure-col" />
-                {(['name', 'copies', 'gross', 'last'] as const).map((key) => {
-                  const active = sortKey === key
-                  const numeric = key === 'copies' || key === 'gross'
-                  return (
-                    <th
-                      key={key}
-                      className={numeric ? 'num' : undefined}
-                      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
-                    >
-                      <button type="button" className="revenue-sort" onClick={() => handleSort(key)}>
-                        {SORT_LABEL[key]}
-                        <Icon
-                          name={active && sortDir === 'asc' ? 'chevronUp' : 'chevronDown'}
-                          size={12}
-                          className={active ? 'revenue-sort-icon-active' : 'revenue-sort-icon'}
-                        />
-                      </button>
-                    </th>
-                  )
-                })}
-                {prices === null ? null : <th>Today</th>}
-              </tr>
-            </thead>
-            <tbody className="bn-stagger">
-              {products.map((row, i) => {
-                const isOpen = expanded.has(row.name)
-                const detailId = `revenue-detail-${row.name}`
-                const lines = scopeSales
-                  .filter((s) => s.name === row.name)
-                  .slice()
-                  .sort((a, b) => b.at.getTime() - a.at.getTime())
-                const compare = prices === null ? null : marketCompareOf(row, prices)
-                return (
-                  <Fragment key={row.name}>
-                    <tr style={{ '--i': i } as CSSProperties}>
-                      <td className="revenue-disclosure-col">
-                        <button
-                          type="button"
-                          className="revenue-disclosure"
-                          aria-expanded={isOpen}
-                          aria-controls={detailId}
-                          aria-label={`${isOpen ? 'Hide' : 'Show'} the orders behind ${row.name}`}
-                          onClick={() => toggleExpanded(row.name)}
-                        >
-                          <Icon name={isOpen ? 'chevronDown' : 'chevronRight'} size={14} />
-                        </button>
-                      </td>
-                      <td>{row.nameIsSku ? <span className="bn-mono">{row.name}</span> : row.name}</td>
-                      <td className="num">{row.copies.toLocaleString()}</td>
-                      {/* GROUPED, LIKE THE COPIES CELL BESIDE IT (defect fix, UX review
-                          2026-09-20). The un-grouped form was argued as "three or four digits,"
-                          but a real product in this store's own data already reads
-                          `$4411.80` — four digits before the decimal, no different from the
-                          five- or six-figure case `moneyGrouped()`'s own comment names as the
-                          comma's reason to exist. Left plain, this cell disagreed with the
-                          Copies column on the same row about whether a big number gets one. */}
-                      <td className="num"><span className="bn-money">{moneyGrouped(row.gross)}</span></td>
-                      <td>{saleDate(row.last)}</td>
-                      {prices === null ? null : (
-                        <td className="revenue-market">
-                          {compare === null ? (
-                            <span className="revenue-market-none">no reading</span>
-                          ) : (
-                            <>
-                              <span className="bn-money">{money(compare.market)}</span>
-                              <span className="revenue-market-delta">
-                                {`${compare.diff > 0 ? '+' : compare.diff < 0 ? '−' : ''}${money(Math.abs(compare.diff))} ${compare.word} what it sold for`}
-                              </span>
-                              <ReadingAge at={new Date(compare.at * 1000).toISOString()} />
-                            </>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                    {isOpen ? (
-                      <tr id={detailId} className="revenue-detail-row">
-                        <td colSpan={prices === null ? 5 : 6}>
-                          <table className="bn-table revenue-detail-table" aria-label={`Orders that included ${row.name}`}>
-                            <thead>
-                              <tr>
-                                <th>Date</th>
-                                <th>Order</th>
-                                <th className="num">Copies</th>
-                                <th className="num">Unit price</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {lines.map((s, i) => (
-                                <tr key={`${s.order}-${i}`}>
-                                  <td>{saleDate(s.at)}</td>
-                                  <td><span className="bn-mono">{s.orderNumber}</span></td>
-                                  <td className="num">{s.quantity.toLocaleString()}</td>
-                                  <td className="num"><span className="bn-money">{money(s.unitPrice)}</span></td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                )
-              })}
-            </tbody>
-          </table>
-          </div>
-        )}
+        <div className="revenue-months" role="group" aria-label={granularity === 'week' ? 'Filter by week' : 'Filter by month'}>
+          {buckets.map((b, i) => (
+            <button
+              type="button"
+              key={b.key}
+              className="revenue-month-col"
+              data-current={b.inProgress}
+              aria-pressed={activeBucket === b.key}
+              style={{ '--i': i } as CSSProperties}
+              title={`${b.orders.toLocaleString()} ${b.orders === 1 ? 'order' : 'orders'}`}
+              onClick={() => setActiveBucket((cur) => (cur === b.key ? null : b.key))}
+            >
+              <span className="revenue-month-barwrap">
+                {b.gross > 0 ? <span className="revenue-month-v">{moneyGrouped(b.gross)}</span> : null}
+                <span
+                  className="revenue-month-bar"
+                  data-zero={b.gross === 0 ? 'true' : undefined}
+                  data-ongoing={b.inProgress && b.gross > 0 ? 'true' : undefined}
+                  style={{ height: b.gross === 0 ? 2 : Math.max(6, (b.gross / bmax) * 72) }}
+                />
+              </span>
+              <span className="revenue-month-label">
+                {b.label}
+                {b.inProgress ? <Pill size="sm" tone="accent">so far</Pill> : null}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {shelfColumn}
       </section>
 
-      {holdingsSection}
-    </main>
+      {activeBucketLabel === null ? null : (
+        <div className="revenue-active-filter">
+          <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
+          <IconButton icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} size="sm" />
+        </div>
+      )}
+
+      <div className="revenue-bar-head">
+        <h2 className="bn-h2">Best sellers</h2>
+        <Segmented
+          label="Sort"
+          value={sortKey}
+          options={SORT_KEYS.map((k) => ({ value: k, label: SORT_SEGMENT_LABEL[k] }))}
+          onChange={(k) => {
+            setSortKey(k)
+            if (k !== sortKey) setSortDir(DEFAULT_DIR[k])
+          }}
+        />
+        <div className="revenue-search">
+          <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Find what you sold" />
+        </div>
+      </div>
+
+      {products.length === 0 ? (
+        <EmptyState icon="search" title="Nothing sold under that name in this period." />
+      ) : (
+        <>
+          <section className="revenue-podium">
+            {podium.map((p, i) => (
+              <article className="revenue-tile" key={p.sku}>
+                <div className="revenue-tile-art">
+                  <RowThumb sku={p.sku} name={p.name} photos={photos} size="lg" />
+                  <span className="revenue-tile-rank">{i + 1}</span>
+                </div>
+                <div className="revenue-tile-body">
+                  <div className="revenue-tile-l1">
+                    <ProductLink sku={p.sku} name={p.name}>
+                      <span className="revenue-tile-name">{p.nameIsSku ? <span className="bn-mono">{p.name}</span> : p.name}</span>
+                    </ProductLink>
+                    {isFoil(p.condition) ? <Pill size="sm">Foil</Pill> : null}
+                  </div>
+                  <MetaLine product={p} />
+                  <div className="revenue-tile-money">
+                    {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-market-none">no price recorded</span>}
+                    {p.gross > 0 ? <small>{`${pct(p.gross)}% of gross`}</small> : null}
+                  </div>
+                  <p className="revenue-tile-foot">
+                    {`${copyWord(p.copies)}, last sold ${saleDate(p.last)}`}
+                    {p.unpriced === 0 ? null : ` — ${p.unpriced} with no price from TCGplayer`}
+                  </p>
+                </div>
+              </article>
+            ))}
+            <article className="revenue-tile revenue-mix">
+              <h3 className="bn-h3">What earned it</h3>
+              <div
+                className="revenue-mix-split"
+                role="img"
+                aria-label={`Foil ${moneyGrouped(mix.foilGross)}, normal ${moneyGrouped(total - mix.foilGross)}`}
+              >
+                <span style={{ flex: Math.max(mix.foilGross, 0.4) }} />
+                <span style={{ flex: Math.max(total - mix.foilGross, 0.4) }} />
+              </div>
+              <div className="revenue-mix-legend">
+                <span><i className="revenue-mix-swatch" />Foil <Money value={mix.foilGross} /></span>
+                <span><i className="revenue-mix-swatch revenue-mix-swatch-b" />Normal <Money value={total - mix.foilGross} /></span>
+              </div>
+              {mix.rarity.length === 0 ? null : (
+                <div className="revenue-mix-rarity">
+                  {mix.rarity.map((r) => (
+                    <Fragment key={r.label}>
+                      <span>{r.label}</span>
+                      <span className="revenue-mix-track">
+                        <i style={{ width: `${(r.gross / (mix.rarity[0]?.gross || 1)) * 100}%` }} />
+                      </span>
+                      <Money value={r.gross} />
+                    </Fragment>
+                  ))}
+                </div>
+              )}
+            </article>
+          </section>
+
+          {board.length === 0 ? null : (
+            <section className="revenue-board-wrap">
+              <ul className="revenue-board">
+                {board.map((p, i) => (
+                  <li key={p.sku}>
+                    <span className="revenue-board-rk">{i + 4}</span>
+                    <RowThumb sku={p.sku} name={p.name} photos={photos} size="sm" />
+                    <div className="revenue-board-who">
+                      <ProductLink sku={p.sku} name={p.name}>
+                        <span className="revenue-tile-name">{p.nameIsSku ? <span className="bn-mono">{p.name}</span> : p.name}</span>
+                      </ProductLink>
+                      <MetaLine product={p} />
+                    </div>
+                    <div className="revenue-board-track">
+                      <i style={{ width: `${p.gross === 0 ? 0 : Math.max((p.gross / boardMax) * 100, 3)}%` }} />
+                      {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-market-none">no price</span>}
+                    </div>
+                    <span className="revenue-board-c">{copyWord(p.copies)}</span>
+                    <span className="revenue-board-d">{saleDate(p.last)}</span>
+                  </li>
+                ))}
+              </ul>
+              {products.length <= BOARD_SIZE ? null : (
+                <div className="revenue-showall">
+                  <Button variant="ghost" onClick={() => setBoardExpanded((e) => !e)}>
+                    {boardExpanded ? 'Show fewer' : `Show all ${products.length}`}
+                  </Button>
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="revenue-products">
+            <div className="revenue-market-refresh">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="refresh"
+                onClick={refreshReadings}
+                disabled={pricesLoading || products.length === 0}
+              >
+                {pricesLoading ? 'Reading…' : "Compare to today's market"}
+              </Button>
+              {prices === null ? null : (
+                <p className="revenue-market-note">
+                  {`Blind to what any of this cost you. ${products.length - noReading} of ${products.length} names have a price today, ${noReading} do not.`}
+                </p>
+              )}
+            </div>
+            {pricesFailure === null ? null : (
+              <Notice tone="danger" title="Could not read today's prices">
+                {pricesFailure}
+              </Notice>
+            )}
+
+            <div className="revenue-table-wrap">
+              <table className="bn-table revenue-table">
+                <thead>
+                  <tr>
+                    <th className="revenue-disclosure-col" />
+                    <SortHeader sortKey="name" value={sortValue} onChange={(v) => { setSortKey(v.key); setSortDir(v.dir) }} first="asc">{SORT_LABEL.name}</SortHeader>
+                    <SortHeader sortKey="copies" value={sortValue} onChange={(v) => { setSortKey(v.key); setSortDir(v.dir) }} align="end">{SORT_LABEL.copies}</SortHeader>
+                    <SortHeader sortKey="gross" value={sortValue} onChange={(v) => { setSortKey(v.key); setSortDir(v.dir) }} align="end">{SORT_LABEL.gross}</SortHeader>
+                    <SortHeader sortKey="last" value={sortValue} onChange={(v) => { setSortKey(v.key); setSortDir(v.dir) }}>{SORT_LABEL.last}</SortHeader>
+                    {prices === null ? null : <th>Today</th>}
+                  </tr>
+                </thead>
+                <tbody className="bn-stagger">
+                  {products.map((row, i) => {
+                    const isOpen = expanded.has(row.sku)
+                    const detailId = `revenue-detail-${row.sku}`
+                    const lines = scopeSales
+                      .filter((s) => s.sku === row.sku)
+                      .slice()
+                      .sort((a, b) => b.at.getTime() - a.at.getTime())
+                    const compare = prices === null ? null : marketCompareOf(row, prices)
+                    return (
+                      <Fragment key={row.sku}>
+                        <tr style={{ '--i': i } as CSSProperties}>
+                          <td className="revenue-disclosure-col">
+                            <IconButton
+                              icon={isOpen ? 'chevronDown' : 'chevronRight'}
+                              label={`${isOpen ? 'Hide' : 'Show'} the orders behind ${row.name}`}
+                              size="sm"
+                              onClick={() => toggleExpanded(row.sku)}
+                            />
+                          </td>
+                          <td>
+                            <ProductLink sku={row.sku} name={row.name}>
+                              {row.nameIsSku ? <span className="bn-mono">{row.name}</span> : row.name}
+                            </ProductLink>
+                            {isFoil(row.condition) ? <Pill size="sm">Foil</Pill> : null}
+                          </td>
+                          <td className="num">{row.copies.toLocaleString()}</td>
+                          <td className="num">
+                            {row.gross > 0 ? <Money value={row.gross} /> : <span className="revenue-market-none">no price</span>}
+                          </td>
+                          <td>{saleDate(row.last)}</td>
+                          {prices === null ? null : (
+                            <td className="revenue-market">
+                              {compare === null ? (
+                                <span className="revenue-market-none">no reading</span>
+                              ) : (
+                                <>
+                                  <Money value={compare.market} />
+                                  <span className="revenue-market-delta">
+                                    {`${compare.diff > 0 ? '+' : compare.diff < 0 ? '−' : ''}${moneyGrouped(Math.abs(compare.diff))} ${compare.word} what it sold for`}
+                                  </span>
+                                  <ReadingAge at={new Date(compare.at * 1000).toISOString()} />
+                                </>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                        {isOpen ? (
+                          <tr id={detailId} className="revenue-detail-row">
+                            <td colSpan={prices === null ? 5 : 6}>
+                              <table className="bn-table revenue-detail-table" aria-label={`Orders that included ${row.name}`}>
+                                <thead>
+                                  <tr>
+                                    <th>Date</th>
+                                    <th>Order</th>
+                                    <th className="num">Copies</th>
+                                    <th className="num">Unit price</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {lines.map((s, li) => (
+                                    <tr key={`${s.order}-${li}`}>
+                                      <td>{saleDate(s.at)}</td>
+                                      <td><span className="bn-mono">{s.orderNumber}</span></td>
+                                      <td className="num">{s.quantity.toLocaleString()}</td>
+                                      <td className="num">
+                                        {s.priceKnown ? <Money value={s.unitPrice} /> : <span className="revenue-market-none">TCGplayer sent no price</span>}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </Page>
   )
 }

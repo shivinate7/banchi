@@ -172,6 +172,21 @@ things:
 
 `make design-check` runs it.
 
+**Round 3 (`ux/kit-tighten`) added the anchor form.** `IconButton` now takes `href`, plus
+`target` and `rel`. It then renders an `<a>`, not a `<button>`. Same face, same `::before`
+40px hit area, same tooltip, same accessible name. No `transform`. The round-2 centering rule
+carries over untouched. It is keyed to a class, not to a tag. The cause: Orders' "Cards to
+pull" needed `window.open` in an `onClick`. No icon-only link existed in the kit. That loses
+middle-click. It also loses the browser's own "Open link in new tab" and "Copy link".
+`app/tests/icon-button.spec.ts` gained three cases for it. The `<a>` carries the given `href`,
+`target` and `rel`. Keyboard Enter follows it. Its face, hit area and tooltip match the button
+form. `scripts/kit-adoption.mjs`'s `R2-icon-only-button` needed no code change. It scans
+hand-rolled `<button>`/`<a role="button">` shapes, never the `<IconButton>` tag itself. It
+gained a self-test naming the anchor form explicitly, so a later edit cannot start flagging it
+by accident. `docs/specs/iconography.md` section 6 carries the full argument. Orders.tsx is
+untouched. Its own "Cards to pull" is already a real, worded `<a href>`. It sits outside this
+rule's reach either way.
+
 ### What is not this lane's job
 
 Converting a screen's existing control to `IconButton` is each screen lane's own work, on
