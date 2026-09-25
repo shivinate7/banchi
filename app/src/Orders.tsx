@@ -2664,6 +2664,11 @@ function PullStage({
    *  the very refetch the `detail` reset exists to force, leaving the panel showing nothing
    *  after a write that changed what it should show. */
   const pendingPicks = useRef<Set<string>>(new Set())
+  /** EVERY KEY ALREADY ANSWERED FOR THIS `payload`, whether the answer carried it or not. An
+   *  answer that leaves a key out (an order the server no longer resolves) still replaces
+   *  `detail`, and `detail` alone would ask for that key again on the next render, for ever:
+   *  4,934 requests in 10 s, measured. Cleared with `pendingPicks`, on a real payload change. */
+  const askedPicks = useRef<Set<string>>(new Set())
   /* GUARDS AGAINST STRICTMODE'S OWN DOUBLE-FETCH, WHICH IS A SECOND REAL BUG THIS RESET
    *  EFFECT CAN CAUSE, AND A REFERENCE CHECK DOES NOT FIX. `main.tsx` mounts under
    *  `<StrictMode>`, and the mount effect above that calls `reread()` (`getOrders()`) has no
@@ -2693,17 +2698,21 @@ function PullStage({
     payloadSignature.current = signature
     setDetail(new Map())
     pendingPicks.current = new Set()
+    askedPicks.current = new Set()
   }, [payload])
 
   /** Fetch real picks for exactly the keys not already answered and not already in flight,
    *  in one batched `POST /orders/picks` — the one door both fetch effects below use, so the
    *  dedupe rule lives in one place rather than twice. */
   const fetchMissingPicks = useCallback((keys: readonly string[]) => {
-    const missing = keys.filter((key) => !detail.has(key) && !pendingPicks.current.has(key))
+    const missing = keys.filter(
+      (key) => !detail.has(key) && !pendingPicks.current.has(key) && !askedPicks.current.has(key),
+    )
     if (missing.length === 0) return
     for (const key of missing) pendingPicks.current.add(key)
     fetchOrderPicks(missing)
       .then((found: OrderPicksPayload) => {
+        for (const key of missing) askedPicks.current.add(key)
         setDetail((prev) => {
           const next = new Map(prev)
           for (const one of found.orders) next.set(one.key, one)

@@ -78,10 +78,9 @@ const SKU = '9191486'
 
 type Wire = { method: string; path: string; body: unknown }
 
-/* `place`, `pick`, `line`, `order` and `payloadOf` moved to `./routeFixtures` (D194's copy-
- * ratchet fixtures) so `copy-budget.spec.ts` can build the same `#/orders` shapes without a
- * second, drifting copy. `ORDER_NUMBER`/`SKU` above still match the values baked into those
- * builders' defaults, which is what keeps every case below reading exactly as it did. */
+/* `place`, `pick`, `line`, `order` and `payloadOf` live in `./routeFixtures`, so the route sweep
+ * builds the same `#/orders` shapes without a second, drifting copy. `ORDER_NUMBER`/`SKU` above
+ * match the values baked into those builders' defaults. */
 
 /* ---- `WalkPlan` fixtures, for `OrdersWalk.tsx`'s own `POST /orders/walk-plan` (§7-8) ---------
  *
@@ -1846,6 +1845,22 @@ test('selecting a two-order buyer sends exactly one batched POST /orders/picks, 
   )
 })
 
+
+test('a picks answer that leaves a key out is not asked for again (the 4,934-request loop)', async ({ page }) => {
+  /* THE DEFECT: `fetchMissingPicks` re-asked every key not in `detail`. An answer that left a
+     key out still replaced `detail`, which re-ran the effect, which asked again: 4,934 requests
+     in 10 s. A key is asked once per `payload`, answered or not. */
+  const wire = await open(page)
+  await page.route(/\/orders\/picks$/, async (route) => {
+    wire.push({ method: 'POST', path: '/orders/picks', body: route.request().postDataJSON() })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ orders: [] }) })
+  })
+  await page.locator('.orders-index-row').first().click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBeGreaterThan(0)
+  /* A window long enough for the loop to have sent hundreds. */
+  await page.waitForTimeout(1000)
+  expect(wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBeLessThanOrEqual(2)
+})
 
 test('?order= resolves an old link to the buyer group that holds it', async ({ page }) => {
   const secondLine = () =>
