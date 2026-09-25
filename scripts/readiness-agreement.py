@@ -55,7 +55,7 @@ TYPES_TS = REPO_ROOT / "app" / "src" / "types.ts"
 # The number of mutation arms `--self-test` runs. Bump this only when you add or remove an
 # arm below, in the same commit — a stale count here would be exactly the disease this round
 # exists to fix, one register up.
-SELF_TEST_ARM_COUNT = 11
+SELF_TEST_ARM_COUNT = 12
 
 
 class Disagreement(Exception):
@@ -363,7 +363,7 @@ def _report(checks: list) -> int:
 
 
 def owe_code_checks(routes_source: str, types_source: str) -> list:
-    """Check 6: the `owes` codes agree both ways (R4). Python by `ast`, TS by its flat union."""
+    """The owe codes: `owes` codes agree both ways (R4). Python by `ast`, TS by its flat union."""
     codes_py = None
     for node in ast.parse(routes_source).body:
         if isinstance(node, ast.Assign) and any(
@@ -377,6 +377,25 @@ def owe_code_checks(routes_source: str, types_source: str) -> list:
         raise Disagreement("app/src/types.ts: `OweCode` is not a flat union of string literals")
     codes_ts = re.findall(r"'([^']*)'", m.group(1))
     checks = []
+    # EVERY OWED REASON IS BUILT BY `_owe` (R6-7), which asserts its code is declared. A dict
+    # literal that writes an owe code by hand bypasses that assert and this check with it.
+    by_hand = [
+        node.lineno
+        for node in ast.walk(ast.parse(routes_source))
+        if isinstance(node, ast.Dict)
+        and any(
+            isinstance(key, ast.Constant) and key.value == "code"
+            and isinstance(value, ast.Constant) and value.value in codes_py
+            for key, value in zip(node.keys, node.values)
+        )
+    ]
+    checks.append(
+        Check(
+            "every owed reason in server/pipeline_routes.py is built by `_owe`",
+            not by_hand,
+            f"owe codes written by hand at lines {by_hand}" if by_hand else "none written by hand",
+        )
+    )
     for code in codes_py:
         checks.append(Check(f"owe code {code!r} in app/src/types.ts:OweCode", code in codes_ts, f"ts={codes_ts}"))
     for code in codes_ts:
@@ -549,6 +568,14 @@ def self_test() -> int:
         assert any(not c.passed and "sub_threshold_unset" in c.subject for c in checks), "a code only TS names was not caught"
 
     arm("catches an owe code server/pipeline_routes.py does not send", a11)
+
+    # Arm 12: an owe code written by hand, past `_owe`, is red (R6-7).
+    def a12():
+        bypass = routes_source + '\n_BYPASS = {"code": "unreadable", "count": None}\n'
+        checks = owe_code_checks(bypass, types_source)
+        assert any(not c.passed and "built by `_owe`" in c.subject for c in checks), "a hand-written code was not caught"
+
+    arm("catches an owe code written by hand past `_owe`", a12)
 
     assert len(arms) == SELF_TEST_ARM_COUNT, (
         f"SELF_TEST_ARM_COUNT says {SELF_TEST_ARM_COUNT} but {len(arms)} arms are registered — "

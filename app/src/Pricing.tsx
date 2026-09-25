@@ -53,7 +53,7 @@ import type {
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
 import { isEditableTarget } from './keys'
 import { FLAT_KEY, subThresholdSkus } from './readiness'
-import { isWithheld, owesOf, rowShare } from './standing'
+import { isWithheld, rowShare, runChip } from './standing'
 import { TrendCell, type TrendRead } from './PriceTrend'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
@@ -494,7 +494,6 @@ function PickRuns({
           const label = runBoxLabel(row)
           const day = row.created_at ? absoluteDate(row.created_at) : null
           const on = picked.has(row.run)
-          const owe = owesOf(row.owed)
           return (
             <button
               key={row.run}
@@ -520,7 +519,7 @@ function PickRuns({
               {/* THREE STATES, NOT TWO (D156): a run that owes nothing and still holds unsent
                   copies is OPEN, and the chip says how many. */}
               <Pill tone={row.open ? 'warn' : 'ok'} className="pricing-run-owes">
-                {chipWords(owe, row)}
+                {runChip(row)}
               </Pill>
             </button>
           )
@@ -533,17 +532,6 @@ function PickRuns({
       )}
     </div>
   )
-}
-
-/** The run chip's words, off the run's codes (R4): a price owed with its count, the cut-off
- *  unset, files that cannot be read, never sent, then what is left unsent. */
-function chipWords(owe: ReturnType<typeof owesOf>, row: RosterRun): string {
-  if (owe.priceCards > 0) return `${owe.priceCards} ${owe.priceCards === 1 ? 'needs' : 'need'} a price`
-  if (owe.blocked) return 'Needs a price'
-  if (owe.unreadable) return 'Cannot be read'
-  if (owe.neverSent) return 'Never sent'
-  if ((row.unsent ?? 0) > 0) return `${row.unsent} unsent`
-  return row.box_former === true ? 'Box deleted' : 'All sent'
 }
 
 /** A LIVE COUNT IS NEVER DRAWN WITHOUT ITS AGE (the owner, 2026-09-03), and the big figure is

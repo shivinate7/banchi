@@ -5345,8 +5345,7 @@ COMPONENTS = [
                                        "loopback one with slow, partial, 5xx and "
                                        "rollback-refused modes.",
                                "governed_by": ["D33", "D54", "D86", "D87", "D99", "D100", "D104",
-                                               "D105", "D106", "D174",
-                                               "D273"],
+                                               "D105", "D106", "D174", "D269", "D273"],
                                "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "
@@ -9135,7 +9134,7 @@ COMPONENTS = [
                                                       "D62", "D68", "D78", "D79", "D85", "D86",
                                                       "D92", "D98", "D99", "D103", "D115", "D117",
                                                       "D118", "D156", "D168", "D181", "D196",
-                                                      "D208", "D218", "D273", "D277", "D278"]},
+                                                      "D208", "D218", "D269", "D273", "D277", "D278"]},
             "tests/revenue.spec.ts": {
                 "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
                         "states, every column's sort and its reverse, the search field, the "

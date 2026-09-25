@@ -485,7 +485,7 @@ def _apply_guard(guard, matches_by_sku, inventory):
     return {"name": name, "live": live, "held": held, "rooms": rooms}
 
 
-def _say_guard(applied, would_by_sku, names, say) -> None:
+def _say_guard(applied, would_by_sku, names, say) -> set:
     """Name what the guard trimmed, then print its one JSON line for the route to read.
 
     `would_by_sku` is what each SKU would have added WITHOUT the guard: the send's own room,
@@ -493,7 +493,7 @@ def _say_guard(applied, would_by_sku, names, say) -> None:
     line the operator is waiting for, and a trim nobody named is a silent drop.
     """
     if applied is None:
-        return
+        return set()
     import json
 
     trimmed = sendguard.trims(
@@ -511,6 +511,8 @@ def _say_guard(applied, would_by_sku, names, say) -> None:
     if not trimmed:
         say(f"{'':<16} nothing trimmed")
     say(json.dumps(sendguard.report(applied["name"], len(would_by_sku), trimmed), sort_keys=True))
+    # THE CARDS THE GUARD TRIMMED TO NOTHING, so an empty send names them as trims (R6-3).
+    return {trim.sku for trim in trimmed if trim.goes == 0}
 
 
 class PriceRefused(Exception):
@@ -805,6 +807,23 @@ def _say_no_price(left, say) -> None:
         say(f"  {sku} {name}")
     if len(left) > 8:
         say(f"  and {len(left) - 8} more")
+
+
+def _say_empty(left_out, cut_back, needs_price, live, say) -> int:
+    """AN EMPTY SEND, SAID THE SAME WAY ON BOTH PATHS (R6-5, R6-9). Every card it left out is
+    named with its own reason, then one JSON line the send route reads, then one headline
+    worded from the reasons the send actually had. A card with no price was named above."""
+    import json
+
+    for sku, why in left_out:
+        say(f"  {sku} — {why}")
+    _say_under_cut(cut_back, say)
+    say(json.dumps(
+        {"send_empty": {"needs_price": needs_price, "under_cut_off": len(cut_back), "live": live}},
+        sort_keys=True,
+    ))
+    say(merge.empty_send_sentence(needs_price, len(cut_back), live))
+    return 1
 
 
 def _say_under_cut(held, say) -> None:
@@ -1129,7 +1148,7 @@ def run(args, say) -> int:
         say(f"REFUSING to write: {refusal}. Nothing was written.")
         return 1
     typed = _quantities_for(args)
-    _say_guard(
+    trimmed_out = _say_guard(
         guarded,
         {sku: _would(match, typed) for sku, match in resolved.matches.items()},
         {sku: match.name for sku, match in resolved.matches.items()},
@@ -1259,9 +1278,25 @@ def run(args, say) -> int:
         ]
         sendable = len(adding) > len(cut_back)
         if (no_price or cut_back) and not sendable and not changes:
-            _say_under_cut(cut_back, say)
-            say(merge.ONLY_UNDER_CUT if cut_back else merge.ONLY_UNPRICED)
-            return 1
+            # EVERY LEFT-OUT CARD IS NAMED, as the merged path names it (R6-5).
+            priced_skus = {sku for by_game in priced.values() for sku in by_game}
+            unpriced = {sku for sku, _ in no_price}
+            under = {sku for sku, _ in cut_back}
+            left_out = []
+            for sku, match in resolved.matches.items():
+                if sku in unpriced or sku in under:
+                    continue
+                if sku not in priced_skus:
+                    left_out.append((sku, merge.HELD_BACK))
+                elif match.add_to_quantity == 0:
+                    left_out.append(
+                        (sku, merge.LIVE_ALREADY if sku in trimmed_out
+                         else match.nothing_to_add or "nothing to add")
+                    )
+            live = sum(1 for _, why in left_out if why == merge.LIVE_ALREADY)
+            return _say_empty(left_out, cut_back, len(no_price), live, say)
+        # A PRICED CARD `--listed-only` LEAVES UNDER THE CUT-OFF IS NAMED (R6-6).
+        _say_under_cut(cut_back, say)
 
         # TWO SHAPES, ONE SET OF ROWS. Whichever branch runs, the rows come out of the same
         # `priced` mapping and the same `_game_only` partition, so the flag decides how many
@@ -1809,7 +1844,7 @@ def run_merged(args, say) -> int:
     # which cards TCGplayer already holds. `room` ignores `asked`, so this is the unguarded
     # figure over the merged union.
     typed = _quantities_for(args)
-    _say_guard(
+    trimmed_out = _say_guard(
         guarded,
         {row.sku: _would(row.match, typed) for row in merged_plan.skus},
         {row.sku: row.match.name for row in merged_plan.skus},
@@ -1853,27 +1888,30 @@ def run_merged(args, say) -> int:
     )
     changed = {change.sku for change in changes}
     rows = rows + [row for row in merged_plan.skus if row.sku in changed]
+    cut_back = (
+        [(row.sku, row.match.name) for row in merged_plan.rows() if row.sub_threshold]
+        if args.listed_only
+        else []
+    )
     if not rows:
-        # EVERY LEFT-OUT CARD IS NAMED BEFORE THE REFUSAL (R4 F3), and the refusal is the same
-        # sentence and the same exit as one run (R3-3, R4 F4). A card with no price was named
-        # above, so it is not named twice.
-        cut_back = (
-            [(row.sku, row.match.name) for row in merged_plan.rows() if row.sub_threshold]
-            if args.listed_only
-            else []
-        )
-        no_price_left = any(why == merge.NO_PRICE_YET for why in merged_plan.dropped.values())
-        if not (cut_back or no_price_left):
-            say("nothing to write — every matched SKU is held back, unlisted, or has no room")
-        for sku, why in merged_plan.dropped.items():
-            if why != merge.NO_PRICE_YET:
-                say(f"  {sku} — {why}")
-        _say_under_cut(cut_back, say)
-        if cut_back:
-            say(merge.ONLY_UNDER_CUT)
-        elif no_price_left:
-            say(merge.ONLY_UNPRICED)
+        # EVERY LEFT-OUT CARD IS NAMED BEFORE THE REFUSAL (R4 F3), a trim as a trim (R6-3), and
+        # the refusal is worded as one run words it (R6-5, R6-9). A card with no price was
+        # named above, so it is not named twice.
+        needs_price = sum(1 for why in merged_plan.dropped.values() if why == merge.NO_PRICE_YET)
+        left_out = [
+            (sku, merge.LIVE_ALREADY if sku in trimmed_out else why)
+            for sku, why in merged_plan.dropped.items()
+            if why != merge.NO_PRICE_YET
+        ]
+        if cut_back or needs_price:
+            live = sum(1 for _, why in left_out if why == merge.LIVE_ALREADY)
+            return _say_empty(left_out, cut_back, needs_price, live, say)
+        say("nothing to write — every matched SKU is held back, unlisted, or has no room")
+        for sku, why in left_out:
+            say(f"  {sku} — {why}")
         return 1
+    # A PRICED CARD `--listed-only` LEAVES UNDER THE CUT-OFF IS NAMED (R6-6), as one run names it.
+    _say_under_cut(cut_back, say)
 
     # A SKU THAT ADDS NOTHING IS NAMED WHETHER OR NOT ANYTHING ELSE WRITES, which the branch
     # above did only in the total case. `MergedSku.rows()` filters `add_to_quantity == 0` out

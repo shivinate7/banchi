@@ -307,6 +307,35 @@ NO_PRICE_YET = "no market price, and no price typed yet"
 #: and the marker the send route reads to answer `needs_price` rather than `nothing_to_send`.
 ONLY_UNPRICED = "nothing to send: every card left needs a price first"
 
+#: What emit names a card that is withheld or answered `unlisted`, on both send paths.
+HELD_BACK = "held back or answered unlisted"
+
+#: What emit names a card the live guard trimmed to nothing (R6-3). Not "asked for none":
+#: the guard lowers the asked figure, and the owner asked for nothing of the kind.
+LIVE_ALREADY = "TCGplayer already holds every copy on hand"
+
+
+def empty_send_sentence(needs_price: int = 0, under_cut_off: int = 0, live: int = 0) -> str:
+    """The one line an empty send ends on, worded from the reasons it has (R6-9).
+
+    A send with one reason keeps that reason's own sentence. A send with several names every
+    one, so a card the guard trimmed is never hidden behind a card that needs a price."""
+    if needs_price and not (under_cut_off or live):
+        return ONLY_UNPRICED
+    if under_cut_off and not (needs_price or live):
+        return ONLY_UNDER_CUT
+    parts = []
+    if needs_price:
+        parts.append(f"{needs_price} card{'s' if needs_price != 1 else ''} "
+                     f"need{'' if needs_price != 1 else 's'} a price first")
+    if under_cut_off:
+        parts.append(f"{under_cut_off} priced card{'s' if under_cut_off != 1 else ''} under the "
+                     f"cut-off {'are' if under_cut_off != 1 else 'is'} held back by --listed-only")
+    if live:
+        parts.append(f"TCGplayer already holds every copy of {live} card{'s' if live != 1 else ''}")
+    return "nothing to send: " + ", and ".join(parts)
+
+
 #: What a send says when `--listed-only` holds back every priced card left, because each is
 #: under the cut-off (the delta review, R4 F4). Both paths say it, and exit 1 on it, and the
 #: send route reads it to answer `under_cut_off`. A card with no price is named apart.
@@ -386,7 +415,7 @@ def plan(
             out.dropped[sku] = (
                 NO_PRICE_YET
                 if sku in unanswered and not match.has_market_data
-                else "held back or answered unlisted"
+                else HELD_BACK
             )
             continue
         out.skus.append(

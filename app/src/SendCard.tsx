@@ -28,7 +28,8 @@ import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
 import { clockTime } from './dates'
 import { describeFailure, dismissSendWarning, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
-import type { LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
+import type { EmptySend, LiveMove, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
+import { emptySendTitle } from './standing'
 import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
 import './SendCard.css'
 
@@ -58,7 +59,11 @@ const DROPPED = new Set(['unreachable', 'bad_response', 'origin_blocked'])
 
 /** One sentence for why a press was refused, in owner words. The server's own text sits behind
  *  "What the server said" (D196, D269). */
-function refusalTitle(code: string): string {
+function refusalTitle(code: string, data?: unknown): string {
+  /* AN EMPTY SEND'S TITLE STATES EVERY REASON IT HAD (R6-2), worded here from the figures the
+     route sends, never from its sentence (D269): a card the guard trimmed is in the title. */
+  const empty = (data as { empty?: EmptySend } | undefined)?.empty
+  if ((code === 'needs_price' || code === 'under_cut_off') && empty) return emptySendTitle(empty)
   switch (code) {
     case 'live_check_failed':
       return 'Banchi could not read what is live at TCGplayer, so nothing was sent.'
@@ -742,14 +747,14 @@ export function SendCard({
         <Retry
           compact
           className="send-failure"
-          title={refusalTitle(failure.code)}
+          title={refusalTitle(failure.code, failure.data)}
           code={failure.code}
           detail={failure.message}
           busy={busy}
           onRetry={() => press(intent)}
         />
       ) : (
-        <Refusal compact className="send-failure" title={refusalTitle(failure.code)} code={failure.code} detail={failure.message} />
+        <Refusal compact className="send-failure" title={refusalTitle(failure.code, failure.data)} code={failure.code} detail={failure.message} />
       )}
 
       {undoFailure === null ? null : (

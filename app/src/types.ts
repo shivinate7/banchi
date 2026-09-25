@@ -2323,6 +2323,16 @@ export type RosterRun = RunSummary & {
   unsent?: number
 }
 
+/** WHY AN EMPTY SEND SENT NOTHING, as figures (R6-2): cards that need a price, priced cards
+ *  under the cut-off a listed-only send held back, and cards TCGplayer already held every copy
+ *  of, with their names. Rides a `needs_price` or `under_cut_off` refusal's `data.empty`. */
+export type EmptySend = {
+  needs_price: number
+  under_cut_off: number
+  live: number
+  live_names: string[]
+}
+
 /** WHY A RUN OWES, AS A CODE. The same list as `server/pipeline_routes.py:OWE_CODES`, one
  *  literal per line, reconciled both ways by `make readiness-agreement`. */
 export type OweCode =

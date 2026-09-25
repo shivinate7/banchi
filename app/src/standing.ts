@@ -1,5 +1,6 @@
 import type { IconName } from './kit'
 import type {
+  EmptySend,
   OrdersPayload,
   OweCode,
   OwedReason,
@@ -146,6 +147,57 @@ export function owesOf(owed: readonly OwedReason[]): {
   }
 }
 
+/** No typed answer at all: what a failed read of `GET /pricing` degrades to (R6-4). */
+const NO_ANSWERS: PricingCorpus = { policy: {}, skus: {} }
+
+/** THE SEND CARD'S TITLE FOR AN EMPTY SEND, one sentence per reason it had (R6-2, R6-9). In
+ *  the title, never only behind the fold, so a card the guard trimmed is never hidden behind a
+ *  card that needs a price. Here so the harness's send matrix reads the same words. */
+export function emptySendTitle(empty: EmptySend): string {
+  const { needs_price: price, under_cut_off: cut, live } = empty
+  if (price > 0 && cut === 0 && live === 0) return 'Every card on this list needs a price first, so nothing was sent.'
+  if (cut > 0 && price === 0 && live === 0) {
+    return 'Every priced card on this list is under the cut-off, and this send lists only the cards above it, so nothing was sent.'
+  }
+  const said = ['Nothing was sent.']
+  if (price > 0) said.push(`${price} ${price === 1 ? 'card needs' : 'cards need'} a price first.`)
+  if (cut > 0) {
+    said.push(`${cut} priced ${cut === 1 ? 'card is' : 'cards are'} under the cut-off, and this send lists only the cards above it.`)
+  }
+  if (live > 0) {
+    const names = empty.live_names.slice(0, 5).join(', ') + (empty.live_names.length > 5 ? ` and ${empty.live_names.length - 5} more` : '')
+    said.push(`TCGplayer already had every copy of ${live} ${live === 1 ? 'card' : 'cards'}${names ? ` (${names})` : ''}.`)
+  }
+  return said.join(' ')
+}
+
+/** HOME'S PRICING TILE NOTE, beside `runsOwingPrice`'s figure. Here rather than in `Home.tsx`
+ *  so the harness's send matrix reads the same words the tile draws (R6). */
+export function pricingTileNote(runsToPrice: number, readyCopies: number | null): string {
+  const runs = runsToPrice === 1 ? 'run' : 'runs'
+  if (runsToPrice === 0) {
+    if (readyCopies !== null && readyCopies > 0) {
+      return `${readyCopies.toLocaleString()} ${readyCopies === 1 ? 'copy' : 'copies'} ready to send`
+    }
+    return 'nothing to price'
+  }
+  return readyCopies !== null && readyCopies > 0 ? `${runs} to price, ${readyCopies} ready` : `${runs} to price`
+}
+
+/** THE RUN PICKER CHIP'S WORDS, off the run's codes (R4). Here so the matrix reads them. */
+export function runChip(run: Pick<PricingWorklist['roster'][number], 'owed' | 'unsent' | 'box_former'>): string {
+  const owe = owesOf(run.owed)
+  /* A SENT RUN AND A NEVER-SENT ONE BOTH OWING A PRICE ARE TOLD APART (R6-8). */
+  if (owe.priceCards > 0) {
+    return `${owe.neverSent ? 'Never sent' : 'Sent'}, ${owe.priceCards} ${owe.priceCards === 1 ? 'needs' : 'need'} a price`
+  }
+  if (owe.blocked) return 'Needs a price'
+  if (owe.unreadable) return 'Cannot be read'
+  if (owe.neverSent) return 'Never sent'
+  if ((run.unsent ?? 0) > 0) return `${run.unsent} unsent`
+  return run.box_former === true ? 'Box deleted' : 'All sent'
+}
+
 /** Runs that owe a PRICE, not only the send. ONE COUNT FOR HOME'S LINE AND HOME'S TILE, so the
  *  two cannot say different things about the same runs (UX-006; D198's one-figure rule). A run
  *  that is only `never_emitted` waits on the SEND: counting it "to price" is what had Home say
@@ -223,7 +275,11 @@ export function standing(input: StandingInput): Standing | null {
   const owed = pricing === null ? null : runsOwingPrice(pricing.roster)
   /* WHAT IS READY, AND WHAT OWES A PRICE: `#/pricing`'s bar rule, per SKU (R4 F1). A run with
      one unpriced card still sends its priced ones, so the count is never per run. */
-  const book = input.book ?? null
+  /* A FAILED READ OF TYPED PRICES DEGRADES, IT DOES NOT STOP THE LINE (R6-4). The worklist's
+     own count stands, with no answer known, so a held card may count as ready: that is named
+     behind the line, and every rank below this one still draws. Loading is still loading. */
+  const bookFailed = input.bookFailed === true && (input.book ?? null) === null
+  const book = input.book ?? (bookFailed ? NO_ANSWERS : null)
   const counts = pricing === null || book === null ? null : sendCounts(pricing, book)
   const readyCopies = counts === null ? null : counts.ready
   const needsPrice = counts === null ? null : counts.needsPrice
@@ -237,6 +293,7 @@ export function standing(input: StandingInput): Standing | null {
   const live = runs === null ? null : runs.filter((r) => r.live)
 
   const behind: Behind[] = []
+  if (bookFailed) behind.push({ figure: null, label: 'Your typed prices could not be read, so a held card may count as ready' })
   const add = (figure: number | null, label: string, when: boolean) => {
     if (when) behind.push({ figure: figure === null ? null : figure.toLocaleString(), label })
   }
@@ -325,7 +382,7 @@ export function standing(input: StandingInput): Standing | null {
   if (pricing === null || readyCopies === null || needsPrice === null || blocked === null) {
     return unknown(
       'pricing-unknown',
-      input.pricingFailed || input.bookFailed
+      input.pricingFailed
         ? 'the pricing worklist did not answer.'
         : 'the pricing worklist is still loading.',
       problem,

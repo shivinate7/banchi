@@ -19,7 +19,7 @@ import type {
 } from './types'
 import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
-import { runsOwingPrice, sendCounts, standing, type Standing } from './standing'
+import { pricingTileNote, runsOwingPrice, sendCounts, standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { placeWordsOf } from './position'
@@ -543,13 +543,7 @@ export function Home() {
           ? pricing.state === 'failed'
             ? 'worklist not read'
             : 'reading the worklist…'
-          : runsToPrice === 0
-            ? readyCopies !== null && readyCopies > 0
-              ? `${plural(readyCopies, 'copy', 'copies')} ready to send`
-              : 'nothing to price'
-            : readyCopies !== null && readyCopies > 0
-              ? `${runsToPrice === 1 ? 'run' : 'runs'} to price, ${readyCopies} ready`
-              : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
+          : pricingTileNote(runsToPrice, readyCopies),
       tone: runsToPrice ? 'warn' : runsToPrice === 0 ? 'ok' : undefined,
     },
     {

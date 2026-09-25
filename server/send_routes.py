@@ -830,14 +830,59 @@ def _trimmed_words(trimmed: list) -> str:
     return f" {len(names)} held back: TCGplayer already had them ({shown})."
 
 
+def _empty_reasons(empty: dict, trimmed: list, step: str) -> "PipelineRefusal":
+    """An empty send's refusal, one sentence per reason it had (R6-9). The Send card draws this
+    as its title, so every fact is in the title and none only behind the fold (R6-2)."""
+    price = int(empty.get("needs_price") or 0)
+    cut = int(empty.get("under_cut_off") or 0)
+    live = int(empty.get("live") or 0)
+    code = "needs_price" if price else "under_cut_off"
+    gone = [str(trim.get("name") or trim.get("sku")) for trim in trimmed if int(trim.get("goes") or 0) == 0]
+    # THE REASONS, FOR THE SEND CARD'S TITLE (R6-2). The server's sentence is the detail behind
+    # "What the server said" (D269), so the title is worded on the screen from these figures.
+    data = {"empty": {"needs_price": price, "under_cut_off": cut, "live": live, "live_names": gone}}
+    if price and not (cut or live):
+        return PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            code,
+            f"Every card on this list needs a price first, so nothing was {step}. Type a price "
+            f"on each, then send.",
+            data,
+        )
+    if cut and not (price or live):
+        return PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            code,
+            f"Every priced card on this list is under the cut-off, and this send lists only the "
+            f"cards above it, so nothing was {step}.",
+            data,
+        )
+    said = [f"Nothing was {step}."]
+    if price:
+        said.append(f"{price} card{'s' if price != 1 else ''} need{'' if price != 1 else 's'} a price first.")
+    if cut:
+        said.append(
+            f"{cut} priced card{'s' if cut != 1 else ''} {'are' if cut != 1 else 'is'} under the "
+            f"cut-off, and this send lists only the cards above it."
+        )
+    if live:
+        names = f" ({', '.join(gone[:5])}{f' and {len(gone) - 5} more' if len(gone) > 5 else ''})" if gone else ""
+        said.append(f"TCGplayer already had every copy of {live} card{'s' if live != 1 else ''}{names}.")
+    return PipelineRefusal(HTTPStatus.CONFLICT, code, " ".join(said), data)
+
+
 def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -> "PipelineRefusal":
     """Why a press that counted nothing sent nothing, in the owner's words.
 
     Its own function so the harness can read the mapping without a press (the delta review,
     R3-3), which is the one case that needs it: every card left needs a price first.
 
-    A card the live guard trimmed is named beside any reason (R4 F5), never hidden behind it."""
+    A card the live guard trimmed is named beside any reason (R4 F5), never hidden behind it.
+    Where emit printed its `send_empty` line, the title is worded from those reasons (R6-9)."""
     held = _trimmed_words(trimmed)
+    empty = _json_line(console, "send_empty")
+    if empty and any(int(empty.get(key) or 0) for key in ("needs_price", "under_cut_off")):
+        return _empty_reasons(empty, trimmed, step)
     if merge.ONLY_UNDER_CUT in console:
         return PipelineRefusal(
             HTTPStatus.CONFLICT,

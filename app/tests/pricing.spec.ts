@@ -1001,7 +1001,7 @@ test('a sent run that owes a price says so, apart from a run never sent', async 
   const chips = page.locator('.pricing-run')
   await expect(chips).toHaveCount(2)
   await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
-  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('1 needs a price')
+  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('Sent, 1 needs a price')
 })
 
 test('an unknown card count is still warned about, and a known zero is not', async ({ page }) => {
@@ -1552,6 +1552,24 @@ test('a send with nothing left to add is a refusal, and offers no retry', async 
   const refusal = page.locator('.send-failure')
   await expect(refusal).toContainText('Nothing to send. Every copy on this list is already at TCGplayer or held back.')
   await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+})
+
+/* THE TITLE STATES EVERY REASON (R6-2): a send emptied by a card with no price AND by cards the
+ * guard found already live says both in the title, worded from the refusal's figures. The
+ * server's own sentence stays behind "What the server said" (D269). */
+test('an empty send titles every reason it had, never only the price', async ({ page }) => {
+  await open(page, {
+    send: () => ({
+      status: 409,
+      code: 'needs_price',
+      data: { empty: { needs_price: 1, under_cut_off: 0, live: 2, live_names: ['Dunsparce', 'Dunsparce'] } },
+    }),
+  })
+  await sendPress(page).click()
+  const title = page.locator('.send-failure .bn-notice-title')
+  await expect(title).toHaveText(
+    'Nothing was sent. 1 card needs a price first. TCGplayer already had every copy of 2 cards (Dunsparce, Dunsparce).',
+  )
 })
 
 test('Download the file instead writes the file, and its copies are named until they are found', async ({
@@ -3744,32 +3762,51 @@ test('with nothing ready, the send press is disabled', async ({ page }) => {
   await expect(page.locator('.send-press')).toBeDisabled()
 })
 
-/* THE CARD NUMBER IS WHAT THE OWNER READS (the delta review, R4): at 390 a long box name cut the
- * place line at "SECTION 1 CARD" and the number went. The line wraps between parts now, and the
- * number sits whole inside its row. */
-test('at 390 the place line keeps the card number whole', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await open(page, {
-    skus: [
-      sku({
-        positions: [{ box: 7, index: 107, label: 'Box Riftbound Origins singles, Section 12, Card 107' }],
-        copies: 1,
-        add_to_quantity: 1,
-      }),
-    ],
+/* THE CARD NUMBER IS WHAT THE OWNER READS (the delta review, R4), AND THE FACTS BESIDE IT KEEP
+ * THEIR WIDTH (R6-1). At 390 a long box name cut the number off. The R4 fix shrank the copy
+ * count and the cap note to nothing instead, leaving a loose separator. The line wraps now, and
+ * each of the three is at least as wide as its own text, at 390 and at 820. */
+for (const width of [390, 820]) {
+  test(`at ${width} the place line keeps the card number, the copies and the cap note whole`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await open(page, {
+      worklist: {
+        runs: [{ run: RUN, box: 7, box_name: 'Riftbound Origins singles', skus: 1 }],
+        skus: [
+          {
+            ...sku({
+              positions: [
+                { box: 7, index: 107, label: 'Box Riftbound Origins singles, Section 12, Card 107' },
+                { box: 7, index: 108, label: 'Box Riftbound Origins singles, Section 12, Card 108' },
+              ],
+              copies: 2,
+              add_to_quantity: 1,
+            }),
+            in: [{ run: RUN, add_to_quantity: 2 }],
+            claimed_add: 2,
+            over_cap: true,
+          },
+        ],
+      },
+    })
+    const where = page.locator('.pricing-where').first()
+    await expect(where.locator('.position-run-num')).toHaveText('107')
+    const parts = await where.evaluate((el) => {
+      const line = el.getBoundingClientRect()
+      return ['.position-run-num', '.pricing-copies', '.pricing-cap'].map((selector) => {
+        const node = el.querySelector(selector) as HTMLElement | null
+        if (node === null) return { selector, found: false, width: 0, text: 0, right: 0, line: line.right }
+        const box = node.getBoundingClientRect()
+        return { selector, found: true, width: box.width, text: node.scrollWidth, right: box.right, line: line.right }
+      })
+    })
+    for (const part of parts) {
+      expect(part.found, `${part.selector} is drawn`).toBe(true)
+      expect(part.width, `${part.selector} keeps its text width`).toBeGreaterThanOrEqual(part.text - 0.5)
+      expect(part.right, `${part.selector} ends inside its line`).toBeLessThanOrEqual(part.line + 0.5)
+    }
   })
-  const where = page.locator('.pricing-where').first()
-  const num = where.locator('.position-run-num')
-  await expect(num).toHaveText('107')
-  const clip = await where.evaluate((el) => {
-    const box = el.getBoundingClientRect()
-    const n = el.querySelector('.position-run-num')!.getBoundingClientRect()
-    return { right: n.right, whereRight: box.right, width: n.width, viewport: window.innerWidth }
-  })
-  expect(clip.width).toBeGreaterThan(0)
-  expect(clip.right).toBeLessThanOrEqual(clip.whereRight + 0.5)
-  expect(clip.right).toBeLessThanOrEqual(clip.viewport)
-})
+}
 
 /* THE CHIP READS THE CODE, NEVER THE SENTENCE (the coordinator's ruling on R4): reworded
  * server words with the same codes draw the same chips. */
@@ -3794,5 +3831,5 @@ test('a reworded owed sentence draws the same chip while its code stays', async 
   await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
   const chips = page.locator('.pricing-run')
   await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
-  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('3 need a price')
+  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('Sent, 3 need a price')
 })

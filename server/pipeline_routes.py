@@ -2773,12 +2773,14 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                 else None
             )
         except (OSError, ValueError, decisions.MalformedDecisions):
-            owed_by_run[entry.name] = ["run files cannot be read"]
+            # THROUGH `_owe`, like every other reason (R6-7), so its code is checked.
+            unreadable = [_owe("unreadable", "run files cannot be read")]
+            owed_by_run[entry.name] = [reason["text"] for reason in unreadable]
             roster.append(
                 {
                     **summary,
                     "owes": owed_by_run[entry.name],
-                    "owed": [{"code": "unreadable", "count": None}],
+                    "owed": [{"code": reason["code"], "count": reason["count"]} for reason in unreadable],
                     "open": True,
                     "unsent": 0,
                 }
