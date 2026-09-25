@@ -499,3 +499,18 @@ that owns the screen:**
 
 Rationale for the ruling itself, the words-vs-icon split, and the check's own build: see
 `docs/decisions/D-icon-buttons.md`.
+
+## 5. Round 2: an independent review, and what it found
+
+An Opus review of the built kit found real defects this map's own risks did not name. Its
+full report and probes are kept at `SD/review/kit-icons/`. `docs/decisions/D-icon-buttons.md`
+has the built fix for each one:
+- the hit area moved off the visual box onto a `::before` pseudo-element (FLT-24, D118)
+- the tooltip's position moved to a viewport-clamped `position: fixed` (the overlay Close
+  clipping, and the viewport-edge case)
+- a long-press no longer also presses the button
+- the Fulfiller's overlay Close is now worded (spec rule 1)
+- clauses (b) and (c) of the kit check were rebuilt against a set of evasion fixtures, kept
+  as permanent self-tests
+
+`app/tests/icon-button.spec.ts` is the new browser proof.

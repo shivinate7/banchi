@@ -216,6 +216,10 @@ export function FilterBar<K extends string = string>({
             <IconButton
               icon="filter"
               label={label}
+              /* The badge is aria-hidden (D118: its arrival moves nothing, kit.css), so the
+                 active count only reaches a screen reader through `name` — round 2's own
+                 finding: before IconButton, the count sat in the button's own text. */
+              name={badge > 0 ? `${label}, ${badge} on` : label}
               badge={badge > 0 ? badge : undefined}
               className="bn-filterbar-trigger"
               aria-haspopup="dialog"

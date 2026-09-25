@@ -1003,7 +1003,12 @@ function FacetChip({
           icon="x"
           label="Clear"
           name={`Clear ${facet.label}`}
+          /* `size="sm"` keeps its own WIDTH narrow, inside the chevron slot it is drawn over
+             (D118, the comment above). The `style` prop sets its HEIGHT to match `.bn-pick`
+             beside it (FLT-24) — through the SAME inline `style`, never a CSS override, so a
+             real pointer's hit-test never races a stylesheet rule fighting an inline one. */
           size="sm"
+          style={{ height: 'var(--bn-control-h)' }}
           className="bn-fchip-clear"
           onClick={() => {
             onChange([])
@@ -1132,6 +1137,9 @@ export function SortControl<K extends string>({
         icon={value.dir === 'asc' ? 'sortAsc' : 'sortDesc'}
         label={value.dir === 'asc' ? asc : desc}
         name={`Order: ${value.dir === 'asc' ? asc : desc}. Press to reverse.`}
+        /* Sized to `Select`'s own height through the SAME inline `style` IconButton already
+           merges a caller's `style` into — never a CSS override (FLT-24). */
+        style={{ width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }}
         className="bn-sort-dir"
         onClick={() => onChange({ key: value.key, dir: value.dir === 'asc' ? 'desc' : 'asc' })}
       />

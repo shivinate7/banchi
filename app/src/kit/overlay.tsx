@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { Button, IconButton, useLeave } from './index'
+import { usePageRoute } from './Page'
 import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
 
 /* ONE SHEET, ONE MODAL, ONE POPOVER, AND ONE STACK OF LAYERS (UX-057, UX-090, UX-091).
@@ -366,6 +367,11 @@ type FrameProps = OverlayProps & {
 
 function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className }: FrameProps) {
   const { mounted, leaving } = useLeave(open)
+  /* THE FULFILLER GETS WORDS, ALWAYS (D-icon-buttons, spec rule 1; DESIGN.md's 20px floor).
+     A Sheet or Modal is portalled to <body>, so it cannot read its persona from where it
+     sits in the DOM — `usePageRoute()` is a React context read, which a portal does not
+     break, since context follows the component tree rather than the DOM tree. */
+  const fulfiller = usePageRoute()?.persona === 'fulfiller'
   const panel = useRef<HTMLDivElement>(null)
   const scrim = useRef<HTMLDivElement>(null)
   const titleId = useId()
@@ -404,7 +410,19 @@ function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose
           <h2 className="bn-overlay-title" id={titleId}>
             {title}
           </h2>
-          <IconButton icon="x" label="Close" onClick={onClose} disabled={!dismissible} className="bn-overlay-close" />
+          {fulfiller ? (
+            <Button
+              variant="ghost"
+              icon="x"
+              onClick={onClose}
+              disabled={!dismissible}
+              className="bn-overlay-close bn-overlay-close-worded"
+            >
+              Close
+            </Button>
+          ) : (
+            <IconButton icon="x" label="Close" onClick={onClose} disabled={!dismissible} className="bn-overlay-close" />
+          )}
         </div>
         <OverlayContext.Provider value>
           <div className="bn-overlay-body">{children}</div>

@@ -32,56 +32,145 @@ including the Fulfiller exemption, the phone edge cases, and the dense-row limit
 
 **`IconButton`** (`app/src/kit/index.tsx`). One primitive: an icon and a `label` prop.
 `label` is required. An icon with no word is a guess, not a control. TypeScript refuses a
-call site that omits it. `label` is the tooltip text, and the accessible name unless a
-longer `name` overrides it for a dense row ("Undo the sale at Section 2, Card 5").
+call site that omits it. `label` is the tooltip text. It is also the accessible name, unless
+a longer `name` overrides it for a dense row ("Undo the sale at Section 2, Card 5"). `name`
+must contain `label` (WCAG 2.5.3, Label in Name, added in round 2). A dev-mode
+`console.error` names the call site that breaks this.
 
-Two nested boxes. The outer `<button>` is the hit area: `min-width`/`min-height: 40px`
-always, at every size. The inner face is the visual glyph, 28px at rest, so a packed row
-stays dense while the target stays reachable. It reuses `.bn-btn` rather than a second
-stylesheet. So it inherits the D117 thumb floor and the D50 cursor/response/press floors for
-free — `button` is a bare-tag selector in `base.css`.
+**The visual box is the face**, 28px at rest, sized per `size` in the component itself. The
+40px thumb floor (D117) is a `::before` pseudo-element instead, `max(40px, 100%)`, centred
+over the real box. This is round 2's own fix. The first cut made the outer box the 40px
+floor. That broke FLT-24, one control height in a field row. It grew `SearchField` on the
+first keystroke (D118, measured 40px to 42px). It also read wrong against `.bn-sort-dir`'s
+own field-edge floor. The pseudo-element expands the clickable region without existing in
+layout, the way `base.css` never lets `:hover`/`:active` move anything. `IconButton` reuses
+`.bn-btn` rather than a second stylesheet. So it inherits the D50 cursor, response and press
+floors for free. `button` is a bare-tag selector in `base.css`.
 
-The tooltip (`.bn-icon-tip`, `app/src/kit.css`) is CSS only. `position: absolute` sits off
-`.bn-btn`'s own `position: relative`, so showing it never moves anything else (D118). It
-shows on real `:hover`, on `:focus-visible`, and on a touch long-press. It never shows on a
-plain mouse `:focus`, so a click does not leave it stuck open. It is `aria-hidden`: the
-accessible name is the button's own `aria-label`, never the tooltip's text.
+**Neither the pseudo nor `.bn-fchip-clear` may centre itself with `transform`.** Verification
+found a real Chromium hit-test gap. A `translate(-50%, -50%)` centring promotes the element
+onto its own compositor layer. A real click landing past the element's own box, inside that
+layer, does not always reach it. `document.elementFromPoint` at the same point reads it fine.
+Measured on `.bn-fchip-clear` (round 2's first draft, `top: 50%; transform: translateY(-50%)`)
+and separately on `.bn-icon-btn::before`'s own reach past a narrow face. Both are now centred
+by inset alone. The pseudo uses `min(0px, calc((100% - 40px) / 2))` on all four sides.
+`.bn-fchip-clear` uses `top: 0; bottom: 0; margin: auto 0`. Same box, no transform, no layer
+to mis-hit.
+
+**The tooltip stays a DOM child of the button**, never a portal. `app/tests/icon-button.spec.ts`
+finds it with `button.querySelector('.bn-icon-tip')`. Its position changed in round 2. It is
+now `position: fixed`, computed by a `reposition()` call on pointer-enter, focus, and the
+long-press timer. `reposition()` measures against the true viewport. It clamps inside it, and
+flips below the button when there is no room above. This is why `.bn-sheet`'s own
+`overflow: hidden` no longer clips the overlay Close tooltip. Round 2 measured the tip's own
+top landing at -14px before this fix. Visibility is still CSS. `:hover` is now under
+`@media (hover: hover)`, so a touchscreen tap does not leave a phantom hover once the finger
+lifts, round 2's own finding. `:focus-visible` (never a plain mouse `:focus`) and
+`[data-tip-open]` (for a long-press) are unchanged. The long-press that opens the tooltip
+also calls `preventDefault()` on its own `touchend` now. So it never also presses the button
+under it. Round 2 measured a click firing once the touch that revealed "Delete" lifted.
 
 `tone="danger"`, `pressed` (a toggle of one act, off the same pair `Chip` reads), `busy`, and
-`badge` (a small count at the corner, `position: absolute`, never moving the layout) round
-out the props. `docs/specs/iconography.md`'s "What IconButton carries" names each one.
+`badge` round out the props. `badge` draws a small count at the corner. It is
+`position: absolute`, so its arrival never moves the layout. Its own accessible name is the
+caller's `name`, since the badge itself is `aria-hidden`. `kbd` also sets
+`aria-keyshortcuts` on the button now. In round 1, the key lived only in the `aria-hidden`
+tooltip. `docs/specs/iconography.md`'s "What IconButton carries" names each prop.
+
+**The Fulfiller gets words for the overlay Close.** This is round 2, the orchestrator's
+ruling, option a, per spec rule 1. `PageRoute` (`app/src/kit/Page.tsx`) now carries
+`persona`. A Sheet or Modal is portalled. So `OverlayFrame` reads persona from context, not
+from where it sits in the DOM. A portal does not break React context. The Fulfiller's Close
+is a plain worded `Button`, at a literal 20px (`.bn-overlay-close-worded`, kit.css). That
+floor is DESIGN.md's, not `--ff-fs-base` — that token is `Fulfillment.css`'s own, and this
+button is the shared kit's, drawn under any Fulfiller overlay.
+
+Verification found the context read was reaching nobody. The Fulfiller's own route renders
+outside the shell (D5), through a SEPARATE branch in `App.tsx` that never wrapped its view in
+`PageRouteContext.Provider`. So `usePageRoute()` read `null` there, and every overlay opened
+from that screen — the "?" keyboard sheet among them — drew the icon-only Close no matter the
+persona. Fixed by giving that branch the same provider the chromed one already carries.
 
 Eight icons were added to `app/src/kit/Icon.tsx`, in the same 24-unit, 1.75-stroke idiom as
-the rest: `sold`, `pencil`, `eraser`, `eyeOff`, `sortAsc`, `sortDesc`, `moveTo`, `grip`.
-`ICON_MEANINGS` gained a row for these and for every other icon the vocabulary draws on.
-`kit-adoption` fails a commit that drops one of these rows, or names a vocabulary icon
-`PATHS` does not draw (`iconMeaningsGap`, self-tested both ways).
+the rest: `sold`, `pencil`, `eraser`, `eyeOff`, `sortAsc`, `sortDesc`, `moveTo`, `grip`. Three
+were redrawn in round 2, after a magnified review. `sold` read as a loose squiggle, not a
+dollar seal. `grip`'s dots were zero-length, under 1.2px at 16px, and invisible. `sortAsc`
+and `sortDesc` drew all three bars nearly the same width, which read as no order at all. They
+now taper narrow-to-wide (ascending) and wide-to-narrow (descending) under the arrow, the
+common convention. `moveTo` read as the standard "sign in" glyph, a three-sided bracket. It
+is now an arrow toward a single destination line. `ICON_MEANINGS` gained a row for these, and
+for every other icon the vocabulary draws on. `kit-adoption` fails a commit that drops one of
+these rows. It also fails one that names a vocabulary icon `PATHS` does not draw
+(`iconMeaningsGap`, self-tested both ways).
 
 Every state is rendered on `#/gallery`, under "Icon button", between "Buttons" and "Keycaps".
+The gallery's own toast specimen was hand-rolled with a raw `<button>`. Round 2 found this is
+why `axe` never caught the toast contrast regression below. It now renders the real
+`IconButton`, the same markup `kit/toast.tsx` does.
 
-**Seven kit-owned controls converted**, per `docs/specs/iconography.md`'s own list. The
-overlay Close, the Toaster dismiss, the FacetChip clear, the SearchField clear,
+**Seven kit-owned controls converted**, per `docs/specs/iconography.md`'s own list. They are
+the overlay Close, the Toaster dismiss, the FacetChip clear, the SearchField clear,
 `ReloadButton`, the compact `FilterBar` trigger, and `SortControl`'s direction toggle. The
-sort key stays in words (the owner's word on the UX-214 conflict). Only the direction became
-`sortAsc`/`sortDesc`, its words moved to the tooltip and the accessible name.
+sort key stays in words, the owner's word on the UX-214 conflict. Only the direction became
+`sortAsc`/`sortDesc`. Its words moved to the tooltip and the accessible name. Each control
+carried its own pre-conversion CSS: a bordered field look, a second count pill, a second
+hover paint. All of it was dead weight fighting `IconButton`'s own box. Round 2 deleted it
+rather than patching around it. Two defects were only visible once it was gone. The Toaster
+dismiss glyph was 1.83:1 in light theme, because `.bn-icon-face`'s own fixed colour, the old
+two-box shape, beat `.bn-toast-close`'s `color: inherit`. `.bn-filterbar-trigger`'s
+active-count badge no longer reached a screen reader at all. The badge is `aria-hidden`, and
+the button's own text used to carry it. `FilterBar` now passes a `name` prop stating the
+label and the count when one is active.
 
 ### The check
 
 **`kit-adoption`'s `R2-icon-only-button` rule** (`scripts/kit-adoption.mjs`) refuses three
 shapes outside `app/src/kit/`, the Fulfiller's files, and Gallery:
-- (a) `iconOnly` on `Button`, read by presence, never by its value.
-- (b) A native `<button>` or inline `<svg>` whose only child is an icon.
+- (a) `iconOnly` on `Button`, read by presence, never by its value. This now includes a
+  spread, `{...{ iconOnly: true }}` (round 2).
+- (b) A `<button>`, or an `<a role="button">`, whose whole visible content resolves to
+  nothing but an icon: an `<Icon>`, an `<svg>`, or a bare `×`, `✕` or `✖`. This reaches
+  through a wrapper element, a `{<Icon/>}` expression, or a ternary of two icons, a chevron
+  toggle. It also fires on one with no visible content at all, carrying only an
+  `aria-label`. Round 2 rebuilt this clause. The first cut dropped every `{expression}`
+  sibling before counting children. So `<Icon/>{label}`, a real word beside the glyph, read
+  as icon-only. A real word anywhere in the content now clears it, even one this reader
+  cannot itself read, a bare `{expression}`.
 - (c) A `Button` whose literal label starts with a vocabulary verb, when its `variant`
-  cannot be shown to always be `primary` or `danger-solid`.
+  cannot be shown to always be `primary` or `danger-solid`. The verb list gained Hold,
+  Release, Reveal, Hide and Clear in round 2. Matching is now case-insensitive. The label
+  reader now reads through `{'Undo'}` and `Undo {n}`, not only plain text. Round 2 also
+  rebuilt the variant reader. The general `literalsOf` silently drops an unresolvable branch
+  of a `??`, `||`, `&&` or ternary. It reports only the literal side it found. So
+  `variant={x ?? 'primary'}` and `variant={c && 'primary'}` both read as safely `'primary'`.
+  The clause's own reader treats one unresolved branch, on either side of any of the three
+  operators, as making the whole expression unresolved. Unknown means not provably worded.
 
-Clause (c) reads `variant` statically. A dynamic variant, like Inventory's `primary ? …`,
-must split into two JSX branches. Only then can the check prove it worded — a screen lane's
-own work, not this entry's.
+Clause (c) still reads `variant` statically. A dynamic variant, like Inventory's
+`primary ? …`, must split into two JSX branches. Only then can the check prove it worded — a
+screen lane's own work, not this entry's.
 
 This rule is born on `ux/kit-icons`. It lists its own first offenders under the kit-adoption
-ratchet's one exception: 26 files, in `scripts/kit-adoption-allow.json` under lane `icons`.
-From here the list only shrinks. `make kit-adoption-selftest` proves the rule in both
-directions, including the Fulfiller and Gallery exemptions and the svg case.
+ratchet's one exception: 27 files, in `scripts/kit-adoption-allow.json` under lane `icons`.
+**The list is keyed file to rule, not file to occurrence** (round 2's own finding). One entry
+excuses every violation of that rule in that file. So a new icon-only control, added to an
+already-listed file, passes silently. It stays silent until the file's other violations are
+fixed and the entry is removed. This is how the list was built before this lane, under
+D-page-scaffold. It is not a gap this entry opened. From here the list
+only shrinks. `make kit-adoption-selftest` proves the rule in both directions. That covers
+the Fulfiller and Gallery exemptions, the svg and role="button" cases, and the review's own
+evasion fixtures (`SD/review/kit-icons/evade.mjs`), kept as permanent cases.
+
+**`app/tests/icon-button.spec.ts`** is the browser half, added in round 2. It checks six
+things:
+- the 40px hit area reaches past the visual face
+- the tooltip shows on hover and focus, and hides after a click
+- showing it moves nothing else (D118)
+- the overlay Close tooltip is not clipped by a sheet, at 1440 or at 390
+- a long-press does not also press the button
+- the toast dismiss glyph clears 4.5:1 in both themes
+
+`make design-check` runs it.
 
 ### What is not this lane's job
 

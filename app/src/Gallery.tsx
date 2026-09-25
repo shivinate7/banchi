@@ -1194,13 +1194,12 @@ export function Gallery() {
                     <button type="button" className="bn-toast-action">
                       Undo <kbd className="bn-kbd">U</kbd>
                     </button>
-                    {/* THE DISMISS IS PART OF THE COMPONENT AND THE SPECIMEN LEFT IT OUT (D117).
-                        A sheet that draws a control's other half is the only place a floor over
-                        the kit can be measured — `.bn-toast-close` was 24px and this page could
-                        not say so, because nothing here drew one. */}
-                    <button type="button" className="bn-toast-close" aria-label="Dismiss">
-                      <Icon name="x" size={14} />
-                    </button>
+                    {/* THE REAL MARKUP, NOT A REDRAWN COPY (round 2's own finding): a hand-rolled
+                        <button> here could not catch the contrast regression `Toaster` itself
+                        had — the dismiss glyph inherited the wrong colour and axe never saw a
+                        real `.bn-icon-btn` to measure. `IconButton` is what `kit/toast.tsx`
+                        actually renders. */}
+                    <IconButton icon="x" label="Dismiss" size="sm" className="bn-toast-close" />
                   </div>
                   <div className="bn-toast bn-toast-ok">
                     <Icon name="check" size={16} className="bn-toast-icon" />

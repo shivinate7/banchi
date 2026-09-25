@@ -171,12 +171,16 @@ const ALLOW_FILE = 'scripts/kit-adoption-allow.json'
 /** R2-icon-only-button's clause (c): a `Button` whose literal label starts with one of these,
  *  and whose `variant` cannot be shown to be always `primary` or `danger-solid` — the two
  *  variants the ICONOGRAPHY rule always leaves as words (`docs/specs/iconography.md` section
- *  2, rules 2 and 4). Longer phrases first, so `Mark sold` is not shadowed by nothing shorter. */
+ *  2, rules 2 and 4). Longer phrases first, so `Mark sold` is not shadowed by nothing shorter.
+ *  Hold, Release, Reveal, Hide and Clear were missing (round 2's review): section 2 step 6
+ *  names all five. Matched case-insensitively (round 2): a screen's own `undo` reads the same
+ *  as `Undo` to a person, and the check should too. */
 export const VOCAB_VERBS = [
   'Mark sold', 'Undo', 'Retire', 'Edit', 'Rename', 'Delete', 'Forget', 'Copy', 'Download',
-  'Open as page', 'Close', 'Dismiss', 'Reload', 'Manage', 'Options',
+  'Open as page', 'Close', 'Dismiss', 'Reload', 'Manage', 'Options', 'Hold', 'Release',
+  'Reveal', 'Hide', 'Clear',
 ]
-const VOCAB_VERB_RE = new RegExp(`^(${VOCAB_VERBS.map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`)
+const VOCAB_VERB_RE = new RegExp(`^(${VOCAB_VERBS.map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'i')
 /** The variants clause (c) never flags: the vocabulary word IS the label there on purpose
  *  (Mark sold as the only primary in its sector, Delete behind a `danger-solid` confirm). */
 const WORDED_VARIANTS = new Set(['primary', 'danger-solid'])
@@ -509,6 +513,142 @@ function attrLiterals(a) {
   return ts.isStringLiteral(a.initializer) ? [a.initializer.text] : literalsOf(a.initializer)
 }
 
+/* ---- R2-icon-only-button's clauses (b) and (c), round 2 -----------------------------------
+ * A round-2 review found the first cut narrow both ways: it dropped every `{expression}`
+ * sibling before counting a `<button>`'s children, so `<Icon/>{label}` (a REAL word beside
+ * the glyph) read as icon-only; and it missed the shapes an icon-only control actually takes
+ * once a screen is asked to hide one — a wrapper `<span>`, `{<Icon/>}`, a ternary of two
+ * icons for a chevron toggle, an `aria-label`-only button with no children at all, a bare
+ * `×` character standing in for a real icon, and `<a role="button">` wearing the same shape
+ * as a `<button>`. Both functions below answer one question, over a JSX child: is this
+ * ICON-LIKE (an `<Icon>`, an `<svg>`, or the literal `×`/`✕`/`✖`), BLANK (whitespace, or an
+ * empty expression), or something else (real content, or a shape this reader cannot resolve)?
+ * `aggregate` folds a list of those answers: all-icon (ignoring blanks) is `'icon'`, no
+ * non-blank answer at all is `'blank'`, anything else is `'other'` — real content, which
+ * clears the control. */
+const FAKE_GLYPHS = new Set(['×', '✕', '✖'])
+
+function aggregate(results) {
+  const nonBlank = results.filter((r) => r !== 'blank')
+  if (nonBlank.length === 0) return 'blank'
+  return nonBlank.every((r) => r === 'icon') ? 'icon' : 'other'
+}
+
+function isIconLikeExpr(expr, sf) {
+  const e = unwrap(expr)
+  if (!e) return 'blank'
+  if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) {
+    const t = e.text.trim()
+    if (t === '') return 'blank'
+    return FAKE_GLYPHS.has(t) ? 'icon' : 'other'
+  }
+  if (ts.isJsxElement(e) || ts.isJsxSelfClosingElement(e) || ts.isJsxFragment(e)) return isIconLike(e, sf)
+  if (ts.isConditionalExpression(e)) return aggregate([isIconLikeExpr(e.whenTrue, sf), isIconLikeExpr(e.whenFalse, sf)])
+  if (ts.isBinaryExpression(e)) {
+    const k = e.operatorToken.kind
+    if (k === ts.SyntaxKind.QuestionQuestionToken || k === ts.SyntaxKind.BarBarToken) {
+      return aggregate([isIconLikeExpr(e.left, sf), isIconLikeExpr(e.right, sf)])
+    }
+    if (k === ts.SyntaxKind.AmpersandAmpersandToken) return isIconLikeExpr(e.right, sf)
+  }
+  return 'other' // an identifier, a call, a member access: cannot be resolved, and is not seen
+}
+
+/** Is this one JSX child icon-like, blank, or other? A wrapper element (a `<span>`, a `<div>`)
+ *  is transparent: its own children are read the same way, so `<span><Icon/></span>` is
+ *  still `'icon'`. */
+function isIconLike(node, sf) {
+  if (ts.isJsxText(node)) {
+    const t = node.text.trim()
+    if (t === '') return 'blank'
+    return FAKE_GLYPHS.has(t) ? 'icon' : 'other'
+  }
+  if (ts.isJsxExpression(node)) return node.expression ? isIconLikeExpr(node.expression, sf) : 'blank'
+  if (ts.isJsxSelfClosingElement(node)) {
+    const tag = node.tagName.getText(sf)
+    return tag === 'Icon' || tag === 'svg' ? 'icon' : 'other'
+  }
+  if (ts.isJsxElement(node)) {
+    const tag = node.openingElement.tagName.getText(sf)
+    if (tag === 'Icon' || tag === 'svg') return 'icon'
+    return aggregate(node.children.map((k) => isIconLike(k, sf)))
+  }
+  if (ts.isJsxFragment(node)) return aggregate(node.children.map((k) => isIconLike(k, sf)))
+  return 'other'
+}
+
+/** Does this JSX opening tag carry a literal `role="button"`? Only a literal is seen, like
+ *  every other heuristic here. */
+function isRoleButton(opening, sf) {
+  return attrLiterals(attr(opening, 'role')).includes('button')
+}
+
+/** Every string fragment a `<Button>`'s children start with, stopping at the first child
+ *  that is not plain JSX text or a string-literal expression. `{'Undo'}` and `Undo {n}` both
+ *  resolve to `"Undo"` this way — round 2's own finding: the count after "Undo" does not
+ *  need to be read, only the word before it does, and `VOCAB_VERB_RE` is anchored at the
+ *  start. */
+function leadingLabelText(kids) {
+  let text = ''
+  for (const k of kids) {
+    if (ts.isJsxText(k)) {
+      text += k.text
+      continue
+    }
+    if (ts.isJsxExpression(k) && k.expression) {
+      const e = unwrap(k.expression)
+      if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) {
+        text += e.text
+        continue
+      }
+    }
+    break
+  }
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/** R2-icon-only-button clause (c)'s own `variant` reader: every possible literal value, or
+ *  `null` when ANY branch cannot be resolved to a literal. Round 2's own finding: the
+ *  general-purpose `literalsOf` silently DROPS an unresolvable branch of a `??`/`||`/`&&`/
+ *  ternary and reports only the literal side it found, which let `variant={x ?? 'primary'}`
+ *  read as safely `'primary'` when `x` could be anything at runtime. Here, one unresolved
+ *  branch makes the whole expression unresolved — "unknown means not provably primary." */
+function resolveVariantLiterals(expr) {
+  const e = unwrap(expr)
+  if (!e) return []
+  if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return [e.text]
+  if (ts.isJsxExpression(e)) return e.expression ? resolveVariantLiterals(e.expression) : []
+  if (ts.isConditionalExpression(e)) {
+    const a = resolveVariantLiterals(e.whenTrue)
+    const b = resolveVariantLiterals(e.whenFalse)
+    return a === null || b === null ? null : [...a, ...b]
+  }
+  if (ts.isBinaryExpression(e)) {
+    const k = e.operatorToken.kind
+    if (k === ts.SyntaxKind.QuestionQuestionToken || k === ts.SyntaxKind.BarBarToken || k === ts.SyntaxKind.AmpersandAmpersandToken) {
+      /* BOTH SIDES, FOR ALL THREE OPERATORS (round 2's own finding, `c && 'primary'`): a
+         non-literal left side of `&&` is not provably truthy, so the whole expression can
+         still evaluate to that non-literal value, not to the literal right side. */
+      const a = resolveVariantLiterals(e.left)
+      const b = resolveVariantLiterals(e.right)
+      return a === null || b === null ? null : [...a, ...b]
+    }
+  }
+  return null
+}
+
+/** Clause (a), the spread shape: `<Button {...{ iconOnly: true }} icon="x">Close</Button>`.
+ *  Round 2's own finding. Read by presence of the property name, never its value, matching
+ *  the plain-attribute form. */
+function hasSpreadIconOnly(opening) {
+  const attrs = ts.isJsxSelfClosingElement(opening) || ts.isJsxOpeningElement(opening) ? opening.attributes.properties : []
+  return attrs.some((a) => {
+    if (!ts.isJsxSpreadAttribute(a)) return false
+    const e = unwrap(a.expression)
+    return ts.isObjectLiteralExpression(e) && e.properties.some((p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === 'iconOnly')
+  })
+}
+
 /** Every R2 violation in one file: `{ rule, line, detail }`. */
 function scanFile(rel, sf) {
   const hits = []
@@ -532,6 +672,13 @@ function scanFile(rel, sf) {
       const tag = n.tagName.getText(sf)
       if (tag === 'select') add('R2-select', n, '<select>')
       if (tag === 'dialog') add('R2-dialog', n, '<dialog>')
+      if (tag === 'Button' && hasSpreadIconOnly(n)) add('R2-icon-only-button', n, 'iconOnly (spread)')
+      /* Clause (b), the self-closing shape: `<button aria-label="Close" />` has no children at
+         all, so the `JsxElement` visitor below never sees it — this is the one blank-by-
+         construction case that reader cannot reach. */
+      if (ts.isJsxSelfClosingElement(n) && (tag === 'button' || isRoleButton(n, sf)) && attrLiterals(attr(n, 'aria-label')).length > 0) {
+        add('R2-icon-only-button', n, `<${tag} aria-label> with no visible content`)
+      }
       if (tag === 'input') {
         const typeAttr = attr(n, 'type')
         const types = attrLiterals(typeAttr)
@@ -551,32 +698,34 @@ function scanFile(rel, sf) {
         const dollar = ts.isJsxText(k) ? DOLLAR_END.test(k.text) : ts.isJsxExpression(k) && k.expression !== undefined && endsInDollar(k.expression)
         if (dollar) add('R2-money', next, 'a `$` in JSX before `{...}`')
       }
-      /* Clause (b): a native <button> whose only non-blank child is <Icon> or a raw <svg> — a
-         hand-rolled icon-only control that skipped the kit's Button/IconButton entirely. */
-      if (ts.isJsxElement(n) && n.openingElement.tagName.getText(sf) === 'button') {
-        const real = kids.filter((k) => !(ts.isJsxText(k) && k.text.trim() === '') && !ts.isJsxExpression(k))
-        if (real.length === 1) {
-          const only = real[0]
-          const onlyTag = ts.isJsxSelfClosingElement(only) ? only.tagName.getText(sf)
-            : ts.isJsxElement(only) ? only.openingElement.tagName.getText(sf) : null
-          if (onlyTag === 'Icon' || onlyTag === 'svg') add('R2-icon-only-button', n.openingElement, `<button> whose only child is <${onlyTag}>`)
+      /* Clause (b): a <button> (or an <a role="button">) whose whole visible content resolves
+         to nothing but an icon — an <Icon>, an <svg>, or a bare ×/✕/✖ — including through a
+         wrapper element, a `{<Icon/>}` expression, or a ternary of two icons (the common
+         chevron-toggle shape); OR one with NO visible content at all, carrying only an
+         `aria-label`. `aria-label`-with-no-children names a control with nothing to read
+         except that label, the same problem an icon-only control has (round 2's review). A
+         REAL word anywhere in the content — even a dynamic one this reader cannot itself
+         read, like `{label}` — clears it: `aggregate` reports `'other'`, not `'icon'`. */
+      const tag0 = ts.isJsxElement(n) ? n.openingElement.tagName.getText(sf) : null
+      if (tag0 === 'button' || (tag0 !== null && isRoleButton(n.openingElement, sf))) {
+        const content = aggregate(kids.map((k) => isIconLike(k, sf)))
+        if (content === 'icon') add('R2-icon-only-button', n.openingElement, `<${tag0}> whose only visible content is an icon`)
+        else if (content === 'blank' && attrLiterals(attr(n.openingElement, 'aria-label')).length > 0) {
+          add('R2-icon-only-button', n.openingElement, `<${tag0} aria-label> with no visible content`)
         }
       }
       /* Clause (c): a <Button> whose literal label starts with a vocabulary verb, and whose
          `variant` cannot be shown to always be `primary` or `danger-solid` — the ICONOGRAPHY
-         rule's own two words-only variants. A label read through anything but plain JSX text
-         (an expression, a nested element) is not a literal and is not seen here, same as
-         every other heuristic in this file. */
+         rule's own two words-only variants. `leadingLabelText` reads through `{'Undo'}` and
+         `Undo {n}` (round 2's review); `resolveVariantLiterals` refuses to call a `??`/`||`/
+         `&&`/ternary variant provably worded unless EVERY branch resolves to a literal. */
       if (ts.isJsxElement(n) && n.openingElement.tagName.getText(sf) === 'Button') {
-        const textKids = kids.filter((k) => !(ts.isJsxText(k) && k.text.trim() === ''))
-        if (textKids.length > 0 && textKids.every((k) => ts.isJsxText(k))) {
-          const label = textKids.map((k) => k.text).join('').replace(/\s+/g, ' ').trim()
-          const verb = VOCAB_VERB_RE.exec(label)
-          if (verb !== null) {
-            const variantLiterals = literalsOf(attr(n.openingElement, 'variant')?.initializer)
-            const provenWorded = variantLiterals.length > 0 && variantLiterals.every((v) => WORDED_VARIANTS.has(v))
-            if (!provenWorded) add('R2-icon-only-button', n.openingElement, `<Button>${label}</Button>, variant not provably primary/danger-solid`)
-          }
+        const label = leadingLabelText(kids)
+        const verb = label === '' ? null : VOCAB_VERB_RE.exec(label)
+        if (verb !== null) {
+          const variantLiterals = resolveVariantLiterals(attr(n.openingElement, 'variant')?.initializer)
+          const provenWorded = variantLiterals !== null && variantLiterals.length > 0 && variantLiterals.every((v) => WORDED_VARIANTS.has(v))
+          if (!provenWorded) add('R2-icon-only-button', n.openingElement, `<Button>${label}</Button>, variant not provably primary/danger-solid`)
         }
       }
     } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken && endsInDollar(n.left)) {
@@ -1158,12 +1307,12 @@ function selfTest() {
     rule('export const S = () => <button onClick={f}><Icon name="x" />Close</button>\n', 'R2-icon-only-button') === 0)
   add('a <button> whose only child is <Icon>, wrapped in whitespace, is still red', () =>
     rule('export const S = () => <button onClick={f}>\n  <Icon name="x" />\n</button>\n', 'R2-icon-only-button') === 1)
-  add('a <Button iconOnly icon="x">Reveal</Button> is red (iconOnly, by presence)', () =>
-    rule('export const S = () => <Button iconOnly icon="x">Reveal</Button>\n', 'R2-icon-only-button') === 1)
+  add('a <Button iconOnly icon="x">Preview</Button> is red (iconOnly, by presence)', () =>
+    rule('export const S = () => <Button iconOnly icon="x">Preview</Button>\n', 'R2-icon-only-button') === 1)
   add('a conditional iconOnly={cond} is still red (read by presence, not value)', () =>
-    rule('export const S = ({ small }) => <Button iconOnly={small} icon="x">Reveal</Button>\n', 'R2-icon-only-button') === 1)
-  add('a <Button icon="x">Reveal</Button> with no iconOnly, and no vocabulary word, is green', () =>
-    rule('export const S = () => <Button icon="x">Reveal</Button>\n', 'R2-icon-only-button') === 0)
+    rule('export const S = ({ small }) => <Button iconOnly={small} icon="x">Preview</Button>\n', 'R2-icon-only-button') === 1)
+  add('a <Button icon="x">Preview</Button> with no iconOnly, and no vocabulary word, is green', () =>
+    rule('export const S = () => <Button icon="x">Preview</Button>\n', 'R2-icon-only-button') === 0)
   add('an <IconButton icon="x" label="Close" /> is green: the kit primitive itself is not a violation', () =>
     rule('export const S = () => <IconButton icon="x" label="Close" />\n', 'R2-icon-only-button') === 0)
   add('a <button><Icon /></button> inside app/src/kit/ is green', () =>
@@ -1200,6 +1349,45 @@ function selfTest() {
     const r = outcome(tree({ 'app/src/Gallery.tsx': 'export const G = () => <button onClick={f}><Icon name="x" /></button>\n' }))
     return !has(r.unlisted, 'app/src/Gallery.tsx', 'R2-icon-only-button')
   })
+
+  /* R2-icon-only-button, round 2 — the review's own evasion fixtures
+     (SD/review/kit-icons/evade.mjs), kept here so the finding stays proven. */
+  add('an Icon wrapped in a <span> is red', () =>
+    rule('export const S = () => <button onClick={f}><span><Icon name="x" /></span></button>\n', 'R2-icon-only-button') === 1)
+  add('{<Icon/>} as the only child is red', () =>
+    rule('export const S = () => <button onClick={f}>{<Icon name="x" />}</button>\n', 'R2-icon-only-button') === 1)
+  add('a ternary of two Icons (a chevron toggle) is red', () =>
+    rule('export const S = ({ open }) => <button onClick={f}>{open ? <Icon name="chevronUp" /> : <Icon name="chevronDown" />}</button>\n', 'R2-icon-only-button') === 1)
+  add('spread props plus an Icon child is still red', () =>
+    rule('export const S = (p) => <button {...p}><Icon name="x" /></button>\n', 'R2-icon-only-button') === 1)
+  add('an aria-label-only button with no children at all is red', () =>
+    rule('export const S = () => <button aria-label="Close" className="x" onClick={f} />\n', 'R2-icon-only-button') === 1)
+  add('a bare × character standing in for an icon is red', () =>
+    rule('export const S = () => <button aria-label="Close" onClick={f}>×</button>\n', 'R2-icon-only-button') === 1)
+  add('<a role="button"> wrapping an icon is red, same as <button>', () =>
+    rule('export const S = () => <a role="button" onClick={f}><Icon name="x" /></a>\n', 'R2-icon-only-button') === 1)
+  add('an icon plus a dynamic label ({label}) is green: real content clears it', () =>
+    rule('export const S = ({ label }) => <button onClick={f}><Icon name="x" />{label}</button>\n', 'R2-icon-only-button') === 0)
+  add('an icon plus {" "} plus a dynamic label is green', () =>
+    rule('export const S = ({ t }) => <button onClick={f}><Icon name="x" />{\' \'}{t.label}</button>\n', 'R2-icon-only-button') === 0)
+  add('iconOnly spread as an object literal ({...{ iconOnly: true }}) is red', () =>
+    /* >= 1, not === 1: "Close" is itself a vocabulary word with no provable variant, so
+       clause (c) also fires on the same element — two true findings, not a double-count. */
+    rule('export const S = () => <Button {...{ iconOnly: true }} icon="x">Close</Button>\n', 'R2-icon-only-button') >= 1)
+  add('a spread-only Button with a vocabulary label is red: no variant attr to read at all', () =>
+    rule('export const S = (p) => <Button {...p}>Undo</Button>\n', 'R2-icon-only-button') === 1)
+  add('{\'Undo\'} as the label is red', () =>
+    rule('export const S = () => <Button icon="undo">{\'Undo\'}</Button>\n', 'R2-icon-only-button') === 1)
+  add('"Undo {n}" as the label is red: the leading literal text is enough', () =>
+    rule('export const S = ({ n }) => <Button icon="undo">Undo {n}</Button>\n', 'R2-icon-only-button') === 1)
+  add('a lowercase "undo" label is red: matched case-insensitively', () =>
+    rule('export const S = () => <Button icon="undo">undo</Button>\n', 'R2-icon-only-button') === 1)
+  add('Hold, Release, Reveal, Hide and Clear are all in the vocabulary', () =>
+    rule('export const S = () => <Button icon="lock">Hold</Button>\n', 'R2-icon-only-button') === 1 &&
+    rule('export const S = () => <Button icon="unlock">Release</Button>\n', 'R2-icon-only-button') === 1 &&
+    rule('export const S = () => <Button icon="eye">Reveal</Button>\n', 'R2-icon-only-button') === 1 &&
+    rule('export const S = () => <Button icon="eyeOff">Hide</Button>\n', 'R2-icon-only-button') === 1 &&
+    rule('export const S = () => <Button icon="eraser">Clear</Button>\n', 'R2-icon-only-button') === 1)
 
   /* ONLY SHRINKS (F3): the growth read against the merge-base. */
   const base = { static: { 'app/src/A.tsx': { R1: 'home', 'R2-class': 'home' } }, runtime: { '/': { page: 'home' } } }

@@ -99,13 +99,22 @@ const PATHS = {
   /* Two arrows, opposite ends, opposite directions: the sort direction toggle. `sortAsc` points
      up on the left (low to high); `sortDesc` points down on the left (high to low). Neither
      names the SORT KEY, which stays in words (FLT-19, UX-214) — only which way it runs. */
-  sortAsc: 'M7 20V4 M7 4l-4 4 M7 4l4 4 M14 7h7 M14 12h7 M14 17h5',
-  sortDesc: 'M7 4v16 M7 20l-4-4 M7 20l4-4 M14 7h5 M14 12h7 M14 17h7',
+  /* THE COMMON CONVENTION (Lucide's own arrow-up-narrow-wide / arrow-down-wide-narrow):
+     ascending reads narrow-to-wide going DOWN, under an UP arrow. A first pass drew all three
+     bars nearly the same width, which read as no order at all (review, round 2). */
+  sortAsc: 'M7 20V4 M7 4l-4 4 M7 4l4 4 M14 7h3 M14 12h5 M14 17h7',
+  sortDesc: 'M7 4v16 M7 20l-4-4 M7 20l4-4 M14 7h7 M14 12h5 M14 17h3',
   /* An arrow into a bracket, deliberately NOT box-shaped (`box`, `package` and `archive` are
      already boxes, and a fourth would blur at 14px): Move to a box. */
-  moveTo: 'M13 4h7v16h-7 M3 12h14 M13 7l4 5-4 5',
+  /* An arrow toward a destination LINE, not a door: the old bracket (three sides, open on
+     one) is the standard "sign in" glyph, and the review (round 2) read it that way. One
+     vertical line stands for the destination instead of enclosing the arrow. */
+  moveTo: 'M3 12h12 M11 7l5 5-5 5 M20 5v14',
   /* Six dots, two columns of three: a drag handle. */
-  grip: 'M9 6h.01 M9 12h.01 M9 18h.01 M15 6h.01 M15 12h.01 M15 18h.01',
+  /* A zero-length "dot" renders at exactly `strokeWidth` (1.75 units, under 1.2px at 16px) —
+     invisible (review, round 2). Each dot is a short vertical stroke instead: with the round
+     cap it reads as a small pill, legible at 14-16px. */
+  grip: 'M9 5.3v1.4 M9 11.3v1.4 M9 17.3v1.4 M15 5.3v1.4 M15 11.3v1.4 M15 17.3v1.4',
 } as const
 
 /** WHAT AN ICON MEANS, where a meaning was ever in doubt (UX-118). A screen that draws one of
