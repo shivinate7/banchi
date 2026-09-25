@@ -7967,6 +7967,46 @@ def check_inventory_filter_facets(checks: Checks) -> None:
             "active facet is ANDed, not the last one applied winning",
         )
 
+        # --- S3, THE OPUS REVIEW, 2026-09-25: A DIMENSION IS NEVER COUNTED UNDER ITS OWN
+        # FILTER. `_card_facets` builds `sets_filters`/`rarities_filters` by EXCLUDING the
+        # dimension's own key (`_other("game", "set_name")`, `_other("game", "rarity")`) —
+        # every earlier assertion in this function reads `facets["sets"]`/`["rarities"]`
+        # only with NO filter active at all, so a mutant that dropped that exclusion (making
+        # the set menu narrow itself to whatever set is picked) went undetected: "picking
+        # rarity first and set second gives the identical counts as the reverse" is a claim
+        # this function had never once put a live `set_name`/`rarity` filter beside a
+        # `facets` read to test.
+        set_filtered = capture_server.do_boxes(game="riftbound", set_name="Unleashed")
+        checks.equal(
+            {row["set"]: row["count"] for row in set_filtered["facets"]["sets"]["riftbound"]},
+            {"Unleashed": 1, None: 1},
+            "with `set=Unleashed` ACTIVE, the SET menu still lists both sets — a dimension "
+            "never narrows its own menu, or picking one set would erase every other choice "
+            "from the dropdown that offered it",
+        )
+        checks.equal(
+            {row["rarity"]: row["count"] for row in set_filtered["facets"]["rarities"]["riftbound"]},
+            {"Rare": 1},
+            "and the RARITY menu still follows the set filter as an ORDINARY other-facet — "
+            "narrowed to only `set=Unleashed`'s own card the same way `matches` is, "
+            "dropping the unclassified card's None-rarity bucket because IT carries no "
+            "set at all — an other-facet obeys every active filter but its own",
+        )
+        rarity_filtered = capture_server.do_boxes(game="riftbound", rarity="Rare")
+        checks.equal(
+            {row["rarity"]: row["count"] for row in rarity_filtered["facets"]["rarities"]["riftbound"]},
+            {"Rare": 1, None: 1},
+            "and the reverse: with `rarity=Rare` ACTIVE, the RARITY menu still lists both "
+            "rarities — the same dimension-never-counts-itself rule from the other side",
+        )
+        checks.equal(
+            {row["set"]: row["count"] for row in rarity_filtered["facets"]["sets"]["riftbound"]},
+            {"Unleashed": 1},
+            "while the SET menu (an ordinary other-facet under `rarity=Rare`) narrows to "
+            "just the classified card — the null-set card is Rare too but has no `set` to "
+            "list, so it drops out of the SET bucket the same way any other-facet narrows",
+        )
+
         # --- clearing the filter restores everything ------------------------------------
         cleared = capture_server.do_boxes()
         checks.ok(
@@ -30562,6 +30602,27 @@ def check_order_reconcile_backlog(checks: Checks) -> None:
             "today itself is still a valid cutoff — the refusal is strictly AFTER today, "
             "never on it",
         )
+
+        # S4, THE OPUS REVIEW, 2026-09-25: THE BOUNDARY ITSELF, NOT A YEAR PAST IT. The
+        # `future` case above jumps a whole year ahead, which a looser mutant (a cutoff
+        # refused only past, say, 30 days out) would still pass — it never asks the one
+        # question the guard's own docstring answers ("NEVER AFTER TODAY... strictly AFTER
+        # today, never on it"): where exactly the line falls. `tomorrow`, one real UTC day
+        # past `order_store.today()`, is that line.
+        tomorrow = (
+            datetime.now(timezone.utc) + timedelta(days=1)
+        ).strftime("%Y-%m-%d")
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_order_reconcile({"preview": True, "cutoff": tomorrow}),
+            "exactly tomorrow refuses too — the boundary is today, not 'today plus some "
+            "slack'",
+        )
+        if caught is not None:
+            checks.equal(
+                caught.code, "cutoff_in_future",
+                "with the same refusal code as a cutoff a year out",
+            )
 
 
 # ---------------------------------------------------------------- the order screen

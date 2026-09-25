@@ -27,6 +27,25 @@ THREE GROUPS OF CASES, in the order this file was built:
      `054-132`/`heimerdinger-inventor` never reached `_match_rank` at all, because no
      token the index holds starts with either spelling. Only a real SQLite FTS5 index can
      show that, which is why this group needs a store and the other two do not.
+  4. `case_do_search_runs_the_shared_case_table` — S2, the Opus review, 2026-09-25.
+     GROUP 1 PROVES `match.py` AGAINST THE TABLE; IT NEVER PROVES `do_search` READS
+     `match.py` AT ALL. Before this fix `do_search` computed its own candidate/rank
+     answer through `_fts_query`/`_match_rank` alone and never called `match_query` —
+     so a case only group 1 could see (the pair-matched `swsh 050`, a `#`/`/`-led
+     number, a hyphen or apostrophe folded to one glued word) could pass group 1 and
+     still find nothing through the real route a screen calls. This group runs every
+     row of `match.cases.json` THROUGH `do_search`, against a real store, one card per
+     row built from the row's own `fields`. Three shapes in the table are not a claim
+     about `do_search` at all and are read, never asserted: a `boxes` row (do_search
+     never searches a box by name — that is the client's own `useSearch`), a
+     multi-`text` row (the store's own `condition` field, likewise client-only), and a
+     blank-query row (`do_search` refuses an empty `q` by contract, `_require_query`).
+     `ventor` (rule 7's mid-word substring, `"izard"` finding `"Charizard"` in T7's own
+     words) is read and reported, never asserted, because store-scaling item 8 measured
+     that loss and the owner took it explicitly — `check_search_fts5` in
+     `harness/tests/t7_store_and_seams.py` is the test that already protects it, and
+     "fixing" `do_search` to find `ventor` would break that settled trade-off, not close
+     a bug. See `scripts/match-selftest.py:CASE_TABLE_INPUT_NEEDED`.
 
 MUTATION-PROOF, THE WAY THIS REPO PROVES A GUARD: run `git show <pre-fix>:server/
 capture_server.py > /tmp/old.py`, swap it in over `server/capture_server.py`, run this
@@ -166,6 +185,31 @@ def case_match_rank_folds_accents() -> None:
     check(rank is not None, "'flabebe' matches a card named Flabébé")
 
 
+def case_match_digit_tests_are_ascii_only() -> None:
+    """S4, the Opus review, 2026-09-25. `kit/match.ts`'s `\\d` is JS syntax, and JS's `\\d`
+    is always `[0-9]` — the `u` flag on its own regexes widens `\\p{L}`, never `\\d`. Python's
+    bare `\\d` and `str.isdigit()` are Unicode-aware, so a real Unicode decimal digit outside
+    ASCII (`５` folds to `5` via NFKC before either side sees it; a Devanagari digit does
+    not) would count as a digit on the server and stay inert text in the browser — the one
+    place this repo's own two-implementation contract could silently disagree.
+    """
+    from server import match
+
+    devanagari_five = "५"  # DEVANAGARI DIGIT FIVE — real Unicode digit, NFKC leaves it
+    equal(
+        match._has_digit(devanagari_five), False,
+        "a Unicode digit outside ASCII does not count as a digit",
+    )
+    equal(
+        match._has_digit("5"), True,
+        "and an ASCII digit still does",
+    )
+    check(
+        match._DIGITS_ONLY.match(devanagari_five) is None,
+        "and `_DIGITS_ONLY` refuses it the same way",
+    )
+
+
 # -------------------------------------------------------------------- group 3: do_search
 
 
@@ -204,6 +248,152 @@ def case_do_search_finds_a_hyphenated_name() -> None:
     check("7000" in skus, "do_search('heimerdinger-inventor') finds 'Heimerdinger, Inventor'")
 
 
+# A query this repo has ALREADY, KNOWINGLY, decided `do_search` will not answer — never a
+# silent skip. Each entry names the case index in `match.cases.json` and the reason,
+# checked at run time against the row it is read against so a re-ordered table cannot let
+# a stale reason cover the wrong row.
+CASE_TABLE_INPUT_NEEDED = {
+    16: (
+        "mid-word text still matches",
+        "rule 7's mid-word substring. FTS5 is a PREFIX index (`tokenchars '/-'` keeps a "
+        "token's own punctuation, but there is no 'contains' operator): 'ventor' is not a "
+        "prefix of the token 'inventor', so the candidate step can never surface this row, "
+        "whatever `match_query` would say once it got there. store-scaling item 8 measured "
+        "this exact loss ('izard' -> Charizard) and the owner took it explicitly; "
+        "harness/tests/t7_store_and_seams.py:check_search_fts5 is the test that already "
+        "protects it. Fixing this row would reopen that settled trade-off.",
+    ),
+}
+
+# Rows the shared table carries for OTHER screens' own client-side matcher — Orders'
+# `useSearch`, over an order label — never `do_search`'s. Read, never asserted, the same
+# way a `boxes` row is: `do_search` has no order-label field at all, so passing or failing
+# it would be an accident of the NAME column's own FTS shape, never a claim about the
+# route. Rows built off the SAME literal (`Order 112`) but stating a GENERIC digit-word
+# rule (25, 29) are NOT here — they are ordinary name-field cases and stay asserted.
+CASE_TABLE_NOT_APPLICABLE = {
+    26: "the same digit narrows an order label as it is typed",
+    27: "a query typed with its own leading zeros stays literal until they resolve",
+    28: "a run of zeros alone never empties the list; it is the order label's own first key",
+    30: "a full order label, hyphen and all",
+    31: "a partial order label still narrows",
+    32: "the wrong day does not match",
+}
+
+
+def case_do_search_runs_the_shared_case_table() -> None:
+    """S2, the Opus review, 2026-09-25. Every row of `match.cases.json` through
+    `do_search`, one card per row built from the row's own `fields` — see the module
+    docstring's group-4 entry for what this proves and why three shapes are read, never
+    asserted, and `CASE_TABLE_INPUT_NEEDED` for the one row this repo has decided not to
+    chase.
+    """
+    from store import Store, master
+    from server import capture_server as cs
+
+    cases = json.loads(CASES_PATH.read_text("utf-8"))
+    for i, case in enumerate(cases):
+        fields = case["fields"]
+        query, want = case["query"], case["match"]
+        note = case["note"]
+
+        if i in CASE_TABLE_INPUT_NEEDED:
+            expected_note, reason = CASE_TABLE_INPUT_NEEDED[i]
+            if not check(
+                note == expected_note,
+                f"case {i}'s own note is still {expected_note!r} — "
+                "CASE_TABLE_INPUT_NEEDED's row index still points at the right case",
+            ):
+                continue
+            ok(f"case {i} ({note}): INPUT NEEDED, not asserted — {reason}")
+            continue
+
+        if i in CASE_TABLE_NOT_APPLICABLE:
+            if not check(
+                note == CASE_TABLE_NOT_APPLICABLE[i],
+                f"case {i}'s own note still matches CASE_TABLE_NOT_APPLICABLE's entry",
+            ):
+                continue
+            ok(f"case {i} ({note}): read, not asserted — an order-label row, "
+               "the Orders screen's own client-side matcher, not a `do_search` field")
+            continue
+
+        if "boxes" in fields:
+            ok(f"case {i} ({note}): read, not asserted — do_search never searches a box "
+               "by name (that is the client's own useSearch, not this route)")
+            continue
+        text = fields.get("text") or []
+        if len(text) > 1:
+            ok(f"case {i} ({note}): read, not asserted — a multi-`text` row is the "
+               "store's own `condition` field beside a name, and `do_search` never "
+               "ranks on condition (client-only, like a box name)")
+            continue
+        if not query.strip().replace(",", ""):
+            ok(f"case {i} ({note}): read, not asserted — `do_search` refuses a blank "
+               "`q` by contract (`_require_query`), so an empty-query row is not a "
+               "claim about what it finds")
+            continue
+
+        fresh_home()
+        numbers = fields.get("numbers") or []
+        skus = fields.get("skus") or []
+        number, printed_total = None, None
+        if numbers:
+            raw = str(numbers[0])
+            if "/" in raw:
+                number, printed_total = raw.split("/", 1)
+            else:
+                number = raw
+        sku = str(skus[0]) if skus else "TESTSKU00001"
+        card = master.Card(
+            box=1, index=1, name=(text[0] if text else None),
+            number=number, printed_total=printed_total, sku=sku,
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["1/1"] = card
+
+        got_skus = [g["sku"] for g in cs.do_search(query)["groups"]]
+        equal(
+            sku in got_skus, want,
+            f"case {i} ({note}): do_search({query!r}) finds sku={sku!r}: {want}",
+        )
+
+
+def case_do_search_multiword_never_500s_next_to_a_widened_word() -> None:
+    """S1, blocking (the Opus review, 2026-09-25). A multi-word query where ANY word gets
+    alternatives (a 1-2 digit number, or a hyphen) 500'd with `fts5: syntax error`, because
+    FTS5 refuses an implicit AND the moment either side of a bareword join is a
+    parenthesized OR-group — measured directly against `sqlite3`'s own fts5 module, both
+    orders. `_fts_query`'s old `" ".join(clauses)` was exactly that implicit join; the fix
+    writes `AND` explicitly. Every failing shape the review named, reproduced against a
+    real card so each one is also a genuine end-to-end request, not just a syntax probe.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        snapshot.inventory.cards["1/1"] = master.Card(
+            box=1, index=1, name="Porygon-Z V", number="054", printed_total="132", sku="9001",
+        )
+        snapshot.inventory.cards["1/2"] = master.Card(
+            box=1, index=2, name="Ho-Oh ex", number="4", printed_total="102", sku="9002",
+        )
+        snapshot.inventory.cards["1/3"] = master.Card(
+            box=1, index=3, name="Pikachu", number="25", printed_total="102", sku="9003",
+        )
+
+    for query in (
+        "54 132", "4 102", "Ho-Oh ex", "ex ho-oh", "pikachu 54", "25 pikachu",
+        "porygon-z v", "x 1-2",
+    ):
+        try:
+            cs.do_search(query)
+            ok(f"do_search({query!r}) does not 500")
+        except Exception as exc:  # noqa: BLE001 — a raising case IS the failing case
+            bad(f"do_search({query!r}) raised {type(exc).__name__}: {exc}")
+
+
 def case_do_search_still_refuses_an_unrelated_number() -> None:
     """The widened FTS5 candidate query must not turn into a false positive end to end —
     the same rule 4 guarantee as group 2, proved through the real index this time."""
@@ -224,9 +414,12 @@ CASES = [
     case_match_rank_never_treats_a_number_as_a_bare_substring,
     case_match_rank_folds_a_hyphen_standing_for_the_slash,
     case_match_rank_folds_accents,
+    case_match_digit_tests_are_ascii_only,
     case_do_search_finds_a_padded_number_typed_without_its_zeros,
     case_do_search_finds_a_hyphenated_name,
+    case_do_search_multiword_never_500s_next_to_a_widened_word,
     case_do_search_still_refuses_an_unrelated_number,
+    case_do_search_runs_the_shared_case_table,
 ]
 
 

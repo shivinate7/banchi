@@ -5621,7 +5621,7 @@ COMPONENTS = [
                         "the FTS5 CANDIDATE query itself, which is the half a rank fix alone "
                         "cannot reach — the index's own token is always zero-padded, so a bare "
                         "`54/132` or a hyphenated `054-132` never prefix-matched anything.",
-                "governed_by": ["D166", "D213"],
+                "governed_by": ["D166", "D213", "D271"],
                 "tested_by": ["T7"],
                 "note": "`scripts/match-selftest.py` runs every row of "
                         "`app/src/kit/match.cases.json` through this module directly, proving "

@@ -242,8 +242,7 @@ collector-number slash, and a hyphen split into separate words. `_match_rank` co
 numbers on their canonical form and folds accents the way the index already does. A bare
 substring never matches, so `54` cannot match `154/200`. `server/match.py` is the one
 shared matcher this repo argued for. `scripts/match-selftest.py` proves it against
-`app/src/kit/match.cases.json`, in `make check`. See `D-one-forgiving-search-matcher` for
-the owner's own ruling.
+`app/src/kit/match.cases.json`, in `make check`. See D271 for the owner's own ruling.
 
 **UX-210, 2026-09-25 (search-server lane).** `_card_facets` and `_box_row`'s `matches`
 field take an optional `hide_sold` flag. `GET /boxes?hide_sold=true` is the wire form.

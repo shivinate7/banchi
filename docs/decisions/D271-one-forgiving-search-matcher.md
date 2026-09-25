@@ -68,7 +68,32 @@ composition only, never matching.
 
 ### What is built
 
-NOT BUILT. In the round-two plan, the filtering lane writes the one case table and the browser
-matcher. The search-server lane makes the server pass the same table. The server half touches
-`server/capture_server.py`, so a reviewer must see it. The filtering lane's plan also names an
-entry for the matcher (slug `one-matcher`). One of the two must go before either merges.
+The server half. `server/match.py` is a same-behaviour Python port of `app/src/kit/match.ts`.
+`scripts/match-selftest.py` proves the two agree, over `app/src/kit/match.cases.json`.
+
+The server's own search (`server/capture_server.py:do_search`) now calls `match.match_query`.
+The Opus review (2026-09-25) found the port existed. `do_search` never called it. The case
+table proved nothing about the actual search. `_fts_query`'s FTS5 candidate step and
+`_match_rank`'s ranking tier stay in their own right. `match.match_query` is now the deciding
+vote for a candidate, alongside them, not instead of them. See the two functions' own
+docstrings for which case still routes through which path.
+
+The filtering lane's own entry for the browser half (slug `one-matcher`) is separate.
+
+**One digit test, corrected.** `kit/match.ts`'s `\d` is JS syntax. It is always `[0-9]`, even
+under the `u` (Unicode) flag — the flag widens `\p{L}`, never `\d`. Python's bare `\d` and
+`str.isdigit()` are both Unicode-aware. So `server/match.py`'s digit tests (`_has_digit`,
+`_DIGITS_ONLY`, `_SKU_SHAPE`, `_HYPHEN_BETWEEN_DIGITS`, and the digit runs inside
+`_drop_leading_zeros`/`_number_shape_ok`) are now ASCII-only on purpose. It is the one place
+this file departs from Python's own Unicode-aware defaults.
+
+**A known, unfixed gap.** `kit/match.ts:foldText` deletes every Unicode Mark character
+outright (`\p{M}`), whatever its canonical combining class. `server/match.py:fold_text` only
+strips a mark with a NON-ZERO combining class — a real combining accent
+(`unicodedata.combining(ch) != 0`). A "ccc-0" mark has combining class zero, a SPACING mark
+such as a Devanagari vowel sign. That test does not remove it. A Mark character is never
+`str.isalnum()`, so it folds into a WORD BREAK on the Python side instead of vanishing. The
+browser would have kept the word joined. No case in the shared table has ever needed a ccc-0
+mark folded. Not chased: `unicodedata` alone cannot express `\p{M}`. The `regex` package
+would, and `requirements.txt` deliberately does not carry it. Fixing this is a dependency
+decision, not a bug fix.

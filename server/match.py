@@ -10,9 +10,31 @@ case table.
 
 STDLIB ONLY. `unicodedata` gives NFKC/NFKD and combining-mark removal without the `regex`
 package's `\\p{L}`/`\\p{N}` classes — `requirements.txt`'s own "Deliberately absent" section is
-the standing reason no dependency is added for this. `str.isalpha()`/`str.isdigit()` are
-Unicode-aware in Python and stand in for `\\p{L}`/`\\p{N}` closely enough for every case this
-repo has ever recorded; `str.isalnum()` stands in for the two combined.
+the standing reason no dependency is added for this. `str.isalpha()` is Unicode-aware in
+Python and stands in for `\\p{L}` closely enough, matching `kit/match.ts`'s own `\\p{L}` (its
+`NUMBER_SHAPE`/etc. carry the `u` flag, which widens `\\p{L}` to every Unicode letter). DIGITS
+ARE THE ONE PLACE THAT SUBSTITUTION BREAKS (S4, the Opus review, 2026-09-25): `str.isdigit()`
+and Python's bare `\\d` are BOTH Unicode-aware, but JS's `\\d` is not — it is always `[0-9]`,
+`u` flag or not, because JS's Unicode regex mode widens `\\p{...}` property escapes and does
+nothing to `\\d` itself. So every digit test in this file (`_has_digit`, `_DIGITS_ONLY`,
+`_SKU_SHAPE`, `_HYPHEN_BETWEEN_DIGITS`, and the two digit runs inside `_drop_leading_zeros`/
+`_number_shape_ok`) is deliberately ASCII-only (`_ASCII_DIGITS`, or a `[0-9]` character class
+rather than `\\d`), even though nothing else here is. `str.isalnum()` (used only inside
+`fold_text`, never for a digit-specific decision) stands in for `\\p{L}`/`\\p{N}` combined, and
+is left Unicode-aware on purpose — it is what a query keeps rather than what it treats as a
+number, so the same asymmetry does not apply to it.
+
+A KNOWN, UNFIXED GAP THE ASCII FIX DOES NOT TOUCH: `kit/match.ts:foldText` deletes every
+Unicode MARK outright (`.replace(/\\p{M}+/gu, '')`), whatever its combining class. This
+file's own mark strip (`unicodedata.combining(ch) != 0`, inside `fold_text`) removes only a
+mark with a NON-ZERO canonical combining class — a genuine COMBINING mark, the kind NFKD
+produces for an accent. A mark whose class IS zero ("ccc-0", a SPACING mark, e.g. Devanagari's
+own vowel signs) is not a combining mark by that test, so it survives to the next step
+instead — and since a Mark character is never `str.isalnum()`, that step folds it into a
+WORD BREAK (one space) rather than deleting it, splitting a word the JS side would have kept
+joined. No case in `app/src/kit/match.cases.json` has ever needed a ccc-0 mark folded, so
+this is recorded rather than chased: `docs/decisions/D271-one-forgiving-search-matcher.md`
+carries it.
 
 USED TWO WAYS. `scripts/match-selftest.py` calls `match_query` directly against the generic
 `MatchFields` shape (text/numbers/skus/boxes), the same contract `kit/match.ts` takes.
@@ -45,10 +67,21 @@ class MatchFields(TypedDict, total=False):
 
 
 _APOSTROPHES = re.compile(r"['’ʼ`´]")
-_DIGITS_ONLY = re.compile(r"^\d+$")
+# ASCII DIGITS ONLY (S4, the Opus review, 2026-09-25), MATCHING `\d` ON THE OTHER SIDE.
+# `app/src/kit/match.ts`'s own `\d` is JS regex syntax, which is ALWAYS `[0-9]` — the `u`
+# flag on `NUMBER_SHAPE`/`SKU_SHAPE`/`DIGITS`/`HAS_DIGIT` widens `\p{L}` to every Unicode
+# letter, but it does nothing to `\d`, which JS has no Unicode-digit mode for at all.
+# Python's bare `\d` (no `re.ASCII`) and `str.isdigit()` are both Unicode-aware — `"५"`
+# (Devanagari digit five, U+096B) is `True` on both and NFKC leaves it untouched (it is not
+# a compatibility decomposition of an ASCII digit, unlike a full-width `５`, which NFKC
+# already folds before either side ever sees it) — so a query built from a real Unicode
+# digit would have canonicalized as a number on the SERVER and stayed inert TEXT in the
+# BROWSER: the one place this repo's own two-implementation contract could silently break.
+_ASCII_DIGITS = "0123456789"
+_DIGITS_ONLY = re.compile(r"^[0-9]+$")
 _ZEROS_ONLY = re.compile(r"^0+$")
-_SKU_SHAPE = re.compile(r"^\d{3,}$")
-_HYPHEN_BETWEEN_DIGITS = re.compile(r"(\d)-(?=\d)")
+_SKU_SHAPE = re.compile(r"^[0-9]{3,}$")
+_HYPHEN_BETWEEN_DIGITS = re.compile(r"([0-9])-(?=[0-9])")
 
 
 def fold_text(value: str) -> str:
@@ -77,7 +110,7 @@ def compact_text(value: str) -> str:
 
 
 def _has_digit(value: str) -> bool:
-    return any(ch.isdigit() for ch in value)
+    return any(ch in _ASCII_DIGITS for ch in value)
 
 
 def _has_letter(value: str) -> bool:
@@ -95,7 +128,7 @@ def _drop_leading_zeros(part: str) -> str:
         i += 1
     letters = part[:i]
     j = i
-    while j < n - 1 and part[j] == "0" and part[j + 1].isdigit():
+    while j < n - 1 and part[j] == "0" and part[j + 1] in _ASCII_DIGITS:
         j += 1
     return letters + part[j:]
 
@@ -124,7 +157,7 @@ def _number_shape_ok(part: str) -> bool:
     if i < n and part[i].isalpha():
         return False
     digits_start = i
-    while i < n and part[i].isdigit():
+    while i < n and part[i] in _ASCII_DIGITS:
         i += 1
     if i == digits_start:
         return False
