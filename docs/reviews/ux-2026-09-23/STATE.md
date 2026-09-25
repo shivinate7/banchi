@@ -106,3 +106,25 @@ Other PR 2 and PR 3 notes:
   allows, and the undo session (undo spec §11).
 - Recorded, to build later: Orders' "Add orders" and "Cards to pull" as small square icon
   buttons on the filter line. This is recorded in D274.
+
+## Follow-up lane after PR 2 (2026-09-25, the orchestrator's call, option a)
+
+The PR 2 offender sweep left these entries in place. Each one needs a ruling or a lane of its
+own, and none of them is a fix that the integration branch can make safely.
+
+- Home's h1 is the greeting. `scaffold.spec.ts` wants the route's own title ("Home") as the one
+  h1, and it wants the kit's top gap. The hero's h1 is the greeting (D121), so the `/` h1 and
+  top entries stay until the owner rules on the hero.
+- The capture top gap. Capture keeps its vertical inset small so that the viewfinder stays
+  above the fold. The `/capture` top entry stays until a layout keeps both the kit gap and the
+  fold.
+- A `Page` variant for Fulfillment. The ruling keeps page and h1 for `#/fulfillment` and exempts
+  width and top gap. `Page` draws its own header and the page width, so a `Page` with no
+  header and no width is the fix. The R1, page and R2-class entries stay until it exists.
+- The Runs R2 entries. `LiveReconcile`, `RunRescue`, `RunsComposer` and `RunPanel` still
+  hand-roll a dialog, a select or a kit class. They wait on the runs fold into Review, per the
+  coordinator's message to the review lane. The PR 2 fix made their sheets join the kit's
+  overlay stack, scrims included, so they are correct now but not yet kit primitives.
+- The six `icons` entries: `ClearPrices`, `Markdown`, `PriceHistory`, `Pricing`,
+  `ProductHistory` and `SendCard`. All six are b-pricing's files, and the b-pricing branch
+  already clears them, so they leave when b-pricing lands.
