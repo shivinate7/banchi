@@ -36083,6 +36083,41 @@ def check_emit_unpriced_left_out(checks: Checks) -> None:
         second, _ = seam_run(checks, [cards[1]], market=no_price)
         left_out(command(checks, "emit", str(first.directory), str(second.directory)))
 
+    # WHEN EVERY READY CARD NEEDS A PRICE, THE REFUSAL SAYS SO, AND BOTH PATHS AGREE (the delta
+    # review, R3-3). The single-run path said "every row is already sent" and exited 0; the
+    # merged path said "held back, unlisted, or has no room" and exited 1; the send route read
+    # either as "already at TCGplayer or held back". All three were false.
+    from cli import __main__ as entry
+
+    def refused(argv) -> Tuple[int, str]:
+        with quiet() as said:
+            code = entry.main(list(argv))
+        return code, said.getvalue()
+
+    with isolated_home():
+        only, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(["emit", str(only.directory)])
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and "already sent" not in said,
+            "one run, every card unpriced: `emit` refuses by saying the card needs a price",
+            f"exit {code}\n{said}",
+        )
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[2]], market=no_price)
+        two, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(["emit", str(one.directory), str(two.directory)])
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and "no room" not in said,
+            "several runs, every card unpriced: the same sentence and the same exit",
+            f"exit {code}\n{said}",
+        )
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNPRICED}\n", [], "sent")
+    checks.equal(
+        (answer.code, "already at TCGplayer" in str(answer)),
+        ("needs_price", False),
+        "and the send route names it `needs_price`, never `nothing_to_send`",
+    )
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)

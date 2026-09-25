@@ -1199,14 +1199,12 @@ def run(args, say) -> int:
                 # ready copy; unpriced rows stay on the list"). It is named just below.
                 leave_unanswered=True,
             )
-        _say_no_price(
-            [
-                (sku, resolved.matches[sku].name)
-                for sku in choice.unanswered
-                if sku in resolved.matches and not resolved.matches[sku].has_market_data
-            ],
-            say,
-        )
+        no_price = [
+            (sku, resolved.matches[sku].name)
+            for sku in choice.unanswered
+            if sku in resolved.matches and not resolved.matches[sku].has_market_data
+        ]
+        _say_no_price(no_price, say)
 
         # THE PRICE-ONLY ROWS (the owner's ruling, 2026-09-24: "Allow mixed"). A SKU this run
         # prices and adds no copy of, already live, whose typed price differs from the live one.
@@ -1231,6 +1229,16 @@ def run(args, say) -> int:
             say,
         )
         zero, changes = _zero_rows_single(resolved, priced, changes, args, say)
+        # EVERY CARD LEFT NEEDS A PRICE (the delta review, R3-3): say that, and exit as the
+        # merged path does. "Every row is already sent" was false here.
+        sendable = any(
+            resolved.matches[sku].add_to_quantity > 0
+            for by_game in priced.values()
+            for sku in by_game
+        )
+        if no_price and not sendable and not changes:
+            say(merge.ONLY_UNPRICED)
+            return 1
 
         # TWO SHAPES, ONE SET OF ROWS. Whichever branch runs, the rows come out of the same
         # `priced` mapping and the same `_game_only` partition, so the flag decides how many
@@ -1822,6 +1830,10 @@ def run_merged(args, say) -> int:
     )
     changed = {change.sku for change in changes}
     rows = rows + [row for row in merged_plan.skus if row.sku in changed]
+    if not rows and any(why == merge.NO_PRICE_YET for why in merged_plan.dropped.values()):
+        # THE SAME SENTENCE AND THE SAME EXIT AS ONE RUN (the delta review, R3-3).
+        say(merge.ONLY_UNPRICED)
+        return 1
     if not rows:
         say("nothing to write — every matched SKU is held back, unlisted, or has no room")
         for sku, why in list(merged_plan.dropped.items())[:8]:

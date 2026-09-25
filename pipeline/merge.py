@@ -302,6 +302,11 @@ def _token(value: object) -> str:
 #: stays on the worklist, owed; `emit` names it on its own line.
 NO_PRICE_YET = "no market price, and no price typed yet"
 
+#: What a send says when every card it could carry is waiting for a price (the delta review,
+#: R3-3). One sentence for the single-run path and the merged one, which both exit 1 on it,
+#: and the marker the send route reads to answer `needs_price` rather than `nothing_to_send`.
+ONLY_UNPRICED = "nothing to send: every card left needs a price first"
+
 
 def plan(
     resolved_by_run: Mapping[str, object],

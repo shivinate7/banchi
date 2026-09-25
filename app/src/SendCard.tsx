@@ -62,6 +62,8 @@ function refusalTitle(code: string): string {
   switch (code) {
     case 'live_check_failed':
       return 'Banchi could not read what is live at TCGplayer, so nothing was sent.'
+    case 'needs_price':
+      return 'Every card on this list needs a price first, so nothing was sent.'
     case 'nothing_to_send':
       return 'Nothing to send. Every copy on this list is already at TCGplayer or held back.'
     case 'already_sent':

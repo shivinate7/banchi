@@ -80,7 +80,7 @@ from typing import Dict, Iterator, List, NoReturn, Optional, Sequence, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cli import cmd_reprice  # noqa: E402
-from pipeline import tcgcsv  # noqa: E402
+from pipeline import merge, tcgcsv  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 from server import tcg_export  # noqa: E402
 from server import tcg_import  # noqa: E402
@@ -821,6 +821,34 @@ def _markdown_blocks(conflict: dict, step: str) -> PipelineRefusal:
     )
 
 
+def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -> "PipelineRefusal":
+    """Why a press that counted nothing sent nothing, in the owner's words.
+
+    Its own function so the harness can read the mapping without a press (the delta review,
+    R3-3), which is the one case that needs it: every card left needs a price first."""
+    if merge.ONLY_UNPRICED in console:
+        return PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "needs_price",
+            f"Every card on this list needs a price first, so nothing was {step}. Type a "
+            f"price on each, then send.",
+        )
+    if code == 0 or trimmed or "nothing to write" in console or "nothing new" in console:
+        held = f" {len(trimmed)} card{'s' if len(trimmed) != 1 else ''} held back." if trimmed else ""
+        return PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "nothing_to_send",
+            f"Every copy on this list is already at TCGplayer or held back, so nothing "
+            f"was {step}.{held}",
+        )
+    last = (console.strip().splitlines() or [""])[-1]
+    return PipelineRefusal(
+        HTTPStatus.CONFLICT,
+        "write_refused",
+        f"The file was not written, so nothing was {step}. {last}",
+    )
+
+
 def do_send(payload: dict) -> dict:
     """`POST /pipeline/send` — read what is live, write the file, send it, make it live.
 
@@ -1064,21 +1092,7 @@ def _write_and_send(
         refused = _claim_refusal(console, step) or _price_refusal(console, step)
         if refused is not None:
             raise refused
-        trimmed = guard.get("trimmed") or []
-        if code == 0 or trimmed or "nothing to write" in console or "nothing new" in console:
-            held = f" {len(trimmed)} card{'s' if len(trimmed) != 1 else ''} held back." if trimmed else ""
-            raise PipelineRefusal(
-                HTTPStatus.CONFLICT,
-                "nothing_to_send",
-                f"Every copy on this list is already at TCGplayer or held back, so nothing "
-                f"was {step}.{held}",
-            )
-        last = (console.strip().splitlines() or [""])[-1]
-        raise PipelineRefusal(
-            HTTPStatus.CONFLICT,
-            "write_refused",
-            f"The file was not written, so nothing was {step}. {last}",
-        )
+        raise _empty_send_refusal(console, guard.get("trimmed") or [], step, code)
     if not written:
         # COUNTED, WITH NO FILE. `emit` writes the file before the store write, so this is a
         # file that went missing after it; `_settle` makes the press unknown and holds it.
