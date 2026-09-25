@@ -8650,7 +8650,7 @@ COMPONENTS = [
                         "cannot run below 768: the sidebar is `display: none` there, which is "
                         "why the phone sweep harvests its own.",
                 "governed_by": ["D31", "D50", "D69", "D70", "D95", "D123", "D194",
-                                "D227"]},
+                                "D227", "D-runs-folds-into-review"]},
             "tests/wide.spec.ts": {
                 "does": "the owner's screens ABOVE the desk, which nothing in this suite had "
                         "ever rendered. Of twenty-one specs, ten cases set 1440x900 and none "
@@ -8713,7 +8713,7 @@ COMPONENTS = [
                         "block, route -> assertion -> lane: an unlisted failure is red and an "
                         "entry that now passes at every width is red (stale). Writes nothing. "
                         "Run by `make design-check`.",
-                "governed_by": ["D5", "D173", "D275", "D276"],
+                "governed_by": ["D5", "D173", "D275", "D276", "D-runs-folds-into-review"],
             },
             "tests/locating.spec.ts": {
                 "does": "where a card is, said one way (the locating lane): at 1440, 820, 720 "
@@ -8908,7 +8908,8 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117", "D204", "D266", "D-icon-buttons"],
+                "governed_by": ["D50", "D95", "D117", "D204", "D266", "D-icon-buttons",
+                                "D-runs-folds-into-review"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
                         "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "

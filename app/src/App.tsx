@@ -66,6 +66,12 @@ export type Route = {
   readonly hotkey?: string
   readonly nav?: boolean
   readonly tab?: boolean
+  /** True only for a route whose view redirects elsewhere and renders nothing of its own
+   *  (D-runs-folds-into-review's `#/runs`). Read by scripts/kit-adoption.mjs's `--routes` and
+   *  `analyze()` (R1 does not apply — there is no page here to render) and by
+   *  app/tests/scaffold.spec.ts (the per-route h1/title sweep does not apply either, since
+   *  what the browser shows a moment later is the redirect target's own screen). */
+  readonly redirect?: boolean
   /** What a person might TYPE to find this screen in the palette — the verbs it holds. */
   readonly keywords?: string
   /** The screen's own keys. The keyboard sheet draws them as the screen's own group. */
@@ -247,7 +253,7 @@ export const ROUTES: readonly Route[] = [
    * unread by itself, and Review reads them (`RunsContent`'s own hash functions, unchanged)
    * to know which of "Past runs" the operator meant to open. No hotkey, on `#/product`'s own
    * rule for a route with no nav entry. */
-  { path: '/runs', label: 'Runs', icon: 'play', view: RunsRedirect, persona: 'owner', group: 'aside', keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing' },
+  { path: '/runs', label: 'Runs', icon: 'play', view: RunsRedirect, persona: 'owner', redirect: true, group: 'aside', keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing' },
 ]
 
 const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] = [

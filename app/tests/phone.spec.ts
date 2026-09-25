@@ -412,7 +412,10 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
     await page.keyboard.press('Escape')
   }
 
-  await page.goto(find('/runs'))
+  /* `#/runs` redirects into the fold now (D-runs-folds-into-review) rather than drawing its
+     own screen, so it never appears in the drawer's own roster — the Runs sheet opens over
+     `#/review` instead, at the address its own redirect lands on. */
+  await page.goto(`${find('/review')}?runs=1`)
   await page.waitForTimeout(600)
   const identify = page.getByRole('button', { name: /Identify a box/i }).first()
   if (await identify.count()) {

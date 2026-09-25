@@ -472,6 +472,8 @@ export function readRoutes(files) {
       const v = unwrap(p.initializer)
       if (ts.isStringLiteral(v) || ts.isNoSubstitutionTemplateLiteral(v)) props[p.name.text] = v.text
       else if (ts.isIdentifier(v)) props[p.name.text] = { ident: v.text }
+      else if (v.kind === ts.SyntaxKind.TrueKeyword) props[p.name.text] = true
+      else if (v.kind === ts.SyntaxKind.FalseKeyword) props[p.name.text] = false
     }
     const where = `${APP_FILE}:${lineOf(sf, el)}`
     if (typeof props.path !== 'string' || typeof props.label !== 'string' || typeof props.view !== 'object') {
@@ -496,6 +498,7 @@ export function readRoutes(files) {
       label: props.label,
       title: typeof props.title === 'string' ? props.title : null,
       persona: typeof props.persona === 'string' ? props.persona : null,
+      redirect: props.redirect === true,
       view: viewName,
       exported,
       file,
@@ -874,6 +877,7 @@ export function analyze(files) {
   const routes = readRoutes(files)
   const violations = []
   for (const route of routes) {
+    if (route.redirect) continue
     if (rendersPage(route.file, route.exported, reader) === null) {
       const sf = reader.parse(route.file)
       const found = sf === null ? null : findComponent(sf, route.exported)
