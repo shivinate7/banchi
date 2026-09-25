@@ -1,4 +1,4 @@
-## D282 — Sales leads with a summary band and the best sellers, and a line with no price gets its price from TCGplayer
+## D-sales-is-a-leaderboard — Sales leads with a summary band and the best sellers, and a line with no price gets its price from TCGplayer
 
 **The owner's rulings, 2026-09-23.** The owner called Sales "literally just an excel sheet". A
 design pass drew three directions on the demo's own data. The owner picked direction B, the

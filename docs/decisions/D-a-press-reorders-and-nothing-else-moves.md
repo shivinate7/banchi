@@ -1,4 +1,4 @@
-## D263 — A sort press re-sorts at once, a sold row folds on the next load, and box lists lead with the most recent
+## D-a-press-reorders-and-nothing-else-moves — A sort press re-sorts at once, a sold row folds on the next load, and box lists lead with the most recent
 
 **The owner's rulings, 2026-09-23, in the UX review interview.** Three rulings about when a list
 may change its order.

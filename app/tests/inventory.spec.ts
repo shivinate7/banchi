@@ -156,7 +156,7 @@ function card(input: {
   /* A card with no name has no read at all, which is why both halves hang off it. */
   const number = input.number ?? (input.name === null ? null : '090')
   const printedTotal = input.printedTotal ?? (input.name === null ? null : '132')
-  /* THE LABEL'S SHAPE SINCE THE OWNER'S BOX-NAME RULING (D259): the box,
+  /* THE LABEL'S SHAPE SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name): the box,
      the section and the card within it, joined by commas; a departed card keeps the place it left.
      The box part stays `Box N` here (the name a backfilled box stores) so the cases below keep
      reading one address; the screen draws `box_name` where the fixture gives one. */
@@ -1901,7 +1901,7 @@ test('the slot column is already as wide as the key the sale will write into it'
      landing, which is the state this measurement is about. */
   await expect(page.locator('.card-locations-row.is-current .position-bar')).toHaveAttribute('data-gone', 'true')
 
-  /* SINCE THE OWNER'S BOX-NAME RULING (D259) A DEPARTED ROW KEEPS THE
+  /* SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name) A DEPARTED ROW KEEPS THE
      NUMBER OF THE PLACE IT LEFT, struck through, and no store key is written into the column. So
      the widening this case was built to catch cannot happen any more; the two equalities below
      still hold the column and the name still. */
@@ -2715,7 +2715,7 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
   await expect(page.locator('.inventory-lone')).toHaveCount(1)
 
   const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
-  /* SINCE THE OWNER'S BOX-NAME RULING (D259) a departed card keeps the
+  /* SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name) a departed card keeps the
      place it left (box, section, card within it), its figure struck through; no word and no
      store key. Its accessible name is in the past tense. */
   await expect(lone).toHaveAttribute('aria-label', 'Was at Box 2, Section 1, Card 4')
@@ -5487,7 +5487,7 @@ test('two departed copies of one card draw two different rows', async ({ page })
   await expandAll(page)
   await page.locator('.browse-row').nth(0).click()
 
-  /* Marked, not worded (D259): the row's own state class finds them. */
+  /* Marked, not worded (D-a-box-is-shown-by-its-name): the row's own state class finds them. */
   const gone = page.locator('.card-locations-row.is-gone')
   await expect(gone).toHaveCount(2)
   /* RANKED, NOT PLAIN (D71), and the store key is the value of the thing that explains it. This

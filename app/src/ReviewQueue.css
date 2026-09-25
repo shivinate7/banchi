@@ -250,7 +250,7 @@
   max-width: calc(100% - var(--bn-5) * 2);
 }
 /* THE PLACE WRAPS BETWEEN ITS PARTS, NEVER INSIDE ONE, AND NEVER CLIPS. A box is named now, not
-   numbered (D259), so the pill is as long as the name: at 390 the card's
+   numbered (D-a-box-is-shown-by-its-name), so the pill is as long as the name: at 390 the card's
    own number fell off the end under `overflow: hidden`. Each part keeps one line. */
 .review-caption .position-run { white-space: normal; line-height: var(--bn-lh-snug); }
 .review-caption .position-run-path,

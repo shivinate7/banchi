@@ -1,4 +1,4 @@
-## D264 — A section is an object that moves whole, and the box map is a view inside Inventory
+## D-a-section-is-an-object — A section is an object that moves whole, and the box map is a view inside Inventory
 
 **The owner's rulings, 2026-09-23, on a new feature: a visual box map.** The first wish, in the
 owner's words:

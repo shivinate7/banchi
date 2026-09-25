@@ -1,11 +1,11 @@
-## D276 — The palette is "Go to", it lists every screen and finds cards, and the rail starts at 640
+## D-palette-go-to — The palette is "Go to", it lists every screen and finds cards, and the rail starts at 640
 
 **The owner's ruling, 2026-09-23.** The palette is relabelled honestly, as "Go to". It lists every
 screen, the off-nav ones included. It finds cards. The drawer and the palette hold focus, and
 "More" is lit when the screen is behind it. This amends D95 (the shell is a rail, a palette and a
 reference sheet). It records only what the shell lane of the 2026-09-23 overhaul adds. The
-drawer's foot is D266. The tab title and the page scaffold are
-D275. The 720 ruling is D272.
+drawer's foot is D-drawer-foot-joins-the-list. The tab title and the page scaffold are
+D-page-scaffold. The 720 ruling is D-one-page-width.
 
 ### The premises that no longer held
 

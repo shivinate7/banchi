@@ -42,7 +42,7 @@ import { fileURLToPath } from 'node:url'
 // "someone else is here" from "I moved".
 //
 // COLLISIONS WERE NOT A COUPLE OF PERCENT, AND ONE WAS SILENT
-// (D261). With about 35 worktrees on this Mac
+// (D-a-claimed-slot-and-a-server-that-names-its-checkout). With about 35 worktrees on this Mac
 // and 300 slots, a shared slot is more likely than not. On 2026-09-24 two live worktrees
 // derived 5218, and a design-check in one ATTACHED to the other's Vite and passed. So two
 // things changed. A checkout may CLAIM a slot in one machine-wide registry, and `slotFor`
@@ -87,7 +87,7 @@ function canonical(root: string): string {
   }
 }
 
-// ONLY A `.git` DIRECTORY KEEPS 5173 AND 8000 (D268, a copied tree never
+// ONLY A `.git` DIRECTORY KEEPS 5173 AND 8000 (D-no-git-no-live-port, a copied tree never
 // gets the live port). This used to ask "is `.git` a FILE?" and read every other answer as
 // "the main tree". On 2026-09-23 a scratch copy of main with no `.git` built an app. It
 // baked 8000, the owner's LIVE capture server, and the page read the real store. So the

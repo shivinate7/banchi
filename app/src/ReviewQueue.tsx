@@ -2441,7 +2441,7 @@ function AbsentPhoto({ title, detail, label, box, cid, place, children }: { titl
 
 /* The card's address, and the way back to it: this opens THE CARD on Inventory
  * (`#/inventory?box=<n>&card=<cid>`), not the box at its first card (LOC-12). The label names
- * the box by its name (D259), and its accessible name is the place as a
+ * the box by its name (D-a-box-is-shown-by-its-name), and its accessible name is the place as a
  * sentence (`Box 1, Section 3, Card 13`). A card with no box has no destination and draws the
  * plain caption; a card the server sent no name for opens its box.
  *

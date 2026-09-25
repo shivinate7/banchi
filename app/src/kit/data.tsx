@@ -465,7 +465,7 @@ export function BoxLabel({
  *  `pipeline/join.py:Position.card`). Give `place` and the box and section names come with it.
  *
  *  A DEPARTED PLACE IS MARKED HERE TOO. A card that has left keeps the place it left in its label
- *  (D259), and only the mark tells it apart: the struck figure and the
+ *  (D-a-box-is-shown-by-its-name), and only the mark tells it apart: the struck figure and the
  *  past-tense accessible name `PositionLabel` draws for `departed`. Read off the place block by
  *  `isDeparted` unless the caller says, so every screen that draws a place through the kit marks
  *  a departed one without being told. */

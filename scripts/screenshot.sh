@@ -71,7 +71,7 @@ EOF
 
 # A TREE THAT IS NOT THE PRIMARY CHECKOUT AND CANNOT DERIVE ITS PORT RENDERS NOTHING. Only a
 # `.git` DIRECTORY is the primary checkout, the same one fact server/ports.py and
-# app/devPort.ts detect on (D268, a copied tree never gets the live port).
+# app/devPort.ts detect on (D-no-git-no-live-port, a copied tree never gets the live port).
 # A linked worktree (`.git` a FILE) and a copy with no `.git` both refuse. Refusing is the
 # answer here rather than an obstacle: falling back to the documented default would render
 # the main checkout's app and the renders would look fine, which is the failure being fixed
@@ -127,7 +127,7 @@ warn_other_tree() {
 }
 
 # THE SERVER ON THIS CHECKOUT'S DEV PORT MUST NAME THIS CHECKOUT
-# (D261). Two checkouts can share a port.
+# (D-a-claimed-slot-and-a-server-that-names-its-checkout). Two checkouts can share a port.
 # A render of another tree's server looks exactly right and shows the wrong code. So before
 # the first render of this checkout's dev origin, the server there is asked at `/__checkout`,
 # the same question `app/checkoutIdentity.ts` asks for a Playwright run, and a server that

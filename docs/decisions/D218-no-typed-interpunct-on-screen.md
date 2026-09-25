@@ -83,7 +83,7 @@ D18 is why `scripts/docs-audit.py`'s row never writes. `scripts/typed-interpunct
 
 D173 names the mechanism: `make docs-audit`'s `typed interpunct` row, cited by name in CLAUDE.md's Hard rules.
 
-### Superseded in part 2026-09-24 — `D280`
+### Superseded in part 2026-09-24 — `D-ratchets-become-offender-lists`
 
 **The ratchet is gone. The rule stays.** A typed middle dot or bullet in a user-visible string is still a defect. The owner retired every pinned count. The `typed interpunct` row now fails on each typed dot that `scripts/typed-interpunct-allow.json` does not list, by file and by string. It also fails on a stale entry, and on growth over the list at the merge-base. `scripts/typed-interpunct.json` and `scripts/typed-interpunct-pin.mjs` are deleted.
 

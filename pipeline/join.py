@@ -217,7 +217,7 @@ class Position:
     # part that does not: see `high_water`.
     departed: Tuple[int, ...] = ()
     # THE BOX'S NAME, AS THE REGISTRY HOLDS IT, OR None WHEN THE CALLER HAS NO REGISTRY TO ASK
-    # (D259). The owner's ruling, 2026-09-23: a box is shown by its
+    # (D-a-box-is-shown-by-its-name). The owner's ruling, 2026-09-23: a box is shown by its
     # name only, and the number stays inside the store. `box_title` below is what the label
     # says. `compare=False` because a name is a label and never part of the card's identity:
     # a rename must not make two positions of one card unequal.
@@ -386,7 +386,7 @@ class Position:
     @property
     def label(self) -> str:
         """`Mixed Singles, Section 2, Card 17`: the box's NAME, the section, and the card's
-        number within its section (D260).
+        number within its section (D-a-card-is-counted-in-its-section).
 
         NO TYPED SEPARATOR (D218). The parts are joined by a comma and a space, which is
         punctuation in a sentence a person reads aloud, so the string is the accessible name
@@ -416,7 +416,7 @@ def place_within_section(section: int, card: int) -> str:
 
 
 def place_label(box_name: str, section: int, card: int) -> str:
-    """The one place label formula (D58, D259): name, section, card."""
+    """The one place label formula (D58, D-a-box-is-shown-by-its-name): name, section, card."""
     return f"{box_name}, {place_within_section(section, card)}"
 
 
@@ -470,7 +470,7 @@ def said_place(inventory, box, index=None) -> str:
     and its card number within the section. THE ONE HELPER every server refusal speaks
     through (the orchestrator's call on the locating review, 2026-09-24).
 
-    THE OWNER'S RULING, 2026-09-23 (D259): the box number and the
+    THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name): the box number and the
     store index stay inside the store. A refusal reaches a screen as a toast, so a message
     that prints `Box 3, card 17` shows the owner both numbers the ruling hides. This builds
     the same `Position` the screens draw, through `box_view`, so the refusal and the card
@@ -587,7 +587,7 @@ class BoxView:
     occupied: Optional[Tuple[int, ...]] = None
     departed: Tuple[int, ...] = ()
     # The box's registry name, carried to every `Position` built here, so a label says the
-    # name (D259). None where the caller has no registry to ask.
+    # name (D-a-box-is-shown-by-its-name). None where the caller has no registry to ask.
     name: Optional[str] = None
 
     @property
@@ -643,7 +643,7 @@ def divider_index(
 def departed_label(box_name: str, section: Optional[int], card: int) -> str:
     """What a screen shows for a card that has left its box: the place it left.
 
-    THE OWNER'S RULING, 2026-09-23 (D259), REPLACES D68's FORM. That
+    THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name), REPLACES D68's FORM. That
     form was `Box 3 · departed · B3 #96`: the box number, the word, and the store key. The
     ruling reads: box NAME, section, and the card's number within the section, so the place
     stays; sold, retired and moved are shown by a visual mark, not by a word. So the string
@@ -693,7 +693,7 @@ def where_phrase(game: str, position: Position) -> str:
         return f"in the {game} pool ({position.box}/{position.index})"
     if position.card is None:
         # D58: a departed card is at nothing now, so the sentence is in the past tense and
-        # names the place it left (D259).
+        # names the place it left (D-a-box-is-shown-by-its-name).
         return f"formerly at {position.label}"
     return f"at {position.label}"
 

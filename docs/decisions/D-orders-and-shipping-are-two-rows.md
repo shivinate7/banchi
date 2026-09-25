@@ -1,4 +1,4 @@
-## D274 — Orders and Shipping are two sidebar rows with no tabs, and the walk gets the full height
+## D-orders-and-shipping-are-two-rows — Orders and Shipping are two sidebar rows with no tabs, and the walk gets the full height
 
 **The owner's ruling, 2026-09-23, in the final interview on the round-two findings:**
 

@@ -1,4 +1,4 @@
-## D268 — A copied tree never gets the live port, and only a `.git` directory keeps 8000
+## D-no-git-no-live-port — A copied tree never gets the live port, and only a `.git` directory keeps 8000
 
 **Amends D43, the port follows the store.** D43 gave the base ports, 8000 and 5173, to every tree that was NOT a linked worktree. A tree with no `.git` was not a linked worktree, so it got 8000. Now only a tree whose `.git` is a DIRECTORY keeps 8000 and 5173. Every other tree takes a slot from its own path, as a linked worktree does. `server/ports.py:is_primary_checkout` and `app/devPort.ts:isPrimaryCheckout` ask the question. `server/ports.py:is_linked_worktree` keeps its meaning for its other callers.
 
@@ -36,4 +36,4 @@
 
 `harness/tests/t7_store_and_seams.py` asserts that a root with no `.git` does not derive 5173.
 
-**AMENDED 2026-09-24 by D261, a checkout claims its port slot once.** A non-primary tree now takes the slot it claimed in `~/.pkmnscan/port-slots.json`. With no claim, it takes the path hash. The primary checkout's rule here is unchanged.
+**AMENDED 2026-09-24 by D-a-claimed-slot-and-a-server-that-names-its-checkout, a checkout claims its port slot once.** A non-primary tree now takes the slot it claimed in `~/.pkmnscan/port-slots.json`. With no claim, it takes the path hash. The primary checkout's rule here is unchanged.

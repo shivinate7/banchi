@@ -237,7 +237,7 @@
 .kit-poslabel { display: inline-flex; font-size: var(--pos-slot); }
 
 /* ---- responsive ----------------------------------------------------------------
-   THE COLUMN DECIDES, NOT THE WINDOW (D272). The sheet is a `Page`, so it asks the
+   THE COLUMN DECIDES, NOT THE WINDOW (D-one-page-width). The sheet is a `Page`, so it asks the
    `bn-page` container: 720 in a desktop window with the rail is a narrow column, and so is a
    phone, and both fold here the same way. Only the sticky offset asks the window, because only
    a phone draws the top bar the index has to clear. */

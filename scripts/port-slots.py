@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ONE SLOT PER CHECKOUT ON THIS MACHINE, CLAIMED ONCE AND KEPT
-(D261).
+(D-a-claimed-slot-and-a-server-that-names-its-checkout).
 
 D43 promised "every checkout has its own ports" and delivered a hash of the path into 300
 slots. Measured 2026-09-24: 44 folders under `.claude/worktrees/` on this Mac. The chance

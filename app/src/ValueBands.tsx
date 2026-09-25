@@ -156,7 +156,7 @@ function pulls(rows: readonly ValueCopy[]): { reaches: number; boxes: number; se
     if (seen === undefined) byBox.set(row.box, [row.index])
     else seen.push(row.index)
     /* THE SECTION OFF THE ONE LABEL READER (`position.ts:placePartsOf`), since the server's label
-       names the box, the section and the card with commas (D259). */
+       names the box, the section and the card with commas (D-a-box-is-shown-by-its-name). */
     const section = placePartsOf(row.label)?.section ?? null
     if (section !== null) sections.add(`${row.box}/${section}`)
   }

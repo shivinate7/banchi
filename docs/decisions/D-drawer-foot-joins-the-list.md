@@ -1,4 +1,4 @@
-## D266 — The phone drawer has no fixed foot, and its items join the one scrolling list
+## D-drawer-foot-joins-the-list — The phone drawer has no fixed foot, and its items join the one scrolling list
 
 **The owner's ruling, 2026-09-23.** On a phone, the drawer's footer items join the scrolling
 list. The footer goes. This amends D204 (the phone drawer's nav scrolls in the space above its
@@ -36,7 +36,7 @@ with `elementFromPoint`. It stays, and it now also asserts that the drawer draws
 ### What is built
 
 BUILT by the shell lane of the 2026-09-23 overhaul, beside the palette changes in
-D276 (amends D95, the shell is a rail, a palette and a reference sheet). The drawer is
+D-palette-go-to (amends D95, the shell is a rail, a palette and a reference sheet). The drawer is
 the kit's `Sheet` now, so it is modal and holds focus (UX-014). Its last group holds Cards to
 pull, the theme toggle and the server line. `--bn-drawer-foot-h` is gone. D204's tap sweep in
 `app/tests/phone.spec.ts` is still skipped (DEBT29). A new case in that file asserts that the

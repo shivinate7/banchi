@@ -2,7 +2,7 @@
 
 D174'S SHAPE, OVER A DIFFERENT PURCHASE. `store/submissions.py` holds the cards a press is
 about to pay Anthropic to read; this table holds the copies a press is about to list at
-TCGplayer, or the prices it is about to change there (`D273`).
+TCGplayer, or the prices it is about to change there (`D-one-press-sends-and-makes-live`).
 The rule is the same one: a press claims what it is about to send IN THE TRANSACTION THAT
 DECIDES IT, and a second press over the same cards is refused by name — by the claim's
 stamp, its time and the cards the two share.

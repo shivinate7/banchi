@@ -146,7 +146,7 @@ import type {
  * A bundle built without that define — a bare `tsc`, a test harness, an editor's type server,
  * a bundler that never read `vite.config.ts` — cannot know its tree's port: the browser cannot
  * hash a path. It used to guess `http://localhost:8000`, the primary checkout's LIVE server,
- * which is the guess that must never be made (D268, a copied tree never gets
+ * which is the guess that must never be made (D-no-git-no-live-port, a copied tree never gets
  * the live port). It now has NO address. `about:invalid` opens no socket, so a photo or file
  * link built on it loads nothing, and `request` refuses by name before any fetch.
  *
@@ -2414,7 +2414,7 @@ export async function publishMarkdown(stamp: string): Promise<MarkdownPublish> {
 
 /**
  * ONE PRESS for a mark-down: read what is live, then push and publish this markdown's file
- * (`D273`). **This changes what buyers pay.** A failed publish
+ * (`D-one-press-sends-and-makes-live`). **This changes what buyers pay.** A failed publish
  * rolls the push back server-side, so no half-sent state is left for a screen to explain.
  */
 export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
@@ -2426,7 +2426,7 @@ export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
 }
 
 /**
- * THE ONE PRESS for listings (`D273`): the server reads what is
+ * THE ONE PRESS for listings (`D-one-press-sends-and-makes-live`): the server reads what is
  * live first and refuses whole if it cannot, writes the file behind the double-send guard,
  * sends it and makes it live. **This changes what buyers see.**
  *

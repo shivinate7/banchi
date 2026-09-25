@@ -3,7 +3,7 @@ import { sealEveryTest } from './shell'
 
 import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, SearchResult } from '../src/types'
 
-/* `#/product` — THE PER-PRODUCT VIEW (D227, D62, `D278`). Off-nav, reached
+/* `#/product` — THE PER-PRODUCT VIEW (D227, D62, `D-product-view-hybrid`). Off-nav, reached
  * by hash and `?sku=`, so `VIEW_ROUTE` below is the one thing a compiler cannot check for this
  * screen — the same reason `fulfillment.spec.ts` and `gallery.spec.ts` pin their own route
  * verbatim.
@@ -17,7 +17,7 @@ import type { OrderRow, OrdersPayload, ProductHistoryPayload, SearchGroup, Searc
  *   2. A fill older than `history_begins` is listed under "Sales older than this history"
  *      and NEVER plotted on any chart. The fixture below places one fill six months before
  *      the archive's own earliest bucket for exactly this reason.
- *   3. THE TRAP (`D278`): leaving `#/product?sku=X` by any nav press must
+ *   3. THE TRAP (`D-product-view-hybrid`): leaving `#/product?sku=X` by any nav press must
  *      land on the target hash. It must never bounce back to an empty `#/product`.
  *   4. `registerSheet('product', ...)` actually registers — `openSheet('product', …)` opens
  *      this view, not the fallback route change, once a sheet is registered.
@@ -179,14 +179,14 @@ test.describe('#/product — the per-product view', () => {
     await expect(view.getByText('ORD-0900', { exact: false })).toBeVisible()
   })
 
-  test('the trap is fixed: leaving #/product?sku=X lands on the target, never an empty #/product (D278)', async ({ page }) => {
+  test('the trap is fixed: leaving #/product?sku=X lands on the target, never an empty #/product (D-product-view-hybrid)', async ({ page }) => {
     await page.goto(VIEW_ROUTE)
     await expect(page.locator('main.producthistory')).toBeVisible()
 
     /* A NAV PRESS AWAY, simulated the way a real one arrives: the hash changes under the
        screen. BEFORE THE FIX, `ProductHistory`'s own `hashchange` listener read this new
        hash, found no `sku` on it, set `sku` to `''`, and the `writeSkuToHash` effect rewrote
-       the hash back to an empty `#/product` — the trap `D278` fixed. */
+       the hash back to an empty `#/product` — the trap `D-product-view-hybrid` fixed. */
     await page.evaluate(() => {
       window.location.hash = '#/gallery'
     })
@@ -196,7 +196,7 @@ test.describe('#/product — the per-product view', () => {
     await expect(page).toHaveURL(/#\/gallery$/)
   })
 
-  test('registerSheet wires the product sheet, and its fallback route is #/product?sku= (D278)', async ({ page }) => {
+  test('registerSheet wires the product sheet, and its fallback route is #/product?sku= (D-product-view-hybrid)', async ({ page }) => {
     await page.goto('/#/gallery')
     const [registered, href] = await page.evaluate(async () => {
       const mod = await import(('/src/kit/sheets' + '.ts'))

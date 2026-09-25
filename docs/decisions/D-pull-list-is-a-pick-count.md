@@ -1,4 +1,4 @@
-## D279 — Cards to pull asks for a count of a card, and shows where every copy is
+## D-pull-list-is-a-pick-count — Cards to pull asks for a count of a card, and shows where every copy is
 
 **The owner's ruling, 2026-09-23, in the UX review interview.** Cards to pull is built wrong
 by outcome. Copies are fungible. When an order wants 2 of card X and the store holds 14, the

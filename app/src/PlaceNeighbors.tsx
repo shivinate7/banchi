@@ -75,7 +75,7 @@ function Name({ side }: { side: PlaceNeighbor }): ReactNode {
 
 /** The card and its two neighbours, drawn from the BACK of the box to the FRONT, or nothing.
  *
- * THE OWNER'S ORIENTATION, 2026-09-23 (D260): card 1 is at the far
+ * THE OWNER'S ORIENTATION, 2026-09-23 (D-a-card-is-counted-in-its-section): card 1 is at the far
  * back and the highest number nearest the body. So the ladder is a picture of the box standing up:
  * the neighbour toward the back (`prev`, the lower number) on the first row, this card on the
  * middle row, and the neighbour toward the front (`next`) on the last. The keys name a SIDE of

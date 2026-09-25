@@ -3,7 +3,7 @@ import type { HTMLAttributes, ReactNode } from 'react'
 import { Icon, type IconName } from './Icon'
 import { useInOverlay } from './overlay'
 
-/* THE PAGE SCAFFOLD. Every screen is built from this from now on (D272).
+/* THE PAGE SCAFFOLD. Every screen is built from this from now on (D-one-page-width).
  *
  * The owner's durability rule, 2026-09-23: a new page in the sidebar inherits the properties
  * of the other pages without being told. So the things every page shares live here, once:

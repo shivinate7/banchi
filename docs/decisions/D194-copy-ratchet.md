@@ -115,7 +115,7 @@ four is copy creep — nothing under `app/src` changed — and `COPY_BUDGET_MUTA
 still fails naming exactly that route (91 words against a ceiling of 46) with every other
 route, populated or not, staying under its own ceiling.
 
-### Superseded 2026-09-23 — `D284`
+### Superseded 2026-09-23 — `D-text-shape-checks`
 
 **This entry's whole mechanism is deleted.** The owner's ruling, 2026-09-23: kill the pinned
 ceilings. His own words for why: *"I think we need to kill ceilings and instead just use a
@@ -128,11 +128,11 @@ are now read by `app/tests/routeSweep.ts`, the one sweep the three text checks s
 **What is kept: the reasons a naive replacement would have been worse.** A blind word count
 still cannot tell whether an addition was worth its words (see "Not mechanized" above). A
 CHECKED-IN fixture is still the only reproducible thing to measure against. Both arguments
-carry over unchanged into `D284`.
+carry over unchanged into `D-text-shape-checks`.
 
 **What is not kept: bounding VOLUME.** The replacement is three things, none of them a pinned
 number: a repetition check (the same sentence on three or more repeating cards or rows, or one
 number-plus-noun fact stated twice), a sentence-shape check (a sentence over 25 words, or a
 caption repeating 60%+ of its own heading's words), and the text-density reviewer
 (`scripts/text-density/`). That third piece stays a repeatable ON-DEMAND pass rather than a
-gate (D18: it writes). See `D284` for the full argument and the mechanism.
+gate (D18: it writes). See `D-text-shape-checks` for the full argument and the mechanism.

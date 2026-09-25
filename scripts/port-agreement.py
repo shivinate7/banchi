@@ -28,7 +28,7 @@ WHAT IT COMPARES, and it is deliberately two different things:
      where both sides are looking at the same tree. That is one case, and it is the case that
      matters: it is the pair a running `make server` and a running `make dev` actually use.
 
-  3. THE THREE KINDS OF TREE, on COPIES (D268, a copied tree never gets
+  3. THE THREE KINDS OF TREE, on COPIES (D-no-git-no-live-port, a copied tree never gets
      the live port). Both files are copied into three throwaway trees, and each copy is asked
      for its OWN default ports, through the same module-location read a real build makes:
        - `.git` a DIRECTORY, the primary checkout: 8000 and 5173, on both sides.
@@ -39,7 +39,7 @@ WHAT IT COMPARES, and it is deliberately two different things:
      A copy, not a path fed to a function, because the incident was the module reading where
      it LIVES. Only a copy reaches that read.
 
-  3b. THE CLAIMED SLOT (D261). Both sides
+  3b. THE CLAIMED SLOT (D-a-claimed-slot-and-a-server-that-names-its-checkout). Both sides
      read one registry of claimed slots before the hash. A temporary registry claims a slot
      for the linked-worktree copy that its hash would never give it, and both sides must
      answer that slot. A damaged registry must read as nothing claimed, on both sides.
@@ -316,7 +316,7 @@ def main() -> int:
                     failures.append(
                         f"{kind} tree: {side} answers the PRIMARY checkout's live port. A "
                         f"build here would call the owner's live server "
-                        f"(D268, a copied tree never gets the live port)"
+                        f"(D-no-git-no-live-port, a copied tree never gets the live port)"
                     )
 
         # The claimed slot: both sides read one registry before the hash.
@@ -329,7 +329,7 @@ def main() -> int:
             if any(port in url for port in live):
                 failures.append(
                     f"a client bundle with no port define addresses {url}, the PRIMARY "
-                    f"checkout's live port (D268, a copied tree never gets "
+                    f"checkout's live port (D-no-git-no-live-port, a copied tree never gets "
                     f"the live port)"
                 )
         if client["calls"]:

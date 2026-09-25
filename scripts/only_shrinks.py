@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ONLY SHRINKS: the one helper every shrinking offender list reads (D280).
+"""ONLY SHRINKS: the one helper every shrinking offender list reads (D-ratchets-become-offender-lists).
 
 Four lists use it. `scripts/docs-audit.py` imports it for the `ste offenders`, `typed
 interpunct` and `line anchor offenders` rows. `scripts/kit-adoption.mjs` cannot import Python,

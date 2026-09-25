@@ -732,7 +732,7 @@ function FulfillerCard({
                   />
                 )}
 
-                {/* THE SERVER'S LABEL, WHOLE, which already names the box (D259),
+                {/* THE SERVER'S LABEL, WHOLE, which already names the box (D-a-box-is-shown-by-its-name),
                     so the box's name is no longer a second line under it. Each part is kept on one
                     line (LOC-27): at 390 the address wraps between parts, never inside one. */}
                 {where === null ? null : (

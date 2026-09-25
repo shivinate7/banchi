@@ -1,4 +1,4 @@
-## D270 — One filter bar, everywhere a list is filtered
+## D-one-filter-control — One filter bar, everywhere a list is filtered
 
 **The owner's rulings, 2026-09-23.** The owner's own gripe, on Inventory:
 

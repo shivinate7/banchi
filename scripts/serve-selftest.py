@@ -17,7 +17,7 @@ THE PORT IS PINNED WITH `PKMNSCAN_PORT`, TO A FREE SOCKET THE OS HANDS OUT. The 
 script ran, the derivation asked whether the directory was a LINKED WORKTREE. A
 `shutil.copytree` of this repo is not one, so the copy called itself the main checkout and
 claimed :8000, the owner's live capture server over their real store. Measured: `up` in the copy
-refused with ":8000 is already held". Since D268 (a copied tree never gets the
+refused with ":8000 is already held". Since D-no-git-no-live-port (a copied tree never gets the
 live port), only a `.git` DIRECTORY keeps :8000, so a copy with no `.git` takes a slot from its
 path. The pin stays: a slot can collide with another worktree's, and a free socket cannot.
 

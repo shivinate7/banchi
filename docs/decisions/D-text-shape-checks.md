@@ -1,4 +1,4 @@
-## D284 — Three checks replace one ceiling, and none of them is a pinned number
+## D-text-shape-checks — Three checks replace one ceiling, and none of them is a pinned number
 
 **The rule.** The owner, 2026-09-23: kill the pinned word ceilings. His own words: "I think we need to kill ceilings and instead just use a different way." He did not want a stagnant static pin. This entry supersedes D194 and its mechanism, `app/tests/copy-budget.spec.ts`. See D194's own "Superseded" note for what carries over.
 
@@ -48,7 +48,7 @@
 
 **A request-path shape is checked too.** It reads `repoTopDirs` in `scripts/machine-words.json`, the same list the Python path check reads.
 
-**A closed `<details>` needs no special case.** `D269` moved a code or a server path behind a closed `<details>`. The UA stylesheet hides all of it but the summary. So `innerText` reads exactly what the owner sees.
+**A closed `<details>` needs no special case.** `D-notice-detail` moved a code or a server path behind a closed `<details>`. The UA stylesheet hides all of it but the summary. So `innerText` reads exactly what the owner sees.
 
 **The two machine-word lists stay separate on purpose.** `scripts/machine-words-allow.json` is the AST row's list, keyed by file. The browser list is keyed by route, because rendered text carries no source file.
 

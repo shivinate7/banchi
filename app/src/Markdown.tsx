@@ -393,7 +393,7 @@ export function Markdown({
     setSending('push')
     setFailure(null)
     try {
-      /* ONE PRESS (`D273`, Q7): the server reads what is live,
+      /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the server reads what is live,
          pushes this file and makes it live. A failed publish is rolled back server-side, so
          the only states this screen can land in are "live" and "nothing changed". */
       const answer = await sendMarkdown(stamp)

@@ -1,4 +1,4 @@
-## D260 — A card's number counts within its section, card 1 is at the far back, and the ruler marks the card
+## D-a-card-is-counted-in-its-section — A card's number counts within its section, card 1 is at the far back, and the ruler marks the card
 
 **The owner's rulings, 2026-09-23, on how the owner finds a card.** Three rulings, one subject:
 the place of a card as the hand uses it.

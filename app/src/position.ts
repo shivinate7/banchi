@@ -138,7 +138,7 @@ function sectionCardTotal(place: Place): number | null {
 export function sentencePartsOf(place: Place, persona: Persona = 'owner'): SentenceParts {
   const { slot, card, box_total, fraction } = place
   if (isDeparted(place)) {
-    /* PAST TENSE, AND THE PLACE IT LEFT (D259): the server's departed
+    /* PAST TENSE, AND THE PLACE IT LEFT (D-a-box-is-shown-by-its-name): the server's departed
        label carries the card number it would take going back, read here rather than invented. */
     const was = placePartsOf(place.label)?.card ?? null
     const words = was === null ? 'Was in this box' : `Was card ${was}`
@@ -158,7 +158,7 @@ export function sentencePartsOf(place: Place, persona: Persona = 'owner'): Sente
       ? { main: `Card ${slot}`, detail: 'where it sits in the box is not known yet' }
       : { main: `#${slot}`, detail: 'where this sits in the box is not known yet' }
   }
-  /* ONE COUNT PER INSTRUMENT, AND IT IS THE SECTION'S (D260).
+  /* ONE COUNT PER INSTRUMENT, AND IT IS THE SECTION'S (D-a-card-is-counted-in-its-section).
      Both personas say `Card 5 of 12`, the card's number within its section and the section's
      own size, the number a hand counts to from the divider. The box-wide `#12 of 34` that the
      owner's caption drew was a second scale on one panel (LOC-03). `card` and the section total
@@ -195,7 +195,7 @@ export function sayPlace(label: string): string {
 /** A server place label read back into its three facts, or null for a label of no place shape
  *  (a pooled card's line, an empty string).
  *
- *  THE ONE READER OF `pipeline/join.py:place_label` (D259). The label is
+ *  THE ONE READER OF `pipeline/join.py:place_label` (D-a-box-is-shown-by-its-name). The label is
  *  `<box name>, Section <n>, Card <m>`, and a box name is free text that may hold a comma of its
  *  own, so the parts are taken from the RIGHT end: the last `, Section <n>, Card <m>` is the
  *  place and everything in front of it is the name. A label from before the ruling
@@ -263,7 +263,7 @@ export type SectionDepth = {
   head: readonly string[]
   tail: readonly string[]
   /** The ruler's two ends IN SECTION NUMBERS: `1` at the far back and the section's own size at
-   *  the front (D260). The box-wide bounds this carried before
+   *  the front (D-a-card-is-counted-in-its-section). The box-wide bounds this carried before
    *  were a second scale on one instrument (LOC-04). */
   firstCard: number
   lastCard: number

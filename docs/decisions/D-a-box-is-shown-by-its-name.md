@@ -1,4 +1,4 @@
-## D259 — A box is shown only by its name, and a box with no name gets a stored default name
+## D-a-box-is-shown-by-its-name — A box is shown only by its name, and a box with no name gets a stored default name
 
 **The owner's ruling, 2026-09-23.** The owner's words:
 

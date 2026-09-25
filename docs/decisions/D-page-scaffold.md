@@ -1,6 +1,6 @@
-## D275 — Every screen inherits the page scaffold, and a shrinking list holds the exceptions
+## D-page-scaffold — Every screen inherits the page scaffold, and a shrinking list holds the exceptions
 
-**The rule.** The owner, 2026-09-23: "say a new page in the sidebar gets built tomorrow, it should be able to autocall/inherit the properties of the other pages". D272 put those properties in one component, `Page` in `app/src/kit/Page.tsx`. A screen inherits them only if it renders `Page`. D173 says a rule that a machine can enforce must be enforced by a machine. This entry is the mechanism.
+**The rule.** The owner, 2026-09-23: "say a new page in the sidebar gets built tomorrow, it should be able to autocall/inherit the properties of the other pages". D-one-page-width put those properties in one component, `Page` in `app/src/kit/Page.tsx`. A screen inherits them only if it renders `Page`. D173 says a rule that a machine can enforce must be enforced by a machine. This entry is the mechanism.
 
 **A new screen is one `ROUTES` entry plus a view that returns `<Page>`.**
 

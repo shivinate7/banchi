@@ -339,7 +339,7 @@ from store import orders as order_store  # noqa: E402
 from server import codes_routes  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 # The one press that sends to TCGplayer and makes copies live, and the live check after it
-# (`D273`). Its own module for `tcg_import.py`'s reason: it can
+# (`D-one-press-sends-and-makes-live`). Its own module for `tcg_import.py`'s reason: it can
 # change what buyers see, so its promises are written once, beside it.
 from server import send_routes  # noqa: E402
 # The shipping seam, below the line for the same reason and by the same rule (D61). It opens
@@ -710,7 +710,7 @@ _MARKDOWN_PUBLISH_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/pub
 # The undo for a push, and only before it is published. Narrower than the portal's own
 # control on purpose: `clearstagedinventory` empties the whole staged channel and takes no id.
 _MARKDOWN_ROLLBACK_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/rollback$")
-# ONE PRESS, `D273`: the live read, the push and the publish of one
+# ONE PRESS, `D-one-press-sends-and-makes-live`: the live read, the push and the publish of one
 # mark-down. The two routes above stay, and this one calls them in order.
 _MARKDOWN_SEND_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/send$")
 # A written file's copies back on the list (the owner's Q8 ruling). A send stamp, the same shape.
@@ -2666,7 +2666,7 @@ class _Places:
                 "fraction": None,
             }
 
-        # THE NAME RIDES THE POSITION, so the label says it (D259).
+        # THE NAME RIDES THE POSITION, so the label says it (D-a-box-is-shown-by-its-name).
         position = join.Position(
             number, at, layout, occupied, box_name=entry.name if entry is not None else None
         )
@@ -4023,7 +4023,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
             if rejected:
                 # ONE SCAN OF THE BOX, never one per rejected card (`join.box_view`). Each
                 # listed card reads "Section n, Card m", never the store index — the box
-                # name is already said once above (D259).
+                # name is already said once above (D-a-box-is-shown-by-its-name).
                 _, _view = join.box_view(inventory, box)
                 named = "; ".join(
                     f"{join.place_within_box(_view, box, at)}: {text}"
@@ -4686,7 +4686,7 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         # ONE SCAN OF THE BOX FOR EVERY BLOCKER'S LABEL, never one scan per blocker
         # (`join.box_view`). Each listed card reads "Section n, Card m", never the store
         # index — the box name is already said once, in the sentence this list sits inside
-        # (D259).
+        # (D-a-box-is-shown-by-its-name).
         _, _view = join.box_view(inventory, box)
         for at, other_key, other in inventory.records_in(box):
             if at <= int(index):
@@ -5603,7 +5603,7 @@ def do_delete_box(box: int) -> dict:
         # ONE SCAN OF THE BOX FOR EVERY BLOCKER'S LABEL, never one scan per blocker
         # (`join.box_view`). Each listed card reads "Section n, Card m", never the store
         # index — the box name is already said once, in the sentence this list sits inside
-        # (D259).
+        # (D-a-box-is-shown-by-its-name).
         _, _view = join.box_view(inventory, box)
         for at, card_key, card in inventory.records_in(box):
             holds.append((at, card_key, card))
@@ -7646,7 +7646,7 @@ def do_review_stand_down(box: int, index: int, payload: dict) -> dict:
     key = master.position_key(box, index)
 
     with Store().write() as snapshot:
-        # THE PLACE A REFUSAL NAMES, NEVER THE STORE KEY (D259).
+        # THE PLACE A REFUSAL NAMES, NEVER THE STORE KEY (D-a-box-is-shown-by-its-name).
         # `key` stays the queue lookup; every MESSAGE below speaks through `where`.
         where = join.said_place(snapshot.inventory, box, index)
         holders = [
@@ -7728,7 +7728,7 @@ def _reverse_stand_down(box: int, index: int) -> dict:
     store = Store()
 
     with store.write() as snapshot:
-        # THE PLACE A REFUSAL NAMES, NEVER THE STORE KEY (D259).
+        # THE PLACE A REFUSAL NAMES, NEVER THE STORE KEY (D-a-box-is-shown-by-its-name).
         # `key` stays the queue and history lookup; every MESSAGE below speaks through
         # `where`.
         where = join.said_place(snapshot.inventory, box, index)
@@ -12523,7 +12523,7 @@ def _prepare_targets(
     refused: List[Tuple[str, BadRequest]] = []
     for target in parsed:
         position = master.position_key(target["box"], target["index"])
-        # THE PLACE A REFUSAL NAMES, NEVER THE STORE POSITION (D259).
+        # THE PLACE A REFUSAL NAMES, NEVER THE STORE POSITION (D-a-box-is-shown-by-its-name).
         # `position` stays the internal key — `seen`, the card lookup, `_sell` — but every
         # MESSAGE below speaks through `where`, the box's name and, once a card is found,
         # its section and card in the section.
@@ -14456,7 +14456,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, pipeline_routes.do_markdown_list(self._body())
                 )
             if path == "/pipeline/send":
-                # THE ONE PRESS (`D273`): reads what is live,
+                # THE ONE PRESS (`D-one-press-sends-and-makes-live`): reads what is live,
                 # writes the listing file behind the double-send guard, pushes it and makes it
                 # live. Refuses without `confirm`, and refuses whole when the live read fails.
                 # `download: true` stops after the file.
@@ -15035,7 +15035,7 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     # over a worktree's empty store looks exactly like the real one until a capture lands
     # somewhere that gets deleted with the branch — which is the failure D46 exists for.
     # Gated on "not the primary checkout", so a copy with no `.git` says so too
-    # (D268, a copied tree never gets the live port).
+    # (D-no-git-no-live-port, a copied tree never gets the live port).
     if not ports.is_primary_checkout(ports.REPO_ROOT):
         print(f"  WORKTREE  {ports.REPO_ROOT.name} — this is NOT the main checkout's store")
         print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")

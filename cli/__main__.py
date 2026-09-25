@@ -260,7 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # ---------------------------------------------------------------------------- boxes
-    # A BOX IS SHOWN BY ITS NAME (D259). `names` is the one-time
+    # A BOX IS SHOWN BY ITS NAME (D-a-box-is-shown-by-its-name). `names` is the one-time
     # backfill that gives every unnamed box the stored name `Box <number>`. Previews by default.
     boxes = sub.add_parser(
         "boxes",
@@ -465,7 +465,7 @@ def build_parser() -> argparse.ArgumentParser:
         "on hand that are not already listed; 0 sends none of it. Repeat per card. A card "
         "not named sends every copy that can go",
     )
-    # THE DOUBLE-SEND GUARD (`D273`). A live export fetched
+    # THE DOUBLE-SEND GUARD (`D-one-press-sends-and-makes-live`). A live export fetched
     # moments before this press: every row is trimmed so that TCGplayer's live quantity plus
     # the copies added never exceeds the copies on hand, and every trim is named. It only
     # ever takes copies OUT of the file. `pipeline/sendguard.py` has the arithmetic.
@@ -485,7 +485,7 @@ def build_parser() -> argparse.ArgumentParser:
         "card already live that this press adds no copy of gets a price-only row (Add to "
         "Quantity 0). A price the list does not name is never written. Each is named",
     )
-    # THE PRESS'S OWN FILE AND ITS CLAIM (`D273`, round 2). Given by
+    # THE PRESS'S OWN FILE AND ITS CLAIM (`D-one-press-sends-and-makes-live`, round 2). Given by
     # `server/send_routes.py` only: the file goes into the press's own directory rather than
     # the run's, so two presses can never read each other's file, and the SKUs it adds are
     # claimed in the same store write that counts them sent (`store/sendclaims.py`).

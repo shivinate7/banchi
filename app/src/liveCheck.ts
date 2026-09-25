@@ -1,4 +1,4 @@
-/* THE LIVE CHECK AFTER A SEND, AND WHEN IT RUNS (`D273`, Q3).
+/* THE LIVE CHECK AFTER A SEND, AND WHEN IT RUNS (`D-one-press-sends-and-makes-live`, Q3).
  *
  * The owner's ruling: if the app is open when the 15-minute wait ends, it checks by itself
  * with no refresh; if the app is closed, it checks on the next visit to Pricing or Home. No

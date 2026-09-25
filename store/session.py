@@ -75,7 +75,7 @@ class Snapshot:
     # against it and the write of it have to be the SAME transaction as the cache consult that
     # decides what is being bought, and D88 is what makes that one transaction.
     submissions: Submissions
-    # THE SKUS A PRESS TO TCGPLAYER IS SENDING (`D273`), in the
+    # THE SKUS A PRESS TO TCGPLAYER IS SENDING (`D-one-press-sends-and-makes-live`), in the
     # snapshot for `submissions`' reason: `cli/cmd_emit.py` checks and writes it in the SAME
     # transaction that counts the copies as sent, so two presses cannot both decide first.
     send_claims: SendClaims

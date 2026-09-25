@@ -1,4 +1,4 @@
-## D272 — One page width, one top gap, and a scaffold every screen inherits
+## D-one-page-width — One page width, one top gap, and a scaffold every screen inherits
 
 **This amends D197.** D197 fixed the left edge and let the width vary by screen. The owner's ruling of 2026-09-23 removes the second half. There is one page width, 1600 px, and every screen must stay competent at every narrower width. The owner's words: "pretty open to 1600px but should easily be that if i cut width that things remain competent".
 

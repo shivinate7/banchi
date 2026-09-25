@@ -7,10 +7,10 @@ import { sealEveryTest } from './shell'
  *
  * The owner's rulings this spec reads back off the rendered page:
  *   - A box is shown by its NAME only; its number never reaches a screen
- *     (D259).
+ *     (D-a-box-is-shown-by-its-name).
  *   - The card number counts within its section, card 1 is at the FAR BACK, and the ruler marks
  *     the exact card, in section numbers, with the sections before and after
- *     (D260).
+ *     (D-a-card-is-counted-in-its-section).
  *   - A departed card keeps the place it left, drawn with a mark, never a word; it speaks in the
  *     past tense.
  *   - Review's place pill opens the card, and a screen reader hears it as a sentence. It shows
@@ -230,7 +230,7 @@ for (const size of SIZES) {
       const label = current.locator('.position-parts')
       await expect(label).toHaveAttribute('aria-label', 'RB Origins, Section 2, Card 2')
 
-      /* THE BOX IS NAMED, NEVER NUMBERED (D259). */
+      /* THE BOX IS NAMED, NEVER NUMBERED (D-a-box-is-shown-by-its-name). */
       const drawn = (await label.innerText()).replace(/\s+/g, ' ')
       expect(drawn).toContain('RB Origins')
       expect(drawn).not.toMatch(NO_BOX_NUMBER)

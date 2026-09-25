@@ -277,7 +277,7 @@ def box_title(name: Optional[str], number: int) -> str:
     """A box's name for a label or a sentence: the stored name, or `Box <number>` without one.
 
     THE FALLBACK IS THE DEFAULT NAME THE STORE WRITES, NOT A SECOND VOCABULARY. The owner's
-    ruling, 2026-09-23 (D259): an unnamed box gets the stored name
+    ruling, 2026-09-23 (D-a-box-is-shown-by-its-name): an unnamed box gets the stored name
     `Box <count+1>` at creation, a cleared name stores the same default, and every box that
     had no name was backfilled `Box <number>` (`store/master.py:Inventory.default_box_name`,
     `Inventory.backfill_box_names`). So no registered box reaches this fallback after the
