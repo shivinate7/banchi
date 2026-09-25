@@ -640,7 +640,11 @@ test('the compact-tier price and actions land in their own tracks, not an implic
 
 async function boxesOf(locators: Record<string, import('@playwright/test').Locator>) {
   const out: Record<string, { x: number; y: number; width: number; height: number } | null> = {}
-  for (const [key, locator] of Object.entries(locators)) out[key] = await locator.boundingBox()
+  /* A SHORT WAIT, AND GONE IS NULL: an element that vanished during the press is the finding,
+     never a timeout. */
+  for (const [key, locator] of Object.entries(locators)) {
+    out[key] = await locator.boundingBox({ timeout: 1000 }).catch(() => null)
+  }
   return out
 }
 
@@ -683,3 +687,29 @@ for (const width of [390, 820]) {
     expectStill(before, await boxesOf(locators))
   })
 }
+
+/* ROUND 9, R9-1: THE FILE'S LINK ALREADY ON SCREEN STAYS THROUGH THE PRESS. "Download the file
+   instead" first puts the link beside the press; the link used to vanish when Send started, and
+   the bar, set to the right, moved the press under the finger. */
+for (const width of [390, 820]) {
+  test(`r9: a file link already on screen holds its place through the send (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    const wire = await open(page, { sendDelayMs: 1500 })
+    const field = page.locator('.pricing-input').first()
+    await field.click()
+    await field.fill('')
+    await field.type('17.50')
+    await field.blur()
+    const bar = page.getByRole('region', { name: 'Send these prices' })
+    await bar.getByRole('button', { name: 'Download the file instead' }).click()
+    await expect(bar.getByRole('link', { name: 'import.csv' })).toBeVisible()
+    const press = bar.locator('.pricing-emit')
+    const locators = { press, door: bar.getByRole('button', { name: /Download/ }), link: bar.getByRole('link', { name: 'import.csv' }) }
+    const before = await boxesOf(locators)
+    await press.click()
+    await expect.poll(() => wire.filter((row) => row.path.endsWith('/send')).length).toBe(1)
+    await expect(press).toHaveAttribute('data-busy', 'true')
+    expectStill(before, await boxesOf(locators))
+  })
+}
+
