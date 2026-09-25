@@ -728,6 +728,20 @@ function OpenField({
   const classes = ['capture-open']
   if (size === 'lg') classes.push('capture-open-lg')
   if (pin === true) classes.push('capture-open-pinned')
+  const bodyRef = useRef<HTMLDivElement>(null)
+  /* UX-138: every field agrees on where focus goes when it opens, now — the body's own
+   *  first control. Box and Set hint already did this by hand, through their own refs (kept:
+   *  Set hint's effect also loads the set vocabulary, which is not this component's job to
+   *  know about); this is what puts Rarity, Finish, Game, Camera, Rotation and Trigger on the
+   *  same footing, in one place instead of six. `OpenField` remounts fresh each time a field
+   *  opens (the parent's own `openField === X ? <OpenField> : <Row>` ternary), so an
+   *  empty-deps effect fires exactly once per open — the same "just opened" moment a per-field
+   *  ref would have caught, without a ref for each one. */
+  useEffect(() => {
+    bodyRef.current
+      ?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex]')
+      ?.focus()
+  }, [])
   return (
     <div className={classes.join(' ')}>
       <button
@@ -743,7 +757,9 @@ function OpenField({
         <span className="capture-meta">{meta}</span>
         <Icon name="chevronUp" size={14} className="capture-chev" />
       </button>
-      <div className="capture-open-body">{children}</div>
+      <div className="capture-open-body" ref={bodyRef}>
+        {children}
+      </div>
     </div>
   )
 }

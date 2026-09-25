@@ -1665,3 +1665,43 @@ test('the shutter keeps one fixed position whatever field opens above it (D118)'
     }
   }
 })
+
+/* ------------------------------------------------------------------------------------------
+ * UX-138: every field agrees on where focus goes when it opens — the body's own first
+ * control. Box and Set hint already focused their text entry; this is the fields that used to
+ * open with focus left on the body.
+ * ------------------------------------------------------------------------------------------ */
+
+test('every field puts focus on its own first control when it opens, not the body', async ({
+  page,
+}) => {
+  await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES)
+  const rigSummary = page.locator('.capture-rig-summary')
+  if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
+
+  const fields: readonly { key: string; label: string | RegExp }[] = [
+    { key: 'r', label: 'Rarity' },
+    { key: 'f', label: 'Finish' },
+    { key: 'g', label: 'Game' },
+    { key: 'v', label: 'Camera' },
+    { key: 'o', label: 'Rotation' },
+    { key: 't', label: 'Trigger' },
+  ]
+
+  for (const field of fields) {
+    await page.keyboard.press(field.key)
+    const body = page
+      .locator('.capture-open')
+      .filter({ hasText: field.label })
+      .locator('.capture-open-body')
+    await expect(body).toBeVisible()
+    // Focus is somewhere inside the open body, not on `document.body` (the pre-fix state)
+    // and not stuck on the row that opened it.
+    const focusedInBody = await body.evaluate(
+      (node) => node.contains(document.activeElement) && document.activeElement !== document.body,
+    )
+    expect(focusedInBody, `${field.label} focus`).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.capture-open')).toHaveCount(0)
+  }
+})

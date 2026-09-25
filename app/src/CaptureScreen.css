@@ -1317,7 +1317,12 @@
      52px top bar when it does. */
   .capture-halt { scroll-margin-top: calc(var(--bn-topbar-h) + var(--bn-2)); }
   .capture-stage-head { flex-wrap: wrap; }
-  .capture-card-run { order: 2; }
+  /* UX-128: `align-self: start` leaked in from the 1279px tablet grid a few rules up (its
+     own `@media (max-width: 1279px)` has no ceiling, so it still applies here) and was never
+     overridden for this one card the way stage/last/rig already are below — `start`, in a
+     flex COLUMN, means the CROSS axis, so the card shrank to its own content's width instead
+     of stretching. Measured at 279-290px against its 358px siblings before this. */
+  .capture-card-run { order: 2; align-self: stretch; }
   .capture-film { order: 3; }
   .capture-last { order: 4; height: auto; max-height: none; align-self: stretch; grid-template-rows: auto auto; }
   .capture-last-viewport { container-type: normal; }
