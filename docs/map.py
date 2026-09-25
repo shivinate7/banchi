@@ -1785,7 +1785,7 @@ COMPONENTS = [
                                           "D23", "D24", "D26", "D28", "D30", "D34", "D36", "D55",
                                           "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88",
                                           "D89", "D100", "D115", "D132", "D145", "D146", "D167",
-                                          "D172", "D183", "D192", "D213", "D253"], "tested_by": ["T7"]},
+                                          "D172", "D173", "D183", "D192", "D213", "D253"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -3019,21 +3019,6 @@ COMPONENTS = [
                         "says plainly that a recovered receipt is one later snapshot, never a "
                         "history, and that every SKU's first posted price is gone either way.",
                 "governed_by": ["D243"],
-            },
-            "correction-rarity-number-repair.py": {
-                "does": "the one-time repair for the three cards D252's amendment names. "
-                        "Preview by default and read-only "
-                        "by construction — no `store.db`/`Store` import at all unless "
-                        "`--write --confirm` is given, and the default preview opens "
-                        "`inventory/store.sqlite` `mode=ro`, the same defence "
-                        "`price-postings-recovery.py` above uses. Reads each card's own "
-                        "run manifest and export CSV as plain files to re-derive what its "
-                        "rarity and number would become, reports whether the route's own "
-                        "undo-then-redo would even be allowed, and proposes the smaller "
-                        "fix instead: set `rarity`/`number`/`printed_total` alone, through "
-                        "`Store().write()`, with no listing touched. `--home` has no "
-                        "default, on purpose. NOT RUN by the session that wrote it.",
-                "governed_by": ["D36", "D43", "D183", "D213", "D252"],
             },
             "sku-number-contradictions-selftest.py": {
                 "does": "proves pipeline/sku_number_contradictions.py against literal "
