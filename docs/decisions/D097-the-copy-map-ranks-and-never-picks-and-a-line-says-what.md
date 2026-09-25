@@ -20,4 +20,11 @@
 
 **It is sized to the owner's own store and to nothing deeper.** The densest SKU there holds fourteen copies of one card, all fourteen in box 3 section 4, and fourteen identical pressable rows is a wall rather than a choice — so six copies are drawn and the rest fold, which is more candidates than any line needs (the largest `remaining` across his twenty open orders is four) and leaves 51 of his 59 lines drawing every copy with no fold at all. The map blocks themselves never fold, because the drawers a card sits in are the primary read. A store deeper than that one has never rendered this, and the fold is the first figure to re-measure against one. **And a copy another open order was offered is a mark rather than a lock** — pressable, because two orders wanting the same card is the operator's problem to solve with the fact in front of them, not the screen's to solve by hiding a row. If that produces a real double-take against the ledger, the mark becomes a refusal and D93's *a full line refuses the take* is the shape it takes.
 
+**Amended 2026-09-25 (D274): the fact is no longer marked on screen.** The owner: *"i had said
+to get rid of claiming wanted by \<order\> as a visual descriptor"*. The "mark rather than a
+lock" sentence above described a visible caption (`.orders-pick-claim`, `.orders-map-claimed`)
+naming which order was offered a shared copy. That caption is deleted. The lock half is
+unchanged: the row stays pressable, and `LineCopy.claimedBy` still keeps a claimed copy out of
+`free` for the density rank. Only the on-screen naming of the other order is gone.
+
 ---

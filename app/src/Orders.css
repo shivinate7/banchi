@@ -698,11 +698,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-map-count b { font-weight: 700; color: var(--bn-ink); font-variant-numeric: tabular-nums; }
 .orders-map-spoken { display: inline-flex; align-items: baseline; gap: 4px; font-size: var(--bn-fs-xs); color: var(--bn-warn); white-space: nowrap; }
 .orders-map-spoken .bn-icon { align-self: center; }
-/* Copies in this drawer another OPEN order was offered. Quieter than `spoken for`, which is the
-   ledger's own answer and cannot be taken; this one is only a claim on the same shelf, and the
-   rows it describes keep their buttons. */
-.orders-map-claimed { display: inline-flex; align-items: baseline; gap: 4px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
-.orders-map-claimed .bn-icon { align-self: center; color: var(--bn-ink-4); }
 .orders-map-sections { display: flex; flex-wrap: wrap; gap: 4px; }
 .orders-map-sect {
   display: inline-flex;
@@ -808,22 +803,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   text-transform: uppercase;
   white-space: nowrap;
 }
-/* Another open order was offered this copy. Ink-3 and no ground: a fact about the shelf, sitting
-   below the card's own name in weight, never a warning. */
-.orders-pick-claim {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  min-width: 0;
-  font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-3);
-  /* "wanted by" is one phrase: it may not break across lines, and only the order
-     number after it is allowed to wrap. */
-  text-wrap: pretty;
-  white-space: nowrap;
-}
-.orders-pick-claim .bn-icon { align-self: center; color: var(--bn-ink-4); flex: none; }
-.orders-pick-claim .bn-mono { font-size: var(--bn-fs-2xs); color: var(--bn-ink-2); overflow-wrap: anywhere; white-space: normal; }
 .orders-pick-order {
   display: inline-flex;
   align-items: center;
@@ -963,7 +942,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 /* Phones: the fold is a control a thumb presses, so it takes the same floor as the rest. */
 @media (max-width: 767px) {
   .orders-fold-btn { min-height: 40px; padding: 0 var(--bn-4); }
-  .orders-pick-claim { white-space: normal; }
 }
 
 /* ---- what the fetch checked, took, and left --------------------------------------

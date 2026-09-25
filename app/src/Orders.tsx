@@ -1088,7 +1088,6 @@ type MapStop = {
   readonly total: number
   readonly free: number
   readonly spoken: number
-  readonly claimed: number
   readonly sections: MapSection[]
   readonly copies: LineCopy[]
 }
@@ -1127,7 +1126,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
     total: number
     free: number
     spoken: number
-    claimed: number
     sections: Map<string, SectionDraft>
   }
 
@@ -1150,7 +1148,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
         total: 0,
         free: 0,
         spoken: 0,
-        claimed: 0,
         sections: new Map(),
       }
       drafts.set(key, stop)
@@ -1158,7 +1155,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
     stop.total += 1
     if (copy.free) stop.free += 1
     if (copy.spokenFor !== null) stop.spoken += 1
-    if (copy.claimedBy !== null) stop.claimed += 1
 
     const section = pooled ? null : place.section
     const sectionKey = section === null ? 'none' : `s${section}`
@@ -1198,7 +1194,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
         total: draft.total,
         free: draft.free,
         spoken: draft.spoken,
-        claimed: draft.claimed,
         sections: sections.map(({ key, label, total, free }) => ({ key, label, total, free })),
         copies: sections.flatMap((bucket) => bucket.copies),
       }
@@ -3954,7 +3949,6 @@ function OrderLineRow({
               line={line}
               pick={copy.pick}
               offered={copy.offered}
-              claimedBy={copy.claimedBy}
               busy={busy}
               onPull={onPull}
               /* The heading already names the card; the row repeats it only where the store's
@@ -4135,14 +4129,6 @@ function CopyMapView({
                 {stop.spoken} spoken for
               </span>
             )}
-            {/* Copies in this drawer that another OPEN order was offered. They stay pressable —
-                the rank is what moves, not the button — so this is said, not enforced. */}
-            {stop.claimed === 0 ? null : (
-              <span className="orders-map-claimed">
-                <Icon name="cart" size={11} />
-                {stop.claimed} wanted elsewhere
-              </span>
-            )}
             <span className="orders-map-sections">
               {stop.sections.map((section, sectionAt) => (
                 <span
@@ -4198,7 +4184,6 @@ function PickLine({
   lit,
   lead,
   offered,
-  claimedBy,
 }: {
   readonly order: OrderRow
   readonly line: ResolvedLine
@@ -4218,8 +4203,6 @@ function PickLine({
   /** This copy is one the resolver offered THIS line — the machine's own choice, marked so the
    *  operator can take it or ignore it. Absent in the walk, where every row is an offered copy. */
   readonly offered?: boolean
-  /** Another open order was offered this copy. Said, never enforced. */
-  readonly claimedBy?: string | null
 }) {
   const target = aimOf(line, pick)
   const pressing = target !== null && busy === `${line.order_key}/${line.sku}/${target.capture_id}`
@@ -4257,15 +4240,6 @@ function PickLine({
             ordinary row: same ground, same button, same place in the order — the operator's eye
             is told where the resolver landed and nothing is decided for him. */}
         {offered === true ? <span className="orders-pick-offered">Offered</span> : null}
-        {/* ANOTHER OPEN ORDER WAS OFFERED THIS ONE. Take it and that order re-resolves onto a
-            different copy, or goes short — worth knowing before the press, not after it. The
-            button stays: this is the fact, not a veto. */}
-        {text(claimedBy) ? (
-          <span className="orders-pick-claim" title={`Order ${claimedBy} was offered this copy`}>
-            <Icon name="cart" size={11} />
-            wanted by <span className="bn-mono">{claimedBy}</span>
-          </span>
-        ) : null}
         {showOrder === true ? (
           <button
             type="button"
@@ -4293,9 +4267,9 @@ function PickLine({
         </span>
       ) : (
         /* ONE PRESS PER ROW, THE SAME ON EVERY COPY — offered or found in the store, near drawer or
-           far — because ranking is not picking. A copy another order counts on says so in its
-           own "wanted by" words beside it. The name carries the place, so a list of rows never
-           announces the same word twice. */
+           far — because ranking is not picking. Every copy is fungible (D212), so a copy another
+           open order counts on gets no caption of its own: Mark sold looks the same on every row
+           (owner's ruling, 2026-09-25 — no "wanted by <order>" visual descriptor). */
         <IconButton
           icon="sold"
           label="Mark sold"

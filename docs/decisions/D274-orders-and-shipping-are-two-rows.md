@@ -101,6 +101,20 @@ own "Add orders" sheet. The panel's `Manage` keeps only that buyer's own orders.
   keeps the title, and in walk mode the walk line. "Cards to pull" opens the Fulfiller's page
   in a new tab, as the sidebar's own row does.
 
+- **A shared copy carries no visual descriptor.** The owner, 2026-09-25:
+
+  ```
+  i had said to get rid of claiming wanted by <order> as a visual descriptor
+  ```
+
+  The "wanted by \<order\>" caption on a pick row (`.orders-pick-claim`) and the block-level
+  "N wanted elsewhere" caption (`.orders-map-claimed`) are both deleted, with their CSS. This
+  amends D97's *"And a copy another open order was offered is a mark rather than a lock"*: the
+  mark is gone. The lock half is unchanged — a copy another open order was offered is still
+  pressable, still ranked as not free (D212's fungibility, `LineCopy.claimedBy` still feeds
+  `free`), and still not enforced. Every Mark sold looks the same, on every row, whether or not
+  another order was offered the same copy.
+
 `app/tests/orders.spec.ts` and `app/tests/order-walk.spec.ts` assert each part. They check
 the widths 1440, 820, 720 and 390.
 
