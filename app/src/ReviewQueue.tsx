@@ -33,7 +33,7 @@ import {
   undoRetire,
   undoStandDown,
 } from './server'
-import { Button, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
+import { Button, EmptyState, Icon, IconButton, Kbd, Notice, PageHeader, Pill, ReloadButton } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
@@ -1397,23 +1397,29 @@ export function ReviewQueue() {
                 Answer all {groupOffer.rows.length} together
               </Button>
             )}
-            {/* NOT THE RELOAD BESIDE IT, and the two labels are written to be unmistakable:
-                that one re-fetches these two queues, this one asks the pipeline to look at
-                every waiting card again. Same header, different verb, and neither says
-                "refresh" — the word that would make them one control. */}
-            <Button icon="wand" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open">
-              {phone ? 'Re-check all' : 'Re-check every waiting card'}
-            </Button>
-            <Button variant="ghost" icon="refresh" iconOnly kbd={phone ? undefined : RELOAD_KEY_LABEL} onClick={reload} disabled={disabled} className="review-reload">
-              Reload the queue
-            </Button>
+            {/* The header rule (owner, 2026-09-24): one worded primary. "Answer all N
+                together" is it, when a group offer is on screen — the rest are icons. NOT
+                THE RELOAD BESIDE IT: one re-fetches these two queues, this one asks the
+                pipeline to look at every waiting card again. Same icon vocabulary word would
+                make them read as one control, so the tooltip keeps the fuller sentence. */}
+            <IconButton icon="wand" label="Re-check every waiting card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
+            {/* The kit's own reload control (D-icon-buttons), with its internal 'r' hotkey
+                OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
+                because a second listener would fire the read twice. */}
+            <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
             {everyone.length === 0 ? null : (
-              <Button icon="list" onClick={() => setQueueOpen(true)} className="review-queue-toggle" aria-expanded={queueOpen}>
-                Queue
-                <Pill tone="accent" size="sm">
-                  {everyone.length}
-                </Pill>
-              </Button>
+              <IconButton
+                icon="list"
+                label="Queue"
+                /* The badge is aria-hidden (D118), so the count reaches a screen reader
+                   through `name` only — the same pattern `kit/filters.tsx`'s own trigger
+                   uses for its active-facet count. */
+                name={`Queue, ${everyone.length}`}
+                badge={everyone.length}
+                onClick={() => setQueueOpen(true)}
+                className="review-queue-toggle"
+                aria-expanded={queueOpen}
+              />
             )}
           </>
         }
@@ -1552,7 +1558,8 @@ function Tray({
       {!allSkipped ? null : (
         <Notice tone="info" title="Every waiting card has been skipped" className="review-tray-notice">
           Skipping again only moves this one behind the rest.{' '}
-          <Button size="sm" variant="quiet" kbd={CLEAR_KEY_LABEL} onClick={onClearSkips} disabled={disabled}>
+          {/* words="word-only-control" (rule 5): a press inside a sentence. */}
+          <Button size="sm" variant="quiet" kbd={CLEAR_KEY_LABEL} onClick={onClearSkips} disabled={disabled} words="word-only-control">
             Clear skips
           </Button>
         </Notice>
@@ -1566,9 +1573,7 @@ function Tray({
           </span>
           <span className="bn-receipt-bar" aria-hidden="true" />
           {!receipt.undoable ? null : (
-            <Button size="sm" icon="undo" kbd={UNDO_KEY_LABEL} onClick={() => onUndo(receipt)} disabled={disabled}>
-              Undo
-            </Button>
+            <IconButton icon="undo" label="Undo" size="sm" kbd={UNDO_KEY_LABEL} onClick={() => onUndo(receipt)} disabled={disabled} />
           )}
         </div>
       )}
@@ -1581,14 +1586,14 @@ function RefusalNotice({ refusal, onReload, onDismiss, disabled }: { refusal: Re
   return (
     <Notice tone="danger" title={refusal.failure.message} code={`${refusal.failure.code}${refusal.at === null ? '' : ` ${refusal.at}`}`} className="review-refusal review-note">
       <span className="review-refusal-actions">
+        {/* ICON-MAP (review): words, not an icon — this is the notice's own recovery, the
+            one primary action beside Dismiss. words="only-primary" (rule 4). */}
         {stale ? (
-          <Button size="sm" icon="refresh" kbd={RELOAD_KEY_LABEL} onClick={onReload} disabled={disabled}>
+          <Button size="sm" icon="refresh" kbd={RELOAD_KEY_LABEL} onClick={onReload} disabled={disabled} words="only-primary">
             Reload the queue
           </Button>
         ) : null}
-        <Button size="sm" onClick={onDismiss}>
-          Dismiss
-        </Button>
+        <IconButton icon="x" label="Dismiss" size="sm" onClick={onDismiss} />
       </span>
     </Notice>
   )
@@ -1610,9 +1615,7 @@ function SessionList({ receipts, onUndo, disabled, limit }: { receipts: readonly
             <span className="review-session-label">{receipt.label}</span>
           </span>
           {!receipt.undoable ? null : (
-            <Button size="sm" variant="ghost" icon="undo" kbd={at === 0 ? UNDO_KEY_LABEL : undefined} onClick={() => onUndo(receipt)} disabled={disabled}>
-              Undo
-            </Button>
+            <IconButton icon="undo" label="Undo" size="sm" kbd={at === 0 ? UNDO_KEY_LABEL : undefined} onClick={() => onUndo(receipt)} disabled={disabled} />
           )}
         </li>
       ))}
@@ -1950,15 +1953,19 @@ function Card({
               {looking ? 'Back to listings' : phone ? 'Search TCGplayer' : 'Search TCGplayer\'s list'}
             </Button>
           )}
+          {/* ICON-MAP (review): words at every width, including the phone — dropped
+              `iconOnly` on purpose. `words="not-in-vocabulary"`: this "Close" means "close
+              this question without answering it" (D37's stand-down umbrella), not the
+              vocabulary's generic dismiss-a-panel sense the rule is written for. */}
           <Button
             variant="quiet"
             icon="x"
             kbd={phone ? undefined : CLOSE_KEY_LABEL}
-            iconOnly={phone}
             className="review-action review-action-close"
             onClick={onClose}
             disabled={busy}
             aria-expanded={closing}
+            words="not-in-vocabulary"
           >
             Close
           </Button>
@@ -2196,9 +2203,7 @@ function ClosePanel({ onChoice, onClose, disabled }: { onChoice: (choice: CloseC
     <div className="review-close bn-dialog" role="dialog" aria-modal="true" aria-label="Close this card without answering it" ref={panel} tabIndex={-1} onKeyDown={trapTab}>
       <div className="review-close-title">
         <span className="bn-section-title">Close without answering</span>
-        <Button size="sm" variant="ghost" iconOnly icon="x" kbd="Esc" onClick={onClose}>
-          Cancel
-        </Button>
+        <IconButton icon="x" label="Close the panel" kbd="Esc" size="sm" onClick={onClose} />
       </div>
       <p className="review-close-lede">Stops the queue asking about it. Can be undone.</p>
       {group('stand_down', 'Stand down', 'the card stays where it is')}
@@ -2599,9 +2604,7 @@ function Waiting({
           Up next
           <Pill>{rows.length}</Pill>
         </span>
-        <Button size="sm" variant="ghost" iconOnly icon="x" onClick={onClose} className="review-rail-close">
-          Close the queue
-        </Button>
+        <IconButton icon="x" label="Close the queue" size="sm" onClick={onClose} className="review-rail-close" />
       </div>
 
       {done === 0 && tally.skipped === 0 && receipts.length === 0 ? null : (
@@ -2789,9 +2792,7 @@ function QueueRefresh({
               Re-check every waiting card
             </h2>
           </div>
-          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={onClose} />
         </header>
 
         <div className="review-recheck-body">

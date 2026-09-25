@@ -126,9 +126,7 @@
       "R2-search": "review",
       "R2-class": "review",
       "R2-date": "review",
-      "R2-money": "review",
-      "R2-icon-only-button": "icons",
-      "R2-header-actions": "review"
+      "R2-money": "review"
     },
     "app/src/RunPanel.tsx": {
       "R2-select": "b-runs",
