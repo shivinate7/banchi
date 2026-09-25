@@ -960,6 +960,79 @@ def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
         )
 
 
+def case_do_search_rows_walked_is_exactly_one_when_widening_is_needed() -> None:
+    """F2, BLOCKING, round-9 Opus delta review, 2026-09-25, on 28d233b2. The hostile
+    timing case's own `rows_walked in (0, 1)` check never FORCES the widening branch —
+    a query needing zero widening also passes it, so a DISCONNECTED counter (the trace
+    removed, or a widening scan moved to a second, untraced connection) could still read
+    0 and pass every existing case. This case names a query that MUST widen — a
+    mid-word fragment, never reachable through the base FTS index — and asserts
+    `rows_walked == 1` exactly, not merely "0 or 1". Removing `_count_cards_scan`'s own
+    trace, or moving the widening scan to an untraced `db.connect(...)`, now reads 0
+    here and fails.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        snapshot.inventory.cards["1/1"] = master.Card(box=1, index=1, name="Charizard ex", sku="7900")
+
+    cs._reset_search_work_counters()
+    result = cs.do_search("izard")  # mid-word only — base FTS cannot reach it at all
+    check("7900" in {g["sku"] for g in result["groups"]}, "the query actually widens and finds the card")
+    walked = cs._SEARCH_WORK_COUNTERS["rows_walked"]
+    check(
+        walked == 1,
+        f"rows_walked={walked}, exactly 1 for a query that MUST widen — a disconnected "
+        "trace, or a widening scan on an untraced connection, reads 0 here",
+    )
+
+
+def case_do_search_match_rank_calls_has_a_known_floor() -> None:
+    """F3, BLOCKING, round-9 Opus delta review, 2026-09-25, on 28d233b2. Every existing
+    case asserted only an UPPER bound on `match_rank_calls`, so deleting the counter's
+    own increment inside `_match_rank` (round-8's own fix, F6-6 item 3) stayed green at
+    183/183 — 0 calls is always at or under any upper bound. A single-term query that
+    MATCHES calls `_match_rank` once (`len(terms) == 1`, and the rank loop runs whenever
+    `matched or token_count == 1`), giving a known, real, non-zero floor.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        snapshot.inventory.cards["1/1"] = master.Card(box=1, index=1, name="Gengar", sku="7901")
+
+    cs._reset_search_work_counters()
+    result = cs.do_search("gengar")
+    check("7901" in {g["sku"] for g in result["groups"]}, "the query actually matches the card")
+    calls = cs._SEARCH_WORK_COUNTERS["match_rank_calls"]
+    check(calls >= 1, f"match_rank_calls={calls}, at least 1 — a deleted increment reads 0 here")
+
+
+def case_do_search_match_query_calls_has_a_known_floor() -> None:
+    """F3, BLOCKING, round-9 Opus delta review, 2026-09-25, on 28d233b2. Deleting
+    `match_query_calls`'s own increment in `do_search`'s rank loop stayed green at
+    183/183 — every existing case asserted only an upper bound. Any query that reaches
+    the rank loop at all (any base FTS or supplemental hit) calls `match.match_query`
+    once per candidate, unconditionally — a known, real, non-zero floor for any query
+    with at least one real match.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        snapshot.inventory.cards["1/1"] = master.Card(box=1, index=1, name="Umbreon", sku="7902")
+
+    cs._reset_search_work_counters()
+    result = cs.do_search("umbreon")
+    check("7902" in {g["sku"] for g in result["groups"]}, "the query actually matches the card")
+    calls = cs._SEARCH_WORK_COUNTERS["match_query_calls"]
+    check(calls >= 1, f"match_query_calls={calls}, at least 1 — a deleted increment reads 0 here")
+
+
 def case_do_search_union_never_drops_a_row_a_single_term_widens() -> None:
     """F2, REGRESSION, round-5 Opus delta review, 2026-09-25, on 65b8f39d.
     `_fts_supplemental_candidates`'s first version INTERSECTED across terms: a query of two
@@ -1060,39 +1133,89 @@ def case_do_search_substring_widens_a_two_char_digit_term() -> None:
     check("9800" in got, "specifically, 'Order Rune (R06a)' is found")
 
 
-def case_do_search_known_gap_hash_prefixed_composed_letter_number() -> None:
-    """KNOWN GAP, round-8 Opus delta review, 2026-09-25 (item 5, the reviewer's own
-    call: "older than this lane", disclosed rather than fixed here). `#24a` for a card
-    numbered `024a/219` MISSES — measured on the real store: 11 of 22 distinct
-    hash-prefixed composed-letter queries sampled missed their target SKU entirely.
+def case_do_search_number_widening_mirrors_canonical_number() -> None:
+    """F1, BLOCKING, round-9 Opus delta review, 2026-09-25, on 28d233b2 — the round-8
+    review's OWN CONTRADICTED claim: D271 round-8 item 5 said these shapes checked clean
+    ("0 missed", "neither reproduced"). They did not — the builder tested neighbours of
+    the reported inputs (`0024a`, a bare `4`), never the exact ones. Re-tested here
+    against the exact reported inputs, on the real store: EVERY sampled query of each
+    shape missed (bare-letter composed 11/11, extra-zero letter composed 11/11,
+    extra-zero plain composed 300/300, zero-padded digit word 1/1).
 
-    WHY: `#24a` fails `match._number_shape_ok` (the leading `#` is neither a letter nor
-    a digit), so the zero-pad widening refuses it before it ever runs. The BASE FTS
-    query's own `#`-stripped alternate spelling (which DOES rescue a query like `#r04a`
-    for a letter-prefixed number with no slash — a real FTS token, unchanged) cannot
-    rescue this shape either: the stored FTS token is the WHOLE composed number,
-    `024a/219`, which starts with `0`, never `2` or `#` — no prefix search from either
-    spelling reaches it.
+    THE CAUSE, IN NUMBER NORMALIZATION: the old widening gate,
+    `match._number_shape_ok(term)`, checks ONE side of a number only — a term
+    containing `/` (`24a/219`, `0027/166`) fails it outright, so no COMPOSED query term
+    ever reached any number widening at all. `match._number_match` (the DECISIVE step)
+    never had this bug: it already splits on `/` via `match.canonical_number`. Fixed:
+    `_number_candidate_forms` computes the SAME canonical forms `match._number_match`
+    itself would accept, so the widening step and the decisive step agree.
 
-    THIS CASE ASSERTS THE GAP, NOT A FIX — a future change that closes it should make
-    this assertion FAIL, which is the signal to flip it (delete the `check(not ...)`,
-    assert the real find instead, and delete this docstring's own "known gap" framing).
+    THE DIGIT-WORD SHAPE IS A SEPARATE GAP: `004` (or a bare digit like `4`) is
+    NUMBER-shaped, so it always reached the zero-pad widening — but that widening only
+    ever checked `number_key`/`number`/`number_display`, never `name`/`set_hint`/
+    `note`, even though `match_query`'s own rule 7 accepts a digit word in TEXT too.
+    Fixed: `_text_digit_word_matches` mirrors `match._digit_word_match` against the
+    same three text fields the substring rule already reads.
+
+    THE `#`-PREFIXED COMPOSED SHAPE (round-8's own disclosed gap,
+    `case_do_search_known_gap_hash_prefixed_composed_letter_number`, formerly here)
+    closes as a SIDE EFFECT of the same fix — `#24a` and `24a/219` now share the one
+    canonical-form comparison, so there is nothing left to disclose as a gap. This case
+    replaces that one.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    cases = [
+        ("Rengar, Unseen", "024a/219", "8801", "24a/219"),
+        ("Rengar, Unseen (hash)", "024a/219", "8802", "#24a"),
+        ("Hand Hammer", "027/166", "8803", "0027/166"),
+    ]
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        for i, (name, number, sku, _query) in enumerate(cases):
+            inv.cards[f"1/{i + 1}"] = master.Card(box=1, index=i + 1, name=name, number=number, sku=sku)
+        # A DIGIT WORD IN NAME TEXT — the card has no useful number of its own, so only
+        # the digit-word-in-text widening can ever surface it.
+        inv.cards["1/4"] = master.Card(
+            box=1, index=4,
+            name="While you control this battlefield, when you play a spell, if you spent 4 or more, PREDICT",
+            sku="8804",
+        )
+
+    for name, number, sku, query in cases:
+        found = [g["sku"] for g in cs.do_search(query)["groups"]]
+        check(sku in found, f"do_search({query!r}) finds {name!r} ({number!r})")
+
+    found = [g["sku"] for g in cs.do_search("004")["groups"]]
+    check("8804" in found, "do_search('004') finds the digit word 'spent 4' in name text")
+
+
+def case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor() -> None:
+    """F4, round-9 Opus delta review, 2026-09-25, on 28d233b2. Round 8 (item 7) claimed
+    the deleted fold-prefix rule's own job was a "strict SUPERSET" of the SUBSTRING
+    rule's compact-containment check — false. A DIFFERENTIAL over the real store found
+    one real disagreement: `bf` found "B.F. Sword" (`161/221`) through the fold rule
+    (which stripped ALL punctuation, including periods, before comparing), and finds
+    nothing without it, because `bf` is a 2-character term with no digit — the SAME
+    accepted 1-2 character TEXT floor (`_is_floor_query`) every other short text term
+    already lives inside. This is that gap, not a new one, and it stays as it is: the
+    fold rule's own NO-FLOOR design was the part correctly identified as dead weight,
+    never a guarantee that every query it once answered stays answered.
     """
     fresh_home()
     from store import Store, master
     from server import capture_server as cs
 
     with Store().write() as snapshot:
-        card = master.Card(box=1, index=1, name="Composed Letter Card", number="024a/219", sku="9700")
-        snapshot.inventory.cards["1/1"] = card
+        snapshot.inventory.cards["1/1"] = master.Card(box=1, index=1, name="B.F. Sword", number="161/221", sku="7903")
 
-    expected = _brute_force_matches("#24a")
-    got = {g["sku"] for g in cs.do_search("#24a")["groups"]}
-    check("9700" in expected, "match_query itself accepts '#24a' for '024a/219' (sanity: the gap is in do_search, not match_query)")
+    found = [g["sku"] for g in cs.do_search("bf")["groups"]]
     check(
-        "9700" not in got,
-        "KNOWN GAP: do_search('#24a') does NOT find '024a/219' today — flip this "
-        "assertion when the gap closes",
+        "7903" not in found,
+        "'bf' does not find 'B.F. Sword' — inside the accepted 1-2 character text "
+        "floor, unchanged by the fold-prefix rule's own deletion",
     )
 
 
@@ -1385,11 +1508,15 @@ CASES = [
     case_do_search_hostile_multiterm_query_stays_fast,
     case_deduped_capped_terms_dedupes_and_caps,
     case_do_search_hostile_repeated_terms_stay_fast_on_real_names,
+    case_do_search_rows_walked_is_exactly_one_when_widening_is_needed,
+    case_do_search_match_rank_calls_has_a_known_floor,
+    case_do_search_match_query_calls_has_a_known_floor,
     case_do_search_union_never_drops_a_row_a_single_term_widens,
     case_do_search_zero_pad_matches_a_composed_number,
     case_do_search_zero_pad_widens_a_digit_plus_letter_term,
     case_do_search_substring_widens_a_two_char_digit_term,
-    case_do_search_known_gap_hash_prefixed_composed_letter_number,
+    case_do_search_number_widening_mirrors_canonical_number,
+    case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor,
     case_do_search_widening_dedupes_case_variants,
     case_do_search_permanent_fuzz_agrees_with_match_query,
     case_do_search_still_refuses_an_unrelated_number,

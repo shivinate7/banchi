@@ -413,23 +413,30 @@ how the caller decided to call it.
 count in the hostile timing case. This is generous against every legitimate shape
 measured (at most 1,427 calls), nowhere near what an unbounded blowup would produce.
 
-**5. THREE DISCLOSED GAPS, KNOWN, NOT BLOCKING. The reviewer's own call: "older than this lane."** Measured on the real store copy:
-  - **`#`-PREFIXED COMPOSED-LETTER NUMBERS.** `#24a` for a card numbered `024a/219`
-    MISSES. 11 of 22 distinct hash-prefixed composed-letter queries sampled missed
-    their target entirely. `#24a` fails `match._number_shape_ok`, since a leading `#`
-    is neither letter nor digit. The zero-pad widening never runs. The base FTS
-    query's own `#`-stripped alternate spelling cannot reach it either. The stored FTS
-    token is the WHOLE composed number (`024a/219`), which starts with `0`, never `2`
-    or `#`. Case-table row: `case_do_search_known_gap_hash_prefixed_composed_letter_
-    number`, asserting the miss so a future fix flips it.
-  - **COMPOSED FORMS WITH AN EXTRA LEADING ZERO** (`0024a` for a card stored `024a/219`)
-    and **A DIGIT WORD IN NAME TEXT** (`4` for a card whose name contains "spent 4")
-    were BOTH CHECKED against the real store. Neither reproduced as a miss in this
-    measurement. 0 extra-zero composed queries missed. The one real card in the store
-    with a standalone 1-2 digit word in its name was found correctly. Named here as
-    checked, not as confirmed gaps. A smaller or differently-shaped sample than the
-    reviewer's own might explain the disagreement. This entry does not claim to have
-    reproduced what it could not measure.
+**5. THIS ITEM WAS WRONG, ROUND 8, AND IS REPLACED HERE. "0 extra-zero composed queries missed" and "neither reproduced" were both FALSE.** The round-8 builder tested NEIGHBOURS of the reported inputs — `0024a` (no
+slash) and a bare `4` — never the EXACT reported shapes (`0027/166`, and `4` specifically
+inside a longer sentence, "spent 4"). Tested against the exact inputs, on a fresh real
+store copy: EVERY sampled query of four shapes missed. Bare-letter composed (`24a/219`
+for `024a/219`): 11 of 11. Extra-zero letter composed (`0024a/219`): 11 of 11.
+Extra-zero plain composed (`0027/166` for `027/166`): 300 of 300. Zero-padded digit
+word in name text (`004`, "spent 4"): 1 of 1.
+
+**F1, round 9, CLOSES ALL FOUR SHAPES, in number normalization.** The candidate
+widening's own gate, `match._number_shape_ok(term)`, checks one side of a number only.
+A term containing `/` fails it outright. No COMPOSED query term ever reached any number
+widening at all, whatever its zero-padding. `match._number_match` (the DECISIVE step)
+never had this bug — it already splits on `/`, through `match.canonical_number`.
+`_number_candidate_forms` now computes the SAME canonical forms `match._number_match`
+itself accepts, so the widening step and the decisive step agree. The digit-word shape
+was separate. A pure-digit term always reached the zero-pad widening. That widening
+only ever checked the NUMBER columns, never `name`/`set_hint`/`note`. Fixed by
+`_text_digit_word_matches`, mirroring `match._digit_word_match` against the same three
+text fields the substring rule already reads. Re-verified at scale on a fresh real-store
+copy: 0 of 52 bare-letter composed queries missed. 0 of 52 extra-zero letter composed
+queries missed. 0 of 300 extra-zero plain composed queries missed. Case-table row:
+`case_do_search_number_widening_mirrors_canonical_number`. It replaces round 8's own
+`case_do_search_known_gap_hash_prefixed_composed_letter_number`. The `#`-prefixed
+composed shape that case disclosed as a gap closes as a side effect of the same fix.
 
 **6. ONE UNIT THROUGHOUT THIS ENTRY, CARD RECORDS, NEVER SKUS.** R5-4's own disclosure,
 above, is corrected in place. F6-7's own round-7 fix was ITSELF wrong. It corrected the
@@ -437,11 +444,12 @@ unit to cards but picked `on_hand`, excluding sold and departed copies, where
 `match_query`'s own count covers every state. `sc` measured on the real store:
 `match_query` accepts 195 card records, `do_search` returns 56, dropping 139.
 
-**7. THE FOLD-PREFIX RULE IS DELETED, NOT GUARDED. M10: "if it is redundant, delete it."** Checked empirically: removing it left every case in this file's own table, and
-the permanent fuzz, still green. The SUBSTRING rule's compact-containment check is a
-strict superset of a prefix check. F6-2 (above) closed the one gap that check would
-otherwise have left open. See `_fts_supplemental_candidates`'s own docstring for the
-argument in full.
+**7. THE FOLD-PREFIX RULE IS DELETED, NOT GUARDED. M10: "if it is redundant, delete it." CORRECTED, round-9: "strict superset" was FALSE.** A differential over the real store found one real disagreement: `bf` found "B.F. Sword"
+(`161/221`) through the fold rule, which stripped ALL punctuation before comparing. `bf`
+finds nothing without it. `bf` is a 2-character term with no digit — the SAME accepted
+1-2 character TEXT floor (`_is_floor_query`) every other short text term already lives
+inside. The behaviour stays as it is. See `case_do_search_fold_deletion_narrowed_bf_to_
+the_accepted_floor` and `_fts_supplemental_candidates`'s own docstring.
 
 **RE-TIMED ON A FRESH REAL-STORE COPY, R8-FIXED CODE:**
 
@@ -478,3 +486,50 @@ Every shape stays under 240ms p95. F6-2's own `6a` row went from a 30-byte empty
 
 M6, M7, M9, M11 and M12 are not described in this round's brief. This entry names only
 the mutations it was given a definition for, rather than guessing at the rest.
+**ROUND 9, OPUS DELTA REVIEW, 2026-09-25, ON 28d233b2.** Three blocking items, one doc
+item. All four closed here.
+
+**F1 IS THE FOUR-SHAPE FIX ABOVE (item 5).** Round 8's own D271 text was wrong about it,
+also corrected above.
+
+**F2: `rows_walked` COULD NOT SEE A SECOND CONNECTION.** Round-8's own claim — "no
+matter which code... issues it" — overclaimed. The trace is scoped to ONE connection,
+`do_search`'s own. A per-term scan issued on a SECOND, untraced `db.connect(...)` stayed
+green at `rows_walked=0`. The round-8 test suite never forced the widening branch at
+all (`in (0, 1)` passes on a query that never widens too). Fixed two ways: the docstring
+now says exactly what the trace sees, scoped to one connection, never "any code
+anywhere". A new case,
+`case_do_search_rows_walked_is_exactly_one_when_widening_is_needed`, names a query
+that MUST widen. It asserts `rows_walked == 1` exactly. A disconnected trace, or a scan
+on an untraced second connection, now reads 0 here and fails.
+
+**F3: EACH COUNTER NEEDED A KNOWN NON-ZERO FLOOR.** Every existing case set only an
+UPPER bound. Deleting either increment (`match_rank_calls` inside `_match_rank`, or
+`match_query_calls` in the rank loop) stayed green — 0 is always at or under any upper
+bound. Two new cases, each a single-term query that matches a real card: `match_rank_
+calls >= 1` and `match_query_calls >= 1`.
+
+**F4 IS THE "STRICT SUPERSET" CORRECTION ABOVE (item 7).**
+
+**F5: `_SEARCH_WORK_COUNTERS` IS UNLOCKED MODULE STATE, NOTED.** `REQUEST_SLOTS` threads
+concurrent requests through the same dict, unlocked. Production never reads it, so there
+is no user-facing effect — but a concurrent TEST could read another request's counts.
+Documented at the dict's own definition: tests must read it single-threaded, one
+`do_search` call per `_reset_search_work_counters()`.
+
+**MUTATION RESULTS, ROUND 9, EACH CONFIRMED RED THEN RESTORED, AGAINST THE FINAL 192-CASE TABLE:**
+
+| Mutation | Reverts | Result |
+|---|---|---|
+| F1's own fix (`_is_number_shape` back to `_number_shape_ok`) | the composed-number normalization fix | 2 cases fail |
+| Composed-number prefix check removed (equality only) | the composed-number widening | 6 cases fail |
+| `conn.set_trace_callback` removed | F2's own fix | 1 case fails |
+| A second, untraced `db.connect(...)` added for the row walk | F2's own fix | 1 case fails |
+| `match_rank_calls` increment removed | F3's own fix | 1 case fails |
+| `match_query_calls` increment removed | F3's own fix | 1 case fails |
+| M1 (decisive check before the rank loop) | R5-1 | 4 cases fail |
+| M3 (case-folded widening dedupe) | R5-3 | 1 case fails |
+| M8 (the 2-character digit-bearing substring floor) | F6-2 | 2 cases fail |
+
+Every mutation here was chosen because round 9's own review named it directly.
+

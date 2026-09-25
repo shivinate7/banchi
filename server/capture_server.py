@@ -10179,6 +10179,12 @@ _SUPPLEMENTAL_TERM_CAP = 8
 # as a plain dict afterward. Never read in production code, and the increment itself is
 # one dict lookup plus one addition, cheap enough that leaving it always-on costs
 # nothing worth removing it for.
+#
+# UNLOCKED MODULE STATE (F5, round-9 Opus delta review, 2026-09-25). `REQUEST_SLOTS`
+# threads a real request through concurrently and this dict is not locked, so two
+# in-flight searches increment the SAME counters together. Tests must read it
+# single-threaded — one `do_search` call per `_reset_search_work_counters()`, never two
+# concurrent ones sharing a read.
 _SEARCH_WORK_COUNTERS = {"match_rank_calls": 0, "match_query_calls": 0, "rows_walked": 0}
 
 _CARDS_TABLE_SCAN = re.compile(r"\bFROM\s+cards\b", re.IGNORECASE)
@@ -10186,14 +10192,24 @@ _CARDS_TABLE_SCAN = re.compile(r"\bFROM\s+cards\b", re.IGNORECASE)
 
 def _count_cards_scan(sql: str) -> None:
     """Attached to a connection via `sqlite3.Connection.set_trace_callback` — fires for
-    EVERY SQL statement that connection runs, whichever Python function issued it (F6-6's
+    EVERY SQL statement THAT CONNECTION RUNS, whichever Python function issued it (F6-6's
     own robustness gap, round-8 Opus review, 2026-09-25). The round-7 version counted
     inside `_fts_supplemental_candidates`'s own row-walk loop — proof that loop ran, and
     nothing else. Loading round-6's four separate per-term SQL sources back in (each its
-    own `conn.execute`, a different code path entirely) stayed green at `rows_walked=0`,
-    because that counter never SAW those scans happen. A CONNECTION-LEVEL trace is tied
-    to the SQL itself, not to one function's own source text, so it counts a `cards`
-    table scan no matter which code — old, new, or a future rewrite — issues it.
+    own `conn.execute`, a different code path entirely, SAME connection) stayed green at
+    `rows_walked=0`, because that counter never SAW those scans happen.
+
+    SCOPED TO ONE CONNECTION, NEVER TO ALL SQL EVERYWHERE (narrowed, round-9 Opus delta
+    review, 2026-09-25 — the round-8 docstring overclaimed "no matter which code — old,
+    new, or a future rewrite — issues it"). `do_search` opens exactly ONE connection
+    today and attaches this trace to it, so this counts a `cards` table scan issued by
+    ANY function running on THAT connection — round-6's old architecture, a future
+    rewrite, anything — but a scan on a SEPARATE connection this trace was never
+    attached to is invisible to it, the same way the round-7 counter was invisible to a
+    different FUNCTION. A future code path that opens its own `db.connect(...)` inside
+    `_fts_supplemental_candidates` (or anywhere else `do_search` reaches) needs its own
+    trace, or needs to reuse `do_search`'s own connection — this function cannot see
+    across a connection boundary by itself.
 
     STATEMENTS, NOT ROWS. `set_trace_callback` reports the SQL text run, never how many
     rows it touched, and re-reading every cursor to count rows would cost more than the
@@ -10241,48 +10257,84 @@ def _deduped_capped_terms(text: str, *, lower: bool = False) -> List[str]:
     return list(dict.fromkeys(terms))[:_SUPPLEMENTAL_TERM_CAP]
 
 
-def _bare_number(value: Optional[str]) -> str:
-    """The stored side of a zero-pad comparison, lower-cased then stripped the same way
-    `match._drop_leading_zeros` strips a query term — LETTER-PREFIX AWARE (F6-1, round-7
-    Opus delta review, 2026-09-25). `match.canonical_number` already strips zeros AFTER
-    any leading letters, not only at the string's absolute front (`tg05` is `tg5`), but
-    the OLD zero-pad widening used SQL `LTRIM(col, '0')`, which strips from the front
-    ONLY — never touching a letter-prefixed number at all (`R01a` starts with `R`, so
-    `LTRIM` leaves it untouched). Reused directly, the one primitive this repo already
-    has for the leading-zero rule, rather than a second, SQL-shaped copy of it."""
-    return match._drop_leading_zeros(value.lower()) if value else ""
+def _number_candidate_forms(term: str) -> set:
+    """Every canonical form `match._number_match` itself would accept for this term —
+    MIRRORS IT EXACTLY (F1, round-9 Opus delta review, 2026-09-25, replacing `_bare_
+    number`'s own ad hoc zero-strip, which never split a composed term on `/` at all).
+
+    THE BUG, MEASURED ON THE REAL STORE: `24a/219` (bare-letter composed, no leading
+    zero typed) missed Rengar, Unseen `024a/219` — 11 of 11 sampled. `0027/166` (extra
+    zero, composed) missed Hand Hammer `027/166` — 11 of 11 letter-composed, 300 of 300
+    plain-composed sampled. The WIDENING gate was `match._number_shape_ok(term)`, which
+    checks ONE side of a number only (0-6 letters, digits, 0-2 letters) — a term
+    containing `/` fails it outright (the trailing `/219` is neither letter nor digit,
+    so the shape check never reaches the end of the string), so a composed QUERY term
+    never reached this widening at all, regardless of how correct the zero-strip itself
+    might have been.
+
+    `match._number_match` (the DECISIVE step) never had this bug — it already splits on
+    `/` per side via `canonical_number`, strips a leading `#`, and folds a hyphen
+    standing for the slash via `_hyphen_to_slash`, then validates the WHOLE form with
+    `match._is_number_shape` (which DOES split on `/`). This function computes the
+    IDENTICAL candidate forms, so the widening step accepts exactly what the decisive
+    step would — no second, slightly different shape rule to keep in step."""
+    bare = term[1:] if term.startswith("#") else term
+    if not match._has_digit(bare):
+        return set()
+    forms = {match.canonical_number(bare), match.canonical_number(match._hyphen_to_slash(bare))}
+    return {f for f in forms if match._is_number_shape(f)}
+
+
+def _text_digit_word_matches(term: str, folded_field: str) -> bool:
+    """Rule 7's digits-only TEXT-word match, for ONE term against one already-folded
+    field — MIRRORS `match._digit_word_match` EXACTLY (F1, round-9 Opus delta review,
+    2026-09-25). `004` missed the card whose name contains "spent 4": `_prepare` in
+    `match.py` builds `words` from EVERY all-digit word in every folded text field, and
+    `_digit_word_match` compares a query term against those WORDS — a TEXT rule, never a
+    NUMBER-field one. The zero-pad widening above only ever checked `number_key`/
+    `number`/`number_display` — a pure-digit term reached it (it easily passes the
+    shape check), but nothing here ever looked at `name`, `set_hint` or `note` for it,
+    so a card findable only through its TEXT carrying that digit was never a candidate."""
+    words = [w for w in folded_field.split(" ") if w and match._DIGITS_ONLY.match(w)]
+    if not words:
+        return False
+    if match._ZEROS_ONLY.match(term):
+        return any(w.startswith(term) for w in words)
+    bare = match._drop_leading_zeros(term)
+    if term != bare:
+        return any(w.startswith(term) or match._drop_leading_zeros(w) == bare for w in words)
+    return any(match._drop_leading_zeros(w).startswith(bare) for w in words)
 
 
 def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
     """Every extra candidate the base FTS5 query (`_fts_query`, above) cannot reach on its
-    own — a SECOND half of a number alone (`/132`), a zero-pad mismatch (`934` for `0934`,
-    now letter-prefixed forms too — `tg5` for `tg05`), a hyphen or apostrophe FTS5 hides
-    (`hooh` for `Ho-Oh`), or a MID-WORD fragment (`izard` for `Charizard`) — DEDUPED AND
-    CAPPED ACROSS TERMS (R1, round-4), UNIONED NEVER INTERSECTED (F2, round-5), in ONE
-    ROW WALK FOR EVERY TERM TOGETHER (F6-3, round-7 Opus delta review, 2026-09-25,
-    BLOCKING BY THE OWNER'S OWN RULING: "NOT accepted").
+    own — a SECOND half of a number alone (`/132`), a NUMBER mismatch a canonical compare
+    closes (`934` for `0934`, `tg5` for `tg05`, `24a/219` for `024a/219`, a DIGIT WORD
+    inside NAME text (`004` for a name containing "spent 4"), or a MID-WORD fragment
+    (`izard` for `Charizard`) — DEDUPED AND CAPPED ACROSS TERMS (R1, round-4), UNIONED
+    NEVER INTERSECTED (F2, round-5), in ONE ROW WALK FOR EVERY TERM TOGETHER (F6-3,
+    round-7, BLOCKING BY THE OWNER'S OWN RULING: "NOT accepted").
 
     ONE WALK, NOT FOUR TIMES EIGHT (F6-3). The four widenings used to be four SEPARATE
     functions, each its own `SELECT ... FROM cards` — a real O(store) scan apiece,
-    because none of them can use an index (a `LIKE` with a leading `%`, an `LTRIM` on
-    every row, or a Python fold no SQL can express). Up to 8 distinct terms times 4
-    sources is up to 32 full-table scans for ONE query. Measured on the owner's real
-    store: 8 distinct 3+ letter mid-word terms took 450-536ms p50, up to 860ms p95 — the
-    scan cost multiplying by TERM COUNT, exactly the shape `_SUPPLEMENTAL_TERM_CAP`
-    exists to bound, still uncapped because the WALK COUNT was never the thing capped.
-    This function now reads each card's row ONCE (`SELECT key, sku, number_key, number,
-    number_display, name, set_hint, note`) and checks every term's every widening rule
-    against that one row before moving to the next — the cap still bounds how many
-    DISTINCT terms are checked; it no longer multiplies the WALK count too.
+    because none of them can use an index (a `LIKE` with a leading `%`, or a Python fold
+    no SQL can express). Up to 8 distinct terms times several sources is many full-table
+    scans for ONE query. This function reads each card's row ONCE and checks every
+    term's every widening rule against that one row before moving to the next.
 
-    A 2-CHARACTER NUMBER-SHAPED TERM NOW WIDENS (F6-2, round-7 Opus delta review,
-    2026-09-25). The zero-pad rule's own floor used to be `len(term) < 3`, inherited
-    whole from the MID-WORD TEXT floor (R3) it was never about — R3's floor exists
-    because a 1-2 character TEXT fragment matches almost every row (`q=a` measured a
-    582ms full scan). A NUMBER-shaped term is not that: `6a` is already a specific
-    collector-number code, not a common substring. `match._number_shape_ok` plus a
-    2-character floor (`match._has_digit` requires at least one digit, so a bare 1-letter
-    term still never reaches this rule) replaces the borrowed floor.
+    A 2-CHARACTER NUMBER-SHAPED TERM WIDENS (F6-2, round-7). R3's mid-word TEXT floor
+    (3 characters) never applied to numbers — `6a` is already a specific collector-number
+    code, not a common substring.
+
+    NUMBER MATCHING MIRRORS `match._number_match` EXACTLY, via `_number_candidate_forms`
+    (F1, round-9 Opus delta review, 2026-09-25 — see that function's own docstring for
+    the bug this replaces: `_number_shape_ok`, checked directly against a term that
+    might contain `/`, refused every COMPOSED query term outright, so `24a/219`,
+    `0027/166` and their kind never reached ANY number widening).
+
+    A DIGIT WORD IN TEXT ALSO WIDENS (F1, round-9), via `_text_digit_word_matches` —
+    mirroring `match._digit_word_match`'s own rule against `name`/`set_hint`/`note`,
+    never only against the number columns.
 
     DEDUPED ON THE FOLDED FORM, `lower=True` (R5-3, round-6). `lower=False` would let
     `ex`, `EX`, `Ex` and `eX` burn 4 of the 8-term cap on the SAME word spelled 4 ways —
@@ -10290,62 +10342,61 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
     distinct bytes.
 
     UNION, NEVER INTERSECTION (F2, round-5). The first version of this function
-    INTERSECTED across terms — wrong whenever only one term needed a widening at all
-    (`izard ex` found 20 rows before the intersection existed, 0 after, because `ex`
-    never needed widening and the intersection of "what `izard` widened" with "nothing"
-    is empty). The base FTS `hits` dict already carries the real AND across every term
-    via one combined `MATCH` expression, so this function only ever WIDENS what
-    candidates the decisive step (`match.match_query`, in `do_search` below) gets to
-    see — it can never make an already-passing row disappear, and a union can only add
-    rows, never remove one the base query already found.
+    INTERSECTED across terms — wrong whenever only one term needed a widening at all.
+    The base FTS `hits` dict already carries the real AND across every term via one
+    combined `MATCH` expression, so this function only ever WIDENS what candidates the
+    decisive step (`match.match_query`, in `do_search` below) gets to see — it can never
+    make an already-passing row disappear, and a union can only add rows, never remove
+    one the base query already found.
 
     A SUPERSET, like every candidate source here has always been: `match.match_query`
     (or `_match_rank`, for a single-term query) still decides which candidate is real.
 
     THE FOLD-PREFIX RULE IS DELETED (M10, round-8 Opus delta review, 2026-09-25: "if it
-    is redundant, delete it"). It matched a hyphen/apostrophe-stripped compact PREFIX of
-    `name` alone, with no length floor at all. Checked empirically: removing it left
-    every case in this file's own table, and the permanent fuzz, still green — the
-    SUBSTRING rule's own compact-containment check (`compact_term in compact_field`,
-    below) is a strict SUPERSET of a prefix check (a prefix is a substring that happens
-    to start at position 0), and once F6-2 let a digit-bearing 2-character term into the
-    substring rule too, nothing was left that only the fold rule could reach. A term
-    short enough that ONLY the fold rule's no-floor prefix check would have found it is
-    a pure-text 1-2 character term with no digit — `_is_floor_query`'s own definition of
-    an accepted gap, not a case this rule was ever meant to rescue.
-    """
+    is redundant, delete it"). CORRECTED, round-9 Opus delta review, 2026-09-25: the
+    SUBSTRING rule's compact-containment check is a superset of a prefix check for MOST
+    terms, but NOT a strict one — `bf` found "B.F. Sword" through the deleted fold rule
+    (which stripped ALL punctuation before comparing) and finds nothing through the
+    substring rule alone, because `bf` is a 2-character term with no digit, which the
+    substring rule's own floor (F6-2, above) never admits. `bf` sits inside the accepted
+    1-2 character TEXT floor (`_is_floor_query`), the SAME gap R3 already accepted for
+    every other short text term — this is that gap, not a new one, and the fold rule's
+    own no-floor design was the part actually redundant to remove, not a guarantee that
+    every query it once answered stays answered."""
     terms = _deduped_capped_terms(text, lower=True)
     if not terms:
         return []
 
     slash_suffixes: Dict[str, set] = {}
-    zero_pad_bare: Dict[str, str] = {}
+    number_forms: Dict[str, set] = {}
+    digit_word_terms: set = set()
     substring_terms: Dict[str, Tuple[str, str]] = {}
     for term in terms:
         found = _LEADING_SLASH_DIGITS.match(term)
         if found:
             digits = found.group(1)
             slash_suffixes[term] = {digits, digits.zfill(3)}
-        # F6-2: 2+ characters, at least one digit, and the same shape
-        # `match.canonical_number`'s own rule accepts (0-6 leading letters, 1+ digits,
-        # 0-2 trailing letters) — never the borrowed 3-character TEXT floor.
-        if len(term) >= 2 and match._has_digit(term) and match._number_shape_ok(term):
-            zero_pad_bare[term] = match._drop_leading_zeros(term)
-        # F6-2, STILL OPEN ON THE REAL COPY (round-8 Opus review, 2026-09-25). `6a`
-        # missed "Order Rune (R06a)" — `match_query` accepts it by rule 7's own
-        # SUBSTRING check (no floor at all there), but this rule's 3-character floor
-        # refused the term before the scan ever ran, R7's own fix having lowered only
-        # the ZERO-PAD floor, never this one. A digit-bearing 2-character term is the
-        # SAME shape `_is_floor_query` already treats as NOT a floor term (a floor term
-        # is 1-2 characters AND carries no digit) — so the floor here now agrees with
-        # that definition instead of contradicting it.
+        # F1, round-9: mirrors `match._number_match` exactly — splits a composed term
+        # on `/`, strips a leading `#`, folds a hyphen standing for the slash. No
+        # length floor here: `match._number_match` itself has none, and a term this
+        # rule accepts is already number-shaped, never a common text substring.
+        forms = _number_candidate_forms(term)
+        if forms:
+            number_forms[term] = forms
+        # F1, round-9: a pure-digit term widens against TEXT fields too now, mirroring
+        # `match._digit_word_match`. No letter, so this never collides with the
+        # substring rule below.
+        if match._DIGITS_ONLY.match(term):
+            digit_word_terms.add(term)
+        # F6-2, round-7: a digit-bearing 2-character term widens; R3's mid-word TEXT
+        # floor (3 characters) was never about numbers.
         if (len(term) >= 3 or (len(term) == 2 and match._has_digit(term))) and match._has_letter(term):
             folded_term = match.fold_text(term)
             compact_term = match.compact_text(term)
             if folded_term:
                 substring_terms[term] = (folded_term, compact_term)
 
-    if not (slash_suffixes or zero_pad_bare or substring_terms):
+    if not (slash_suffixes or number_forms or digit_word_terms or substring_terms):
         return []
 
     out: Dict[str, str] = {}
@@ -10355,7 +10406,7 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
     ):
         key = str(key)
         number_cols = (number_key, number, number_display)
-        folded_fields = None  # computed lazily, only if a substring term needs it
+        folded_fields = None  # computed lazily, only if a substring or digit-word term needs it
 
         for term in terms:
             matched = False
@@ -10367,34 +10418,46 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
                         matched = True
                         break
 
-            if not matched and term in zero_pad_bare:
-                bare = zero_pad_bare[term]
+            if not matched and term in number_forms:
+                forms = number_forms[term]
                 for column in number_cols:
                     if not column:
                         continue
-                    col_bare = _bare_number(column)
-                    if col_bare == bare or col_bare.startswith(bare + "/"):
-                        matched = True
+                    col_canonical = match.canonical_number(column)
+                    for form in forms:
+                        whole = "/" in form
+                        if col_canonical == form or (not whole and col_canonical.startswith(form + "/")):
+                            matched = True
+                            break
+                    if matched:
                         break
 
-            if not matched and term in substring_terms:
-                folded_term, compact_term = substring_terms[term]
+            if not matched and (term in substring_terms or term in digit_word_terms):
                 if folded_fields is None:
                     folded_fields = [
                         (match.fold_text(field), match.compact_text(field))
                         for field in (name, set_hint, note)
                         if field
                     ]
-                for folded_field, compact_field in folded_fields:
-                    if folded_term in folded_field or (compact_term and compact_term in compact_field):
-                        matched = True
-                        break
+                if term in substring_terms:
+                    folded_term, compact_term = substring_terms[term]
+                    for folded_field, compact_field in folded_fields:
+                        if folded_term in folded_field or (compact_term and compact_term in compact_field):
+                            matched = True
+                            break
+                if not matched and term in digit_word_terms:
+                    for folded_field, _compact_field in folded_fields:
+                        if _text_digit_word_matches(term, folded_field):
+                            matched = True
+                            break
 
             if matched:
                 out.setdefault(key, sku)
                 break  # this row is already a candidate — no need to check its other terms
 
     return list(out.items())
+
+
 def _card_match_fields(card: master.Card) -> "match.MatchFields":
     """This card, in the generic shape `server/match.py:match_query` takes — the same
     contract `app/src/kit/match.ts` speaks (S2, UX-173 amended). Built off the fields
