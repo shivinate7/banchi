@@ -42,7 +42,11 @@ addresses it. It adds the freedom the owner asked for.
 
 ### What is open
 
-The shape of the key is not decided. The builder brings options to the owner with measurements:
+**Answered by the owner, 2026-09-25**, verbatim: "A key on each card". Every card carries its
+own order key, apart from its stored index. D-a-key-on-each-card records the form that was
+built from that ruling. The list below is the question as it was put.
+
+The shape of the key was not decided. The builder brings options to the owner with measurements:
 
 - **The form.** A sortable fraction between two neighbors, integers with gaps, or an order
   within the section object. Each costs something different on a long box.

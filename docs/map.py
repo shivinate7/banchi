@@ -2797,8 +2797,7 @@ COMPONENTS = [
                         "excused by a RECORDED digest with the audit going red when that "
                         "digest is mutated; and a `-9` mid-transaction leaving the store "
                         "byte-identical",
-                "governed_by": ["D18", "D26", "D80", "D83", "D88", "D89", "D172",
-                                "D183"],
+                "governed_by": ["D18", "D26", "D80", "D83", "D88", "D89", "D172", "D183", "D265"],
             },
             "submission-selftest.py": {
                 "does": "proves the identify claim table by violating it. A throwaway store "
