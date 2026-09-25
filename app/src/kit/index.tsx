@@ -64,6 +64,235 @@ export function Button({
   )
 }
 
+/* ---- IconButton ---------------------------------------------------------------
+   THE ONE ICON-ONLY BUTTON (owner's ruling, 2026-09-24, ICONOGRAPHY; D-icon-buttons;
+   `docs/specs/iconography.md`): a common, repeated action from the vocabulary — Mark sold,
+   Undo, Retire, Edit, Delete, Copy, Download, Open, Close, Filter, Sort, Hold, Release,
+   Reveal, Hide, Clear, and the rest the spec names — becomes an icon with a `label` that is
+   REQUIRED: an icon with no word is a guess, not a control. A press that spends money or
+   cannot be undone (Send, Identify, Stand down) keeps its words and stays a plain `Button`.
+   `kit-adoption`'s `R2-icon-only-button` rule refuses the shapes a screen reaches for
+   instead — `iconOnly` on `Button`, a hand-rolled `<button>`/`<svg>`, or a worded `Button`
+   whose label is a vocabulary verb — outside this file, so every icon action in the product
+   goes through here.
+
+   THE VISUAL BOX IS THE FACE — 28px at `size="md"`, the density a packed row like a walk or
+   a table needs, matching `FLT-24` (one control height in a field row) — and the 40px thumb
+   floor (D117) is a `::before` pseudo-element, `max(40px, 100%)` centred over the real box
+   (kit.css). A round review found the earlier "outer box is the hit area" shape grew a
+   34px field row to 40px on the first keystroke (`SearchField`) and broke `FLT-24` and the
+   `.bn-sort-dir` field-edge floor everywhere else — this is that fix (the orchestrator's
+   ruling, round 2, option a). The pseudo-element expands the CLICKABLE region past the
+   painted box without moving anything, the same way base.css never lets `:hover`/`:active`
+   touch layout (D118). Reuses `button`'s own D50 cursor/response/press floors for free (a
+   bare-tag selector in base.css).
+
+   `label` is BOTH the tooltip text and, when `name` is not given, the accessible name. `name`
+   is for a row where every instance would otherwise announce the same word — "Undo the sale
+   at Section 2, Card 5" as `name`, "Undo" as the short `label` a tooltip has room for. `name`,
+   when given, MUST contain `label` (WCAG 2.5.3, "Label in Name" — a screen reader's voice
+   command matches against the visible label, so the spoken name has to include it word for
+   word); a call site that breaks this is loud in development, never silently wrong in
+   production.
+
+   THE TOOLTIP STAYS A DOM CHILD OF THE BUTTON (never a portal: `app/tests/icon-button.spec.ts`
+   finds it with `button.querySelector('.bn-icon-tip')`, matching how the rest of the kit
+   reads its own markup). What changed after the round-2 review is the POSITION, not the
+   parentage: `reposition()` below measures the button and the tip with `getBoundingClientRect`
+   and sets `position: fixed` coordinates, clamped inside the viewport and flipped below the
+   button when there is no room above it. `position: fixed` is computed against the true
+   viewport regardless of an ancestor's `overflow` (no ancestor here sets `transform`, which
+   is the one thing that would re-anchor it) — so `.bn-sheet`'s own `overflow: hidden`, which
+   clipped the overlay Close tooltip at the top of a sheet before this fix, no longer reaches
+   it. `reposition()` runs on the same events that reveal the tip — pointer enter, focus, and
+   the long-press timer firing — so the coordinates are set before the opacity transition
+   starts and nothing visibly jumps.
+
+   VISIBILITY IS STILL CSS, not React state, for hover and keyboard focus: `:hover` (now
+   wrapped in `@media (hover: hover)`, so a touchscreen tap does not leave a phantom hover
+   after the finger lifts — round 2's own finding) and `:focus-visible` (never a mouse
+   `:focus`, so a click does not leave the tip stuck open). A touch long-press sets
+   `data-tip-open` after `LONG_PRESS_MS`, and — new in round 2 — the touch that opened it
+   calls `preventDefault()` on its own `touchend`, so the long-press that reveals "Delete"
+   never also fires the delete. It is `aria-hidden`: the accessible name is the button's own
+   `aria-label`, never the tooltip's text, so a screen reader is never told the label twice.
+
+   `pressed` marks a toggle of one act (Hold/Release, Reveal/Hide) with `aria-pressed`, tinted
+   like `Chip`'s own pressed state — change the label AND the icon together on a toggle, never
+   the icon alone (D118). `badge` draws a small count at the corner, `aria-hidden` and
+   `pointer-events: none`, so its arrival moves nothing (D118) — the accessible name for a
+   badged control is the caller's job (`name`), because only the caller knows the right
+   phrasing ("Filters, 3 on"). `kbd` also sets `aria-keyshortcuts`, so the key survives in the
+   accessible name's own metadata even though it is drawn only in the tooltip, not the face. */
+const LONG_PRESS_MS = 500
+const FACE_PX: Record<ButtonSize, number> = { sm: 24, md: 28, lg: 34, xl: 40 }
+const GLYPH_PX: Record<ButtonSize, number> = { sm: 12, md: 14, lg: 16, xl: 18 }
+/** Clamp the tooltip inside the viewport, and flip it below the button when there is no room
+ *  above — the shape that fixed the overlay Close tooltip clipping at the top of a sheet. */
+function positionTip(btn: HTMLElement, tip: HTMLElement): void {
+  const b = btn.getBoundingClientRect()
+  const tw = tip.offsetWidth
+  const th = tip.offsetHeight
+  const margin = 6
+  let left = b.left + b.width / 2 - tw / 2
+  left = Math.max(margin, Math.min(left, window.innerWidth - tw - margin))
+  let top = b.top - th - 8
+  if (top < margin) top = b.bottom + 8
+  tip.style.left = `${Math.round(left)}px`
+  tip.style.top = `${Math.round(top)}px`
+}
+
+export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'aria-label' | 'title'> & {
+  readonly ref?: Ref<HTMLButtonElement>
+  readonly icon: IconName
+  /** The tooltip text, and the accessible name unless `name` overrides it. Required. */
+  readonly label: string
+  /** A longer accessible name for a row where `label` alone would repeat on every instance
+   *  ("Undo the sale at Section 2, Card 5"). The tooltip still shows the short `label`. MUST
+   *  contain `label` (WCAG 2.5.3) — a dev-mode check names the call site that does not. */
+  readonly name?: string
+  readonly size?: ButtonSize
+  /** The one variant this takes: everything that is not a danger press stays the kit's
+   *  default icon-only look (ghost), which is what every icon-only close/reload button in the
+   *  product already draws. */
+  readonly tone?: 'danger'
+  readonly busy?: boolean
+  /** A toggle of one act: Hold vs. Release, Reveal vs. Hide. Change the label and the icon
+   *  together with it, never the icon alone (D118). */
+  readonly pressed?: boolean
+  /** A small count at the corner — a filter bar's active-facet count. Never moves the layout
+   *  (D118): it is `position: absolute`, drawn outside the flow. Pass `name` too: the count
+   *  is `aria-hidden` and never reaches the accessible name by itself. */
+  readonly badge?: number | string
+  /** A keycap, shown inside the tooltip beside the label and set as `aria-keyshortcuts` on
+   *  the button itself — an icon-only control has no room on its face to spare for one. */
+  readonly kbd?: string
+}
+
+export function IconButton({
+  icon,
+  label,
+  name,
+  size = 'md',
+  tone,
+  busy,
+  pressed,
+  badge,
+  kbd,
+  className,
+  type = 'button',
+  style,
+  onTouchStart,
+  onTouchEnd,
+  onTouchCancel,
+  onMouseEnter,
+  onMouseLeave,
+  onFocus,
+  onBlur,
+  onClick,
+  ...rest
+}: IconButtonProps) {
+  if (import.meta.env.DEV && name !== undefined && !name.includes(label)) {
+    console.error(`IconButton: name "${name}" does not contain label "${label}" (WCAG 2.5.3, Label in Name).`)
+  }
+  const [longPress, setLongPress] = useState(false)
+  /* A CLICK DISMISSES ITS OWN TOOLTIP (round 2, `icon-button.spec.ts`). The mouse does not
+     move on a click, so `:hover` alone would leave "Mark sold" reading its own tooltip after
+     the press already changed the card under it. Cleared on the next mouseleave or blur, so
+     hovering away and back — or tabbing off and back — reads it again. */
+  const [dismissed, setDismissed] = useState(false)
+  const longPressFired = useRef(false)
+  const timer = useRef<number | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const tipRef = useRef<HTMLSpanElement>(null)
+  const reposition = () => {
+    if (btnRef.current && tipRef.current) positionTip(btnRef.current, tipRef.current)
+  }
+  const clearTimer = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    timer.current = null
+  }
+  const classes = ['bn-btn', 'bn-icon-btn', className ?? ''].filter(Boolean).join(' ')
+  return (
+    <button
+      ref={btnRef}
+      type={type}
+      className={classes}
+      style={{ width: FACE_PX[size], height: FACE_PX[size], ...style }}
+      aria-label={name ?? label}
+      aria-pressed={pressed}
+      aria-keyshortcuts={kbd}
+      data-tone={tone}
+      data-busy={busy ? 'true' : undefined}
+      data-tip-open={longPress ? 'true' : undefined}
+      data-tip-dismissed={dismissed ? 'true' : undefined}
+      onMouseEnter={(event) => {
+        reposition()
+        onMouseEnter?.(event)
+      }}
+      onMouseLeave={(event) => {
+        setDismissed(false)
+        onMouseLeave?.(event)
+      }}
+      onFocus={(event) => {
+        reposition()
+        onFocus?.(event)
+      }}
+      onBlur={(event) => {
+        setDismissed(false)
+        onBlur?.(event)
+      }}
+      onClick={(event) => {
+        setDismissed(true)
+        onClick?.(event)
+      }}
+      onTouchStart={(event) => {
+        clearTimer()
+        longPressFired.current = false
+        timer.current = window.setTimeout(() => {
+          longPressFired.current = true
+          setLongPress(true)
+          reposition()
+        }, LONG_PRESS_MS)
+        onTouchStart?.(event)
+      }}
+      onTouchEnd={(event) => {
+        clearTimer()
+        setLongPress(false)
+        /* THE PRESS THAT REVEALED THE TIP NEVER ALSO FIRES THE CLICK. A long-press on Delete
+           opening its tooltip is reading the control, not choosing it (round-2 review). */
+        if (longPressFired.current) event.preventDefault()
+        longPressFired.current = false
+        onTouchEnd?.(event)
+      }}
+      onTouchCancel={(event) => {
+        clearTimer()
+        setLongPress(false)
+        longPressFired.current = false
+        onTouchCancel?.(event)
+      }}
+      {...rest}
+    >
+      {/* No `style` override here (round 3's own bug): `Icon.tsx` spreads `rest` onto the
+          `<svg>` AFTER its own `width`/`height` attributes, and inline CSS beats an SVG
+          attribute — a `style={{ width: FACE_PX[size], ... }}` here drew every glyph at the
+          FACE size, not GLYPH_PX, filling the whole face. The button's OWN box is already
+          FACE_PX (its own inline `style` above) and `.bn-icon-btn`'s flex centring places the
+          smaller glyph inside it — nothing here needs to repeat that size. */}
+      <Icon name={icon} size={GLYPH_PX[size]} />
+      {badge !== undefined && badge !== 0 && badge !== '' ? (
+        <span className="bn-icon-count" aria-hidden="true">
+          {badge}
+        </span>
+      ) : null}
+      <span ref={tipRef} className="bn-icon-tip" aria-hidden="true">
+        {label}
+        {kbd ? <Kbd>{kbd}</Kbd> : null}
+      </span>
+    </button>
+  )
+}
+
 /* ---- Kbd ------------------------------------------------------------------------ */
 export function Kbd({ children, className }: { readonly children: ReactNode; readonly className?: string }) {
   return (
@@ -383,17 +612,16 @@ export function ReloadButton({
     return () => window.removeEventListener('keydown', onKey)
   }, [hotkey])
   return (
-    <Button
+    <IconButton
       icon="refresh"
+      label={label}
       kbd={hotkey ? 'R' : undefined}
       busy={busy}
       disabled={busy}
       aria-busy={busy ? 'true' : undefined}
       onClick={onReload}
       className={['bn-reload', className].filter(Boolean).join(' ')}
-    >
-      {label}
-    </Button>
+    />
   )
 }
 
