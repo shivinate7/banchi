@@ -1939,6 +1939,12 @@ class SkuMatch:
     # `live` reading and the export's, by `store/master.py:Listing.live_reading` (D87,
     # amended). `None` for a store-less match, where the row alone answers — `live_before`.
     live_out: Optional[int] = None
+    # THE LIVE COPIES THE SEND'S OWN GUARD FILE SHOWS (`emit --live-guard`), or `None` with no
+    # guard. A live reading like `live_out`, so `--cap` counts it (D7: "at most N copies LIVE"):
+    # `copies_out` and `live_now` take the larger. KEPT APART FROM `held_out` so the figure the
+    # send would have added WITHOUT the guard (`unguarded_room`) can still be measured, and a
+    # card the guard closes is named as the guard's trim, never as "asked for none" (R6-3).
+    guard_live: Optional[int] = None
 
     @property
     def condition(self) -> str:
@@ -2003,9 +2009,8 @@ class SkuMatch:
         SENTENCE about live quantity reads, so "4 live, at the cap of 4" can never be
         printed off a reading the store has since superseded — D59's own rule about a
         count under a false sentence."""
-        if self.live_out is None:
-            return self.live_before
-        return self.live_out
+        seen = self.live_before if self.live_out is None else self.live_out
+        return seen if self.guard_live is None else max(seen, self.guard_live)
 
     @property
     def copies_out(self) -> int:
@@ -2019,10 +2024,14 @@ class SkuMatch:
         outrank a newer store observation: with the store newer and lower, `_copies_out`
         answered 2 and the `max` put the file's 4 back, so a stale export closed the cap
         against a reading the store took after it. `held_out` is the arbitrated figure and
-        it answers alone."""
-        if self.held_out is None:
-            return self.live_before
-        return self.held_out
+        it answers alone. THE GUARD'S OWN READING, WHERE THE SEND HAS ONE, IS A FLOOR ON IT
+        (`guard_live`)."""
+        out = self._unguarded_out
+        return out if self.guard_live is None else max(out, self.guard_live)
+
+    @property
+    def _unguarded_out(self) -> int:
+        return self.live_before if self.held_out is None else self.held_out
 
     @property
     def add_to_quantity(self) -> int:
@@ -2060,10 +2069,19 @@ class SkuMatch:
         """What could go before this send's own quantity is applied: every copy TCGplayer does
         not already hold, under the ceiling when one was asked for. `add_to_quantity` is this
         bounded by `asked`, and the report reads both to say *asked 5, 3 can go*."""
+        return self._room(self.copies_out)
+
+    @property
+    def unguarded_room(self) -> int:
+        """`room` with the guard's reading left out: what the send would add with no guard. What
+        `cli/cmd_emit.py:_would` measures a trim against, so a card the guard closes under a cap
+        is still named as the guard's trim."""
+        return self._room(self._unguarded_out)
+
+    def _room(self, out: int) -> int:
         if self.live_cap is None:
             return len(self.uncommitted_positions)
-        ceiling = self.live_cap - self.copies_out
-        return max(0, min(ceiling, len(self.uncommitted_positions)))
+        return max(0, min(self.live_cap - out, len(self.uncommitted_positions)))
 
     @property
     def asked_short(self) -> bool:

@@ -190,6 +190,12 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
             if all(leg.match.live_out is None for leg in legs)
             else max(leg.match.live_out or 0 for leg in legs)
         ),
+        # THE GUARD'S READING, the same on every leg (`cli/cmd_emit.py:_apply_guard`).
+        guard_live=(
+            None
+            if all(leg.match.guard_live is None for leg in legs)
+            else max(leg.match.guard_live or 0 for leg in legs)
+        ),
     )
 
 

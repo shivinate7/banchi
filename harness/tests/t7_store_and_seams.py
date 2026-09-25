@@ -36234,7 +36234,7 @@ _M_SUB = {_M_A: "", _M_D: "0.10"}
 _M_SUBALL = {_M_A: "0.05", _M_D: "0.10", _M_R: "0.12"}
 _M_LAYOUT = {
     "one": [[0, 1, 2]], "two": [[0, 2], [1]], "share": [[0, 1, 2], [3, 4]],
-    "deep1": [[0, 1, 2, 5, 6]], "deep2": [[0, 2, 5], [1, 6]],
+    "deep1": [[0, 1, 2, 5, 6]], "deep2": [[0, 2, 5], [1, 6]], "share1": [[0, 1, 2, 5]],
 }
 _M_NONE_NAMED = {"prices": [], "moves": []}
 
@@ -36250,6 +36250,7 @@ _M_ONLY_PRICE = "nothing to send: every card left needs a price first"
 _M_ONLY_CUT = "nothing to send: every priced card left is under the cut-off, and --listed-only holds it back"
 _M_NOTHING_NEW = "nothing new to send: every card left is already at TCGplayer, held back, or has no room"
 _M_PRICE_LIVE2 = "nothing to send: 1 card needs a price first, and TCGplayer already holds every copy of 2 cards"
+_M_PRICE_LIVE1 = "nothing to send: 1 card needs a price first, and TCGplayer already holds every copy of 1 card"
 _M_PRICE_CUT_LIVE = (
     "nothing to send: 1 card needs a price first, and 1 priced card under the cut-off is held "
     "back by --listed-only, and TCGplayer already holds every copy of 1 card"
@@ -36391,6 +36392,21 @@ def _m_cases() -> Dict[str, dict]:
         "says": [f"{_M_R} — {_M_LIVE}"], "never": [_M_ASKED0], "route": None,
         "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
     }
+    # R7 F5 UNDER A CAP THE GUARD CLOSES, ON BOTH PATHS (the lane-end review of send-fixes). A
+    # cap of 1 with one Dunsparce live leaves no room, and the guard trims the reverse holo. The
+    # reverse holo is still the guard's trim, never "asked for none", and the headline names it.
+    # The cap fix first measured the trim with the guard's own reading, saw nothing to trim, and
+    # said "every card left needs a price first".
+    for layout, runs_label in (("share1", "one"), ("share", "two")):
+        cases[f"share/{runs_label}/cap1-guardall"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
+            "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 1, "files": {},
+            "says": [f"{_M_R} — {_M_LIVE}", f"{_M_D} — 1 live, at the cap of 1", _M_A, _M_PRICE_LIVE1,
+                     f'"sku": "{_M_R}"'],
+            "never": [_M_ASKED0, _M_ONLY_PRICE],
+            "route": ("needs_price", ["1 card needs a price first", "TCGplayer already had every copy of 1 card"]),
+            "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "3 ready"},
+        }
     # `--cap N` WITH `--live-guard`: THE CAP COUNTS THE COPIES THE GUARD SAYS ARE LIVE (D7: "at
     # most N copies LIVE"). Three Dunsparce are on hand, so the guard alone leaves room past the
     # cap. Before the fix the cap read only the store and the join's export, both 0 here, and

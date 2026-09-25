@@ -6,8 +6,9 @@ reads that constant to answer `nothing_to_send`, where it read two phrases befor
 row "suball/listed-sent" now asks for exit 1, the sentence and each card's reason, on both paths.
 The row was red on the old code.
 
-**What the fix moves on a screen.** `#/runs` draws a step that exits non-zero as refused. An emit
-over one run that adds nothing now reads as refused. Over several runs, it already did.
+**No screen changes.** No screen presses emit directly. `RunPanel` never calls its step
+function with emit. The client's merged emit function has no caller. The send route answered
+`nothing_to_send` before the fix and answers it now.
 
 **The defect, as it was recorded.** Run `pkmnscan emit --listed-only` after a full send. Over one
 run, it printed "nothing new to send" and exited 0. Over several runs, it printed "nothing to

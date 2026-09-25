@@ -483,13 +483,10 @@ def _apply_guard(guard, matches_by_sku, inventory):
             # THE GUARD'S READING IS A LIVE READING, SO `--cap` COUNTS IT (D7: "at most N
             # copies LIVE"). The cap is spent against `copies_out`, which read the store and
             # the join's export. A guard file that shows more live copies than either raised no
-            # bound, so `--cap 1` over one live copy sent one more. The larger reading wins, the
-            # only safe direction (`pipeline/merge.py:_merged_match` takes the same max).
-            seen = live.get(sku, 0)
-            if seen > match.copies_out:
-                match.held_out = seen
-            if seen > match.live_now:
-                match.live_out = seen
+            # bound, so `--cap 1` over one live copy sent one more. `SkuMatch.guard_live` takes
+            # the larger of the readings, and DEBT36 says what that
+            # costs. It is its own field, so `_would` still measures the send without the guard.
+            match.guard_live = live.get(sku, 0)
             if match.asked is None or match.asked > rooms[sku]:
                 match.asked = rooms[sku]
     return {"name": name, "live": live, "held": held, "rooms": rooms}
@@ -673,8 +670,10 @@ def _zero_rows_single(resolved, priced, changes, args, say):
 
 
 def _would(match, typed) -> int:
-    """What one match adds with the operator's own figure applied and no guard."""
-    room = match.room
+    """What one match adds with the operator's own figure applied and no guard. The room
+    WITHOUT the guard's reading: under `--cap` that reading closes the cap too, and measured
+    with it the guard's trim read as nothing to trim (the lane-end review of send-fixes)."""
+    room = match.unguarded_room
     asked = typed.get(match.sku)
     return room if asked is None else max(0, min(asked, room))
 
