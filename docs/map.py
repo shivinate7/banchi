@@ -6027,7 +6027,8 @@ COMPONENTS = [
                                          "top gap, one left edge, and the page is the `bn-page` "
                                          "query container. `Section` draws an h2. A new screen is "
                                          "one ROUTES entry plus a view that returns `<Page>`.",
-                                 "governed_by": ["D94", "D118", "D197", "D272", "D-icon-buttons"]},
+                                 "governed_by": ["D94", "D118", "D197", "D272", "D275",
+                                                 "D-icon-buttons"]},
             "src/kit/overlay.tsx": {"does": "the kit's overlays: `Sheet`, `Modal`, `Popover` and "
                                             "`ConfirmSheet`, each with one header and one Close, "
                                             "focus kept inside and given back, Escape for the top "
@@ -6635,7 +6636,7 @@ COMPONENTS = [
                                       # move what is around it when a drawer changes.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65",
                                                       "D117", "D118", "D130", "D142", "D164",
-                                                      "D195", "D205", "D218"]},
+                                                      "D195", "D205", "D218", "D272", "D275"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -7055,7 +7056,7 @@ COMPONENTS = [
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
                                 "D83", "D93", "D94", "D125", "D172", "D192", "D193", "D212", "D218",
-                                "D259"],
+                                "D259", "D275"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -7063,7 +7064,7 @@ COMPONENTS = [
                         "none is restated as a comment — they are asserted next door instead. "
                         "The temporary rule that hid the shell nav is gone: src/App.tsx stopped "
                         "rendering it on this route, which is the fix that rule named.",
-                "governed_by": ["D5", "D10", "D93", "D97", "D212", "D218"],
+                "governed_by": ["D5", "D10", "D93", "D97", "D212", "D218", "D275"],
             },
 
             # ---- step 6's component and the sheet that renders it ----
@@ -8724,7 +8725,7 @@ COMPONENTS = [
                         "block, route -> assertion -> lane: an unlisted failure is red and an "
                         "entry that now passes at every width is red (stale). Writes nothing. "
                         "Run by `make design-check`.",
-                "governed_by": ["D5", "D173", "D275", "D276", "D-runs-folds-into-review"],
+                "governed_by": ["D5", "D121", "D173", "D275", "D276", "D-runs-folds-into-review"],
             },
             "tests/locating.spec.ts": {
                 "does": "where a card is, said one way (the locating lane): at 1440, 820, 720 "

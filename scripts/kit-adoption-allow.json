@@ -9,10 +9,6 @@
     "app/src/Codes.tsx": {
       "R2-filter-row": "library"
     },
-    "app/src/Fulfillment.tsx": {
-      "R1": "fulfillment",
-      "R2-class": "fulfillment"
-    },
     "app/src/LiveReconcile.tsx": {
       "R2-dialog": "review",
       "R2-class": "review"
@@ -76,11 +72,7 @@
   },
   "runtime": {
     "/": {
-      "h1": "home",
       "top": "home"
-    },
-    "/capture": {
-      "top": "capture"
     },
     "/runs": {
       "top": "review"
@@ -97,9 +89,6 @@
       "page": "sales",
       "width": "sales",
       "top": "sales"
-    },
-    "/fulfillment": {
-      "page": "fulfillment"
     }
   }
 }

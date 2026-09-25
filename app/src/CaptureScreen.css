@@ -17,14 +17,17 @@
      screenshots this lane took at four widths are the check that this estimate holds — a
      tighter number wants a real measurement, not another guess. */
   --cap-head-h: 96px;
-  --cap-chrome: calc(var(--bn-3) + var(--cap-head-h) + var(--cap-gap) + var(--bn-4));
+  --cap-chrome: calc(var(--bn-page-top) + var(--cap-head-h) + var(--cap-gap) + var(--bn-4));
   display: flex;
   flex-direction: column;
   gap: var(--cap-gap);
   min-height: 100dvh;
-  /* The kit's horizontal inset, so the title's left edge lands where every other screen's
-     does; the vertical inset stays compressed for the viewfinder's sake. */
-  padding: var(--bn-3) var(--bn-7) var(--bn-4);
+  /* D272/D275, the follow-up lane after PR 2: the kit's own top gap, same as every other
+     screen -- measured to still clear the fold at 390x754 and 1440x900 (`--bn-page-top` is
+     4px more than this screen's old compressed pad on a phone, 12px more on a desktop
+     window; `--cap-chrome`'s own first term below moved with it, so the fold math this
+     screen already did for `--cap-head-h` stays exact). */
+  padding: var(--bn-page-top) var(--bn-7) var(--bn-4);
   /* The halt overlay below positions against THIS box, never the viewport, so it lines up
      under the rail regardless of width and needs no z-index fight with the shell (D118). */
   position: relative;
@@ -1269,12 +1272,18 @@
 }
 
 @media (max-width: 1023px) and (min-width: 768px) {
-  .capture.bn-page { padding: 12px 20px 16px; }
+  /* D272/D275, the follow-up lane after PR 2: was a literal 12px, matching the base rule's
+     old compressed pad. `--bn-page-top` is still the desktop 24px at this breakpoint (it
+     only drops at 767px and below). */
+  .capture.bn-page { padding: var(--bn-page-top) 20px 16px; }
 }
 
 /* ---- phone: the viewfinder first, then the run, then everything else ----------------------------------------------------- */
 @media (max-width: 767px) {
-  .capture.bn-page { padding: var(--bn-3) var(--bn-4) var(--bn-4); gap: var(--bn-3); }
+  /* D272/D275: was `var(--bn-3)` (12px). `--bn-page-top` is 16px here (the token's own
+     767px rule), and the phone `.capture-stage` height below is a fixed clamp() budget, not
+     this `--cap-chrome` calc -- it is re-measured for the 4px difference in the same commit. */
+  .capture.bn-page { padding: var(--bn-page-top) var(--bn-4) var(--bn-4); gap: var(--bn-3); }
   /* The lamp and the box sentence are drawn again inside the stage, 20px lower; the h1 and
      the odometer both show here now (Page's own header, R1, UX-048) — the old
      `.capture-head-text { display: none }` this replaced hid the title text entirely, which
@@ -1284,7 +1293,7 @@
   .capture-odo .bn-stat-value { font-size: var(--bn-fs-xl); }
   .capture-odo-rule { height: 22px; }
   .capture-shell { display: flex; flex-direction: column; gap: var(--bn-3); }
-  /* Sized by what is left above the tab bar, not by a ratio: top bar 52 + page pad 12 + head
+  /* Sized by what is left above the tab bar, not by a ratio: top bar 52 + page pad 16 + head
      38 + gap 12 above it, and gap 12 + run card head 92 + shutter 52 + THE TAB BAR + 12 of
      air below it.
      THE TAB BAR IS `var(--bn-tabbar-h)`, NEVER A LITERAL, because it is not a constant: it is
@@ -1318,8 +1327,14 @@
        The 260px floor forced 41.77px of overlap into the tab bar regardless of what this
        constant subtracted, because the calc() branch was already below the floor at that
        height — raising or lowering 366px could not reach it. 214px is that budget with a
-       ~4px margin, the same subpixel-rounding cushion the constant above already keeps. */
-    height: clamp(214px, calc(100dvh - 366px - var(--bn-tabbar-h)), 560px);
+       ~4px margin, the same subpixel-rounding cushion the constant above already keeps.
+
+       +4px, 2026-09-25 (D272/D275, the follow-up lane after PR 2): the phone page pad moved
+       from a flat 12px to the kit's own `--bn-page-top`, 16px on a phone. Every rect below the
+       page head shifts down by that same 4px, confirmed against the real DOM at 390x754 (a
+       measured screenshot pass, not arithmetic): 370px and 218px, the same margins as before,
+       carried forward. */
+    height: clamp(218px, calc(100dvh - 370px - var(--bn-tabbar-h)), 560px);
     max-height: none;
     align-self: stretch;
   }
