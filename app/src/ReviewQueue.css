@@ -83,7 +83,7 @@
    whose 40px hit areas each overflow 6px a side — 8px of gap leaves a 4px zone where the
    later button's hit area wins the probe (phone.spec.ts: "Re-check every waiting card"
    missed its own right edge to the Reload button beside it). 12px clears it exactly. */
-.review-pagehead .bn-head-actions { gap: 12px; }
+.review-pagehead .bn-head-actions { gap: var(--bn-3); }
 .review-progress { display: inline-flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; min-width: 0; }
 .review-progress-bar { width: 160px; height: 5px; flex: none; }
 .review-progress-text { color: var(--bn-ink-3); }
