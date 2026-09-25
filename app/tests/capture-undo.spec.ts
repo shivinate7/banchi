@@ -888,3 +888,67 @@ test('pressing the pause button moves nothing else on the screen (D118)', async 
   const after = await shutter(page).boundingBox()
   expect(after).toEqual(before)
 })
+
+/* ------------------------------------------------------------------------------------------
+ * UX-076 (owner, 2026-09-24): "do we have that data? if so name the reason." `halt.code`
+ * already carried the server's own code; `CaptureScreen.tsx`'s `HALT_CODE_INFO` now maps
+ * each one `POST /capture`'s call chain can answer with to its own headline, never the raw
+ * code (D196) — that still shows only behind "What the server said". One case per code, plus
+ * the fallback for a code this roster does not know.
+ * ------------------------------------------------------------------------------------------ */
+
+const HALT_CODES: readonly { code: string; headline: string }[] = [
+  { code: 'box_closed', headline: 'that box was sealed just now' },
+  { code: 'store_busy', headline: 'the store is busy' },
+  { code: 'store_unavailable', headline: 'the store could not be reached' },
+  { code: 'inventory_conflict', headline: 'the store disagreed with what this screen expected' },
+  { code: 'game_invalid', headline: 'capturing as a game the server does not know' },
+  { code: 'game_unverified', headline: 'this game has no export to join against' },
+  { code: 'rarity_claim_invalid', headline: 'the Rarity claim no longer matches this game' },
+  { code: 'variant_invalid', headline: 'the Finish claim no longer matches this game' },
+  { code: 'box_required', headline: 'no box reached the server' },
+  { code: 'box_invalid', headline: 'the box number did not reach the server whole' },
+  { code: 'image_required', headline: 'no photograph reached the server' },
+  { code: 'image_invalid', headline: 'the photograph did not reach the server intact' },
+  { code: 'image_too_large', headline: 'the photograph was too large to send' },
+  { code: 'image_not_jpeg', headline: 'the camera sent a frame the server will not store' },
+  { code: 'server_error', headline: 'the server hit a bug' },
+]
+
+/** Overrides `open()`'s own always-succeeds `/capture` stub with one refusal, carrying the
+ *  code a case names. Playwright takes the newest handler, so this shadows it without
+ *  needing a second `open()` variant. */
+async function refuseCapture(page: Page, code: string): Promise<void> {
+  await page.route(/\/capture$/, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code, message: `refused: ${code}` } }),
+    }),
+  )
+}
+
+for (const { code, headline } of HALT_CODES) {
+  test(`a ${code} halt reads its own headline, never the raw code`, async ({ page }) => {
+    await open(page)
+    await refuseCapture(page, code)
+    await page.keyboard.press('c')
+
+    const title = page.locator('.capture-halt-title')
+    await expect(title).toContainText(headline)
+    // D196: the code itself is never the headline — it is only behind the disclosure.
+    await expect(title).not.toContainText(code)
+    await expect(page.locator('.capture-halt-code')).toHaveText(code)
+  })
+}
+
+test('an unmapped code falls back to the honest, hedged sentence', async ({ page }) => {
+  await open(page)
+  await refuseCapture(page, 'a_code_this_roster_does_not_know')
+  await page.keyboard.press('c')
+
+  await expect(page.locator('.capture-halt-title')).toHaveText(
+    'Captures are paused — check whether that card was recorded.',
+  )
+  await expect(page.locator('.capture-halt-code')).toHaveText('a_code_this_roster_does_not_know')
+})

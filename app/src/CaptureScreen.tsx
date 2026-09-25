@@ -80,6 +80,89 @@ const SECTION_KEY_LABEL = 'S'
 
 const NO_CLAIM_LABEL = 'No claim'
 
+/** UX-076 (owner, 2026-09-24): "do we have that data? if so name the reason." We do —
+ *  `halt.code` already carries the server's own refusal code, and the screen used to print
+ *  it raw, behind the disclosure, and say nothing else about it. This is the roster of every
+ *  code `POST /capture`'s own call chain can answer with, collected from
+ *  `server/capture_server.py` (`_require_box`, `_require_image`, `_optional_game`,
+ *  `_optional_rarity_claim`/`_check_variant_members`, `allocate_capture`) and the dispatcher
+ *  that turns a store exception into one of these (`_dispatch`'s own `except` chain).
+ *
+ *  ONE ENTRY EACH, HEADLINE FIRST, NEVER THE CODE ITSELF (D196) — `capture-halt-code` still
+ *  prints the raw code behind "What the server said", which is the one place D196 exempts.
+ *  `resume` is what pressing Resume actually gets the operator: most codes clear on their
+ *  own (the box reopened, the lock let go), so the sentence says what to check rather than
+ *  promising a fix this button cannot make.
+ *
+ *  MOST OF THESE ARE DEFENSIVE, NOT LIKELY. `CaptureScreen.tsx` already refuses to fire on an
+ *  unpicked box, an unverified game or a game the operator did not choose from the loaded
+ *  registry, so `box_required`, `game_invalid` and `game_unverified` mean this device's own
+ *  copy of the registry or the setup has gone stale since the page loaded — the same class of
+ *  problem `box_closed` and `store_busy` are, just caught one layer later. `image_*` would
+ *  mean the frame the camera handed the screen was not a usable photograph. */
+const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
+  box_closed: {
+    headline: 'Captures are paused — that box was sealed just now.',
+    resume: 'Pick a different box, or reopen this one from the Inventory screen, then resume.',
+  },
+  store_busy: {
+    headline: 'Captures are paused — the store is busy.',
+    resume: 'An `identify` or `emit` run is using it. Wait for it to finish, then resume.',
+  },
+  store_unavailable: {
+    headline: 'Captures are paused — the store could not be reached.',
+    resume: 'Check the capture server is still running, then resume.',
+  },
+  inventory_conflict: {
+    headline: 'Captures are paused — the store disagreed with what this screen expected.',
+    resume: 'Reload the page before you resume, so this screen reads the store fresh.',
+  },
+  game_invalid: {
+    headline: 'Captures are paused — this device is capturing as a game the server does not know.',
+    resume: 'Reload the page to pick up the current game list, then choose Game again.',
+  },
+  game_unverified: {
+    headline: 'Captures are paused — this game has no export to join against.',
+    resume: 'Choose a different game, or leave this one for a note-only capture, then resume.',
+  },
+  rarity_claim_invalid: {
+    headline: 'Captures are paused — the Rarity claim no longer matches this game.',
+    resume: 'Reopen Rarity and re-pick your claim, then resume.',
+  },
+  variant_invalid: {
+    headline: 'Captures are paused — the Finish claim no longer matches this game.',
+    resume: 'Reopen Finish and re-pick your claim, then resume.',
+  },
+  box_required: {
+    headline: 'Captures are paused — no box reached the server.',
+    resume: 'Reopen the Box field and pick one again, then resume.',
+  },
+  box_invalid: {
+    headline: 'Captures are paused — the box number did not reach the server whole.',
+    resume: 'Reopen the Box field and pick one again, then resume.',
+  },
+  image_required: {
+    headline: 'Captures are paused — no photograph reached the server.',
+    resume: 'Check the camera feed is live, then resume.',
+  },
+  image_invalid: {
+    headline: 'Captures are paused — the photograph did not reach the server intact.',
+    resume: 'Check the camera feed is live, then resume.',
+  },
+  image_too_large: {
+    headline: 'Captures are paused — the photograph was too large to send.',
+    resume: 'Check the camera resolution, then resume.',
+  },
+  image_not_jpeg: {
+    headline: 'Captures are paused — the camera sent a frame the server will not store.',
+    resume: 'Check the camera feed is live, then resume.',
+  },
+  server_error: {
+    headline: 'Captures are paused — the server hit a bug.',
+    resume: 'Check the server log names it, then resume.',
+  },
+}
+
 /** A finish member drawn as a word. The KEY — `reverse_holo` — is what the claim stores,
  *  sends and compares (D3); only the eye gets the label. An unknown member falls back to
  *  the key with its underscores opened, so no game's vocabulary ever prints as a raw enum. */
@@ -2842,6 +2925,10 @@ export function CaptureScreen() {
    * person moving between screens should never have to guess which `#` they are reading. */
   const boxNextText = boxIsEmpty ? 'Empty' : `next index ${nextForBox ?? '?'}`
 
+  // UX-076: the known-code lookup for the halt banner, read once here so the two JSX spots
+  // that need it (headline, resume sentence) do not each re-index a possibly-undefined map.
+  const haltCodeInfo = halt?.code === null || halt?.code === undefined ? undefined : HALT_CODE_INFO[halt.code]
+
   const gameSentence =
     gameEntry === null ? (registryNote === null ? 'Loading…' : 'Unavailable') : gameEntry.display
 
@@ -2933,14 +3020,18 @@ export function CaptureScreen() {
                      server halt means the response was lost, not that the write was — the
                      replay on the next capture (`captureId`) exists exactly because the
                      server may have already committed it. The headline now says what is
-                     actually known: the run stopped, and the card's fate is unconfirmed. */
-                  : 'Captures are paused — check whether that card was recorded.'}
+                     actually known: the run stopped, and the card's fate is unconfirmed.
+                     UX-076: a KNOWN code overrides this generic sentence with its own —
+                     `HALT_CODE_INFO` — since a known cause is a stronger, truer headline
+                     than "unconfirmed" and D196 forbids printing the code itself here. */
+                  : (haltCodeInfo?.headline ?? 'Captures are paused — check whether that card was recorded.')}
               </h2>
               <p className="capture-halt-message">
                 {halt.where === 'camera'
                   ? 'Set aside the card at the lens and check the camera feed before you resume.'
-                  : 'Leave the card at the lens and capture it again after you resume — if it ' +
-                    'was already recorded, the app will say so and give it no second position.'}
+                  : (haltCodeInfo?.resume ??
+                      'Leave the card at the lens and capture it again after you resume — if it ' +
+                        'was already recorded, the app will say so and give it no second position.')}
               </p>
               {triggerMode !== 'manual' && swallowed.halted > 0 ? (
                 <p className="capture-halt-message capture-halt-count">
