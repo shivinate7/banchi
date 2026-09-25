@@ -271,8 +271,17 @@ test('the anchor form draws the same face, hit area and tooltip as the button fo
   const linkBox = await link.evaluate((el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) } })
   const btnBox = await btn.evaluate((el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) } })
   expect(linkBox).toEqual(btnBox)
-  // The `::before` hit area reaches 40px past the drawn face on the anchor too.
   await link.scrollIntoViewIfNeeded()
+  // The tooltip, the same accessible name and text as the label passed to it — read BEFORE
+  // the click below, which opens a new tab and leaves this one backgrounded.
+  const tip = link.locator('.bn-icon-tip')
+  await expect(tip).toHaveCSS('opacity', '0')
+  await link.hover()
+  await expect(tip).toHaveCSS('opacity', '1')
+  await expect(tip).toHaveText('Cards to pull')
+  await expect(link).toHaveAccessibleName('Cards to pull')
+  await page.mouse.move(0, 0)
+  // The `::before` hit area reaches 40px past the drawn face on the anchor too.
   const box = await link.boundingBox()
   expect(box, 'the link drew no box at all').not.toBeNull()
   const b = box as NonNullable<typeof box>
@@ -292,11 +301,4 @@ test('the anchor form draws the same face, hit area and tooltip as the button fo
   await popup.close()
   const clicks = await page.evaluate(() => window.__iconClicks)
   expect(clicks, 'a click just outside the visual face did not reach the anchor — the 40px floor is not there').toBe(1)
-  // The tooltip, the same accessible name and text as the label passed to it.
-  const tip = link.locator('.bn-icon-tip')
-  await expect(tip).toHaveCSS('opacity', '0')
-  await link.hover()
-  await expect(tip).toHaveCSS('opacity', '1')
-  await expect(tip).toHaveText('Cards to pull')
-  await expect(link).toHaveAccessibleName('Cards to pull')
 })
