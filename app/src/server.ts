@@ -432,8 +432,9 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
 /** D30's neighbours, as records rather than as substrings of an English sentence.
  *
  * `Card 19` is the nineteenth card in the box, and the neighbours are what let a hand count
- * to it without anyone learning that rule. `prev` is the card in front of this one and `next`
- * the card behind it; either is null past the box's ends, and both null together when the
+ * to it without anyone learning that rule. `prev` is the card toward the BACK of the box (the
+ * lower number: card 1 is at the far back, the owner's ruling of 2026-09-23) and `next` the
+ * card toward the FRONT; either is null past the box's ends, and both null together when the
  * server sent no decoration (an older server) or nulled it — a record in the store whose
  * position will not read, the same event that nulls the denominator. A sentence naming a
  * possibly-wrong neighbour would send a hand to the wrong slot, which is the one thing a
@@ -461,50 +462,50 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
  * void. Measured on the owner's store before it went: it cost 15px on every copy row in a box
  * that had ever had a sale, and it was the reason the line wrapped to three lines at all.
  *
- * A NEIGHBOUR NOTHING HAS IDENTIFIED IS NO LONGER A NEIGHBOUR AT ALL (D116). It used to
- * degrade to its slot — `#41`, and to its INDEX before D92 — which is a live card at a real
- * count and was read as a sold card leaking into the ladder. It is neither: it is a card on
- * the shelf that no identification ever named, seven of them on the owner's store, all seven
- * queued and closed under D37. The server now walks past it to the nearest card it CAN name
- * and says how many it passed, so the fallback below fires only for an older server.
+ * A NEIGHBOUR NOTHING HAS IDENTIFIED was drawn as its slot (`#41`) until D116, and the owner
+ * read that figure as a sold card leaking into the ladder. D116 then walked past it to a
+ * named card, which dropped a real card from the sentence (UX-264).
  *
- * THE SKIP IS SAID RATHER THAN SWALLOWED. A landmark two cards away instead of one is a
- * sentence somebody counts slots against and comes out one short, which is the one thing
- * D30 says this sentence may never cause — so `said` carries the count, in the joined form
- * the Fulfiller reads at 20px, and the ranked block draws it per side. */
+ * AN UNREAD CARD IS A NEIGHBOUR AGAIN (the owner's ruling, 2026-09-24, LOC-28, amending
+ * D116). The server sends the ADJACENT card on each side, named or not, and `unread` is the
+ * run of unread cards starting there. So a side reads "an unread card" or "3 unread cards",
+ * never a bare figure (D116's complaint) and never a name further along (UX-264's).
+ *
+ * `said` IS A WHOLE SENTENCE WITH BACK AND FRONT IN IT (UX-186). It used to be a clause,
+ * "between X and Y", which never said which neighbour stands at the back. Now it reads
+ * "It sits in front of X and behind Y.": X is toward the back, Y toward the front, in the
+ * owner's own orientation. A departed card's sentence is in the past tense ("It was ..."). */
 export type PlaceParts = {
   prev: PlaceNeighbor | null
   next: PlaceNeighbor | null
   said: string
 }
 
-export function placeParts(place: Place | undefined): PlaceParts | null {
+/** What one side of the card is, in words: the neighbour's name, or the unread run
+ *  ("an unread card", "3 unread cards"). An older server's nameless side with no `unread`
+ *  reads as one unread card, never as a bare figure. */
+export function neighborWords(side: PlaceNeighbor): string {
+  if (side.name !== null) return side.name
+  const run = Math.max(1, side.unread ?? 1)
+  return run === 1 ? 'an unread card' : `${run} unread cards`
+}
+
+export function placeParts(place: Place | undefined, departed = false): PlaceParts | null {
   if (place === undefined || place.located === false) return null
 
   const neighbors = place.neighbors
   if (neighbors === undefined || neighbors === null) return null
 
   const { prev, next } = neighbors
-  const name = (side: PlaceNeighbor): string => side.name ?? `#${side.slot}`
+  const verb = departed ? 'was' : 'sits'
 
   let said: string
-  if (prev !== null && next !== null) said = `between ${name(prev)} and ${name(next)}`
-  else if (prev !== null) said = `after ${name(prev)}`
-  else if (next !== null) said = `before ${name(next)}`
-  /* The one card whose box holds nothing else — and, since D116, a card with no NAMED card
-     either side of it. No neighbours is no content, and null lets a screen render nothing
-     rather than chrome. */
+  if (prev !== null && next !== null) said = `It ${verb} in front of ${neighborWords(prev)} and behind ${neighborWords(next)}.`
+  else if (prev !== null) said = `It ${verb} in front of ${neighborWords(prev)}.`
+  else if (next !== null) said = `It ${verb} behind ${neighborWords(next)}.`
+  /* The one card whose box holds nothing else. No neighbours is no content, and null lets a
+     screen render nothing rather than chrome. */
   else return null
-
-  /* THE SKIPPED CARDS ARE STATED, AND ONE CLAUSE COVERS BOTH SIDES: every card the walk
-     passed over lies strictly between the two landmarks named above, whichever side it was
-     on, so "with 1 unidentified card in between" is exact for a one-sided skip and for a
-     two-sided one alike. Drawn only when it fires — 27 rows on the owner's store — because a
-     clause on every row is the gap clause the owner had removed in 2026-08-30. */
-  const skipped = (prev?.skipped ?? 0) + (next?.skipped ?? 0)
-  if (skipped > 0) {
-    said += `, with ${skipped} unidentified card${skipped === 1 ? '' : 's'} in between`
-  }
 
   return { prev, next, said }
 }
@@ -517,10 +518,10 @@ export function placeParts(place: Place | undefined): PlaceParts | null {
  * `aria-label`. Kept as its own export rather than inlined at the call sites: it is the shape
  * three screens have imported since 2026-08-13.
  *
- * At the box's ends there is one neighbour and it says which side (`after Mantine` /
- * `before Thievul`) rather than pretending a between. */
-export function placeSentence(place: Place | undefined): string | null {
-  return placeParts(place)?.said ?? null
+ * At the box's ends there is one neighbour and it says which side (`It sits in front of
+ * Mantine.` / `It sits behind Thievul.`) rather than pretending a between. */
+export function placeSentence(place: Place | undefined, departed = false): string | null {
+  return placeParts(place, departed)?.said ?? null
 }
 
 // ------------------------------------------------------------------------------ the wire

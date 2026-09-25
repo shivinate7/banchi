@@ -281,6 +281,9 @@ const RECORDED = {
     // D207: listener-shaped exactly like `onServerBoot` above — it registers a
     // callback and returns an unsubscribe function, and makes no request of its own.
     'onServerReachable',
+    // LOC-28: the words for one side of a card's neighbours ("an unread card"), a pure
+    // string helper beside `placeParts`, which makes no request.
+    'neighborWords',
   ],
 }
 

@@ -77,8 +77,9 @@ const NO_FRACTION = place({ label: 'Box 4 · Section 1 · Card 1', box: 4, index
 /* A COPY THAT HAS LEFT ITS BOX (D58, D68, D71), which is a ROW SHAPE and not a variation on a
    located one: `slot`, `section` and `card` are all null, because a card that has left is in no
    slot, and `join.departed_label` is what the server sends where a position label would be — the
-   box it belongs to, the word, and the store key, since two departed copies of one card in one
-   box were otherwise the identical string.
+   place it left (the fixture below keeps the older dotted form, which the label reader still
+   reads). Two departed copies of one card at one place may read the same (the owner's ruling,
+   2026-09-24).
    `server.ts:isDeparted` reads the NULL SLOT BESIDE A REAL LABEL, so handing this fixture a
    numeric slot turns the departed row back into an ordinary one and the shell it draws
    (`is-gone is-nobar`) stops being rendered anywhere on this sheet — which is exactly what

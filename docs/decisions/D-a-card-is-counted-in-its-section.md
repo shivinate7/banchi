@@ -65,13 +65,46 @@ two ends say which end is the far back.
 
 ### What is built
 
-NOT BUILT. The locating lane builds it (LOC-03 to LOC-07, and the ruler). It moved to wave 1 in
-the round-two plan, so the screen lanes use its vocabulary. `docs/specs/box-map.md` uses the same
-orientation for its move receipts.
+BUILT in the locating lane:
 
-The round-two plan names three locating entries for the same rulings (slugs `section-ruler`,
-`card-one-at-back` and `section-card-number`). One copy of each argument must go before either
-merges.
+- The server's label counts the card within its section, and a departed card is counted in the
+  section it left (`pipeline/join.py:Position.section`, in index space).
+- `app/src/position.ts:placePartsOf` is the one reader of the label. `sentencePartsOf` says
+  `Card 5 of 12` for both personas. `sectionDepthOf` gives the ruler section numbers at both
+  ends and the card's own cell.
+- `app/src/PositionBar.tsx`: the ruler fills the card's cell and puts the pin at its centre. The
+  strip under it numbers the box's sections and outlines this one. `back` and `front` are
+  written under both. The caret is gone.
+- `app/src/PlaceNeighbors.tsx` draws back, this card, front. A departed card reads `was here`,
+  and its accessible name is `Was between ...`.
+- `app/tests/locating.spec.ts` asserts it at 1440, 820, 720 and 390, in both themes.
+
+### An unread card is a neighbour (amends D116)
+
+**The owner's ruling, 2026-09-24 (LOC-28):** unread cards count as neighbours, said as
+"an unread card" or "N unread cards".
+
+**The premise that no longer holds.** D116 (a card nobody has named is not a landmark) walked
+past an unnamed card to the nearest named one, because the bare `#270` it drew read as a sold
+card. The walk dropped a real card from the sentence (UX-264): "after Galio" named a card
+three along.
+
+**What D116 protected, and what protects it now.** D116 protected a sentence with no bare
+figure in it. The words "an unread card" keep that. D30 protected a sentence that never sends a
+hand to the wrong card. The adjacent card is now always the neighbour, so nothing is skipped.
+
+**What is built.** `server/capture_server.py:_Places._company` sends the adjacent on-hand card
+on each side, and `unread`, the run of unread cards from it to the next named card. The wire
+field `skipped` is gone. `app/src/server.ts:neighborWords` says the run.
+
+### The neighbour sentence says back and front (UX-186)
+
+"Between X and Y" did not say which card is at the back. The sentence is now "It sits in front
+of X and behind Y.", composed once in `app/src/server.ts:placeParts`. X is toward the back and
+Y toward the front, so the words agree with card 1 at the far back. A departed card reads "It
+was ...". The Fulfiller reads this sentence, and it is the accessible name of the owner's
+neighbour ladder. Review's place pill draws back, the two neighbours and front on one line
+under the label.
 
 ### One more word: slots
 

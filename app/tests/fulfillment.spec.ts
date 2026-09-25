@@ -110,7 +110,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 26,
     state: 'identified',
     name: 'Pidgeot ex',
-    label: 'Box 3 · Section 2 · Card 1',
+    label: 'Box 3, Section 2, Card 1',
     photo: '/captures/3/026.jpg',
   },
   '3/7': {
@@ -118,7 +118,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 7,
     state: 'identified',
     name: 'Charizard ex',
-    label: 'Box 3 · Section 1 · Card 7',
+    label: 'Box 3, Section 1, Card 7',
     photo: '/captures/3/007.jpg',
   },
   '1/3': {
@@ -126,7 +126,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 3,
     state: 'identified',
     name: 'Iono',
-    label: 'Box 1 · Section 1 · Card 3',
+    label: 'Box 1, Section 1, Card 3',
     photo: '/captures/1/003.jpg',
   },
   /* TWO COPIES OF ONE CARD, IN TWO BOXES, and they are the whole reason the search path can be
@@ -146,7 +146,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 2,
     state: 'captured',
     name: 'Eiscue',
-    label: 'Box 4 · Section 1 · Card 2',
+    label: 'Box 4, Section 1, Card 2',
     photo: '/captures/4/002.jpg',
   },
   '2/9': {
@@ -154,7 +154,7 @@ const CARDS: Record<string, FixtureCard> = {
     index: 9,
     state: 'identified',
     name: 'Eiscue',
-    label: 'Box 2 · Section 1 · Card 9',
+    label: 'Box 2, Section 1, Card 9',
     photo: '/captures/2/009.jpg',
   },
   // ALREADY SOLD, and it must never appear. This row used to be `captured` and carry the
@@ -162,7 +162,7 @@ const CARDS: Record<string, FixtureCard> = {
   // buyer could have ordered". D7's amendment retired that reasoning rather than this case:
   // copies are fungible, every UNSOLD copy is sellable, and `captured` now means a card that
   // is on the shelf and perfectly pullable. `sold` is what "must not appear" is made of now.
-  '2/4': { box: 2, index: 4, state: 'sold', name: null, label: 'Box 2 · Section 1 · Card 4', photo: null },
+  '2/4': { box: 2, index: 4, state: 'sold', name: null, label: 'Box 2, Section 1, Card 4', photo: null },
   // For sale, and undecorated — `do_inventory` leaves a row bare when its box or index will
   // not coerce. It must be counted on screen rather than dropped in silence.
   '9/12': { box: 9, index: 12, state: 'identified', name: 'Great Ball', photo: '/captures/9/012.jpg' },
@@ -593,7 +593,7 @@ const EMPTY_PLAN = {
 /** The real place `ONE_OPEN_ORDER`'s SKU resolves to — the box and index the store holds it
  *  at, the only fixture that carries it now that `GET /orders`'s own `picks` are `[]`. */
 const ORDER_COPY_PLACE = {
-  label: 'Box 3 · Section 1 · Card 7',
+  label: 'Box 3, Section 1, Card 7',
   located: true,
   box: 3,
   index: 7,
@@ -707,7 +707,7 @@ function multiCopy(key: string, box: number, section: number, card: number, sect
     capture_id: `cap-${key.replace('/', '-')}`,
     cid: null,
     place: {
-      label: `Box ${box} · Section ${section} · Card ${card}`,
+      label: `Box ${box}, Section ${section}, Card ${card}`,
       located: true,
       box,
       index: card,
@@ -1546,8 +1546,9 @@ async function cardRow(page: Page, name: string): Promise<Locator> {
  *  web-first assertion that can only wait for the second half. */
 /** D218: the seam between `PlaceText`'s parts is CSS now (`.ff-place-elem::before`), which
  *  `allTextContents` never sees — generated content is not part of an element's `textContent`.
- *  `expected` keeps the server's own spelling, dot and all, because that is still what a caller
- *  reads and what `aria-label` would carry; this strips the same seam from it before comparing,
+ *  `expected` keeps the server's own spelling, commas and all (the label has typed no dot since
+ *  D-a-box-is-shown-by-its-name), because that is what a caller reads and what `aria-label`
+ *  would carry; this strips the same seam from it before comparing,
  *  so the assertion is about which PARTS are drawn and in what order, not about a character this
  *  component was told to stop typing. */
 async function expectWalk(page: Page, expected: readonly string[]): Promise<void> {
@@ -1555,7 +1556,7 @@ async function expectWalk(page: Page, expected: readonly string[]): Promise<void
     await openEveryBox(page)
     const drawn = await view(page).locator('.fulfillment-row .fulfillment-place').allTextContents()
     expect(drawn.map((one) => one.replace(/\s+/g, ' ').trim())).toEqual(
-      expected.map((one) => one.replace(/\s*·\s*/g, '')),
+      expected.map((one) => one.replace(/\s*[·,]\s*/g, '')),
     )
   }).toPass({ timeout: 20_000 })
 }
@@ -1678,7 +1679,7 @@ async function sellOpenCard(page: Page): Promise<void> {
  *  still passes the server's own spelling, dot and all, so it reads like the label everywhere
  *  else in this file; this is the one place that strips it before the match. */
 function receiptFor(page: Page, place: string): Locator {
-  return view(page).locator('.fulfillment-panel', { hasText: place.replace(/\s*·\s*/g, '') })
+  return view(page).locator('.fulfillment-panel', { hasText: place.replace(/\s*[·,]\s*/g, '') })
 }
 
 // ------------------------------------------------------------------------------ the table
@@ -1690,11 +1691,11 @@ function receiptFor(page: Page, place: string): Locator {
  *  putting a card back. Three hand-written copies of the same five strings is three places for
  *  a fixture row to be added to two of them. */
 const WALK = [
-  'Box 1 · Section 1 · Card 3',
-  'Box 2 · Section 1 · Card 9',
-  'Box 3 · Section 1 · Card 7',
-  'Box 3 · Section 2 · Card 1',
-  'Box 4 · Section 1 · Card 2',
+  'Box 1, Section 1, Card 3',
+  'Box 2, Section 1, Card 9',
+  'Box 3, Section 1, Card 7',
+  'Box 3, Section 2, Card 1',
+  'Box 4, Section 1, Card 2',
 ]
 
 /* NOTHING HERE MAY REACH THE CAPTURE SERVER — `app/tests/shell.ts` carries the argument. The
@@ -1786,9 +1787,12 @@ test('a card an open order owes is drawn as "Pick N" with every copy the store h
      draws, with a two-step Pull/Mark-sold control on the copy itself -- not a single card that
      opens on its own screen. D218: the seam is CSS now (`.ff-place-elem::before` /
      `.card-locations-place-large`'s own render), never part of `textContent`. */
-  // `CardLocations`' own place text is the server's raw label, dots and all — unlike
-  // `PlaceText`'s CSS seam, this component has never stripped it.
-  await expect(card.locator('.card-locations-place-large')).toHaveText('Box 3 · Section 1 · Card 7')
+  // `CardLocations`' own place text is the server's label, whole: box name, section, card within
+  // the section, joined by commas (D-a-box-is-shown-by-its-name). No separator dot is typed into
+  // it any more (D218), so none can reach the Fulfiller's screen.
+  const placeLarge = card.locator('.card-locations-place-large')
+  await expect(placeLarge).toHaveText('Box 3, Section 1, Card 7')
+  expect(await placeLarge.textContent()).not.toMatch(/[·•]/)
   await expect(card.getByRole('button', { name: 'Pull' })).toBeVisible()
   await battery(page, 'cards to pick')
 
@@ -1815,9 +1819,9 @@ test('a SKU owed 2 with 3 copies on hand shows "Pick 2" and every copy, none pre
   // ALL THREE, not two -- the wanted count never caps the copies list (D212, D93).
   await expect(card.locator('.card-locations-copy')).toHaveCount(3)
   await expect(card.locator('.card-locations-place-large')).toHaveText([
-    'Box 1 · Section 1 · Card 5',
-    'Box 2 · Section 1 · Card 9',
-    'Box 4 · Section 2 · Card 2',
+    'Box 1, Section 1, Card 5',
+    'Box 2, Section 1, Card 9',
+    'Box 4, Section 2, Card 2',
   ])
 
   // NONE PRESELECTED: every one of the three offers the same first-step control, none of
@@ -1846,7 +1850,7 @@ const WALK_ORDER_PLAN = {
         copies: [{
           key: '5/1', state: 'identified', has_photo: true, capture_id: 'cap-x', cid: null,
           place: {
-            label: 'Box 5 · Section 1 · Card 1', located: true, box: 5, index: 1, slot: 1,
+            label: 'Box 5, Section 1, Card 1', located: true, box: 5, index: 1, slot: 1,
             section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
             box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
           },
@@ -1866,7 +1870,7 @@ const WALK_ORDER_PLAN = {
         copies: [{
           key: '1/1', state: 'identified', has_photo: true, capture_id: 'cap-a', cid: null,
           place: {
-            label: 'Box 1 · Section 1 · Card 1', located: true, box: 1, index: 1, slot: 1,
+            label: 'Box 1, Section 1, Card 1', located: true, box: 1, index: 1, slot: 1,
             section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
             box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
           },
@@ -1928,7 +1932,7 @@ const UNCOUNTED_SECTION_PLAN = {
         copies: [{
           key: '6/2', state: 'identified', has_photo: true, capture_id: 'cap-c', cid: null,
           place: {
-            label: 'Box 6 · Section 1 · Card 2', located: true, box: 6, index: 2, slot: 2,
+            label: 'Box 6, Section 1, Card 2', located: true, box: 6, index: 2, slot: 2,
             section: 1, card: 2, box_name: null, section_start: 1, section_end: 10,
             box_total: 10, box_closed: true, fraction: 0.2, neighbors: null, section_gaps: 0,
           },
@@ -2283,7 +2287,7 @@ test('the position label does not wrap to three lines at 768px', async ({ page }
 /* THE COORDINATOR'S OWN CHECK ON THIS FIX: 820px is one of the three widths docs/DESIGN.md's
  * "Verifying a screen" section names, and a first attempt at this fix moved the breakpoint to
  * exactly 820px -- which measured fine on the store's ORDINARY labels and still wrapped to
- * three lines on the longest one the store can emit ("Box 9999 · Section 99 · Card 50000":
+ * three lines on the longest one the store can emit ("Box 9999, Section 99, Card 50000":
  * docs/specs/store-scaling.md's 50,000-card target, in one undeclared box with no dividers,
  * D10 -- so a single section holding that many cards is a real shape and not a fabricated
  * string). The breakpoint moved again, to 900 -- the ladder's own "a two-column body becomes
@@ -2291,7 +2295,7 @@ test('the position label does not wrap to three lines at 768px', async ({ page }
 test('the longest label the store can emit does not wrap to three lines at 820px', async ({
   page,
 }) => {
-  const MAX_LABEL = 'Box 9999 · Section 99 · Card 50000'
+  const MAX_LABEL = 'Box 9999, Section 99, Card 50000'
   // Drawn on an owed card's own copy now (`CardLocations`' `.card-locations-place-large`),
   // since that is the live path a long label reaches this screen through — the Owed section
   // draws every on-hand copy of a SKU, ranked, and the label is whatever the store composed
@@ -2430,7 +2434,7 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
   expect(wire.map((call) => call.undo), 'the sale reached the server as a sale').toEqual([false])
   expect(wire[0]!.url, 'the sale named the card').toContain('/inventory/3/7/sold')
 
-  const undo = receiptFor(page, 'Box 3 · Section 1 · Card 7').getByRole('button', { name: 'Undo' })
+  const undo = receiptFor(page, 'Box 3, Section 1, Card 7').getByRole('button', { name: 'Undo' })
   await expect(undo).toBeVisible()
   // The sold card leaves the list while the sale stands, and stays gone across the re-read
   // the sale triggers — the stub store moved with the sale, so this is the server agreeing.
@@ -2470,15 +2474,15 @@ test('a second sale does not take the first sale undo away', async ({ page }) =>
 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
-  await expect(receiptFor(page, 'Box 3 · Section 1 · Card 7')).toBeVisible()
+  await expect(receiptFor(page, 'Box 3, Section 1, Card 7')).toBeVisible()
 
   await openCard(page, 'Iono')
   await sellOpenCard(page)
 
   // Both receipts stand, each with its own Undo. One slot held one of these and dropped the
   // other with no trace, on a screen whose only other route to recovery is the owner.
-  const first = receiptFor(page, 'Box 3 · Section 1 · Card 7')
-  const second = receiptFor(page, 'Box 1 · Section 1 · Card 3')
+  const first = receiptFor(page, 'Box 3, Section 1, Card 7')
+  const second = receiptFor(page, 'Box 1, Section 1, Card 3')
   await expect(first.getByRole('button', { name: 'Undo' })).toBeVisible()
   await expect(second.getByRole('button', { name: 'Undo' })).toBeVisible()
 
@@ -2499,7 +2503,7 @@ test('the undo is still there after walking into another card', async ({ page })
 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
 
   // The card panel used to return before the receipt was rendered, so this navigation hid the
@@ -2534,7 +2538,7 @@ test('a sale the server cannot reverse offers no undo, and says why', async ({ p
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
 
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await expect(receipt).toContainText('Marked sold.')
   await expect(
     receipt.getByRole('button', { name: 'Undo' }),
@@ -2564,7 +2568,7 @@ test('an undo the server refuses with no remedy stops asking', async ({ page }) 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
 
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await receipt.getByRole('button', { name: 'Undo' }).click()
 
   await expect(receipt).toContainText('This card stays sold. Ask for help to put it back.')
@@ -2597,7 +2601,7 @@ test('a card the other device already sold is not this device sale, and gets no 
    * have reached the server and reversed somebody else's real sale, putting a card a buyer has
    * paid for back on TCGplayer. It is a receipt for a card leaving his list, not for anything
    * he did, so it says so and offers nothing to press. */
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await expect(receipt).toContainText('Already sold.')
   await expect(receipt).toContainText('Somebody else sold this card')
   await expect(view(page), 'a sale this device did not make was reported as one').not.toContainText(
@@ -2622,7 +2626,7 @@ test('an undo of a sale the other device already reversed reads as done', async 
 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
 
   // The other device puts it back first. `not_sold` then means the card is in the state the
@@ -2780,6 +2784,36 @@ test('a body this screen cannot read fails the same way a dead server does', asy
   await battery(page, 'unreadable body')
 })
 
+test('the card says which neighbour is at the back and which at the front, in a sentence', async ({ page }) => {
+  /* UX-186. The sentence was "It sits between X and Y", which never said which of the two is at
+     the back. Card 1 is at the far back (the owner's orientation), so the card toward the back
+     is the one this card sits IN FRONT OF, and the card toward the front is the one it sits
+     BEHIND. An unread neighbour counts, said as "an unread card" or "2 unread cards" (LOC-28). */
+  const states = await stubServer(page, [])
+  await page.route(/\/inventory$/, async (route) => {
+    const body = inventoryBody(states) as { version: number; cards: Record<string, Record<string, unknown>> }
+    body.cards['3/7'] = {
+      ...body.cards['3/7'],
+      place: {
+        ...ORDER_COPY_PLACE,
+        neighbors: {
+          prev: { index: 6, slot: 6, name: 'Pidgeot ex', unread: 0 },
+          next: { index: 8, slot: 8, name: null, unread: 2 },
+        },
+      },
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
+  await openCard(page, 'Charizard ex')
+
+  await expect(view(page).locator('.ff-where-between')).toHaveText(
+    'It sits in front of Pidgeot ex and behind 2 unread cards.',
+  )
+  await battery(page, 'the neighbour sentence')
+})
+
 test('the screen with nothing to pull is his too', async ({ page }) => {
   await openList(page, [], { empty: true })
   await expect(view(page)).toContainText('No cards are for sale right now.')
@@ -2856,7 +2890,7 @@ test('the failed-undo message leaves with the undo it tells him to press', async
 
   await openCard(page, 'Charizard ex')
   await sellOpenCard(page)
-  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await receipt.getByRole('button', { name: 'Undo' }).click()
 
   /* Held in screen-wide state, this sentence outlived the control it named: the window closed,
@@ -2913,7 +2947,7 @@ async function settlePhotos(page: Page): Promise<void> {
 }
 
 /** The two copies of the fixture's one repeated card, in box-walk order. */
-const EISCUE = ['Box 2 · Section 1 · Card 9', 'Box 4 · Section 1 · Card 2']
+const EISCUE = ['Box 2, Section 1, Card 9', 'Box 4, Section 1, Card 2']
 const [EISCUE_FIRST, EISCUE_SECOND] = EISCUE as [string, string]
 
 test('the search narrows to the copies of one card, and clearing it gives the whole walk back', async ({

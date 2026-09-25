@@ -29,7 +29,7 @@ import { PullConfirm } from './PullConfirm'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
-import { sayPlace } from './position'
+import { placePartsOf, placeWordsOf, sayPlace } from './position'
 import { Icon, Logo, Modal, useOverlayLayer } from './kit'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
@@ -437,7 +437,15 @@ function compareNullable(a: number | null, b: number | null): number {
  *  which is also what lets it disappear on the stacked line without a dangling character left
  *  behind, `Fulfillment.css`'s narrow-width rule below. */
 function PlaceText({ label }: { label: string }): ReactNode {
-  return label.split(' · ').map((part, at) => {
+  /* THE PARTS COME FROM THE ONE LABEL READER (`position.ts:placePartsOf`): the server's label is
+     `<box name>, Section <n>, Card <m>` since the owner's box-name ruling, and a box name may
+     hold a comma, so it is read from the right end. A label of another shape is drawn whole. */
+  const place = placePartsOf(label)
+  const parts =
+    place === null || place.section === null || place.card === null
+      ? [label]
+      : [place.box, `Section ${place.section}`, `Card ${place.card}`]
+  return parts.map((part, at) => {
     const seam = part.lastIndexOf(' ')
     const value = seam < 1 ? '' : part.slice(seam + 1)
     const numeric = /^\d+$/.test(value)
@@ -998,7 +1006,7 @@ export function Fulfillment() {
                     server's raw label off a variable, so the reader's plain-string scan never
                     saw the dot in it. Same string, same register; the seam is CSS now. */}
                 <span className="ff-receipt-place">
-                  {sale.card.place.split(' · ').map((part, at) => (
+                  {placeWordsOf(sale.card.place).map((part, at) => (
                     <span key={at}>{part}</span>
                   ))}
                 </span>
@@ -1197,7 +1205,7 @@ export function Fulfillment() {
               </div>
             )}
             {between === null ? null : (
-              <p className="fulfillment-say ff-where-between">It sits {between}.</p>
+              <p className="fulfillment-say ff-where-between">{between}</p>
             )}
           </section>
 
@@ -1446,7 +1454,7 @@ export function Fulfillment() {
                           never saw the dot in it. Same string, same register; the seam is CSS
                           now. */}
                       <span className="fulfillment-say ff-done-place">
-                        {row.place.split(' · ').map((part, at) => (
+                        {placeWordsOf(row.place).map((part, at) => (
                           <span key={at}>{part}</span>
                         ))}
                       </span>

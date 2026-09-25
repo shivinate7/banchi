@@ -302,26 +302,25 @@
   transition: transform var(--bn-t) var(--bn-ease);
 }
 .browse-sectfold[aria-expanded='true'] .browse-sectmark { transform: rotate(90deg); color: var(--bn-accent); }
-/* THE NAME IS CUT, THE COUNT IS NOT (`SectionTitle.tsx`). The title is a row of two parts: the
-   head shrinks and ellipsizes, the count keeps its own width. One ellipsis over the whole title
-   cut the count first, because the count is the END of the sentence. */
+/* THE NAME IS WHOLE (LOC-21, UX-223). A section's name is the label on the physical divider, so
+   it wraps onto a second line rather than being cut; the count is the pill beside it
+   (`SectionTitle.tsx` speaks its own count and does not draw it). */
 .browse-secttitle {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
   font-size: var(--bn-fs-xs);
   font-weight: 700;
   letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
-  white-space: nowrap;
+  line-height: 1.3;
+  padding-block: var(--bn-1);
 }
 .browse-secttitle-head {
   flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.browse-secttitle-count { flex: none; white-space: pre; }
 .browse-sectcount {
   flex: none;
   min-width: 22px;
@@ -454,6 +453,10 @@
 .browse-row-badge.is-out { color: var(--bn-ink-3); }
 .browse-rowline.is-departed .browse-row { color: var(--bn-ink-3); }
 .browse-rowline.is-departed .browse-row-position { font-family: var(--bn-font-mono); font-weight: 500; }
+/* A DEPARTED ROW'S NUMBER IS THE PLACE IT LEFT, STRUCK THROUGH (the owner's ruling, 2026-09-23):
+   the departure is drawn, never worded, and the live card that closed up behind it keeps the
+   same number plain. */
+.browse-rowline.is-departed .browse-row-slot { text-decoration: line-through; }
 .browse-row[aria-current='true'] {
   background: var(--bn-accent-tint);
   color: var(--bn-ink);

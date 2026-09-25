@@ -36,7 +36,7 @@ const NOW = '2026-09-17T12:00:00+00:00'
 function place(box: number, section: number, card: number, boxTotal: number) {
   return {
     located: true,
-    label: `Box ${box} · Section ${section} · Card ${card}`,
+    label: `Box ${box}, Section ${section}, Card ${card}`,
     box,
     index: card,
     section,
@@ -65,7 +65,7 @@ function card(over: {
   return {
     box: over.box,
     index: over.index,
-    label: `Box ${over.box} · Section 1 · Card ${over.index}`,
+    label: `Box ${over.box}, Section 1, Card ${over.index}`,
     section: 1,
     card: over.index,
     place: place(over.box, 1, over.index, 5),

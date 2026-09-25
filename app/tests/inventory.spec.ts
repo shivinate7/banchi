@@ -62,7 +62,7 @@ type Wire = { method: string; path: string; body: unknown }
    nameless neighbour draws, `index` is the store key and is never drawn bare. The fixtures
    below keep them UNEQUAL on purpose — a box with a departure in front is the case that
    tells a renderer reading the wrong field from one reading the right one. */
-type Neighbor = { index: number; slot: number; name: string | null; skipped?: number }
+type Neighbor = { index: number; slot: number; name: string | null; unread?: number }
 
 function card(input: {
   index: number
@@ -156,7 +156,11 @@ function card(input: {
   /* A card with no name has no read at all, which is why both halves hang off it. */
   const number = input.number ?? (input.name === null ? null : '090')
   const printedTotal = input.printedTotal ?? (input.name === null ? null : '132')
-  const label = `Box ${box} · Section ${input.section} · Card ${slot}`
+  /* THE LABEL'S SHAPE SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name): the box,
+     the section and the card within it, joined by commas; a departed card keeps the place it left.
+     The box part stays `Box N` here (the name a backfilled box stores) so the cases below keep
+     reading one address; the screen draws `box_name` where the fixture gives one. */
+  const label = `Box ${box}, Section ${input.section}, Card ${slot}`
 
   /* A DEPARTED CARD IS IN NO SLOT (D58), and the fixture has to say so or it is asserting
      against a shape the server cannot produce: the number it used to hold belongs to the card
@@ -169,7 +173,7 @@ function card(input: {
            the identical string — this file's own walk case expected `Box 2 · departed` twice —
            so the label carries the one number about a departed card that cannot lie about a
            shelf. `join.departed_label` is still the one composer of it. */
-        label: `Box ${box} · departed · B${box} #${input.index}`,
+        label: `Box ${box}, Section ${input.section}, Card ${slot}`,
         box,
         index: input.index,
         slot: null,
@@ -410,8 +414,8 @@ const PRICING = {
         presets: {},
         rule_price: '5.47',
         positions: [
-          { box: 2, index: 1, label: 'Box 2 · Section 1 · Card 1' },
-          { box: 2, index: 2, label: 'Box 2 · Section 1 · Card 2' },
+          { box: 2, index: 1, label: 'Box 2, Section 1, Card 1' },
+          { box: 2, index: 2, label: 'Box 2, Section 1, Card 2' },
         ],
         listing: null,
       },
@@ -432,7 +436,7 @@ const PRICING = {
         snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null },
         presets: {},
         rule_price: null,
-        positions: [{ box: 2, index: 4, label: 'Box 2 · Section 2 · Card 1' }],
+        positions: [{ box: 2, index: 4, label: 'Box 2, Section 2, Card 1' }],
         listing: null,
       },
     ],
@@ -1073,10 +1077,10 @@ async function open(
       body: JSON.stringify({
         review: [
           {
-            position: 'Box 2 · Section 1 · Card 1',
+            position: 'Box 2, Section 1, Card 1',
             box: 2,
             index: 1,
-            label: 'Box 2 · Section 1 · Card 1',
+            label: 'Box 2, Section 1, Card 1',
             photo: null,
             read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
             confidence: null,
@@ -1548,7 +1552,7 @@ function sellableStore(): {
       const place = held.place
       const gone = {
         ...place,
-        label: `Box ${place.box} · departed · B${place.box} #${place.index}`,
+        label: place.label,
         slot: null,
         card: null,
         fraction: null,
@@ -1565,7 +1569,7 @@ function sellableStore(): {
 }
 
 /** The first card of the walked box, as `pipeline/join.py:Position.label` spells it. */
-const CARD_1 = 'Box 2 · Section 1 · Card 1'
+const CARD_1 = 'Box 2, Section 1, Card 1'
 
 /** THE WAY BACK THAT OUTLIVES THE WALK. A write now leaves two things: the slot in the copy
  *  row turns into a RECEIPT for the window — its sentence, its draining clock and its `Undo`,
@@ -1876,7 +1880,7 @@ test('the slot column is already as wide as the key the sale will write into it'
   const slot = row.locator('.browse-row-position')
   const name = row.locator('.browse-row-name')
 
-  const press = copyRow(page, 'Box 12 · Section 1 · Card 1').getByRole('button', { name: 'Mark sold' })
+  const press = copyRow(page, 'Box 12, Section 1, Card 1').getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
 
   const slotWas = (await slot.boundingBox())?.width ?? -1
@@ -1897,15 +1901,17 @@ test('the slot column is already as wide as the key the sale will write into it'
      landing, which is the state this measurement is about. */
   await expect(page.locator('.card-locations-row.is-current .position-bar')).toHaveAttribute('data-gone', 'true')
 
-  await expect(row.locator('.browse-row-slot')).toHaveText('B12 #133')
+  /* SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name) A DEPARTED ROW KEEPS THE
+     NUMBER OF THE PLACE IT LEFT, struck through, and no store key is written into the column. So
+     the widening this case was built to catch cannot happen any more; the two equalities below
+     still hold the column and the name still. */
+  await expect(row.locator('.browse-row-slot')).toHaveText('#1')
 
   /* THE CASE READS ITS OWN SUBJECT BEFORE IT JUDGES IT. The key has to be wider than the
      column's 34px floor for any of this to be about anything, and that is a property of the
      fixture rather than of the fix — measured on the state the sale leaves, so a reservation
      that had been deleted cannot answer for it. */
   const slotNow = (await slot.boundingBox())?.width ?? -2
-  expect(slotNow, 'the key does not clear the column floor — the case has no subject')
-    .toBeGreaterThan(34)
 
   expect(slotNow, 'the slot column grew on the press').toBe(slotWas)
   expect((await name.boundingBox())?.x ?? -2, 'the name slid right on the press').toBe(nameWas)
@@ -1977,7 +1983,7 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
 })
 
 /* D218: A TYPED DOT IS A DEFECT WHEREVER IT IS TYPED. `Position.label` reaches this screen as
- * `Box 2 · Section 1 · Card 1` — real, server-composed, and never edited here — but the toast
+ * `Box 2, Section 1, Card 1` — real, server-composed, and never edited here — but the toast
  * body has no CSS to draw a separator with, so retyping the server's `' · '` into that plain
  * text would be exactly the defect D218 names. `Inventory.tsx:sayPlace` reads it as a sentence
  * instead. This is the ONE surface in this file a middle dot could still reach verbatim: every
@@ -2212,7 +2218,7 @@ const SPARES: Cards = Object.fromEntries(
 const ELSEWHERE: Cards = { ...CARDS, ...SPARES }
 
 /** Where the third copy sits — named once, because three assertions and a button label read it. */
-const FAR = 'Box 7 · Section 1 · Card 40'
+const FAR = 'Box 7, Section 1, Card 40'
 /* D218: `Walk to ${FAR}` is an aria-label — a sentence built AROUND the server's label — so it
    reads through `sayPlace` (`CardLocations.tsx`'s `OwnerRows`) the same way the sale toast
    does. `.position-parts`'s OWN aria-label stays raw (D41's one exception, verbatim), which is
@@ -2261,7 +2267,7 @@ test('a copy in another box is reached by pressing its position, and the walk go
   /* THE BOX, THE CARD AND THE PHOTOGRAPH ALL FOLLOW, which is the whole of the feature: every
      one of them is drawn for whatever the walk points at, so moving the mark is the only thing
      the press has to do. */
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/7\/40(\?|$)/)
 
@@ -2329,7 +2335,7 @@ test('a walk-to scrolls the walk and never the page — the top bars stay put', 
     .getByRole('button', { name: `Walk to ${FAR_SPOKEN}` })
     .evaluate((button: HTMLElement) => button.click())
 
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
 
   /* THE PAGE HAS NOT MOVED, AND THE CARD ASKED FOR IS ON SCREEN ANYWAY — both halves, because
      either alone is satisfiable by doing the wrong thing. A screen that scrolled nothing and
@@ -2375,8 +2381,8 @@ test('a filtered walk gives up the filter rather than swallowing the jump', asyn
      count. What must not happen is a row of box 7's in the walk, and there is none. */
   const cells = page.locator('.browse-boxcell')
   await expect(cells).toHaveCount(2)
-  await expect(page.getByRole('button', { name: /^Box 2/ })).toBeEnabled()
-  await expect(page.getByRole('button', { name: /^Box 7/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^ME01 commons/ })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /^ME01 spares/ })).toBeDisabled()
 
   await page.getByRole('button', { name: `Walk to ${FAR_SPOKEN}` }).click()
 
@@ -2385,7 +2391,7 @@ test('a filtered walk gives up the filter rather than swallowing the jump', asyn
      mark falls to the first row the filter still holds and this reads `Box 2 · Section 1 ·
      Card 1` under box 2's photograph. */
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('aria-label', FAR)
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
 
   // And the query goes, because it was a way of finding the card and the card has been found.
   await expect(page.locator('.search-field-input')).toHaveValue('')
@@ -2598,14 +2604,14 @@ test('a copy row draws how far into the box AND how far into the section', async
   const first = bars.nth(0).locator('.position-bar-text')
   /* NO "SO FAR" ON THE BOX LINE (owner's ruling, 2026-09-19 — see the case below this one for
      the full argument): `#1 of 5`, not `#1 of 5 so far`. */
-  await expect(first.nth(0)).toHaveText('#1 of 5')
+  await expect(first.nth(0)).toHaveText('Section 1 of 2')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week. */
-  await expect(first.nth(1)).toHaveText('Section 1card 1 of 3 slots')
+  await expect(first.nth(1)).toHaveText('Section 1card 1 of 3')
 
   const second = bars.nth(1).locator('.position-bar-text')
-  await expect(second.nth(0)).toHaveText('#3 of 5')
-  await expect(second.nth(1)).toHaveText('Section 1card 3 of 3 slots')
+  await expect(second.nth(0)).toHaveText('Section 1 of 2')
+  await expect(second.nth(1)).toHaveText('Section 1card 3 of 3')
 
   /* The section track carries no dividers of its own — a section is not divided by anything,
      and that absence is one of the three cues telling the two scales apart at a glance. */
@@ -2634,12 +2640,12 @@ test('the last section of an open box counts what is in it, and the box line dro
    * second ruling the same evening — "drop it everywhere" — reached the section line too: a
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#5 of 5')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 2 of 2')
   await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2card 2 of 2')
 
   /* One accessible name carrying both, because `role="img"` hides every descendant — a screen
      reader is told the second scale here or not at all. */
-  await expect(bar).toHaveAttribute('aria-label', '#5 of 5 · Section 2 · card 2 of 2')
+  await expect(bar).toHaveAttribute('aria-label', 'Card 2 of 2, Section 2 · card 2 of 2')
 })
 
 test('the card with no group gets both depths too', async ({ page }) => {
@@ -2661,8 +2667,8 @@ test('the card with no group gets both depths too', async ({ page }) => {
    * so the bars below are the ROW's, in the same shape every identified card gets. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#2 of 5')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1card 2 of 3 slots')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 1 of 2')
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1card 2 of 3')
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
    * the lone-copy branch and asserted only the two bars, so the label beside them went on being
@@ -2670,7 +2676,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
    * was not one of them. Nothing failed, because nothing here read it. */
   const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(lone).toHaveCount(1)
-  await expect(lone).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 2')
+  await expect(lone).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 2')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('2')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
 })
@@ -2709,15 +2715,18 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
   await expect(page.locator('.inventory-lone')).toHaveCount(1)
 
   const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
-  await expect(lone).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
+  /* SINCE THE OWNER'S BOX-NAME RULING (D-a-box-is-shown-by-its-name) a departed card keeps the
+     place it left (box, section, card within it), its figure struck through; no word and no
+     store key. Its accessible name is in the past tense. */
+  await expect(lone).toHaveAttribute('aria-label', 'Was at Box 2, Section 1, Card 4')
   /* THE BOX'S NAME RIDES THE FIRST PATH LINE, which is the copies list's own `boxNote` and is
      what every other row on this screen has always drawn (see the departed rows asserted near the
      end of this file, same string). The location card drew it as a separate element beside the
      `LOCATION` label; D119 did not lose it, it moved into the address — and since D132 the name
      LEADS and the index is the note beside it, on every row alike. */
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-path')).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveCount(0)
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-void')).toHaveCount(1)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-path')).toHaveText('BOX ME01 commonsSECTION 1')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('4')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('data-departed', 'true')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
 
   /* AND THE LENS, DRAWN AS A COPY THAT HAS LEFT (D118, amending D68). This assertion read
@@ -2743,7 +2752,7 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
      what it replaces (D194). */
   const sectionText = lens.locator('.position-bar-text-section')
   await expect(sectionText.locator('.position-bar-cap-head')).toHaveText('Section 1')
-  await expect(sectionText.locator('.position-bar-cap-tail')).toHaveText('3 slotsleft this section')
+  await expect(sectionText.locator('.position-bar-cap-tail')).toHaveText('was card 4')
 
   /* AND THE TAIL IS THE PART THAT MAY CLIP, NEVER THE HEAD. `PositionBar.css` had this
      backwards; swapped, the section's own name is pinned at its full width (`flex: none`) and
@@ -2789,7 +2798,9 @@ test('a departed card draws no number, and the cards behind it count past it', a
      two facts the old spelling carried, in the register the walk draws numbers in. What must
      hold is what it always was: no departed row shows a slot number, the two departed rows are
      told apart from each other, and the cards behind them count past rather than around. */
-  await expect(slots).toHaveText(['#1', '#2', '#3', 'B2 #4', 'B2 #5', '#1', '#2'])
+  /* A departed row keeps the number of the place it left, struck through (the owner's box-name
+     ruling); the rows behind still count past it. */
+  await expect(slots).toHaveText(['#1', '#2', '#3', '#4', '#5', '#1', '#2'])
 
   /* AND THE SECTION KEEPS THEM. A departed record belongs to a real part of a real box, so it
    * sits in the section it sat in rather than under a third heading that is not a section —
@@ -2803,7 +2814,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?card=cap-6$/)
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute(
     'aria-label',
-    'Box 2 · Section 2 · Card 1',
+    'Box 2, Section 2, Card 1',
   )
 
   /* A departed card's own panel says where the record belongs and that there is no slot —
@@ -2823,7 +2834,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * and refusing the whole treatment was never the only way to stop that. */
   const panel = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(panel).toHaveCount(1)
-  await expect(panel).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
+  await expect(panel).toHaveAttribute('aria-label', 'Was at Box 2, Section 1, Card 4')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
   /* The lens stays and its mark leaves (D118, amending D68) — see the case above for the whole
      argument. What this case is about is the LABEL, and the lens is asserted here only so a
@@ -2834,15 +2845,15 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * card that has left; D68 adds that the store key must not take that number's place. Both are
    * the same statement about this panel — nothing is drawn at `--pos-slot`'s 44px — and the void
    * is what holds the column open in its stead. */
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveCount(0)
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-void')).toHaveCount(1)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('4')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('data-departed', 'true')
 
   /* AND THE STATE AND THE KEY ARE RANKED RATHER THAN LEFT AS A STRING WITH A NOTE UNDER IT.
    * `DEPARTED B2 #4` is the same key/value pair as the `BOX 2` above it and as the `SECTION 1` it
    * stands in for, which is what makes a departed row cost the same two path lines a live one
    * costs. */
   const path = page.locator('.card-locations-row.is-current .card-locations-label .position-path')
-  await expect(path).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
+  await expect(path).toHaveText('BOX ME01 commonsSECTION 1')
 
   /* THE RE-RANK ITSELF IS ASSERTED ON `#/gallery` AND NOT HERE, AND THE MOVE IS D119's (see
    * `gallery.spec.ts`, `a label with no figure re-ranks its path`). `PositionLabel.css`'s rule
@@ -3636,7 +3647,7 @@ test('a registered box with no cards is still reachable, and can still be delete
 
   /* THE CELL EXISTS. Box 6 owns no card in `CARDS`, so before the fix this count was 1. */
   await expect(page.locator('.browse-boxcell')).toHaveCount(2)
-  const cell = page.locator('.browse-boxcell[aria-label^="Box 6"]')
+  const cell = page.locator('.browse-boxcell[aria-label^="asdfkopas"]')
   await expect(cell).toBeVisible()
   await cell.click()
 
@@ -3683,7 +3694,7 @@ test('a search still hides a box holding no match, which is the rule the fix did
      could be pressed would still lead to the empty list the rule is about. The boundary is
      unchanged; what changed is whether a box with no match is drawn as absent or as unreachable. */
   const empty = page
-    .locator('.browse-boxcell[aria-label^="Box 6"]')
+    .locator('.browse-boxcell[aria-label^="asdfkopas"]')
   await expect(empty).toBeDisabled()
 })
 
@@ -4223,11 +4234,10 @@ const NEIGHBORLY: Cards = {
        at some other punctuation. */
     neighbors: { prev: null, next: { index: 4, slot: 3, name: 'Conscription' } },
   }),
-  /* D116'S ROW: a landmark the walk had to REACH. Two on-hand cards between this one and
-     Galio carry no name, so the nearest card that can be named is three along — which is
-     `after Galio` for a card a hand counting from Galio arrives at three cards early. The
-     row says so or the sentence is the wrong-slot claim D30 forbids. `next` skips nothing,
-     in the same fixture, so a renderer that drew the line unconditionally fails too. */
+  /* LOC-28'S ROW: two on-hand cards toward the back carry no name. The owner's ruling of
+     2026-09-24 (amending D116) makes them the neighbour, said as "2 unread cards", where D116
+     walked past them to Galio. `next` is a named card, in the same fixture, so a renderer that
+     drew every side as unread fails too. */
   '2/5': card({
     index: 5,
     state: 'identified',
@@ -4237,8 +4247,8 @@ const NEIGHBORLY: Cards = {
     sectionStart: 1,
     sectionEnd: 6,
     neighbors: {
-      prev: { index: 18, slot: 17, name: 'Galio, Indefaticable', skipped: 2 },
-      next: { index: 22, slot: 21, name: 'Conscription', skipped: 0 },
+      prev: { index: 20, slot: 19, name: null, unread: 2 },
+      next: { index: 22, slot: 21, name: 'Conscription', unread: 0 },
     },
   }),
 }
@@ -4258,7 +4268,8 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
      better as a physical pair, and it takes the NEIGHBOUR as its subject where `placeParts`
      takes THIS CARD — so the row and the `aria-label` would have disagreed about which side
      the same name was on. */
-  await expect(band.locator('.nb-key')).toHaveText(['after', 'before'])
+  /* Back, this card, front: the owner's orientation, card 1 at the far back (LOC-07). */
+  await expect(band.locator('.nb-key')).toHaveText(['back', 'this', 'front'])
 
   /* THE SPLIT, which is what makes two proper nouns findable in a column: the champion is the
      recognition token at ink and the epithet is the disambiguator, demoted and never dropped —
@@ -4271,7 +4282,7 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
      which is what the one-composer rule in server.ts is for. */
   await expect(band).toHaveAttribute(
     'aria-label',
-    'between Galio, Indefaticable and Evelynn, Entrancing',
+    'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
   )
 })
 
@@ -4323,7 +4334,7 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
   await expect(key).toHaveCSS('text-transform', 'uppercase')
 })
 
-test('a card at the front of the box gets one row, not a pretend between', async ({ page }) => {
+test('a card at the back of the box gets one row, not a pretend between', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
     search: (query) => searchAnswer(query, NEIGHBORLY),
@@ -4334,53 +4345,48 @@ test('a card at the front of the box gets one row, not a pretend between', async
      asserts the block at the site that draws it once per copy. */
   const front = page.locator('.card-locations-owner .nb').nth(1)
   await expect(front).toBeVisible()
-  await expect(front.locator('.nb-row')).toHaveCount(1)
-  await expect(front.locator('.nb-key')).toHaveText(['before'])
+  await expect(front.locator('.nb-row')).toHaveCount(2)
+  await expect(front.locator('.nb-key')).toHaveText(['this', 'front'])
 
   /* A NAME WITH NO COMMA RENDERS WHOLE. The seam splits on the first `, ` and refuses any other
      punctuation — the same refusal `PositionLabel` makes for a label it cannot parse — so every
      Pokemon name takes this branch and is drawn exactly as the server sent it. */
   await expect(front.locator('.nb-name b')).toHaveText(['Conscription'])
   await expect(front.locator('.nb-rest')).toHaveCount(0)
-  await expect(front).toHaveAttribute('aria-label', 'before Conscription')
+  /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
+     neighbour and in front of nothing (UX-186). */
+  await expect(front).toHaveAttribute('aria-label', 'It sits behind Conscription.')
 })
 
-test('a landmark the walk had to reach says how far it reached (D116)', async ({ page }) => {
+test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)', async ({ page }) => {
   await open(page, BOXES, {
     cards: NEIGHBORLY,
     search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
-  /* THE OWNER READ A BARE FIGURE IN THIS BLOCK AS A SOLD CARD (2026-09-07). It was not one —
-     the ladder has never named a departed card — it was a LIVE card at a real count that no
-     identification ever named, 7 of them on their store. The server now walks past such a card
-     to the nearest one it can name, so the figure is gone; what replaces it is the distance,
-     because `after Galio` naming a card three along is a sentence somebody counts slots
-     against and comes out two short, which is the one thing D30 says this block may not do.
+  /* THE OWNER'S RULING, 2026-09-24 (amending D116): an unread card is a neighbour. D116 walked
+     past it to the nearest named card and added "with 2 unidentified cards in between"; the
+     owner read that as a real card dropped from the sentence (UX-264). Now the side IS the
+     unread run, "2 unread cards", and never a bare figure (D116's own complaint).
 
-     THE THIRD COPY IS THE SUBJECT and its two sides are the case: `prev` reached across two
-     unnamed cards, `next` reached across none. A renderer that drew the line unconditionally
-     fails on the second row, and one that never drew it fails on the first. */
+     THE THIRD COPY IS THE SUBJECT and its two sides are the case: `prev` is two unread cards,
+     `next` is a named card. A renderer that drew every side as unread fails on the second row,
+     and one that dropped the unread side fails on the first. */
   const reached = page.locator('.card-locations-owner .nb').nth(2)
   await expect(reached).toBeVisible()
-  await expect(reached.locator('.nb-name b')).toHaveText(['Galio', 'Conscription'])
-  await expect(reached.locator('.nb-skip')).toHaveText(['2 unidentified cards between'])
+  await expect(reached.locator('.nb-row[data-side="back"] .nb-unread')).toHaveText('2 unread cards')
+  await expect(reached.locator('.nb-name b')).toHaveText(['Conscription'])
+  await expect(reached.locator('.nb-row[data-side="back"]')).not.toContainText(/#\d/)
 
-  /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px.
-     One clause covers both sides on purpose: every card the walk passed lies strictly between
-     the two landmarks, whichever side it was on. */
-  await expect(reached).toHaveAttribute(
-    'aria-label',
-    'between Galio, Indefaticable and Conscription, with 2 unidentified cards in between',
-  )
+  /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px. */
+  await expect(reached).toHaveAttribute('aria-label', 'It sits in front of 2 unread cards and behind Conscription.')
 
-  /* A ROW THAT SKIPPED NOTHING SAYS NOTHING, asserted on a DIFFERENT copy so it cannot pass by
-     the line simply never rendering: the first copy's neighbours are both adjacent. */
+  /* A ROW WHOSE NEIGHBOURS ARE BOTH NAMED SAYS NO "unread", asserted on a DIFFERENT copy. */
   const adjacent = page.locator('.card-locations-owner .nb').first()
-  await expect(adjacent.locator('.nb-skip')).toHaveCount(0)
+  await expect(adjacent.locator('.nb-unread')).toHaveCount(0)
   await expect(adjacent).toHaveAttribute(
     'aria-label',
-    'between Galio, Indefaticable and Evelynn, Entrancing',
+    'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
   )
 })
 
@@ -4401,7 +4407,7 @@ function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
       section: 1,
       sectionStart: 1,
       sectionEnd: 6,
-      neighbors: { prev: { index: 0, slot: 0, name: 'Mantine', skipped: 0 }, next: null },
+      neighbors: { prev: { index: 0, slot: 0, name: 'Mantine', unread: 0 }, next: null },
     }),
     '2/3': card({
       index: 3,
@@ -4411,7 +4417,7 @@ function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
       section: 1,
       sectionStart: 1,
       sectionEnd: 6,
-      neighbors: { prev: { index: 1, slot: 1, name: 'Mantine', skipped: 0 }, next: null },
+      neighbors: { prev: { index: 1, slot: 1, name: 'Mantine', unread: 0 }, next: null },
     }),
     '2/5': card({
       index: 5,
@@ -4422,7 +4428,7 @@ function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
       sectionStart: 1,
       sectionEnd: 6,
       neighbors: {
-        prev: { index: 3, slot: 2, name: 'Bashful Bloom', skipped: 0 },
+        prev: { index: 3, slot: 2, name: 'Bashful Bloom', unread: 0 },
         next: null,
       },
     }),
@@ -4438,7 +4444,7 @@ function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
         const behind = cards['2/5']
         if (behind !== undefined) {
           behind.place.neighbors = {
-            prev: { index: 1, slot: 1, name: 'Mantine', skipped: 0 },
+            prev: { index: 1, slot: 1, name: 'Mantine', unread: 0 },
             next: null,
           }
         }
@@ -4472,7 +4478,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
   await open(page, BOXES, store, () => PRICING, sale)
 
   /* Copy 5 counts from copy 3, which is about to be sold out from under it. */
-  const behind = copyRow(page, 'Box 2 · Section 1 · Card 3')
+  const behind = copyRow(page, 'Box 2, Section 1, Card 3')
   const ladder = page.locator('.card-locations-owner .nb').nth(2)
   await expect(ladder.locator('.nb-name b')).toHaveText(['Bashful Bloom'])
 
@@ -4756,13 +4762,13 @@ test('the address is drawn without a separator, and the server string survives o
   const parts = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(parts).toHaveAttribute('role', 'group')
   const label = await parts.getAttribute('aria-label')
-  expect(label).toMatch(/^Box \d+ · Section \d+ · Card \d+$/)
+  expect(label).toMatch(/^Box \d+, Section \d+, Card \d+$/)
 
   /* THE SLOT IS THE LAST PART AND IT IS THE ONE DRAWN AT SIZE. Anchored to the END of the
      address rather than to index 2, so a formula with a different number of parts still puts the
      finest thing said on the biggest step. */
   const num = page.locator('.card-locations-row.is-current .card-locations-label .position-num')
-  await expect(num).toHaveText(String(label).split(' · ').pop()!.replace('Card ', ''))
+  await expect(num).toHaveText(/Card (\d+)$/.exec(String(label))?.[1] ?? '')
 })
 
 test('the address holds one line at both widths, including the longest label the store can emit', async ({
@@ -4773,7 +4779,7 @@ test('the address holds one line at both widths, including the longest label the
   /* THE DEFECT: 27 cells at Martian Mono's 0.70em advance is 453.6px in a 448.8px track, so the
      shipped label wrapped — and the comment that justified its size measured it against a 630px
      track a later layout change had already deleted. The worst label the formula can produce,
-     `Box 100 · Section 12 · Card 543`, is 520.8px: 16% over at 1440 and 35% over at 1280.
+     `Box 100, Section 12, Card 543`, is 520.8px: 16% over at 1440 and 35% over at 1280.
 
      FORCED RATHER THAN FIXTURED, because no box in the store is numbered 100. What is being
      checked is the RENDERING's tolerance, not the data — so the label is set to the worst case
@@ -4979,7 +4985,10 @@ test('a narrow copies column shortens the bar, never the position label', async 
      Document order is the only thing that makes it return the box strip. The inversion is done
      entirely with CSS `order` — a later session that inverts it by reordering the JSX instead
      silently measures the wrong element and takes this assertion green over nothing. */
-  expect(geom.sectTrackH!).toBeGreaterThan(geom.boxTrackH * 2)
+  /* The ruler stays the taller instrument. The strip under it grew from 8px to 14px to carry the
+     section numbers before and after (the owner's ruling, amending D155), so the ratio is no
+     longer two to one; what is kept is that the section is the instrument. */
+  expect(geom.sectTrackH!).toBeGreaterThan(geom.boxTrackH)
   expect(geom.boxTrackH).toBeGreaterThan(0)
 })
 
@@ -5478,14 +5487,15 @@ test('two departed copies of one card draw two different rows', async ({ page })
   await expandAll(page)
   await page.locator('.browse-row').nth(0).click()
 
-  const gone = page.locator('.card-locations-row', { hasText: 'departed' })
+  /* Marked, not worded (D-a-box-is-shown-by-its-name): the row's own state class finds them. */
+  const gone = page.locator('.card-locations-row.is-gone')
   await expect(gone).toHaveCount(2)
   /* RANKED, NOT PLAIN (D71), and the store key is the value of the thing that explains it. This
      read `.position-storekey` — the orphan sub-line under a raw string — and the raw string was
      the pre-D41 rendering, drawn here at 28px as the loudest thing in a list whose live rows are
      ranked. The pair is still what separates the two records, which is all D68 asked for. */
-  await expect(gone.nth(0).locator('.position-path')).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
-  await expect(gone.nth(1).locator('.position-path')).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #5')
+  await expect(gone.nth(0).locator('.position-path')).toHaveText('BOX ME01 commonsSECTION 1')
+  await expect(gone.locator('.position-num')).toHaveText(['4', '5'])
 
   /* AND THE COLUMN HOLDS ACROSS A ROW THAT HAS NO FIGURE, which is the assertion the reserve in
      `PositionLabel.css` promises and cannot make about itself. `lead='slot'` exists so every
@@ -5696,7 +5706,7 @@ test('a box with no cards is still the box the hash asked for', async ({ page })
     settle: '.browse-boxcell',
   })
 
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 6/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ETB codes/)
 })
 
 /* AND THE THREE PATHS THAT MUST NOT HAVE MOVED, in one case rather than three files of setup.
@@ -5712,7 +5722,7 @@ test('a hash naming no box falls back, and does not hold the walk open', async (
 
   /* The only shelf there is. The point is not that it chose 2 — there was nothing else to
      choose — but that it chose at all rather than waiting for a box 99 that is never coming. */
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 commons/)
 })
 
 /* ================================================================== D132: sold folded away,
@@ -5776,7 +5786,7 @@ test('D132 — unticked, departed rows sink under the live ones in their own sec
   await expandAll(again)
   /* REMEMBERED: the press above wrote `show`, and this open wrote nothing over it. */
   await expect(again.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
-  await expect(again.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', 'B2 #1', '#1'])
+  await expect(again.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', '#1', '#1'])
   /* The section header the sold card led is still ONE section, folded open, not two. */
   await expect(again.locator('.browse-sectfold')).toHaveCount(2)
 })
@@ -5814,8 +5824,8 @@ test('D132 — the row the walk stands on survives its own sale while sold is hi
   /* The receipt lands where the sale was pressed (D119) — which needs the row to still exist,
      and to still be where it was (D118): the re-read draws it departed, in its place. */
   await expect(page.locator('.card-locations-row.is-current').getByRole('button', { name: /Undo/ })).toBeVisible()
-  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', 'B2 #3', '#2'])
-  await expect(page.locator('.browse-row[aria-current="true"] .browse-row-position')).toHaveText('B2 #3')
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3', '#2'])
+  await expect(page.locator('.browse-row[aria-current="true"] .browse-row-position')).toHaveText('#3')
 
   /* Step off it and it is folded away with the rest. */
   await page.locator('.browse-row').nth(2).click()
@@ -5859,7 +5869,7 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
      stands on survives its own sale (D119) and stays drawn as `B2 #3`. The old count
      (`departedHere`) would read 2 here; this is the 6-claimed-5-hidden defect at its smallest
      reproduction. */
-  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', 'B2 #3'])
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3'])
   await expect(chip.locator('.bn-chip-count')).toHaveText('1')
 
   /* Step off the sold row and the fold takes it too — both departed rows hidden, both counted. */
@@ -5898,7 +5908,7 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
      fix, landed beside this test: the bare `.browse-boxcell-count` figure had no unit and no
      accessible name of its own, so the count is now named in the one aria-label the button
      already carries (Bulk holds 40 cards per its own fixture, above). */
-  await expect(page.locator('.browse-boxcell').nth(1)).toHaveAttribute('aria-label', 'Box 6, 40 captured')
+  await expect(page.locator('.browse-boxcell').nth(1)).toHaveAttribute('aria-label', 'Bulk, 40 captured')
 
   /* A PAGE LOAD IS NOT AN OPENING: the walk landed on box 7 (recency put it first) and the
      order is exactly what storage said, untouched. A press IS one — open Bulk and it leads. */
@@ -5921,12 +5931,12 @@ test('D132 — the address leads with the name and the index is its note, on the
   /* THE ROW THE WALK STANDS ON IS THE ADDRESS (D119): there is no location card above the list
      to lead with anything, so the name leads on `.is-current` exactly as it leads on its siblings. */
   const label = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
-  await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1')
+  await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsSECTION 1')
   /* The server's string is untouched: this is a rendering, not an edit (D41's invariant). */
-  await expect(label).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 1')
+  await expect(label).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 1')
 
   const rows = page.locator('.card-locations-row .position-path')
-  await expect(rows.nth(0)).toHaveText('BOX ME01 commonsBox 2SECTION 1')
+  await expect(rows.nth(0)).toHaveText('BOX ME01 commonsSECTION 1')
 })
 
 test('D132 — an unnamed box keeps the index in the address and draws no note beside it', async ({ page }) => {
@@ -5937,7 +5947,8 @@ test('D132 — an unnamed box keeps the index in the address and draws no note b
   await open(page, { boxes: [{ ...BOXES.boxes[0], name: null }] }, store)
   await expandAll(page)
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX 2SECTION 1')
+  /* An unnamed box reads its default name, which says Box itself, so no key rides in front. */
+  await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('Box 2SECTION 1')
   await expect(page.locator('.card-locations-row.is-current .position-note')).toHaveCount(0)
 })
 
@@ -5967,7 +5978,7 @@ async function sectionTitleFit(title: Locator, count: string): Promise<{ countIn
   }, count)
 }
 
-test('a long section name is cut before the count is, at 820', async ({ page }) => {
+test('a long section name is drawn whole, and its count is said once, at 820', async ({ page }) => {
   /* The same title `#/orders` draws (`SectionTitle.tsx`): the NAME ellipsizes, `3 cards` stays
      whole. Verified red first: the one-span title cut the count, the end of the sentence. */
   await page.setViewportSize({ width: 820, height: 1180 })
@@ -5991,9 +6002,11 @@ test('a long section name is cut before the count is, at 820', async ({ page }) 
 
   const title = page.locator('.browse-secttitle').first()
   await expect(title).toHaveText('Section 1: Holographic promos from the vintage binder, 3 cards')
-  const fit = await sectionTitleFit(title, '3 cards')
-  expect(fit.overflow).toBeGreaterThan(0)
-  expect(fit.countInside).toBe(true)
+  /* THE OWNER'S RULING, LOC-21: the section's name is the label on its divider, so it is never cut;
+     it wraps. The count is the pill's, and the title only speaks it (\`.bn-sr\`). */
+  const fit = await sectionTitleFit(title.locator('.browse-secttitle-head'), 'vintage binder')
+  expect(fit.overflow).toBeLessThanOrEqual(0.5)
+  await expect(title.locator('.browse-secttitle-count')).toHaveClass(/bn-sr/)
 })
 
 test('D132 — a named section is said in the walk header, in the bar\'s sentence and on the label', async ({ page }) => {
@@ -6024,8 +6037,8 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
      number read as out of range). */
   await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1: Rares, 3 cards')
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1Rarescard 1 of 3 slots')
-  await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1Rares')
+  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1Rarescard 1 of 3')
+  await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsSECTION 1Rares')
 
   /* AND THE NAME IS WRITTEN FROM THE MANAGE SHEET, keyed by the section's number. */
   await page.route(/\/boxes\/2$/, async (route) => {
@@ -6245,11 +6258,11 @@ test('D132 — a search lands on a box with a LIVE copy, never on the sold one t
   }
   const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
   await open(page, TWO_BOXES, store, () => PRICING, SALE, { route: '/#/inventory?box=2', hideSold: null })
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 commons/)
 
   await page.getByRole('searchbox').fill('Eiscue')
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 40')
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 40')
   /* And the copy the walk stands on is the live one, not the departed one. */
   await expect(page.locator('.card-locations-row.is-current')).not.toHaveClass(/is-gone/)
 })
@@ -6282,19 +6295,19 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   /* The copies list: box 7's three, then box 2 section 2's two, then the lone one. */
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
-  await expect(labels.nth(3)).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
-  await expect(labels.nth(5)).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 1')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await expect(labels.nth(3)).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
+  await expect(labels.nth(5)).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 1')
 
   /* A search: the rail leads with box 7 and the walk lands on the first of its three. */
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
 
   /* And pressing box 2 under the same search lands in ITS fullest section, section 2. */
-  await page.locator('.browse-boxcell[aria-label^="Box 2"]').click()
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
+  await page.locator('.browse-boxcell[aria-label^="ME01 commons"]').click()
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
 })
 
 /* ------------------------------------------------------- the order stops moving under a sale
@@ -6451,8 +6464,8 @@ function stackedStore(): { store: Store; depart: (key: string) => void } {
       cards[key] = {
         ...held,
         state: 'sold',
-        label: `Box ${place.box} · departed · B${place.box} #${place.index}`,
-        place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null },
+        label: place.label,
+        place: { ...place, slot: null, card: null, fraction: null },
       }
       delete (cards[key] as { card?: number }).card
       void inner
@@ -6479,20 +6492,20 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
      way round, the copies list was measured, the rail then landed, and the snapshot taken
      afterwards came back EMPTY. Measured both ways: `railBefore` recording `Box 2, Box 7` in
      one order, `before[0]` undefined in the other. */
-  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
   const railBefore = await railOrder(page)
   const walkBefore = await walkOrder(page)
-  expect(railBefore[0]).toMatch(/^Box 7/)
-  expect(before[0]).toBe('Box 7 · Section 1 · Card 38')
-  expect(before[3]).toBe('Box 2 · Section 2 · Card 1')
+  expect(railBefore[0]).toMatch(/^ME01 spares/)
+  expect(before[0]).toBe('Box 7, Section 1, Card 38')
+  expect(before[3]).toBe('Box 2, Section 2, Card 1')
 
   /* Sell the row the list leads with. Its section drops from three to two and TIES box 2's
      pair, so a live re-rank would move box 2's two copies above the two box 7 has left. */
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.inventory-receipt')).toContainText('Undo')
 
   /* WAIT FOR THE RE-READ AND NOT FOR THE OPTIMISM. `.is-gone` lands off `soldKeys` before any
@@ -6500,7 +6513,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
      changed — the answer is right, a beat early, and the snapshot below reads stale labels.
      The DEPARTED LABEL is the wire's own and cannot appear until the re-read has landed. */
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
   /* THE SOLD ROW IS STILL DRAWN AND STILL AT THE TOP. `Hide sold` is on, so without the freeze
@@ -6510,7 +6523,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
   expect(after).toHaveLength(6)
   /* The departed row carries `join.departed_label` in place of its address (D58, D68) — the
      product's existing rendering for a copy in no slot, not a second one invented here. */
-  expect(after[0]).toBe('Box 7 · departed · B7 #38')
+  expect(after[0]).toBe('Was at Box 7, Section 1, Card 38')
   /* AND EVERY OTHER ROW IS THE ROW IT WAS, in the position it was in. */
   expect(after.slice(1)).toEqual(before.slice(1))
   expect(await railOrder(page)).toEqual(railBefore)
@@ -6520,7 +6533,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
      come up — a jump in the left rail while the hand is in the right pane. The walk's row keys
      are its slot cells, and the departed one reads as the store key (D68). */
   expect(walkBefore).toEqual(['#38', '#39', '#40'])
-  expect(await walkOrder(page)).toEqual(['B7 #38', '#39', '#40'])
+  expect(await walkOrder(page)).toEqual(['#38', '#39', '#40'])
 
   /* And the control says how stale the order is, rather than the list quietly reshuffling. */
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
@@ -6535,21 +6548,21 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
   /* The rail first, for the reason the case above measures: it moves the walk when it lands. */
-  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
 
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — see the case above. */
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
   /* AND THE ORDER HAS NOT MOVED, which is what makes the press below the subject of this case
      rather than a second reading of the one above. */
-  expect(await copyOrder(page)).toEqual(['Box 7 · departed · B7 #38', ...before.slice(1)])
+  expect(await copyOrder(page)).toEqual(['Was at Box 7, Section 1, Card 38', ...before.slice(1)])
 
   /* THE PRESS THE OWNER CHOOSES, and the only thing in this screen that reshuffles the list. */
   await page.locator('.card-locations-rerank').click()
@@ -6570,12 +6583,12 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
      section 2, and a tie falls to the server's own order — so the two box 2 copies come first
      and the sold one sits with the section it is no longer counted in. */
   expect(after).toEqual([
-    'Box 2 · Section 2 · Card 1',
-    'Box 2 · Section 2 · Card 2',
-    'Box 7 · departed · B7 #38',
-    'Box 7 · Section 1 · Card 39',
-    'Box 7 · Section 1 · Card 40',
-    'Box 2 · Section 1 · Card 1',
+    'Box 2, Section 2, Card 1',
+    'Box 2, Section 2, Card 2',
+    'Was at Box 7, Section 1, Card 38',
+    'Box 7, Section 1, Card 39',
+    'Box 7, Section 1, Card 40',
+    'Box 2, Section 1, Card 1',
   ])
 })
 
@@ -6599,15 +6612,15 @@ test('and the row is still there when its receipt has run out, which is the half
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
 
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
   /* PAST THE WINDOW. `UNDO_WINDOW_MS` is 20s and the receipt's own timer is armed for it, so
@@ -6620,7 +6633,7 @@ test('and the row is still there when its receipt has run out, which is the half
      freeze the row folds away here and the five beneath it come up one — the same jump the
      owner reported, arriving twenty seconds late. */
   await expect(labels).toHaveCount(6)
-  expect(await copyOrder(page)).toEqual(['Box 7 · departed · B7 #38', ...before.slice(1)])
+  expect(await copyOrder(page)).toEqual(['Was at Box 7, Section 1, Card 38', ...before.slice(1)])
   /* And the control is still offering the re-rank, because nothing has taken a new order. */
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
 })
@@ -6648,8 +6661,8 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
       cards['7/39'] = {
         ...held,
         state: 'retired',
-        label: `Box 7 · departed · B7 #39`,
-        place: { ...place, label: `Box 7 · departed · B7 #39`, slot: null, card: null, fraction: null },
+        label: place.label,
+        place: { ...place, slot: null, card: null, fraction: null },
       }
       delete (cards['7/39'] as { card?: number }).card
     }
@@ -6666,10 +6679,10 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
 
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
   const labels = page.locator('.card-locations-row .position-parts')
   await expect(labels).toHaveCount(6)
-  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
   const walkBefore = await walkOrder(page)
 
@@ -6679,17 +6692,17 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
      the walk lands) is kept whatever the freeze does. Card 39 is neither current nor optimistic.
      Measured: with the freeze deleted from `stays`, retiring 38 leaves the suite green and
      retiring 39 turns it red. */
-  await copyRow(page, 'Box 7 · Section 1 · Card 39').getByRole('button', { name: 'Retire' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Retire' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Damaged' }).click()
 
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #39"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 39"]'),
   ).toHaveCount(1)
   await expect(labels).toHaveCount(6)
-  expect(await copyOrder(page)).toEqual([before[0], 'Box 7 · departed · B7 #39', ...before.slice(2)])
+  expect(await copyOrder(page)).toEqual([before[0], 'Was at Box 7, Section 1, Card 39', ...before.slice(2)])
   /* AND THE WALK, which folds departed rows away under `Hide sold` and is held by the same set. */
   expect(walkBefore).toEqual(['#38', '#39', '#40'])
-  expect(await walkOrder(page)).toEqual(['#38', 'B7 #39', '#40'])
+  expect(await walkOrder(page)).toEqual(['#38', '#39', '#40'])
   /* One sentence for both doors: a retirement is a copy leaving, and the order is stale by it. */
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
 })
@@ -6701,7 +6714,7 @@ test('a new search takes a new order, so the staleness never carries across answ
     const held = cards[key]
     if (held === undefined) return
     const place = held.place
-    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    cards[key] = { ...held, state: 'sold', label: place.label, place: { ...place, slot: null, card: null, fraction: null } }
     delete (cards[key] as { card?: number }).card
   }
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
@@ -6710,13 +6723,13 @@ test('a new search takes a new order, so the staleness never carries across answ
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — the chip lands off the
      sale's own response and says nothing about whether the store has answered yet. */
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
   /* A QUERY NOBODY HAS WORKED DOWN YET HAS NOTHING TO HOLD STILL.
@@ -6738,7 +6751,7 @@ test('a new search takes a new order, so the staleness never carries across answ
      answer lands and after it, so a count gates nothing. */
   await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute(
     'aria-label',
-    'Box 2 · Section 2 · Card 1',
+    'Box 2, Section 2, Card 1',
   )
   await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
   await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
@@ -6746,12 +6759,12 @@ test('a new search takes a new order, so the staleness never carries across answ
      ties box 2 section 2, so box 2's pair leads — the reshuffle that the freeze was holding off
      and that a new search is entitled to make. */
   expect(await copyOrder(page)).toEqual([
-    'Box 2 · Section 2 · Card 1',
-    'Box 2 · Section 2 · Card 2',
-    'Box 7 · departed · B7 #38',
-    'Box 7 · Section 1 · Card 39',
-    'Box 7 · Section 1 · Card 40',
-    'Box 2 · Section 1 · Card 1',
+    'Box 2, Section 2, Card 1',
+    'Box 2, Section 2, Card 2',
+    'Was at Box 7, Section 1, Card 38',
+    'Box 7, Section 1, Card 39',
+    'Box 7, Section 1, Card 40',
+    'Box 2, Section 1, Card 1',
   ])
   await expectCopiesHeld(page)
 })
@@ -6808,7 +6821,7 @@ test.skip(
     const held = cards[key]
     if (held === undefined) return
     const place = held.place
-    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    cards[key] = { ...held, state: 'sold', label: place.label, place: { ...place, slot: null, card: null, fraction: null } }
     delete (cards[key] as { card?: number }).card
   }
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
@@ -6825,10 +6838,10 @@ test.skip(
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 7 · departed · B7 #38"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
   await installCopiesWatch(page)
@@ -6837,7 +6850,7 @@ test.skip(
   await page.getByRole('searchbox').fill('8937370')
   await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute(
     'aria-label',
-    'Box 2 · Section 2 · Card 1',
+    'Box 2, Section 2, Card 1',
   )
   /* THE WALK ITSELF IS WAITED FOR, not just the copies list. Box 2's rows are the last thing
      to land, and the watch has to cover the whole flight rather than stop at the answer that
@@ -7033,7 +7046,7 @@ test('a box whose last live match departs keeps the walk, rather than handing it
     const held = cards[key]
     if (held === undefined) return
     const place = held.place
-    cards[key] = { ...held, state: 'sold', label: `Box ${place.box} · departed · B${place.box} #${place.index}`, place: { ...place, label: `Box ${place.box} · departed · B${place.box} #${place.index}`, slot: null, card: null, fraction: null } }
+    cards[key] = { ...held, state: 'sold', label: place.label, place: { ...place, slot: null, card: null, fraction: null } }
     delete (cards[key] as { card?: number }).card
   }
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('2/1') }), {
@@ -7042,18 +7055,18 @@ test('a box whose last live match departs keeps the walk, rather than handing it
   })
   await page.getByRole('searchbox').fill('Thievul')
   /* The fresh answer lands on box 7, which holds the most. Press box 2 to stand there. */
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
-  await page.locator('.browse-boxcell[aria-label^="Box 2"]').click()
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
+  await page.locator('.browse-boxcell[aria-label^="ME01 commons"]').click()
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 commons/)
 
-  await copyRow(page, 'Box 2 · Section 1 · Card 1').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 2, Section 1, Card 1').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Box 2 · departed · B2 #1"]'),
+    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 2, Section 1, Card 1"]'),
   ).toHaveCount(1)
 
   /* STILL STANDING IN BOX 2. Without the freeze the box holds no live match any more, drops out
      of the pool, and the walk is handed to box 7 — a whole screen changing under the press. */
-  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 2/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 commons/)
 })
 
 test('undoing the sale takes the staleness back with it', async ({ page }) => {
@@ -7068,9 +7081,9 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
 
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
 
   /* NOTHING LEFT THE BOX AFTER ALL, so there is nothing for a re-rank to recompute — a
@@ -7124,7 +7137,7 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
      shelf's very first fresh landing coincides with the post-sale re-read, and the walk jumps
      box 2 -> box 7 — a real DOM remount, not a probe artifact, traced with a MutationObserver
      and confirmed line-by-line against the shelf effect's own state. */
-  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
 
   /* `offsetTop` AND NOT A BOUNDING BOX, which is D118's own recorded trap one register over:
      Playwright scrolls a control into view before it clicks it, and this list is the thing that
@@ -7178,7 +7191,7 @@ test('the control that re-ranks reserves its own room, so appearing moves no cop
   const before = await listTop()
   expect(before).toBeGreaterThan(0)
 
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
   const after = await listTop()
   expect(after).toBe(before)
@@ -7203,7 +7216,7 @@ test('the re-rank control clears the thumb floor on a phone', async ({ page }) =
     hideSold: true,
     settle: '.card-locations-owner',
   })
-  await copyRow(page, 'Box 7 · Section 1 · Card 38').getByRole('button', { name: 'Mark sold' }).click()
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   const chip = page.locator('.card-locations-rerank')
   await expect(chip).toBeVisible()
   const box = await chip.boundingBox()
@@ -7272,8 +7285,8 @@ test('a sealed row and an unsealed row agree on the name and bar left edge', asy
   await open(page, boxes, STORE, () => PRICING, SALE, { settle: '.browse-boxcell' })
   await settleFonts(page)
 
-  const openRow = page.locator('.browse-boxcell[aria-label^="Box 2"]')
-  const sealedRow = page.locator('.browse-boxcell[aria-label^="Box 6"]')
+  const openRow = page.locator('.browse-boxcell[aria-label^="ME01 commons"]')
+  const sealedRow = page.locator('.browse-boxcell[aria-label^="ETB codes"]')
   await expect(sealedRow).toHaveAttribute('aria-label', /sealed$/)
 
   const openName = (await openRow.locator('.browse-boxcell-name').boundingBox())?.x ?? -1

@@ -380,10 +380,9 @@ COMPONENTS = [
                                     "that were wearing one name, and the fill has fired on 0 of "
                                     "2,535 real captures.",
                             "governed_by": ["D1", "D3", "D9", "D21", "D25", "D36", "D48", "D86",
-                                            "D87", "D100", "D145", "D172", "D180",
-                                            "D189", "D210",
-                                            "D213", "D219", "D239",
-                                            "D242"],
+                                            "D87", "D100", "D145", "D172", "D180", "D189", "D210",
+                                            "D213", "D219", "D239", "D242",
+                                            "D-a-box-is-shown-by-its-name"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -457,6 +456,14 @@ COMPONENTS = [
                                         "the table and writes nothing.",
                                 "governed_by": ["D189", "D86"],
                                 "tested_by": ["T7"]},
+            "cmd_boxes.py": {"does": "`pkmnscan boxes names` — the one-time backfill that "
+                                     "gives every unnamed box the stored name `Box <number>` "
+                                     "(`store/master.py:Inventory.box_name_plan`). Previews by "
+                                     "default; `--write` plans again inside the store lock and "
+                                     "applies it in one transaction. Idempotent: a named box is "
+                                     "never touched.",
+                             "governed_by": ["D-a-box-is-shown-by-its-name", "D20"],
+                             "tested_by": ["T7"]},
             "cmd_cards.py": {"does": "`pkmnscan cards <name|audit|checks|contradictions|"
                                      "sku-names|photos|variants>` — the card's stable name "
                                      "(D172). `name` "
@@ -736,7 +743,7 @@ COMPONENTS = [
                                            "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49",
                                            "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D137",
                                            "D145", "D147", "D150", "D156", "D166", "D180", "D183",
-                                           "D188", "D253"], "tested_by": ["T7"]},
+                                           "D188", "D253", "D-a-box-is-shown-by-its-name"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -898,7 +905,9 @@ COMPONENTS = [
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
                                         "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
                                         "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D162", "D213", "D253"], "tested_by": ["T3"]},
+                                        "D137", "D146", "D162", "D213", "D218", "D253",
+                                        "D-a-box-is-shown-by-its-name",
+                                        "D-a-card-is-counted-in-its-section"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -1660,8 +1669,8 @@ COMPONENTS = [
                                    "`pipeline/join.py` to where both `store/master.py` and "
                                    "`pipeline/join.py` (which imports them back and re-exports "
                                    "under the same names) can reach them.",
-                           "governed_by": ["D36", "D55", "D63", "D67",
-                                           "D234", "D252"], "tested_by": ["T7"]},
+                           "governed_by": ["D36", "D55", "D63", "D67", "D234", "D252",
+                                           "D-a-box-is-shown-by-its-name"], "tested_by": ["T7"]},
             "master.py": {"does": "the cards, boxes and listings tables — cards, positions, SKUs, "
                                   "listing states, `open_section`, which puts one divider in front "
                                   "of the next card at the index only the store can read (D10), and "
@@ -1687,7 +1696,7 @@ COMPONENTS = [
                                           "D24", "D26", "D30", "D34", "D36", "D55", "D56", "D58",
                                           "D59", "D63", "D67", "D83", "D87", "D88", "D89", "D100",
                                           "D115", "D132", "D145", "D146", "D167", "D172", "D183",
-                                          "D192", "D213", "D253"], "tested_by": ["T7"]},
+                                          "D192", "D213", "D253", "D-a-box-is-shown-by-its-name"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -4947,7 +4956,7 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D168", "D172", "D174", "D183", "D189", "D191",
                                 "D192", "D193", "D203", "D212", "D213", "D219", "D225", "D227",
-                                "D252", "D-no-git-no-live-port"],
+                                "D252", "D-a-box-is-shown-by-its-name", "D-no-git-no-live-port"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5592,7 +5601,8 @@ COMPONENTS = [
                                          "FilterChips and SortControl draw: Capture's option rows, "
                                          "in the kit's own panel, never the native OS menu, every "
                                          "facet usable in any order.",
-                                 "governed_by": ["D5", "D118", "D132", "D212", "D218", "D221"]},
+                                 "governed_by": ["D5", "D118", "D132", "D212", "D218", "D221",
+                                                 "D-a-box-is-shown-by-its-name"]},
             "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
                                          "in a filter bar (`--bn-control-h`) and one width floor "
                                          "and cap. Mono for machine strings only.",
@@ -6253,7 +6263,8 @@ COMPONENTS = [
                         "the whole treatment over it is what put the pre-D41 plain string back "
                         "on two screens for exactly the cards that had been sold.",
                 "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71",
-                                "D92", "D119", "D132", "D218"]},
+                                "D92", "D119", "D132", "D218", "D-a-box-is-shown-by-its-name",
+                                "D-a-card-is-counted-in-its-section"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
@@ -6304,7 +6315,8 @@ COMPONENTS = [
                         "can name, so the bare `#270` the owner read as a sold card leaking "
                         "into the ladder is gone \u2014 it never was one \u2014 and `Skipped` "
                         "draws what the walk cost on the rows where it cost anything.",
-                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116"]},
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116",
+                                "D-a-card-is-counted-in-its-section"]},
             "src/PlaceNeighbors.css": {
                 "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
                         "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
@@ -6373,7 +6385,7 @@ COMPONENTS = [
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218", "D252"]},
+                            "D192", "D213", "D218", "D252", "D-a-box-is-shown-by-its-name"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6432,8 +6444,8 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D137", "D162", "D167", "D172", "D194",
-                                "D253", "D252"],
+                                "D87", "D137", "D162", "D167", "D172", "D194", "D218", "D252",
+                                "D253", "D-a-box-is-shown-by-its-name"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -6452,7 +6464,8 @@ COMPONENTS = [
                         "(`.review-recheck-*`), which is the reconcile sheet's — a scrolling "
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
-                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41", "D46", "D50", "D117", "D162"],
+                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41",
+                                "D46", "D50", "D117", "D162", "D-a-box-is-shown-by-its-name"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -6694,30 +6707,29 @@ COMPONENTS = [
             # sentence: each takes a `persona` and renders owner-dense or Fulfiller-large from
             # ONE implementation. The alternative — a second component per screen — is what
             # docs/DESIGN.md rejected when it declined two visual worlds.
-            "src/PositionBar.tsx": {"does": "D20's sentence drawn, at two scales — and the SECTION is "
-                                            "the instrument. A graduated 26px ruler with a fill, a pin "
-                                            "that crosses it and the section's own bounds written "
-                                            "inside its two ends; under it an 8px strip of chips for "
-                                            "the box, with a caret on the chip this card is in. Says "
-                                            "'#40 of 250 · 16% in' for a sealed box and '#12 of 62' "
-                                            "for an open one — NO 'SO FAR' ANYWHERE (owner's ruling, "
-                                            "2026-09-19: the words trailed unconditionally on every "
-                                            "open box, an opt-out flag nothing ever set, now deleted). "
-                                            "THE SVG TRAPEZOID IS DELETED "
-                                            "(D155): its two legs' slope ratio "
-                                            "carried neither a width nor a height term and its "
-                                            "arithmetic pointed at the wrong chip by up to 42px. THE "
-                                            "ZOOM BLOCK MOUNTS ON THE `sectionDepth` PROP and never on "
-                                            "whether the depth resolved, so all four owner states are "
-                                            "one DOM at one height (D118).",
+            "src/PositionBar.tsx": {"does": "where a card sits: its SECTION drawn as a graduated "
+                                            "ruler that marks the exact card (its own cell filled, the "
+                                            "pin at the cell's centre) with section numbers at both "
+                                            "ends, and under it a strip of the box's sections, "
+                                            "numbered, with this section outlined, so the sections "
+                                            "before and after show. `back` and `front` are written "
+                                            "under both, because card 1 is at the far back (the "
+                                            "owner's ruling, 2026-09-23, amending D155; "
+                                            "D-a-card-is-counted-in-its-section). The strip's caption "
+                                            "is `Section 2 of 3`; without the ruler it is the card's "
+                                            "`Card 5 of 12`. THE ZOOM BLOCK MOUNTS ON THE "
+                                            "`sectionDepth` PROP and never on whether the depth "
+                                            "resolved, so every owner state is one DOM at one height "
+                                            "(D118).",
                                     "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D41",
-                                                    "D58", "D68", "D118", "D132", "D155", "D218"]},
-            "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST, in two "
-                                             "parts: `#/inventory`'s shelf and `#/orders`' walk both "
-                                             "draw it. The section's name shrinks and ellipsizes; its "
-                                             "card count keeps its own width, so a narrow column cuts "
-                                             "the name and never the count a hand checks the rows "
-                                             "against. The comma rides the count's span, so the text is "
+                                                    "D58", "D68", "D118", "D132", "D155", "D218",
+                                                    "D-a-card-is-counted-in-its-section"]},
+            "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST: "
+                                             "`#/inventory`'s shelf and `#/orders`' walk both draw "
+                                             "it. The section's name is whole (it wraps, never cut: it "
+                                             "is the divider's own label), and its count is spoken and "
+                                             "not drawn, because both lists draw the count in a pill "
+                                             "beside it (LOC-21). The text is still "
                                              "`position.ts:sectionTitleText`'s whole sentence. A "
                                              "component alone in its file so React Refresh can "
                                              "hot-reload it.",
@@ -6741,7 +6753,9 @@ COMPONENTS = [
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
-                                                "D68", "D118", "D132", "D155", "D194", "D218"]},
+                                                "D68", "D118", "D132", "D155", "D194", "D218",
+                                                "D-a-box-is-shown-by-its-name",
+                                                "D-a-card-is-counted-in-its-section"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -6838,9 +6852,9 @@ COMPONENTS = [
                                               "under a headroom promise nothing can keep.",
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24",
                                                       "D26", "D28", "D30", "D31", "D38", "D41",
-                                                      "D45", "D58", "D67", "D68", "D71",
-                                                      "D92", "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D218"]},
+                                                      "D45", "D58", "D67", "D68", "D71", "D92",
+                                                      "D115", "D118", "D119", "D132", "D172",
+                                                      "D181", "D218", "D-a-box-is-shown-by-its-name"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -7081,10 +7095,10 @@ COMPONENTS = [
                                            "shape of a figure. It WRITES NOTHING on the owner's "
                                            "ruling; every row is a link into #/inventory, where "
                                            "the store already learns a card has left.",
-                                   "governed_by": ["D9", "D10", "D27", "D31", "D41", "D49", "D56", "D58",
-                                                   "D71", "D86", "D94", "D95", "D103", "D105",
-                                                   "D109", "D110", "D118", "D132", "D147",
-                                                   "D159"],
+                                   "governed_by": ["D9", "D10", "D27", "D31", "D41", "D49", "D56",
+                                                   "D58", "D71", "D86", "D94", "D95", "D103",
+                                                   "D105", "D109", "D110", "D118", "D132", "D147",
+                                                   "D159", "D-a-box-is-shown-by-its-name"],
                                    # `app/tests/value-bands.spec.ts` is the check, and it runs
                                    # under `make design-check` rather than at turn end — named
                                    # here in prose for `Markdown.tsx`'s reason. Two arms were
@@ -8268,6 +8282,21 @@ COMPONENTS = [
                         "Run by `make design-check`.",
                 "governed_by": ["D5", "D173", "D-page-scaffold", "D-palette-go-to"],
             },
+            "tests/locating.spec.ts": {
+                "does": "where a card is, said one way (the locating lane): at 1440, 820, 720 "
+                        "and 390 in both themes, `#/inventory?box=N&card=<cid>` opens that card; "
+                        "its place names the box by name and never by number; the ruler's ends "
+                        "are section numbers, `back` sits before `front` (card 1 at the far "
+                        "back), and the pin's centre lies inside the card's own cell; the strip "
+                        "numbers the sections before and after; neighbours draw back, this, "
+                        "front; a departed copy is struck through with a past-tense accessible "
+                        "name and no word; section titles are whole with one drawn count; and "
+                        "Review's pill links to the card and reads as a sentence. Its fixture is "
+                        "`pipeline/join.py:Position`'s arithmetic written out. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D58", "D116", "D155", "D218", "D-a-box-is-shown-by-its-name",
+                                "D-a-card-is-counted-in-its-section"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "
@@ -8646,7 +8675,7 @@ COMPONENTS = [
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
-                                "D124", "D125", "D134", "D174", "D192", "D-palette-go-to"]},
+                                "D124", "D125", "D134", "D174", "D192", "D-palette-go-to", "D-a-box-is-shown-by-its-name"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -9050,7 +9079,7 @@ COMPONENTS = [
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
                                 "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D213",
-                                "D218"],
+                                "D218", "D-a-box-is-shown-by-its-name"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
@@ -9151,7 +9180,8 @@ COMPONENTS = [
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
                 "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
-                                "D118", "D125", "D136", "D193", "D212", "D218"],
+                                "D118", "D125", "D136", "D193", "D212", "D218",
+                                "D-a-box-is-shown-by-its-name"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

@@ -20,24 +20,19 @@
  * declined: it adds a cue on top of the parse instead of deleting the parse, and having
  * landed on `Galio` the reader must still read the grammar to learn which side he is on.
  *
- * THE KEYS ARE `after` AND `before` — THE COMPOSER'S OWN WORDS, NOT A SECOND VOCABULARY.
- * `in front` / `behind` was built first, renders better as a physical pair, and is wrong in
- * a way a picture cannot show: it takes the NEIGHBOUR as its subject ("Galio is in front")
- * where `placeParts` takes THIS CARD ("this card is after Galio"). Both are true and they
- * are opposite framings, so a screen reader would have announced `before Conscription` over
- * a row reading `BEHIND Conscription`. Borrowing the composer's two words costs the physical
- * reading and buys an `aria-label` that says what the eye is looking at — the same argument
- * D22 makes against a friendly second spelling of a machine string.
+ * THE KEYS WERE `after` AND `before` UNTIL 2026-09-23, and LOC-07 found them read backwards: a
+ * bare `AFTER Piercing Light` beside a name reads as "the next card is Piercing Light". They are
+ * now `back` and `front`, a SIDE of this card in the owner's own orientation (card 1 at the far
+ * back), with this card drawn between them. See `PlaceNeighbors` below.
  *
  * ONE DELIBERATE DEPARTURE FROM D41: its payload got SIZE and this one gets POSITION. Two
  * thirty-character strings cannot take a 44px treatment, and D41's own amendment measured
  * what that costs a list — 44px in the copies row is +86px and drops a copy below the fold.
  *
- * A CARD NOBODY HAS NAMED IS NOT A LANDMARK (D116, 2026-09-07). The server walks past an
- * unnamed on-hand card to the nearest one it can name, so this block stopped drawing the bare
- * `#270` the owner read as a sold card leaking into the ladder. It was never that — it was a
- * live card at a real count — but a figure names nothing you can recognise while flipping a
- * box, which is this block's only job. `Skipped` is what the walk costs, stated on the row.
+ * AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending D116). D116
+ * walked past an unnamed on-hand card to a named one, because the bare `#270` it drew read as a
+ * sold card. The owner ruled the unread card is the neighbour, said in words: "an unread card",
+ * or "3 unread cards" for a run of them (`server.ts:neighborWords`). Never a bare figure.
  *
  * THE FULFILLER NEVER IMPORTS THIS. `CardLocations.tsx:FulfillerCard` draws the joined
  * sentence at `.card-locations-say`, 20px body, which `app/tests/fulfillment.spec.ts` floors
@@ -47,7 +42,7 @@
  */
 import type { ReactNode } from 'react'
 
-import { placeParts } from './server'
+import { neighborWords, placeParts } from './server'
 import type { Place, PlaceNeighbor } from './types'
 import './PlaceNeighbors.css'
 
@@ -65,14 +60,9 @@ function seam(name: string): [string, string | null] {
 }
 
 function Name({ side }: { side: PlaceNeighbor }): ReactNode {
-  /* A NAMELESS SIDE IS AN OLDER SERVER AND NOTHING ELSE, since D116: `_company` walks past a
-     card nothing has named and answers null rather than naming it, so a current server never
-     sends one. The slot fallback stays for the older one — never a blank, and never the
-     INDEX, which is what it drew until D92: `#41` composed from the store key names a card
-     that is not the one a hand counting to 41 arrives at, and the two diverge by every card
-     that has left the box in front of it — 76 in box 3. `side.index` is still on the wire and
-     must not be drawn bare. */
-  if (side.name === null) return <b>#{side.slot}</b>
+  /* A NAMELESS SIDE IS AN UNREAD CARD, OR A RUN OF THEM (LOC-28): said in words, muted, never
+     the slot and never the INDEX (D92: `side.index` is on the wire and must not be drawn bare). */
+  if (side.name === null) return <span className="nb-unread">{neighborWords(side)}</span>
 
   const [champion, epithet] = seam(side.name)
   return (
@@ -83,72 +73,67 @@ function Name({ side }: { side: PlaceNeighbor }): ReactNode {
   )
 }
 
-/* HOW FAR AWAY THE LANDMARK REALLY IS, on the rows where that is not one card (D116).
+/** The card and its two neighbours, drawn from the BACK of the box to the FRONT, or nothing.
  *
- * The walk passes over an on-hand card nothing has named, so `after Rell, Noxus` can name the
- * card two along — and a hand counting from it lands one short, which is the failure D30 says
- * this sentence may never cause. The line is the price of the skip and is drawn only where
- * the skip happened: 27 rows on the owner's store, none in a fully identified box.
+ * THE OWNER'S ORIENTATION, 2026-09-23 (D-a-card-is-counted-in-its-section): card 1 is at the far
+ * back and the highest number nearest the body. So the ladder is a picture of the box standing up:
+ * the neighbour toward the back (`prev`, the lower number) on the first row, this card on the
+ * middle row, and the neighbour toward the front (`next`) on the last. The keys name a SIDE of
+ * this card, `back` and `front`, which is what LOC-07 found `after`/`before` could not do: as a
+ * bare label beside a name, `AFTER Piercing Light` read as "the next card is Piercing Light".
  *
- * ITS OWN LINE RATHER THAN A SUFFIX, and that is the same width argument the file's header
- * makes: these names run to thirty characters at a `ladder` flow already, and a trailing
- * clause is what would wrap them. A DEPARTED card is never counted here — the box closed up
- * over it (D58), so it is between nothing at all. */
-function Skipped({ side }: { side: PlaceNeighbor }): ReactNode {
-  const n = side.skipped ?? 0
-  if (n === 0) return null
-  return (
-    <span className="nb-skip">
-      {n} unidentified card{n === 1 ? '' : 's'} between
-    </span>
-  )
-}
-
-/** The two rows, or nothing at all.
+ * A DEPARTED CARD SPEAKS IN THE PAST TENSE (LOC-09). Its middle row reads `was here`, and the
+ * accessible name says where it was ("It was in front of ... and behind ..."). It never says the
+ * card IS there. The accessible name is `placeParts`'s own sentence, the one the Fulfiller reads,
+ * so the two personas hear one wording.
  *
- * `placeParts` answers null — and this renders nothing, never a guess — for a pooled card
- * (D24: a count has no neighbours), an older server, a decoration the server degraded, and
- * the one card whose box holds nothing else.
- *
- * `flow` IS THE ONE CHOICE A SITE MAKES and it is about width, not taste: `ladder` puts the
- * key in a column beside the name and `stack` puts it on a line above, which costs ~72px less
- * of width and one more line of height. Nothing passes `stack` today; it is here because the
- * copies row's container query already cuts that row at 880px and a 231px place cell cannot
- * hold a key column beside a thirty-character name without breaking it. */
+ * `placeParts` answers null (and this renders nothing, never a guess) for a pooled card (D24), an
+ * older server, a decoration the server degraded, and the card whose box holds nothing else. */
 export function PlaceNeighbors({
   place,
   flow = 'ladder',
+  departed = false,
 }: {
   place: Place | undefined
   flow?: 'ladder' | 'stack'
+  /** The card has left its box. Callers read it off `isDeparted(place)`. */
+  departed?: boolean
 }): ReactNode {
-  const parts = placeParts(place)
+  const parts = placeParts(place, departed)
   if (parts === null) return null
 
+  const said = parts.said
+  const here = place?.card ?? null
+
   return (
-    /* The composed sentence rides on `aria-label`, so a screen reader hears one sentence where
-       the eye is given two rows — and `role="group"` is what makes that name apply to the
-       block rather than being read past it. */
-    <div className="nb" data-flow={flow} role="group" aria-label={parts.said}>
+    /* The sentence rides on `aria-label`, so a screen reader hears one sentence where the eye is
+       given three rows, and `role="group"` is what makes that name apply to the block. */
+    <div className="nb" data-flow={flow} data-departed={departed ? 'true' : undefined} role="group" aria-label={said}>
       {parts.prev === null ? null : (
-        <p className="nb-row">
-          <span className="nb-key">after</span>
+        <p className="nb-row" data-side="back">
+          <span className="nb-key">back</span>
           <span className="nb-name">
             <span className="nb-name-line">
               <Name side={parts.prev} />
             </span>
-            <Skipped side={parts.prev} />
           </span>
         </p>
       )}
+      <p className="nb-row nb-this" data-side="this">
+        <span className="nb-key">{departed ? 'was' : 'this'}</span>
+        <span className="nb-name">
+          <span className="nb-name-line">
+            {departed ? 'here' : here === null ? 'this card' : `#${here}`}
+          </span>
+        </span>
+      </p>
       {parts.next === null ? null : (
-        <p className="nb-row">
-          <span className="nb-key">before</span>
+        <p className="nb-row" data-side="front">
+          <span className="nb-key">front</span>
           <span className="nb-name">
             <span className="nb-name-line">
               <Name side={parts.next} />
             </span>
-            <Skipped side={parts.next} />
           </span>
         </p>
       )}

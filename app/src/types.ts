@@ -660,6 +660,12 @@ export type QueueEntryWire = {
    *  `first_seen` is missing or unparsable, because that helper refuses to guess. Optional on
    *  this side so an older server running on the Mac renders a gap rather than `undefined`. */
   age_days?: number | null
+
+  /** DECORATED BY THE ROUTE, the card's whole place block and its stable name (D172), so the
+   *  review screen draws the place the way Inventory does and links to THIS card
+   *  (`#/inventory?box=<n>&card=<cid>`). Optional: an older server sends neither. */
+  place?: Place
+  cid?: string | null
 }
 
 /** `GET /queues`. Both queues, each already in `store/queues.py:sort_key` order. */
@@ -1310,15 +1316,14 @@ export type Place = {
    *  place to send somebody. The same rule `ServerStatus.queues` states for its own nulls. */
   fraction: number | null
 
-  /** The nearest NAMED records that are still physically in the box on either side of this
+  /** The ADJACENT records that are still physically in the box on either side of this
    *  one — D30's digital half. `Card 17` is the seventeenth SLOT, not the seventeenth card you
    *  can count, and once a section has holes those two stop being the same number; the
    *  neighbours are what make the label countable by hand again. Sold and retired records are
-   *  passed over, never named — a departed card cannot be the thing you count from — and
-   *  SINCE D116 so is an on-hand card nothing has named, because a figure is not something you
-   *  recognise while flipping a box. `prev`/`next` are null past the box's ends AND where
-   *  nothing that way carries a name; `PlaceNeighbor.skipped` says how many cards the walk
-   *  passed over to get there.
+   *  passed over, never named — a departed card cannot be the thing you count from. An
+   *  on-hand card nothing has named IS a neighbour (the owner's ruling, 2026-09-24, LOC-28,
+   *  amending D116), said as "an unread card"; `PlaceNeighbor.unread` counts the run.
+   *  `prev` (toward the back) and `next` (toward the front) are null past the box's ends.
    *
    *  THE WHOLE FIELD IS NULL WHEN THE SERVER DEGRADED IT — a record in the store whose
    *  position will not read, the same event that nulls the denominator — and ABSENT on an
@@ -1357,20 +1362,14 @@ export type PlaceNeighbor = {
   index: number
   name: string | null
 
-  /** How many on-hand cards the walk passed over to reach this one, because nothing has named
-   *  them (D116). Zero on a neighbour that really is the next card along, which is every row
-   *  in a fully identified box — 27 rows on the owner's store carry a skip.
+  /** How many unread cards stand in a row on this side, starting with this neighbour, up to
+   *  the next named card or the box's end (the owner's ruling, 2026-09-24, LOC-28). Zero on a
+   *  named neighbour. Drawn as "an unread card" or "3 unread cards" (`server.ts:neighborWords`).
+   *  Departed cards are never counted here: the box closed up over them (D58).
    *
-   *  IT IS DRAWN WHENEVER IT IS NONZERO, and that is not decoration. D30 forbids a sentence
-   *  that sends a hand to the wrong slot, and a landmark two cards away rather than one does
-   *  exactly that if the row does not say so. Departed cards are never counted here: the box
-   *  closed up over them (D58) so they are between nothing, and `Place.section_gaps` is where
-   *  they are counted instead.
-   *
-   *  Optional for the reason every late field in this file is — an older server sends a
-   *  neighbour without it, and `?? 0` is the honest read of that: it named the adjacent card
-   *  because it had no other rule. */
-  skipped?: number
+   *  Optional for the reason every late field in this file is: an older server sends a
+   *  neighbour without it, and a nameless side then reads as one unread card. */
+  unread?: number
 }
 
 // ------------------------------------------------------------------------------- the search

@@ -25,12 +25,12 @@ const VIEW_ROUTE = '/#/inventory'
 const CARD = {
   box: 2,
   index: 1,
-  label: 'Box 2 · Section 1 · Card 1',
+  label: 'Box 2, Section 1, Card 1',
   section: 1,
   card: 1,
   place: {
     located: true,
-    label: 'Box 2 · Section 1 · Card 1',
+    label: 'Box 2, Section 1, Card 1',
     box: 2,
     index: 1,
     slot: 1,

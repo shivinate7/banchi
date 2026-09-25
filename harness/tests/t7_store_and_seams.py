@@ -166,6 +166,7 @@ says the same thing about 7b that a green T6 says about geometry: it is self-con
 
 from __future__ import annotations
 
+import argparse
 import ast
 import base64
 import codecs
@@ -326,6 +327,17 @@ STALE_CANDIDATE = {
     "market": "0.05",
 }
 
+
+
+def stored_label(box: int, index: int) -> str:
+    """`Position.label` for a card, against the box's STORED name (D-a-box-is-shown-by-its-name).
+
+    A box created with no name carries its stored default (`Inventory.default_box_name`), so a
+    bare `join.Position(box, index).label` (the `Box <number>` fallback for a caller with no
+    registry) is not what a route answers. This is the one formula with the registry's name.
+    """
+    entry = Store().read().inventory.box(box)
+    return join.Position(box, index, box_name=entry.name if entry else None).label
 
 def entry(box: int, index: int, **extra) -> queues.QueueEntry:
     """A queue entry for a captured position, with the fields a review row is drawn from.
@@ -1714,7 +1726,7 @@ def check_server_routes(checks: Checks) -> None:
         checks.ok(body["new_box"], "and flags the box as new")
         checks.equal(
             body["label"],
-            join.Position(3, 1).label,
+            stored_label(3, 1),
             "the rendered label matches pipeline/join.py's — one renderer, not two",
         )
 
@@ -1893,7 +1905,7 @@ def check_server_routes(checks: Checks) -> None:
         row = inventory["cards"]["3/2"]
         checks.equal(
             row["label"],
-            join.Position(3, 2).label,
+            stored_label(3, 2),
             "and each row carries the label pipeline/join.py renders — not a second copy of "
             "D10's divider rule living in the app",
         )
@@ -2064,11 +2076,13 @@ def check_undo(checks: Checks) -> None:
                 "undo_not_newest",
                 "and it refuses in its own code, not card_not_found",
             )
+            undoable = capture_server.do_inventory()["cards"]["3/3"].get("label")
             checks.ok(
-                "box 3, card 3" in str(caught),
+                bool(undoable) and str(undoable) in str(caught),
                 "and the refusal NAMES the position that is undoable — otherwise the app "
-                "has to ask again to find out",
-                f"message was: {caught}",
+                "has to ask again to find out. It names it the way the card row does: the "
+                "box's name, the section and the card in the section, never the number",
+                f"message was: {caught}; label: {undoable}",
             )
         checks.ok(
             Store().read().inventory.get("3/1") is not None,
@@ -3173,7 +3187,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             snapshot.cache.put("3/5", {"name": "N5"}, "sha-5", "p1")
             snapshot.review.upsert(
                 queues.QueueEntry(
-                    position="3/5", box=3, index=5, label=join.Position(3, 5).label,
+                    position="3/5", box=3, index=5, label=stored_label(3, 5),
                     photo=str(photo_of(3, 5)),
                     reason="metadata_detection_disagreement", market="2.00",
                 )
@@ -3224,9 +3238,24 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "renumber_blocked", "renumber_blocked")
             checks.ok(
-                "card 4 is retired: damaged" in str(caught),
-                "and the refusal NAMES the blocker with its reason",
+                "Section 1, Card 4 is retired: damaged" in str(caught)
+                and "card 4 is retired" not in str(caught),
+                "and the refusal NAMES the blocker with its reason, in the SAME SHAPE a "
+                "card row reads — Section n, Card m, never the bare store index "
+                "(D-a-box-is-shown-by-its-name)",
                 f"message was: {caught}",
+            )
+            # THE LISTED CARD'S TEXT MATCHES ITS OWN LABEL. Box 3 got no typed name, so it
+            # carries the stored default — `said_place` (a second code path through
+            # `join.box_view`) answers the same "Section 1, Card 4" for this departed card,
+            # cross-checking `place_within_box`, the one the list actually calls.
+            expected_label = join.said_place(Store().read().inventory, 3, 4)
+            checks.ok(
+                expected_label.endswith("Section 1, Card 4")
+                and "Section 1, Card 4" in str(caught),
+                "the list's own text for card 4 matches `said_place`'s label for the same "
+                "index, minus the box name already said once in the sentence",
+                f"said_place: {expected_label!r}; message: {caught}",
             )
         refusal(
             checks,
@@ -3249,8 +3278,11 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         if caught is not None:
             checks.equal(getattr(caught, "code", None), "renumber_blocked", "renumber_blocked")
             checks.ok(
-                "8608859" in str(caught) and "1 pushed" in str(caught),
-                "naming the SKU and the stage that holds it",
+                "Section 1, Card 3 is one copy of SKU 8608859" in str(caught)
+                and "1 pushed" in str(caught)
+                and "card 3 is one copy" not in str(caught),
+                "naming the SKU and the stage that holds it, against the card's Section n, "
+                "Card m label — never the bare store index",
                 f"message was: {caught}",
             )
         with Store().write() as snapshot:
@@ -3331,7 +3363,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             f"entry was: {moved_entry!r}",
         )
         checks.ok(
-            moved_entry is not None and moved_entry.label == join.Position(3, 5).label,
+            moved_entry is not None and moved_entry.label == stored_label(3, 5),
             "AND ITS STORED LABEL IS NOT REWRITTEN, which is D92 and is the reverse of what "
             "this case asserted until then. The re-key composed one with `join.Position` and "
             "no `occupied`, so it was in INDEX space while every route serves a label "
@@ -3435,12 +3467,21 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                 "in its own code",
             )
             checks.ok(
-                "8608859" in str(caught) and "1 pushed" in str(caught)
+                "Section 1, Card 1 is one copy of SKU 8608859" in str(caught)
+                and "1 pushed" in str(caught)
+                and "card 1 is one copy" not in str(caught)
                 and "is sold" not in str(caught) and "is retired" not in str(caught)
                 and "was moved" not in str(caught),
-                "and the refusal names only the listed copy — the sold, retired and "
-                "moved records no longer stand in the way (D134)",
+                "and the refusal names only the listed copy, in the SAME SHAPE a card "
+                "row reads — Section n, Card m, never the bare store index "
+                "(D-a-box-is-shown-by-its-name) — the sold, retired and moved records "
+                "no longer stand in the way (D134)",
                 f"message was: {caught}",
+            )
+            checks.equal(
+                join.said_place(Store().read().inventory, 3, 1),
+                "Box 1, Section 1, Card 1",
+                "cross-checked against `said_place` for the same index",
             )
         checks.equal(
             len(Store().read().inventory.cards), 5,
@@ -3510,7 +3551,8 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             and by_key["3/2"].get("sku") is None
             and by_key["3/2"].get("box") == 3
             and by_key["3/2"].get("index") == 2
-            and by_key["3/2"].get("box_name") is None
+            # A BOX CREATED WITH NO NAME CARRIES ITS STORED DEFAULT (D-a-box-is-shown-by-its-name).
+            and by_key["3/2"].get("box_name") == "Box 1"
             and by_key["3/2"].get("capture_id") == "r3"
             and by_key["3/2"].get("order") is None
             and by_key["3/2"].get("photo_sha256")
@@ -4023,6 +4065,7 @@ def check_queues(checks: Checks) -> None:
                 "age_days",
                 "box",
                 "candidates",
+                "cid",
                 "cleared_by_human",
                 "confidence",
                 "first_seen",
@@ -4030,11 +4073,13 @@ def check_queues(checks: Checks) -> None:
                 "label",
                 "market",
                 "photo",
+                "place",
                 "position",
                 "read",
                 "reason",
             ],
-            "a queue row is the whole QueueEntry record plus age_days — not a projection "
+            "a queue row is the whole QueueEntry record plus age_days, the card's place block "
+            "and its stable name (the review pill opens THIS card, LOC-12) — not a projection "
             "the app has to hold against review.json field by field",
         )
         checks.equal(
@@ -4056,7 +4101,7 @@ def check_queues(checks: Checks) -> None:
         )
         checks.equal(
             row["label"],
-            join.Position(3, 3).label,
+            stored_label(3, 3),
             "the label is pipeline/join.py's, the same one every other route answers with",
         )
 
@@ -4317,7 +4362,7 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             body["card"]["label"],
-            join.Position(3, 1).label,
+            stored_label(3, 1),
             "the returned card is a decorated inventory row — the same shape GET "
             "/inventory answers with, so the app needs no second vocabulary for a card",
         )
@@ -8755,23 +8800,28 @@ def check_box_names(checks: Checks) -> None:
             "written, which is the shape a screen that PUTs its whole form back produces",
         )
 
-        # --- clearing puts it back to unnamed --------------------------------------------
+        # --- clearing stores the default name ---------------------------------------------
+        # A box is shown by its name only (D-a-box-is-shown-by-its-name), so a clear cannot
+        # leave it with none: it stores the default `Box <count+1>`, the orchestrator's call
+        # on the locating review, 2026-09-24 — ANOTHER ORCHESTRATOR CALL, 2026-09-24, AMENDS
+        # THE COUNT: the box being cleared is already in the registry when this runs, and its
+        # own row does not count toward `<count+1>` any more than its own name counts as
+        # taken. One box stands beside it here, so the default is `Box 2`, not `Box 3`.
         cleared = capture_server.do_put_box(1, {"name": None})
         checks.equal(
             cleared["name"],
-            None,
+            "Box 2",
             "`{name: null}` clears the name — the shape a cleared text field sends, and a "
-            "legitimate edit rather than a refusal",
+            "legitimate edit rather than a refusal. One OTHER box stands (`mega pulls`), so "
+            "it stores `Box 2`: the box being cleared does not count itself",
         )
         cleared_event = [e for e in Store().history() if e["event"] == "box_renamed"][-1]
         checks.equal(
-            [cleared_event["name_from"], "name_to" in cleared_event],
-            ["ME01 commons, tray 2", False],
-            "and the clear is logged like any other rename, with `name_to` ABSENT rather "
-            "than null — `_log` drops None by construction, the same convention that keeps "
-            "a box-level event from carrying a null `position`. Asserted rather than worked "
-            "around: after this write there is no other evidence the box was ever called "
-            "anything, so what the line does and does not carry is the whole record",
+            [cleared_event["name_from"], cleared_event.get("name_to")],
+            ["ME01 commons, tray 2", "Box 2"],
+            "and the clear is logged like any other rename, with both names on the line: "
+            "after this write there is no other evidence the box was ever called anything, "
+            "so what the line carries is the whole record",
         )
         freed = capture_server.do_create_box({"name": "ME01 commons, tray 2"})[1]
         checks.equal(
@@ -8869,9 +8919,18 @@ def check_box_claims(checks: Checks) -> None:
                 getattr(caught, "code", None), "claim_not_stocked_by_game", "in its own code"
             )
             checks.ok(
-                "card 3" in str(caught),
-                "naming the card whose game rejected it",
+                "Section 1, Card 3" in str(caught) and "card 3:" not in str(caught),
+                "naming the card whose game rejected it, in the SAME SHAPE a card row "
+                "reads — Section n, Card m, never the bare store index "
+                "(D-a-box-is-shown-by-its-name)",
                 f"message was: {caught}",
+            )
+            # THE LISTED CARD MATCHES ITS OWN LABEL — a second code path, `said_place`,
+            # answers the same numbers for the same index.
+            checks.equal(
+                join.said_place(Store().read().inventory, 6, 3),
+                "Box 1, Section 1, Card 3",
+                "cross-checked against `said_place` for the same index",
             )
         checks.ok(
             all(
@@ -9104,16 +9163,15 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             rows["4/3"]["place"]["neighbors"],
             {
-                "prev": {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
-                "next": None,
+                "prev": {"index": 1, "slot": 1, "name": "Mantine", "unread": 0},
+                "next": {"index": 5, "slot": 3, "name": None, "unread": 1},
             },
-            "a card between two gaps names the nearest NON-TERMINAL, NAMED record — the "
-            "sold card at 2 and the retired card at 4 are skipped as landmarks, never "
-            "named: a departed card cannot be the thing you count from (D30) — and each "
-            "side carries BOTH numbers (D92): the store key and D58's count, which this "
-            "box has already pulled apart. `next` is NULL and not the unnamed card at 5: "
-            "past that card there is nothing this box can name, and a side with no "
-            "landmark answers the same null the box's own edge does (D116)",
+            "a card between two gaps names the nearest NON-TERMINAL record — the sold card "
+            "at 2 and the retired card at 4 are skipped, never named: a departed card cannot "
+            "be the thing you count from (D30) — and each side carries BOTH numbers (D92): "
+            "the store key and D58's count, which this box has already pulled apart. `next` "
+            "IS THE UNREAD CARD AT 5, `unread: 1`: the owner's ruling of 2026-09-24 (LOC-28, "
+            "amending D116) counts an unread card as a neighbour, where D116 answered null",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -9134,31 +9192,24 @@ def check_place_neighbors(checks: Checks) -> None:
         )
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["prev"],
-            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 1},
-            "AND A CARD NOBODY HAS NAMED IS SKIPPED AS A LANDMARK TOO, WHICH IS D116 AND "
-            "IS THE REVERSE OF WHAT THIS CASE ASSERTED. It pinned `{index: 3, slot: 2, "
-            "name: None}` — the adjacent card, sent nameless for the app to draw as `#2` "
-            "— and the owner read that figure on their own store as a sold card leaking "
-            "into the ladder. It never was one: index 425 in box 3 is a live card at "
-            "count 270, one of 7 the model returned no name for. But a figure names "
-            "nothing you can recognise while flipping a box, so the walk passes it and "
-            "names Mantine instead. THE TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED "
-            "TOGETHER (D92): the card at index 3 is the SECOND card in this box. And "
-            "`skipped: 1` is the price — one on-hand card lies between Mantine and this "
-            "one, so a hand counting from Mantine lands one short unless the row says so",
+            {"index": 3, "slot": 2, "name": None, "unread": 1},
+            "AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending "
+            "D116). D116 walked past the unread card at 3 to name Mantine, and the screen "
+            "said `with 1 unidentified card in between`; the owner's word is that the card "
+            "next to this one is the neighbour, read or not, said as `an unread card`. THE "
+            "TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED TOGETHER (D92): the card at "
+            "index 3 is the SECOND card in this box",
         )
         checks.equal(
             [
-                rows["4/3"]["place"]["neighbors"]["prev"]["skipped"],
+                rows["4/3"]["place"]["neighbors"]["prev"]["unread"],
                 rows["4/3"]["place"]["section_gaps"],
             ],
             [0, 2],
-            "and `skipped` COUNTS THE ON-HAND CARDS PASSED OVER AND NEVER THE DEPARTED "
-            "ONES: card 3 reaches Mantine across a sold record at 2 and answers 0, while "
-            "the same two departed records are its section's gaps. The box closed up over "
-            "them (D58), so they lie between nothing and a hand counting from Mantine "
-            "arrives at card 3 exactly — the two numbers count different things and this "
-            "pins them apart",
+            "and `unread` COUNTS ON-HAND CARDS AND NEVER THE DEPARTED ONES: card 3 reaches "
+            "Mantine across a sold record at 2 and answers 0, while the same two departed "
+            "records are its section's gaps. The box closed up over them (D58), so they lie "
+            "between nothing",
         )
 
         # --- a sold card is not a landmark, and the sale is what proves it ---------------
@@ -9178,19 +9229,46 @@ def check_place_neighbors(checks: Checks) -> None:
         before_sale = capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]
         checks.equal(
             before_sale["prev"],
-            {"index": 2, "slot": 2, "name": "Thievul", "skipped": 0},
+            {"index": 2, "slot": 2, "name": "Thievul", "unread": 0},
             "with every card on hand, card 3's `prev` is the card next to it — the "
             "landmark this case is about to sell",
         )
         capture_server.do_mark_sold(6, 2, {})
         checks.equal(
             capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]["prev"],
-            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
+            {"index": 1, "slot": 1, "name": "Mantine", "unread": 0},
             "AND SELLING IT MOVES THE LANDMARK RATHER THAN NAMING A SOLD CARD. Thievul is "
             "not in that drawer any more, so a sentence naming him sends a hand to a slot "
             "the card has left (D30) — the walk names Mantine, who has closed up to be "
-            "the card in front (D58), and `skipped` stays 0 because a departed card lies "
+            "the card in front (D58), and `unread` stays 0 because a departed card lies "
             "between nothing at all",
+        )
+
+        # --- a run of unread cards is one neighbour, with its count ----------------------
+        # Box 8: Mantine, then three cards nothing has named, then this card, then Thievul.
+        # The owner's words for the run are "N unread cards", so `unread` is the length of the
+        # run, counted from the neighbour outward to the next named card.
+        for _ in range(6):
+            capture_server.do_capture(capture_payload(8))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["8/1"].name = "Mantine"
+            snapshot.inventory.cards["8/5"].name = "Charizard"
+            snapshot.inventory.cards["8/6"].name = "Thievul"
+        run = capture_server.do_inventory()["cards"]["8/5"]["place"]["neighbors"]
+        checks.equal(
+            run,
+            {
+                "prev": {"index": 4, "slot": 4, "name": None, "unread": 3},
+                "next": {"index": 6, "slot": 6, "name": "Thievul", "unread": 0},
+            },
+            "THREE UNREAD CARDS IN A ROW ARE THE NEIGHBOUR TOWARD THE BACK, SAID AS `3 unread "
+            "cards`: `prev` is the adjacent card, and `unread: 3` is the run up to Mantine",
+        )
+        checks.equal(
+            capture_server.do_inventory()["cards"]["8/2"]["place"]["neighbors"]["next"],
+            {"index": 3, "slot": 3, "name": None, "unread": 2},
+            "and the run is counted from the neighbour outward, not from the box's start: "
+            "card 2's front side holds two unread cards before Charizard",
         )
 
         # --- an unallocated tail is not a gap --------------------------------------------
@@ -9429,6 +9507,283 @@ def check_box_claim_product(checks: Checks) -> None:
         )
 
 
+def check_box_names_and_place_labels(checks: Checks) -> None:
+    """A box is shown by its name, and a place label is box name, section and card in section.
+
+    THE OWNER'S RULINGS OF 2026-09-23, both argued in their own entries:
+    D-a-box-is-shown-by-its-name (the box number never reaches a screen; an unnamed box gets the
+    stored name `Box <count+1>`; the boxes that had no name are backfilled `Box <number>`) and
+    D-a-card-is-counted-in-its-section (the card number restarts at every divider). Four parts:
+    the label's shape, where a departed card says it was, the default name at creation, and the
+    backfill as a previewed, idempotent, one-transaction write.
+    """
+    checks.note("")
+    checks.note("BOX NAMES AND PLACE LABELS — D-a-box-is-shown-by-its-name")
+
+    # --- the label's shape -------------------------------------------------------------------
+    view = join.BoxView(sections=(1, 6), occupied=(1, 2, 3, 4, 6, 7, 8), departed=(5,),
+                        name="Mixed Singles")
+    live = view.at(7, 7)
+    checks.equal(
+        live.label,
+        "Mixed Singles, Section 2, Card 2",
+        "a place label is the box's NAME, the section, and the card counted within its "
+        "section: index 7 is the second card behind the divider at index 6",
+    )
+    typed = [
+        text for text in (live.label, view.at(7, 5).label, join.where_phrase("pokemon", view.at(7, 5)))
+        if "\u00b7" in text or "\u2022" in text
+    ]
+    checks.equal(
+        typed,
+        [],
+        "no place label, departed label or report phrase TYPES a middle dot or bullet (D218)",
+    )
+    checks.ok(
+        "7" not in live.label.replace("Card 2", ""),
+        "and the box NUMBER is nowhere in a named box's label",
+        live.label,
+    )
+    checks.equal(
+        join.Position(7, 1).label,
+        "Box 7, Section 1, Card 1",
+        "a caller with no registry to ask gets `Box <number>`, which is exactly the name the "
+        "backfill stores for that box, so the two cannot come to spell it differently",
+    )
+
+    # --- where a departed card was ----------------------------------------------------------
+    departed = view.at(7, 5)
+    checks.equal(
+        (departed.slot, departed.card, departed.section, departed.was_card, departed.label),
+        (None, None, 1, 5, "Mixed Singles, Section 1, Card 5"),
+        "A DEPARTED CARD NAMES THE PLACE IT LEFT, IN ITS OWN SECTION. Index 5 was the last "
+        "card of section 1 (the divider is at index 6), so it reads Section 1, Card 5: the "
+        "number it would take going back. Counted in the slot space it would read Section 2, "
+        "the next divider's number, which is the defect this guards",
+    )
+    checks.equal(
+        join.where_phrase("pokemon", departed),
+        "formerly at Mixed Singles, Section 1, Card 5",
+        "and a report sentence about it is in the past tense",
+    )
+
+    with isolated_home():
+        # --- the default name at creation --------------------------------------------------
+        capture_server.do_create_box({"box": 4})
+        inventory = Store().read().inventory
+        checks.equal(
+            inventory.box(4).name,
+            "Box 1",
+            "A BOX CREATED WITH NO NAME GETS THE STORED NAME `Box <count+1>`: the first box is "
+            "`Box 1` whatever its number (4)",
+        )
+        capture_server.do_create_box({"name": "Box 3"})
+        capture_server.do_create_box({"box": 9})
+        inventory = Store().read().inventory
+        checks.equal(
+            [(entry.box, entry.name) for entry in sorted(inventory.boxes.values(), key=lambda e: e.box)],
+            [(1, "Box 3"), (4, "Box 1"), (9, "Box 4")],
+            "WHEN `Box <count+1>` IS TAKEN, THE NEXT FREE NAME IS USED. Two boxes stand, so the "
+            "third is `Box 3`, but the owner named box 1 `Box 3` by hand: box 9 gets `Box 4`, "
+            "and names stay unique (D20)",
+        )
+
+        # THE DEFAULT GOES THROUGH THE SAME UNIQUE-NAME CHECK AS A TYPED NAME. The default is
+        # chosen free, and the check is what proves it: a default that clashes is refused,
+        # never stored beside the box that already answers to it.
+        real_default = master.Inventory.default_box_name
+        master.Inventory.default_box_name = lambda self, count=None, number=None: "Box 1"
+        try:
+            with Store().write() as snapshot:
+                clash = checks.raises(
+                    master.BoxNameTaken,
+                    lambda: snapshot.inventory.ensure_box(20),
+                    "a default name that another box already has is REFUSED at creation: the "
+                    "default path takes the same unique-name check a typed name takes",
+                )
+                if clash is None:
+                    snapshot.inventory.boxes.pop("20", None)
+        finally:
+            master.Inventory.default_box_name = real_default
+        checks.equal(
+            Store().read().inventory.box(20),
+            None,
+            "and the refused box is not registered",
+        )
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(4))
+        capture_server.do_put_box(4, {"name": "Rares"})
+        checks.equal(
+            capture_server.do_inventory()["cards"]["4/2"].get("label"),
+            "Rares, Section 1, Card 2",
+            "and a rename reaches every label at once: the name is joined at read time",
+        )
+
+        # --- clearing a name stores the default -------------------------------------------
+        # The orchestrator's call on the locating review: a cleared name is the default name
+        # `Box <count+1>`, the next free one, never a bare number drawn at render time.
+        capture_server.do_put_box(4, {"name": ""})
+        checks.equal(
+            Store().read().inventory.box(4).name,
+            "Box 5",
+            "CLEARING A BOX'S NAME STORES THE DEFAULT NAME. Three boxes stand, so the default "
+            "is `Box 4`, which box 9 has: the next free one, `Box 5`, is stored",
+        )
+        cleared = [e for e in Store().history() if e.get("event") == "box_renamed"
+                   and e.get("box") == 4 and e.get("name_from") == "Rares"]
+        checks.equal(
+            [e.get("name_to") for e in cleared],
+            ["Box 5"],
+            "and the clear lands as one `box_renamed` line naming the stored default",
+        )
+        before_events = len(Store().history())
+        capture_server.do_put_box(9, {"name": None})
+        checks.ok(
+            Store().read().inventory.box(9).name == "Box 4"
+            and len(Store().history()) == before_events,
+            "a box that already carries `Box <count+1>` keeps it when cleared, and nothing is "
+            "logged: its own name is not taken from it",
+            Store().read().inventory.box(9).name,
+        )
+
+        # --- the backfill ------------------------------------------------------------------
+        # A store from before the ruling: registered boxes with no name.
+        # `set_name` no longer stores None (a cleared name is the default), so a legacy box is
+        # made by writing the row's name away directly, the shape a store from before the
+        # ruling holds.
+        with Store().write() as snapshot:
+            snapshot.inventory.box(4).name = None
+            snapshot.inventory.box(9).name = None
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            # Box 5 came from a capture, which now names it; unname it to stand for a legacy box.
+            snapshot.inventory.box(5).name = None
+        before = Store().read().inventory
+        plan = before.box_name_plan()
+        checks.equal(
+            plan,
+            [(4, "Box 4"), (5, "Box 5"), (9, "Box 9")],
+            "the backfill PLANS `Box <number>` for every unnamed box, today's number, so "
+            "nothing visible changes and the drawers' physical labels still match",
+        )
+        checks.equal(
+            [Store().read().inventory.box(n).name for n in (4, 5, 9)],
+            [None, None, None],
+            "and a plan writes nothing: the preview is a read",
+        )
+
+        said: list = []
+        from cli import cmd_boxes  # noqa: E402 — the CLI seam, imported where it is exercised
+
+        cmd_boxes.run(argparse.Namespace(boxes_action="names", write=False), said.append)
+        checks.ok(
+            Store().read().inventory.box(4).name is None and any("box 4 -> Box 4" in line for line in said),
+            "`pkmnscan boxes names` with no flag PREVIEWS: it prints the plan and writes nothing",
+            "\n".join(said),
+        )
+        said.clear()
+        cmd_boxes.run(argparse.Namespace(boxes_action="names", write=True), said.append)
+        after = Store().read().inventory
+        checks.equal(
+            [after.box(n).name for n in (1, 4, 5, 9)],
+            ["Box 3", "Box 4", "Box 5", "Box 9"],
+            "`--write` names every unnamed box and leaves a named one alone",
+        )
+        renamed = [e for e in Store().history() if e.get("event") == "box_renamed"
+                   and e.get("name_from") is None and e.get("box") in (4, 5, 9)]
+        checks.equal(
+            sorted(e.get("box") for e in renamed if str(e.get("name_to", "")).startswith("Box ")),
+            [4, 5, 9],
+            "each name goes through `set_name`, so each lands with its `box_renamed` line",
+        )
+        said.clear()
+        cmd_boxes.run(argparse.Namespace(boxes_action="names", write=True), said.append)
+        checks.ok(
+            Store().read().inventory.box_name_plan() == []
+            and any("already has a name" in line for line in said),
+            "A SECOND PASS CHANGES NOTHING: the backfill is idempotent",
+            "\n".join(said),
+        )
+
+    with isolated_home():
+        # A clash: `Box <number>` already belongs to another box, named that way by hand.
+        capture_server.do_create_box({"box": 1, "name": "Box 2"})
+        capture_server.do_create_box({"box": 2})
+        with Store().write() as snapshot:
+            snapshot.inventory.box(2).name = None
+        checks.equal(
+            Store().read().inventory.box_name_plan(),
+            [(2, "Box 3")],
+            "WHEN `Box <number>` IS ANOTHER BOX'S NAME, the backfill plans the next free one: "
+            "names stay unique (D20), and no box is renamed to make room",
+        )
+
+    with isolated_home():
+        # --- a refusal names the place the way a card row does -----------------------------
+        # The orchestrator's call on the locating review, 2026-09-24: a server refusal that
+        # names a card says the box's NAME, the section and the card within the section,
+        # through the one helper (`join.said_place`), and never the box number or the store
+        # index. A refusal reaches a screen as a toast. The error code does not change.
+        capture_server.do_create_box({"box": 7, "name": "Rares", "sections": [1, 3]})
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(7))
+        capture_server.do_mark_sold(7, 4, {})
+        try:
+            capture_server.do_mark_sold(7, 4, {})
+            said_sold = None
+        except capture_server.BadRequest as caught:
+            said_sold = caught
+        checks.ok(
+            said_sold is not None
+            and said_sold.code == "already_sold"
+            and str(said_sold).startswith("Rares, Section 2, Card 2 is already sold")
+            and "7/" not in str(said_sold) and "Box 7" not in str(said_sold)
+            and "card 4" not in str(said_sold),
+            "A REFUSAL ABOUT A CARD SAYS THE BOX'S NAME, SECTION AND CARD IN THE SECTION. Index "
+            "4 is the second card behind the divider at index 3: `Rares, Section 2, Card 2`. "
+            "The code stays `already_sold`, and neither the box number nor the index is said",
+            f"refusal: {getattr(said_sold, 'code', None)}: {said_sold}",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.close_box(7)
+        try:
+            capture_server.do_capture(capture_payload(7))
+            said_sealed = ""
+        except Exception as caught:  # noqa: BLE001 — the message is what is read here
+            said_sealed = str(caught)
+        checks.ok(
+            said_sealed.startswith("Rares is sealed") and "box 7" not in said_sealed.casefold(),
+            "and a store refusal about a box says its name: `Rares is sealed`, never `box 7`",
+            said_sealed,
+        )
+        checks.equal(
+            (
+                join.said_place(Store().read().inventory, 7),
+                join.said_place(Store().read().inventory, 7, 99),
+            ),
+            ("Rares", "Rares"),
+            "the helper says the box alone for no index, and for an index that holds no card "
+            "(a place with no card has no section or card number to say)",
+        )
+
+    with isolated_home():
+        # A clash must not push a box off a name that was free for it. Box 1 was named `Box 4`
+        # by hand; boxes 4 and 5 have no name. Box 5's own `Box 5` is free, so it keeps it,
+        # and only box 4, the one that clashes, moves to the next free name.
+        capture_server.do_create_box({"box": 1, "name": "Box 4"})
+        capture_server.do_create_box({"box": 4})
+        capture_server.do_create_box({"box": 5})
+        with Store().write() as snapshot:
+            snapshot.inventory.box(4).name = None
+            snapshot.inventory.box(5).name = None
+        checks.equal(
+            Store().read().inventory.box_name_plan(),
+            [(4, "Box 6"), (5, "Box 5")],
+            "EVERY UNNAMED BOX GETS ITS OWN `Box <number>` FIRST, WHERE IT IS FREE, and only then "
+            "are the clashes resolved: a clash never shifts a later box off its own free name",
+        )
+
+
 def check_consolidated_numbering(checks: Checks) -> None:
     """A card's number is its place among the cards IN the box, not among the slots. D58.
 
@@ -9459,6 +9814,9 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_create_box({"box": 3, "sections": [1, 7]})
         for _ in range(12):
             capture_server.do_capture(capture_payload(3))
+        # THE LABEL SAYS THE BOX'S NAME (D-a-box-is-shown-by-its-name), and a box created with
+        # no name carries its stored default. Read back, so this check is about numbering.
+        box_title = Store().read().inventory.box(3).name
 
         def label(index: int) -> object:
             return capture_server.do_inventory()["cards"][f"3/{index}"].get("label")
@@ -9469,9 +9827,9 @@ def check_consolidated_numbering(checks: Checks) -> None:
         checks.equal(
             [label(1), label(7), label(12)],
             [
-                "Box 3 · Section 1 · Card 1",
-                "Box 3 · Section 2 · Card 1",
-                "Box 3 · Section 2 · Card 6",
+                f"{box_title}, Section 1, Card 1",
+                f"{box_title}, Section 2, Card 1",
+                f"{box_title}, Section 2, Card 6",
             ],
             "a box nothing has left renders exactly as it did before D58 — the two spaces "
             "coincide until the first departure, which is what makes this additive",
@@ -9481,14 +9839,14 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_mark_sold(3, 3, {})
         checks.equal(
             label(4),
-            "Box 3 · Section 1 · Card 3",
+            f"{box_title}, Section 1, Card 3",
             "SELL CARD 3 AND THE CARD BEHIND IT BECOMES CARD 3 — the whole of D58 in one "
             "assertion, and the sentence `docs/specs/order-flow.md` §10.4 says could not "
             "be true while a label named a slot",
         )
         checks.equal(
             label(7),
-            "Box 3 · Section 2 · Card 1",
+            f"{box_title}, Section 2, Card 1",
             "AND SECTION 2 IS UNDISTURBED: a sale in an earlier section moves the divider "
             "and the cards behind it by the same one, so the number WITHIN a section is "
             "the difference between two things that both moved. Mapping the cards and not "
@@ -9502,18 +9860,16 @@ def check_consolidated_numbering(checks: Checks) -> None:
         )
         checks.equal(
             capture_server.do_inventory()["cards"]["3/3"].get("label"),
-            "Box 3 · departed · B3 #3",
-            "the DEPARTED card does not keep the number it held — that number belongs to "
-            "the card that closed up behind it, and answering it would send someone to the "
-            "wrong slot. It says where the record belongs, that there is no slot, and which "
-            "record it is (D68), which is the same shape a pooled card's line takes for the "
-            "same reason (D24)",
+            f"{box_title}, Section 1, Card 3",
+            "the DEPARTED card's label keeps the PLACE it left: the box's name, its section, "
+            "and the number it would take going back (the owner's ruling, "
+            "D-a-box-is-shown-by-its-name). No word says it left and no store key is "
+            "printed; the screen draws a mark for that, off `slot` being null",
         )
         checks.equal(
             place(3)["label"],
-            join.departed_label(3, 3),
-            "and its block says so in the one composer that owns that string, beside "
-            "`pooled_label` — a card with no slot, said the same way both times it happens",
+            join.departed_label(box_title, 1, 3),
+            "and its block says so through the one composer that owns a departed label",
         )
         checks.equal(
             [place(3)["slot"], place(3)["card"], place(3)["fraction"]],
@@ -9525,13 +9881,13 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_mark_sold(3, 8, {})
         checks.equal(
             label(9),
-            "Box 3 · Section 2 · Card 2",
+            f"{box_title}, Section 2, Card 2",
             "a sale in this card's OWN section and in front of it moves it by one — the "
             "other half of the pair, and the half a build that mapped nothing would pass",
         )
         checks.equal(
             label(4),
-            "Box 3 · Section 1 · Card 3",
+            f"{box_title}, Section 1, Card 3",
             "while section 1 is untouched by a sale behind it: the map runs one way",
         )
 
@@ -9541,14 +9897,12 @@ def check_consolidated_numbering(checks: Checks) -> None:
         # 11 of 12 departed records sit in a group that does it. Asserted as an inequality
         # rather than against the literals above it, because what the label must guarantee is
         # that no two records ever share one.
-        checks.ok(
-            label(3) != label(8) and {label(3), label(8)} == {
-                "Box 3 · departed · B3 #3",
-                "Box 3 · departed · B3 #8",
-            },
-            "two departed records in one box draw two different labels, each naming the "
-            "record it belongs to — `Place.index`, which D58 keeps immovable, and never "
-            "`Place.slot`, which now belongs to the card that closed up behind it",
+        checks.equal(
+            [label(3), label(8)],
+            [f"{box_title}, Section 1, Card 3", f"{box_title}, Section 2, Card 2"],
+            "two departed records in two sections each name the place they left, counted in "
+            "their own section; `Place.slot` stays null for both, and it is the mark a screen "
+            "draws off that null, never a word, that says they left",
         )
 
         # --- the index never moved --------------------------------------------------------
@@ -9572,7 +9926,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_retire(3, 5, {"reason": "damaged"})
         checks.equal(
             label(6),
-            "Box 3 · Section 1 · Card 4",
+            f"{box_title}, Section 1, Card 4",
             "a RETIRED card is counted out exactly as a sold one is — `master.TERMINAL_"
             "STATES` is the pair, and both mean the card is not in the box any more",
         )
@@ -12629,11 +12983,21 @@ def check_review_stand_down(checks: Checks) -> None:
             "field_not_settable",
             "a reversal carrying a reason refuses rather than obeying with the reason ignored",
         )
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 4, {"reason": "not_listing"}),
-            "not_in_queue",
-            "a card in no queue has no question to stand down from",
+        not_in_queue_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 4, {"reason": "not_listing"})
+        )
+        checks.ok(
+            not_in_queue_text is not None
+            and not_in_queue_text[0] == "not_in_queue"
+            and not_in_queue_text[1].startswith(
+                "Box 1, Section 1, Card 4 is in no queue file"
+            )
+            and "3/4" not in not_in_queue_text[1]
+            and "box 3" not in not_in_queue_text[1].lower(),
+            "a card in no queue has no question to stand down from, and the refusal NAMES "
+            "THE PLACE — Section n, Card m — never the store key `3/4` "
+            "(D-a-box-is-shown-by-its-name)",
+            f"got {not_in_queue_text!r}",
         )
 
         # --- the write itself, on the card that cannot be answered --------------------
@@ -12678,11 +13042,19 @@ def check_review_stand_down(checks: Checks) -> None:
             "name here: a state would make months of these parse as card states",
         )
 
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 2, {"reason": "not_listing"}),
-            "already_cleared",
-            "a second stand-down refuses rather than re-writing a settled question",
+        already_cleared_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 2, {"reason": "not_listing"})
+        )
+        checks.ok(
+            already_cleared_text is not None
+            and already_cleared_text[0] == "already_cleared"
+            and already_cleared_text[1].startswith(
+                "Box 1, Section 1, Card 2 has already been"
+            )
+            and "3/2" not in already_cleared_text[1],
+            "a second stand-down refuses rather than re-writing a settled question, and "
+            "the refusal names the place, never `3/2` (D-a-box-is-shown-by-its-name)",
+            f"got {already_cleared_text!r}",
         )
 
         # --- both queues, one press ---------------------------------------------------
@@ -12702,12 +13074,20 @@ def check_review_stand_down(checks: Checks) -> None:
             not Store().read().review.entries["3/2"].cleared_by_human,
             "and the entry is waiting again",
         )
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 2, {"undo": True}),
-            "not_stood_down",
+        second_reversal_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 2, {"undo": True})
+        )
+        checks.ok(
+            second_reversal_text is not None
+            and second_reversal_text[0] == "not_stood_down"
+            and second_reversal_text[1].startswith(
+                "Box 1, Section 1, Card 2 is already waiting in its queue"
+            )
+            and "3/2" not in second_reversal_text[1],
             "a second reversal refuses — the first reopened the entry, so nothing has to "
-            "remember that a reversal happened",
+            "remember that a reversal happened — and the refusal names the place, never "
+            "`3/2` (D-a-box-is-shown-by-its-name)",
+            f"got {second_reversal_text!r}",
         )
 
         # --- THE GUARD THAT MATTERS MOST -----------------------------------------------
@@ -12715,12 +13095,21 @@ def check_review_stand_down(checks: Checks) -> None:
         # against a draft whose reversal only checked `cleared_by_human`.
         answered = {"sku": CANDIDATES[1]["sku"], "condition": CANDIDATES[1]["condition"]}
         capture_server.do_review_answer(3, 1, answered)
-        refusal(
-            checks,
-            lambda: capture_server.do_review_stand_down(3, 1, {"undo": True}),
-            "not_stood_down",
+        answer_guard_text = _refusal_text(
+            lambda: capture_server.do_review_stand_down(3, 1, {"undo": True})
+        )
+        checks.ok(
+            answer_guard_text is not None
+            and answer_guard_text[0] == "not_stood_down"
+            and answer_guard_text[1].startswith(
+                "Box 1, Section 1, Card 1 was closed by an ANSWER"
+            )
+            and "3/1 is" not in answer_guard_text[1],
             "a card closed by an ANSWER refuses this reversal — taking back a real "
-            "identification through the un-dismiss control is the one thing it must not do",
+            "identification through the un-dismiss control is the one thing it must not "
+            "do — and the refusal names the place, never the store key "
+            "(D-a-box-is-shown-by-its-name)",
+            f"got {answer_guard_text!r}",
         )
         still = Store().read().inventory.cards["3/1"]
         checks.equal(
@@ -14909,9 +15298,11 @@ def check_cli_refusals(checks: Checks) -> None:
     # means it may be the only copy of that observation left anywhere.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["archive", "cards", "emit", "identify", "join", "prices", "queue", "readings",
-         "reconcile", "reprice", "rescue", "scan"],
-        "twelve commands are registered, and only twelve",
+        ["archive", "boxes", "cards", "emit", "identify", "join", "prices", "queue",
+         "readings", "reconcile", "reprice", "rescue", "scan"],
+        # `boxes` IS THE THIRTEENTH (D-a-box-is-shown-by-its-name): `boxes names` gives every
+        # unnamed box its stored default name. Previews by default; `--write` is one transaction.
+        "thirteen commands are registered, and only thirteen",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -18639,7 +19030,7 @@ def check_pricing_labels(checks: Checks) -> None:
     run an immutable input, so that label is a snapshot of a rendering — and D56 states the rule
     one register up: never write down an answer nobody can correct; join it when it is read.
     `capture_server._queue_row` has obeyed it since D58 and this route did not, so a copy sold
-    after the join went on drawing `Box 3 · Section 1 · Card 1` at a slot whose occupant had
+    after the join went on drawing `Box 3, Section 1, Card 1` at a slot whose occupant had
     closed up behind it, under a photograph `photoUrl` addresses BY SLOT — the caption naming
     one card and the picture showing another.
 
@@ -18693,11 +19084,13 @@ def check_pricing_labels(checks: Checks) -> None:
         name = run_dir.directory.name
         joined_bytes = run_dir.path(runs.PRICING).read_bytes()
 
+        # The box was created with no name, so it carries its stored default, `Box 1`
+        # (D-a-box-is-shown-by-its-name): the first box in this store.
         at_join = {
-            "3/1": "Box 3 · Section 1 · Card 1",
-            "3/2": "Box 3 · Section 1 · Card 2",
-            "3/3": "Box 3 · Section 2 · Card 1",
-            "3/4": "Box 3 · Section 2 · Card 2",
+            "3/1": "Box 1, Section 1, Card 1",
+            "3/2": "Box 1, Section 1, Card 2",
+            "3/3": "Box 1, Section 2, Card 1",
+            "3/4": "Box 1, Section 2, Card 2",
         }
         checks.equal(
             written(run_dir),
@@ -18720,15 +19113,15 @@ def check_pricing_labels(checks: Checks) -> None:
         checks.equal(
             positions(name),
             {
-                "3/1": "Box 3 · departed · B3 #1",
-                "3/2": "Box 3 · Section 1 · Card 1",
-                "3/3": "Box 3 · Section 2 · Card 1",
-                "3/4": "Box 3 · Section 2 · Card 2",
+                "3/1": "Box 1, Section 1, Card 1",
+                "3/2": "Box 1, Section 1, Card 1",
+                "3/3": "Box 1, Section 2, Card 1",
+                "3/4": "Box 1, Section 2, Card 2",
             },
-            "SELL A COPY AND ITS CAPTION STOPS NAMING A SLOT — `Box 3 · departed · B3 #1`, with "
-            "the store key D68 put there so two departed copies of one SKU are not one string "
-            "— while the card behind it takes the number it vacated. The stored label said "
-            "`Section 1 · Card 1` for BOTH rows, which is the exact lie D58 refuses",
+            "SELL A COPY AND THE CARD BEHIND IT TAKES THE NUMBER IT VACATED (D58), while the "
+            "sold copy's caption names the place it LEFT (D-a-box-is-shown-by-its-name). The "
+            "two strings are equal on purpose: the screen tells them apart by the departed "
+            "mark it draws off a null `slot`, never by a word or a store key in the string",
         )
         checks.equal(
             run_dir.path(runs.PRICING).read_bytes(),
@@ -18746,10 +19139,10 @@ def check_pricing_labels(checks: Checks) -> None:
         checks.equal(
             positions(name),
             {
-                "3/1": "Box 3 · departed · B3 #1",
-                "3/2": "Box 3 · Section 1 · Card 1",
-                "3/3": "Box 3 · Section 1 · Card 2",
-                "3/4": "Box 3 · Section 2 · Card 1",
+                "3/1": "Box 1, Section 1, Card 1",
+                "3/2": "Box 1, Section 1, Card 1",
+                "3/3": "Box 1, Section 1, Card 2",
+                "3/4": "Box 1, Section 2, Card 1",
             },
             "MOVE A DIVIDER AND EVERY CAPTION BEHIND IT FOLLOWS — 3/3 crosses from section 2 "
             "into section 1 and 3/4 becomes the section's first card. This is the failure D58 "
@@ -18772,7 +19165,7 @@ def check_pricing_labels(checks: Checks) -> None:
             None,
             "a box `box_views` will not answer for — deleted out from under the run, or the "
             "store-wide degrade — answers NULL rather than an index-space label. A bare "
-            "`BoxView()` would render `Box 9 · Section 1 · Card 1` in the numbering D58 "
+            "`BoxView()` would render `Box 9, Section 1, Card 1` in the numbering D58 "
             "replaced, silently, beside three captions drawn in the other one",
         )
 
@@ -20680,10 +21073,10 @@ def check_boxes_and_listings(checks: Checks) -> None:
     checks.equal(
         [join.Position(1, i, migrated.sections_for(1)).label for i in (1, 25, 26, 53)],
         [
-            "Box 1 · Section 1 · Card 1",
-            "Box 1 · Section 1 · Card 25",
-            "Box 1 · Section 1 · Card 26",
-            "Box 1 · Section 1 · Card 53",
+            "Box 1, Section 1, Card 1",
+            "Box 1, Section 1, Card 25",
+            "Box 1, Section 1, Card 26",
+            "Box 1, Section 1, Card 53",
         ],
         "AN UNDECLARED BOX IS ONE SECTION, and `card` is the index: no divider exists "
         "until somebody puts one in (D10, amended 2026-08-29)",
@@ -20708,10 +21101,10 @@ def check_boxes_and_listings(checks: Checks) -> None:
     checks.equal(
         [join.Position(1, i, inventory.sections_for(1)).label for i in (30, 31, 55, 56)],
         [
-            "Box 1 · Section 1 · Card 30",
-            "Box 1 · Section 2 · Card 1",
-            "Box 1 · Section 2 · Card 25",
-            "Box 1 · Section 3 · Card 1",
+            "Box 1, Section 1, Card 30",
+            "Box 1, Section 2, Card 1",
+            "Box 1, Section 2, Card 25",
+            "Box 1, Section 3, Card 1",
         ],
         "a declared layout puts the divider exactly where it was declared",
     )
@@ -20728,7 +21121,7 @@ def check_boxes_and_listings(checks: Checks) -> None:
     after = join.Position(1, 40, inventory.sections_for(1)).label
     checks.equal(
         (before, after),
-        ("Box 1 · Section 2 · Card 10", "Box 1 · Section 1 · Card 40"),
+        ("Box 1, Section 2, Card 10", "Box 1, Section 1, Card 40"),
         "moving a divider RELABELS the cards behind it — the label is a view (D10 amended)",
     )
     checks.ok(
@@ -22240,7 +22633,7 @@ def check_open_section(checks: Checks) -> None:
         )
         checks.equal(
             join.Position(4, 41, (1, 41)).label,
-            "Box 4 · Section 2 · Card 1",
+            "Box 4, Section 2, Card 1",
             "so the next card captured is card 1 of section 2",
         )
 
@@ -27026,16 +27419,20 @@ def check_order_screen(checks: Checks) -> None:
             )
             checks.equal(
                 pulled["places"][0]["label"],
-                "Box 3 · Section 1 · Card 1",
+                join.place_label(
+                    join.box_title(Store().read().inventory.box(3).name, 3), 1, 1
+                ),
                 "THE RECEIPT IS COMPOSED BEFORE THE WRITE — where the operator just was",
             )
             checks.equal(
                 capture_server._Places(Store().read().inventory).of(3, 1)["label"],
-                join.departed_label(3, 1),
-                "AND A `_Places` BUILT AFTER THE CALL SAYS `Box 3 · departed · B3 #1` FOR THE SAME "
-                "POSITION. The two differ, and the response carries the FIRST: a sale moves "
-                "the box's occupancy (D58), so a receipt composed afterwards would name "
-                "where the box has closed up to rather than the slot the card came out of",
+                join.departed_label(
+                    join.box_title(Store().read().inventory.box(3).name, 3), 1, 1
+                ),
+                "AND A `_Places` BUILT AFTER THE CALL NAMES THE SAME PLACE THROUGH THE DEPARTED "
+                "COMPOSER (D-a-box-is-shown-by-its-name): the place the card left. Its `slot` "
+                "is null, which is what a screen draws the departure from, and the response "
+                "still carries the receipt composed before the write",
             )
             # ---------------------------------------------------- `refreshed`, the other way in time
             #
@@ -27145,6 +27542,9 @@ def check_order_screen(checks: Checks) -> None:
             "and the ledger still reads one, so the refusal cost the line nothing",
         )
 
+        # THE PLACE THIS REFUSAL NAMES, computed the same way `capture_id_mismatch`'s own
+        # message computes it — before the call, since the target is not sold by a refusal.
+        where_3_2 = join.said_place(Store().read().inventory, 3, 2)
         refused_aim = _refusal_text(
             lambda: capture_server.do_order_pull(
                 {
@@ -27162,6 +27562,15 @@ def check_order_screen(checks: Checks) -> None:
             "mid-box delete, a capture undo releasing an index or a re-shoot all change a "
             "slot's occupant, so a screen drawn a minute ago may aim at a different card",
             f"got {refused_aim!r}",
+        )
+        checks.ok(
+            refused_aim is not None
+            and f"The card at {where_3_2} is not the card the screen drew" in refused_aim[1]
+            and "3/2" not in refused_aim[1]
+            and "box 3" not in refused_aim[1].lower(),
+            "and the message NAMES THE PLACE, not the store position — the section and "
+            "card within it, never `3/2` or the box number (D-a-box-is-shown-by-its-name)",
+            f"where: {where_3_2!r}; got: {refused_aim!r}",
         )
         checks.equal(
             (Store().read().inventory.cards["3/2"].state,
@@ -27336,6 +27745,9 @@ def check_order_screen(checks: Checks) -> None:
 
         # THE AGGREGATE. Two good targets and one stale one, so the case can distinguish
         # 'the whole pull refused' from 'every target was bad anyway'.
+        before_agg = Store().read().inventory
+        where_3_3 = join.said_place(before_agg, 3, 3)
+        where_3_4 = join.said_place(before_agg, 3, 4)
         aggregate = _refusal_text(
             lambda: capture_server.do_order_pull(
                 {
@@ -27348,10 +27760,12 @@ def check_order_screen(checks: Checks) -> None:
         checks.ok(
             aggregate is not None
             and aggregate[0] == "pull_entry_refused"
-            and "3/3: capture_id_mismatch" in aggregate[1]
-            and "3/4: copy_not_identifiable" in aggregate[1],
-            "THREE TARGETS, TWO REFUSALS, AND EACH POSITION IS NAMED WITH ITS OWN CODE. A "
-            "per-position refusal is collected rather than raised and the whole set is "
+            and f"{where_3_3}: capture_id_mismatch" in aggregate[1]
+            and f"{where_3_4}: copy_not_identifiable" in aggregate[1]
+            and "3/3:" not in aggregate[1] and "3/4:" not in aggregate[1],
+            "THREE TARGETS, TWO REFUSALS, AND EACH IS NAMED BY ITS PLACE, WITH ITS OWN "
+            "CODE — never the store position `3/3` or `3/4` (D-a-box-is-shown-by-its-name). "
+            "A per-position refusal is collected rather than raised and the whole set is "
             "answered at once — `group_entry_refused`'s shape — because a pull half-refused "
             "is an operator holding cards with no record of which ones went",
             f"got {aggregate!r}",
@@ -30888,7 +31302,7 @@ def check_shipping_stamps(checks: Checks) -> None:
             "space, not the `_Places` this route composed them with",
         )
         checks.ok(
-            all(part.startswith("Box 3 · Section ") and " · Card " in part for part in expected),
+            all(", Section " in part and ", Card " in part for part in expected),
             "and that formula really did produce a pick instruction rather than an empty "
             "string both sides agreed on — a comparison of two nulls passes and stamps "
             "nothing",
@@ -31572,7 +31986,7 @@ def check_value_table(checks: Checks) -> None:
         # --- the rest of the row ------------------------------------------------------------
         checks.equal(
             at[(1, 1)]["label"],
-            "Box 1 · Section 1 · Card 1",
+            "WB1 R2, Section 1, Card 1",
             "the label is composed against the box as it stands now (D58)",
         )
         checks.equal(at[(1, 1)]["live"], 2, "the row says how many copies TCGplayer holds")
@@ -31932,6 +32346,7 @@ def run() -> Result:
     check_open_section(checks)
     check_section_names(checks)
     check_consolidated_numbering(checks)
+    check_box_names_and_place_labels(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
     check_photo_cache(checks)

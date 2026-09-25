@@ -21,6 +21,7 @@ import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
 import { standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
+import { placeWordsOf } from './position'
 import { runBoxLabel } from './runScope'
 import { hubState } from './OrdersHubStore'
 import './Home.css'
@@ -644,7 +645,7 @@ export function Home() {
                   // above never saw it. Same server string, same aria-hidden badge; the seam
                   // between its parts is CSS now (`.home-deck-card-no > span::before`).
                   <span className="home-deck-card-no">
-                    {frontCard.place.label.split(' · ').map((part, at) => (
+                    {placeWordsOf(frontCard.place.label).map((part, at) => (
                       <span key={at}>{part}</span>
                     ))}
                   </span>
