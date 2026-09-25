@@ -13188,6 +13188,110 @@ def check_catalog_set_rarity_match(checks: Checks) -> None:
     )
 
 
+class _ClaimCard:
+    """Everything `join.claim_matches`/`join.rank_by_claims` read off a card, duck-typed —
+    `_catalog_matches`'s own `card` parameter never requires `store.master.Card` itself,
+    only these four attributes."""
+
+    def __init__(self, rarity_claim=None, metadata_finish=None, set_hint=None, game="riftbound"):
+        self.rarity_claim = rarity_claim
+        self.metadata_finish = metadata_finish
+        self.set_hint = set_hint
+        self.game = game
+
+
+def check_catalog_claim_rank_and_no_cutoff(checks: Checks) -> None:
+    """D23's amendment, 2026-09-24: `do_review_catalog` no longer cuts the wire response at
+    nine, and its ranking puts the card's own claim-agreeing rows first — `4/383` on the
+    owner's real store, over the SAME committed fixture `check_catalog_set_rarity_match`
+    already reads.
+
+    `GET /review/4/383/catalog?q=Calm%20Rune` found all 16 `Calm Rune` rows and returned 9,
+    silently, before this fix — the owner's own report, and this file's real numbers.
+    """
+    checks.note("")
+    checks.note(
+        "D23 AMENDMENT — server/capture_server.py:_catalog_matches, no cutoff, claim rank"
+    )
+
+    catalog = join.Catalog.from_export(
+        tcgcsv.read_export(RIFTBOUND_EXPORT), "riftbound"
+    )
+
+    unranked = capture_server._catalog_matches(catalog, "riftbound", "Calm Rune")
+    checks.equal(
+        len(unranked), 16,
+        "EVERY MATCH IS RETURNED, not the old nine-row cut — the owner's own real count "
+        "for this real query",
+    )
+
+    claimed_card = _ClaimCard(rarity_claim=("Showcase",))
+    ranked = capture_server._catalog_matches(catalog, "riftbound", "Calm Rune", claimed_card)
+    checks.equal(
+        len(ranked), 16, "the claim ranks; it does not narrow — the same 16 rows either way"
+    )
+    checks.equal(
+        [row.get("rarity") for row in ranked[:4]],
+        ["Showcase"] * 4,
+        "THE CLAIM-AGREEING ROWS LEAD — all four `Showcase` printings of `Calm Rune` "
+        "ranked ahead of every Common, Promo and unclaimed row, none of which agree",
+    )
+    checks.ok(
+        "9139842" in [row["sku"] for row in ranked[:4]],
+        "and Spiritforged's own Showcase row — the real SKU the owner's case names — is "
+        "one of the four",
+    )
+    checks.equal(
+        {row["sku"] for row in unranked}, {row["sku"] for row in ranked},
+        "ranking reorders; it drops nothing and adds nothing",
+    )
+
+    # `do_review_catalog` itself, over a real card carrying the claim, end to end.
+    with isolated_home() as home:
+        run_dir = home / "runs" / "2026-09-11-box4-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps({
+                "created_at": "2026-09-11T00:00:00+00:00", "joined": True,
+                "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+            })
+        )
+        for _ in range(1):
+            capture_server.do_capture(capture_payload(4, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            card = snapshot.inventory.cards["4/1"]
+            card.game = "riftbound"
+            card.run = "2026-09-11-box4-01"
+            card.rarity_claim = ["Showcase"]
+            snapshot.review.upsert(
+                entry(
+                    4, 1, candidates=[], reason="set_ambiguous",
+                    read={"name": "Calm Rune", "number": "R02"},
+                )
+            )
+
+        wired = answers(
+            checks,
+            lambda: capture_server.do_review_catalog(4, 1, "Calm Rune"),
+            "the live route, over a card carrying the claim",
+        )
+        if wired is not None:
+            checks.equal(
+                (wired["found"], len(wired["rows"]), wired["truncated"]),
+                (16, 16, False),
+                "16 found, all 16 on the wire, and truncated is false — under "
+                "CATALOG_EGREGIOUS_LIMIT",
+            )
+            checks.equal(
+                [row.get("rarity") for row in wired["rows"][:4]],
+                ["Showcase"] * 4,
+                "and the card's own stored claim ranks the search exactly as the direct "
+                "call above did",
+            )
+
+
 def check_identify_preflight_stage(checks: Checks) -> None:
     """`identify` hashes before it decodes, and `Item.stage` is what makes that safe.
 
@@ -32868,6 +32972,7 @@ def run() -> Result:
     check_identity_binding(checks)
     check_catalog_number_fields_round_trip(checks)
     check_catalog_set_rarity_match(checks)
+    check_catalog_claim_rank_and_no_cutoff(checks)
     check_run_realignment(checks)
     check_reused_box_refusal(checks)
     check_box_true_index(checks)

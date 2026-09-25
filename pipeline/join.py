@@ -1045,6 +1045,98 @@ def distinct_cards(rows: Sequence[tcgcsv.Row]) -> int:
     )
 
 
+# ------------------------------------------------------------ D23's third job: ranking
+#
+# THE CLAIM USED TO ONLY CROSS-CHECK AND NARROW. `rarity_filter` (`pipeline/variant.py`)
+# is job (a): it refuses a row the claim contradicts. Job (b) narrows the finish chips on
+# the capture screen. Neither ever changed the ORDER a human is shown candidates in — a
+# card queued `set_ambiguous` or `rarity_claim_mismatch` offered the number's own rows in
+# catalog order, whatever the operator had typed about the stack. `4/383` is the case: read
+# `Calm Rune` / `R02`, claimed `Showcase`. The number found five `R02` Commons across three
+# sets — a `set_ambiguous` collision the claim was never even consulted for, because that
+# rung fires before the ladder runs — and the three `Calm Rune (R02a)` Showcase rows the
+# claim actually names sat under a different number the same name also answers to, offered
+# nowhere. The owner's ruling: a card should be offered a name match and/or a number match;
+# where the claim picks out some of them, those come first.
+#
+# JOB (c): RANK WHAT IS OFFERED. It reorders; it never files a list down and it never
+# answers one. `distinct_cards` above is the question "is this one card or two" — this is
+# "which of these rows does the evidence favour", and the two stay separate: this function
+# never removes a row, so a tie it cannot break is left a tie rather than resolved by
+# omission.
+
+
+def claim_matches(row: tcgcsv.Row, card: Optional["IdentifiedCard"]) -> int:
+    """How many of the card's own capture claims — rarity, finish, set hint — this ONE
+    row agrees with. 0 to 3.
+
+    A CLAIM THAT IS EMPTY RANKS NOTHING, the same compatibility guarantee D23's filter
+    already gives an empty rarity claim: it contributes to no row's score, so a card
+    captured with no claim at all ranks every row of its ordinary text match equally, and
+    nothing here has a way to move it. `card=None` is the same fact stated for a caller
+    that has no card at all — `do_review_catalog`'s own callers before this entry, kept
+    working rather than made to invent one.
+
+    REUSES THE LADDER'S OWN TESTS rather than a second copy of either fold: the rarity half
+    is `variant.rarity_filter` — one row is "kept" or it is not, exactly the ladder's own
+    rung 0 filter run on a list of one — and the set half is `set_matches`, D25's own
+    pairwise answer to "does this hint name this set". A blank `Rarity` cell PASSES
+    `rarity_filter` (evidence of nothing, D23's own rule) but that is not the SAME as
+    matching a claim, so it scores 0 here rather than 1 — ranking rewards agreement, not
+    the absence of a contradiction.
+    """
+    if card is None:
+        return 0
+    score = 0
+    if card.rarity_claim and variant.rarity_filter((row,), card.rarity_claim):
+        score += 1
+    if card.metadata_finish:
+        _stocked, condition_by_finish = variant.vocabulary(card.game)
+        claimed = (
+            (card.metadata_finish,)
+            if isinstance(card.metadata_finish, str)
+            else tuple(card.metadata_finish)
+        )
+        wanted = {condition_by_finish[f] for f in claimed if f in condition_by_finish}
+        if wanted and row.get(tcgcsv.CONDITION_COLUMN) in wanted:
+            score += 1
+    if card.set_hint and set_matches(card.set_hint, row.get(tcgcsv.SET_COLUMN, "")):
+        score += 1
+    return score
+
+
+def rank_by_claims(
+    rows: Sequence[tcgcsv.Row], card: "IdentifiedCard"
+) -> Tuple[tcgcsv.Row, ...]:
+    """Rows ranked by `claim_matches`, best first — THE ONE FUNCTION `join_batch`'s
+    suggestion-widening and `server/capture_server.py:do_review_catalog`'s search both
+    call, so a claim is scored once rather than twice.
+
+    STABLE (Python's own `sorted` guarantee): rows that score equally keep the order they
+    arrived in. WHERE THE EVIDENCE FAVOURS NO ONE ROW OVER ANOTHER — every claim empty, or
+    every row scoring the same — nothing here breaks the tie, which is the owner's own
+    rule stated as code: never guess between rows two agreeing signals do not separate.
+
+    DECIDES NOTHING. It reorders a list a caller already built; it can neither add a row
+    nor drop one, and calling it on a `HUMAN_ANSWERED` card's own one-row answer is a
+    no-op rather than a rule this function has to enforce — D146's "rung 0 must not
+    consult the claim" holds because rung 0 never reaches here with more than one row to
+    rank, not because this function checks the stage.
+    """
+    return tuple(sorted(rows, key=lambda row: -claim_matches(row, card)))
+
+
+# A GENEROUS BACKSTOP ON THE NAME-WIDEN BELOW, NEVER EXPECTED TO BIND. The widest group
+# this game's committed catalogue has for one folded name, Near-Mint-scoped, is 16
+# (`Calm Rune`, measured against `fixtures/riftbound_export_untouched.csv` — six Runes tie
+# it). A rarity-claim filter over that can only ever shrink it. This exists so one
+# degenerate export cannot hand a queue entry an unbounded list, never to drop a row the
+# claim actually agrees with in the ordinary case — `rank_by_claims` runs on the matching
+# rows before this cuts, so a cut (if it ever fires) drops the ones the OTHER two claims
+# agree with least, never an arbitrary one.
+WIDEN_BY_CLAIM_LIMIT = 60
+
+
 # ------------------------------------------------------------------ per-game dispatch
 #
 # `pipeline/games.py` says HOW a game's cards find their catalog rows, by name — the
@@ -2702,6 +2794,61 @@ def join_batch(
                     condition=resolution.condition,
                     market_price=resolution.market_price,
                 )
+
+        # D23 AMENDMENT — WIDEN BY NAME WHERE THE NUMBER'S OWN ROWS MISS THE RARITY CLAIM,
+        # THEN RANK WHATEVER IS OFFERED. `set_ambiguous` never even reaches the ladder (it
+        # fires in `catalog.candidates`, before `variant.resolve` runs), so a claim can sit
+        # on a card whose number-found rows never had a chance to answer to it.
+        # `rarity_claim_mismatch` and `ambiguous_no_signal` carry the same gap: neither
+        # reason's rows are re-examined once the ladder gives up. `4/383` is the case: read
+        # `Calm Rune` / `R02`, claimed `Showcase`, number found five `R02` Commons across
+        # three sets — set_ambiguous, claim never consulted — while the three
+        # `Calm Rune (R02a)` Showcase rows the claim names sat under a different number the
+        # SAME NAME also answers to, offered nowhere.
+        #
+        # GATED ON A RARITY CLAIM, NOT ON THE OTHER TWO. A finish or set claim only ever
+        # chooses AMONG rows the number already found — the ladder's own rungs 1 and the
+        # set-hint rung already consult those before a card ever reaches here. A rarity
+        # claim is the one axis that can be true of a row under a NUMBER NEITHER SIDE
+        # READ, because the finish/rarity split lives one level below the number and the
+        # set split lives at the number itself (D25's own collision). So this widens by
+        # name only when the claim is the signal being missed.
+        #
+        # NEVER NARROWS, ONLY ADDS. `found.rows` keeps every row it already had — the
+        # widen can never be the reason a row already offered disappears — and the name's
+        # claim-matching rows are appended, deduped by SKU, whatever else the two blocks
+        # above already did to the list.
+        if (
+            resolution.needs_review
+            and card.rarity_claim
+            and not variant.rarity_filter(found.rows, card.rarity_claim)
+        ):
+            named = catalog.rows_for_name(card.name)
+            claim_matching_named = rank_by_claims(
+                variant.rarity_filter(named, card.rarity_claim), card
+            )
+            existing_skus = {str(row[tcgcsv.SKU_COLUMN]) for row in found.rows}
+            widened = tuple(
+                row
+                for row in claim_matching_named
+                if str(row[tcgcsv.SKU_COLUMN]) not in existing_skus
+            )[:WIDEN_BY_CLAIM_LIMIT]
+            if widened:
+                found = replace(found, rows=found.rows + widened)
+                name_matched_skus = name_matched_skus + tuple(
+                    str(row[tcgcsv.SKU_COLUMN]) for row in widened
+                )
+
+        # RANK WHAT IS OFFERED, NEVER PICK ONE (D23 job (c), added this entry). A single-
+        # row list is a no-op, so this changes nothing for the ordinary resolved card; it
+        # reorders only a REVIEW entry whose card carries a rarity claim — the same gate
+        # the widen above uses, so a claim that could not add a row can still move the
+        # ones already offered to the front. Where the evidence favours no set over
+        # another (no set hint, or every candidate row scores the same), `rank_by_claims`
+        # is stable and leaves them in the order the catalog already put them in — ranked
+        # equally, never chosen for the operator.
+        if resolution.needs_review and card.rarity_claim:
+            found = replace(found, rows=rank_by_claims(found.rows, card))
 
         # D253, THE NEAR-MISS HALF. A card that resolved OUTSIDE review
         # (whether the ladder settled it directly or the dispute above settled it here)

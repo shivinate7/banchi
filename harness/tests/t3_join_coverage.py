@@ -3133,9 +3133,175 @@ def run() -> Result:
         "D35/printed_code: an unknown name finds nothing and stays unmatched",
     )
 
+    _check_rank_by_claims(c)
     _check_near_mint_candidates(c)
 
     return c.result()
+
+
+def _check_rank_by_claims(c: Checks) -> None:
+    """D23's amendment, 2026-09-24: the claim ranks what is offered, and widens the
+    suggestions by name where the number's own rows miss it — `4/383` on the owner's real
+    store, reproduced here off the COMMITTED fixture rather than a hand-built one, exactly
+    the way `check_catalog_set_rarity_match` (T7) already does for the search side of the
+    same case.
+
+    `4/383` read `Calm Rune` / `R02`, capture claimed `Showcase`. The number's own rows are
+    five `R02` Commons across three sets — measured, this is `Catalog.candidates`'s real
+    `set_ambiguous` shape on this fixture, not an invented one. The three
+    `Calm Rune (R02a)` Showcase rows the claim names sit under a different number the same
+    name also answers to.
+    """
+    c.note("")
+    c.note("D23 AMENDMENT — rank_by_claims and the name-widen (pipeline/join.py)")
+
+    catalog = join.Catalog.from_export(
+        tcgcsv.read_export(REPO_ROOT / RIFTBOUND_FIXTURE), "riftbound"
+    )
+    CALM_RUNE_SPIRITFORGED_SHOWCASE_SKU = "9139842"
+
+    card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=383),
+        name="Calm Rune",
+        number="R02",
+        printed_total=None,
+        rarity_claim=("Showcase",),
+        photo=f"captures/box{BOX}/0383.jpg",
+        confidence="high",
+        game="riftbound",
+    )
+    report = join.join_batch([card], catalog, router=join.default_router())
+    c.equal(list(report.matches), [], "nothing is listed — the claim only ranks, never picks")
+    queued = report.queued[0] if report.queued else None
+    if c.ok(queued is not None, "the card still queues"):
+        c.equal(
+            queued.destination.reason,
+            routing.SET_AMBIGUOUS,
+            "the real reason on this fixture: a number collision, never even reaching the "
+            "ladder's own rarity filter",
+        )
+        rarities = [row.get(tcgcsv.RARITY_COLUMN) for row in queued.candidates]
+        c.equal(
+            rarities[:4],
+            ["Showcase"] * 4,
+            "THE CLAIM-AGREEING ROWS LEAD — every Showcase row the name found, ranked ahead "
+            "of the five Commons the number found, none of which agree with the claim",
+        )
+        c.ok(
+            CALM_RUNE_SPIRITFORGED_SHOWCASE_SKU
+            in [str(row[tcgcsv.SKU_COLUMN]) for row in queued.candidates[:4]],
+            "and Spiritforged's own Showcase row is one of the four — the real SKU the "
+            "owner's case names",
+        )
+        c.equal(
+            set(queued.name_matched_skus),
+            {str(row[tcgcsv.SKU_COLUMN]) for row in queued.candidates[:4]},
+            "the widened rows are stamped `found_by: name` — none of the four Showcase rows "
+            "was among the number's own five",
+        )
+        c.equal(
+            len(queued.candidates),
+            9,
+            "NOTHING IS DROPPED — four widened rows plus the number's original five, both "
+            "kept, never a cutoff",
+        )
+
+    # A CLAIM THE NUMBER'S OWN ROWS ALREADY SATISFY WIDENS NOTHING. `Calm Rune` at the
+    # ordinary `R02` printing, claimed `Common` — every one of the five rows the number
+    # found already agrees, so there is nothing to add by name.
+    already_satisfied = join.join_batch(
+        [
+            join.IdentifiedCard(
+                position=join.Position(box=BOX, index=384),
+                name="Calm Rune",
+                number="R02",
+                printed_total=None,
+                rarity_claim=("Common",),
+                photo=f"captures/box{BOX}/0384.jpg",
+                confidence="high",
+                game="riftbound",
+            )
+        ],
+        catalog,
+        router=join.default_router(),
+    )
+    satisfied_queued = already_satisfied.queued[0] if already_satisfied.queued else None
+    if c.ok(satisfied_queued is not None, "a claim the number already satisfies still queues"):
+        c.equal(
+            len(satisfied_queued.name_matched_skus),
+            0,
+            "and nothing was widened by name — every one of the number's own rows already "
+            "agreed with the claim",
+        )
+        c.equal(
+            len(satisfied_queued.candidates),
+            5,
+            "so the candidate count is exactly the number's own five, untouched",
+        )
+
+    # `claim_matches`/`rank_by_claims` DIRECTLY, over synthetic rows, for the two axes the
+    # real fixture's own shape does not exercise on its own: finish and set hint.
+    normal_row = {
+        tcgcsv.SKU_COLUMN: "S1", tcgcsv.NAME_COLUMN: "Fixture Card",
+        tcgcsv.SET_COLUMN: "Origins", tcgcsv.NUMBER_COLUMN: "001/298",
+        tcgcsv.RARITY_COLUMN: "Common", tcgcsv.CONDITION_COLUMN: "Near Mint",
+        tcgcsv.MARKET_PRICE_COLUMN: "1.00",
+    }
+    foil_row = dict(normal_row, **{
+        tcgcsv.SKU_COLUMN: "S2", tcgcsv.CONDITION_COLUMN: "Near Mint Foil",
+    })
+    other_set_row = dict(normal_row, **{
+        tcgcsv.SKU_COLUMN: "S3", tcgcsv.SET_COLUMN: "Vendetta",
+    })
+    finish_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=385),
+        name="Fixture Card", number="001", printed_total="298",
+        metadata_finish=("foil",), photo=f"captures/box{BOX}/0385.jpg",
+        confidence="high", game="riftbound",
+    )
+    c.equal(
+        join.claim_matches(foil_row, finish_card),
+        1,
+        "the finish claim alone scores a matching row",
+    )
+    c.equal(
+        join.claim_matches(normal_row, finish_card),
+        0,
+        "and scores zero against a row it contradicts",
+    )
+    c.equal(
+        join.rank_by_claims([normal_row, foil_row], finish_card),
+        (foil_row, normal_row),
+        "and ranking moves the matching row to the front",
+    )
+    set_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=386),
+        name="Fixture Card", number="001", printed_total="298",
+        set_hint="Vendetta", photo=f"captures/box{BOX}/0386.jpg",
+        confidence="high", game="riftbound",
+    )
+    c.equal(
+        join.rank_by_claims([normal_row, other_set_row], set_card),
+        (other_set_row, normal_row),
+        "the set hint alone also ranks its own matching row first",
+    )
+    blank_claim_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=387),
+        name="Fixture Card", number="001", printed_total="298",
+        photo=f"captures/box{BOX}/0387.jpg", confidence="high", game="riftbound",
+    )
+    c.equal(
+        join.rank_by_claims([normal_row, foil_row, other_set_row], blank_claim_card),
+        (normal_row, foil_row, other_set_row),
+        "A CLAIM THAT IS EMPTY RANKS NOTHING — every axis blank, so the original order "
+        "survives untouched, tied rather than chosen for",
+    )
+    c.equal(
+        join.claim_matches(normal_row, None),
+        0,
+        "and `card=None` (do_review_catalog's own callers before a card is known) scores "
+        "zero rather than raising",
+    )
 
 
 def _near_mint_row(sku: str, set_name: str, condition: str) -> dict:
