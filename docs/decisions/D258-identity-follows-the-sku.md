@@ -1,4 +1,4 @@
-## D-identity-follows-the-sku — Identity follows the SKU
+## D258 — Identity follows the SKU
 
 **The argument.** A card carries two kinds of fact. What the camera read. What the card IS.
 Before this entry, both lived in the same five fields — `name`, `number`, `printed_total`,

@@ -1,6 +1,6 @@
 ## D213 — The set is a stored fact, and the hint was never one
 
-**AMENDED, WIDENED (`D-identity-follows-the-sku`).** This entry's rule covered `set_name` and
+**AMENDED, WIDENED (`D258`).** This entry's rule covered `set_name` and
 `rarity`. It now covers `name`, `number` and `condition` too. Measured: 64 cards draw a name
 their own listing disputes. 241 draw a number. The old premise was wrong. `name` and `number`
 stayed "what the model read" even after a SKU bound. They now write at bind time, from the SKU

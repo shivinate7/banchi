@@ -1,6 +1,6 @@
 ## D242 — Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
 
-**AMENDED, MERGED (`D-identity-follows-the-sku`, ruling 6).** This class read "the card's own
+**AMENDED, MERGED (`D258`, ruling 6).** This class read "the card's own
 stored name and number." Those are no longer the read, once a card is bound. So this class
 becomes empty by construction — the outcome it protected. `cards identity`, one report, reads
 `read_*` against the SKU table instead, and excludes any card a human bound. D255 merges into

@@ -1196,6 +1196,7 @@ D254 A product is resolved from its SKU, never from a card's own read fields
 D255 One SKU, two stored names: the sibling check D242 cannot see
 D256 A literal that duplicates a token is caught by family, and the ratchet is pinned per file
 D257 a worktree's node_modules is provisioned, not reported
+D258 Identity follows the SKU
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

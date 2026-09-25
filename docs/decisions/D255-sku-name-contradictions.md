@@ -1,6 +1,6 @@
 ## D255 — One SKU, two stored names: the sibling check D242 cannot see
 
-**AMENDED, MERGED (`D-identity-follows-the-sku`, ruling 6).** This class read "the card's own
+**AMENDED, MERGED (`D258`, ruling 6).** This class read "the card's own
 stored name." That is no longer the read, once a card is bound. `cards identity`, one report,
 reads `read_*` against the SKU table instead, and excludes any card a human bound. D242 merges
 into the same report. The owner's own word: *"Merge them."*

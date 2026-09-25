@@ -1,6 +1,6 @@
 ## D253 — A card lists off name AND number agreeing, never off the number alone
 
-**AMENDED IN ONE PART, KEPT IN SUBSTANCE (`D-identity-follows-the-sku`).** The agreement rule
+**AMENDED IN ONE PART, KEPT IN SUBSTANCE (`D258`).** The agreement rule
 stands. D162's release and the replay stand too. `JoinReport.name_corrections` retires, and so
 does `set_state`'s `name` parameter. The identity name is now the row's by construction, once
 a card is bound. The two store-backed builders this entry named move to `read_*` instead. That

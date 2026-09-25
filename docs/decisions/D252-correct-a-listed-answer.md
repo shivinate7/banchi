@@ -1,6 +1,6 @@
 ## D252 — A wrong answer gets a correct route, and the SKU it leaves is over-listed by exactly what it gave up
 
-**AMENDED (`D-identity-follows-the-sku`).** The route upserts the chosen row. It writes one
+**AMENDED (`D258`).** The route upserts the chosen row. It writes one
 binding through `bind_sku`, instead of seven fields by hand. Its undo derives the identity
 again, rather than restoring seven stored values. `sku_unchanged` stays, with a new remedy
 text. A new sibling press, confirm, answers the case this entry cannot: the SKU is right, and

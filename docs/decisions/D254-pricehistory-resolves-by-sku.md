@@ -1,6 +1,6 @@
 ## D254 — A product is resolved from its SKU, never from a card's own read fields
 
-**AMENDED IN ONE LINE (`D-identity-follows-the-sku`).** Tier (b) reads the store-owned SKU
+**AMENDED IN ONE LINE (`D258`).** Tier (b) reads the store-owned SKU
 table now, instead of merging every cached export on each call. The tier order stands. The
 owner's ruling stands. Only the source of tier (b)'s own map moved.
 
