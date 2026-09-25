@@ -68,16 +68,22 @@
    the table wider than `.bn-page`. `overflow-x: auto` stays as a floor for a narrower rail. */
 .graveyard-table-wrap { overflow-x: auto; }
 .graveyard-table { table-layout: fixed; }
-.graveyard-col-left { width: 11%; }
-.graveyard-col-card { width: 28%; }
-.graveyard-col-sku { width: 15%; }
-.graveyard-col-how { width: 13%; }
+.graveyard-col-left { width: 10%; }
+.graveyard-col-card { width: 25%; }
+.graveyard-col-sku { width: 13%; }
+.graveyard-col-how { width: 18%; }
 .graveyard-col-where { width: 15%; }
 .graveyard-col-order { width: 9%; }
-.graveyard-col-captured { width: 9%; }
+.graveyard-col-captured { width: 10%; }
 .graveyard-table td[data-th='Order'],
 .graveyard-table td[data-th='Captured'],
 .graveyard-table td[data-th='Where'] { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* UX-036 (720 pass): "Moved to <box name>" is unbounded — a pill is `white-space: nowrap`
+   by its own base rule (kit.css), so at a narrow column it drew past its cell and over the
+   Where column next to it. The cell clips; the pill itself ellipses so the text truncates
+   inside its own shape rather than the cell cutting the pill's rounded end off flat. */
+.graveyard-table td[data-th='How'] { overflow: hidden; }
+.graveyard-table td[data-th='How'] .bn-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .graveyard-table td[data-th='Card'] .graveyard-name {
   display: block;
   overflow: hidden;

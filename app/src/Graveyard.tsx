@@ -265,7 +265,10 @@ export function Graveyard() {
                       {row.sku ?? <span className="bn-faint">—</span>}
                       {row.condition ? <span className="graveyard-condition">{row.condition}</span> : null}
                     </td>
-                    <td data-th="How">
+                    <td
+                      data-th="How"
+                      title={row.how === 'moved' && row.moved_to !== null ? `Moved to ${movedToName(row.moved_to, boxes)}` : undefined}
+                    >
                       <Pill tone={cardTone(row.how)}>{howIt(row, boxes)}</Pill>
                     </td>
                     <td data-th="Where">
