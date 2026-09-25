@@ -248,6 +248,22 @@ def interpunct_inputs(audit):
 # ------------------------------------------------------------------------------------ main
 
 
+def read_list(path: Path) -> Tuple[Optional[object], Optional[str]]:
+    """`(document, None)`, or `(None, what to do)` when the list is not JSON.
+
+    The likely cause is a merge conflict: two branches each deleted entries, and git left
+    its markers in the file. The recipe needs no hand merge, because the list only shrinks.
+    Keep either side's list whole, and this pruner deletes what the tree no longer needs."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8")), None
+    except (OSError, ValueError) as exc:
+        return None, (f"cannot be read as JSON ({exc}). If git left conflict markers in it, "
+                      "keep either side's list whole and drop the other side's, then run "
+                      "`make offenders-prune ARGS=--write`. The list "
+                      "only shrinks, so the pruner deletes what the other side fixed. "
+                      "Nothing was written.")
+
+
 def _report(name: str, result: Plan) -> None:
     if result.errors:
         print(f"{name}: not pruned.")
@@ -288,7 +304,11 @@ def main() -> int:
 
     status = 0
     for name, (path, found, present, list_key, key, rules) in inputs:
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document, unreadable = read_list(path)
+        if document is None:
+            print(f"{name} ({audit.rel(path)}): not pruned. It {unreadable}")
+            status = 1
+            continue
         result = plan(document, found, present, renames, list_key, key, rules,
                       audit._offender_list_shape, audit._offender_diff)
         _report(f"{name} ({audit.rel(path)})", result)
@@ -410,6 +430,17 @@ def selftest() -> int:
           grown(doc, renamed, shape, rules, entry_key), [])
     check("the serialisation is the lists' own: two-space indent, UTF-8 kept",
           _dump({"a": ["…"]}), '{\n  "a": [\n    "…"\n  ]\n}\n')
+
+    print("\noffenders-prune: a list git left conflict markers in")
+    with tempfile.TemporaryDirectory() as tmp:
+        conflicted = Path(tmp) / "list.json"
+        text = _dump(doc)
+        conflicted.write_text("<<<<<<< ours\n" + text + "=======\n" + text + ">>>>>>> theirs\n")
+        before_bytes = conflicted.read_bytes()
+        document, unreadable = read_list(conflicted)
+        check("a conflicted list is refused with the recipe, not a traceback",
+              (document, "keep either side's list whole" in (unreadable or "")), (None, True))
+        check("and the file is left exactly as it was", conflicted.read_bytes(), before_bytes)
 
     print("\noffenders-prune: git's rename detection, in a throwaway repository")
     with tempfile.TemporaryDirectory() as tmp:

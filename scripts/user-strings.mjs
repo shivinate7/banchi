@@ -143,25 +143,32 @@ function literalsIn(expr) {
 
 /** The name of the nearest NAMED declaration around `node`: a function, a method, a class,
  *  a `const X = () => …` binding (a component or helper written as an arrow), or a
- *  module-level `const X = …` (a table). A local variable inside a function is NOT a scope,
- *  so renaming one moves nothing. Anonymous callbacks are passed through to the name around
- *  them. `(module)` when nothing names it. `typed interpunct` keys an entry by this and the text together, so a listed bare
- *  separator such as `·` excuses that string in that one function, never the same string
- *  typed anywhere else in the file. A line number would do the same job and rot on the next
- *  edit above it. */
+ *  module-level `const X = …` (a table). A plain local variable (`const label = …` inside a
+ *  function) is not a scope, so renaming one moves nothing. A NESTED named scope is
+ *  qualified by the scope around it (`Outer.helper`), so two local helpers that share a name
+ *  in two functions never share a key. Anonymous callbacks are passed through to the name
+ *  around them. `(module)` when nothing names it. `typed interpunct` keys an entry by this
+ *  and the text together, so a listed bare separator such as `·` excuses that string in that
+ *  one function, never the same string typed anywhere else in the file. A line number would
+ *  do the same job and rot on the next edit above it. Still shared: two helpers with one
+ *  name in two sibling blocks of the SAME function. */
 function scopeOf(node) {
   for (let cur = node.parent; cur; cur = cur.parent) {
+    let name = null
     if (
       (ts.isFunctionDeclaration(cur) || ts.isClassDeclaration(cur) || ts.isMethodDeclaration(cur)) &&
       cur.name
     ) {
-      return cur.name.getText()
-    }
-    if (ts.isVariableDeclaration(cur) && ts.isIdentifier(cur.name)) {
+      name = cur.name.getText()
+    } else if (ts.isVariableDeclaration(cur) && ts.isIdentifier(cur.name)) {
       const init = cur.initializer
       const isFunction = init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))
       const atModule = cur.parent?.parent && ts.isSourceFile(cur.parent.parent.parent)
-      if (isFunction || atModule) return cur.name.text
+      if (isFunction || atModule) name = cur.name.text
+    }
+    if (name !== null) {
+      const outer = scopeOf(cur)
+      return outer === '(module)' ? name : `${outer}.${name}`
     }
   }
   return '(module)'

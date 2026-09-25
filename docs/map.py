@@ -3424,9 +3424,10 @@ COMPONENTS = [
                         "table cell, a decision citation, the literal \"VS Code\", `via`), and "
                         "names each remaining one as an OFFENDER: one sentence per rule, keyed "
                         "by a hash of its folded text (`offender_identity`), so a reflow, a "
-                        "code-span edit or a claim moves nothing. A code span that crosses a "
-                        "line break is hidden over the joined paragraph "
-                        "(`join_code_span_breaks`), never line by line. Also reports the per-code "
+                        "code-span edit or a claim moves nothing. A code span, decision "
+                        "citation or `VS Code` that crosses a line break is read over the "
+                        "joined paragraph (`join_span_breaks`), never line by line. Also "
+                        "reports the per-code "
                         "counts and errors-per-1,000-plain-words per bucket, printed and never "
                         "gated. Never touches disk itself.",
                 "governed_by": ["D18", "D140", "D218", "D226", "D229",

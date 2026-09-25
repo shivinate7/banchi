@@ -13294,6 +13294,17 @@ def typed_interpunct_entry(item: Dict[str, object]) -> str:
     return f"{item.get('scope') or '(module)'}: {item['text']}"
 
 
+def typed_interpunct_growth_key(entry: str) -> str:
+    """The key GROWTH is counted by: the string, without its scope.
+
+    The scope stays in the unlisted and stale check (`typed_interpunct_entry`), so a dot
+    moved to another function is still a new offender there. Growth drops it, so a function
+    RENAME moves its entries the way a file rename does. Re-key the entries to the new name,
+    and the row passes: the same strings, the same number of times, in the list. A scope is
+    an identifier or `(module)`, so the first `: ` always ends it."""
+    return entry.split(": ", 1)[1] if ": " in entry else entry
+
+
 def _typed_interpunct_found(strings: List[Dict[str, object]]) -> Dict[str, Dict[str, List[str]]]:
     """file -> {TYPED_INTERPUNCT_RULE: [every offending entry, once per occurrence]}."""
     found: Dict[str, Dict[str, List[str]]] = {}
@@ -13380,7 +13391,8 @@ def check_typed_interpunct(report: Report) -> None:
         growth_note = f" Only-shrinks not compared: {where}. Failing open."
     else:
         base_listed, _, _ = _offender_list_shape(base_doc, rules)
-        refused, allowed = _offender_growth(base_listed, listed, rules, rules)
+        refused, allowed = _offender_growth(base_listed, listed, rules, rules,
+                                            key=typed_interpunct_growth_key)
         for line in refused:
             findings.append(Finding(
                 allow_rel, f"gained {line} over the merge-base {where}. Fix the string instead "
@@ -20606,6 +20618,45 @@ def self_test() -> int:
            "an edit elsewhere in the same function moves nothing: the key is the function's "
            "name, never a line")
 
+        nested = scoped(
+            "export function One(p: { a: string[] }) {\n"
+            "  const sep = (a: string[]) => a.join(' · ')\n"
+            "  return <p>{sep(p.a)}</p>\n"
+            "}\n"
+            "export function Two(p: { a: string[] }) {\n"
+            "  const sep = (a: string[]) => a.join(' · ')\n"
+            "  return <p>{sep(p.a)}</p>\n"
+            "}\n")
+        ok(nested == {"Two.tsx": {TYPED_INTERPUNCT_RULE: ["One.sep: ·", "Two.sep: ·"]}},
+           "two local helpers with one name in two functions get two keys: a nested scope "
+           "is qualified by the scope around it", f"{nested}")
+
+        # A FUNCTION RENAME MOVES ITS ENTRIES, the way a file rename does. The rename is red
+        # until the entries are re-keyed. Re-keyed, it is not growth, because growth drops
+        # the scope (`typed_interpunct_growth_key`).
+        renamed_fn = scoped(two_components.replace("function First(", "function Renamed("))
+        unlisted, stale = _offender_diff(renamed_fn, before)
+        ok(len(unlisted) == 1 and len(stale) == 1,
+           "RED: a function renamed and its entry left alone is one unlisted, one stale",
+           f"{unlisted} {stale}")
+        dot_rules = {TYPED_INTERPUNCT_RULE}
+        ok(_offender_diff(renamed_fn, renamed_fn) == ([], [])
+           and _offender_growth(before, renamed_fn, dot_rules, dot_rules,
+                                key=typed_interpunct_growth_key) == ([], []),
+           "the entry re-keyed to the new name is not growth — the same string, the same "
+           "number of times")
+        refused, _ = _offender_growth(before, renamed_fn, dot_rules, dot_rules)
+        ok(len(refused) == 1,
+           "RED without the growth key: counted with its scope, the re-key reads as growth",
+           f"{refused}")
+        more = {"Two.tsx": {TYPED_INTERPUNCT_RULE: before["Two.tsx"][TYPED_INTERPUNCT_RULE]
+                            + ["Second: ·"]}}
+        refused, _ = _offender_growth(before, more, dot_rules, dot_rules,
+                                      key=typed_interpunct_growth_key)
+        ok(len(refused) == 1,
+           "RED: one more copy of a listed string is still growth under the growth key",
+           f"{refused}")
+
     # THE SHRINKING LIST'S OWN ARITHMETIC (D-ratchets-become-offender-lists), in memory: plain
     # dicts in, findings out, no file read and none written (D18). Each arm below is one of the
     # three failures the list exists for, or one of the two things it must let through.
@@ -20774,7 +20825,7 @@ def self_test() -> int:
            "an edit inside a code span keeps its identity — the prose is the subject")
 
         # A CODE SPAN THAT CROSSES A LINE BREAK. The linter masks one line at a time, so
-        # before `join_code_span_breaks` such a span read as prose on one layout and as code
+        # before `join_span_breaks` such a span read as prose on one layout and as code
         # on the other. The review's own probe split `make down` over two lines in README.md.
         span_one_line = "The press runs `make down` first; the row reads it back.\n"
         span_layouts = {
@@ -20806,12 +20857,28 @@ def self_test() -> int:
         ok(_keys(long_prose.replace("w9 ", "w9\n") + "\n") == _keys(long_prose + "\n"),
            "a span's words count as one on both layouts, so a sentence-length finding does "
            "not appear or vanish with the break")
-        ok(ste_measure.join_code_span_breaks("Plain `code` here.\nNext line; more.\n")
+        ok(ste_measure.join_span_breaks("Plain `code` here.\nNext line; more.\n")
            == "Plain `code` here.\nNext line; more.\n",
            "a file with no span across a break comes back byte for byte")
-        ok(ste_measure.join_code_span_breaks("An odd ` backtick\nnever closes.\n")
+        ok(ste_measure.join_span_breaks("An odd ` backtick\nnever closes.\n")
            == "An odd ` backtick\nnever closes.\n",
            "a backtick nothing closes joins nothing — the linter's own pairing rule")
+
+        # A LINE-SCOPED EXEMPTION ACROSS A LINE BREAK. `decision citation` and `VS Code` read
+        # the finding's own line, so a break after `(D<n>,` once made the contraction inside
+        # the citation a new offender (the second review's reflow of one decision entry's
+        # paragraph). The id is BUILT FROM PARTS: a citation-shaped token in this file is
+        # read as a citation by `repo map`.
+        cite = "(" + "D" + "7" + ","
+        cite_one_line = f"It is refused {cite} and the owner said \"You're out\") today.\n"
+        ok(_only(cite_one_line) == [],
+           "a contraction inside a decision citation is exempt on one line")
+        ok(_only(cite_one_line.replace(f"{cite} ", f"{cite}\n")) == [],
+           "and still exempt with a break right after the citation's comma",
+           f"{_only(cite_one_line.replace(f'{cite} ', f'{cite}' + chr(10)))}")
+        ok(_only("Open it in VS\nCode and close it.\n") == []
+           and _only("Open it in VS Code and close it.\n") == [],
+           "`VS Code` split over two lines is the editor's name on both layouts")
         # BUILT FROM PARTS, never spelled: a citation-shaped token in this file is read as a
         # citation by `repo map` and `decision index`, and these two name no real entry.
         slug, number = "D" + "-a-slug", "D" + "257"
