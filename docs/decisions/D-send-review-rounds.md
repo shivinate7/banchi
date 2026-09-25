@@ -156,7 +156,9 @@ there, except P6, which found no defect.
   moved since then, and it names the price.
 - **B3, the Staged test.** The owner's test of Staged is one call by hand to the transport, not
   a press, and nothing is built for it. A mark-down's rollback is now recorded as not live and
-  "check the Staged list". Its answers cannot ride a send after B1.
+  "check the Staged list". CORRECTED IN ROUND 7: after B1, its answers cannot ride a send as
+  a price-only row. A listing row for the same card still carries the stored answer. That row
+  moves the live copies, and round 7 makes the button name the move.
 - **S1, the floor.** A named price under `policy.threshold` is refused and named.
 - **S2, a crash mid-push.** A receipt in phase sending or publishing with a dead holder and no
   record of why reads as possibly staged.
@@ -168,3 +170,21 @@ there, except P6, which found no defect.
 - **N2, a card that sold out.** A price row on a card with no copy live at the check settles, and
   the card is named.
 
+### Round 7: the review of round 6, and the owner's ruling on R6-3 (2026-09-24)
+
+The review of round 6 passed, with four findings to fix before a mixed send. Each case below
+has a T7 case in `check_send_review_r7`, or a spec case in `app/tests/pricing.spec.ts`, that
+went red on the round-6 build before the fix. The reviewer's probe P11 is a T7 case there.
+
+- **R6-3, the owner's ruling.** A new copy of a card already live carries Banchi's stored price,
+  and it moves the live copies to that price. The button names every live copy that moves and
+  its new price. The press refuses a move it was not told of, and the receipt records each move.
+  Round 6's record said a mark-down's answers "cannot ride a send". That is true only of a
+  price-only row, and it is corrected above.
+- **R6-1, the live price the screen shows.** The worklist reads the newest live export on disk,
+  not only the export from the join. A refusal carries `{sku, live, price}` as data. The card
+  says "TCGplayer shows $22.03 now. Send $30.00?", and one press sends again with that live price
+  named. The server still refuses if the price moved again.
+- **R6-2, undo.** Undo takes the SKU out of the prices typed this visit.
+- **R6-4, a held mark-down.** A mark-down over a card that an unconfirmed send holds refuses
+  with `send_held`, not `send_in_progress`. The send is not running: it waits for the check.
