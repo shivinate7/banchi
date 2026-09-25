@@ -6,8 +6,9 @@
 D18 IS ABSOLUTE HERE: a generator may write, and nothing that writes may gate a commit. This
 script is on no `make` target and no git hook — a person runs it, on purpose, once, and
 `git diff scripts/ste-ratchet.json` is the receipt, the same discipline
-`scripts/copy-budget.mjs` and `scripts/typed-interpunct-pin.mjs` already keep for their own
-ratchets (D194, D218).
+`scripts/typed-interpunct-pin.mjs` already keeps for its own ratchet (D218). D194's own
+ratchet, `scripts/copy-budget.mjs`, is retired — superseded by `D-text-shape-checks`,
+2026-09-23, which replaced a pinned ceiling with a shrinking pending list instead.
 
 THE PIN IS PER FILE (D226, amended). One entry per tracked markdown file, holding that
 file's own ratio, error count and word count. The repo-wide total, the four per-code counts

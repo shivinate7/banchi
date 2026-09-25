@@ -39,6 +39,13 @@ WHAT IT COMPARES, and it is deliberately two different things:
      A copy, not a path fed to a function, because the incident was the module reading where
      it LIVES. Only a copy reaches that read.
 
+  3b. THE CLAIMED SLOT (D-a-claimed-slot-and-a-server-that-names-its-checkout). Both sides
+     read one registry of claimed slots before the hash. A temporary registry claims a slot
+     for the linked-worktree copy that its hash would never give it, and both sides must
+     answer that slot. A damaged registry must read as nothing claimed, on both sides.
+     So must a slot written as a decimal (`149.0`) or with an exponent, and a file
+     holding NaN: Python's json and JSON.parse read those differently.
+
   4. THE TWO FALLBACKS that do not use the derivation. `app/src/server.ts` bundled with NO
      port define, with `fetch` stubbed, must refuse by name and address no base port. A copy
      of `scripts/screenshot.sh` that cannot derive its port may fall back to 5173 only in a
@@ -154,6 +161,54 @@ def expected(kind: str, slot: int) -> tuple:
     return ports.DEV_LOW + slot, ports.CAPTURE_LOW + slot
 
 
+def registry_failures(tmp: Path, tree: Path) -> list:
+    """Both sides over one temporary registry: a claimed slot, then files neither may trust."""
+    registry = tmp / "port-slots.json"
+    claimed = (ports.hashed_slot(tree) + 7) % ports.SLOTS
+    copy = str(tree / "app" / "devPort.ts")
+    failures = []
+    saved = os.environ.get(ports.SLOT_REGISTRY_ENV)
+    os.environ[ports.SLOT_REGISTRY_ENV] = str(registry)
+    key = json.dumps(ports.canonical(tree))
+    hashed = ports.hashed_slot(tree)
+    try:
+        for label, text, want in (
+            ("a claimed slot", json.dumps({"version": 1, "slots": {ports.canonical(tree): claimed}}),
+             claimed),
+            ("a damaged registry", "{not json", hashed),
+            # A slot written as a decimal is not a whole slot, even when its value is whole.
+            # JSON.parse reads `149.0` as the integer 149 and Python reads it as a float, so
+            # only the written text can decide, and both sides must refuse it the same way.
+            ("a decimal slot", '{"version": 1, "slots": {%s: %d.0}}' % (key, claimed), hashed),
+            ("an exponent slot", '{"version": 1, "slots": {%s: %de0}}' % (key, claimed), hashed),
+            ("a fractional slot", '{"version": 1, "slots": {%s: %d.5}}' % (key, claimed), hashed),
+            # Python's json reads NaN, and JSON.parse refuses the whole file. So a file that
+            # holds one is damaged as a whole, on both sides.
+            ("a NaN beside a good claim",
+             '{"version": 1, "slots": {%s: %d, "/elsewhere": NaN}}' % (key, claimed), hashed),
+        ):
+            registry.write_text(text, encoding="utf-8")
+            node_tree = node_answers([str(tree)], [copy])
+            py_tree = python_answers(tree)
+            want_ports = (ports.DEV_LOW + want, ports.CAPTURE_LOW + want)
+            for side, slot, got in (
+                ("python", py_tree["slot"], (py_tree["devPort"], py_tree["capturePort"])),
+                ("node", node_tree["slots"][0],
+                 (node_tree["trees"][0]["devPort"], node_tree["trees"][0]["capturePort"])),
+            ):
+                if slot != want or got != want_ports:
+                    failures.append(
+                        f"{label}: {side} answers slot {slot}, ports {got}; want slot {want}, "
+                        f"ports {want_ports}"
+                    )
+    finally:
+        if saved is None:
+            os.environ.pop(ports.SLOT_REGISTRY_ENV, None)
+        else:
+            os.environ[ports.SLOT_REGISTRY_ENV] = saved
+    return failures
+
+
 def client_fallback_answers(tmp: Path) -> dict:
     """Bundle the real `app/src/server.ts` WITHOUT `vite.config.ts`'s port define, and ask it.
 
@@ -264,6 +319,9 @@ def main() -> int:
                         f"(D-no-git-no-live-port, a copied tree never gets the live port)"
                     )
 
+        # The claimed slot: both sides read one registry before the hash.
+        failures += registry_failures(Path(tmp), trees[TREE_KINDS.index("linked")])
+
         # The client bundle with no port define: it must refuse, and never call a base port.
         client = client_fallback_answers(Path(tmp))
         live = (f":{ports.CAPTURE_BASE_PORT}", f":{ports.DEV_BASE_PORT}")
@@ -305,6 +363,7 @@ def main() -> int:
             f"port agreement: {len(as_strings)} paths, slots identical; "
             f"this checkout dev {ports.dev_port()} / capture {ports.capture_port()} on both "
             f"sides; {len(trees)} copied trees ({', '.join(TREE_KINDS)}) answer their own kind; "
+            f"a claimed slot and five registries neither side may trust read alike; "
             f"a client with no port define refuses; screenshot.sh falls back only when primary"
         )
         return 0

@@ -2,13 +2,11 @@
 //
 //     node scripts/typed-interpunct-pin.mjs --pin
 //
-// Mirrors scripts/copy-budget.mjs's own discipline (D194), for the ratchet
-// scripts/docs-audit.py's `typed interpunct` row asserts (D218):
-// the ROW only ever READS scripts/typed-interpunct.json — D18 forbids it writing, since it
-// runs on the commit path — and this generator is the one thing that may, run by a person
-// choosing, on purpose, to accept today's count as the new ceiling. Never pin quietly:
-// `git diff scripts/typed-interpunct.json` is the receipt, the same sentence
-// `copy-budget.mjs` prints for the same reason.
+// A RATCHET, NEVER A CLIFF, for the ratchet scripts/docs-audit.py's `typed interpunct` row
+// asserts (D218): the ROW only ever READS scripts/typed-interpunct.json — D18 forbids it
+// writing, since it runs on the commit path — and this generator is the one thing that may,
+// run by a person choosing, on purpose, to accept today's count as the new ceiling. Never pin
+// quietly: `git diff scripts/typed-interpunct.json` is the receipt.
 //
 // THE MEASUREMENT IS THE SAME EXTRACTION THE ROW READS: `scripts/user-strings.mjs`, run with
 // `--join-literals --include-code-attr` (`TYPED_INTERPUNCT_EXTRACT_ARGS` in
@@ -17,15 +15,14 @@
 // subprocess hop this script has no other reason to pay for).
 //
 // THE MATCH ITSELF — U+00B7 (middle dot) and U+2022 (bullet) — is a two-code-point regex
-// kept duplicated in scripts/docs-audit.py's `_INTERPUNCT_RE` rather than shared. That is a
-// deliberate difference from D196's word list, which stays in one file (docs-audit.py) alone
-// because it is a large, changing, semantic policy a session actually edits. This is two
-// fixed code points from one ruling; the duplication cannot drift the way a growing list
-// could, and importing a Python module from Node (or shelling out to Python from here) would
-// cost more machinery than the two-character class it would save.
+// kept duplicated in scripts/docs-audit.py's `_INTERPUNCT_RE` rather than shared. D196's own
+// word list moved to `scripts/machine-words.json` on 2026-09-23 (`D-text-shape-checks`),
+// once a second reader — `app/tests/machine-words.spec.ts` — needed it too. This match has
+// only one reader, so it stays where it is: two fixed code points from one ruling, and a
+// single-consumer duplication cannot drift the way a growing, two-consumer list could.
 //
 // What it writes: scripts/typed-interpunct.json, `{"count": <measured>}` — no slack added,
-// for the same reason copy-budget.mjs's own header gives: slack is how a ratchet leaks.
+// because slack is how a ratchet leaks.
 import { spawnSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'

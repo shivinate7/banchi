@@ -6,6 +6,7 @@ import { Icon, type IconName } from './Icon'
 import { cropStyle, type Crop } from './index'
 import { STATUS_TONES, UNNAMED_BOX, type StatusKind } from './dataRules'
 import { hasSheet, openSheet, sheetHref } from './sheets'
+import { useOverlayLayer } from './overlay'
 import { moneyGrouped, moneySigned } from '../money'
 import { PositionLabel } from '../PositionLabel'
 import type { Place } from '../types'
@@ -614,6 +615,16 @@ function PickPanel<T extends string>({
    * itself otherwise. Not before: the first render places nothing, so there is nothing to hold
    * focus yet, and a key pressed then would land on the trigger and close the list. */
   const drawn = place !== null
+
+  /* THE LIST IS A LAYER IN THE ONE OVERLAY STACK (`kit/overlay.tsx:useOverlayLayer`), joined
+   * the moment it is drawn. It is portalled to <body>, so inside a Sheet (FilterBar's phone
+   * sheet) it sits OUTSIDE the sheet's panel. While the sheet was the top layer, its trap saw
+   * focus land in the list and pulled it back into the sheet: the arrows moved nothing, and
+   * Escape closed the whole sheet. As the top layer the list keeps focus, Escape closes the
+   * list only, and focus goes back to its trigger inside the sheet. `trap: false`: Tab closes
+   * the list (below), as a popover does. The stack also sets its z-index above the sheet's. */
+  useOverlayLayer(panel, { active: drawn, onEscape: () => onClose(true), trap: false })
+
   useEffect(() => {
     if (!drawn) return
     if (searchable) entry.current?.focus()

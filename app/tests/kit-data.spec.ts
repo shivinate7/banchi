@@ -380,6 +380,11 @@ test('an empty search press says what to type, and moves nothing below it', asyn
   const search = page.locator('[data-specimen="Search"]')
   const before = (await search.boundingBox())?.height
 
+  /* A STANDALONE SearchField (no `controlHeight="bar"`) reads at its own 14px
+   *  (`--bn-fs-base`), UNCHANGED by FilterBar's 13px bar-only rule (`SearchField.css:
+   *  .search-field-bar .search-field-input`, filtering round 3). */
+  await expect(search.locator('.search-field-input')).toHaveCSS('font-size', '14px')
+
   await search.getByRole('button', { name: 'Find' }).click()
   await expect(search.getByRole('status')).toHaveText('Type a card name, number or SKU first.')
   expect((await search.boundingBox())?.height).toBe(before)

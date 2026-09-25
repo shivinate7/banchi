@@ -1,0 +1,224 @@
+[
+  {
+    "note": "a card number matches with its leading zeros or without them (FLT-04)",
+    "query": "54/132",
+    "fields": { "text": ["Abra"], "numbers": ["054/132"] },
+    "match": true
+  },
+  {
+    "note": "the same card, typed as printed on it",
+    "query": "054/132",
+    "fields": { "text": ["Abra"], "numbers": ["054/132"] },
+    "match": true
+  },
+  {
+    "note": "a bare first part still finds the card",
+    "query": "54",
+    "fields": { "text": ["Abra"], "numbers": ["054/132"] },
+    "match": true
+  },
+  {
+    "note": "never a substring of a longer number",
+    "query": "54",
+    "fields": { "numbers": ["154/200"] },
+    "match": false
+  },
+  {
+    "note": "the wrong number does not match",
+    "query": "54/131",
+    "fields": { "text": ["Abra"], "numbers": ["054/132"] },
+    "match": false
+  },
+  {
+    "note": "a leading `#` still names the number",
+    "query": "#54",
+    "fields": { "numbers": ["054/132"] },
+    "match": true
+  },
+  {
+    "note": "a leading `/` names the second part only",
+    "query": "/132",
+    "fields": { "numbers": ["054/132"] },
+    "match": true
+  },
+  {
+    "note": "a second part that does not match",
+    "query": "/131",
+    "fields": { "numbers": ["054/132"] },
+    "match": false
+  },
+  {
+    "note": "a number split into two tokens by a space still matches together",
+    "query": "54 132",
+    "fields": { "numbers": ["054/132"] },
+    "match": true
+  },
+  {
+    "note": "a number written with a hyphen in place of the slash",
+    "query": "054-132",
+    "fields": { "numbers": ["054/132"] },
+    "match": true
+  },
+  {
+    "note": "a set-prefixed number, split by a space",
+    "query": "swsh 050",
+    "fields": { "numbers": ["SWSH050"] },
+    "match": true
+  },
+  {
+    "note": "a full-width digit still folds to its plain form",
+    "query": "５４/１３２",
+    "fields": { "numbers": ["054/132"] },
+    "match": true
+  },
+  {
+    "note": "words match in any order",
+    "query": "deadly akali",
+    "fields": { "text": ["Akali, Deadly Duelist"] },
+    "match": true
+  },
+  {
+    "note": "the same words, typed with the comma the row carries",
+    "query": "akali, deadly",
+    "fields": { "text": ["Akali, Deadly Duelist"] },
+    "match": true
+  },
+  {
+    "note": "an accented name is found unaccented",
+    "query": "flabebe",
+    "fields": { "text": ["Flabébé"] },
+    "match": true
+  },
+  {
+    "note": "a hyphen the query runs together as one word",
+    "query": "heimerdinger-inventor",
+    "fields": { "text": ["Heimerdinger, Inventor"] },
+    "match": true
+  },
+  {
+    "note": "mid-word text still matches",
+    "query": "ventor",
+    "fields": { "text": ["Heimerdinger, Inventor"] },
+    "match": true
+  },
+  {
+    "note": "an apostrophe never splits the word the query runs together",
+    "query": "farfetchd",
+    "fields": { "text": ["Farfetch'd"] },
+    "match": true
+  },
+  {
+    "note": "a curly apostrophe folds the same way",
+    "query": "farfetchd",
+    "fields": { "text": ["Farfetch’d"] },
+    "match": true
+  },
+  {
+    "note": "a hyphenated name folds to one compact word",
+    "query": "hooh",
+    "fields": { "text": ["Ho-Oh ex"] },
+    "match": true
+  },
+  {
+    "note": "the compact fallback never crosses an unrelated word",
+    "query": "hooh",
+    "fields": { "text": ["Hoothoot"] },
+    "match": false
+  },
+  {
+    "note": "a SKU is found by its prefix, zeros kept",
+    "query": "860123",
+    "fields": { "skus": ["8601230"] },
+    "match": true
+  },
+  {
+    "note": "a box is found by its name only, never its number (the owner's ruling, 2026-09-23)",
+    "query": "4",
+    "fields": { "text": ["Pikachu"], "boxes": [{ "box": 4, "name": "Mixed Singles" }] },
+    "match": false
+  },
+  {
+    "note": "a box named `Box 4` is still found by NAME, once it carries that stored name",
+    "query": "box 4",
+    "fields": { "text": ["Pikachu"], "boxes": [{ "box": 4, "name": "Box 4" }] },
+    "match": true
+  },
+  {
+    "note": "a box's real name always works",
+    "query": "mixed",
+    "fields": { "text": ["Pikachu"], "boxes": [{ "box": 4, "name": "Mixed Singles" }] },
+    "match": true
+  },
+  {
+    "note": "a digit word in text is a whole word or the start of one, never a substring",
+    "query": "12",
+    "fields": { "text": ["Order 112"] },
+    "match": false
+  },
+  {
+    "note": "the same digit narrows an order label as it is typed",
+    "query": "12",
+    "fields": { "text": ["09-03-26_00012"] },
+    "match": true
+  },
+  {
+    "note": "a query typed with its own leading zeros stays literal until they resolve",
+    "query": "0001",
+    "fields": { "text": ["09-03-26_00012"] },
+    "match": true
+  },
+  {
+    "note": "a run of zeros alone never empties the list; it is the order label's own first key",
+    "query": "0",
+    "fields": { "text": ["09-03-26_00012"] },
+    "match": true
+  },
+  {
+    "note": "the same run of zeros against an unrelated digit word",
+    "query": "0",
+    "fields": { "text": ["Order 112"] },
+    "match": false
+  },
+  {
+    "note": "a full order label, hyphen and all",
+    "query": "09-03-26_00012",
+    "fields": { "text": ["09-03-26_00012"] },
+    "match": true
+  },
+  {
+    "note": "a partial order label still narrows",
+    "query": "09-03-26",
+    "fields": { "text": ["09-03-26_00012"] },
+    "match": true
+  },
+  {
+    "note": "the wrong day does not match",
+    "query": "09-03-27",
+    "fields": { "text": ["09-03-26_00012"] },
+    "match": false
+  },
+  {
+    "note": "a condition word matches",
+    "query": "near mint",
+    "fields": { "text": ["Abra", "Near Mint"] },
+    "match": true
+  },
+  {
+    "note": "an empty query matches every row",
+    "query": "",
+    "fields": { "text": ["Abra"] },
+    "match": true
+  },
+  {
+    "note": "a query of only commas and spaces is the same as empty",
+    "query": " , ",
+    "fields": { "text": ["Abra"] },
+    "match": true
+  },
+  {
+    "note": "one matching word is not enough when a second word is not found anywhere",
+    "query": "akali zed",
+    "fields": { "text": ["Akali, Deadly Duelist"] },
+    "match": false
+  }
+]

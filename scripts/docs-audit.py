@@ -12717,54 +12717,51 @@ def _render_manifest_findings(
 USER_STRINGS_SCRIPT = ROOT / "scripts" / "user-strings.mjs"
 APP_TS_COMPILER = ROOT / "app" / "node_modules" / "typescript" / "lib" / "typescript.js"
 
-# THE ONE PLACE THIS LIST LIVES, so a session refining it edits one dictionary rather than
-# a scattered set of regexes. Every entry is machinery this repo is BUILT FROM, and every
-# comment says why it is not something an operator reaches for. `run`, `box`, `export`,
-# `listing` and `TCGplayer` are deliberately NOT here — they are the operator's own words,
+# THE ONE PLACE THIS LIST LIVES IS scripts/machine-words.json, not a Python dict, since D196's
+# 2026-09-23 amendment (D-text-shape-checks) put a SECOND reader on it: `app/tests/
+# machine-words.spec.ts` reads the rendered TEXT every route draws, catching server- and
+# demo-composed strings this AST walk cannot (it only sees JSX literals). One file, so growing
+# the list edits one dictionary rather than two that can drift apart. `run`, `box`, `export`,
+# `listing` and `TCGplayer` are deliberately NOT in it — they are the operator's own words,
 # the ones `docs/DESIGN.md`'s Register section and every screen in CLAUDE.md's table are
 # written in, and banning them would be the opposite defect.
-NO_MECHANISM_WORDS: Dict[str, str] = {
-    "the pipeline": (
-        "D1's two-phase batch process, end to end — an implementation the operator never "
-        "chose and the outcome (a price, a queue entry) is what they read instead"
-    ),
-    "the resolver": (
-        "pipeline/join.py's per-order picker (D174, D181) — an internal component name; "
-        "the operator sees which copies fill an order, never which module chose them"
-    ),
-    "the model": (
-        "the vision call identify/ makes (D2) — naming the model is naming a vendor and a "
-        "technique, not a fact about a card"
-    ),
-    "the server sent": (
-        "server.ts's own phrase for relaying a response — the operator reads a fact about "
-        "their store, never about an HTTP exchange with it"
-    ),
-    "the join": (
-        "pipeline/join.py's join step (D11) — a pipeline stage; the operator sees a listed "
-        "card or a reason it queued, never the step that produced either"
-    ),
-    "the corpus": (
-        "pipeline/corpus.py's one-file pricing store (D86) — a storage detail; the "
-        "operator thinks in prices and holds, never in which file holds them"
-    ),
-    "the ledger": (
-        "the code-card and order ledgers (D24, D63) as STORAGE — codes and orders are the "
-        "operator's own words; that either is kept in one file called a ledger is not"
-    ),
-}
+MACHINE_WORDS_JSON = ROOT / "scripts" / "machine-words.json"
 
-_NO_MECHANISM_RE = re.compile("|".join(re.escape(w) for w in NO_MECHANISM_WORDS), re.I)
+
+@lru_cache(maxsize=1)
+def _machine_words() -> Dict[str, object]:
+    return json.loads(MACHINE_WORDS_JSON.read_text(encoding="utf-8"))
+
+
+NO_MECHANISM_WORDS: Dict[str, str] = _machine_words()["words"]
+
+
+def _word_pattern(word: str) -> str:
+    """A bare identifier-shaped word (`emit`, `sub-threshold`) is wrapped in `\\b`, so it
+    matches the word itself and not a substring of a longer one (`emitted`, `unstaged`,
+    `reindex`). A phrase with a space, or a path-shaped entry carrying a `/`, is left as a
+    plain literal exactly as the original hand-typed dict was — `\\b` either side of a `/`
+    checks the wrong transition (word/non-word, not `/`/word) and would refuse to match at
+    the very position the entry exists to catch."""
+    if re.fullmatch(r"[\w-]+", word):
+        return r"\b" + re.escape(word) + r"\b"
+    return re.escape(word)
+
+
+_NO_MECHANISM_RE = re.compile(
+    "|".join(_word_pattern(w) for w in NO_MECHANISM_WORDS), re.I
+)
 
 # A repository path, never something a person types or reads off a download. Every
 # top-level package `docs/map.py` maps, plus `scripts` (where this row itself lives): any
 # of them followed by `/` is a filesystem fact about this checkout, not a sentence about a
 # card. `docs/decisions/` is covered by the bare `docs` prefix, deliberately — a path INTO
 # it is exactly the citation-by-path `cite-decisions-by-id-not-path` already warns against.
-_REPO_TOP_DIRS = (
-    "inventory", "runs", "captures", "harness", "docs", "app",
-    "server", "pipeline", "store", "identify", "geometry", "codes", "cli", "scripts",
-)
+# SAME SOURCE `scripts/machine-words.json`'s `repoTopDirs` HOLDS, so the browser-side check
+# (`machine-words.spec.ts`, which flags a rendered request-path shape with the identical top
+# dirs) cannot drift from this one — a second hand-typed tuple here is exactly the drift this
+# file's own header warns against.
+_REPO_TOP_DIRS = tuple(_machine_words()["repoTopDirs"])
 _REPO_PATH_RE = re.compile(r"\b(?:" + "|".join(_REPO_TOP_DIRS) + r")/[\w./<>-]+")
 
 # A bare filename in a format only this repository's own store speaks. `.csv` is
@@ -12841,6 +12838,15 @@ def _run_user_strings(args: List[str]) -> Optional[List[Dict[str, object]]]:
 # from being added quietly.
 NO_MECHANISM_EXEMPT_FILES = frozenset({"Gallery.tsx"})
 
+# A CASE-INSENSITIVE LOOKUP FROM THE MATCHED TEXT BACK TO ITS OWN ENTRY'S "why", built once
+# rather than `.lower()`-ing `NO_MECHANISM_WORDS` at every call site. `NO_MECHANISM_WORDS`
+# keeps entries in their own natural case (`Pushed`, `Staged` — proper-noun-shaped internal
+# states) beside the original all-lowercase phrases (`the pipeline`), and `_NO_MECHANISM_RE`
+# matches case-insensitively (`re.I`) either way, so the "why" lookup has to fold to the same
+# case it folds the SEARCH to, or a capitalised entry's own explanation is silently empty —
+# measured: before this map existed, a `Staged` hit printed no reason at all.
+_WHY_BY_LOWER: Dict[str, str] = {word.lower(): why for word, why in NO_MECHANISM_WORDS.items()}
+
 
 def _no_mechanism_exempt(where_file: str) -> bool:
     """Matched by basename, not by full path — this file is a leaf name (`Gallery.tsx`),
@@ -12850,8 +12856,38 @@ def _no_mechanism_exempt(where_file: str) -> bool:
     return Path(where_file).name in NO_MECHANISM_EXEMPT_FILES
 
 
-def _no_mechanism_findings(strings: List[Dict[str, object]]) -> List[Finding]:
+# THE SHRINKING OFFENDER LIST, on `scripts/kit-adoption-allow.json`'s own precedent and the
+# owner's Q3 ruling, 2026-09-23: file -> word -> the lane that owes the fix. Growing
+# `scripts/machine-words.json`'s word list (D-text-shape-checks) put ten new pipeline nouns —
+# `emit`, `sub-threshold`, `index`, `span`, `parked`, `Pushed`, `Staged`, `make demo`,
+# `/pipeline/`, `manual:c` — in front of this row for the first time, and several of them are
+# real, on screens no wave-2 lane has reached yet. A hard gate with no allow list would fail
+# every one of THOSE lanes' branches for a defect this lane found and none of them caused.
+# `check_no_mechanism_on_screen` fails on a hit this file does not list AND on a listed entry
+# that no longer matches any hit — the second half is what keeps the list SHRINKING rather
+# than becoming a second, quieter exemption.
+MACHINE_WORDS_ALLOW_JSON = ROOT / "scripts" / "machine-words-allow.json"
+
+
+@lru_cache(maxsize=1)
+def _machine_words_allow() -> Dict[str, Dict[str, str]]:
+    try:
+        raw = json.loads(MACHINE_WORDS_ALLOW_JSON.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {k: v for k, v in raw.items() if k != "_about"}
+
+
+def _no_mechanism_findings(
+    strings: List[Dict[str, object]],
+    allow: Optional[Dict[str, Dict[str, str]]] = None,
+) -> Tuple[List[Finding], Set[Tuple[str, str]]]:
+    """Returns the findings, and the `(file, word)` allow-list entries a hit actually used —
+    the second is how the caller tells a listed entry that is still true from one that has
+    gone stale (nothing matches it any more) without a second pass over `strings`."""
+    allow = allow or {}
     findings: List[Finding] = []
+    used: Set[Tuple[str, str]] = set()
     for item in strings:
         file = str(item["file"])
         if _no_mechanism_exempt(file):
@@ -12866,6 +12902,9 @@ def _no_mechanism_findings(strings: List[Dict[str, object]]) -> List[Finding]:
             or _CLI_INVOCATION_RE.search(text)
         )
         if code_hit is not None:
+            # A decision citation or a repository path is never on the allow list — see
+            # `machine-words-allow.json`'s own header: it exists for the WORD-LIST growth
+            # only, never for the two checks this row has always run.
             findings.append(
                 Finding(
                     where,
@@ -12878,14 +12917,19 @@ def _no_mechanism_findings(strings: List[Dict[str, object]]) -> List[Finding]:
             continue
         word_hit = _NO_MECHANISM_RE.search(text)
         if word_hit is not None:
-            why = NO_MECHANISM_WORDS.get(word_hit.group(0).lower(), "")
+            canon = word_hit.group(0).lower()
+            why = _WHY_BY_LOWER.get(canon, "")
+            listed_lane = (allow.get(file) or {}).get(canon)
+            if listed_lane is not None:
+                used.add((file, canon))
+                continue
             findings.append(
                 Finding(
                     where,
                     f"says {word_hit.group(0)!r}: {shown!r}\n  {why}",
                 )
             )
-    return findings
+    return findings, used
 
 
 def check_no_mechanism_on_screen(report: Report) -> None:
@@ -12959,13 +13003,34 @@ def check_no_mechanism_on_screen(report: Report) -> None:
             "toolchain unavailable, so nothing was read", scanned=0,
         )
         return
-    findings = _no_mechanism_findings(strings)
+    allow = _machine_words_allow()
+    findings, used = _no_mechanism_findings(strings, allow)
+
+    # STALE ENTRIES: an allow-listed (file, word) pair that matched nothing this run. The
+    # lane that owns it already fixed the string, and the entry is the only thing left
+    # naming a defect that is gone — `scripts/kit-adoption-allow.json`'s own `runtime allow
+    # list names only real routes` self-test argues the identical point for its own list.
+    for file, words in sorted(allow.items()):
+        for word, lane in sorted(words.items()):
+            if (file, word) not in used:
+                findings.append(
+                    Finding(
+                        f"{rel(MACHINE_WORDS_ALLOW_JSON)}: {file} / {word!r}",
+                        f"is allow-listed for lane {lane!r}, but nothing in {file} says "
+                        f"{word!r} any more — the entry is stale. Delete it.",
+                    )
+                )
+
     report.add(
         "no mechanism on screen", MECHANICAL, findings,
         (
             f"{len(findings)} of {len(strings)} visible strings name a decision, a "
             "repository path, or pipeline machinery"
-        ) if findings else f"{len(strings)} visible strings carry none of it",
+        ) if findings else (
+            f"{len(strings)} visible strings carry none of it "
+            f"({len(used)} allow-listed hit(s) over {sum(len(w) for w in allow.values())} "
+            "entries, none stale)" if allow else f"{len(strings)} visible strings carry none of it"
+        ),
         scanned=len(strings),
     )
 
@@ -13086,17 +13151,16 @@ def check_typed_interpunct(report: Report) -> None:
     them as the accessible name a screen reader announces; the rule is that a CLIENT stops
     rendering them verbatim, which is a front-end fact this row can and does check.
 
-    A RATCHET, NOT A CLIFF (D194's own discipline, mirrored). Today's count is real and the
-    sweep that would zero it is a separate task (per the owner's ruling) that has not run yet,
-    so this row would be permanently red on day one without one. `scripts/typed-interpunct.json`
-    pins the count `node scripts/typed-interpunct-pin.mjs --pin` last measured — mirroring
-    `scripts/copy-budget.mjs`'s own discipline exactly: this row only READS the pin (D18: it
-    may never write, being on the commit path), a lower count is accepted SILENTLY (printed in
-    the summary, never a finding), and only a RISE past the pin is a failure — because a
-    ratchet padded "for safety" is headroom a later session spends without being asked, the
-    same argument `copy-budget.spec.ts`'s own header makes for D194. No pin file at all is
-    ALSO a failure: an unpinned budget could not otherwise be told apart from "nothing to pin
-    yet", which is the same non-vacuity argument `HARD_RULE_FLOOR` makes for `rule enforcement`.
+    A RATCHET, NOT A CLIFF. Today's count is real and the sweep that would zero it is a
+    separate task (per the owner's ruling) that has not run yet, so this row would be
+    permanently red on day one without one. `scripts/typed-interpunct.json` pins the count
+    `node scripts/typed-interpunct-pin.mjs --pin` last measured: this row only READS the pin
+    (D18: it may never write, being on the commit path), a lower count is accepted SILENTLY
+    (printed in the summary, never a finding), and only a RISE past the pin is a failure —
+    because a ratchet padded "for safety" is headroom a later session spends without being
+    asked. No pin file at all is ALSO a failure: an unpinned budget could not otherwise be
+    told apart from "nothing to pin yet", which is the same non-vacuity argument
+    `HARD_RULE_FLOOR` makes for `rule enforcement`.
     """
     strings = _run_user_strings(list(TYPED_INTERPUNCT_EXTRACT_ARGS))
     if strings is None:
@@ -13182,7 +13246,7 @@ def check_typed_interpunct(report: Report) -> None:
 # installed — so the toolchain argument against gating (D18's, not D74's) does not transfer:
 # nothing new has to be present on a machine that can already run this hook at all.
 #
-# A RATCHET, NEVER A CLIFF, on the SAME three arguments D194 and D218 already settled: a hard
+# A RATCHET, NEVER A CLIFF, on the SAME three arguments D218 already settled: a hard
 # gate over an 11,361-finding backlog blocks every commit on day one; the number may only fall,
 # silently, printed; and a rise is never quiet, however small. `scripts/ste-ratchet.json` pins
 # the total, the four ERROR-severity rules' own counts, and the ruler below, written only by
@@ -20334,7 +20398,7 @@ def self_test() -> int:
         ok(strings is not None, "the extractor runs over a throwaway fixture tree",
            "node or app/node_modules/typescript unavailable — install and re-run")
         if strings is not None:
-            findings = _no_mechanism_findings(strings)
+            findings, _used = _no_mechanism_findings(strings)
             hit_files = {f.where.split(":")[0].split("/")[-1] for f in findings}
             ok("Positive.tsx" in hit_files,
                "a decision citation in JSX text is caught")

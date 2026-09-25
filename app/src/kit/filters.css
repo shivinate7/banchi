@@ -1,0 +1,205 @@
+/* THE ONE FILTER BAR (`kit/filters.tsx`). `--bn-*` tokens only.
+
+   THE BAR ASKS ITS OWN WIDTH, NOT THE WINDOW'S (a container query). Inventory's rail is
+   268-300px wide on a 1440px desk, and a viewport test would lay five controls out in it. Below
+   480px of BAR the wide row hides and one "Filters" trigger opens a sheet. At 480px three facet
+   triggers still share a row, each wide enough for its label and a short value. A phone's page
+   column (390 less its gutters) is under it; a 720 or 820 window's column is over it. */
+
+.bn-filterbar {
+  container: bn-filterbar / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+
+.bn-filterbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+
+/* The search and a screen's own control beside it: one line, at every width. */
+.bn-filterbar-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex: 1 1 220px;
+  min-width: 160px;
+  max-width: 420px;
+}
+.bn-filterbar-search { flex: 1 1 auto; min-width: 0; }
+.bn-filterbar-beside { flex: none; display: flex; align-items: center; }
+
+.bn-filterbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* EVERY FACET TRIGGER IS ONE WIDTH (the orchestrator's call on the owner's gripe, "the filters
+   aren't even the same widths"). One grid row of equal `1fr` tracks: sized to its content, a
+   grid makes every `1fr` track as wide as the WIDEST item needs, so the three triggers take the
+   width of the widest one. Squeezed, the tracks shrink together and a value ellipsizes. Each
+   trigger already holds its widest value from the first paint (`PickTrigger`'s sizer), so a
+   pick moves no width (D118). The cap keeps one long set name from widening all three. */
+.bn-filterbar-row > .bn-filterchips {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.bn-filterbar-row > .bn-filterchips > .bn-fchip { min-width: 0; max-width: 280px; }
+.bn-filterbar-row > .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; min-width: 0; max-width: none; }
+
+/* ONE CLEAR-ALL: the count line's. `FilterChips`' own is not drawn inside a bar, in the row or in
+   the sheet, so there are never two side by side, and its reserved slot leaves no blank band. */
+.bn-filterbar .bn-filterchips-clear,
+.bn-filterbar-sheet-body .bn-filterchips-clear { display: none; }
+
+.bn-filterbar-compact { display: none; }
+
+/* ---- HideToggle: quiet, one bar height ------------------------------------------------------- */
+/* The same field edge, surface and height as a pick trigger beside it (`--bn-control-h`: 34px on
+   a desk, 42px under a thumb). On, it is marked by the check filling with the accent, never by
+   the whole control turning black or white. */
+.bn-hidetoggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1-5);
+  height: var(--bn-control-h);
+  padding: 0 var(--bn-3);
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  color: var(--bn-ink-2);
+  font: inherit;
+  font-size: var(--bn-fs-md);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-hidetoggle:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
+.bn-hidetoggle:focus-visible { outline: none; border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
+.bn-hidetoggle-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--bn-field-edge, var(--bn-ink-4));
+  border-radius: var(--bn-r-xs);
+  color: var(--bn-on-accent);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-hidetoggle-mark .bn-icon { opacity: 0; transition: opacity var(--bn-t-fast) var(--bn-ease); }
+.bn-hidetoggle[aria-pressed='true'] { color: var(--bn-ink); }
+.bn-hidetoggle[aria-pressed='true'] .bn-hidetoggle-mark { background: var(--bn-accent); border-color: var(--bn-accent); }
+.bn-hidetoggle[aria-pressed='true'] .bn-hidetoggle-mark .bn-icon { opacity: 1; }
+.bn-hidetoggle-count {
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- SortHeader: a table column that marks the one it is sorted by (FLT-19) ------------------ */
+.bn-sortth-cell-end { text-align: right; }
+.bn-sortth {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  min-height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-1);
+  margin: calc(var(--bn-1) * -1);
+  border-radius: var(--bn-r-sm);
+  font: inherit;
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  transition: color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-sortth:hover { color: var(--bn-ink); background: var(--bn-hover); }
+.bn-sortth-end { flex-direction: row-reverse; }
+/* THE ACTIVE COLUMN IS MARKED IN TWO CHANNELS, not only the chevron a squint could miss
+   (FLT-19's own complaint about a chevron on every header): the label goes to full ink weight
+   and the chevron itself only draws once a column is active — an inactive header shows its
+   label alone, so "which column is this" is answered by presence, not by reading `aria-sort`. */
+.bn-sortth-icon { flex: none; opacity: 0; color: var(--bn-accent); transition: opacity var(--bn-t-fast) var(--bn-ease); }
+.bn-sortth[data-active='true'] { color: var(--bn-ink); }
+.bn-sortth[data-active='true'] .bn-sortth-icon { opacity: 1; }
+
+/* ---- The compact trigger and its sheet -------------------------------------------------------- */
+.bn-filterbar-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1-5);
+  height: var(--bn-control-h);
+  padding: 0 var(--bn-3);
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  font: inherit;
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-ink-2);
+  transition: border-color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-filterbar-trigger:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
+.bn-filterbar-trigger[data-active='true'] { border-color: var(--bn-accent); background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
+.bn-filterbar-trigger-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--bn-1-5);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bn-filterbar-sheet-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--bn-3);
+}
+/* Inside the sheet, every control is one column wide (D195: same-role controls share a width),
+   at any window width: the sheet also opens on a desk when the bar sits in a narrow rail. */
+.bn-filterbar-sheet-body .bn-filterchips,
+.bn-filterbar-sheet-body .bn-sort,
+.bn-filterbar-sheet-body .bn-hidetoggle {
+  width: 100%;
+}
+.bn-filterbar-sheet-body .bn-filterchips { flex-direction: column; align-items: stretch; }
+.bn-filterbar-sheet-body .bn-filterchips > .bn-fchip { flex: none; width: 100%; }
+.bn-filterbar-sheet-body .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; min-width: 0; max-width: none; }
+.bn-filterbar-sheet-body .bn-sort { flex-direction: column; align-items: stretch; }
+.bn-filterbar-sheet-body .bn-sort > .bn-pick,
+.bn-filterbar-sheet-body .bn-sort-dir { width: 100%; min-width: 0; max-width: none; justify-content: flex-start; }
+
+/* ---- The match highlight (`kit/highlight.tsx`) ------------------------------------------------ */
+.bn-highlight {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--bn-accent-tint);
+  color: inherit;
+  font-weight: 700;
+}
+:root[data-theme='dark'] .bn-highlight { background: var(--bn-accent-tint-2); }
+
+/* ---- A narrow bar: the row hides, the compact trigger and its sheet take over ----------------- */
+@container bn-filterbar (max-width: 479px) {
+  .bn-filterbar-row { display: none; }
+  .bn-filterbar-compact { display: block; }
+  .bn-filterbar-lead { flex-basis: 100%; min-width: 0; max-width: none; }
+}

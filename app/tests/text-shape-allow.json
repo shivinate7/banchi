@@ -1,0 +1,12 @@
+{
+  "_about": "THE SHRINKING PENDING LIST for `text-shape.spec.ts` (D-text-shape-checks, supersedes D194). KEY SHAPE: route -> assertion -> finding key -> the lane that owes the fix. The finding key is the finding's own text, exactly as the spec prints it: a repeated sentence (lower-cased, punctuation dropped), a repeated fact ('4 copies'), a long sentence's first 80 characters, a caption's first 80 characters. An entry excuses that ONE finding: a new finding on the same route is still red. The spec also fails on a listed entry that matches nothing this run (stale — delete it). A lane that fixes its screen deletes its own entries in the same commit. Assertions: `repeated-sentence`, `repeated-fact`, `long-sentence` (over 25 words), `caption-heading` (60%+ of its heading's words). The fixture is deterministic (`routeSweep.ts`: every seed registered once, each screen read only once loaded), so each entry below matched at BOTH 1440 and 390, every run, 2026-09-24.",
+  "#/": {
+    "repeated-fact": { "4 copies": "home" }
+  },
+  "#/revenue": {
+    "long-sentence": { "0 lines were marked refunded or canceled during fulfilment and left out — your o": "sales" }
+  },
+  "#/product?sku=9191486": {
+    "long-sentence": { "Reported precision decays over time for a fixed sale — the same sale sits in a f": "product" }
+  }
+}
