@@ -12,6 +12,7 @@ import type {
   QueueRead,
   QueueSnapshot,
   RetireReason,
+  ServerStatus,
   StandDownReason,
 } from './types'
 import type { Failure } from './server'
@@ -21,6 +22,7 @@ import {
   answerReviewGroup,
   describeFailure,
   getQueues,
+  getStatus,
   isDeparted,
   neighborWords,
   placeParts,
@@ -33,10 +35,11 @@ import {
   undoRetire,
   undoStandDown,
 } from './server'
-import { Button, EmptyState, Icon, IconButton, Kbd, Notice, Page, Pill, ReloadButton } from './kit'
+import { Button, EmptyState, Icon, IconButton, Kbd, Notice, Page, Pill, ReloadButton, Sheet } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
+import { RunsContent, boxInHash, runInHash, stateInHash } from './Runs'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
@@ -719,6 +722,34 @@ export function ReviewQueue() {
   const [queueOpen, setQueueOpen] = useState(false)
   /** The store-wide re-check sheet. Closed on arrival: opening it takes a reading. */
   const [recheckOpen, setRecheckOpen] = useState(false)
+
+  /* RUNS, FOLDED IN (D-runs-folds-into-review). Open on arrival when the hash still carries
+   * the intent a redirected `#/runs` link left behind — `?run=`, `?state=captured`,
+   * `?box=`, or the bare `?runs=1` a link with none of those adds (`Runs.tsx:RunsRedirect`).
+   * `RunsContent` itself reads the same three functions off the SAME hash to decide which
+   * run opens or whether the composer does; this state is only whether the SHEET is up. */
+  const [runsOpen, setRunsOpen] = useState(() => {
+    const query = window.location.hash.split('?')[1] ?? ''
+    return stateInHash() || runInHash() !== null || boxInHash() !== null || new URLSearchParams(query).get('runs') === '1'
+  })
+
+  /* THE STRIP: "Identify N cards", drawn only when the pipeline has cards waiting
+   * (`status.states.captured`, the same figure Home's own standing sentence reads). A
+   * light-weight read, not the composer's own preflight — opening the sheet runs that, with
+   * the real estimate, the way it always has. */
+  const [status, setStatus] = useState<ServerStatus | null>(null)
+  useEffect(() => {
+    let live = true
+    void getStatus()
+      .then((answer) => {
+        if (live) setStatus(answer)
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [reloads])
+  const captured = status?.states.captured ?? 0
 
   useEffect(() => {
     let live = true
@@ -1415,6 +1446,8 @@ export function ReviewQueue() {
               OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
               because a second listener would fire the read twice. */}
           <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
+          {/* D-runs-folds-into-review: every Runs capability, one press away. */}
+          <IconButton icon="play" label="Past runs" onClick={() => setRunsOpen(true)} className="review-runs-open" />
           {everyone.length === 0 ? null : (
             <IconButton
               icon="list"
@@ -1432,6 +1465,17 @@ export function ReviewQueue() {
         </>
       }
     >
+      {/* THE STRIP (D-runs-folds-into-review): drawn only when the pipeline has cards
+          waiting. Opens the same sheet, on the composer's own default "needed" start — the
+          real cost estimate is the composer's preflight, not a second one guessed here. */}
+      {captured === 0 ? null : (
+        <button type="button" className="review-identify-strip" onClick={() => setRunsOpen(true)}>
+          <Icon name="play" size={16} />
+          {`Identify ${captured} ${captured === 1 ? 'card' : 'cards'}`}
+          <Icon name="arrowRight" size={14} className="review-identify-strip-arrow" />
+        </button>
+      )}
+
       {!lens ? null : (
         <div className="review-filters" role="group" aria-label="Work one reason at a time">
           {shape.map(([reason, n]) => (
@@ -1467,7 +1511,7 @@ export function ReviewQueue() {
 
       {rows !== null && worklist.length === 0 ? (
         everyone.length === 0 ? (
-          <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} />
+          <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} onOpenRuns={() => setRunsOpen(true)} />
         ) : (
           <section className="review-lone bn-panel">
             <EmptyState
@@ -1532,6 +1576,13 @@ export function ReviewQueue() {
       </div>
 
       <QueueRefresh open={recheckOpen} onClose={closeRecheck} onWrote={reload} />
+
+      {/* D-runs-folds-into-review: every Runs capability, reachable from here. Mounted only
+          while open (`Sheet`'s own `useLeave`), so its GET /boxes and GET /pipeline/runs
+          reads happen only when the operator is looking at it. */}
+      <Sheet open={runsOpen} onClose={() => setRunsOpen(false)} title="Runs" icon="play" className="review-runs-sheet">
+        <RunsContent />
+      </Sheet>
     </Page>
   )
 }
@@ -1643,7 +1694,21 @@ function SessionList({ receipts, onUndo, disabled, limit }: { receipts: readonly
 
 // ------------------------------------------------------------------------- the empty state
 
-function Done({ tally, startedAt, receipts, onUndo, disabled }: { tally: Tally; startedAt: number; receipts: readonly Receipt[]; onUndo: (receipt: Receipt) => void; disabled: boolean }) {
+function Done({
+  tally,
+  startedAt,
+  receipts,
+  onUndo,
+  disabled,
+  onOpenRuns,
+}: {
+  tally: Tally
+  startedAt: number
+  receipts: readonly Receipt[]
+  onUndo: (receipt: Receipt) => void
+  disabled: boolean
+  onOpenRuns: () => void
+}) {
   const done = tally.answered + tally.closed
   const body =
     done === 0 ? (
@@ -1667,7 +1732,7 @@ function Done({ tally, startedAt, receipts, onUndo, disabled }: { tally: Tally; 
             <Button variant="primary" size="lg" icon="tag" iconRight="arrowRight" onClick={() => (window.location.hash = '#/pricing')}>
               Price the answers
             </Button>
-            <Button size="lg" icon="play" onClick={() => (window.location.hash = '#/runs')}>
+            <Button size="lg" icon="play" onClick={onOpenRuns}>
               Run another box
             </Button>
           </>

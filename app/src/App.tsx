@@ -13,7 +13,7 @@ import { SearchField } from './SearchField'
 
 import { Home } from './Home'
 import { CaptureScreen } from './CaptureScreen'
-import { Runs } from './Runs'
+import { RunsRedirect } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
 import { Graveyard } from './Graveyard'
@@ -102,13 +102,6 @@ const CAPTURE_KEYS: ScreenKeys = {
   ],
 }
 
-const RUNS_KEYS: ScreenKeys = {
-  rows: [
-    { keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a preview is on screen' },
-    { keys: ['Esc'], does: 'Close the open sheet', when: 'not while it is sending' },
-  ],
-}
-
 const REVIEW_KEYS: ScreenKeys = {
   rows: [
     { keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], seq: true, does: 'Answer with that candidate, or that row of the lookup' },
@@ -123,6 +116,9 @@ const REVIEW_KEYS: ScreenKeys = {
     { keys: ['Esc'], does: 'Leave the lookup, the close panel or the queue drawer' },
     { keys: ['R'], does: 'Reload the queue' },
     { keys: ['U'], does: 'Undo the newest answer' },
+    /* From the runs fold (D-runs-folds-into-review): the same two rows RUNS_KEYS carried
+       on its own route, now read while the "Past runs" sheet is open instead. */
+    { keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a run preview is on screen' },
   ],
 }
 
@@ -199,8 +195,7 @@ const FULFILLMENT_KEYS: ScreenKeys = {
 export const ROUTES: readonly Route[] = [
   { path: '/', label: 'Home', icon: 'home', view: Home, persona: 'owner', group: 'home', hotkey: 'h', nav: true, keywords: 'start overview' },
   { path: '/capture', label: 'Capture', icon: 'camera', view: CaptureScreen, persona: 'owner', group: 'work', hotkey: 'c', nav: true, tab: true, keywords: 'camera photograph scan feeder new box section', keys: CAPTURE_KEYS },
-  { path: '/runs', label: 'Runs', icon: 'play', view: Runs, persona: 'owner', group: 'work', hotkey: 'r', nav: true, keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing', keys: RUNS_KEYS },
-  { path: '/review', label: 'Review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked', keys: REVIEW_KEYS },
+  { path: '/review', label: 'Review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked pipeline identify join emit import csv reconcile the store live quantities my pricing run runs', keys: REVIEW_KEYS },
   { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist markdown stale reprice live listings mark down', keys: PRICING_KEYS },
   { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger', keys: ORDERS_KEYS },
   { path: '/shipping', label: 'Shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
@@ -244,6 +239,15 @@ export const ROUTES: readonly Route[] = [
    * with no nav entry earns no chord, per this file's own rule for `#/fulfillment` and
    * `#/gallery`. */
   { path: '/product', label: 'Product history', icon: 'chart', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
+  /* RUNS FOLDED INTO REVIEW (D-runs-folds-into-review, the owner's ruling, RULINGS.md Q6).
+   * `#/runs` stays a registered route, off-nav (the same D227 shape `#/product` above
+   * already has), because a route is not a feature — a bookmark, a link Pricing or
+   * ValueBands still carries, or a person's own habit all still say `#/runs`. Its view is a
+   * redirect: it rewrites the hash to `#/review`, carrying `?run=`/`?state=`/`?box=` over
+   * unread by itself, and Review reads them (`RunsContent`'s own hash functions, unchanged)
+   * to know which of "Past runs" the operator meant to open. No hotkey, on `#/product`'s own
+   * rule for a route with no nav entry. */
+  { path: '/runs', label: 'Runs', icon: 'play', view: RunsRedirect, persona: 'owner', group: 'aside', keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing' },
 ]
 
 const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] = [

@@ -575,9 +575,18 @@ export function RunsComposer({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
       if (event.metaKey || event.ctrlKey || event.altKey) return
-      const target = event.target as HTMLElement | null
+      /* `document.activeElement`, not `event.target` alone (D-runs-folds-into-review): once
+         this composer's own Modal mounts one layer deeper — inside Review's own Sheet — a
+         `window`-level keydown's `target` can read as the document body rather than the
+         focused field on some builds, and the guard must not trust it alone. */
+      const target = (event.target ?? document.activeElement) as HTMLElement | null
+      const active = document.activeElement as HTMLElement | null
       const tag = target?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return
+      const activeTag = active?.tagName
+      if (
+        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable ||
+        activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT' || active?.isContentEditable
+      ) return
       event.preventDefault()
       stepPreview(event.key === 'ArrowRight' ? 1 : -1)
     }

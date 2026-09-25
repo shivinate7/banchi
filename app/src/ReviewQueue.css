@@ -91,6 +91,37 @@
 .review-progress-parked { color: var(--bn-ink-3); }
 .review-progress-parked::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
 
+/* D-runs-folds-into-review: the strip, drawn only when cards wait. One line, a warm tint so
+   it reads as a call to act rather than a fact — the same tint family the group-offer chip
+   in the header uses. */
+.review-identify-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-warn-tint);
+  color: var(--bn-warn);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.review-identify-strip:hover { background: color-mix(in srgb, var(--bn-warn-tint) 70%, var(--bn-warn) 30%); }
+.review-identify-strip-arrow { opacity: 0.7; }
+
+/* D-runs-folds-into-review: `.bn-sheet`'s own default width (kit.css, 420px) is sized for a
+   form or a detail — RunPanel's own master/detail split and the composer's 940px dialog were
+   both built for the full page `#/runs` used to be. A 420px drawer squeezed that content into
+   a column it was never measured against, moving rows and panel heights the D118 floors this
+   content already carries (`run-panel.spec.ts`) assert have not moved. Wide, not narrow. */
+.review-runs-sheet { width: min(1100px, 96vw); }
+@media (max-width: 767px) {
+  .review-runs-sheet { width: 100vw; }
+}
+
 /* The reason lens. Wide screens wrap it; below 1024px it is one scrolling strip with a
    fade for the affordance. The mask's colour is alpha-only and names no colour. */
 .review-filters {

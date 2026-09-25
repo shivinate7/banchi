@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { describeFailure, getBoxes, type Failure } from './server'
 import type { BoxRecord, RunSelection } from './types'
-import { Button, PageHeader, Pill } from './kit'
+import { Button, IconButton, Pill, ReloadButton } from './kit'
 import { LiveReconcile } from './LiveReconcile'
 import { RunPanel } from './RunPanel'
 import {
@@ -49,25 +49,27 @@ function inOrder(records: readonly BoxRecord[]): BoxRecord[] {
   return [...records].sort((a, b) => a.box - b.box)
 }
 
-/** `#/runs?run=<name>` opens that run — Home links here that way. */
-function runInHash(): string | null {
+/** `?run=<name>` opens that run — Home links here that way, and so does the Review strip
+ *  since the fold (`docs/decisions/D-runs-folds-into-review.md`). Read off the whole hash's
+ *  query, so it works the same whether the path in front of it is `#/runs` or `#/review`. */
+export function runInHash(): string | null {
   const query = window.location.hash.split('?')[1] ?? ''
   return new URLSearchParams(query).get('run')
 }
 
-/** `#/runs?state=captured` — `standing.ts`'s own link — asks for the composer to be open on
+/** `?state=captured` — `standing.ts`'s own link — asks for the composer to be open on
  *  arrival. The value is not otherwise read: `captured` is the only state this composer can
  *  act on and it is already the default draft's start. */
-function stateInHash(): boolean {
+export function stateInHash(): boolean {
   const query = window.location.hash.split('?')[1] ?? ''
   return new URLSearchParams(query).get('state') === 'captured'
 }
 
-/** `#/runs?box=<n>` — Capture's "Identify <box> on Runs" (UX-030). THE PRESS ARRIVES WITH THE
+/** `?box=<n>` — Capture's "Identify <box> on Runs" (UX-030). THE PRESS ARRIVES WITH THE
  *  BOX IT NAMED AS ITS SCOPE, which is D39's own outcome: the selection is handed to the screen.
  *  Before this the button landed on the store-wide start, so the next press spent money across
  *  every box while the label named one. A value that is not a whole number is no box at all. */
-function boxInHash(): number | null {
+export function boxInHash(): number | null {
   const query = window.location.hash.split('?')[1] ?? ''
   const raw = new URLSearchParams(query).get('box')
   if (raw === null || !/^[0-9]+$/.test(raw)) return null
@@ -75,7 +77,16 @@ function boxInHash(): number | null {
   return box >= 1 ? box : null
 }
 
-export function Runs() {
+/** THE RUNS CONTENT, folded into Review's own sheet (`docs/decisions/D-runs-folds-into-review.md`,
+ *  the owner's ruling, RULINGS.md Q6). Unchanged from the screen this used to be on its own
+ *  route — same state, same hooks, same hash reads — only the outer frame moved: `#/runs`'s
+ *  own `<main className="runs bn-page">` and `<PageHeader>` are gone, because this now
+ *  mounts inside `ReviewQueue.tsx`'s own Sheet, whose header already draws a title.
+ *  `#/runs` itself is a redirect now (`RunsRedirect`, below) that keeps every deep link
+ *  (`?run=`, `?state=captured`, `?box=`) working unread by this file — it is the SAME hash
+ *  query reads, `runInHash`/`stateInHash`/`boxInHash` above, that already worked from either
+ *  path. */
+export function RunsContent() {
   const [boxes, setBoxes] = useState<readonly BoxRecord[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [reloads, setReloads] = useState(0)
@@ -216,41 +227,27 @@ export function Runs() {
   const closeSync = useCallback(() => setSyncOpen(false), [])
 
   return (
-    <main className="runs bn-page">
-      <PageHeader
-        icon="play"
-        title="Runs"
-        lede="Only Identify costs money."
-
-        actions={
-          <>
-            {scopeLine === '' ? null : (
-              <Pill tone="accent" icon="box" className="runs-scope">
-                {scopeLine}
-              </Pill>
-            )}
-            <Button
-              variant="ghost"
-              icon="refresh"
-              iconOnly
-              onClick={() => setReloads((n) => n + 1)}
-              disabled={boxes === null && failure === null}
-            >
-              Reload boxes and runs
-            </Button>
-            <Button icon="upload" onClick={() => setSyncOpen(true)}>
-              Check what is live
-            </Button>
-            {/* ONE VERB, WHATEVER THE SELECTION IS OVER. It read `Identify a box` / `Identify N
-                boxes`, which named the unit of work in the label of the button that opens the
-                dialog where the unit is chosen — so the operator had to have decided before
-                pressing. `Identify cards` is true of every selection this now composes. */}
-            <Button variant="primary" icon="zap" onClick={() => setComposerOpen(true)}>
-              Identify cards
-            </Button>
-          </>
-        }
-      />
+    <div className="runs">
+      {/* The sheet's own header carries the title and icon now (Review's Sheet, "Runs").
+         This row is the one worded primary — "Identify cards" — plus icons for the rest
+         (the header rule, owner 2026-09-24). */}
+      <p className="runs-lede">Only Identify costs money.</p>
+      <div className="runs-actions">
+        {scopeLine === '' ? null : (
+          <Pill tone="accent" icon="box" className="runs-scope">
+            {scopeLine}
+          </Pill>
+        )}
+        <ReloadButton onReload={() => setReloads((n) => n + 1)} busy={boxes === null && failure === null} label="Reload boxes and runs" hotkey={false} />
+        <IconButton icon="refresh" label="Check what is live" onClick={() => setSyncOpen(true)} />
+        {/* ONE VERB, WHATEVER THE SELECTION IS OVER. It read `Identify a box` / `Identify N
+            boxes`, which named the unit of work in the label of the button that opens the
+            dialog where the unit is chosen — so the operator had to have decided before
+            pressing. `Identify cards` is true of every selection this now composes. */}
+        <Button variant="primary" icon="zap" onClick={() => setComposerOpen(true)}>
+          Identify cards
+        </Button>
+      </div>
 
       {/* WHAT A LIVE SEND IS HOLDING, AND THE WAY OUT OF A STUCK CLAIM
           (D174). Above the run list rather than inside it, because it is a
@@ -286,6 +283,31 @@ export function Runs() {
       />
 
       <LiveReconcile open={syncOpen} onClose={closeSync} />
-    </main>
+    </div>
   )
+}
+
+/** `#/runs` ITSELF IS A REDIRECT NOW (item 2, `D-runs-folds-into-review.md`). Every deep link
+ *  a person or another screen already holds — `#/runs`, `#/runs?run=<name>`,
+ *  `#/runs?state=captured`, `#/runs?box=<n>` — keeps landing on the same content, because the
+ *  whole query string carries over unread by this component: `RunsContent`'s own hash reads
+ *  (`runInHash`, `stateInHash`, `boxInHash`) run again once the location is `#/review?...`
+ *  and see the same values. `replace: true` so the redirect leaves no `#/runs` entry for the
+ *  Back button to land back on. */
+export function RunsRedirect() {
+  useEffect(() => {
+    const query = window.location.hash.split('?')[1] ?? ''
+    /* A BARE `#/runs`, WITH NO QUERY, STILL HAS TO OPEN THE SHEET — every internal link this
+       app already carries to `#/runs` (Pricing's "Start a run", ValueBands' own links, and
+       others) means "take me to the runs screen," which now means "open the sheet." `runs=1`
+       is that intent, read by `ReviewQueue.tsx` beside `run=`/`state=`/`box=`, which already
+       carry their own intent and do not need it added.
+
+       `window.location.hash =`, never `history.replaceState`: the shell's own router
+       (`App.tsx:useHashPath`) reads the path on `hashchange` alone, and `replaceState` does
+       not fire it — the route would keep drawing this redirect with a URL already changed
+       under it. Every other navigation in this app sets `.hash` the same way. */
+    window.location.hash = `#/review${query === '' ? '?runs=1' : `?${query}`}`
+  }, [])
+  return null
 }
