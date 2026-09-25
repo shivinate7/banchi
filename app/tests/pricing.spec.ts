@@ -3765,19 +3765,25 @@ test('with nothing ready, the send press is disabled', async ({ page }) => {
 /* THE CARD NUMBER IS WHAT THE OWNER READS (the delta review, R4), AND THE FACTS BESIDE IT KEEP
  * THEIR WIDTH (R6-1). At 390 a long box name cut the number off. The R4 fix shrank the copy
  * count and the cap note to nothing instead, leaving a loose separator. The line wraps now, and
- * each of the three is at least as wide as its own text, at 390 and at 820. */
+ * each of the three is at least as wide as its own text, at 390 and at 820.
+ *
+ * AND THE LINE STAYS IN ITS COLUMN (R7 F1, F2, F3). The reviewer's long box name spilled 153px
+ * into the price column at 390, "and 1 more" drew over the card number, and a wrap left a "·"
+ * at a line end. Every part of the place line stays inside the card column, "and 1 more"
+ * overlaps nothing beside it, and no part draws a separator glyph that a wrap can strand. */
+const LONG_BOX = 'Riftbound Origins singles and Surging Sparks overflow'
 for (const width of [390, 820]) {
   test(`at ${width} the place line keeps the card number, the copies and the cap note whole`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await open(page, {
       worklist: {
-        runs: [{ run: RUN, box: 7, box_name: 'Riftbound Origins singles', skus: 1 }],
+        runs: [{ run: RUN, box: 7, box_name: LONG_BOX, skus: 1 }],
         skus: [
           {
             ...sku({
               positions: [
-                { box: 7, index: 107, label: 'Box Riftbound Origins singles, Section 12, Card 107' },
-                { box: 7, index: 108, label: 'Box Riftbound Origins singles, Section 12, Card 108' },
+                { box: 7, index: 107, label: `Box ${LONG_BOX}, Section 12, Card 107` },
+                { box: 7, index: 108, label: `Box ${LONG_BOX}, Section 12, Card 108` },
               ],
               copies: 2,
               add_to_quantity: 1,
@@ -3805,6 +3811,33 @@ for (const width of [390, 820]) {
       expect(part.width, `${part.selector} keeps its text width`).toBeGreaterThanOrEqual(part.text - 0.5)
       expect(part.right, `${part.selector} ends inside its line`).toBeLessThanOrEqual(part.line + 0.5)
     }
+
+    const layout = await where.evaluate((el) => {
+      const column = (el.closest('.pricing-id') as HTMLElement).getBoundingClientRect()
+      const outside = [...el.querySelectorAll('*')]
+        .map((node) => ({ node, box: node.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.right > column.right + 0.5 || box.left < column.left - 0.5))
+        .map(({ node, box }) => `${node.className || node.tagName} ${Math.round(box.left)}..${Math.round(box.right)}`)
+      const more = el.querySelector('.pricing-more') as HTMLElement
+      const mine = more.getBoundingClientRect()
+      const overlaps = [...el.querySelectorAll('*')]
+        .filter((node) => node !== more && !node.contains(more) && !more.contains(node))
+        .filter((node) => {
+          const box = node.getBoundingClientRect()
+          const x = Math.min(box.right, mine.right) - Math.max(box.left, mine.left)
+          const y = Math.min(box.bottom, mine.bottom) - Math.max(box.top, mine.top)
+          return box.width > 0 && x > 0.5 && y > 0.5
+        })
+        .map((node) => String(node.className || node.tagName))
+      const glyphs = [...el.querySelectorAll('*')]
+        .flatMap((node) => ['::before', '::after'].map((pseudo) => getComputedStyle(node, pseudo).content))
+        .filter((content) => content.includes('·'))
+      return { outside, overlaps, glyphs, more: more.textContent }
+    })
+    expect(layout.more).toBe('and 1 more')
+    expect(layout.outside, 'every part of the place line stays inside the card column').toEqual([])
+    expect(layout.overlaps, '"and 1 more" overlaps nothing beside it').toEqual([])
+    expect(layout.glyphs, 'no part draws a separator a wrap can strand').toEqual([])
   })
 }
 

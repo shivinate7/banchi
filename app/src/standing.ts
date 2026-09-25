@@ -282,7 +282,9 @@ export function standing(input: StandingInput): Standing | null {
   const book = input.book ?? (bookFailed ? NO_ANSWERS : null)
   const counts = pricing === null || book === null ? null : sendCounts(pricing, book)
   const readyCopies = counts === null ? null : counts.ready
-  const needsPrice = counts === null ? null : counts.needsPrice
+  /* WITH THE ANSWERS UNKNOWN, NO CARD IS COUNTED AS NEEDING A PRICE (R7 F7): a priced card
+     cannot be told from an unpriced one, so the figure would be a guess. */
+  const needsPrice = counts === null ? null : bookFailed ? 0 : counts.needsPrice
   /* A run whose own reason stops the whole send (the cut-off price unset), apart from a card
      left out for want of a price and from a run that only waits on the send. */
   const blocked =
@@ -293,7 +295,7 @@ export function standing(input: StandingInput): Standing | null {
   const live = runs === null ? null : runs.filter((r) => r.live)
 
   const behind: Behind[] = []
-  if (bookFailed) behind.push({ figure: null, label: 'Your typed prices could not be read, so a held card may count as ready' })
+  if (bookFailed) behind.push({ figure: null, label: 'Your typed prices could not be read, so these counts may be off' })
   const add = (figure: number | null, label: string, when: boolean) => {
     if (when) behind.push({ figure: figure === null ? null : figure.toLocaleString(), label })
   }

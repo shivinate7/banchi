@@ -837,7 +837,9 @@ def _empty_reasons(empty: dict, trimmed: list, step: str) -> "PipelineRefusal":
     cut = int(empty.get("under_cut_off") or 0)
     live = int(empty.get("live") or 0)
     code = "needs_price" if price else "under_cut_off"
-    gone = [str(trim.get("name") or trim.get("sku")) for trim in trimmed if int(trim.get("goes") or 0) == 0]
+    # THE NAMES ARE EMIT'S OWN, off its `send_empty` line (R7 F4), so the count and the names are
+    # one list and a card is never both "needs a price" and "already live".
+    gone = [str(name) for name in empty.get("live_names") or []]
     # THE REASONS, FOR THE SEND CARD'S TITLE (R6-2). The server's sentence is the detail behind
     # "What the server said" (D269), so the title is worded on the screen from these figures.
     data = {"empty": {"needs_price": price, "under_cut_off": cut, "live": live, "live_names": gone}}

@@ -809,20 +809,38 @@ def _say_no_price(left, say) -> None:
         say(f"  and {len(left) - 8} more")
 
 
-def _say_empty(left_out, cut_back, needs_price, live, say) -> int:
+def _adds_nothing(sku, match, trimmed_out) -> str:
+    """Why a matched card adds no copy, in one place for every site that names it (R7 F5). A
+    card the live guard trimmed to nothing is named as that, never as "asked for none": the
+    guard lowers the asked figure, and the owner asked for nothing of the kind."""
+    if sku in trimmed_out:
+        return merge.LIVE_ALREADY
+    return match.nothing_to_add or "nothing to add"
+
+
+def _say_empty(left_out, cut_back, needs_price, live_names, say) -> int:
     """AN EMPTY SEND, SAID THE SAME WAY ON BOTH PATHS (R6-5, R6-9). Every card it left out is
     named with its own reason, then one JSON line the send route reads, then one headline
-    worded from the reasons the send actually had. A card with no price was named above."""
+    worded from the reasons the send actually had. A card with no price was named above.
+
+    EACH CARD HAS EXACTLY ONE REASON (R7 F4). A card with no price that TCGplayer also holds
+    counts as needing a price and is not in `live_names`, which is this line's own list: the
+    route reads the names from here, never from the guard's trims."""
     import json
 
     for sku, why in left_out:
         say(f"  {sku} — {why}")
     _say_under_cut(cut_back, say)
     say(json.dumps(
-        {"send_empty": {"needs_price": needs_price, "under_cut_off": len(cut_back), "live": live}},
+        {"send_empty": {
+            "needs_price": needs_price,
+            "under_cut_off": len(cut_back),
+            "live": len(live_names),
+            "live_names": list(live_names),
+        }},
         sort_keys=True,
     ))
-    say(merge.empty_send_sentence(needs_price, len(cut_back), live))
+    say(merge.empty_send_sentence(needs_price, len(cut_back), len(live_names)))
     return 1
 
 
@@ -1289,12 +1307,11 @@ def run(args, say) -> int:
                 if sku not in priced_skus:
                     left_out.append((sku, merge.HELD_BACK))
                 elif match.add_to_quantity == 0:
-                    left_out.append(
-                        (sku, merge.LIVE_ALREADY if sku in trimmed_out
-                         else match.nothing_to_add or "nothing to add")
-                    )
-            live = sum(1 for _, why in left_out if why == merge.LIVE_ALREADY)
-            return _say_empty(left_out, cut_back, len(no_price), live, say)
+                    left_out.append((sku, _adds_nothing(sku, match, trimmed_out)))
+            live_names = [
+                resolved.matches[sku].name for sku, why in left_out if why == merge.LIVE_ALREADY
+            ]
+            return _say_empty(left_out, cut_back, len(no_price), live_names, say)
         # A PRICED CARD `--listed-only` LEAVES UNDER THE CUT-OFF IS NAMED (R6-6).
         _say_under_cut(cut_back, say)
 
@@ -1366,7 +1383,7 @@ def run(args, say) -> int:
         # seen land, so the old line told the operator TCGplayer already holds nothing.
         say(f"{'no room':<16} {len(at_cap)} SKU(s) matched and added nothing")
         for match in at_cap[:8]:
-            say(f"{'':<16} {match.sku} — {match.nothing_to_add}")
+            say(f"{'':<16} {match.sku} — {_adds_nothing(match.sku, match, trimmed_out)}")
     _say_quantities(_quantities_for(args), resolved.matches, say)
     _say_prices(changes, left, moves, args, say)
 
@@ -1904,8 +1921,12 @@ def run_merged(args, say) -> int:
             if why != merge.NO_PRICE_YET
         ]
         if cut_back or needs_price:
-            live = sum(1 for _, why in left_out if why == merge.LIVE_ALREADY)
-            return _say_empty(left_out, cut_back, needs_price, live, say)
+            live_names = [
+                next(iter(resolved_matches_named(resolved_by_run, sku)), sku)
+                for sku, why in left_out
+                if why == merge.LIVE_ALREADY
+            ]
+            return _say_empty(left_out, cut_back, needs_price, live_names, say)
         say("nothing to write — every matched SKU is held back, unlisted, or has no room")
         for sku, why in left_out:
             say(f"  {sku} — {why}")
@@ -1928,7 +1949,7 @@ def run_merged(args, say) -> int:
         say("")
         say(f"{'no room':<16} {len(silent)} SKU(s) matched and added nothing")
         for row in silent[:8]:
-            say(f"{'':<16} {row.sku} — {row.match.nothing_to_add}")
+            say(f"{'':<16} {row.sku} — {_adds_nothing(row.sku, row.match, trimmed_out)}")
         if len(silent) > 8:
             say(f"{'':<16} ...and {len(silent) - 8} more")
 

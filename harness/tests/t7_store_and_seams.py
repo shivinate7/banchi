@@ -36159,7 +36159,8 @@ def check_emit_unpriced_left_out(checks: Checks) -> None:
         checks.ok(
             code == 1
             # R6-9: both reasons in one headline, never only the flag's.
-            and merge.empty_send_sentence(needs_price=1, under_cut_off=1) in said
+            and "nothing to send: 1 card needs a price first, and 1 priced card under the "
+            "cut-off is held back by --listed-only" in said
             and merge.ONLY_UNPRICED not in said
             and f"{DUNSPARCE_SKU} — under the cut-off" in said
             and ARTICUNO_SKU in said,
@@ -36215,11 +36216,18 @@ def check_emit_unpriced_left_out(checks: Checks) -> None:
 # from its reasons. R6-4 (a failed read of typed prices) and R6-8 (the chip) are Home columns.
 
 _M_D, _M_R, _M_A = DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU, ARTICUNO_SKU
-_M_CARDS = [(3, 1, "Dunsparce", "120", "normal"), (3, 2, "Dunsparce", "120", "reverse_holo"), (3, 3, "Articuno", "161", None)]
+_M_CARDS = [
+    (3, 1, "Dunsparce", "120", "normal"),
+    (3, 2, "Dunsparce", "120", "reverse_holo"),
+    (3, 3, "Articuno", "161", None),
+    # A SECOND DRAWER HOLDING THE SAME TWO SKUS, for the shared-SKU rows (R7 F5).
+    (4, 1, "Dunsparce", "120", "normal"),
+    (4, 2, "Articuno", "161", None),
+]
 _M_MIX = {_M_A: ""}
 _M_SUB = {_M_A: "", _M_D: "0.10"}
 _M_SUBALL = {_M_A: "0.05", _M_D: "0.10", _M_R: "0.12"}
-_M_LAYOUT = {"one": [[0, 1, 2]], "two": [[0, 2], [1]]}
+_M_LAYOUT = {"one": [[0, 1, 2]], "two": [[0, 2], [1]], "share": [[0, 1, 2], [3, 4]]}
 _M_NONE_NAMED = {"prices": [], "moves": []}
 
 # The reasons, as emit prints them, one per card.
@@ -36227,6 +36235,16 @@ _M_LIVE = "TCGplayer already holds every copy on hand"
 _M_HELD = "held back or answered unlisted"
 _M_ASKED0 = "this send asked for none of this card"
 _M_SENT = "every copy in this run is already listed or has left the box"
+
+# THE HEADLINES, WRITTEN OUT (R7 F6). The matrix never asks `merge` for the sentence it is
+# checking, so a defect in the sentence builder goes red here.
+_M_ONLY_PRICE = "nothing to send: every card left needs a price first"
+_M_ONLY_CUT = "nothing to send: every priced card left is under the cut-off, and --listed-only holds it back"
+_M_PRICE_LIVE2 = "nothing to send: 1 card needs a price first, and TCGplayer already holds every copy of 2 cards"
+_M_PRICE_CUT_LIVE = (
+    "nothing to send: 1 card needs a price first, and 1 priced card under the cut-off is held "
+    "back by --listed-only, and TCGplayer already holds every copy of 1 card"
+)
 
 
 def _m_row(sku: str, price: str) -> Tuple[str, int, str]:
@@ -36267,29 +36285,39 @@ def _m_cases() -> Dict[str, dict]:
                   "failed": "send 2 copies to TCGplayer"})
         # R6-5: the one-run empty send names every card it left out, as the merged one does.
         add("mix/heldall", market=_M_MIX, pre=(_M_D, _M_R), exit=1, files={},
-            says=[f"{_M_D} — {_M_HELD}", f"{_M_R} — {_M_HELD}", _M_A, merge.ONLY_UNPRICED],
+            says=[f"{_M_D} — {_M_HELD}", f"{_M_R} — {_M_HELD}", _M_A, _M_ONLY_PRICE],
             route=("needs_price", ["Every card on this list needs a price first"]),
             home={"line": "price 1 card", "behind": None, "tile": "run to price",
                   "failed": "send 2 copies to TCGplayer"})
         add("mix/qty0all", market=_M_MIX, flags=["--quantity", f"{_M_D}=0", "--quantity", f"{_M_R}=0"], exit=1, files={},
-            says=[f"{_M_D} — {_M_ASKED0}", f"{_M_R} — {_M_ASKED0}", _M_A, merge.ONLY_UNPRICED],
+            says=[f"{_M_D} — {_M_ASKED0}", f"{_M_R} — {_M_ASKED0}", _M_A, _M_ONLY_PRICE],
             route=("needs_price", ["Every card on this list needs a price first"]), home=send2)
         add("mix/sent", market=_M_MIX, twice=True, exit=1, files={last: both},
-            says=[f"{_M_D} — {_M_SENT}", f"{_M_R} — {_M_SENT}", _M_A, merge.ONLY_UNPRICED],
+            says=[f"{_M_D} — {_M_SENT}", f"{_M_R} — {_M_SENT}", _M_A, _M_ONLY_PRICE],
             route=("needs_price", ["Every card on this list needs a price first"]),
             home={"line": "price 1 card", "behind": None, "tile": "run to price",
-                  "chip": "Sent, 1 needs a price"})
+                  "chip": "Sent, 1 needs a price", "failed": None})
         # R6-3 and R6-9: a live-guard trim is named as a trim, and the headline and the title
         # state every reason the send was empty, never only the price.
         for flag, named in (("guard", None), ("guard+named", _M_NONE_NAMED)):
             add(f"mix/{flag}", market=_M_MIX, live={_M_D: 1, _M_R: 1, _M_A: 0}, named=named, exit=1, files={},
                 says=[f"{_M_D} — {_M_LIVE}", f"{_M_R} — {_M_LIVE}", _M_A,
-                      merge.empty_send_sentence(needs_price=1, live=2)],
-                never=[_M_ASKED0, merge.ONLY_UNPRICED],
+                      _M_PRICE_LIVE2],
+                never=[_M_ASKED0, _M_ONLY_PRICE],
                 route=("needs_price", ["1 card needs a price first", "TCGplayer already had every copy of 2 cards"]),
                 home=send2)
         add("mix/guard+part", market=_M_MIX, live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED, exit=0,
-            files={last: [r_mix]}, says=[f"{_M_D} Dunsparce — TCGplayer holds 1 of 1 on hand"], home=send2)
+            files={last: [r_mix]}, says=[f"{_M_D} Dunsparce — TCGplayer holds 1 of 1 on hand", f"{_M_D} — {_M_LIVE}"],
+            never=[_M_ASKED0], home=send2)
+        # R7 F4: a card with no price that TCGplayer also holds has one reason, the price. It is
+        # counted once, and never named among the live cards.
+        add("mix/unpricedlive", market=_M_MIX, live={_M_D: 1, _M_R: 1, _M_A: 1}, named=_M_NONE_NAMED, exit=1,
+            files={}, says=[f"{_M_D} — {_M_LIVE}", f"{_M_R} — {_M_LIVE}", _M_A, _M_PRICE_LIVE2,
+                            '"live_names": ["Dunsparce", "Dunsparce"]'],
+            never=[_M_ASKED0, f"{_M_A} — {_M_LIVE}"],
+            route=("needs_price", ["Nothing was sent. 1 card needs a price first. TCGplayer already had every "
+                                   "copy of 2 cards (Dunsparce, Dunsparce)."]),
+            home=send2)
 
         # A STORE WITH A PRICED CARD UNDER THE CUT-OFF.
         sub_both = [d_sub, r_mix]
@@ -36310,15 +36338,15 @@ def _m_cases() -> Dict[str, dict]:
         add("sub/listed+guard", market=_M_SUB, flags=["--listed-only"], live={_M_D: 0, _M_R: 1, _M_A: 0},
             named=_M_NONE_NAMED, exit=1, files={},
             says=[f"{_M_D} — under the cut-off (Dunsparce)", f"{_M_R} — {_M_LIVE}", _M_A,
-                  merge.empty_send_sentence(needs_price=1, under_cut_off=1, live=1)],
-            never=[merge.ONLY_UNDER_CUT, _M_ASKED0],
+                  _M_PRICE_CUT_LIVE],
+            never=[_M_ONLY_CUT, _M_ASKED0],
             route=("needs_price", ["1 card needs a price first", "1 priced card is under the cut-off",
                                    "TCGplayer already had every copy of 1 card"]),
             home=send2)
 
         # EVERY CARD PRICED AND UNDER THE CUT-OFF.
         add("suball/listed", market=_M_SUBALL, flags=["--listed-only"], exit=1, files={},
-            says=[f"{sku} — under the cut-off" for sku in (_M_D, _M_R, _M_A)] + [merge.ONLY_UNDER_CUT],
+            says=[f"{sku} — under the cut-off" for sku in (_M_D, _M_R, _M_A)] + [_M_ONLY_CUT],
             route=("under_cut_off", ["Every priced card on this list is under the cut-off"]),
             home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 copies ready to send",
                   "chip": "Never sent"})
@@ -36328,6 +36356,16 @@ def _m_cases() -> Dict[str, dict]:
             says=["nothing new to send"] if layout == "one" else [f"{sku} — {_M_SENT}" for sku in (_M_D, _M_R, _M_A)],
             route=("nothing_to_send", ["already at TCGplayer"]) if layout == "two" else None,
             home={"line": None, "behind": None, "tile": "nothing to price", "chip": "All sent"})
+    # R7 F5: A SKU SHARED BY TWO DRAWERS UNDER `--cap 1`, WITH THE GUARD. The reverse holo is
+    # trimmed to nothing and the send is not empty: the trim is named as a trim, never as
+    # "asked for none".
+    cases["share/two/cap1-guardall"] = {
+        "layout": "share", "market": _M_MIX, "flags": ["--cap", "1"],
+        "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
+        "files": {"import.csv": [d_mix]},
+        "says": [f"{_M_R} — {_M_LIVE}"], "never": [_M_ASKED0], "route": None,
+        "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
+    }
     return cases
 
 
@@ -36474,14 +36512,18 @@ def check_send_matrix(checks: Checks) -> None:
             checks.ok(want["behind"] in (got["line"] or {}).get("behind", []),
                       f"{name}: Home names {want['behind']!r} behind the line", str(got["line"]))
         checks.ok(want["tile"] in got["tile"], f"{name}: the Pricing tile says {want['tile']!r}", got["tile"])
-        # R6-4: a failed read of typed prices degrades to the worklist's own count, and a
-        # Pricing line names that read. A line from a rank below Pricing still draws.
+        # R6-4 AND R7 F7: a failed read of typed prices degrades to the worklist's own count, a
+        # Pricing line names that read, and no card is counted as needing a price, because
+        # with the answers unknown a priced card cannot be told from an unpriced one. A line
+        # from a rank below Pricing still draws.
         failed = (got["failed"] or {})
         checks.ok(
             "the pricing worklist" not in failed.get("text", "")
+            and not any("needs a price" in b or "need a price" in b for b in failed.get("behind", []))
             and (
-                want["line"] is None
-                or (
+                ("send" not in failed.get("text", "") and "price" not in failed.get("text", ""))
+                if want.get("failed", want["line"]) is None
+                else (
                     want.get("failed", want["line"]) in failed.get("text", "")
                     and any("typed prices" in b for b in failed.get("behind", []))
                 )

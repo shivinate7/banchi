@@ -183,7 +183,20 @@
    note each keep their whole width: the line wraps to a second line rather than shrink one of
    them to nothing. A place wider than the whole line wraps between its own parts. */
 .pricing-where { flex-wrap: wrap; overflow: visible; }
-.pricing-where > .pricing-place { max-width: 100%; white-space: normal; }
+.pricing-where > .pricing-place { max-width: 100%; min-width: 0; white-space: normal; }
+.pricing-where .bn-location { max-width: 100%; }
+/* A BOX NAME LONGER THAN THE COLUMN WRAPS INSIDE ITS OWN PART (R7 F1), never past the column
+   into the price. `overflow: visible` above is safe only because nothing here is wider than
+   the column. */
+.pricing-where .position-run-path { white-space: normal; overflow-wrap: anywhere; }
+/* "AND 1 MORE" IS ITS OWN ITEM (R7 F2): it keeps its whole width and wraps below the place
+   when the place fills the line, so it never draws over the card number. */
+.pricing-where > .pricing-place { flex-wrap: wrap; }
+.pricing-where .pricing-more { flex: none; white-space: nowrap; }
+/* NO GLYPH ON A LINE THAT WRAPS (R7 F3). A "·" drawn after an item stays at the line end when
+   the next item wraps, so the place line is separated by its gap alone. */
+.pricing-where { column-gap: var(--bn-3); }
+.pricing-meta.pricing-where > *::after { content: none; }
 /* THE OPERATOR'S NOTE IS THE ONE PART THAT GIVES WAY (D28): it starts from no width and takes
    what the line has left, up to its own cap, so a note never adds a line where the facts fit. */
 .pricing-where > .pricing-why { flex: 1 1 0; min-width: 6ch; }
