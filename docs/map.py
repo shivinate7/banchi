@@ -6457,7 +6457,7 @@ COMPONENTS = [
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
                             "D192", "D213", "D218", "D252", "D-a-box-is-shown-by-its-name",
-                            "D-view-state-in-url"]},
+                            "D-a-press-reorders-and-nothing-else-moves", "D-view-state-in-url"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6607,7 +6607,8 @@ COMPONENTS = [
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
-                                "D172", "D181", "D192", "D213", "D218"],
+                                "D172", "D181", "D192", "D196", "D213", "D218",
+                                "D-a-card-is-counted-in-its-section"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -6848,8 +6849,12 @@ COMPONENTS = [
                                          "React Refresh reloaded the whole page on every edit to that "
                                          "file. `stateLabel` is the one map every state pill on the "
                                          "owner's screens draws through, so a raw wire value is never "
-                                         "printed as a label.",
-                                 "governed_by": ["D5", "D26", "D31", "D83", "D92", "D115"]},
+                                         "printed as a label. Also `RETIRE_REASONS` and "
+                                         "`reasonWord`: the four ways a card leaves without a sale, "
+                                         "one label and one sentence each, the one table the "
+                                         "Retire dialog and Graveyard read (UX-241). The stored "
+                                         "code never reaches the screen (D196).",
+                                 "governed_by": ["D5", "D26", "D31", "D83", "D92", "D115", "D196"]},
             "src/frozenRank.ts": {"does": "THE ORDER IS TAKEN ONCE AND HELD UNTIL SOMEBODY ASKS "
                                           "FOR A NEW ONE — the copies that have left since the "
                                           "ranking on screen was computed, as a set of store keys, "
@@ -9190,8 +9195,8 @@ COMPONENTS = [
                                 "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58",
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
-                                "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D213",
-                                "D218", "D-a-box-is-shown-by-its-name"],
+                                "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D196",
+                                "D213", "D218", "D-a-box-is-shown-by-its-name"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

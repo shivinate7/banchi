@@ -2157,7 +2157,9 @@ test('a sale the store cannot put back offers no undo, in the row or on the rece
   sell('2/1')
 
   await expect(receiptToast(page)).toContainText('Marked sold')
-  await expect(receiptToast(page)).toContainText('sold_origin_unknown')
+  /* THE STORE'S REASON STAYS OFF THE SCREEN (UX-207, D196): the receipt says it in words. */
+  await expect(receiptToast(page)).toContainText('No undo for this one.')
+  await expect(receiptToast(page)).not.toContainText('origin_unknown')
   await expect(page.getByRole('button', { name: /Undo/ })).toHaveCount(0)
   // `stateLabel` — the human word, which is the register every state pill on this screen uses.
   await expect(row).toContainText('Sold')
@@ -4253,6 +4255,21 @@ const NEIGHBORLY: Cards = {
   }),
 }
 
+test('UX-190 — a sale says which card took its number, and the rows hold still', async ({ page }) => {
+  const cards: Cards = Object.fromEntries(Object.entries(NEIGHBORLY).map(([key, held]) => [key, { ...held }]))
+  await open(page, BOXES, { cards, search: (query) => searchAnswer(query, cards) }, () => PRICING, SALE, { hideSold: true })
+  await expandAll(page)
+  await page.locator('.browse-row').nth(2).click()
+  const rects = async () =>
+    page.locator('.browse-row').evaluateAll((rows) => rows.map((row) => Math.round(row.getBoundingClientRect().top)))
+  const before = await rects()
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
+  /* Card 5's neighbour in front, Conscription, takes its number. The receipt says so, since the
+     list does not move to show it (FLT-22). */
+  await expect(receiptToast(page)).toContainText('Conscription is now card')
+  expect(await rects()).toEqual(before)
+})
+
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({
   page,
 }) => {
@@ -5753,16 +5770,15 @@ test('D132 — the product hides sold by default, and the chip says how many it 
   await expect(page.locator('.card-locations-row.is-gone')).toHaveCount(0)
 })
 
-test('D132 — unticked, departed rows sink under the live ones in their own section, and the choice is remembered', async ({ page }) => {
+test('UX-189 — unticked, a departed row stays where it sat, so the list and the arrow keys follow one order, and the choice is remembered', async ({ page }) => {
   await open(page, BOXES, STORE, () => PRICING, SALE, { hideSold: null })
   await expandAll(page)
   await page.locator('.browse-hidesold').click()
   await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
 
-  /* Section 1 held #1 #2 #3 · B2 #4 · B2 #5 in arrival order already; the fixture's departed
-     records are LAST there by construction, so a sunk order is indistinguishable from the
-     arrival order. The store below puts the sold card FIRST in the section, which is the shape
-     a real box takes after its first card sells — and the one a stable partition has to move. */
+  /* The store below puts the sold card FIRST in its section, which is the shape a real box
+     takes after its first card sells. D132 sank it to the section's foot while the arrow keys
+     still stepped onto it in box order (UX-189). It stays first now (FLT-22, nothing jumps). */
   const store: Store = {
     cards: {
       '2/1': card({ index: 1, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 3 }),
@@ -5786,12 +5802,17 @@ test('D132 — unticked, departed rows sink under the live ones in their own sec
   await expandAll(again)
   /* REMEMBERED: the press above wrote `show`, and this open wrote nothing over it. */
   await expect(again.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
-  await expect(again.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', '#1', '#1'])
+  await expect(again.locator('.browse-row .browse-row-name')).toHaveText(['Eiscue', 'Thievul', 'Thievul', 'Inteleon'])
+  /* THE KEYS WALK THE SAME ORDER: from the sold Eiscue, → lands on the Thievul drawn under it. */
+  await again.locator('.browse-row').nth(0).click()
+  await again.keyboard.press('ArrowRight')
+  await expect(again.locator('.browse-row[aria-current="true"]')).toHaveCount(1)
+  await expect(again.locator('.browse-row').nth(1)).toHaveAttribute('aria-current', 'true')
   /* The section header the sold card led is still ONE section, folded open, not two. */
   await expect(again.locator('.browse-sectfold')).toHaveCount(2)
 })
 
-test('D132 — the row the walk stands on survives its own sale while sold is hidden, and goes when the walk moves', async ({ page }) => {
+test('UX-181 — the row the walk stands on survives its own sale while sold is hidden, stays when the walk moves, and folds on the next box load', async ({ page }) => {
   /* A store whose sale LANDS on the re-read — the record comes back DEPARTED, place and all,
      which is the shape the fold rule has to look past. `laddersAfterSale` flips only `state`. */
   const live = (index: number, at: number) =>
@@ -5827,8 +5848,19 @@ test('D132 — the row the walk stands on survives its own sale while sold is hi
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3', '#2'])
   await expect(page.locator('.browse-row[aria-current="true"] .browse-row-position')).toHaveText('#3')
 
-  /* Step off it and it is folded away with the rest. */
+  /* NOTHING JUMPS (UX-181, FLT-22). Step off it and it STAYS, in its place, marked sold: the
+     next press lands on the row it aimed at, and no row moves under the pointer. */
+  const rects = async () =>
+    page.locator('.browse-row').evaluateAll((rows) => rows.map((row) => Math.round(row.getBoundingClientRect().top)))
+  const before = await rects()
   await page.locator('.browse-row').nth(2).click()
+  await expect(page.locator('.browse-row').nth(2)).toHaveAttribute('aria-current', 'true')
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3', '#2'])
+  expect(await rects()).toEqual(before)
+
+  /* The fold happens on the next box load, when no row is under the hand. */
+  await page.reload()
+  await expandAll(page)
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2'])
 })
 
@@ -5872,8 +5904,13 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3'])
   await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('1')
 
-  /* Step off the sold row and the fold takes it too — both departed rows hidden, both counted. */
+  /* Step off the sold row and it stays drawn (UX-181, nothing jumps), so the fold still hides
+     one. On the next box load it goes, and both departed rows are hidden and counted. */
   await page.locator('.browse-row').nth(0).click()
+  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3'])
+  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('1')
+  await page.reload()
+  await expandAll(page)
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1'])
   await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('2')
 })

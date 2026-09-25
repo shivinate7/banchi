@@ -55,10 +55,19 @@ screen keeps that, and the kit-data lane's `BoxLabel` list draws it once for all
 
 ### What is built
 
-NOT BUILT. In the round-two plan, the orders lane builds ruling 1 and the inventory lane builds
-ruling 2. The kit-data lane builds ruling 3. `app/tests/inventory.spec.ts` already asserts D118
-around a sale. The inventory lane extends it to the next click after a sale, red on today's
-tree first.
+Ruling 2 is BUILT on `#/inventory` (the inventory lane, 2026-09-24). `BoxBrowse.tsx` takes the
+rows on hand when a box is opened (`enteredLive`). A row that leaves while the box is open stays
+drawn, marked sold, until the next box load, a reload or a new visit. With Hide sold off, a
+departed row stays where it sat. It no longer sinks to the foot of its section. So the list and
+the arrow keys follow one order (UX-189). A sale's receipt names the card that took its number
+(UX-190). `app/tests/inventory.spec.ts` asserts the next click after a sale moves no row, and
+that the row folds on the reload. Each case was red on the tree before it.
+
+The inventory lane also built the rail case under "What is still open" (UX-215). The rail reads
+the device's recency map when the screen opens. A press writes the map. The rail takes the new
+order on the next visit.
+
+Rulings 1 and 3 belong to the orders and kit-data lanes.
 
 The round-two plan also names lane entries for rulings 1 and 2 (slugs `orders-sort-press` and
 `nothing-jumps`). One copy of each argument must go before either merges.

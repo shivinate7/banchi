@@ -13,6 +13,8 @@
  * component imports them back.
  */
 
+import type { RetireReason } from './types'
+
 const MINUTE = 60_000
 const HOUR = 3_600_000
 const DAY = 86_400_000
@@ -51,6 +53,10 @@ export const SOLD = 'sold'
 
 /** The other door out (D26). On the Fulfiller's skin both read as the same fact. */
 export const RETIRED = 'retired'
+
+/** The ordinary state, and so the one a screen does not draw as a pill (UX-221): nearly every
+ *  copy is identified, so the word tells the hand nothing. */
+export const IDENTIFIED = 'identified'
 
 /** The tone of a state pill. Shared with `BoxBrowse` so the two draw one register. */
 export function stateTone(state: string): 'default' | 'ok' | 'warn' | 'accent' {
@@ -128,4 +134,23 @@ export function forSale(live: number | null | undefined, soldHere: number | null
  *  coercion, and the clause and the figure can never disagree. */
 export function soldSince(soldHere: number | null | undefined): number {
   return figure(soldHere)
+}
+
+/* THE FOUR WAYS A CARD LEAVES WITHOUT A SALE (D26), ONE LABEL AND ONE SENTENCE EACH (UX-241).
+ *
+ * Inventory's Retire dialog and Review's Close dialog named the same four stored codes two ways:
+ * "Pulled out" beside "Pulled", "Not in a condition to sell" beside "Not sellable at the
+ * condition listed". This is the one table both read. The stored code never reaches the screen
+ * (D196): a screen draws `label` and `said`. */
+export const RETIRE_REASONS: readonly { readonly reason: RetireReason; readonly label: string; readonly said: string }[] = [
+  { reason: 'pulled', label: 'Pulled out', said: 'Taken out of the box by hand.' },
+  { reason: 'damaged', label: 'Damaged', said: 'Not in a condition to sell.' },
+  { reason: 'lost', label: 'Lost', said: 'Gone, and not sold.' },
+  { reason: 'given_away', label: 'Given away', said: 'Left as a gift or a trade.' },
+]
+
+/** The retire reason as a person reads it: `given_away` is `Given away`. Takes `string` because
+ *  `DepartedCard.retire_reason` is stored untyped. An unknown value falls back to itself. */
+export function reasonWord(reason: string): string {
+  return RETIRE_REASONS.find((candidate) => candidate.reason === reason)?.label ?? reason
 }

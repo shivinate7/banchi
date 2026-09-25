@@ -11,7 +11,7 @@ import { collectorNumber } from './cardNumber'
 import { Button, Chip, Icon, Pill } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
-import { forSale, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
+import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
 
 /* One card, every copy of it, and where each copy physically is.
  *
@@ -539,21 +539,12 @@ function OwnerRows({
               )}
 
               <span className="card-locations-state">
-                {current ? (
-                  <Pill icon="eye" outline className="card-locations-viewing">
-                    {/* NARROW, THE WORD IS SPOKEN AND NOT DRAWN — the kit's own `.bn-sr`
-                        technique, `Button`'s `iconOnly` reuses the same way:
-                        the current row is the only one that carries this second pill beside
-                        its own state, and sharing the narrow row with `.card-locations-action`'s
-                        137px reservation (D118) left `Identified` too little room — measured,
-                        it wrapped onto its own line under 335px. Growing the row instead
-                        (a line of its own for `state`) fixed the wrap and broke a stricter
-                        floor: `toBeInViewport({ ratio: 1 })` on the pipeline-console case,
-                        because the taller row no longer fit. The eye icon alone still says
-                        "you are looking at this one"; the word rides `.bn-sr` so a screen
-                        reader still gets it, and the row's height never moves. */}
-                    <span className="card-locations-viewing-text">Viewing</span>
-                  </Pill>
+                {/* THE COPY THE WALK STANDS ON, MARKED ONLY WHERE THERE IS A CHOICE (UX-221): the
+                    row's own rail and ground say it on screen, and with one copy there is no
+                    other row to tell it from. Never an eye, which read as "identified = seen".
+                    The word is spoken, not drawn. */}
+                {current && group.copies.length > 1 ? (
+                  <span className="card-locations-viewing bn-sr">Viewing</span>
                 ) : null}
                 {claim === null ? null : (
                   <a
@@ -571,7 +562,9 @@ function OwnerRows({
                     <span className="card-locations-claim-id">{claim.order}</span>
                   </a>
                 )}
-                <Pill tone={stateTone(copy.state)}>{stateLabel(copy.state)}</Pill>
+                {/* A STATE ONLY WHEN IT IS THE EXCEPTION (UX-221): nearly every copy is identified,
+                    so the word told the hand nothing, twice per card. */}
+                {copy.state === IDENTIFIED ? null : <Pill tone={stateTone(copy.state)}>{stateLabel(copy.state)}</Pill>}
               </span>
 
               {/* The action, or what stands where one would. A sold copy's own state pill

@@ -29,6 +29,7 @@ import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
+import { RETIRE_REASONS, reasonWord } from './cardState'
 import { useSearch } from './useSearch'
 import { isEditableTarget } from './keys'
 import { Button, Icon, Notice, Pill } from './kit'
@@ -64,18 +65,14 @@ const UNDO_KEY_LABEL = 'U'
 /* The refusal codes this screen branches on. `already_sold` on a sale is not this device's
  * sale: a receipt with NO undo. `not_sold` on a reversal is success. The retirement pair
  * applies the same two rulings. Codes, never messages. */
+/* WHAT A RECEIPT SAYS WHEN THE STORE CANNOT PUT A COPY BACK (UX-207, D196): the stored reason
+ * (`sold_origin_unknown`, `retired_origin_unknown`) stays off the screen. */
+const NO_UNDO = 'No undo for this one.'
+
 const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
-
-/** The four reasons a card leaves without a sale, in the store's own vocabulary (D26). */
-const REASONS: readonly { reason: RetireReason; label: string; said: string }[] = [
-  { reason: 'pulled', label: 'Pulled out', said: 'Taken out of the box for something else.' },
-  { reason: 'damaged', label: 'Damaged', said: 'Not in a condition to sell.' },
-  { reason: 'lost', label: 'Lost', said: 'The slot is empty and nobody knows where it went.' },
-  { reason: 'given_away', label: 'Given away', said: 'Left the store as a gift or a trade.' },
-]
 
 const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
 
@@ -104,13 +101,26 @@ function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
 }
 
-/** The retire reason as the panel labels it — `given_away` is `Given away` in a sentence.
- *  Exported so Graveyard reads the one label table rather than the raw enum (UX review,
- *  2026-09-20, "Retired · pulled"). Takes `string` rather than `RetireReason` because
- *  `DepartedCard.retire_reason` is stored untyped (`types.ts:825`); an unrecognized value
- *  still falls back to itself, same as the panel's own call. */
-export function reasonWord(reason: string): string {
-  return REASONS.find((candidate) => candidate.reason === reason)?.label ?? reason
+/* Graveyard reads the one label table through here (UX review, 2026-09-20). */
+export { reasonWord }
+
+/** WHO TAKES THE NUMBER (UX-190). A card counts the cards in its section (D58, amended by
+ *  D-a-card-is-counted-in-its-section), so when one leaves, the card in front of it (toward the
+ *  owner, `neighbors.next`) takes its number, and every card after it steps down one. The rows
+ *  hold still (FLT-22), so the receipt says it: `Tinkatink is now card 3.` Nothing when the card
+ *  was the last of its section, when the store sent no neighbours, or for a pooled card. */
+function renumberNote(place: SearchCopy['place']): string | null {
+  const next = place.neighbors?.next ?? null
+  if (next === null || place.card === null || place.slot === null) return null
+  if (place.section_end !== null && place.slot >= place.section_end) return null
+  const who = next.name ?? 'The unread card in front'
+  return `${who} is now card ${place.card}.`
+}
+
+/** The receipt's second line, in sentences: who took the number, then any note. */
+function receiptBody(place: string, ...lines: readonly (string | null)[]): string {
+  const said = lines.filter((line): line is string => line !== null && line !== '')
+  return said.length === 0 ? place : `${place}. ${said.join(' ')}`
 }
 
 /** An open order that names one copy, by the copy's store key (`3/103`). */
@@ -380,7 +390,7 @@ export function Inventory() {
       kind: full.canUndo ? 'receipt' : 'status',
       icon: full.kind === 'sale' ? 'check' : 'archive',
       title: full.said,
-      body: full.note === null ? full.place : `${full.place} — ${full.note}`,
+      body: receiptBody(full.place, full.note),
       ttlMs: UNDO_WINDOW_MS,
       action: full.canUndo ? { label: 'Undo', onPress: () => void doUndoRef.current(full) } : undefined,
     })
@@ -408,10 +418,7 @@ export function Inventory() {
           kind: 'sale',
           said: 'Marked sold',
           canUndo: reversible,
-          note: reversible
-            ? null
-            : 'The store cannot say what state this copy was in before the sale, so it ' +
-              'cannot be put back from here (sold_origin_unknown).',
+          note: [renumberNote(copy.place), reversible ? null : NO_UNDO].filter(Boolean).join(' ') || null,
         })
         setReloads((n) => n + 1)
       } catch (err) {
@@ -461,13 +468,9 @@ export function Inventory() {
         remember({
           ...seat,
           kind: 'retirement',
-          said: 'Retired',
+          said: `Retired: ${reasonWord(reason)}`,
           canUndo: reversible,
-          note: reversible
-            ? reasonWord(reason)
-            : `${reasonWord(reason)} — the store cannot say what state this copy was in ` +
-              'before the retirement, so it cannot be put back from here ' +
-              '(retired_origin_unknown).',
+          note: [renumberNote(copy.place), reversible ? null : NO_UNDO].filter(Boolean).join(' ') || null,
         })
         setReloads((n) => n + 1)
       } catch (err) {
@@ -780,18 +783,8 @@ function CopiesPanel({
             figures", which is context for the thing above it and reads wrong before it. */}
         <div className="inventory-lone">
           <Notice tone="info" title="No name and no SKU yet.">
-            {lone === null ? (
-              <>
-                The store sent no position for this record, so there is no copy to draw.{' '}
-                <span className="inventory-machine bn-facts">
-                  <span>place: absent</span> <span>key {row.key}</span>
-                </span>
-              </>
-            ) : (
-              <>This is one copy at one position, and the panel above is that copy alone.</>
-            )}{' '}
-            A SKU appears only after <code className="inventory-inline">emit</code> writes
-            it.
+            {lone === null ? 'The store sent no place for this card.' : 'This is the only copy.'} It gets a SKU
+            when a run matches it.
           </Notice>
         </div>
       </section>
@@ -1034,13 +1027,10 @@ function RetirePanel({
           </div>
         </div>
 
-        <p className="bn-muted">
-          The card leaves the inventory without a sale. Its record and photo stay, and the
-          position is never reused.
-        </p>
+        <p className="bn-muted">Leaves the box without a sale. The record stays.</p>
 
         <div className="inventory-retire-reasons" role="group" aria-label="Reason">
-          {REASONS.map(({ reason, label, said }) => (
+          {RETIRE_REASONS.map(({ reason, label, said }) => (
             <button
               key={reason}
               className="inventory-retire-reason"
@@ -1052,7 +1042,6 @@ function RetirePanel({
                 <span className="inventory-retire-label">{label}</span>
                 <span className="inventory-retire-said">{said}</span>
               </span>
-              <span className="inventory-machine">{reason}</span>
             </button>
           ))}
         </div>

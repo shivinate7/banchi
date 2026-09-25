@@ -49,7 +49,7 @@ import {
   type MarketRead,
   type Row,
 } from './CardHero'
-import { stateLabel, stateTone } from './cardState'
+import { IDENTIFIED, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
 import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Kbd, Notice, PageHeader, Pill, countFacets, filterRows } from './kit'
@@ -342,7 +342,7 @@ function sectionKeyOf(row: Row, title: string): string {
  * is — and survives the sold rows being folded away or shown again (D132), which changes which
  * row comes first in a section whose first card has left. A section with no number (pooled,
  * unlabelled) keys on its title, which is all it has. */
-function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = null): Section[] {
+function sectionsOf(rows: Row[]): Section[] {
   const out: Section[] = []
   for (const row of rows) {
     const open = out[out.length - 1]
@@ -351,18 +351,11 @@ function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = nul
     if (open !== undefined && open.title === title) open.rows.push(row)
     else out.push({ key: sectionKeyOf(row, title), title, parts, first: row, rows: [row] })
   }
-  /* DEPARTED ROWS SINK UNDER THE LIVE ONES, WITHIN THEIR OWN SECTION (D132). A stable partition
-     so the walk's order survives in each half, and per section rather than over the whole list,
-     because a sold card still belongs to the part of the box it sat in.
-     THE ROW THE WALK STANDS ON DOES NOT SINK (D118): the press that sold it may change what is
-     on the screen and never where the rest of it is, and a row dropping to the foot of its
-     section on the press moves every row beneath it. It sinks when the walk steps off it. */
-  if (sinkDeparted) {
-    const sinks = (row: Row) => hasDeparted(row.card) && row.key !== keep
-    for (const section of out) {
-      section.rows = [...section.rows.filter((row) => !sinks(row)), ...section.rows.filter(sinks)]
-    }
-  }
+  /* A DEPARTED ROW STAYS WHERE IT SAT (UX-189, the owner's "nothing jumps"). D132 sank departed
+     rows under the live ones in their section while Hide sold was off, so the list drew a sold
+     card at the section's foot while the arrow keys still stepped onto it in box order: the
+     highlight jumped to the foot and back. One order now, the box's own, for the list and the
+     keys alike. The row's own mark says it left. */
   return out
 }
 
@@ -713,6 +706,10 @@ export function BoxBrowse({
    *  It is written in the same batch as `setRows`, so the two can never disagree in a
    *  committed render. */
   const [rowsShelf, setRowsShelf] = useState<number | null>(null)
+  /** The rows on hand when this box was opened (FLT-22, "nothing jumps"). Taken once per box
+   *  load: a write re-reads the same box and keeps it, and a new box, a reload or a new visit
+   *  takes it again. A row that leaves while the box is open stays drawn until then. */
+  const [enteredLive, setEnteredLive] = useState<{ readonly shelf: number; readonly keys: ReadonlySet<string> } | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -997,31 +994,29 @@ export function BoxBrowse({
     return inQuery.filter((row) => shelfOf(row) === shelf)
   }, [inQuery, shelf])
 
-  /* THE WALK, WITH SOLD FOLDED AWAY (D132). The row the walk stands on is kept whatever its
-     state: `selectedRow` is found in this list, a sale must leave its receipt on screen (D119),
-     and a walk-to from the copies list may land on a sold copy (D45). It goes the moment the
-     walk steps off it.
-     AND UNDER A SEARCH, A ROW THAT LEFT SINCE THIS ORDER WAS TAKEN IS KEPT TOO
-     (`frozenRank.ts`). Freezing the arithmetic and letting the fold delete the row puts the
-     jump straight back through the other door: the row goes and everything under it comes up by
-     its height, which is the movement the freeze exists to stop. It goes on the re-rank, with
-     everything else.
-
-     UNDER A SEARCH AND NOWHERE ELSE, which is the narrower half of this and is deliberate. The
-     unfiltered walk is in `(box, index)` order — nothing RANKS it, so nothing about it goes
-     stale, and D132's fold there is the behaviour the owner asked for and did not complain
-     about: "scrolling past them to find the live ones was the whole complaint". What they
-     reported is a RANKED list rearranging, and a ranked list is what a query makes. The row the
-     walk stands on is kept either way, as it always was (D119). */
+  /* THE WALK, WITH SOLD FOLDED AWAY (D132), AT A MOMENT WHEN NO ROW IS UNDER THE HAND.
+     NOTHING JUMPS (FLT-22, the owner's ruling of 2026-09-23,
+     D-a-press-reorders-and-nothing-else-moves): a row that was on hand when this box was opened stays drawn, in its place and
+     marked sold, until the next box load. D132 folded it "the moment the walk steps off it", and
+     that moment is a press: the owner sold #1, pressed #2, and every row under #2 came up 32px
+     at that click, so #2 slid from under the pointer. D118 wins over D132's timing. The fold
+     still happens, on the next box load or reload, when no row is under the pointer.
+     Three rows are kept besides:
+     - the row the walk stands on, whatever its state (D119's receipt, D45's walk-to onto a sold
+       copy),
+     - under a search, a row that left since this order was taken (`frozenRank.ts`, D181), which
+       the same rule now covers for this box but a search may have walked from another box,
+     - a row that left while this box was open (`enteredLive`). */
   const visible = useMemo(() => {
     if (!hideSold) return onShelf
     return onShelf.filter(
       (row) =>
         !hasDeparted(row.card) ||
         row.key === selected ||
+        enteredLive?.keys.has(row.key) === true ||
         (filtered && ranksAsShown(row.key, true, frozen)),
     )
-  }, [onShelf, hideSold, selected, filtered, frozen])
+  }, [onShelf, hideSold, selected, filtered, frozen, enteredLive])
 
   /* THE PILL COUNTS WHAT THE FOLD ACTUALLY HIDES, NEVER EVERY DEPARTED ROW ON THE SHELF.
      `visible`'s own exceptions above keep some departed rows drawn — the row the walk stands
@@ -1033,7 +1028,7 @@ export function BoxBrowse({
      one just-sold row stayed drawn under the selection exception, and only 5 left the shelf. */
   const hiddenBySold = useMemo(() => onShelf.length - visible.length, [onShelf, visible])
 
-  const sections = useMemo(() => sectionsOf(visible, !hideSold, selected), [visible, hideSold, selected])
+  const sections = useMemo(() => sectionsOf(visible), [visible])
 
   /* How many matches each shelf holds under a query, for the box list. Off `results` rather
      than `inQuery` for the same reason `order`/`shelves` are, above (D192, item 2). */
@@ -1109,6 +1104,11 @@ export function BoxBrowse({
         if (!live) return
         const next = rowsOf(inventory.cards)
         setRows(next)
+        setEnteredLive((held) =>
+          held !== null && held.shelf === shelf
+            ? held
+            : { shelf, keys: new Set(next.filter((row) => !hasDeparted(row.card)).map((row) => row.key)) },
+        )
         /* WHICH SHELF `rows` NOW ANSWERS FOR, so the cross-box jump effect below can tell
          * "this box's own rows just landed and truly lack the target" from "the fetch for a
          * NEW shelf has not landed yet, so `rows` is still the OLD box's stale data" —
@@ -2192,9 +2192,13 @@ export function BoxBrowse({
                                 >
                                   {nameOf(row.card) ?? 'Not identified yet'}
                                 </span>
+                                {/* A ROW THAT LEFT THE BOX (UX-222): the headstone, the product's one mark
+                                    for a card that left (`ICON_MEANINGS`), named by its state. It
+                                    was the arrow that means "opens a new tab". */}
                                 {departed ? (
-                                  <span className="browse-row-badge is-out" aria-hidden="true">
-                                    <Icon name="external" size={12} />
+                                  <span className="browse-row-badge is-out" title={stateLabel(row.card.state)}>
+                                    <Icon name="headstone" size={12} />
+                                    <span className="bn-sr">{stateLabel(row.card.state)}</span>
                                   </span>
                                 ) : null}
                                 {queuedKeys.has(row.key) ? (
@@ -2510,9 +2514,10 @@ export function BoxBrowse({
                           {claimList(panelRow.card.rarity_claim).map((rarity) => (
                             <Pill key={`r-${rarity}`}>{titleCase(rarity)}</Pill>
                           ))}
-                          <Pill tone={stateTone(panelRow.card.state)} outline={panelRow.card.state === 'identified'}>
-                            {stateLabel(panelRow.card.state)}
-                          </Pill>
+                          {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221). */}
+                          {panelRow.card.state === IDENTIFIED ? null : (
+                            <Pill tone={stateTone(panelRow.card.state)}>{stateLabel(panelRow.card.state)}</Pill>
+                          )}
                           {open === null ? null : (
                             <a className="bn-pill bn-pill-warn browse-queuechip" href="#/review">
                               <Icon name="clock" size={12} />
