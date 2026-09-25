@@ -60,7 +60,7 @@
    here would read as the panel's primary action, above the sales that are the actual work.
 
    NO HEIGHT OF ITS OWN. `.bn-chip` reads `--bn-control-h-sm`, which the token file raises to
-   40px under 767px and on any coarse pointer, so the thumb floor is met by the kit rather than
+   40px under 640px and on any coarse pointer, so the thumb floor is met by the kit rather than
    by a number typed here. `align-self: center` because the row's other cell is a heading on a
    baseline and a chip has no baseline worth sharing. */
 /* D218: `.bn-chip` is already `inline-flex; gap: 6px`, so the gap alone spaces the two spans
@@ -109,7 +109,7 @@
 }
 /* Live is vermilion — the one register in the product that means "out there right now". The
    FIGURE carries it; the label stays in the ordinary voice so the strip is not two-thirds red. */
-.card-locations-owner .card-locations-live .bn-stat-value { color: var(--bn-live); }
+.card-locations-owner .card-locations-live[data-read='false'] .bn-stat-value { color: var(--bn-ink-3); }
 .card-locations-owner .card-locations-live .bn-dot { flex: none; }
 
 .card-locations-owner .card-locations-meta {
@@ -361,12 +361,13 @@
   justify-content: flex-end;
   gap: var(--bn-2);
   min-height: var(--bn-control-h-sm);
-  /* AND ITS WIDTH, WHICH IS THE HALF THAT MOVED THE MOST. The pair this cell holds — `Mark sold`
-     beside an icon-only `Retire` — measures 137px at this density; a sold copy draws nothing here
-     at all, so the cell collapsed to 0 and the state pills beside it slid 137px right on the
-     press. The reservation is that measurement, taken on the real screen at 1440 with fonts
-     settled, and it is a `min-width` so a longer label in another language still fits. */
-  min-width: 137px;
+  /* AND ITS WIDTH, WHICH IS THE HALF THAT MOVED THE MOST. The three presses this cell holds —
+     `Mark sold` beside an icon-only `Retire` and `Move` (UX-244) — measure 169px at this
+     density; a sold copy draws nothing here at all, so the cell collapsed to 0 and the state
+     pills beside it slid right on the press. The reservation is that measurement, taken on the
+     real screen at 1440 with fonts settled, and it is a `min-width` so a longer label in another
+     language still fits. It was 137px for the pair before Move. */
+  min-width: 169px;
 }
 
 /* --------------------------------------------------- the receipt, inside the slot (D119)
@@ -467,7 +468,7 @@
 /* A thumb presses the walk-to, AND the claim pill — it is a link to the order screen, not a
    badge, so it takes the same floor as the `Mark sold` button beside it (`Button size="sm"`
    is `--bn-control-h-sm`, which the phone tokens raise to 40px). 28px is a mouse size. */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
   .card-locations-owner .card-locations-goto { min-height: var(--bn-control-h-lg); padding-top: 4px; padding-bottom: 4px; }
   .card-locations-owner .card-locations-claim {
     height: var(--bn-control-h-sm);

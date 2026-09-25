@@ -6753,8 +6753,9 @@ COMPONENTS = [
             "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
-                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218", "D252", "D259"]},
+                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D159", "D172",
+                            "D181", "D192", "D213", "D218", "D221", "D252", "D259", "D263",
+                            "D275", "D285"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6769,7 +6770,9 @@ COMPONENTS = [
                                   "only stylesheet that ever filled it.",
                                   "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33",
                                                   "D38", "D39", "D40", "D41", "D90", "D117", "D118",
-                                                  "D119", "D132", "D213"]},
+                                                  "D119", "D132", "D213",
+                                                  "D259",
+                                                  "D-inventory-walk-first"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -6903,8 +6906,9 @@ COMPONENTS = [
                 # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
-                                "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
-                                "D172", "D181", "D192", "D213", "D218"],
+                                "D58", "D68", "D71", "D83", "D90", "D93", "D118", "D119", "D125",
+                                "D132", "D172", "D181", "D192", "D196", "D213", "D218",
+                                "D260", "D275"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -6994,7 +6998,7 @@ COMPONENTS = [
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
-                                "D132", "D134", "D218"],
+                                "D132", "D134", "D196", "D218", "D259"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -7046,7 +7050,8 @@ COMPONENTS = [
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
-                                "D83", "D93", "D125", "D172", "D192", "D193", "D212", "D218"],
+                                "D83", "D93", "D94", "D125", "D172", "D192", "D193", "D212", "D218",
+                                "D259"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -7145,8 +7150,12 @@ COMPONENTS = [
                                          "React Refresh reloaded the whole page on every edit to that "
                                          "file. `stateLabel` is the one map every state pill on the "
                                          "owner's screens draws through, so a raw wire value is never "
-                                         "printed as a label.",
-                                 "governed_by": ["D5", "D26", "D31", "D83", "D92", "D115"]},
+                                         "printed as a label. Also `RETIRE_REASONS` and "
+                                         "`reasonWord`: the four ways a card leaves without a sale, "
+                                         "one label and one sentence each, the one table the "
+                                         "Retire dialog and Graveyard read (UX-241). The stored "
+                                         "code never reaches the screen (D196).",
+                                 "governed_by": ["D5", "D26", "D31", "D83", "D92", "D115", "D196"]},
             "src/frozenRank.ts": {"does": "THE ORDER IS TAKEN ONCE AND HELD UNTIL SOMEBODY ASKS "
                                           "FOR A NEW ONE — the copies that have left since the "
                                           "ranking on screen was computed, as a set of store keys, "
@@ -7223,7 +7232,7 @@ COMPONENTS = [
                                                       "D26", "D28", "D30", "D31", "D38", "D41",
                                                       "D45", "D58", "D67", "D68", "D71", "D92",
                                                       "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D218", "D259"]},
+                                                      "D181", "D196", "D218", "D259"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -9504,8 +9513,8 @@ COMPONENTS = [
                                 "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58",
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
-                                "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D213",
-                                "D218", "D259"],
+                                "D136", "D142", "D155", "D159", "D172", "D181", "D192", "D194",
+                                "D196", "D213", "D218", "D259"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

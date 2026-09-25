@@ -2,13 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
-import { placePartsOf, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { placePartsOf, sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'
 import type {
   BoxRecord,
+  FacetCell,
   InventoryCard,
-  InventoryFacetFilter,
-  InventoryFacets,
   Listing,
   QueueEntryWire,
   QueueSnapshot,
@@ -26,6 +25,7 @@ import {
   getQueues,
   getInventoryBox,
   getPricing,
+  getValueAggregates,
   photoUrl,
   removeCardInPlace,
   reshootPhoto,
@@ -50,11 +50,13 @@ import {
   type MarketRead,
   type Row,
 } from './CardHero'
-import { stateLabel, stateTone } from './cardState'
+import { IDENTIFIED, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
-import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
+import { UNNAMED_BOX } from './kit/data'
+import type { FilterFacet, FilterValue } from './kit/data'
+import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
@@ -245,21 +247,57 @@ function shelvesOf(
 
 // -------------------------------------------------------------------- D213's game/set/rarity filter
 
-/* Blank and null both mean "no claim" for a facet — the same fold `_card_facets` and
- * `_card_matches_filters` apply on the server, so a card's own value and the dropdown's
- * chosen value are compared the same way on both sides of the wire. */
-function facetNorm(value: string | null | undefined): string | null {
-  return value ? value : null
+const NO_CELLS: readonly FacetCell[] = []
+
+const FACET_KEYS = ['game', 'set', 'rarity'] as const
+type FacetKey = (typeof FACET_KEYS)[number]
+
+/* THE UNCLASSIFIED BUCKET, AS A PICK: the URL's blank value (`?set=`), the same spelling the
+ * wire uses for "no claim". Blank and null both mean no claim, the fold `_card_facets` and
+ * `_card_matches_filters` apply on the server, so a card and a cell compare the same way. */
+const UNCLASSIFIED = ''
+
+const FACET_WORDS: Readonly<Record<FacetKey, { readonly label: string; readonly none: string }>> = {
+  game: { label: 'Game', none: 'No game recorded' },
+  set: { label: 'Set', none: 'No set on file' },
+  rarity: { label: 'Rarity', none: 'No rarity on file' },
 }
 
-/* Does this card pass every ACTIVE facet in `filter`? A key ABSENT from `filter` is not
- * being filtered on — `'game' in filter` rather than `filter.game !== undefined`, because
- * `filter.game === null` is a real filter (the unclassified bucket) and must not read as
- * unset. Mirrors `server/capture_server.py:_card_matches_filters` field for field. */
-function passesFacetFilter(card: InventoryCard, filter: InventoryFacetFilter): boolean {
-  if ('game' in filter && facetNorm(card.game) !== facetNorm(filter.game)) return false
-  if ('set' in filter && facetNorm(card.set_name) !== facetNorm(filter.set)) return false
-  if ('rarity' in filter && facetNorm(card.rarity) !== facetNorm(filter.rarity)) return false
+function cellValue(cell: FacetCell, key: string): string {
+  const raw = key === 'game' ? cell.game : key === 'set' ? cell.set : cell.rarity
+  return raw ? raw : UNCLASSIFIED
+}
+
+function cardFacetValue(card: InventoryCard, key: FacetKey): string {
+  const raw = key === 'game' ? card.game : key === 'set' ? card.set_name : card.rarity
+  return raw ? raw : UNCLASSIFIED
+}
+
+/* The three facets, each offering every value the store holds: one flat list per facet, never
+ * scoped to a game first. Real values alphabetically, the unclassified bucket last. */
+function facetsOf(cells: readonly FacetCell[]): FilterFacet[] {
+  return FACET_KEYS.map((key) => {
+    const values = new Set<string>()
+    for (const cell of cells) values.add(cellValue(cell, key))
+    const sorted = [...values].sort((a, b) => (a === UNCLASSIFIED ? 1 : b === UNCLASSIFIED ? -1 : a.localeCompare(b)))
+    return {
+      key,
+      label: FACET_WORDS[key].label,
+      options: sorted.map((value) => ({
+        value,
+        label: value === UNCLASSIFIED ? FACET_WORDS[key].none : key === 'game' ? gameLabel(value) : value,
+      })),
+    }
+  })
+}
+
+/* Does this card pass every facet with a pick? Several picks in one facet are OR, the facets
+ * are AND (`kit/facets.ts`'s rule). */
+function passesFacets(card: InventoryCard, value: FilterValue): boolean {
+  for (const key of FACET_KEYS) {
+    const picked = value[key]
+    if (picked !== undefined && picked.length > 0 && !picked.includes(cardFacetValue(card, key))) return false
+  }
   return true
 }
 
@@ -306,7 +344,7 @@ function sectionKeyOf(row: Row, title: string): string {
  * is — and survives the sold rows being folded away or shown again (D132), which changes which
  * row comes first in a section whose first card has left. A section with no number (pooled,
  * unlabelled) keys on its title, which is all it has. */
-function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = null): Section[] {
+function sectionsOf(rows: Row[]): Section[] {
   const out: Section[] = []
   for (const row of rows) {
     const open = out[out.length - 1]
@@ -315,18 +353,11 @@ function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = nul
     if (open !== undefined && open.title === title) open.rows.push(row)
     else out.push({ key: sectionKeyOf(row, title), title, parts, first: row, rows: [row] })
   }
-  /* DEPARTED ROWS SINK UNDER THE LIVE ONES, WITHIN THEIR OWN SECTION (D132). A stable partition
-     so the walk's order survives in each half, and per section rather than over the whole list,
-     because a sold card still belongs to the part of the box it sat in.
-     THE ROW THE WALK STANDS ON DOES NOT SINK (D118): the press that sold it may change what is
-     on the screen and never where the rest of it is, and a row dropping to the foot of its
-     section on the press moves every row beneath it. It sinks when the walk steps off it. */
-  if (sinkDeparted) {
-    const sinks = (row: Row) => hasDeparted(row.card) && row.key !== keep
-    for (const section of out) {
-      section.rows = [...section.rows.filter((row) => !sinks(row)), ...section.rows.filter(sinks)]
-    }
-  }
+  /* A DEPARTED ROW STAYS WHERE IT SAT (UX-189, the owner's "nothing jumps"). D132 sank departed
+     rows under the live ones in their section while Hide sold was off, so the list drew a sold
+     card at the section's foot while the arrow keys still stepped onto it in box order: the
+     highlight jumped to the foot and back. One order now, the box's own, for the list and the
+     keys alike. The row's own mark says it left. */
   return out
 }
 
@@ -334,17 +365,27 @@ function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = nul
  * `card` decoration; the fallbacks for a departed, pooled or unlabelled record. */
 function rowSlot(row: Row): string {
   if (row.card.card !== undefined) return `#${row.card.card}`
-  /* A DEPARTED ROW KEEPS THE NUMBER OF THE PLACE IT LEFT (the owner's ruling, 2026-09-23,
-     D259): the server's departed label carries it, and the row's own
-     mark (`.is-departed`, struck through by the stylesheet) says it left, never a word or the
-     store key. A label from before the ruling names no card, so the store key is the fallback. */
-  if (hasDeparted(row.card)) {
-    const was = placePartsOf(positionLabel(row.card))?.card ?? null
-    return was === null ? departedKey(row.card) : `#${was}`
-  }
+  if (hasDeparted(row.card)) return departedSlot(row.card)
   const label = positionLabel(row.card)
   if (label !== null) return label
   return isPooled(row.card) ? pooledText(row.card, row.key) : `no label, ${row.key}`
+}
+
+/** WHAT A DEPARTED ROW'S SLOT SAYS (the owner's ruling, 2026-09-23,
+ *  D259): the server's departed label carries the number of the place
+ *  it left, and the row's own mark (`.is-departed`, struck through by the stylesheet) says it
+ *  left, never a word or the store key. A label from before the ruling names no card, so the
+ *  store key is the fallback.
+ *
+ *  A FUNCTION OF ITS OWN (S5), SO THE GHOST BELOW CAN ASK IT TOO. It used to reserve the store
+ *  key unconditionally, on the premise that a sale rewrites `#1` into that wider spelling —
+ *  true before this ruling, false since: a departed row keeps its own number's width
+ *  unchanged. Reserving the store key regardless left the ghost wider than the slot ever
+ *  draws once a box's card numbers reach two digits, and every name after it sat those pixels
+ *  too far right. */
+function departedSlot(card: InventoryCard): string {
+  const was = placePartsOf(positionLabel(card))?.card ?? null
+  return was === null ? departedKey(card) : `#${was}`
 }
 
 /** `join.departed_label`'s store key, in the server's spelling (`B3 #96`, D68).
@@ -393,9 +434,6 @@ function isTyping(target: EventTarget | null): boolean {
 
 /** What the screen above hands down, and what it gets back. */
 type BoxBrowseProps = {
-  /** The page title. */
-  head?: ReactNode
-
   /** Rendered beside the photograph, for the selected card: its location, its copies and its
    *  writes. Given as a node because the caller already knows which card is selected. */
   detail?: ReactNode
@@ -477,8 +515,11 @@ function bringInto(target: HTMLElement, scroller: HTMLElement, mode: Bring): voi
   const box = scroller.getBoundingClientRect()
   const top = rect.top - (parseFloat(style.scrollMarginTop) || 0)
   const bottom = rect.bottom + (parseFloat(style.scrollMarginBottom) || 0)
-  const edge = box.top + scroller.clientTop
-  const foot = edge + scroller.clientHeight
+  /* THE PART OF THE SCROLLER A PERSON CAN SEE, not the whole of it (UX-227). The rail is sticky
+     and taller than the window below the page head until the page scrolls, so its list runs
+     past the bottom of the window. A row brought to the list's own foot was still out of view. */
+  const edge = Math.max(box.top + scroller.clientTop, 0)
+  const foot = Math.min(box.top + scroller.clientTop + scroller.clientHeight, window.innerHeight)
 
   if (mode === 'start' || top < edge) {
     scroller.scrollTop += top - edge
@@ -651,7 +692,6 @@ function VariantChooser({
 }
 
 export function BoxBrowse({
-  head,
   detail,
   boxPanel,
   actionBar,
@@ -677,6 +717,10 @@ export function BoxBrowse({
    *  It is written in the same batch as `setRows`, so the two can never disagree in a
    *  committed render. */
   const [rowsShelf, setRowsShelf] = useState<number | null>(null)
+  /** The rows on hand when this box was opened (FLT-22, "nothing jumps"). Taken once per box
+   *  load: a write re-reads the same box and keeps it, and a new box, a reload or a new visit
+   *  takes it again. A row that leaves while the box is open stays drawn until then. */
+  const [enteredLive, setEnteredLive] = useState<{ readonly shelf: number; readonly keys: ReadonlySet<string> } | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -709,9 +753,35 @@ export function BoxBrowse({
      itself — `[]` is both "not yet" and "no boxes" — and the shelf effect needs to tell those
      apart to know whether a box the hash asked for is genuinely absent or merely not here yet. */
   const [boxesAnswered, setBoxesAnswered] = useState(false)
-  /* WHEN THIS BROWSER LAST OPENED EACH BOX (D132) — the rail's first sort key. Read once and
-     then held here, so a press reorders the rail from the map it just wrote. */
-  const [recency, setRecency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
+  /* WHEN THIS BROWSER LAST OPENED EACH BOX (D132) — the rail's first sort key. READ ONCE, ON
+     ARRIVAL, AND NEVER RE-READ HERE (UX-215, the owner's "nothing jumps"). A press writes the
+     device's map (`touchBox`), and the rail takes the new order on the next visit. Re-sorting on
+     the press moved the pressed box to the top, and the row under the pointer became another
+     box. */
+  const [recency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
+  /* THE RAIL'S OWN SORT (the ruling of 2026-09-24: the value list is D159's own screen no
+   * longer — it is an Inventory sort, through the same `SortControl` every other sorted list
+   * in the kit uses). `recent` is the resting order above and needs no fetch; `value` reads
+   * `GET /pipeline/value`'s aggregates, fetched lazily the first time it is picked and kept —
+   * a box's own dollar total does not move under a sale the way `on_hand` does, so nothing
+   * here re-fetches on a write the way `boxRecords` does. */
+  const [sort, setSort] = useState<SortValue<'recent' | 'value'>>({ key: 'recent', dir: 'desc' })
+  const [valueByBox, setValueByBox] = useState<ReadonlyMap<number, number> | null>(null)
+  useEffect(() => {
+    if (sort.key !== 'value' || valueByBox !== null) return
+    let live = true
+    getValueAggregates()
+      .then((aggregates) => {
+        if (live) setValueByBox(new Map(aggregates.boxes.map((box) => [box.box, Number(box.total)])))
+      })
+      .catch(() => {
+        // Deliberately nothing — the rail falls back to box order below (D18's own reason:
+        // a sort with no data to sort by is not a failure the operator asked to hear about).
+      })
+    return () => {
+      live = false
+    }
+  }, [sort.key, valueByBox])
   /* Every SKU's listing record, off the same read as the cards. Read for `at` — how old the
      live figures are — and never for a second copy of the counts. */
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
@@ -731,7 +801,19 @@ export function BoxBrowse({
   )
   const listRef = useRef<HTMLUListElement | null>(null)
   const mapRef = useRef<HTMLDivElement | null>(null)
+  /* The same node as state, so the rail's height effect runs when the rail mounts (it is not
+     drawn on the first render). */
+  const [mapEl, setMapEl] = useState<HTMLDivElement | null>(null)
+  const holdMap = useCallback((node: HTMLDivElement | null) => {
+    mapRef.current = node
+    setMapEl(node)
+  }, [])
   const boxesRef = useRef<HTMLDivElement | null>(null)
+  /** N3: set by `selectShelf` alone, right before `setShelf`, so the rail's own scroll-into-view
+   *  effect below skips exactly one run — the one a direct press on a row already caused to be
+   *  on screen. Every other `setShelf` caller (a walk-to, a deep link) leaves it unset, because
+   *  those targets may genuinely be off screen and still need bringing into view. */
+  const skipRailScroll = useRef(false)
   const jumpRef = useRef<string | null>(null)
   const [jump, setJump] = useState<string | null>(null)
   const askedAt = useRef<number | null>(null)
@@ -740,7 +822,7 @@ export function BoxBrowse({
 
   /* Layout state: the phone's rail sheet, the desktop rail's collapse, the box sheet, the
      photo lightbox, the details disclosure. */
-  const phone = useMediaQuery('(max-width: 767px)')
+  const phone = useMediaQuery('(max-width: 639px)')
   const [railOpen, setRailOpen] = useState(false)
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [manage, setManage] = useState(false)
@@ -751,43 +833,17 @@ export function BoxBrowse({
   const { query, setQuery, results, loading, failure: searchFailure } = useSearch()
   const searching = query.trim() !== ''
 
-  /* D213's game/set/rarity filter, independent of the search above and ANDed with it —
-   * clearing the search leaves the filter standing and clearing the filter leaves the
-   * search standing. A key ABSENT means "not filtering that facet" (`passesFacetFilter`'s
-   * own note); `{}` is therefore the cleared state, not a filter of "everything". */
-  const [facetFilter, setFacetFilter] = useState<InventoryFacetFilter>({})
-  const facetActive = Object.keys(facetFilter).length > 0
-  /* The vocabulary this store holds, off `GET /boxes`'s own `facets` block (D213) — never a
-   * hardcoded list. `null` before the first answer lands, which empties every dropdown
-   * rather than guessing at one. */
-  const [facets, setFacets] = useState<InventoryFacets | null>(null)
-
-  const setGameFilter = (value: string) => {
-    setFacetFilter(() => {
-      if (value === '') return {}
-      // A GAME CHANGE RESETS SET AND RARITY. Both lists are scoped to the selected game
-      // (`_card_facets`'s own reason: one game's set list must not leak into another's),
-      // so a set or rarity chosen under the old game may not exist under the new one —
-      // carrying it forward would filter on a value the new dropdown never offered.
-      return { game: value === '__none__' ? null : value }
-    })
-  }
-  const setSetFilter = (value: string) => {
-    setFacetFilter((prev) => {
-      const next = { ...prev }
-      if (value === '__unset__') delete next.set
-      else next.set = value === '' ? null : value
-      return next
-    })
-  }
-  const setRarityFilter = (value: string) => {
-    setFacetFilter((prev) => {
-      const next = { ...prev }
-      if (value === '__unset__') delete next.rarity
-      else next.rarity = value === '' ? null : value
-      return next
-    })
-  }
+  /* D213's game/set/rarity filter, independent of the search above and ANDed with it.
+   * THE FACETS WORK IN ANY ORDER (FLT-09, the owner: "I hate how on the inventory screen I
+   * have to filter by game first, then set, then rarity and only IN THAT ORDER"). Each facet
+   * takes several picks at once, none waits on another, and none clears another. The
+   * vocabulary and every count come off `GET /boxes`'s `facet_cells`, folded here with the
+   * kit's `countFacets`, so a pick asks the server nothing. The picks live in the URL
+   * (D285): a reload, a link and Back restore them. */
+  const [facetCells, setCells] = useState<readonly FacetCell[]>(NO_CELLS)
+  const facetDefs = useMemo(() => facetsOf(facetCells), [facetCells])
+  const [facetValue, setFacetValue] = useFacetParams(facetDefs)
+  const facetActive = Object.keys(facetValue).length > 0
 
   /* A NEW ANSWER IS A NEW ORDER (`frozenRank.ts`). Told on the TEXT and not on the answer: the
      answer for `Thiev` and the answer for `Thievul` are two orders too, and waiting for the
@@ -870,23 +926,39 @@ export function BoxBrowse({
     if (rows === null) return NO_ROWS
     let base = rows
     if (searching && matched !== null) base = base.filter((row) => matched.has(row.key))
-    if (facetActive) base = base.filter((row) => passesFacetFilter(row.card, facetFilter))
+    if (facetActive) base = base.filter((row) => passesFacets(row.card, facetValue))
     return base
-  }, [rows, searching, matched, facetActive, facetFilter])
+  }, [rows, searching, matched, facetActive, facetValue])
 
   const filtered = searching && matched !== null
 
   /* THE RAIL'S ORDER IS THE HAND'S (D132): the box opened most recently on this browser first,
-     then the box holding the most cards, then the number — which is the LAST thing the owner
-     thinks in, so it is the last thing this sorts by. `on_hand` and not `cards`: a box full of
-     sold records is not a box worth reaching for. */
+     then its own true index (`bid`, newest box first), then the number — `kit/dataRules.ts:
+     boxesMostRecentFirst`, the one primitive for a box order every list of boxes now shares.
+     B3: `on_hand` USED TO BREAK THE RECENCY TIE, AND A SALE MOVES `on_hand`. Two boxes neither
+     side of this browser has ever opened tie on recency (both unstored) and used to fall to
+     whichever held more copies — so a sale that took RB Epics from 26 to 25 dropped it under
+     MEG Bulk IN THE SAME SESSION, with no press on the rail at all. `bid` and the box number
+     are both facts about the DRAWER, not the count inside it, so nothing a sale touches can
+     move this tie-break again. */
   const order = useMemo(() => {
-    const onHandOf = new Map(
-      boxRecords.map((record) => [
-        record.box,
-        record.on_hand ?? record.cards - record.sold - record.retired - record.moved,
-      ]),
-    )
+    /* VALUE IS ITS OWN, SIMPLER ORDER — the operator asked to see the money, not the money
+       folded into the recency rule's own tie-breaks. A box the aggregates never mention (none
+       of its cards have a market reading) sorts last regardless of direction, never as if it
+       were worth $0. */
+    if (sort.key === 'value') {
+      const dirMul = sort.dir === 'asc' ? 1 : -1
+      return (a: number, b: number): number => {
+        const va = valueByBox?.get(a)
+        const vb = valueByBox?.get(b)
+        if (va === undefined && vb === undefined) return a - b
+        if (va === undefined) return 1
+        if (vb === undefined) return -1
+        if (va !== vb) return (va - vb) * dirMul
+        return a - b
+      }
+    }
+    const rankOf = new Map(boxesMostRecentFirst(boxRecords, recency).map((record, i) => [record.box, i]))
     /* UNDER A SEARCH THE BOX WHOSE FULLEST SECTION HOLDS THE MOST LIVE COPIES OF THE ANSWER
        LEADS (D132, amended on the owner's rule of 2026-09-11): "the largest quantity of
        whatever I searched, BY SECTION, is the order". A box is ranked by its best section and
@@ -917,81 +989,97 @@ export function BoxBrowse({
       const ma = liveMatches.get(a) ?? 0
       const mb = liveMatches.get(b) ?? 0
       if (ma !== mb) return mb - ma
-      const ra = recency.get(a) ?? ''
-      const rb = recency.get(b) ?? ''
-      if (ra !== rb) return ra > rb ? -1 : 1
-      const ha = onHandOf.get(a) ?? -1
-      const hb = onHandOf.get(b) ?? -1
-      if (ha !== hb) return hb - ha
+      const rra = rankOf.get(a) ?? Number.MAX_SAFE_INTEGER
+      const rrb = rankOf.get(b) ?? Number.MAX_SAFE_INTEGER
+      if (rra !== rrb) return rra - rrb
       return a - b
     }
-  }, [boxRecords, recency, filtered, results, activeGroups, frozen])
+  }, [sort, valueByBox, boxRecords, recency, filtered, results, activeGroups, frozen])
 
   /* D192, item 2: under a search, which OTHER boxes hold a match comes off the search's own
      result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
      so it can no longer answer "which boxes does this search touch" on its own. */
+  /* S3: the same Hide-sold rule `matchesByShelf` now keeps — a box a search touches only
+     through a departed copy is not a box the fold offers to reach for, so it is not one of
+     the "N of M boxes" the count line below states. */
   const searchBoxes = useMemo(() => {
     if (results === null) return []
     const boxes = new Set<number>()
     for (const group of activeGroups) {
       for (const copy of group.copies) {
+        if (hideSold && copyDeparted(copy)) continue
         const shelf = copyShelf(copy)
         if (typeof shelf === 'number') boxes.add(shelf)
       }
     }
     return [...boxes]
-  }, [results, activeGroups])
+  }, [results, activeGroups, hideSold])
 
-  /* D213: which boxes the FACET filter touches, off `boxRecords[].matches` — the count
-   * `server/capture_server.py:_box_row` folds into the same box-list read this screen
-   * already polls (see the `getBoxes` effect above), never a second route. Search's own
-   * `searchBoxes` is the model: a box with zero matches is not reachable, exactly as a box
-   * a search does not touch is not. */
-  const facetBoxes = useMemo(() => {
-    if (!facetActive) return []
-    return boxRecords.filter((record) => (record.matches ?? 0) > 0).map((record) => record.box)
-  }, [facetActive, boxRecords])
+  /* WHAT HIDE SOLD KEEPS, for every count the filter draws: with it on, a count is of the cards
+   * the walk would draw (UX-210's rule: the counts follow the other filters, Hide sold too). */
+  const keepCell = useCallback((cell: FacetCell) => !hideSold || !cell.gone, [hideSold])
 
-  const shelves = useMemo(
-    () =>
-      shelvesOf(
-        inQuery,
-        filtered ? searchBoxes : facetActive ? facetBoxes : boxRecords.map((record) => record.box),
-        order,
-      ),
-    [inQuery, filtered, searchBoxes, facetActive, facetBoxes, boxRecords, order],
+  /* Every option's count under the OTHER picks and Hide sold (the kit's one rule). */
+  const countedFacets = useMemo(
+    () => countFacets(facetCells, facetDefs, facetValue, cellValue, keepCell, (cell) => cell.count),
+    [facetCells, facetDefs, facetValue, keepCell],
   )
+
+  /* D213: how many cards of each box the facet picks let through, off the same cells. A box
+   * with none is not reachable, exactly as a box a search does not touch is not. */
+  const facetMatchesByBox = useMemo(() => {
+    const out = new Map<number, number>()
+    if (!facetActive) return out
+    for (const cell of filterRows(facetCells, facetDefs, facetValue, cellValue, keepCell)) {
+      if (cell.box !== null) out.set(cell.box, (out.get(cell.box) ?? 0) + cell.count)
+    }
+    return out
+  }, [facetActive, facetCells, facetDefs, facetValue, keepCell])
+
+  /* The boxes the rail may open: under a search the boxes it touches, under a facet pick the
+   * boxes holding a match, and under both the boxes that satisfy both. */
+  const reachableBoxes = useMemo(() => {
+    const all = boxRecords.map((record) => record.box)
+    const bySearch = filtered ? new Set(searchBoxes) : null
+    return all
+      .concat(filtered ? searchBoxes.filter((box) => !all.includes(box)) : [])
+      .filter((box) => (bySearch === null || bySearch.has(box)) && (!facetActive || (facetMatchesByBox.get(box) ?? 0) > 0))
+  }, [boxRecords, filtered, searchBoxes, facetActive, facetMatchesByBox])
+
+  const shelves = useMemo(() => shelvesOf(inQuery, reachableBoxes, order), [inQuery, reachableBoxes, order])
+
+  /* The filter bar's count line counts BOXES, the list it sits over: `3 of 13 boxes, filtered by
+   * Pokémon`. */
+  const reachableCount = reachableBoxes.length
 
   const onShelf = useMemo(() => {
     if (shelf === null) return NO_ROWS
     return inQuery.filter((row) => shelfOf(row) === shelf)
   }, [inQuery, shelf])
 
-  /* THE WALK, WITH SOLD FOLDED AWAY (D132). The row the walk stands on is kept whatever its
-     state: `selectedRow` is found in this list, a sale must leave its receipt on screen (D119),
-     and a walk-to from the copies list may land on a sold copy (D45). It goes the moment the
-     walk steps off it.
-     AND UNDER A SEARCH, A ROW THAT LEFT SINCE THIS ORDER WAS TAKEN IS KEPT TOO
-     (`frozenRank.ts`). Freezing the arithmetic and letting the fold delete the row puts the
-     jump straight back through the other door: the row goes and everything under it comes up by
-     its height, which is the movement the freeze exists to stop. It goes on the re-rank, with
-     everything else.
-
-     UNDER A SEARCH AND NOWHERE ELSE, which is the narrower half of this and is deliberate. The
-     unfiltered walk is in `(box, index)` order — nothing RANKS it, so nothing about it goes
-     stale, and D132's fold there is the behaviour the owner asked for and did not complain
-     about: "scrolling past them to find the live ones was the whole complaint". What they
-     reported is a RANKED list rearranging, and a ranked list is what a query makes. The row the
-     walk stands on is kept either way, as it always was (D119). */
+  /* THE WALK, WITH SOLD FOLDED AWAY (D132), AT A MOMENT WHEN NO ROW IS UNDER THE HAND.
+     NOTHING JUMPS (FLT-22, the owner's ruling of 2026-09-23,
+     D263): a row that was on hand when this box was opened stays drawn, in its place and
+     marked sold, until the next box load. D132 folded it "the moment the walk steps off it", and
+     that moment is a press: the owner sold #1, pressed #2, and every row under #2 came up 32px
+     at that click, so #2 slid from under the pointer. D118 wins over D132's timing. The fold
+     still happens, on the next box load or reload, when no row is under the pointer.
+     Three rows are kept besides:
+     - the row the walk stands on, whatever its state (D119's receipt, D45's walk-to onto a sold
+       copy),
+     - under a search, a row that left since this order was taken (`frozenRank.ts`, D181), which
+       the same rule now covers for this box but a search may have walked from another box,
+     - a row that left while this box was open (`enteredLive`). */
   const visible = useMemo(() => {
     if (!hideSold) return onShelf
     return onShelf.filter(
       (row) =>
         !hasDeparted(row.card) ||
         row.key === selected ||
+        enteredLive?.keys.has(row.key) === true ||
         (filtered && ranksAsShown(row.key, true, frozen)),
     )
-  }, [onShelf, hideSold, selected, filtered, frozen])
+  }, [onShelf, hideSold, selected, filtered, frozen, enteredLive])
 
   /* THE PILL COUNTS WHAT THE FOLD ACTUALLY HIDES, NEVER EVERY DEPARTED ROW ON THE SHELF.
      `visible`'s own exceptions above keep some departed rows drawn — the row the walk stands
@@ -1003,32 +1091,27 @@ export function BoxBrowse({
      one just-sold row stayed drawn under the selection exception, and only 5 left the shelf. */
   const hiddenBySold = useMemo(() => onShelf.length - visible.length, [onShelf, visible])
 
-  const sections = useMemo(() => sectionsOf(visible, !hideSold, selected), [visible, hideSold, selected])
+  const sections = useMemo(() => sectionsOf(visible), [visible])
 
   /* How many matches each shelf holds under a query, for the box list. Off `results` rather
-     than `inQuery` for the same reason `order`/`shelves` are, above (D192, item 2). */
+     than `inQuery` for the same reason `order`/`shelves` are, above (D192, item 2).
+     S3: WITH Hide sold ON, A DEPARTED COPY DOES NOT COUNT — `keepCell`'s own rule, below,
+     asked of a search match rather than a facet cell. `visible` already folds a departed copy
+     off the shelf it sold from; a rail cell counting it too, and a "2 of 4 boxes" line built on
+     the same count, disagreed with the very pane saying "Nothing matches". Off when the toggle
+     is off, matching the fold's own two states. */
   const matchesByShelf = useMemo(() => {
     const out = new Map<Shelf, number>()
     if (!filtered || results === null) return out
     for (const group of activeGroups) {
       for (const copy of group.copies) {
+        if (hideSold && copyDeparted(copy)) continue
         const s = copyShelf(copy)
         out.set(s, (out.get(s) ?? 0) + 1)
       }
     }
     return out
-  }, [filtered, results, activeGroups])
-
-  /* D213's own per-box counts, off `boxRecords[].matches` — see `facetBoxes` above for why
-   * this needs no second pass over anything. */
-  const facetMatchesByShelf = useMemo(() => {
-    const out = new Map<Shelf, number>()
-    if (!facetActive) return out
-    for (const record of boxRecords) {
-      if (record.matches !== undefined) out.set(record.box, record.matches)
-    }
-    return out
-  }, [facetActive, boxRecords])
+  }, [filtered, results, activeGroups, hideSold])
 
   /* Every position with an open question, for the row badges. */
   const queuedKeys = useMemo(() => {
@@ -1090,6 +1173,11 @@ export function BoxBrowse({
         if (!live) return
         const next = rowsOf(inventory.cards)
         setRows(next)
+        setEnteredLive((held) =>
+          held !== null && held.shelf === shelf
+            ? held
+            : { shelf, keys: new Set(next.filter((row) => !hasDeparted(row.card)).map((row) => row.key)) },
+        )
         /* WHICH SHELF `rows` NOW ANSWERS FOR, so the cross-box jump effect below can tell
          * "this box's own rows just landed and truly lack the target" from "the fetch for a
          * NEW shelf has not landed yet, so `rows` is still the OLD box's stale data" —
@@ -1117,19 +1205,38 @@ export function BoxBrowse({
     }
   }, [shelf, reloads, reloadToken, onListings])
 
-  /* The box registry, on the same counter and allowed to fail without anybody hearing.
-   * RE-ASKED ON A FILTER CHANGE TOO (D213): `facetFilter` selects the query params
-   * `getBoxes` sends, and the server folds a box's `matches` count into the SAME row this
-   * effect already reads — no second route, no second poll. */
+  /* B2: A ROW THE WALK STANDS ON IS "DRAWN DURING THIS BOX LOAD" EVEN WHEN IT ARRIVED SOLD.
+   *
+   * `enteredLive`'s own snapshot above only catches what was LIVE at the fetch — a row that
+   * was already sold when this box was opened never entered it, so `visible`'s fallback for it
+   * was `row.key === selected` alone. That holds only while the walk stands on it: land on a
+   * sold card by its `&card=<cid>` link with Hide sold on, step onto a live row next, and the
+   * sold row has nothing left to stand on — it folds, and every row below it moves.
+   *
+   * Selecting a row THIS SHELF's own snapshot already covers adds it to the standing set
+   * instead of replacing it, so it goes on being drawn for the rest of the load. `held.shelf
+   * !== shelf` is the same "until the next load" guard the snapshot above uses: a shelf
+   * switch's own fetch overwrites `enteredLive` wholesale, and this effect is not the one that
+   * decides what a NEW box starts with. */
+  useEffect(() => {
+    if (selected === null) return
+    setEnteredLive((held) => {
+      if (held === null || held.shelf !== shelf || held.keys.has(selected)) return held
+      return { shelf: held.shelf, keys: new Set(held.keys).add(selected) }
+    })
+  }, [selected, shelf])
+
+  /* The box registry, on the same counter and allowed to fail without anybody hearing. The
+   * facet cells ride on the same answer, so a filter pick needs no second read (FLT-09). */
   useEffect(() => {
     let live = true
-    getBoxes(facetFilter)
+    getBoxes()
       .then((summary) => {
         if (!live) return
         const records = Array.isArray(summary.boxes) ? summary.boxes : []
         setBoxRecords(records)
         onBoxes?.(records)
-        setFacets(summary.facets ?? null)
+        setCells(Array.isArray(summary.facet_cells) ? summary.facet_cells : NO_CELLS)
       })
       .catch(() => {
         // Deliberately nothing: the walk is whole without this.
@@ -1144,7 +1251,7 @@ export function BoxBrowse({
     return () => {
       live = false
     }
-  }, [reloads, reloadToken, onBoxes, facetFilter])
+  }, [reloads, reloadToken, onBoxes])
 
   useEffect(() => {
     let live = true
@@ -1315,6 +1422,21 @@ export function BoxBrowse({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [visible, stepSelection])
 
+  /* THE RAIL'S TOP AT REST, for its height (BoxBrowse.css `.browse-map`, UX-227). Read off the
+     rail's parent, which is never sticky, so a resize while the page is scrolled reads the same
+     number as one at rest. */
+  useLayoutEffect(() => {
+    const map = mapEl
+    const body = map?.parentElement ?? null
+    if (map === null || body === null) return
+    const measure = () => {
+      map.style.setProperty('--browse-rail-rest', `${Math.round(body.getBoundingClientRect().top + window.scrollY)}px`)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [mapEl])
+
   /* Keep the selected row where it can be seen — within the rail, never by scrolling the page. */
   useEffect(() => {
     const current = listRef.current?.querySelector('[aria-current="true"]')
@@ -1324,8 +1446,14 @@ export function BoxBrowse({
     jumpRef.current = null
   }, [selected, visible])
 
-  /* And the selected box, in a box list long enough to scroll. */
+  /* And the selected box, in a box list long enough to scroll — UNLESS a direct press put it
+     there (N3, D118): the operator can already see a row they just pressed, so scrolling the
+     rail in answer to their own click moves it under the hand that pressed it. */
   useEffect(() => {
+    if (skipRailScroll.current) {
+      skipRailScroll.current = false
+      return
+    }
     const current = boxesRef.current?.querySelector('[aria-current="true"]')
     if (current instanceof HTMLElement) scrollWithin(current, boxesRef.current, 'nearest')
   }, [shelf])
@@ -1381,8 +1509,11 @@ export function BoxBrowse({
      * #404's regression). Marked before `setShelf` so the row-hold below never stands on
      * the box the operator just left. */
     shelfSource.current = 'manual'
+    /* N3: the row named here is a row the operator is already looking at (they just pressed
+       it), so the rail's own scroll-into-view effect skips this one run. */
+    skipRailScroll.current = true
     setShelf(next)
-    if (typeof next === 'number') setRecency(touchBox(next))
+    if (typeof next === 'number') touchBox(next)
     let landingKey: string | undefined
     if (filtered && results !== null) {
       const counts = new Map<string, number>()
@@ -1709,7 +1840,7 @@ export function BoxBrowse({
      * card, never a re-rank, and the row-hold below must not stand on a superseded box. */
     shelfSource.current = 'manual'
     setShelf(landing)
-    if (typeof landing === 'number') setRecency(touchBox(landing))
+    if (typeof landing === 'number') touchBox(landing)
     jumpRef.current = jump
     setSelected(jump)
     listRef.current?.focus(FOCUS)
@@ -1778,88 +1909,53 @@ export function BoxBrowse({
   const shelfChip =
     shelf === null ? 'Boxes' : shelfLabel(shelf, shelfName)
 
-  /* D213's dropdown options, off `facets` (never a hardcoded list — see `_card_facets`'s own
-   * docstring for which of the two the brief asked for). Set and rarity are scoped to the
-   * chosen game and read empty until one is picked, matching the server's own per-game keys. */
-  const gameOptions = facets?.games ?? []
-  const setOptions =
-    facetFilter.game !== undefined ? (facets?.sets[facetFilter.game ?? ''] ?? []) : []
-  const rarityOptions =
-    facetFilter.game !== undefined ? (facets?.rarities[facetFilter.game ?? ''] ?? []) : []
-
   // ---------------------------------------------------------------------------- the rail
 
   const rail = (
-    <div className="browse-map" ref={mapRef}>
-      <div className="browse-map-top">
-        <SearchField value={query} onChange={setQuery} persona="owner" />
-        {phone ? null : (
-          <Button
-            variant="ghost"
-            icon="chevronLeft"
-            iconOnly
-            className="browse-rail-toggle"
-            onClick={() => setRailCollapsed(true)}
-          >
-            Collapse the box rail
-          </Button>
-        )}
-      </div>
-
-      {/* D213: game, set and rarity — the three filters the decision settled, no more. A
-       * dropdown for each rather than chips (the owner's own ruling — see the decision's
-       * "the control is a dropdown" section), so the row stays one shape whatever a game's
-       * own set count is. `disabled` on set/rarity until a game is chosen: both option
-       * lists are scoped per game and have nothing to offer before then. */}
-      <div className="browse-filters" role="group" aria-label="Filter by game, set or rarity">
-        <select
-          className="bn-select"
-          aria-label="Filter by game"
-          value={facetFilter.game === undefined ? '' : (facetFilter.game ?? '__none__')}
-          onChange={(event) => setGameFilter(event.target.value)}
-        >
-          <option value="">Game</option>
-          {gameOptions.map((entry) => (
-            <option key={entry.game ?? '__none__'} value={entry.game ?? '__none__'}>
-              {(entry.game === null ? 'No game recorded' : gameLabel(entry.game)) +
-                ` (${entry.count.toLocaleString()})`}
-            </option>
-          ))}
-        </select>
-        <select
-          className="bn-select"
-          aria-label="Filter by set"
-          value={facetFilter.set === undefined ? '__unset__' : (facetFilter.set ?? '')}
-          onChange={(event) => setSetFilter(event.target.value)}
-          disabled={facetFilter.game === undefined}
-        >
-          <option value="__unset__">Set</option>
-          {setOptions.map((entry) => (
-            <option key={entry.set ?? ''} value={entry.set ?? ''}>
-              {(entry.set ?? 'No set on file') + ` (${entry.count.toLocaleString()})`}
-            </option>
-          ))}
-        </select>
-        <select
-          className="bn-select"
-          aria-label="Filter by rarity"
-          value={facetFilter.rarity === undefined ? '__unset__' : (facetFilter.rarity ?? '')}
-          onChange={(event) => setRarityFilter(event.target.value)}
-          disabled={facetFilter.game === undefined}
-        >
-          <option value="__unset__">Rarity</option>
-          {rarityOptions.map((entry) => (
-            <option key={entry.rarity ?? ''} value={entry.rarity ?? ''}>
-              {(entry.rarity ?? 'No rarity on file') + ` (${entry.count.toLocaleString()})`}
-            </option>
-          ))}
-        </select>
-        {facetActive ? (
-          <Button variant="ghost" size="sm" icon="x" onClick={() => setFacetFilter({})}>
-            Clear filter
-          </Button>
-        ) : null}
-      </div>
+    <div className="browse-map" ref={holdMap}>
+      {/* THE KIT'S FILTER BAR (FLT-09): the search, the three facets in any order and the one
+          count line. Hide sold stays on the walk's own bar, beside the rows it folds. The rail is narrow, so the facets sit behind one Filters
+          press: a popover beside it on a desk, a sheet on a phone. */}
+      <FilterBar
+        className="browse-filterbar"
+        facets={countedFacets}
+        value={facetValue}
+        onChange={setFacetValue}
+        compact={phone ? 'sheet' : 'popover'}
+        search={{
+          query,
+          onChange: setQuery,
+          loading,
+          failure: searchFailure,
+          /* N5: `SearchField`'s own default, "Card name, number or SKU", cut to "Card na" in
+             the rail's own narrow column at 720 and 820 — a raw clip, no ellipsis, off the
+             native `placeholder` attribute. Shorter here, where the column is narrowest. */
+          placeholder: 'Search',
+        }}
+        count={{ shown: reachableCount, total: boxRecords.length, noun: { one: 'box', many: 'boxes' } }}
+        sort={{
+          options: [
+            { key: 'recent', label: 'Most recent' },
+            { key: 'value', label: 'Value', asc: 'Lowest first', desc: 'Highest first', first: 'desc' },
+          ],
+          value: sort,
+          onChange: setSort,
+          defaultValue: { key: 'recent', dir: 'desc' },
+        }}
+        beside={
+          phone ? undefined : (
+            <Button
+              variant="ghost"
+              icon="chevronLeft"
+              iconOnly
+              className="browse-rail-toggle"
+              onClick={() => setRailCollapsed(true)}
+            >
+              Collapse the box rail
+            </Button>
+          )
+        }
+      />
 
       {cells.length === 0 ? null : (
         <div className="browse-boxes bn-panel" role="group" aria-label="Choose a box to walk" ref={boxesRef}>
@@ -1868,7 +1964,7 @@ export function BoxBrowse({
             const onHand = record ? (record.on_hand ?? record.cards - record.sold - record.retired - record.moved) : null
             const pct = record && record.cards > 0 && onHand !== null ? Math.round((onHand / record.cards) * 100) : 0
             const sealed = record?.state === 'closed'
-            const matches = matchesByShelf.get(cell) ?? facetMatchesByShelf.get(cell)
+            const matches = matchesByShelf.get(cell) ?? (typeof cell === 'number' ? facetMatchesByBox.get(cell) : undefined)
             return (
               <button
                 key={String(cell)}
@@ -1911,15 +2007,23 @@ export function BoxBrowse({
                   </span>
                   {/* The lock beside the row already says sealed; the meta keeps to the count. */}
                   <span className="browse-boxcell-meta">
-                    {matches !== undefined
+                    {/* ONE LABEL FOR "NO MATCH HERE" (UX-261), whether a search or a filter
+                        left the box out. Sorted by value and not searching, the meta is the
+                        one figure that sort is actually about (D221: `Money`, never a plain
+                        string, or this dollar sign sits in the wrong face). */}
+                    {!reachable
+                      ? 'No match'
+                      : matches !== undefined
                       ? `${matches} ${matches === 1 ? 'match' : 'matches'}`
-                      : record
-                        ? `${(onHand ?? 0).toLocaleString()} on hand`
-                        : cell === 'pooled'
-                          ? 'a count, not a location'
-                          : cell === 'unplaced'
-                            ? 'no position at all'
-                            : ''}
+                      : record && sort.key === 'value' && typeof cell === 'number'
+                        ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
+                        : record
+                          ? `${(onHand ?? 0).toLocaleString()} on hand`
+                          : cell === 'pooled'
+                            ? 'a count, not a location'
+                            : cell === 'unplaced'
+                              ? 'no position at all'
+                              : ''}
                   </span>
                 </span>
                 {record ? (
@@ -1978,17 +2082,11 @@ export function BoxBrowse({
             ) : (
               <div className="browse-shelfnote">
                 <span className="boxops-identity-num">No box</span>
-                <p>These records have no valid box or index. See the server status page.</p>
+                <p>These cards have no box or place the store can read.</p>
               </div>
             )}
             {shelfBox === null ? null : boxPanel}
           </div>
-
-          {searchFailure === null ? null : (
-            <div className="browse-mapnote">
-              <Notice tone="danger" title={searchFailure.message} code={searchFailure.code} />
-            </div>
-          )}
 
           <div className="browse-status">
             {/* While anything is ticked the selection leads the row — the count would only
@@ -2012,9 +2110,8 @@ export function BoxBrowse({
             ) : (
               <button className="browse-quiet" type="button" onClick={toggleAllSections}>
                 <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
-                <span className="bn-facts">
-                  <span>{anyExpanded ? 'collapse all' : 'expand all'}</span> <span>{sections.length} sections</span>
-                </span>
+                {/* THE HEADERS BELOW ALREADY COUNT THE SECTIONS (cut list #11, UX-269). */}
+                {anyExpanded ? 'Collapse all' : 'Expand all'}
               </button>
             )}
 
@@ -2032,15 +2129,12 @@ export function BoxBrowse({
             ) : null}
 
             {onShelf.length === 0 || onHideSold === undefined ? null : (
-              <Chip
-                pressed={hideSold}
-                count={hiddenBySold}
-                className="browse-hidesold"
-                title={hideSold ? 'Sold and retired cards are folded away' : 'Sold and retired cards sink under the live ones'}
-                onClick={onHideSold}
-              >
-                Hide sold
-              </Chip>
+              /* UX-254 (owner's ruling, 2026-09-24: "maybe in stock only should be the toggle
+                 name?"): the words, never the meaning — checked still folds a departed copy
+                 away, on by default (`storedHideSold`), and the count is still what it hides. */
+              <HideToggle checked={hideSold} count={hiddenBySold} className="browse-hidesold" onChange={() => onHideSold()}>
+                In stock only
+              </HideToggle>
             )}
 
             <span className="bn-spacer" />
@@ -2063,31 +2157,19 @@ export function BoxBrowse({
             <div className="browse-empty">
               <EmptyState
                 icon="box"
-                title={`Nothing in box ${shelfBox.box} yet`}
+                title={`Nothing in ${shelfLabel(shelfBox.box, shelfBox.name)} yet`}
                 body="Capture a card, or manage the box above."
                 actions={
                   <Button size="sm" icon="camera" onClick={() => (window.location.hash = '#/capture')}>
-                    Capture into box {shelfBox.box}
+                    Capture into this box
                   </Button>
                 }
               />
             </div>
           ) : null}
 
-          {visible.length === 0 && !awaitingRows && filtered ? (
-            <div className="browse-empty">
-              <EmptyState
-                icon="search"
-                title="Nothing matches here"
-                body={`No card in ${shelfLabel(shelf, shelfName)} matches “${query.trim()}”.`}
-                actions={
-                  <Button size="sm" icon="x" onClick={() => setQuery('')}>
-                    Clear the search
-                  </Button>
-                }
-              />
-            </div>
-          ) : null}
+          {/* NO SECOND "NOTHING MATCHES" HERE (UX-260): the card pane says it once, with the
+              one Clear. */}
 
           {/* D213: the filter narrowed this box to nothing, told apart from a search's own
               empty state above — clearing the filter is a different action from clearing
@@ -2099,7 +2181,7 @@ export function BoxBrowse({
                 title="Nothing here matches the filter"
                 body={`No card in ${shelfLabel(shelf, shelfName)} matches the game, set or rarity chosen.`}
                 actions={
-                  <Button size="sm" icon="x" onClick={() => setFacetFilter({})}>
+                  <Button size="sm" icon="x" onClick={() => setFacetValue({})}>
                     Clear the filter
                   </Button>
                 }
@@ -2110,6 +2192,9 @@ export function BoxBrowse({
           {displaySections.length === 0 ? null : (
             <ul
               className="browse-list"
+              /* THE PHONE'S BOX SHEET OPENS ON THE LIST (UX-253): its overlay focuses this first,
+                 not the search, whose keyboard would cover the list the sheet was opened for. */
+              data-autofocus=""
               ref={listRef}
               style={listHoldStyle}
               tabIndex={awaitingRows ? -1 : 0}
@@ -2151,7 +2236,9 @@ export function BoxBrowse({
                           if (node !== null)
                             node.indeterminate = ticked > 0 && ticked < section.rows.length
                         }}
-                        aria-label={`Tick every card in ${section.title} (${census})`}
+                        /* SAID ONCE (UX-271): the section and its count are the fold's own name,
+                           beside this, so the tick names only what it ticks. */
+                        aria-label={`Tick all of ${section.parts.head}`}
                         onChange={(event) => tickSection(section, event.target.checked)}
                       />
                       <button
@@ -2162,11 +2249,16 @@ export function BoxBrowse({
                       >
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
                         <SectionTitle parts={section.parts} />
+                        {/* ONE COUNT PER HEADER (cut list #9): the title already says how many
+                            cards. The badge draws only a tick count, and keeps its slot while
+                            empty, so a tick moves nothing in the header (D118). */}
                         <span
                           className="browse-sectcount"
-                          title={ticked === 0 ? census : `${ticked} of ${section.rows.length} records ticked; ${census}`}
+                          data-empty={ticked === 0 ? 'true' : undefined}
+                          aria-hidden={ticked === 0 ? 'true' : undefined}
+                          title={ticked === 0 ? undefined : `${ticked} of ${section.rows.length} ticked; ${census}`}
                         >
-                          {ticked === 0 ? onHand : `${ticked}/${section.rows.length}`}
+                          {ticked === 0 ? '' : `${ticked}/${section.rows.length}`}
                         </span>
                       </button>
                     </div>
@@ -2193,29 +2285,31 @@ export function BoxBrowse({
                                 title={departed ? 'Departed — no longer in this box' : undefined}
                                 onClick={() => pickRow(row.key)}
                               >
-                                {/* THE WIDTH THE SALE WILL NEED, RESERVED BEFORE IT IS SPENT
-                                    (D118). Selling this copy rewrites the slot from `#1` to the
-                                    store key `B2 #1`, which is wider — so the column grew and
-                                    the name and the badges slid right ON THE PRESS. The ghost
-                                    holds that exact string, in the face it will be set in, so
-                                    the track is already that wide and the write changes only
-                                    which of the two is painted.
+                                {/* THE WIDTH A DEPARTURE WILL NEED, RESERVED BEFORE IT IS
+                                    SPENT (D118). `departedSlot` (S5) is what the slot cell
+                                    ITSELF draws once this row departs — its own struck `#N`
+                                    in the ordinary case, the store key only for the rare
+                                    pre-ruling record with no label to read a number off. The
+                                    ghost holds that exact string, in the face it will be set
+                                    in, so the track is already that wide and a departure
+                                    changes only which of the two is painted.
                                     IT IS `content:` AND NOT A TEXT NODE, AND IT IS
-                                    `aria-hidden`. A hidden twin in the DOM would put `B2 #1`
-                                    into every row's text content, where the census, the walk's
-                                    locators and this button's own accessible name all read;
-                                    pseudo content is in none of those, and the attribute keeps
-                                    the pseudo out of the accessibility tree as well. And it is
-                                    the STRING rather than a `ch` count of it: the count was the
-                                    first build and it is an estimate — a face whose weight is
-                                    synthesized does not set five characters at five times the
-                                    advance of `0`, which is the register the whole 1px is in. */}
+                                    `aria-hidden`. A hidden twin in the DOM would put the
+                                    reserved string into every row's text content, where the
+                                    census, the walk's locators and this button's own
+                                    accessible name all read; pseudo content is in none of
+                                    those, and the attribute keeps the pseudo out of the
+                                    accessibility tree as well. And it is the STRING rather
+                                    than a `ch` count of it: the count was the first build and
+                                    it is an estimate — a face whose weight is synthesized does
+                                    not set five characters at five times the advance of `0`,
+                                    which is the register the whole 1px is in. */}
                                 <span className="browse-row-position">
                                   <span className="browse-row-slot">{rowSlot(row)}</span>
                                   <span
                                     className="browse-row-slotghost"
                                     aria-hidden="true"
-                                    style={{ '--bn-slot-key': JSON.stringify(departedKey(row.card)) } as CSSProperties}
+                                    style={{ '--bn-slot-key': JSON.stringify(departedSlot(row.card)) } as CSSProperties}
                                   />
                                 </span>
                                 {/* NEVER the state word here: the row would read `#1
@@ -2231,9 +2325,13 @@ export function BoxBrowse({
                                 >
                                   {nameOf(row.card) ?? 'Not identified yet'}
                                 </span>
+                                {/* A ROW THAT LEFT THE BOX (UX-222): the headstone, the product's one mark
+                                    for a card that left (`ICON_MEANINGS`), named by its state. It
+                                    was the arrow that means "opens a new tab". */}
                                 {departed ? (
-                                  <span className="browse-row-badge is-out" aria-hidden="true">
-                                    <Icon name="external" size={12} />
+                                  <span className="browse-row-badge is-out" title={stateLabel(row.card.state)}>
+                                    <Icon name="headstone" size={12} />
+                                    <span className="bn-sr">{stateLabel(row.card.state)}</span>
                                   </span>
                                 ) : null}
                                 {queuedKeys.has(row.key) ? (
@@ -2253,19 +2351,8 @@ export function BoxBrowse({
             </ul>
           )}
 
-          <p className="browse-listkeys">
-            <span>
-              <Kbd>←</Kbd>
-              <Kbd>→</Kbd> card
-            </span>
-            <span>
-              <Kbd>PgUp</Kbd>
-              <Kbd>PgDn</Kbd> section
-            </span>
-            <span>
-              <Kbd>X</Kbd> tick
-            </span>
-          </p>
+          {/* NO KEY LEGEND UNDER THE LIST (UX-272, cut list #10): the ? sheet lists every key this
+              list takes (App.tsx INVENTORY_KEYS), and the legend cost the list a row. */}
         </div>
       )}
     </div>
@@ -2318,34 +2405,6 @@ export function BoxBrowse({
 
   return (
     <section className="browse">
-      <PageHeader
-        title={head ?? 'Inventory'}
-        icon="box"
-        lede={
-          rows === null
-            ? failure === null
-              ? noBoxesYet
-                ? null
-                : 'Reading the inventory…'
-              : 'The inventory could not be read.'
-            : 'Walk any box card by card. Sell, retire or move a copy from here.'
-        }
-        actions={
-          rows === null ? null : (
-            <Pill mono className="browse-census">
-              <span className="bn-facts">
-                <span>
-                  {storeCards.toLocaleString()} {storeCards === 1 ? 'card' : 'cards'}
-                </span>{' '}
-                <span>
-                  {boxRecords.length} {boxRecords.length === 1 ? 'box' : 'boxes'}
-                </span>
-              </span>
-            </Pill>
-          )
-        }
-      />
-
       {failure === null ? null : (
         <Notice tone="danger" title={failure.message} code={failure.code}>
           <Button size="sm" icon="refresh" onClick={() => setReloads((n) => n + 1)}>
@@ -2356,28 +2415,9 @@ export function BoxBrowse({
 
       {rows === null && failure === null && !noBoxesYet ? (
         <div className="browse-body browse-body-loading">
-          <div className="browse-map">
-            <div className="bn-skeleton browse-skel-search" />
-            <div className="bn-panel browse-skel-panel">
-              {Array.from({ length: 5 }, (_, i) => (
-                <div key={i} className="bn-skeleton browse-skel-row" />
-              ))}
-            </div>
-          </div>
-          <div className="browse-side">
-            <div className="bn-panel browse-card">
-              <div className="browse-hero-head">
-                <div className="bn-skeleton" style={{ width: 260, height: 26 }} />
-              </div>
-              <div className="browse-band">
-                <div className="bn-skeleton browse-skel-photo" />
-                <div className="bn-stack">
-                  <div className="bn-skeleton" style={{ height: 120 }} />
-                  <div className="bn-skeleton" style={{ height: 80 }} />
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* THE KIT'S LOADING SHAPE (D275): the rail's rows, then the card. */}
+          <Loading rows={6} label="Reading the inventory" />
+          <Loading shape="cards" rows={1} label="Reading the card" />
         </div>
       ) : null}
 
@@ -2527,6 +2567,13 @@ export function BoxBrowse({
                               </span>
                             ))}
                         </p>
+                        {/* WHERE IT IS, BESIDE THE NAME, IN A ONE-COLUMN PANE (UX-187). At 390 and
+                            720 the copy row that says it sits under the photograph, below the
+                            fold. Drawn only where the pane is one column (BoxBrowse.css), so the
+                            wide pane does not say it twice. */}
+                        {positionLabel(panelRow.card) === null ? null : (
+                          <p className="browse-hero-place">{sayPlace(positionLabel(panelRow.card) ?? '')}</p>
+                        )}
                         <div className="browse-hero-chips">
                           {/* No `chooserActive` check needed here: while the chooser shows,
                               `panelRow` is null and this whole branch does not render, so
@@ -2549,9 +2596,10 @@ export function BoxBrowse({
                           {claimList(panelRow.card.rarity_claim).map((rarity) => (
                             <Pill key={`r-${rarity}`}>{titleCase(rarity)}</Pill>
                           ))}
-                          <Pill tone={stateTone(panelRow.card.state)} outline={panelRow.card.state === 'identified'}>
-                            {stateLabel(panelRow.card.state)}
-                          </Pill>
+                          {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221). */}
+                          {panelRow.card.state === IDENTIFIED ? null : (
+                            <Pill tone={stateTone(panelRow.card.state)}>{stateLabel(panelRow.card.state)}</Pill>
+                          )}
                           {open === null ? null : (
                             <a className="bn-pill bn-pill-warn browse-queuechip" href="#/review">
                               <Icon name="clock" size={12} />
@@ -2809,21 +2857,11 @@ function CardOps({
       toast({
         kind: 'ok',
         icon: 'trash',
-        title:
+        title: `${nameOf(row.card) ?? 'The card'} is deleted`,
+        body:
           result.shifted === 0
-            ? 'Capture removed'
-            : `Capture removed. ${result.shifted} ${result.shifted === 1 ? 'card' : 'cards'} moved down.`,
-        body: `${
-          result.shifted === 0
-            ? 'It was the top of its box, so nothing moved.'
-            : 'Every card behind it moved down one index — every one of those labels has changed.'
-        } ${result.deleted} is removed and the box's next index is ${result.next_index}. ${
-          result.photo_deleted
-            ? result.sidecar_deleted
-              ? 'Its photograph and sidecar went with it.'
-              : 'Its photograph went with it; no sidecar was on disk.'
-            : 'No photograph was on disk to delete.'
-        }`,
+            ? 'It was the last card in its box, so no number changed.'
+            : `${result.shifted} ${result.shifted === 1 ? 'card after it takes' : 'cards after it take'} the number before.`,
         ttlMs: 12000,
       })
       setOpen(null)
@@ -2847,10 +2885,12 @@ function CardOps({
     setTrouble(null)
     try {
       // NOT `positionLabel`: for a departed card that reads "Box 1 · departed · B1 #1"
-      // (D68), which would say a card just brought back is still departed. The store key,
-      // spelled the way a departed row's own slot cell already spells it (`storeKeyText`),
-      // names the same physical card without the tense clash.
-      const label = storeKeyText(row.card.box, row.card.index)
+      // (D68), which would say a card just brought back is still departed. The box's own
+      // NAME (S1: never its number) plus the store index names the same physical card
+      // without the tense clash `storeKeyText`'s box number used to carry.
+      // sigil-ok: a store key, `storeKeyText`'s own shape (D92) with the box respelled from
+      // its number to its name — this card is not in a slot to count, same as that one.
+      const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
       if (row.card.state === 'sold') {
         const result: SaleResult = await undoSale(row.card.box, row.card.index)
         toast({
@@ -3013,22 +3053,13 @@ function CardOps({
             <span className="bn-eyebrow bn-facts">
               <span>{positionLabel(row.card) ?? row.key}</span>
             </span>
-            <h2 className="inv-dialog-title">Remove this card and slide the box down?</h2>
+            <h2 className="inv-dialog-title">Delete {nameOf(row.card) ?? 'this card'}?</h2>
           </div>
           <div className="inv-dialog-body">
             <p>
-              This deletes the record, the photograph and the sidecar, and{' '}
-              <strong>every card behind it in box {row.card.box} moves down one index</strong> —
-              so every stored position above it changes. There is no undo, and this card is not
-              necessarily still in your hand.
+              Every card after it takes the number before it. <strong>No undo.</strong>
             </p>
-            <p className="bn-muted">
-              It is refused if any card behind it has been sold, retired or listed: those records
-              are departures and commitments rather than clutter.
-            </p>
-            <span className="browse-machine">
-              aiming at capture id {row.card.capture_id ?? 'null (written before ids existed)'}
-            </span>
+            <p className="bn-muted">Refused if a card after it was sold, retired or listed.</p>
             {trouble === null ? null : <Notice tone="danger" title={trouble.message} code={trouble.code} />}
           </div>
           <div className="inv-dialog-foot">
@@ -3036,7 +3067,7 @@ function CardOps({
               Cancel
             </Button>
             <Button variant="danger-solid" icon="trash" busy={busy} onClick={() => void remove()}>
-              Remove this card and slide the box down
+              Delete this card
             </Button>
           </div>
         </Overlay>

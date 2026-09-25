@@ -166,9 +166,6 @@
     "app/src/ValueBands.tsx": {
       "R2-class": "b-pricing",
       "R2-money": "b-pricing"
-    },
-    "app/src/cardState.ts": {
-      "R2-date": "inventory"
     }
   },
   "runtime": {
@@ -213,11 +210,6 @@
       "page": "sales",
       "width": "sales",
       "top": "sales"
-    },
-    "/inventory": {
-      "page": "inventory",
-      "width": "inventory",
-      "top": "inventory"
     },
     "/graveyard": {
       "page": "library",

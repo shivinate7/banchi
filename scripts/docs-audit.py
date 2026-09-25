@@ -17723,7 +17723,7 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("cli/resolve.py", "box_views", "select"),   # store-scaling item 7 — renamed from `.values()`; the unbounded (`boxes=None`) branch every existing caller still uses is genuinely store-wide, for the same reason `_value_rows` is
     ("cli/resolve.py", "_cards_by_sku", "select"),   # store-scaling item 4 — one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
     ("server/capture_server.py", "do_inventory_copies", "select"),   # §27, site 1 — a NEW full-table scan, added rather than removed, and named as a cost paid: `POST /inventory/copies` replaces `Orders.tsx`'s `GET /inventory` (D192's own site 1), and the one unfiltered `_cards_by_sku`-shaped pass here is what lets the box set handed to `_Places.for_keys` be DERIVED from the scan rather than guessed at from the request — the docstring on the function has the full argument for why that is sound where box-scoping the walk itself is not. This is the count going UP by one, on purpose, for a route this file's own item 1 could not have existed to forbid before it existed to write.
-    ("server/capture_server.py", "_card_facets", "select"),   # D213's inventory filter — a NEW full-table scan, added rather than removed. It answers "what game/set/rarity values does this store hold, and how many of each" — an aggregate over every distinct value, which by definition cannot be scoped to one `equals` filter the way a lookup can. `GET /boxes` already pays one O(cards) pass per box (`_box_row`'s own docstring); this adds one MORE full pass, on the same route, at the same poll cadence — named here rather than folded into an existing entry because it is a genuinely new site, over three columns rather than the two-or-three `_cards_by_sku`/`do_inventory_copies` already read.
+    ("server/capture_server.py", "_facet_cells", "select"),   # D213's inventory filter, moved here from `_card_facets` by FLT-09: `_facet_cells` is now the ONE scan and `_card_facets` folds its answer, so `GET /boxes` still pays one pass for both blocks. Was: — a NEW full-table scan, added rather than removed. It answers "what game/set/rarity values does this store hold, and how many of each" — an aggregate over every distinct value, which by definition cannot be scoped to one `equals` filter the way a lookup can. `GET /boxes` already pays one O(cards) pass per box (`_box_row`'s own docstring); this adds one MORE full pass, on the same route, at the same poll cadence — named here rather than folded into an existing entry because it is a genuinely new site, over three columns rather than the two-or-three `_cards_by_sku`/`do_inventory_copies` already read.
 })
 # STORE-SCALING ITEM 8 REMOVED `do_search`'s ROW: the O(cards) walk over
 # `inventory.cards.values()` is deleted, replaced by an FTS5 `MATCH` query
@@ -17743,7 +17743,8 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
 # `_cards_by_sku`'s — see that entry's own comment, above, for why one unfiltered scan is
 # the correct implementation here rather than a shortcut around scoping it.
 #
-# 10 -> 11, D213's INVENTORY FILTER. `_card_facets` is a NEW full-table scan, added rather
+# 10 -> 11, D213's INVENTORY FILTER (the scan moved to `_facet_cells` with FLT-09, the count
+# unchanged). `_card_facets` is a NEW full-table scan, added rather
 # than removed, for the same reason `do_inventory_copies` and `_value_rows` are on this
 # list already: the question it answers ("what game/set/rarity values exist, and how many
 # of each") is a store-wide aggregate by definition, over the same `GET /boxes` route that

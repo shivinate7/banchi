@@ -78,7 +78,7 @@ export function BoxRuns({ box, indices }: BoxRunsProps) {
           ? 'Runs'
           : indices.length > 0
             ? `Run ${indices.length} ticked`
-            : `Run box ${box}`}
+            : 'Run this box'}
         <Icon name="arrowRight" size={13} />
       </a>
     </div>

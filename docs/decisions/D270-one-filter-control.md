@@ -101,3 +101,15 @@ way the four-width strip did.
   Game/Set/Rarity roster, if a screen's own filters differ.
 - **The exact word for "Any."** Each screen may need its own: a set, a status, a lane. That is
   a wave-2 question, not this entry's.
+
+### What the inventory lane built (2026-09-24)
+
+- **Inventory's rail uses the bar.** Game, Set and Rarity each take several picks, in any
+  order. No pick clears another. The picks live in the URL.
+- **The counts come from one read.** `GET /boxes` sends `facet_cells`: the store's cards,
+  grouped by box, game, set, rarity and whether they left. The screen folds them with
+  `kit/facets.ts:countFacets`. So a pick asks the server nothing. Each count follows the
+  other picks and Hide sold. The unclassified value is the blank pick, `?set=`.
+- **A popover on a desk.** `FilterBar` takes `compact="popover"`. A narrow bar on a desk then
+  opens its facets under the Filters press, not in a sheet at the far right of the window. The
+  phone keeps the sheet. In the popover bar the Filters press shares the search's line.

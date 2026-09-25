@@ -38,7 +38,7 @@
 
 .inventory-receipt-said { font-weight: 600; flex: 1 1 auto; }
 
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   /* a thumb presses this: the dialogs' Cancel */
   .inv-dialog-foot .bn-btn { --btn-h: var(--bn-control-h-lg); }
 }
@@ -48,15 +48,6 @@
 
 /* the lone copy: a card with no name and no SKU */
 .inventory-lone { min-width: 0; }
-.inventory-inline { font-family: var(--bn-font-mono); font-size: 0.92em; }
-.inventory-machine {
-  display: block;
-  margin-top: var(--bn-1);
-  font-family: var(--bn-font-mono);
-  font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-3);
-  overflow-wrap: anywhere;
-}
 .inventory-looking { display: flex; flex-direction: column; gap: var(--bn-2); }
 
 /* ---- the retire dialog ---- */
@@ -121,4 +112,3 @@
 .inventory-retire-text { display: flex; flex-direction: column; gap: 2px; }
 .inventory-retire-label { font-size: var(--bn-fs-base); font-weight: 700; }
 .inventory-retire-said { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.inventory-retire-reason .inventory-machine { margin-top: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }

@@ -559,8 +559,14 @@ export function Popover({
   }, [mounted, anchor])
   useEffect(() => {
     if (!live) return
+    /* A PICK LIST OPENED FROM INSIDE THE POPOVER IS INSIDE IT (FilterBar's popover mode). The
+       list is portalled to <body>, so a press on one of its options is outside the panel by
+       the DOM, and would close the popover under the pick it is making. */
     const outside = (target: EventTarget | null) =>
-      target instanceof Node && panel.current?.contains(target) !== true && anchor.current?.contains(target) !== true
+      target instanceof Node &&
+      panel.current?.contains(target) !== true &&
+      anchor.current?.contains(target) !== true &&
+      !(target instanceof Element && target.closest('[data-bn-pick-panel]') !== null)
     const onDown = (event: PointerEvent) => {
       if (outside(event.target)) onClose()
     }

@@ -11,7 +11,7 @@ import { collectorNumber } from './cardNumber'
 import { Button, Chip, Icon, Pill } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
-import { forSale, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
+import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
 
 /* One card, every copy of it, and where each copy physically is.
  *
@@ -390,10 +390,14 @@ function OwnerRows({
           )}
         </div>
         <div className="card-locations-stats">
-          <div className="bn-stat card-locations-stat">
-            <span className="bn-stat-value">{group.copies.length}</span>
-            <span className="bn-stat-label">{group.copies.length === 1 ? 'copy' : 'copies'}</span>
-          </div>
+          {/* "1 copy" beside "1 in the boxes" said one fact twice (UX-258, cut list #6): the copy
+              count is drawn only when it differs from what is in the boxes. */}
+          {group.copies.length === group.on_hand ? null : (
+            <div className="bn-stat card-locations-stat">
+              <span className="bn-stat-value">{group.copies.length}</span>
+              <span className="bn-stat-label">{group.copies.length === 1 ? 'copy' : 'copies'}</span>
+            </div>
+          )}
           <div className="bn-stat card-locations-stat">
             <span className="bn-stat-value">{group.on_hand}</span>
             <span className="bn-stat-label">in the boxes</span>
@@ -407,10 +411,25 @@ function OwnerRows({
               information, and `· 0 sold here since` on the other 440 is noise that trains the
               eye to skip the line. */}
           {listing ? (
-            <div className="bn-stat card-locations-stat card-locations-live">
+            <div
+              className="bn-stat card-locations-stat card-locations-live"
+              data-read={listedAt || group.listed.live > 0 ? 'true' : 'false'}
+            >
+              {/* RED IS FOR A PROBLEM, AND A LIVE LISTING IS NOT ONE (UX-247). An unread figure is
+                  an unknown: a quiet dash, never a red 0. A read figure is ink, and its dot is
+                  the live mark only while copies are live. */}
               <span className="bn-stat-value">
-                <span className="bn-dot bn-dot-live" aria-hidden="true" />
-                {forSale(group.listed.live, group.sold_here)}
+                {listedAt || group.listed.live > 0 ? (
+                  <>
+                    <span
+                      className={forSale(group.listed.live, group.sold_here) > 0 ? 'bn-dot bn-dot-live' : 'bn-dot'}
+                      aria-hidden="true"
+                    />
+                    {forSale(group.listed.live, group.sold_here)}
+                  </>
+                ) : (
+                  '—'
+                )}
               </span>
               <span className="bn-stat-label">live on TCGplayer</span>
               <ReadingAge at={listedAt} />
@@ -440,9 +459,17 @@ function OwnerRows({
             Headroom is the honest form of the same fact. */}
         {listing ? (
           <p className="card-locations-counts">
-            <span>Pushed {group.listed.pushed}</span>
-            <span>Staged {group.listed.staged}</span>
-            <span>{headroom(group)}</span>
+            {/* THE LISTING'S STAGES IN WORDS, AND ONLY THE ONES THAT HOLD A COPY (UX-207, D196,
+                cut list #7): "Pushed 0 Staged 0" named the pipeline's two stages to the owner. */}
+            {group.listed.pushed + group.listed.staged + group.listed.live === 0 ? (
+              <span>Not listed yet</span>
+            ) : (
+              <>
+                {group.listed.pushed > 0 ? <span>{group.listed.pushed} sent to TCGplayer</span> : null}
+                {group.listed.staged > 0 ? <span>{group.listed.staged} waiting to go live</span> : null}
+                <span>{headroom(group)}</span>
+              </>
+            )}
           </p>
         ) : null}
       </header>
@@ -539,21 +566,12 @@ function OwnerRows({
               )}
 
               <span className="card-locations-state">
-                {current ? (
-                  <Pill icon="eye" outline className="card-locations-viewing">
-                    {/* NARROW, THE WORD IS SPOKEN AND NOT DRAWN — the kit's own `.bn-sr`
-                        technique, `Button`'s `iconOnly` reuses the same way:
-                        the current row is the only one that carries this second pill beside
-                        its own state, and sharing the narrow row with `.card-locations-action`'s
-                        137px reservation (D118) left `Identified` too little room — measured,
-                        it wrapped onto its own line under 335px. Growing the row instead
-                        (a line of its own for `state`) fixed the wrap and broke a stricter
-                        floor: `toBeInViewport({ ratio: 1 })` on the pipeline-console case,
-                        because the taller row no longer fit. The eye icon alone still says
-                        "you are looking at this one"; the word rides `.bn-sr` so a screen
-                        reader still gets it, and the row's height never moves. */}
-                    <span className="card-locations-viewing-text">Viewing</span>
-                  </Pill>
+                {/* THE COPY THE WALK STANDS ON, MARKED ONLY WHERE THERE IS A CHOICE (UX-221): the
+                    row's own rail and ground say it on screen, and with one copy there is no
+                    other row to tell it from. Never an eye, which read as "identified = seen".
+                    The word is spoken, not drawn. */}
+                {current && group.copies.length > 1 ? (
+                  <span className="card-locations-viewing bn-sr">Viewing</span>
                 ) : null}
                 {claim === null ? null : (
                   <a
@@ -571,11 +589,19 @@ function OwnerRows({
                     <span className="card-locations-claim-id">{claim.order}</span>
                   </a>
                 )}
-                <Pill tone={stateTone(copy.state)}>{stateLabel(copy.state)}</Pill>
+                {/* A STATE ONLY WHEN IT IS THE EXCEPTION (UX-221): nearly every copy is identified,
+                    so the word told the hand nothing, twice per card. NEVER for a departed one
+                    (S2): the struck number `PositionLabel` already draws is that row's own mark,
+                    and the hero chips above already say "Sold" or "Retired" once for the copy
+                    the walk stands on — a second pill here repeated it, a third time in the
+                    action bar at 390. */}
+                {copy.state === IDENTIFIED || copy.state === SOLD || copy.state === RETIRED ? null : (
+                  <Pill tone={stateTone(copy.state)}>{stateLabel(copy.state)}</Pill>
+                )}
               </span>
 
-              {/* The action, or what stands where one would. A sold copy's own state pill
-                  already says so; an optimistic sale whose re-read is still in flight needs a
+              {/* The action, or what stands where one would. A departed copy's struck number
+                  already says so (S2); an optimistic sale whose re-read is still in flight needs a
                   word, and a sale whose undo window is still running draws its draining clock
                   and an `Undo` here since D119 — inside this cell, at the size the cell already
                   reserves (D118), because a press may not resize the slot it lands in. */}

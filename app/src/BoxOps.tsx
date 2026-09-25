@@ -32,7 +32,8 @@ import {
 import { spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
-import { Button, Icon, Notice, Pill, Stat, type IconName } from './kit'
+import { Button, Icon, Notice, Pill, Stat, boxesMostRecentFirst, type IconName } from './kit'
+import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
 import './BoxOps.css'
@@ -330,21 +331,23 @@ export function BoxIdentity({
   return (
     <div className="boxops-identity">
       <div className="boxops-identity-top">
+        {/* THE NAME ALONE (D259): the number is the store's key, never
+            drawn. An unnamed box has a stored default name since the locating lane. THE STATE
+            PILL ONLY FOR THE EXCEPTION, ON THE NAME'S LINE (UX-269, UX-221's rule): on the
+            figures' line an "open" pill sat inline for one box and wrapped alone for another,
+            and nearly every box is open, so the word told the hand nothing. Sealed is drawn. */}
         <div className="boxops-identity-text">
-          <span className="boxops-identity-num">Box {record.box}</span>
-          <h2 className="boxops-identity-name">{record.name ?? `Box ${record.box}`}</h2>
+          <h2 className="boxops-identity-name">{record.name ?? UNNAMED_BOX}</h2>
         </div>
+        {sealed ? (
+          <Pill tone="default" icon="lock" className="boxops-state boxops-state-sealed">
+            sealed
+          </Pill>
+        ) : null}
         {actions}
       </div>
 
       <div className="boxops-identity-line">
-        <Pill
-          tone={sealed ? 'default' : 'ok'}
-          icon={sealed ? 'lock' : 'unlock'}
-          className={sealed ? 'boxops-state boxops-state-sealed' : 'boxops-state'}
-        >
-          {sealed ? 'sealed' : 'open'}
-        </Pill>
         {censusStats.length === 0 ? null : (
           <div className="boxops-stats bn-stat-row">
             {censusStats.map((stat) => (
@@ -365,7 +368,7 @@ export function BoxIdentity({
         <div
           className="boxops-track"
           role="img"
-          aria-label={`Box ${record.box}, ${spans.length} ${spans.length === 1 ? 'section' : 'sections'}`}
+          aria-label={`${record.name ?? UNNAMED_BOX}, ${spans.length} ${spans.length === 1 ? 'section' : 'sections'}`}
         >
           {spans.map((span, i) => (
             <span
@@ -444,7 +447,7 @@ export function BoxOps({
   const scope =
     selection.length > 0
       ? `the ${count(selection.length, 'selected card', 'selected cards')}`
-      : `all ${count(record.cards, 'card', 'cards')} in box ${record.box}`
+      : `all ${count(record.cards, 'card', 'cards')} in ${record.name ?? UNNAMED_BOX}`
 
   const applyClaims = async (patch: ClaimPatch) => {
     const result = await write(() =>
@@ -524,16 +527,17 @@ export function BoxOps({
 
   if (!open) return null
 
-  const others = boxes.filter((candidate) => candidate.box !== record.box)
+  /* S4: MOST RECENT FIRST — the same rule `Inventory.tsx:MovePanel` and the rail sort by.
+     `boxes` arrives in the server's own order (box number), which said nothing about which
+     box the hand was likeliest to reach for. */
+  const others = boxesMostRecentFirst(boxes.filter((candidate) => candidate.box !== record.box))
 
   return (
-    <Overlay kind="sheet" label={`Manage box ${record.box}`} onClose={onClose} className="boxops-sheet">
+    <Overlay kind="sheet" label={`Manage ${record.name ?? UNNAMED_BOX}`} onClose={onClose} className="boxops-sheet">
       <header className="inv-sheet-head">
         <div className="inv-sheet-head-text">
-          <span className="bn-eyebrow bn-facts">
-            <span>Box {record.box}</span> <span>{sealed ? 'sealed' : 'open'}</span>
-          </span>
-          <h2 className="inv-sheet-title">{record.name ?? `Box ${record.box}`}</h2>
+          <span className="bn-eyebrow">{sealed ? 'Sealed box' : 'Open box'}</span>
+          <h2 className="inv-sheet-title">{record.name ?? UNNAMED_BOX}</h2>
         </div>
         <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
           Close
@@ -572,24 +576,10 @@ export function BoxOps({
                       : boundHelp
                   }
                 />
-                {/* FILL and NEXT INDEX used to be the two bare labelled numbers on this sheet
-                    — every other control here already "says what it will do before it does
-                    it" (Seal, Edit dividers), and a hover-only `help` title said this without
-                    ever being read, since nothing on a touch device or a keyboard walk ever
-                    triggers one. `note` is the same visible-caption slot `Listing-held`
-                    already draws its reading age through, so this reaches for an existing
-                    mechanism rather than inventing new markup. */}
-                <Census
-                  label="Fill"
-                  value={known(record.fill)}
-                  help="Highest index ever captured — never comes down."
-                  note="Never comes down, even after a sale"
-                />
-                <Census
-                  label="Next index"
-                  value={known(record.next_index)}
-                  note="Where the next capture lands"
-                />
+                {/* THE TWO FIGURES KEEP NO NOTE (UX-259, cut list #17), and the second is named
+                    for what it is to the owner, never the store's "index" (D196). */}
+                <Census label="Fill" value={known(record.fill)} help="The highest card position ever captured in this box." />
+                <Census label="Next capture" value={known(record.next_index)} help="Where the next card captured into this box lands." />
                 {sealed ? <Census label="Sealed at" value={known(record.capacity)} /> : null}
               </dl>
             </section>
@@ -702,12 +692,12 @@ export function BoxOps({
               </section>
             ) : null}
 
-            {claimed === null ? null : <ClaimReceipt result={claimed} />}
+            {claimed === null ? null : <ClaimReceipt result={claimed} boxLabel={record.name ?? UNNAMED_BOX} />}
 
             {moved === null ? null : (
               <Notice
                 tone="ok"
-                title={`Moved ${count(moved.moved, 'card', 'cards')} from box ${moved.box} to box ${moved.to_box}.`}
+                title={`Moved ${count(moved.moved, 'card', 'cards')} from ${record.name ?? UNNAMED_BOX} to ${boxName(boxes, moved.to_box)}.`}
               >
                 The {count(moved.moved, 'position', 'positions')} left behind
                 {moved.moved === 1 ? ' stays' : ' stay'} permanently empty — the same gap a sale
@@ -720,7 +710,7 @@ export function BoxOps({
             <section className="boxops-group boxops-group-danger">
               <h3 className="bn-label">Danger</h3>
               <div className="boxops-ops">
-                <ReleaseListings record={record} listings={listings} onChanged={onChanged} />
+                <ReleaseListings record={record} boxes={boxes} listings={listings} onChanged={onChanged} />
                 <ReclaimPhotos record={record} onChanged={onChanged} />
                 <DeleteBox record={record} onChanged={onChanged} onDeleted={onClose} />
               </div>
@@ -745,7 +735,7 @@ export function BoxOps({
               onChange={setDraft}
               placeholder="SV commons"
               autoFocus
-              hint="The box number is the identifier and can't change here."
+              hint="Each box has its own name. Leave it empty for a default name."
             />
             <Trouble failure={trouble} />
             <div className="boxops-actions">
@@ -775,13 +765,10 @@ export function BoxOps({
                   {others.map((candidate) => {
                     // `<option>` renders plain text only, so the name and the sealed state
                     // fold into one parenthetical rather than a typed separator (D218).
-                    const extras = [candidate.name, candidate.state === CLOSED ? 'sealed' : null].filter(
-                      (part): part is string => Boolean(part),
-                    )
                     return (
                       <option key={candidate.box} value={String(candidate.box)}>
-                        Box {candidate.box}
-                        {extras.length > 0 ? ` (${extras.join(', ')})` : ''}
+                        {candidate.name ?? UNNAMED_BOX}
+                        {candidate.state === CLOSED ? ' (sealed)' : ''}
                       </option>
                     )
                   })}
@@ -801,7 +788,7 @@ export function BoxOps({
               <p className="bn-field-hint">
                 {selection.length > 0
                   ? `Moves the ${count(selection.length, 'selected card', 'selected cards')}. The positions here stay permanently empty.`
-                  : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in box ${record.box} — the same operation a merge is, from this side.`}
+                  : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in ${record.name ?? UNNAMED_BOX} — the same operation a merge is, from this side.`}
               </p>
             </div>
             {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
@@ -902,8 +889,10 @@ function Census({
   return (
     <div className="boxops-census-cell" title={help}>
       <dt>{label}</dt>
-      <dd>{value === null ? '—' : value.toLocaleString()}</dd>
-      {note === undefined ? null : <div className="boxops-census-note">{note}</div>}
+      <dd>
+        {value === null ? '—' : value.toLocaleString()}
+        {note === undefined ? null : <span className="boxops-census-note">{note}</span>}
+      </dd>
     </div>
   )
 }
@@ -962,7 +951,7 @@ function Relabel({
         <Notice tone="info">Already the box's layout — nothing changes.</Notice>
       ) : (
         <Notice tone="warn" title="A relabel, not a renumber.">
-          No card moves, no index changes — cards from #{from} on are relabelled only.{' '}
+          No card moves. Cards from #{from} on get a new section only.{' '}
           {hit === null || hit.sections.length === 0
             ? 'How many cards that reaches could not be read from this box.'
             : `That reaches ${hit.sections.length === 1 ? 'section' : 'sections'} ${hit.sections.join(', ')} — ${count(hit.cards, 'card', 'cards')}, counted by whole section.`}
@@ -1156,10 +1145,7 @@ export function ClaimEditor({
   return (
     <div className="boxops-claims">
       <p className="boxops-claim-scope">Change claims on {scope}</p>
-      <p className="bn-field-hint">
-        Switch a field on to write it; a field left off is left alone. A field switched on and
-        left empty clears the claim.
-      </p>
+      <p className="bn-field-hint">Switch a field on to change it. Empty clears it.</p>
 
       <ClaimRow field="game" label="Game" armed={isArmed('game')} onArm={arm} says="required — nothing to clear it to">
         <select
@@ -1287,14 +1273,9 @@ export function ClaimEditor({
         <PlainInput value={note} onChange={setNote} placeholder="blue-eyes, japanese" label="Note" />
       </ClaimRow>
 
-      <p className="bn-field-hint">
-        Finish and rarity are per game, so the choices above come from the game selected here.
-        The server checks every card against its own game and refuses the whole apply, naming
-        the cards, rather than writing some of them.
-        {!showsProduct
-          ? null
-          : ' A code card with no product claim is refused by both channel lanes, so clearing this one takes the code out of every lot until it is claimed again.'}
-      </p>
+      {!showsProduct ? null : (
+        <p className="bn-field-hint">A code card with no product cannot be sold until it has one again.</p>
+      )}
       {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
 
       <div className="boxops-actions">
@@ -1384,7 +1365,7 @@ function PlainInput({
 
 /** The receipt a box-wide apply leaves: what the scope reached, what actually changed, and
  *  which sold or retired cards the route stepped over. */
-function ClaimReceipt({ result }: { result: BoxClaimResult }) {
+function ClaimReceipt({ result, boxLabel }: { result: BoxClaimResult; boxLabel: string }) {
   return (
     <div className="boxops-receipt">
       <Notice
@@ -1394,7 +1375,7 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
             ? 'Nothing changed — every card in scope already said this.'
             : `${count(result.applied, 'card', 'cards')} changed.`
         }
-        code={`box ${result.box}: eligible ${result.eligible}, applied ${result.applied}, unchanged ${result.unchanged}, sidecars ${result.sidecars_rewritten}, skipped ${result.skipped_terminal}`}
+        code={`${boxLabel}: eligible ${result.eligible}, applied ${result.applied}, unchanged ${result.unchanged}, sidecars ${result.sidecars_rewritten}, skipped ${result.skipped_terminal}`}
       >
         {result.skipped.length === 0
           ? null
@@ -1409,7 +1390,24 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
 }
 
 /** One SKU's line in the plan and in the receipt, with the age of the figures it is quoting. */
-function ListingLine({ row, at }: { row: BoxListingRow; at?: string | null }) {
+/** A box's own NAME off the registry (S1: never the number a person reads on the drawer).
+ *  'another box' when the registry does not carry this box at all — the same fallback the
+ *  release receipt above already used for a box this screen never loaded. */
+function boxName(boxes: readonly BoxRecord[], box: number): string {
+  const found = boxes.find((candidate) => candidate.box === box)
+  return found === undefined ? 'another box' : (found.name ?? UNNAMED_BOX)
+}
+
+function ListingLine({
+  row,
+  at,
+  boxes = [],
+}: {
+  row: BoxListingRow
+  at?: string | null
+  /** The registry, to name the other boxes a SKU is also held in (S1: never the number). */
+  boxes?: readonly BoxRecord[]
+}) {
   const gives = Object.entries(row.releases)
   const keeps = Object.entries(row.after)
   return (
@@ -1426,7 +1424,9 @@ function ListingLine({ row, at }: { row: BoxListingRow; at?: string | null }) {
         {row.also_in_boxes.length === 0 ? null : (
           <>
             {' '}
-            <span>also {row.also_in_boxes.map((o) => `box ${o.box} (${o.copies})`).join(', ')}</span>
+            <span>
+              also {row.also_in_boxes.map((o) => `${boxName(boxes, o.box)} (${o.copies})`).join(', ')}
+            </span>
           </>
         )}
       </span>
@@ -1438,12 +1438,22 @@ function ListingLine({ row, at }: { row: BoxListingRow; at?: string | null }) {
 /* THE LISTING RELEASE — D34. Two steps and the first is free: opening the row fetches the plan,
  * and the button that asserts does not exist until that has answered. Draws nothing when there
  * is nothing to release. */
+/* A listing stage as the owner reads it, never the pipeline's word for it (D196). */
+function stageWords(stage: string): string {
+  if (stage === 'pushed') return 'sent'
+  if (stage === 'staged') return 'waiting to go live'
+  return stage
+}
+
 function ReleaseListings({
   record,
+  boxes = [],
   listings = NO_LISTINGS,
   onChanged,
 }: {
   record: BoxRecord
+  /** The registry, to name the other boxes that hold copies. */
+  boxes?: readonly BoxRecord[]
   listings?: Readonly<Record<string, Listing>>
   onChanged: () => void
 }) {
@@ -1500,26 +1510,26 @@ function ReleaseListings({
       <div className="boxops-receipt">
         <Notice
           tone="ok"
-          title={`Released ${count(receipt.released, 'SKU', 'SKUs')} in box ${receipt.box}${
-            gave.length === 0 ? '.' : `, giving up ${gave.map(([stage, n]) => `${n} ${stage}`).join(', ')}.`
+          title={`Released ${count(receipt.released, 'SKU', 'SKUs')} in ${record.name ?? UNNAMED_BOX}${
+            gave.length === 0 ? '.' : `, giving up ${gave.map(([stage, n]) => `${n} ${stageWords(stage)}`).join(', ')}.`
           }`}
         >
           Nothing was deleted — these are counts, and staging again re-establishes them.
           {receipt.frees_box ? null : (
             <>
               {' '}
-              <strong>Box {receipt.box} is still held.</strong>{' '}
+              <strong>{record.name ?? UNNAMED_BOX} is still held.</strong>{' '}
               {count(receipt.still_held.length, 'SKU', 'SKUs')} kept copies this box could not
               account for
               {receipt.also_in_boxes.length === 0
                 ? ''
-                : `, and ${receipt.also_in_boxes.map((b) => `box ${b}`).join(', ')} hold copies of them`}
+                : `, and ${receipt.also_in_boxes.map((b) => boxName(boxes, b)).join(', ')} hold copies of them`}
               , so the delete will go on refusing.
             </>
           )}
         </Notice>
         {receipt.listings.map((row) => (
-          <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} />
+          <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} boxes={boxes} />
         ))}
       </div>
     )
@@ -1542,7 +1552,7 @@ function ReleaseListings({
       {!open ? null : (
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
-            {count(record.listed, 'card', 'cards')} in box {box}{' '}
+            {count(record.listed, 'card', 'cards')} in {record.name ?? UNNAMED_BOX}{' '}
             {record.listed === 1 ? 'belongs' : 'belong'} to a SKU this store believes TCGplayer
             holds. Release only if{' '}
             <strong>you've checked TCGplayer and it holds none of them</strong> — nothing here
@@ -1556,21 +1566,21 @@ function ReleaseListings({
               <Notice tone={plan.frees_box ? 'info' : 'warn'}>
                 Each SKU gives up at most the copies this box holds.{' '}
                 {plan.frees_box ? (
-                  <>This releases box {box} completely.</>
+                  <>This releases {record.name ?? UNNAMED_BOX} completely.</>
                 ) : (
                   <>
-                    <strong>This will not free box {box}.</strong>{' '}
+                    <strong>This will not free {record.name ?? UNNAMED_BOX}.</strong>{' '}
                     {count(plan.still_held.length, 'SKU', 'SKUs')} will keep copies
                     {plan.also_in_boxes.length === 0
                       ? ''
-                      : ` also held by ${plan.also_in_boxes.map((b) => `box ${b}`).join(', ')}`}
+                      : ` also held by ${plan.also_in_boxes.map((b) => boxName(boxes, b)).join(', ')}`}
                     .
                   </>
                 )}
               </Notice>
               <div className="boxops-lines">
                 {plan.listings.map((row) => (
-                  <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} />
+                  <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} boxes={boxes} />
                 ))}
               </div>
             </>
@@ -1657,7 +1667,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       <div className="boxops-receipt">
         <Notice
           tone="ok"
-          title={`Reclaimed ${count(receipt.reclaimed, 'photograph', 'photographs')} from box ${receipt.box}, ${megabytes(receipt.bytes)}.`}
+          title={`Reclaimed ${count(receipt.reclaimed, 'photograph', 'photographs')} from ${record.name ?? UNNAMED_BOX}, ${megabytes(receipt.bytes)}.`}
           code={receipt.keys.join(', ')}
         >
           Records stay sold; each keeps its photograph's digest. No undo.
@@ -1678,7 +1688,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
         danger
         label="Reclaim photographs"
         detail={count(record.sold, 'sold card', 'sold cards')}
-        said={`Reclaim the photographs of ${count(record.sold, 'sold card', 'sold cards')} in box ${box}…`}
+        said={`Reclaim the photographs of ${count(record.sold, 'sold card', 'sold cards')} in ${record.name ?? UNNAMED_BOX}…`}
         busy={false}
         expanded={open}
         onClick={() => setOpen((held) => !held)}
@@ -1686,7 +1696,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       {!open ? null : (
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
-            Deletes the <strong>photograph</strong> of every sold card in box {box}; records
+            Deletes the <strong>photograph</strong> of every sold card in {record.name ?? UNNAMED_BOX}; records
             stay.{' '}
             <strong>No undo</strong> — a photograph can't be regenerated.
           </p>
@@ -1697,7 +1707,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
             <Notice tone={plan.reclaimable.cards === 0 ? 'info' : 'warn'}>
               {plan.reclaimable.cards === 0 ? (
                 <>
-                  Nothing to reclaim: no sold card in box {box} still has a photograph on disk
+                  Nothing to reclaim: no sold card in {record.name ?? UNNAMED_BOX} still has a photograph on disk
                   {plan.reclaimed.cards > 0
                     ? ` — ${count(plan.reclaimed.cards, 'was', 'were')} reclaimed already`
                     : ''}
@@ -1733,7 +1743,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
             </Button>
             {plan === null || plan.reclaimable.cards === 0 ? null : (
               <Button variant="danger-solid" icon="trash" busy={busy} onClick={() => void run()}>
-                Delete {count(plan.reclaimable.cards, 'photograph', 'photographs')} from box {box}{' '}
+                Delete {count(plan.reclaimable.cards, 'photograph', 'photographs')} from {record.name ?? UNNAMED_BOX}{' '}
                 permanently
               </Button>
             )}
@@ -1781,12 +1791,10 @@ function DeleteBox({
       toast({
         kind: 'ok',
         icon: 'trash',
-        title: `Box ${result.deleted_box} is gone. There is no undo.`,
-        body: `${result.cards} ${result.cards === 1 ? 'card' : 'cards'} gone${
-          result.buried > 0 ? ` — ${count(result.buried, 'departed record', 'departed records')} buried in the graveyard` : ''
-        }, with ${result.photos} ${result.photos === 1 ? 'photograph' : 'photographs'} and ${result.sidecars} ${result.sidecars === 1 ? 'sidecar' : 'sidecars'}, and ${result.review_deleted} review, ${result.parked_deleted} parked and ${result.cache_deleted} cache ${result.cache_deleted === 1 ? 'entry' : 'entries'}.${
-          result.directory_removed ? '' : ' The photo directory was left in place: it still holds a file this delete did not account for.'
-        }`,
+        title: `${record.name ?? UNNAMED_BOX} is gone. There is no undo.`,
+        body: `${count(result.cards, 'card', 'cards')} and ${count(result.photos, 'photograph', 'photographs')} deleted.${
+          result.buried > 0 ? ` ${count(result.buried, 'sold or retired card', 'sold or retired cards')} moved to the graveyard.` : ''
+        }${result.directory_removed ? '' : ' One photo folder stays: it holds a file the delete did not expect.'}`,
         ttlMs: 12000,
       })
       onChanged()
@@ -1803,7 +1811,7 @@ function DeleteBox({
       <Op
         icon="trash"
         danger
-        label={`Delete box ${record.box}…`}
+        label="Delete this box…"
         detail="no undo"
         busy={false}
         expanded={open}
@@ -1812,7 +1820,7 @@ function DeleteBox({
       {!open ? null : (
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
-            Deletes <strong>every record, photograph and sidecar</strong> in box {record.box}{' '}
+            Deletes <strong>every record, photograph and sidecar</strong> in {record.name ?? UNNAMED_BOX}{' '}
             — {count(record.cards, 'card', 'cards')}, plus its queue entries, id cache, and the
             box. <strong>No undo.</strong>
           </p>
@@ -1841,7 +1849,7 @@ function DeleteBox({
               Cancel
             </Button>
             <Button variant="danger-solid" icon="trash" busy={busy} onClick={() => void run()}>
-              Delete box {record.box} permanently
+              Delete this box permanently
             </Button>
           </div>
         </div>

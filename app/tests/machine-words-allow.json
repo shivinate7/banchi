@@ -5,6 +5,9 @@
     "span": "capture",
     "manual:c": "capture"
   },
+  "#/runs": {
+    "emit": "b-runs"
+  },
   "#/orders": {
     "pushed": "inventory",
     "staged": "inventory"

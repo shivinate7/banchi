@@ -160,6 +160,9 @@
    its own size beside the key instead of stacking full width with it. */
 .bn-filterbar-sheet-body .bn-sort > .bn-pick { flex: 1; min-width: 0; max-width: none; justify-content: flex-start; }
 
+/* The same body in a popover under the trigger (`compact="popover"`): a desk's narrow bar. */
+.bn-filterbar-popover { width: min(320px, calc(100vw - 16px)); padding: var(--bn-3); }
+
 /* ---- The match highlight (`kit/highlight.tsx`) ------------------------------------------------ */
 .bn-highlight {
   padding: 0 1px;
@@ -175,4 +178,10 @@
   .bn-filterbar-row { display: none; }
   .bn-filterbar-compact { display: block; }
   .bn-filterbar-lead { flex-basis: 100%; min-width: 0; max-width: none; }
+}
+/* A POPOVER BAR KEEPS ITS FILTERS PRESS ON THE SEARCH'S OWN LINE. It is a desk's narrow column
+   (Inventory's rail), where every line the bar takes is a line the list under it loses (UX-206).
+   The phone's sheet bar keeps the search on a line of its own. */
+@container bn-filterbar (max-width: 479px) {
+  .bn-filterbar[data-compact='popover'] .bn-filterbar-lead { flex: 1 1 0; }
 }
