@@ -36118,6 +36118,69 @@ def check_emit_unpriced_left_out(checks: Checks) -> None:
         "and the send route names it `needs_price`, never `nothing_to_send`",
     )
 
+    # THE REVIEWER'S STORES, R4 (the delta review of 683860e7).
+    #
+    # F3: several runs, one card sent with `--quantity SKU=0` and one with no price. The empty
+    # send returned on the price sentence before the loop that names every left-out card, so
+    # the zero-quantity card was never named.
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[0], cards[2]], market=no_price)
+        two, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(
+            ["emit", str(one.directory), str(two.directory), "--quantity", f"{DUNSPARCE_SKU}=0"]
+        )
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and f"{DUNSPARCE_SKU} — " in said,
+            "several runs, an empty send: every left-out card is NAMED with its reason before "
+            "the price sentence",
+            f"exit {code}\n{said}",
+        )
+
+    # F4: `--listed-only` over a priced card under the cut-off and an unpriced card. Nothing
+    # can go. The single-run path ignored the flag, and the merged path said every card needs a
+    # price while a priced card stayed back. Both paths must say the same true thing: the
+    # priced card is held back by the flag, and it is named apart from the unpriced one.
+    under = {ARTICUNO_SKU: "", DUNSPARCE_SKU: "0.10"}
+
+    def listed_only_truth(argv, label) -> None:
+        code, said = refused(argv)
+        checks.ok(
+            code == 1
+            and merge.ONLY_UNDER_CUT in said
+            and merge.ONLY_UNPRICED not in said
+            and f"{DUNSPARCE_SKU} — under the cut-off" in said
+            and ARTICUNO_SKU in said,
+            f"{label}, --listed-only: the priced card under the cut-off is named apart from the "
+            "unpriced one, and the refusal says the flag holds it back",
+            f"exit {code}\n{said}",
+        )
+
+    with isolated_home():
+        only, _ = seam_run(checks, [cards[0], cards[2]], market=under)
+        listed_only_truth(["emit", str(only.directory), "--listed-only"], "one run")
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[0]], market=under)
+        two, _ = seam_run(checks, [cards[2]], market=under)
+        listed_only_truth(
+            ["emit", str(one.directory), str(two.directory), "--listed-only"], "several runs"
+        )
+
+    # F5: a live-guard trim beside the price reason. The route checked the price sentence
+    # first and dropped the trim. It names both now.
+    trim = {"sku": DUNSPARCE_SKU, "name": "Dunsparce", "live": 1, "on_hand": 1, "would": 1, "goes": 0}
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNPRICED}\n", [trim], "sent")
+    checks.ok(
+        answer.code == "needs_price" and "Dunsparce" in str(answer) and "TCGplayer already" in str(answer),
+        "the send route names the trimmed card beside the price reason, never hides it",
+        str(answer),
+    )
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNDER_CUT}\n", [], "sent")
+    checks.equal(
+        answer.code,
+        "under_cut_off",
+        "and a send that --listed-only emptied is named for the flag, not for a price",
+    )
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)

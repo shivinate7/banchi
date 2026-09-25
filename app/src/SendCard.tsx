@@ -64,6 +64,8 @@ function refusalTitle(code: string): string {
       return 'Banchi could not read what is live at TCGplayer, so nothing was sent.'
     case 'needs_price':
       return 'Every card on this list needs a price first, so nothing was sent.'
+    case 'under_cut_off':
+      return 'Every priced card on this list is under the cut-off, and this send lists only the cards above it, so nothing was sent.'
     case 'nothing_to_send':
       return 'Nothing to send. Every copy on this list is already at TCGplayer or held back.'
     case 'already_sent':
@@ -602,6 +604,9 @@ export function SendCard({
           : null
   const running = open.some((send) => send.state === 'sending')
   const busy = phase !== 'idle' || running
+  /* NOTHING READY, NOTHING TO PRESS (R4 F5): with no copy and no price change the press could
+     only be refused, so it is disabled until a copy is ready. */
+  const empty = copies === 0 && priceChanges.length === 0
   /* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118: a press changes what is on the
      screen, never where the rest of it is). Its label named the live copies on two lines at a
      phone width and became one short line under the finger, so the sticky bar shrank and the
@@ -671,7 +676,7 @@ export function SendCard({
           icon="send"
           className="pricing-emit send-press"
           busy={phase === 'sending' || phase === 'waiting' || running}
-          disabled={busy}
+          disabled={busy || empty}
           onClick={() => press('send')}
         >
           {label}

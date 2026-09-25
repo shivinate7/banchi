@@ -821,20 +821,38 @@ def _markdown_blocks(conflict: dict, step: str) -> PipelineRefusal:
     )
 
 
+def _trimmed_words(trimmed: list) -> str:
+    """The cards the live guard held back, by name, as one sentence (R4 F5)."""
+    if not trimmed:
+        return ""
+    names = [str(trim.get("name") or trim.get("sku")) for trim in trimmed]
+    shown = ", ".join(names[:5]) + (f" and {len(names) - 5} more" if len(names) > 5 else "")
+    return f" {len(names)} held back: TCGplayer already had them ({shown})."
+
+
 def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -> "PipelineRefusal":
     """Why a press that counted nothing sent nothing, in the owner's words.
 
     Its own function so the harness can read the mapping without a press (the delta review,
-    R3-3), which is the one case that needs it: every card left needs a price first."""
+    R3-3), which is the one case that needs it: every card left needs a price first.
+
+    A card the live guard trimmed is named beside any reason (R4 F5), never hidden behind it."""
+    held = _trimmed_words(trimmed)
+    if merge.ONLY_UNDER_CUT in console:
+        return PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "under_cut_off",
+            f"Every priced card on this list is under the cut-off, and this send lists only "
+            f"the cards above it, so nothing was {step}.{held}",
+        )
     if merge.ONLY_UNPRICED in console:
         return PipelineRefusal(
             HTTPStatus.CONFLICT,
             "needs_price",
             f"Every card on this list needs a price first, so nothing was {step}. Type a "
-            f"price on each, then send.",
+            f"price on each, then send.{held}",
         )
     if code == 0 or trimmed or "nothing to write" in console or "nothing new" in console:
-        held = f" {len(trimmed)} card{'s' if len(trimmed) != 1 else ''} held back." if trimmed else ""
         return PipelineRefusal(
             HTTPStatus.CONFLICT,
             "nothing_to_send",

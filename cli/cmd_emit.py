@@ -807,6 +807,15 @@ def _say_no_price(left, say) -> None:
         say(f"  and {len(left) - 8} more")
 
 
+def _say_under_cut(held, say) -> None:
+    """Priced cards `--listed-only` held back, each named apart from an unpriced card (R4 F4)."""
+    if not held:
+        return
+    say(f"{'--listed-only':<16} {len(held)} priced card(s) under the cut-off held back")
+    for sku, name in held:
+        say(f"{'':<16} {sku} — under the cut-off ({name})")
+
+
 def resolved_matches_named(resolved_by_run, sku):
     """The card names every leg of a merged send knows `sku` by, newest leg last."""
     return [
@@ -1229,15 +1238,29 @@ def run(args, say) -> int:
             say,
         )
         zero, changes = _zero_rows_single(resolved, priced, changes, args, say)
-        # EVERY CARD LEFT NEEDS A PRICE (the delta review, R3-3): say that, and exit as the
-        # merged path does. "Every row is already sent" was false here.
-        sendable = any(
-            resolved.matches[sku].add_to_quantity > 0
+        # NOTHING LEFT TO SEND, SAID TRULY AND AS THE MERGED PATH SAYS IT (R3-3, R4 F4). A card
+        # with no price stays back, and so does a priced card under the cut-off when
+        # `--listed-only` is set. The flag is obeyed here as the merged plan obeys it.
+        below = {
+            sku
+            for game_join in resolved.joins.values()
+            for sku in game_join.report.below_threshold.skus
+        }
+        adding = [
+            sku
             for by_game in priced.values()
             for sku in by_game
-        )
-        if no_price and not sendable and not changes:
-            say(merge.ONLY_UNPRICED)
+            if resolved.matches[sku].add_to_quantity > 0
+        ]
+        cut_back = [
+            (sku, resolved.matches[sku].name)
+            for sku in adding
+            if args.listed_only and sku in below
+        ]
+        sendable = len(adding) > len(cut_back)
+        if (no_price or cut_back) and not sendable and not changes:
+            _say_under_cut(cut_back, say)
+            say(merge.ONLY_UNDER_CUT if cut_back else merge.ONLY_UNPRICED)
             return 1
 
         # TWO SHAPES, ONE SET OF ROWS. Whichever branch runs, the rows come out of the same
@@ -1830,14 +1853,26 @@ def run_merged(args, say) -> int:
     )
     changed = {change.sku for change in changes}
     rows = rows + [row for row in merged_plan.skus if row.sku in changed]
-    if not rows and any(why == merge.NO_PRICE_YET for why in merged_plan.dropped.values()):
-        # THE SAME SENTENCE AND THE SAME EXIT AS ONE RUN (the delta review, R3-3).
-        say(merge.ONLY_UNPRICED)
-        return 1
     if not rows:
-        say("nothing to write — every matched SKU is held back, unlisted, or has no room")
-        for sku, why in list(merged_plan.dropped.items())[:8]:
-            say(f"  {sku} — {why}")
+        # EVERY LEFT-OUT CARD IS NAMED BEFORE THE REFUSAL (R4 F3), and the refusal is the same
+        # sentence and the same exit as one run (R3-3, R4 F4). A card with no price was named
+        # above, so it is not named twice.
+        cut_back = (
+            [(row.sku, row.match.name) for row in merged_plan.rows() if row.sub_threshold]
+            if args.listed_only
+            else []
+        )
+        no_price_left = any(why == merge.NO_PRICE_YET for why in merged_plan.dropped.values())
+        if not (cut_back or no_price_left):
+            say("nothing to write — every matched SKU is held back, unlisted, or has no room")
+        for sku, why in merged_plan.dropped.items():
+            if why != merge.NO_PRICE_YET:
+                say(f"  {sku} — {why}")
+        _say_under_cut(cut_back, say)
+        if cut_back:
+            say(merge.ONLY_UNDER_CUT)
+        elif no_price_left:
+            say(merge.ONLY_UNPRICED)
         return 1
 
     # A SKU THAT ADDS NOTHING IS NAMED WHETHER OR NOT ANYTHING ELSE WRITES, which the branch

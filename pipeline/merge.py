@@ -307,6 +307,11 @@ NO_PRICE_YET = "no market price, and no price typed yet"
 #: and the marker the send route reads to answer `needs_price` rather than `nothing_to_send`.
 ONLY_UNPRICED = "nothing to send: every card left needs a price first"
 
+#: What a send says when `--listed-only` holds back every priced card left, because each is
+#: under the cut-off (the delta review, R4 F4). Both paths say it, and exit 1 on it, and the
+#: send route reads it to answer `under_cut_off`. A card with no price is named apart.
+ONLY_UNDER_CUT = "nothing to send: every priced card left is under the cut-off, and --listed-only holds it back"
+
 
 def plan(
     resolved_by_run: Mapping[str, object],

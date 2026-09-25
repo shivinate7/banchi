@@ -179,6 +179,12 @@
 .pricing-meta > *:not(:last-child)::after { content: '·'; margin-left: var(--bn-1-5); color: var(--bn-ink-3); }
 .pricing-number { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); }
 .pricing-place { display: inline-flex; align-items: center; gap: var(--bn-1); }
+/* THE CARD NUMBER IS NEVER CLIPPED (R4). The place keeps its whole width and gives way to
+   nothing: the facts after it shrink to an ellipsis first. Only a place wider than the whole
+   line wraps, between its parts, so a row costs a line only where the number would go. */
+.pricing-where > .pricing-place { flex: 0 0 auto; max-width: 100%; white-space: normal; }
+.pricing-where > .pricing-place > .pricing-more,
+.pricing-where > :not(.pricing-place) { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pricing-more { color: var(--bn-ink-3); }
 .pricing-copies { font-weight: 600; color: var(--bn-ink-2); }
 .pricing-live { color: var(--bn-ink-2); }

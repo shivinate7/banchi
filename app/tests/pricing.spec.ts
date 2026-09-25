@@ -3724,3 +3724,42 @@ test('the keyboard sheet lists the keys the rows answer, and nothing the screen 
   await expect(sheet).not.toContainText('Direct low')
   await expect(sheet).not.toContainText('Hold to read')
 })
+
+/* THE REVIEWER'S STORE (the delta review, R4 F5): every row owes a price, so nothing is ready.
+ * The press read "0 copies ready" and stayed live, and a press could only be refused. It is
+ * disabled until a copy is ready. */
+test('with nothing ready, the send press is disabled', async ({ page }) => {
+  await open(page, {
+    skus: [sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} },
+  })
+  await expect(page.locator('.pricing-bar-says')).toContainText('needs a price')
+  await expect(page.locator('.send-press')).toBeDisabled()
+})
+
+/* THE CARD NUMBER IS WHAT THE OWNER READS (the delta review, R4): at 390 a long box name cut the
+ * place line at "SECTION 1 CARD" and the number went. The line wraps between parts now, and the
+ * number sits whole inside its row. */
+test('at 390 the place line keeps the card number whole', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, {
+    skus: [
+      sku({
+        positions: [{ box: 7, index: 107, label: 'Box Riftbound Origins singles, Section 12, Card 107' }],
+        copies: 1,
+        add_to_quantity: 1,
+      }),
+    ],
+  })
+  const where = page.locator('.pricing-where').first()
+  const num = where.locator('.position-run-num')
+  await expect(num).toHaveText('107')
+  const clip = await where.evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    const n = el.querySelector('.position-run-num')!.getBoundingClientRect()
+    return { right: n.right, whereRight: box.right, width: n.width, viewport: window.innerWidth }
+  })
+  expect(clip.width).toBeGreaterThan(0)
+  expect(clip.right).toBeLessThanOrEqual(clip.whereRight + 0.5)
+  expect(clip.right).toBeLessThanOrEqual(clip.viewport)
+})
