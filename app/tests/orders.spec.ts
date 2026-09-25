@@ -3313,22 +3313,32 @@ for (const [width, height] of [
   test(`at ${width}, the filter bar is one line: the search and one Filters button`, async ({ page }) => {
     await page.setViewportSize({ width, height })
     await open(page, { orders: threeBuyerPayload() })
+    /* Settle fonts before any measurement: a late swap shifts the row a fraction of a pixel,
+       and the anchor and button forms of IconButton can settle on different frames. */
+    await page.evaluate(() => document.fonts.ready)
     const bar = page.locator(`${VIEW} .orders-filterbar`)
     const box = await bar.boundingBox()
     expect(box?.height ?? 999, 'the filter bar takes more than one line').toBeLessThanOrEqual(48)
     await expect(bar.locator('.bn-filterbar-trigger')).toBeVisible()
     await expect(bar.getByRole('button', { name: /^Show/ })).toBeHidden()
     /* Add orders and Cards to pull are two small squares ON THIS LINE (the owner's plan,
-       D274), and the page header holds no press. */
-    for (const name of ['Add orders', 'Cards to pull']) {
-      const press = bar.getByRole('button', { name })
+       D274), and the page header holds no press. Cards to pull is the IconButton ANCHOR
+       form (href, target, rel), never window.open (D274), so its role is 'link'. `box` is
+       RE-MEASURED beside each button rather than reused from above: the two boxes must come
+       from the same tick, or a sub-pixel settle between the loop's two turns reads as the
+       button drifting off a line that itself moved. */
+    for (const [name, role] of [['Add orders', 'button'], ['Cards to pull', 'link']] as const) {
+      const press = bar.getByRole(role, { name })
       await expect(press).toBeVisible()
-      const square = await press.boundingBox()
-      const search = await bar.locator('.search-field-box').boundingBox()
+      const [freshBox, square, search] = await Promise.all([
+        bar.boundingBox(),
+        press.boundingBox(),
+        bar.locator('.search-field-box').boundingBox(),
+      ])
       expect(Math.abs((square?.width ?? 0) - (square?.height ?? 99)), `${name} is not a square`).toBeLessThanOrEqual(1)
       expect(Math.abs((square?.height ?? 0) - (search?.height ?? 0)), `${name} is not the search's height`).toBeLessThanOrEqual(1)
-      expect((square?.y ?? 0) + (square?.height ?? 0), `${name} is off the filter bar's line`).toBeLessThanOrEqual((box?.y ?? 0) + (box?.height ?? 0) + 1)
-      expect(square?.y ?? -1, `${name} is off the filter bar's line`).toBeGreaterThanOrEqual((box?.y ?? 0) - 1)
+      expect((square?.y ?? 0) + (square?.height ?? 0), `${name} is off the filter bar's line`).toBeLessThanOrEqual((freshBox?.y ?? 0) + (freshBox?.height ?? 0) + 1)
+      expect(square?.y ?? -1, `${name} is off the filter bar's line`).toBeGreaterThanOrEqual((freshBox?.y ?? 0) - 1)
     }
     await expect(page.locator(`${VIEW} .bn-head`).getByRole('button')).toHaveCount(0)
   })
