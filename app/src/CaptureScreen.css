@@ -291,6 +291,36 @@
 .capture-open > .capture-row { border-radius: 0; background: var(--bn-accent-tint); }
 .capture-open > .capture-row .capture-k { color: var(--bn-accent); border-color: var(--bn-accent); }
 .capture-open > .capture-row .capture-lab { color: var(--bn-ink); }
+
+/* UX-069 (D118): the Box field's own slot. `min-height` is a fallback floor only — the real
+   height comes from the closed Row, which is ALWAYS rendered inside it (see
+   `.capture-row-covered`), so the slot is exactly as tall as the row's own content needs,
+   whether that is one line (empty) or two (a box picked). */
+.capture-box-slot { position: relative; min-height: 54px; }
+/* The closed row while the field is open: still in flow (it is what sizes the slot), but
+   invisible and out of the tab order — the pinned overlay above it is what the operator
+   sees and reaches. `visibility`, not `display: none`, is the whole trick: a hidden element
+   keeps its box for layout purposes and drops out of both paint and the accessibility tree. */
+.capture-row-covered { visibility: hidden; }
+/* THE OVERLAY ITSELF: out of flow, so opening it can never push the shutter, the blocker
+   list or the divider button below — measured at up to 202px/258px before this (UX-069).
+   Anchored to the slot's own top-left so it starts exactly where the closed row sat. */
+.capture-open-pinned {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  /* Opaque: it sits over the shutter and the blocker list, not beside them, and a
+     transparent gap here would let both show through. Matches .capture-card's own ground. */
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong), var(--bn-shadow-2);
+  /* A long box list grew the card itself before this (in flow); now that it overlays
+     instead, an unbounded height would run the list off the bottom of the screen with
+     nothing to stop it. Capped and scrollable, never clipped mid-row. */
+  max-height: min(420px, calc(100dvh - 200px));
+  overflow-y: auto;
+}
 .capture-open-body { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 10px; }
 .capture-open-lg > .capture-row { min-height: 40px; }
 .capture-meta {

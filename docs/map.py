@@ -8291,7 +8291,7 @@ COMPONENTS = [
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
                 "governed_by": ["D3", "D20", "D22", "D23", "D27", "D56", "D65", "D101", "D118",
-                                "D142", "D145", "D153", "D211", "D218"],
+                                "D142", "D145", "D153", "D205", "D211", "D218"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "

@@ -1607,3 +1607,61 @@ test('no typed middle dot or bullet reaches the capture screen', async ({ page }
 /* The pause/play overlay's own cases moved to capture-undo.spec.ts: this file's own rule is
    that the shutter is never pressed and no capture is ever taken, and proving the manual key
    fires while paused means pressing it. See capture-undo.spec.ts's "pause/play" block. */
+
+/* ------------------------------------------------------------------------------------------
+ * UX-069 (D118): "PIN THE SHUTTER, so it keeps one fixed position whatever opens above it."
+ * Every setup field, opened in turn, against the shutter's own rect before and after.
+ * ------------------------------------------------------------------------------------------ */
+
+function shutter(page: Page) {
+  return page.getByRole('button', { name: 'Capture card', exact: true })
+}
+
+test('the shutter keeps one fixed position whatever field opens above it (D118)', async ({
+  page,
+}) => {
+  // Set hint fetches the game's export sets the moment it opens; unstubbed, that reaches
+  // the real capture server, which `shell.ts`'s seal refuses.
+  await routeSets(page, { game: 'pokemon', sets: [], aliases: {}, reason: null })
+  await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES)
+  const rigSummary = page.locator('.capture-rig-summary')
+  if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
+
+  const fields: readonly { key: string; label: string | RegExp }[] = [
+    { key: 'b', label: 'Box' },
+    { key: 'h', label: 'Set hint' },
+    { key: 'r', label: 'Rarity' },
+    { key: 'f', label: 'Finish' },
+    { key: 'g', label: 'Game' },
+    { key: 'v', label: 'Camera' },
+    { key: 'o', label: 'Rotation' },
+    { key: 't', label: 'Trigger' },
+  ]
+
+  // DOCUMENT-relative, not viewport-relative: opening a field low on the page (Set hint,
+  // Rarity, ... on a phone, order 5-6 behind the shutter's own order 2) can scroll it into
+  // view, and a scroll moves every element's VIEWPORT rect without moving anything in the
+  // page's own layout — the opposite of what D118 is about. `getBoundingClientRect().top +
+  // scrollY` is stable across a scroll; `boundingBox()` alone is not.
+  const docRect = () =>
+    shutter(page).evaluate((el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.left + window.scrollX, y: r.top + window.scrollY, width: r.width, height: r.height }
+    })
+
+  // Both widths the owner named: 1440 desktop, 390 phone — the shutter's own row reflows
+  // between them (D205's tab bar, the phone's single column), so each gets its own baseline.
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 })
+    const baseline = await docRect()
+
+    for (const field of fields) {
+      await page.keyboard.press(field.key)
+      await expect(page.locator('.capture-open').filter({ hasText: field.label })).toBeVisible()
+      const opened = await docRect()
+      expect(opened, `${width}px, ${field.label} open`).toEqual(baseline)
+      await page.keyboard.press('Escape')
+      await expect(page.locator('.capture-open')).toHaveCount(0)
+    }
+  }
+})

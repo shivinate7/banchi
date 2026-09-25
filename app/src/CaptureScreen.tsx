@@ -587,6 +587,7 @@ function Row({
   right,
   onToggle,
   size,
+  className,
 }: {
   k: string
   label: string
@@ -594,11 +595,16 @@ function Row({
   right: ReactNode
   onToggle: () => void
   size?: 'lg'
+  /** UX-069: the Box row's own way of staying in flow (for its height) while an overlay
+   *  covers it. See `.capture-row-covered` in the stylesheet. */
+  className?: string
 }) {
+  const classes = [size === 'lg' ? 'capture-row capture-row-lg' : 'capture-row']
+  if (className !== undefined) classes.push(className)
   return (
     <button
       type="button"
-      className={size === 'lg' ? 'capture-row capture-row-lg' : 'capture-row'}
+      className={classes.join(' ')}
       aria-expanded={false}
       aria-keyshortcuts={k}
       onClick={onToggle}
@@ -622,6 +628,7 @@ function OpenField({
   onClose,
   children,
   size,
+  pin,
 }: {
   k: string
   label: string
@@ -630,9 +637,16 @@ function OpenField({
   onClose: () => void
   children: ReactNode
   size?: 'lg'
+  /** UX-069 (D118): opens as an overlay, out of flow, instead of pushing what is below it
+   *  down. Only the Box field asks for this — see `.capture-open-pinned` in the stylesheet
+   *  for why nothing else in this file needs it. */
+  pin?: boolean
 }) {
+  const classes = ['capture-open']
+  if (size === 'lg') classes.push('capture-open-lg')
+  if (pin === true) classes.push('capture-open-pinned')
   return (
-    <div className={size === 'lg' ? 'capture-open capture-open-lg' : 'capture-open'}>
+    <div className={classes.join(' ')}>
       <button
         type="button"
         className="capture-row"
@@ -3387,12 +3401,46 @@ export function CaptureScreen() {
         <section className="capture-card capture-card-run" aria-label="Shooting">
           <p className="bn-label capture-card-label">Shooting</p>
 
-          {openField === 'box' ? (
+          {/* UX-069 (D118): the closed Row is now ALWAYS rendered, open or shut — only
+              hidden visually (`visibility`, not removed) when the field opens. Its natural
+              height is what reserves the slot, whatever the row's own content shape (one
+              line empty, two lines picked) — a fixed number here was tried first and was
+              8px short against the two-line state, because `min-height: 54px` is the empty
+              row's own floor, not this one's. The OpenField overlay sits on top of it. */}
+          <div className="capture-box-slot">
+          <Row
+            k="B"
+            label="Box"
+            icon="box"
+            size="lg"
+            className={openField === 'box' ? 'capture-row-covered' : undefined}
+            right={
+              box === null ? (
+                <span className="capture-box-val is-empty">
+                  <strong>No box yet</strong>
+                  <span>Pick one, or type a new name</span>
+                </span>
+              ) : (
+                /* THE NAME IS THE HEADLINE AND THE NUMBER IS GONE (D142).
+                   It read `Box 3` over `RB Epics · next index 41`, which made the operator
+                   read past the number to reach the word they think in. `captureBoxLabel`
+                   falls back to `Box 3` for a drawer nobody has named, so an unnamed box is
+                   still identifiable and no placeholder is invented (D56). */
+                <span className="capture-box-val">
+                  <strong>{captureBoxLabel(box, boxName)}</strong>
+                  <span>{boxNextText}</span>
+                </span>
+              )
+            }
+            onToggle={() => toggleField('box')}
+          />
+          {openField !== 'box' ? null : (
             <OpenField
               k="B"
               label="Box"
               icon="box"
               size="lg"
+              pin
               // TXT-32 (density): "4 boxes" counted what the list under it already shows.
               meta={null}
               onClose={closeField}
@@ -3509,33 +3557,8 @@ export function CaptureScreen() {
                 </p>
               )}
             </OpenField>
-          ) : (
-            <Row
-              k="B"
-              label="Box"
-              icon="box"
-              size="lg"
-              right={
-                box === null ? (
-                  <span className="capture-box-val is-empty">
-                    <strong>No box yet</strong>
-                    <span>Pick one, or type a new name</span>
-                  </span>
-                ) : (
-                  /* THE NAME IS THE HEADLINE AND THE NUMBER IS GONE (D142).
-                     It read `Box 3` over `RB Epics · next index 41`, which made the operator
-                     read past the number to reach the word they think in. `captureBoxLabel`
-                     falls back to `Box 3` for a drawer nobody has named, so an unnamed box is
-                     still identifiable and no placeholder is invented (D56). */
-                  <span className="capture-box-val">
-                    <strong>{captureBoxLabel(box, boxName)}</strong>
-                    <span>{boxNextText}</span>
-                  </span>
-                )
-              }
-              onToggle={() => toggleField('box')}
-            />
           )}
+          </div>
 
           <div className="capture-controls">
             <Button
