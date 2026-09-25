@@ -74,7 +74,6 @@ function placeOf(index: number, boxName: string) {
     section_start: sectionStart,
     section_end: sectionEnd,
     box_total: OCCUPIED.length,
-    box_closed: false,
     fraction: slot === null ? null : (slot - 1) / OCCUPIED.length,
     neighbors: { prev: neighbor(before[before.length - 1]), next: neighbor(after[0]) },
     section_gaps: 0,

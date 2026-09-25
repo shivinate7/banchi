@@ -469,6 +469,8 @@ That is the deciding reason. An integer cannot be checked against anything on di
 
 **`store/master.py:1390 next_index` stays, unchanged, and is still needed.** `1 + max(idx WHERE box = N)` over every state, D10's high-water mark. Its argument in D10 is *permanent gaps from departures*; note that D26's re-shoot is **not** a second ground — `do_reshoot`'s own docstring says *"allocator never involved"* — and with zero gaps in all five boxes today, high-water, count+1 and first-free return the same integer. That is a population of zero, not a vindication, and it is why `next_index` is left alone here rather than defended.
 
+**Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
+
 **The whole shutter-to-sidecar path stays.** `_require_box`, `allocate_capture`'s sealed-box check and its `capture_id` replay guard, `BoxClosed`, `PositionOccupied`, `next_index` inside the lock, `sidecar_payload(box, index, …)`, `open_section`'s `S`, `banchi.session.box`. One statement is added to it.
 
 **Every photograph and every sidecar stays exactly where it is.** `captures/cards/box<N>/<idx:04d>.jpg` — 2,535 files, 4,445,351,065 bytes — and `captures/cards/box<N>/<idx:04d>.json`. **This PR performs zero filesystem renames, zero unlinks, and zero writes outside the database.** `photo_path` stays derived, `INDEX_PAD = 4` stays load-bearing (`sidecar.scan` sorts by path string), and `Card.photo` stays a stored path string: measured **0 of 2,535 stored paths disagree with the derived tail** (1,993 absolute, 542 relative, one naming an iCloud root deleted 2026-08-29), so the store survey's 536-drifted-paths argument for deleting it **does not reproduce on this tree and must not be acted on**.

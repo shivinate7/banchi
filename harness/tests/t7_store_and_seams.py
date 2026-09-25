@@ -8475,9 +8475,10 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "not the registry, so no box captured before D20 is invisible",
         ):
             checks.equal(
-                [listed[8]["state"], listed[8]["capacity"], listed[8]["sections"]],
-                [master.BOX_OPEN, None, []],
-                "and it renders as open, uncapped and undeclared, which is what it is",
+                ["state" in listed[8], "capacity" in listed[8], listed[8]["sections"]],
+                [False, False, []],
+                "and it renders undeclared, with no lid and no capacity: a box has neither "
+                "since `D-sealed-boxes-removed`",
             )
             checks.equal(
                 [listed[8]["cards"], listed[8]["fill"], listed[8]["next_index"]],
@@ -8518,8 +8519,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
             checks,
             lambda: capture_server.do_put_box(9, {"capacity": 250}),
             "field_not_settable",
-            "and PUT refuses `capacity` for the same reason — it is FROZEN at the seal, "
-            "never typed",
+            "and PUT refuses `capacity`: a box has none (`D-sealed-boxes-removed`)",
         )
         refusal(
             checks,
@@ -8527,13 +8527,6 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "field_not_settable",
             "and refuses `box`: a body that could change a box NUMBER would be a renumber, "
             "which D10 forbids outright",
-        )
-        refusal(
-            checks,
-            lambda: capture_server.do_put_box(9, {"state": "sealed"}),
-            "box_state_invalid",
-            "a state outside open/closed refuses in its OWN code, not as field_not_settable "
-            "— the field is settable and the value is not one of the two",
         )
         refusal(
             checks,
@@ -8549,75 +8542,25 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "so refusing here would put a dead rename control on a live row",
         )
 
-        # --- sealing freezes capacity at the fill ---------------------------------------
-        sealed = capture_server.do_put_box(9, {"state": master.BOX_CLOSED})
-        checks.equal(
-            [sealed["capacity"], sealed["fill"], sealed["state"]],
-            [0, 0, master.BOX_CLOSED],
-            "sealing an empty box freezes capacity at its fill, which is zero",
+        # --- NO SEAL (`D-sealed-boxes-removed`, the owner's ruling of 2026-09-25) ----------
+        # "what was the point of sealed boxes? lets kill this". Red before the removal: the
+        # PUT sealed box 8, and the capture into it was refused `box_closed`.
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box(8, {"state": "closed"}),
+            "field_not_settable",
+            "a box has no lid: PUT refuses `state` as a field it does not have",
         )
-        reopened = capture_server.do_put_box(9, {"state": master.BOX_OPEN})
-        checks.equal(
-            reopened["capacity"],
-            None,
-            "and re-opening drops capacity rather than leaving a stale number standing",
+        status, _ = capture_server.do_capture(capture_payload(8))
+        checks.ok(
+            int(status) in (200, 201),
+            "and a capture into any box is taken: there is no sealed box to refuse it",
+            f"status {status}",
         )
-        filled = capture_server.do_put_box(8, {"state": master.BOX_CLOSED})
-        checks.equal(
-            [filled["capacity"], filled["fill"]],
-            [3, 3],
-            "sealing a filled box freezes capacity at the cards it holds — the difference "
-            "between D20's '#40 of 250 · 16% in' and a denominator that keeps growing",
+        checks.ok(
+            not hasattr(master, "BoxClosed") and not hasattr(master.Inventory, "close_box"),
+            "and the store has no seal left to reach: no `BoxClosed`, no `close_box`",
         )
-        # BOTH SEALED-BOX REFUSALS GO OVER A SOCKET, and they are the only cases in this
-        # section that have to. `store/master.py` raises `BoxClosed` and `_dispatch` is what
-        # turns it into a code, so an in-process call asserts the store's exception and
-        # proves nothing about what a client is told — which is the half that reaches a
-        # screen. Asserted here as well, since a route that stopped raising would answer 500.
-        checks.raises(
-            master.BoxClosed,
-            lambda: capture_server.do_put_box(8, {"state": master.BOX_CLOSED}),
-            "sealing a sealed box raises rather than restamping it — the alternative "
-            "reading is that the call re-froze capacity at a new fill",
-        )
-        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
-        port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
-        try:
-            status, body, _ = request(
-                port, "PUT", "/boxes/8", payload={"state": master.BOX_CLOSED}
-            )
-            checks.equal(status, 409, "and on the wire a second seal is a 409, not a 500")
-            checks.equal(
-                error_code(body),
-                "box_closed",
-                "answering in its own code: the request was well-formed and lost a race "
-                "with the lid",
-            )
-
-            status, body, _ = request(port, "POST", "/capture", payload=capture_payload(8))
-            checks.equal(status, 409, "a capture into a sealed box is refused the same way")
-            checks.equal(
-                error_code(body),
-                "box_closed",
-                "and in the same code — one more card would falsify every fraction already "
-                "printed off that box",
-            )
-            after = {row["box"]: row for row in capture_server.do_boxes()["boxes"]}
-            checks.equal(
-                [
-                    after.get(8, {}).get("capacity"),
-                    after.get(8, {}).get("fill"),
-                    after.get(9, {}).get("capacity", "missing"),
-                ],
-                [3, 3, None],
-                "AND NEITHER REFUSAL CHANGED ANYTHING: box 8 is still sealed at 3 with no "
-                "index burned, and box 9 is still uncapped",
-            )
-        finally:
-            httpd.shutdown()
-            httpd.server_close()
 
     # --- GET /search: D7's SKU -> positions map, finally served to a screen -------------
     with isolated_home():
@@ -10410,17 +10353,19 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
             "The code stays `already_sold`, and neither the box number nor the index is said",
             f"refusal: {getattr(said_sold, 'code', None)}: {said_sold}",
         )
-        with Store().write() as snapshot:
-            snapshot.inventory.close_box(7)
+        # A STORE REFUSAL ABOUT A BOX SAYS ITS NAME. This read the sealed-box refusal until
+        # `D-sealed-boxes-removed`; a second divider in front of nothing is the same shape.
+        said_empty = ""
         try:
-            capture_server.do_capture(capture_payload(7))
-            said_sealed = ""
+            with Store().write() as snapshot:
+                snapshot.inventory.open_section(7)
+                snapshot.inventory.open_section(7)
         except Exception as caught:  # noqa: BLE001 — the message is what is read here
-            said_sealed = str(caught)
+            said_empty = str(caught)
         checks.ok(
-            said_sealed.startswith("Rares is sealed") and "box 7" not in said_sealed.casefold(),
-            "and a store refusal about a box says its name: `Rares is sealed`, never `box 7`",
-            said_sealed,
+            "of Rares holds nothing yet" in said_empty and "box 7" not in said_empty.casefold(),
+            "and a store refusal about a box says its name, `Rares`, never `box 7`",
+            said_empty,
         )
         checks.equal(
             (
@@ -21645,7 +21590,10 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
             conn.close()
         return stamp, tables, views, columns, skus_rows
 
-    checks.equal(db.SCHEMA_VERSION, 12, "the current schema is 12: skus at 11, send_claims at 12")
+    checks.equal(
+        db.SCHEMA_VERSION, 13,
+        "the current schema is 13: skus at 11, send_claims at 12, the order key at 13 (D265)",
+    )
 
     # --- a store at 10 has neither table -------------------------------------------------
     with isolated_home():
@@ -21672,7 +21620,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         checks.equal(
             (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
              {"sku_products", "sku_printings"} <= views),
-            (("12",), True, True, True, True),
+            ((str(db.SCHEMA_VERSION),), True, True, True, True),
             "a schema-10 store passes through 11 and then 12, and gains both tables",
         )
         checks.equal(
@@ -21703,7 +21651,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         stamp, tables, _views, _columns, rows = shape(store_path)
         checks.equal(
             (stamp, "send_claims" in tables, rows),
-            (("12",), True, 1),
+            ((str(db.SCHEMA_VERSION),), True, 1),
             "a schema-11 store from main gains send_claims at 12 and keeps its skus row",
         )
 
@@ -21734,7 +21682,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         checks.equal(
             (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
              {"sku_products", "sku_printings"} <= views),
-            (("12",), True, True, True, True),
+            ((str(db.SCHEMA_VERSION),), True, True, True, True),
             "the UX branch's schema-11 store reaches 12 with skus, both views and "
             "cards.identity_source",
         )
@@ -25323,9 +25271,9 @@ def check_boxes_and_listings(checks: Checks) -> None:
         migrated.boxes["1"].sections, [],
         "MIGRATED BOXES DECLARE NO LAYOUT — which is what preserves every existing label",
     )
-    checks.equal(
-        migrated.boxes["1"].capacity, None,
-        "and no capacity: it is retroactive, and this box was never sealed (D20)",
+    checks.ok(
+        not hasattr(migrated.boxes["1"], "capacity"),
+        "and no capacity: a box has none since `D-sealed-boxes-removed`",
     )
 
     # THE LABELS THEMSELVES. Literal strings, because a formula asserted against itself
@@ -25369,7 +25317,6 @@ def check_boxes_and_listings(checks: Checks) -> None:
     inventory = master.Inventory()
     inventory.ensure_box(1, name="ME01 commons")
     checks.equal(inventory.box(1).name, "ME01 commons", "a box can be created and named")
-    checks.equal(inventory.box(1).state, master.BOX_OPEN, "and starts open")
 
     inventory.set_sections(1, [1, 31, 56])
     checks.equal(
@@ -25430,36 +25377,11 @@ def check_boxes_and_listings(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(5))
         with Store().write() as snapshot:
             checks.equal(snapshot.inventory.box_fill(5), 4, "fill is the high-water mark")
-            snapshot.inventory.close_box(5)
-            box = snapshot.inventory.box(5)
-            checks.equal(box.capacity, 4, "SEALING FREEZES CAPACITY at the final fill (D20)")
-            checks.ok(box.closed, "and the box reads closed")
-            checks.raises(
-                master.BoxClosed,
-                lambda: snapshot.inventory.close_box(5),
-                "sealing a sealed box refuses rather than restamping it",
-            )
-            checks.raises(
-                master.BoxClosed,
-                # DELIBERATELY NAMELESS, for the reason the `UnknownClaim` case above gives
-                # (D172): the seal is checked before the index is computed and therefore
-                # before `record_capture` can refuse a nameless card, so this still hears
-                # `BoxClosed`. A `cid` here would let a reordering turn the seal's refusal
-                # into `UnnamedCard` with the case still green.
-                lambda: snapshot.inventory.allocate_capture(5),
-                "A SEALED BOX TAKES NO MORE CARDS — one more would falsify every fraction",
-            )
-            checks.equal(
-                snapshot.inventory.next_index(5), 5,
-                "and the refusal burned no index: it is checked before one is computed",
-            )
-            snapshot.inventory.reopen_box(5)
-            checks.equal(
-                snapshot.inventory.box(5).capacity, None,
-                "re-opening drops capacity rather than leaving a stale number standing",
-            )
             card, created = snapshot.inventory.allocate_capture(5, cid=fake_cid("reopened"))
-            checks.ok(created and card.index == 5, "and the box takes cards again")
+            checks.ok(
+                created and card.index == 5,
+                "and the box takes the next card: a box has no lid (`D-sealed-boxes-removed`)",
+            )
 
     # --- listings are quantities, never addresses --------------------------------------
     inventory = master.Inventory()
@@ -26970,13 +26892,6 @@ def check_open_section(checks: Checks) -> None:
             "sentence about a list rather than about this box",
         )
 
-        capture_server.do_put_box(4, {"state": "closed"})
-        checks.raises(
-            master.BoxClosed,
-            lambda: capture_server.do_open_section(4, {}),
-            "A SEALED BOX TAKES NO DIVIDER, for the reason it takes no card: there are no "
-            "more cards to come, so the section would hold nothing, ever",
-        )
         refusal(
             checks,
             lambda: capture_server.do_open_section(77, {}),
@@ -27030,7 +26945,6 @@ def check_open_section(checks: Checks) -> None:
             for box, code, label in (
                 (6, "section_empty", "a replayed press is a 409 `section_empty`"),
                 (5, "section_ahead", "a divider ahead of the next card is 409 `section_ahead`"),
-                (4, "box_closed", "and a sealed box is 409 `box_closed`, not a 500"),
             ):
                 status, body, _ = request(port, "POST", f"/boxes/{box}/sections", payload={})
                 checks.equal(
@@ -36718,6 +36632,12 @@ def run() -> Result:
     check_shipping_stamps(checks)
     check_value_table(checks)
     check_value_page(checks)
+    # The box map's cases live in a sibling file (D264). Imported here, not at the top,
+    # because that file imports its fixtures from this one.
+    from harness.tests import t7_box_map
+
+    for box_map_check in t7_box_map.CHECKS:
+        box_map_check(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

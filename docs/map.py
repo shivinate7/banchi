@@ -754,8 +754,8 @@ COMPONENTS = [
                            "governed_by": ["D4", "D8", "D10", "D11", "D12", "D20", "D21", "D22",
                                            "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49",
                                            "D56", "D58", "D59", "D64", "D87", "D89", "D115", "D137",
-                                           "D145", "D147", "D150", "D156", "D166", "D180", "D183",
-                                           "D188", "D253", "D259"], "tested_by": ["T7"]},
+                                           "D145", "D147", "D150", "D156", "D165", "D166", "D180",
+                                           "D183", "D188", "D253", "D259", "D262"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -958,8 +958,7 @@ COMPONENTS = [
                                         "D36", "D41", "D46", "D49", "D54", "D55", "D56", "D58",
                                         "D59", "D63", "D64", "D65", "D67", "D68", "D71", "D76",
                                         "D87", "D137", "D146", "D162", "D213", "D218", "D253",
-                                        "D259",
-                                        "D260"], "tested_by": ["T3"]},
+                                        "D259", "D260", "D265"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -1119,7 +1118,7 @@ COMPONENTS = [
                             # and removing it is what created one. D93/D97 because a stop says
                             # how many to take and lists every copy, never `wanted` of them.
                             "governed_by": ["D10", "D21", "D24", "D26", "D36", "D58", "D63", "D93",
-                                            "D97", "D172", "D183", "D212"],
+                                            "D97", "D172", "D183", "D212", "D265"],
                             "tested_by": ["T11"],
                             "note": "IT TOUCHES NO WIRE AND NO BROWSER. `POST /orders/walk-plan` "
                                     "(`server/capture_server.py:do_order_walk_plan`) and "
@@ -1480,9 +1479,9 @@ COMPONENTS = [
                                      "`photos/` a capture is filed under from D172 onward — "
                                      "gated on the second existing, so a store with nothing "
                                      "captured since scans exactly as it always did.",
-                             "governed_by": ["D10", "D21", "D22", "D33", "D36", "D39", "D43",
-                                             "D48", "D56", "D58", "D65", "D76", "D145", "D165",
-                                             "D172", "D174", "D180"],
+                             "governed_by": ["D10", "D21", "D22", "D33", "D36", "D39", "D43", "D48",
+                                             "D56", "D58", "D65", "D76", "D145", "D165", "D172",
+                                             "D174", "D180", "D265"],
                              "tested_by": ["T7"]},
             "sendguard.py": {"does": "THE DOUBLE-SEND GUARD. After a send, live at TCGplayer "
                                      "plus Add to Quantity may never pass the copies on hand, "
@@ -1811,7 +1810,8 @@ COMPONENTS = [
                                           "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88",
                                           "D89", "D100", "D115", "D132", "D145", "D146", "D167",
                                           "D172", "D173", "D183", "D192", "D213", "D253", "D258",
-                                          "D259"], "tested_by": ["T7"]},
+                                          "D259", "D264", "D265", "D-sealed-boxes-removed"],
+                                          "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -2058,9 +2058,9 @@ COMPONENTS = [
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
                               "migration to add one to a store already on disk.",
-                      "governed_by": ["D20", "D26", "D86", "D88", "D134", "D140", "D145", "D166",
-                                      "D172", "D174", "D189", "D192", "D213", "D219", "D243",
-                                      "D273"],
+                      "governed_by": ["D20", "D26", "D58", "D86", "D88", "D134", "D140", "D145",
+                                      "D166", "D172", "D174", "D189", "D192", "D213", "D219",
+                                      "D243", "D265", "D273", "D-sealed-boxes-removed"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -2799,8 +2799,7 @@ COMPONENTS = [
                         "excused by a RECORDED digest with the audit going red when that "
                         "digest is mutated; and a `-9` mid-transaction leaving the store "
                         "byte-identical",
-                "governed_by": ["D18", "D26", "D80", "D83", "D88", "D89", "D172",
-                                "D183"],
+                "governed_by": ["D18", "D26", "D80", "D83", "D88", "D89", "D172", "D183", "D265"],
             },
             "submission-selftest.py": {
                 "does": "proves the identify claim table by violating it. A throwaway store "
@@ -3547,7 +3546,7 @@ COMPONENTS = [
                 "governed_by": ["D13", "D14", "D18", "D28", "D58", "D62", "D76", "D79", "D83",
                                 "D86", "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D165", "D167", "D168", "D174", "D189", "D192",
-                                "D193", "D203", "D210", "D225", "D227", "D236", "D252",
+                                "D193", "D203", "D210", "D225", "D227", "D236", "D252", "D264",
                                 "D273"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
@@ -5294,7 +5293,8 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D166", "D168", "D172", "D174", "D183", "D189",
                                 "D191", "D192", "D193", "D196", "D203", "D212", "D213", "D219",
-                                "D225", "D227", "D251", "D252", "D259", "D268", "D273"],
+                                "D225", "D227", "D251", "D252", "D259", "D262", "D264", "D265",
+                                "D268", "D273", "D-sealed-boxes-removed"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -6313,9 +6313,8 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236", "D252",
-                                              "D268",
-                                              "D273"]},
+                                              "D225", "D227", "D236", "D252", "D264", "D268",
+                                              "D273", "D-sealed-boxes-removed"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6408,7 +6407,8 @@ COMPONENTS = [
                                              "D104", "D113", "D114", "D115", "D116", "D118", "D132",
                                              "D134", "D142", "D145", "D147", "D156", "D159", "D165",
                                              "D166", "D168", "D172", "D174", "D180", "D183", "D193",
-                                             "D212", "D213", "D225", "D227", "D236", "D252", "D273"]},
+                                             "D212", "D213", "D225", "D227", "D236", "D252", "D264",
+                                             "D265", "D273", "D-sealed-boxes-removed"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6619,7 +6619,8 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145", "D153",
-                            "D164", "D170", "D172", "D196", "D218", "D-capture-always-asks"]},
+                            "D164", "D170", "D172", "D196", "D218", "D-capture-always-asks",
+                            "D-sealed-boxes-removed"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -6777,7 +6778,7 @@ COMPONENTS = [
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D159", "D172",
                             "D181", "D192", "D213", "D218", "D221", "D252", "D259", "D263",
-                            "D275", "D285"]},
+                            "D275", "D285", "D264", "D265"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6932,7 +6933,7 @@ COMPONENTS = [
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D83", "D90", "D93", "D118", "D119", "D125",
                                 "D132", "D172", "D181", "D192", "D196", "D213", "D218",
-                                "D260", "D275"],
+                                "D260", "D275", "D264", "D285"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -7001,7 +7002,7 @@ COMPONENTS = [
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
-                                "D132", "D134", "D196", "D218", "D259"],
+                                "D132", "D134", "D196", "D218", "D259", "D-sealed-boxes-removed"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -7055,7 +7056,7 @@ COMPONENTS = [
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
                                 "D83", "D93", "D94", "D125", "D172", "D192", "D193", "D212", "D218",
-                                "D259"],
+                                "D259", "D265"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -7132,8 +7133,7 @@ COMPONENTS = [
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
                                                 "D68", "D118", "D132", "D155", "D194", "D218",
-                                                "D259",
-                                                "D260"]},
+                                                "D259", "D260", "D-sealed-boxes-removed"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -8283,6 +8283,19 @@ COMPONENTS = [
                                         "read overrides, a hold or the floor, because blocking() "
                                         "reads none of them.",
                                  "governed_by": ["D9", "D16", "D49", "D54"]},
+            "src/BoxShelf.tsx": {"does": "the Shelf, the second view of #/inventory "
+                                         "(`?view=shelf`): every box drawn from above with its "
+                                         "sections as blocks, card 1 at the top, counts only. A "
+                                         "section is picked up, a box is picked, and the two boxes "
+                                         "stand side by side; a pointer drag, a tap or Enter on a "
+                                         "gap moves it through `moveSections`. The receipt is the "
+                                         "server's physical instruction, with Undo on U.",
+                                  "governed_by": ["D31", "D50", "D117", "D118", "D264", "D265",
+                                                  "D285"]},
+            "src/BoxShelf.css": {"does": "the Shelf's blocks, gaps, lift bar and receipt. A "
+                                         "block's height follows its count with a 44px floor; a "
+                                         "gap is 40px, the thumb floor.",
+                                 "governed_by": ["D117", "D264"]},
             "src/BoxRuns.tsx": {"does": "what is left of the run panel on #/inventory: one status "
                                         "line saying whether anything is running over this box, "
                                         "and the control that hands the ticked selection to "
@@ -8616,7 +8629,8 @@ COMPONENTS = [
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
                 "governed_by": ["D3", "D20", "D22", "D23", "D27", "D56", "D65", "D101", "D118",
-                                "D142", "D145", "D153", "D205", "D211", "D218"],
+                                "D142", "D145", "D153", "D205", "D211", "D218",
+                                "D-sealed-boxes-removed"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -9404,6 +9418,13 @@ COMPONENTS = [
                                                       "D92", "D98", "D99", "D103", "D115", "D117",
                                                       "D118", "D156", "D168", "D196", "D208",
                                                       "D218", "D273"]},
+            "tests/boxmap.spec.ts": {
+                "does": "the Shelf (`D264`), stubbed: the map draws counts and no money, a "
+                        "gap press sends the section, the gap and the aim, U sends the undo, the "
+                        "keyboard and a pointer drag each move a section, a split names a new "
+                        "box, and every press is 40px or more.",
+                "governed_by": ["D117", "D264"],
+            },
             "tests/revenue.spec.ts": {
                 "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
                         "states, every column's sort and its reverse, the search field, the "
@@ -9552,7 +9573,7 @@ COMPONENTS = [
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
                                 "D136", "D142", "D155", "D159", "D172", "D181", "D192", "D194",
-                                "D196", "D213", "D218", "D259"],
+                                "D196", "D213", "D218", "D259", "D-sealed-boxes-removed"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

@@ -389,6 +389,8 @@ never composes a second one.
 
 ### 5.2 — Box selection
 
+**Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
+
 **OVERTAKEN 2026-08-25 — the box field is one control, and the number is no longer typed.**
 D20's amendment carries the argument. The two inputs this section describes (a list to pick
 from, and a separate typed number to start a new box) are one free-text field that searches
@@ -513,6 +515,8 @@ its own high-water mark inside the lock. A client that computed the index would 
 one number across a round trip and sending it back, and at the feeder's measured 623 ms
 cadence that race is real: one capture in between and the divider lands behind the card it
 was meant to be in front of.
+
+**Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
 
 **It refuses rather than guessing, in three named cases**: a second press with nothing
 captured between (`section_empty` — the divider you want is already there), a divider

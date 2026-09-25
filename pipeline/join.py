@@ -65,6 +65,7 @@ has already failed to decide.
 from __future__ import annotations
 
 import bisect
+import math
 import re
 import unicodedata
 from collections import OrderedDict
@@ -222,6 +223,30 @@ class Position:
     # says. `compare=False` because a name is a label and never part of the card's identity:
     # a rename must not make two positions of one card unequal.
     box_name: Optional[str] = field(default=None, compare=False)
+    # WHERE THE CARD STANDS IN ITS BOX'S ORDER (D265), or None when the order is the index.
+    # `(this card's order, occupied in order space, departed in order space)`. `index`,
+    # `occupied` and `departed` above stay the STORE's, because callers key writes by them.
+    # Every number below is counted in this space instead. `BoxView.at` fills it.
+    ordered: Optional[Tuple[int, Optional[Tuple[int, ...]], Tuple[int, ...]]] = field(
+        default=None, compare=False
+    )
+
+    def _front(self) -> Tuple:
+        """The dividers with the front of the box set by the one rule (`master.front_of_box`)."""
+        lows = [v[0] for v in (self._occ or (), self._dep or ()) if v]
+        return master.front_of_box(self.sections, min(lows) if lows else None)
+
+    @property
+    def _i(self) -> int:
+        return self.index if self.ordered is None else self.ordered[0]
+
+    @property
+    def _occ(self) -> Optional[Tuple[int, ...]]:
+        return self.occupied if self.ordered is None else self.ordered[1]
+
+    @property
+    def _dep(self) -> Tuple[int, ...]:
+        return self.departed if self.ordered is None else self.ordered[2]
 
     @property
     def consolidated(self) -> bool:
@@ -242,10 +267,10 @@ class Position:
         what keeps the pre-D58 rendering intact.
         """
         if not self.consolidated:
-            return self.index
-        occupied = self.occupied or ()
-        at = bisect.bisect_left(occupied, self.index)
-        if at < len(occupied) and occupied[at] == self.index:
+            return self._i
+        occupied = self._occ or ()
+        at = bisect.bisect_left(occupied, self._i)
+        if at < len(occupied) and occupied[at] == self._i:
             return at + 1
         return None
 
@@ -276,7 +301,7 @@ class Position:
         is still physically in the box. `section` counts dividers, so the empty one keeps
         its ordinal and simply holds nothing.
         """
-        declared = self.sections or (1,)
+        declared = self._front()
         if not self.consolidated:
             return declared
         return tuple(self._divider(start) for start in declared)
@@ -290,9 +315,10 @@ class Position:
         been captured, so a declared divider up there is a plan and the slots between are
         waiting to be filled.
         """
+        occupied, departed = self._occ, self._dep
         return max(
-            self.occupied[-1] if self.occupied else 0,
-            self.departed[-1] if self.departed else 0,
+            occupied[-1] if occupied else 0,
+            departed[-1] if departed else 0,
         )
 
     def _divider(self, start: int) -> int:
@@ -308,8 +334,10 @@ class Position:
         The two agree everywhere below `high_water`, so this correction is invisible on
         every box that has grown into its own dividers.
         """
-        ahead = bisect.bisect_left(self.occupied or (), start)
-        unfilled = max(0, start - 1 - self.high_water)
+        ahead = bisect.bisect_left(self._occ or (), start)
+        # `ceil` keeps this a count of slots when the box's keys are fractions (D265). For a
+        # whole-number key it is `start - 1 - high_water`, exactly as before.
+        unfilled = max(0, math.ceil(start - self.high_water) - 1)
         return ahead + unfilled + 1
 
     @property
@@ -322,7 +350,7 @@ class Position:
             # divider maps to, and read as section 2. The declared dividers are indices, and
             # the index never moves (D10), so the section it left is the one whose divider is
             # the last at or before its index.
-            count = sum(1 for start in (self.sections or (1,)) if start <= self.index)
+            count = sum(1 for start in self._front() if start <= self._i)
             return max(1, count)
         count = 0
         for start in self.layout:
@@ -375,7 +403,7 @@ class Position:
         """
         if self.card is not None:
             return None
-        at = bisect.bisect_left(self.occupied or (), self.index) + 1
+        at = bisect.bisect_left(self._occ or (), self._i) + 1
         return max(1, at - self.section_start + 1)
 
     @property
@@ -459,6 +487,7 @@ def box_view(inventory, box) -> Tuple[str, "BoxView"]:
             occupied=tuple(sorted(on_hand)),
             departed=tuple(sorted(gone)),
             name=title,
+            order=inventory.box_order(number),
         )
     except Exception:  # noqa: BLE001 — a refusal must not raise a second error
         view = BoxView(name=title)
@@ -589,15 +618,39 @@ class BoxView:
     # The box's registry name, carried to every `Position` built here, so a label says the
     # name (D259). None where the caller has no registry to ask.
     name: Optional[str] = None
+    # THE BOX'S ORDER (D265). `occupied` and `departed` stay in INDEX space, because every
+    # caller asks "is this index here" of them. `sections` is already in order space (it is
+    # `Box.sections`). `at()` hands `Position` orders, so the one label formula counts the
+    # cards in the order they stand, and never needs to know an order exists.
+    order: master.BoxOrder = field(default=master.BoxOrder(), compare=False)
 
     @property
     def on_hand(self) -> int:
         """How many cards are in this box — the denominator every number here counts to."""
         return len(self.occupied or ())
 
+    def _ordered(self) -> Tuple[Optional[Tuple[int, ...]], Tuple[int, ...]]:
+        """`occupied` and `departed` in order space, computed once per view."""
+        cached = self.__dict__.get("_ordered_cache")
+        if cached is None:
+            of = self.order.of
+            occupied = (
+                None if self.occupied is None else tuple(sorted(of(i) for i in self.occupied))
+            )
+            cached = (occupied, tuple(sorted(of(i) for i in self.departed)))
+            object.__setattr__(self, "_ordered_cache", cached)
+        return cached
+
     def at(self, box: int, index: int) -> "Position":
+        if self.order.identity or self.occupied is None:
+            return Position(
+                int(box), int(index), self.sections, self.occupied, self.departed,
+                box_name=self.name,
+            )
+        occupied, departed = self._ordered()
         return Position(
-            int(box), int(index), self.sections, self.occupied, self.departed, box_name=self.name
+            int(box), int(index), self.sections, self.occupied, self.departed,
+            box_name=self.name, ordered=(self.order.of(index), occupied, departed),
         )
 
 
@@ -630,14 +683,20 @@ def divider_index(
     there will hold one card.
     """
     if ordinal <= 1:
-        return 1
+        # The front of the box: 1, or below it where a section was placed in front of card
+        # 1 (D265, the order key).
+        lows = [v[0] for v in (occupied, departed) if v]
+        return master.front_of_box((), min(lows) if lows else None)[0]
     if ordinal <= len(occupied):
-        return int(occupied[ordinal - 1])
+        # THE KEY ITSELF, NEVER `int()` OF IT (the R4 review): a placed card's key is a
+        # fraction, and cutting it moved the divider onto the card in front (D265).
+        return master.as_order(occupied[ordinal - 1])
     high = max(
         int(occupied[-1]) if occupied else 0,
         int(departed[-1]) if departed else 0,
     )
-    return high + (ordinal - len(occupied))
+    # `int` keeps a planned divider on the whole-number keys a capture takes (D265).
+    return int(high) + (ordinal - len(occupied))
 
 
 def departed_label(box_name: str, section: Optional[int], card: int) -> str:

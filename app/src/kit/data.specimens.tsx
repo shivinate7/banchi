@@ -44,7 +44,6 @@ const WIRE_PLACE: Place = {
   section_start: 26,
   section_end: 50,
   box_total: 250,
-  box_closed: true,
   fraction: 0.16,
 }
 
@@ -141,7 +140,7 @@ export function DataSpecimens() {
         <StatusBadge status="done">Listed</StatusBadge>
         <StatusBadge status="failed">Refused</StatusBadge>
         <StatusBadge status="waiting">At TCGplayer</StatusBadge>
-        <StatusBadge status="neutral">Sealed</StatusBadge>
+        <StatusBadge status="neutral">Held</StatusBadge>
       </Specimen>
 
       <Specimen name="Card">

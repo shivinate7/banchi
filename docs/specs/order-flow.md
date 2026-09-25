@@ -160,6 +160,8 @@ one place a number like this is actually read.
 
 ### 3.1 — Capacity is retroactive because nobody knows a box's size when they start filling it
 
+**Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
+
 That sentence is the whole of the lifecycle and everything else in D20 follows from it.
 `store/master.py:Box` carries `box`, `name`, `sections`, `state`, `capacity`, `created_at`,
 `closed_at`. A box is `open` or `closed`. **While it is open it has no capacity**, and the
@@ -202,6 +204,8 @@ number.
 The sealing control **says the number it will freeze before it is pressed**. A button reading
 "Seal box" alone would be a permanent decision taken against a denominator the owner would
 have to go and find.
+
+**Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
 
 ### 3.4 — A sealed box refuses before it computes an index
 

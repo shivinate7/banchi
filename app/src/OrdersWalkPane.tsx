@@ -129,7 +129,7 @@ function rowsOf(plan: WalkPlan | null): WalkRow[] {
  *  `span` is `section_start`/`section_end`, counted across the whole box. `#54–#93` over a row
  *  reading `#37` is two rulers on one screen, the defect `sectionCountOf` already fixed on
  *  `#/inventory`. `place` is the section's first row's copy — a `here` copy, so it stands in
- *  this stop's box and section and carries the `box_closed` the stop itself does not. */
+ *  this stop's box and section. */
 function stopTitle(stop: WalkPlanStop, place: Place): SectionTitleParts {
   if (stop.pooled) return { head: `Pooled: ${stop.game_display ?? 'cards'}`, count: null }
   const box = stop.box_name ?? (stop.box === null ? 'Box' : `Box ${stop.box}`)

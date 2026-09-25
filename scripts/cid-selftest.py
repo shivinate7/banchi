@@ -414,10 +414,10 @@ def case_the_four_column_rosters_agree() -> None:
     equal(sorted(spec ^ built), [],
           "and `_card_columns` builds exactly those keys")
     equal(sorted(built - set(master.Card.__annotations__)),
-          ["idx", "number_display", "number_key"],
-          "and every other one of them is a declared field on `Card` — `idx` is the one "
-          "named alias, for `index`, which is a Python builtin's name in every other "
-          "context, and `number_key`/`number_display` (store-scaling item 8) are the two "
+          ["idx", "number_display", "number_key", "ord"],
+          "and every other one of them is a declared field on `Card` — `idx` and `ord` are "
+          "the two named aliases, for `index` (a Python builtin's name in every other "
+          "context) and for `order` (a SQL keyword, D265), and `number_key`/`number_display` (store-scaling item 8) are the two "
           "DERIVED columns `_card_columns` composes from `number`/`printed_total` through "
           "`pipeline/join.py` rather than reading off a `Card` field of their own name — "
           "there is no `Card.number_key`, on purpose, because the composed form has no "
@@ -579,8 +579,8 @@ def case_the_moved_tombstone_names_no_photograph() -> None:
         equal(transplant.cid, digest,
               "the transplant keeps the card's name, because the name is the CARD's and the "
               "card is what moved")
-        equal(tombstone.cid, f"{photos.MOVED_PREFIX}{digest}",
-              "and the tombstone wears `moved:<name>`, so one name is never on two rows "
+        equal(tombstone.cid, f"{photos.MOVED_PREFIX}{digest}@1/1",
+              "and the tombstone wears `moved:<name>@<its key>`, so one name is never on two rows "
               "under a UNIQUE index — cleared to NULL it would be re-issued by the heal")
     check(not photos.is_photo_cid(f"{photos.MOVED_PREFIX}{digest}"),
           "a `moved:` name names no photograph, so nothing composes a path from it")
@@ -855,8 +855,8 @@ def case_a_move_moves_no_file() -> None:
     tombstone = snapshot.inventory.cards.get("1/1")
     equal(transplant.cid if transplant else None, digest,
           "the transplant in box 4 wears the name")
-    equal(tombstone.cid if tombstone else None, f"{photos.MOVED_PREFIX}{digest}",
-          "and the tombstone wears `moved:` in front of it")
+    equal(tombstone.cid if tombstone else None, f"{photos.MOVED_PREFIX}{digest}@1/1",
+          "and the tombstone wears `moved:` in front of it, and its own key after it")
 
 
 def case_two_captures_cannot_compose_one_photograph_path() -> None:

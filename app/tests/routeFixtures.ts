@@ -138,7 +138,6 @@ export function place(over: Partial<Place> = {}): Place {
     section_start: 12,
     section_end: null,
     box_total: 133,
-    box_closed: false,
     fraction: 0.13,
     neighbors: null,
     section_gaps: 0,

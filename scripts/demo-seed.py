@@ -233,11 +233,11 @@ def write_photo(digest: str, row: "Row") -> None:
 # ------------------------------------------------------------------------------- boxes
 
 # The shape of the demo store. Four boxes, chosen so that every case a screen has to draw
-# is present somewhere — an open box with dividers, a sealed one with a frozen capacity, a
+# is present somewhere — two boxes with dividers, a
 # mixed box with NO dividers (D10's undeclared box, which renders as one section), and a
 # box holding the departed. A demo where every box is the same box teaches nothing.
 # The shape of the demo store. Four boxes, chosen so every case a screen has to draw is
-# present somewhere — an open box with dividers, a sealed one with a frozen capacity, a
+# present somewhere — two boxes with dividers, a
 # mixed box with NO dividers (D10's undeclared box, which renders as one section), and a
 # box holding the departed. A demo where every box is the same box teaches nothing.
 #
@@ -251,21 +251,21 @@ BOXES = (
         "box": 1, "name": "RB Origins", "pool": "priceable", "count": 42,
         "sections": [1, 15, 29],
         "section_names": {"1": "Commons", "15": "Uncommons", "29": "Signatures"},
-        "state": "open", "created": 24.0,
+        "created": 24.0,
         "sittings": ((24.0, 34, 2.9), (20.6, 8, 5.2)),
     },
     {
         "box": 2, "name": "MEG Bulk", "pool": "other", "count": 28,
         "sections": [1, 16],
         "section_names": {"1": "Commons", "16": "Holos"},
-        "state": "open", "created": 17.0,
+        "created": 17.0,
         "sittings": ((17.0, 28, 6.5),),
     },
     {
         "box": 3, "name": "RB Epics", "pool": "priceable", "count": 34,
         "sections": [1, 12, 24],
         "section_names": {"1": "Origins", "12": "Legacy", "24": "Epics"},
-        "state": "closed", "created": 31.0,
+        "created": 31.0,
         "sittings": ((31.0, 19, 3.4), (29.4, 15, 4.7)),
     },
     {
@@ -276,7 +276,7 @@ BOXES = (
         # per-card claim rather than a mode.
         "box": 4, "name": "Mixed Singles", "pool": "mixed", "count": 18,
         "sections": [], "section_names": {},
-        "state": "open", "created": 9.0,
+        "created": 9.0,
         "sittings": ((9.0, 18, 3.9),),
     },
 )
@@ -541,10 +541,7 @@ def build_store(force: bool) -> dict:
                 name=spec["name"],
                 sections=list(spec["sections"]),
                 section_names=dict(spec["section_names"]),
-                state="closed" if spec["state"] == "closed" else "open",
-                capacity=spec["count"] if spec["state"] == "closed" else None,
                 created_at=stamp(spec["created"]),
-                closed_at=stamp(spec["created"] - 6) if spec["state"] == "closed" else None,
             )
             counts["boxes"] += 1
 

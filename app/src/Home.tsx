@@ -808,7 +808,6 @@ export function Home() {
                       <span className="home-box-meta">
                         <span>{held.toLocaleString()} on hand</span>
                         <span>{box.sold} sold</span>
-                        {box.state === 'closed' ? <span>sealed</span> : null}
                       </span>
                     </span>
                     <span className="home-box-bar" title={`${pct}% on hand`}>

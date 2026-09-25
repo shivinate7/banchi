@@ -1028,9 +1028,10 @@ const HAND_BOXES = {
    thing these cases exist to catch. 21-24 also keeps every id two digits, so a case that
    searches the picker for `2` gets a stable answer off the NUMBERS alone. */
 
-/** The same four with box 2 SEALED, for the restore that has to fail softly. */
-const HAND_BOXES_SEALED_2 = {
-  boxes: HAND_BOXES.boxes.map((row) => (row.box === 2 ? { ...row, state: 'closed' } : row)),
+/** The same four with box 2 DELETED, for the restore that has to fail softly. A box has no
+ *  seal any more (`D-sealed-boxes-removed`), so a deleted box is the case left to let go of. */
+const HAND_BOXES_WITHOUT_2 = {
+  boxes: HAND_BOXES.boxes.filter((row) => row.box !== 2),
 }
 
 /** The box rows as drawn, in order, each collapsed to one line. */
@@ -1135,23 +1136,22 @@ test('the setup survives a reload, and the in-flight capture id is not on the de
   ])
 })
 
-test('a restored box that has been sealed since is let go of, by name', async ({ page }) => {
-  /* SEEDED AS BOX 2, WHICH THE FIXTURE HAS SEALED. Between two sittings a box can be sealed,
+test('a restored box that has been deleted since is let go of', async ({ page }) => {
+  /* SEEDED AS BOX 2, WHICH THE FIXTURE HAS DELETED. Between two sittings a box can be
      deleted, or deleted and its number reused by `next_box_number`'s lowest-free allocation —
      and the last of those is refused nowhere, because the box exists and takes cards. It is
      simply not the drawer the operator thinks they are looking at, which is why the restore
      falls back to NOTHING rather than to a guess. */
-  await open(page, { box: 2 }, GAMES, HAND_BOXES_SEALED_2, { probe: false })
+  await open(page, { box: 2 }, GAMES, HAND_BOXES_WITHOUT_2, { probe: false })
 
   /* THE STAGE FOOT AND NOT `.capture-box-val`, which is the RESTING row and does not exist
      while a field is open — and this check opens the box field on purpose. The foot is drawn
      in both states and is the screen's standing answer to "which drawer is this". */
   await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
 
-  /* IT SAYS WHICH BOX AND WHY, and it says it by NAME — the screen's own vocabulary, not the
-     number the operator no longer sees anywhere else on it. */
-  const note = page.locator('.capture-refused').filter({ hasText: /sealed/ })
-  await expect(note).toContainText('Slabs')
+  /* IT SAYS WHY: the box is not in the store any more. */
+  const note = page.locator('.capture-refused').filter({ hasText: /not in the store any more/ })
+  await expect(note).toBeVisible()
 
   /* AND THE REMEDY IS THE PRESS THEY WERE ABOUT TO MAKE: the field is open with focus in the
      entry, which is where `Pick a box` would have put them. */
