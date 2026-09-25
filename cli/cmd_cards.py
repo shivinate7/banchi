@@ -68,33 +68,9 @@ SOURCE_ORDER = ("kept", "disk", "record", "identification", "nophoto")
 
 
 def _read_only(directory: Path) -> sqlite3.Connection:
-    """The store, read-only, WITHOUT `db.connect`.
-
-    `mode=ro` always: SQLite refuses every write through this connection, and the database
-    file is never changed.
-
-    `immutable=1` ONLY WHEN THE WAL IS EMPTY OR ABSENT. The store runs in WAL mode
-    (`store/db.py:_open`). A commit lands in `store.sqlite-wal` first, and it reaches the
-    main file only at a checkpoint. `immutable=1` tells SQLite the file cannot change, so
-    SQLite never reads the WAL. Any commit not yet checkpointed is then invisible. A
-    checkpoint runs when the last connection closes. So while any other connection is open
-    (a live capture server, or an open `Store.read()` snapshot), this door read a store
-    older than its last commit. Measured: `cards identity --write` found 0 SKUs in a
-    `skus` table that a committed fill had just written, and bound nothing. This failed T7
-    on CI, where garbage collection left a read snapshot open.
-
-    Plain `mode=ro` reads the WAL through the `-shm` index a live writer already keeps, so
-    it creates no file there. It cannot open a WAL store that has no side files at all
-    ("unable to open database file", measured on SQLite 3.54). In that state every commit
-    is already in the main file, and `immutable=1` is exact and writes nothing.
-    """
-    target = db.path(directory)
-    if not target.is_file():
-        raise FileNotFoundError(f"no store at {target}")
-    wal = Path(f"{target}-wal")
-    if wal.is_file() and wal.stat().st_size > 0:
-        return sqlite3.connect(f"file:{target}?mode=ro", uri=True)
-    return sqlite3.connect(f"file:{target}?mode=ro&immutable=1", uri=True)
+    """The store through `store/db.py:open_read_only`, WITHOUT `db.connect`: it never
+    migrates, and it sees every commit, including one still in the WAL."""
+    return db.open_read_only(db.path(directory))
 
 
 def _meta(conn: sqlite3.Connection) -> Dict[str, str]:

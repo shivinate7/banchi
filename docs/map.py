@@ -508,7 +508,7 @@ COMPONENTS = [
             "cmd_sku_contradictions.py": {
                 "does": "`pkmnscan cards contradictions` — RETIRED. `run` prints a pointer "
                         "to `pkmnscan cards identity` and exits 0. `_read_only` (read-only, "
-                        "`mode=ro&immutable=1`, never `db.connect`) and `_by_sku` (every "
+                        "`store/db.py:open_read_only`, never `db.connect`) and `_by_sku` (every "
                         "card grouped by SKU) stay as helpers; `pipeline/"
                         "sku_number_contradictions.py`'s own resolver is still proved "
                         "directly by `scripts/sku-number-contradictions-selftest.py`, even "
@@ -2871,7 +2871,7 @@ COMPONENTS = [
             "identity-replay.py": {
                 "does": "the migration's replay, before any write (identity-follows-sku.md "
                         "§7.4, lane 2): reads a COPY of the store, read-only "
-                        "(mode=ro&immutable=1, never db.connect), simulates the whole "
+                        "(store/db.py:open_read_only, never db.connect), simulates the whole "
                         "press in memory through pipeline/identity_binding.py's own "
                         "plan_migration, and asserts the six things §7.4 names — every "
                         "held card's drawn identity unchanged, no field outside the "

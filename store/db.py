@@ -1504,6 +1504,43 @@ def _open(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def open_read_only(db_path: Path) -> sqlite3.Connection:
+    """The one read-only door onto a store file. It never migrates, and it sees every commit.
+
+    NOT `connect`. `connect` always runs `_ensure_schema`, so a preview that opened the store
+    through it would PERFORM the migration it claims to preview. Every reader that must not
+    migrate opens here instead: `cli/cmd_cards.py`'s previews, `scripts/identity-replay.py`,
+    `scripts/d240-tolerance-fit.py` and `scripts/cid-selftest.py`.
+
+    `mode=ro` ALWAYS. SQLite refuses every write through this connection, and the database
+    file is never changed.
+
+    `immutable=1` ONLY WHEN THE WAL IS EMPTY OR ABSENT. `_open` above puts the store in WAL
+    mode. A commit lands in `store.sqlite-wal` first. It reaches the main file only at a
+    checkpoint, and a checkpoint runs when the last connection closes. `immutable=1` tells
+    SQLite the file cannot change, so SQLite never reads the WAL, and every commit not yet
+    checkpointed is invisible. While any other connection is open (a live capture server,
+    or an open `Store.read()` snapshot), an always-immutable door read a store older than
+    its last commit. Measured: `cards identity --write` found 0 SKUs in a `skus` table that
+    a committed fill had just written, and bound nothing. T7 failed on CI for this reason.
+
+    Plain `mode=ro` reads the WAL through the `-shm` index a live writer already keeps, so
+    it creates no file there. It cannot open a WAL store that has no side files at all
+    ("unable to open database file", measured on SQLite 3.54). In that state every commit
+    is already in the main file, so `immutable=1` is exact, and it writes nothing. A
+    `.backup` copy is that state too: the backup API copies committed WAL pages into the
+    copy's own main file.
+
+    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves both halves.
+    """
+    if not db_path.is_file():
+        raise FileNotFoundError(f"no store at {db_path}")
+    wal = Path(f"{db_path}-wal")
+    if wal.is_file() and wal.stat().st_size > 0:
+        return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    return sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+
+
 def connect(directory: Path, *, locked: bool = False) -> sqlite3.Connection:
     """The store's database, created empty or imported from the legacy files on first open.
 
