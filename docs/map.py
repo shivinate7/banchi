@@ -6187,7 +6187,8 @@ COMPONENTS = [
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
                               "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172",
-                                              "D218"]},
+                                              "D218", "D-a-box-is-shown-by-its-name",
+                                              "D-one-page-width"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -6200,7 +6201,7 @@ COMPONENTS = [
                                       "store is empty (D43) so no disabled button renders for "
                                       "it to see even now that it does.",
                               "governed_by": ["D14", "D32", "D43", "D50", "D58", "D70", "D117",
-                                              "D218"]},
+                                              "D218", "D-a-box-is-shown-by-its-name"]},
             "src/App.css": {"does": "the shell's chrome: the sidebar and the rail it collapses "
                                     "to, the phone's top bar and its sheet, the bottom tab bar, "
                                     "the command palette, the which-key overlay, the "
@@ -7020,7 +7021,8 @@ COMPONENTS = [
                         "a departed record has no slot to count to, so `positionOf` and the "
                         "Where column both go through `storeKey.ts:storeKeyText` — `B9 #3`, "
                         "D68's own spelling — rather than composing `#{index}` by hand.",
-                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D218"],
+                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D218",
+                                "D-a-box-is-shown-by-its-name"],
             },
             "src/Graveyard.css": {
                 "does": "a smaller sheet than a working screen's, because this one has no "

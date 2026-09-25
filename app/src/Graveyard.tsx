@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
-import { describeFailure, getGraveyard, type Failure } from './server'
-import type { DepartedCard } from './types'
+import { describeFailure, getBoxes, getGraveyard, type Failure } from './server'
+import type { BoxRecord, DepartedCard } from './types'
 import { Button, EmptyState, Notice, PageHeader, Pill, Segmented, type PillTone } from './kit'
 import { readingAgo, readingExact, stateLabel, stateTone } from './cardState'
-import { storeKeyText } from './storeKey'
 import { reasonWord } from './Inventory'
 import './Graveyard.css'
 
@@ -25,6 +24,11 @@ import './Graveyard.css'
  * back from a deleted box — and its photograph is gone with it. What survives is the record
  * itself: what the card was, how it left, when, and where. Nothing about pricing or an order
  * reads this screen; it is a ledger for looking, not a control.
+ *
+ * THE BOX SHOWS BY ITS NAME, NEVER ITS NUMBER (D-a-box-is-shown-by-its-name, superseding D68's
+ * "Box 3 · departed · B3 #96" form and the store-key exemption D92 gave it). The Where column
+ * reads `row.box_name` straight off the payload; the "Moved to" text resolves the destination
+ * through `getBoxes()`. Neither draws the store key any more.
  */
 
 type HowFilter = 'all' | 'sold' | 'retired' | 'moved' | 'buried'
@@ -45,9 +49,20 @@ function gameLabel(game: string | null): string | null {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-function howIt(row: DepartedCard): ReactNode {
+/** The box named in a `"box/index"` store key — `D-a-box-is-shown-by-its-name`: the number
+ *  the key carries is never drawn, only the name it resolves to. A box the registry no longer
+ *  has (deleted, or the list has not answered yet) falls back to "another box" rather than the
+ *  number — the honest answer where there is genuinely no name to read. */
+function movedToName(key: string, boxes: BoxRecord[] | null): string {
+  const boxN = Number(key.split('/')[0])
+  if (!Number.isFinite(boxN)) return 'another box'
+  const name = boxes?.find((b) => b.box === boxN)?.name
+  return typeof name === 'string' && name.trim() !== '' ? name : 'another box'
+}
+
+function howIt(row: DepartedCard, boxes: BoxRecord[] | null): ReactNode {
   if (row.how === 'moved') {
-    return row.moved_to === null ? 'Moved' : `Moved to ${positionOf(row.moved_to)}`
+    return row.moved_to === null ? 'Moved' : `Moved to ${movedToName(row.moved_to, boxes)}`
   }
   if (row.how === 'retired' && row.retire_reason) {
     // D218: the reason is its own span; the seam is CSS. The word itself reads Inventory's
@@ -63,23 +78,15 @@ function howIt(row: DepartedCard): ReactNode {
   return stateLabel(row.how)
 }
 
-/** `"9/3"` → `"B9 #3"`, `storeKey.ts`'s own spelling (D68, D92): a departed record is in no
- *  slot to count to, so its `#` is the store key rather than D58's countable figure — the
- *  exemption `storeKeyText` carries, not a bare `#{index}` reaching for it by hand. A
- *  malformed key (there should never be one) falls back to the raw string rather than
- *  hiding where the card went. */
-function positionOf(key: string): string {
-  const [box, index] = key.split('/')
-  const boxN = Number(box)
-  const indexN = Number(index)
-  if (!Number.isFinite(boxN) || !Number.isFinite(indexN)) return key
-  return storeKeyText(boxN, indexN)
-}
-
 function cardTone(how: string): PillTone {
   const tone = stateTone(how)
   return tone === 'accent' ? 'default' : tone
 }
+
+/** Rows drawn before a "Show more" press, and added each further press (UX-036): the real
+ *  store's 1,180 departed rows made an 86,935px page with every row drawn at once. Windowed
+ *  rather than paged, matching `Codes.tsx`'s own `ROW_CAP`/`showAll` pattern for a long list. */
+const ROW_WINDOW = 100
 
 export function Graveyard() {
   const [rows, setRows] = useState<DepartedCard[] | null>(null)
@@ -87,6 +94,9 @@ export function Graveyard() {
   const [retrying, setRetrying] = useState(false)
   const [filter, setFilter] = useState<HowFilter>('all')
   const [query, setQuery] = useState('')
+  const [shown, setShown] = useState(ROW_WINDOW)
+  // Names the "Moved to" text alone — read-only, so a stale list between reloads costs nothing.
+  const [boxes, setBoxes] = useState<BoxRecord[] | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -101,6 +111,12 @@ export function Graveyard() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    getBoxes()
+      .then((summary) => setBoxes(summary.boxes))
+      .catch(() => undefined)
+  }, [])
 
   const retry = useCallback(async () => {
     setRetrying(true)
@@ -136,12 +152,20 @@ export function Graveyard() {
     })
   }, [rows, filter, query])
 
+  // A changed filter or search is a new list: the window starts over rather than keeping a
+  // count sized for a different set of rows.
+  useEffect(() => {
+    setShown(ROW_WINDOW)
+  }, [filter, query])
+
+  const windowed = visible.slice(0, shown)
+
   return (
     <main className="graveyard bn-page">
       <PageHeader
         title="Graveyard"
         icon="history"
-        lede="Every card that's left inventory — sold, retired, or moved. Read-only."
+        lede="Sold, retired and moved cards."
         actions={
           <Button variant="ghost" iconOnly icon="refresh" onClick={() => void load()} disabled={retrying}>
             Reload
@@ -212,6 +236,15 @@ export function Graveyard() {
           ) : (
             <div className="graveyard-table-wrap">
               <table className="bn-table graveyard-table">
+                <colgroup>
+                  <col className="graveyard-col-left" />
+                  <col className="graveyard-col-card" />
+                  <col className="graveyard-col-sku" />
+                  <col className="graveyard-col-how" />
+                  <col className="graveyard-col-where" />
+                  <col className="graveyard-col-order" />
+                  <col className="graveyard-col-captured" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Left</th>
@@ -220,11 +253,11 @@ export function Graveyard() {
                     <th>How</th>
                     <th>Where</th>
                     <th>Order</th>
-                    <th>Run</th>
+                    <th>Captured</th>
                   </tr>
                 </thead>
                 <tbody className="bn-stagger">
-                  {visible.map((row, i) => {
+                  {windowed.map((row, i) => {
                     const key = `${row.how}:${row.buried ? 'b' : 's'}:${row.box}/${row.index}`
                     const stamp = row.buried ? row.buried_at : row.left_at
                     return (
@@ -239,7 +272,9 @@ export function Graveyard() {
                         </td>
                         <td data-th="Card">
                           <span className="graveyard-card-cell">
-                            <span className="graveyard-name">{row.name && row.name.trim() !== '' ? row.name : <span className="bn-muted">Unidentified</span>}</span>
+                            <span className="graveyard-name" title={row.name ?? undefined}>
+                              {row.name && row.name.trim() !== '' ? row.name : <span className="bn-muted">Unidentified</span>}
+                            </span>
                             <span className="graveyard-sub">
                               {row.number ?? <span className="bn-faint">—</span>}
                               {gameLabel(row.game) !== null ? <Pill size="sm">{gameLabel(row.game)}</Pill> : null}
@@ -251,28 +286,43 @@ export function Graveyard() {
                           {row.condition ? <span className="graveyard-condition">{row.condition}</span> : null}
                         </td>
                         <td data-th="How">
-                          <Pill tone={cardTone(row.how)}>{howIt(row)}</Pill>
+                          <Pill tone={cardTone(row.how)}>{howIt(row, boxes)}</Pill>
                         </td>
                         <td data-th="Where">
                           <span className="graveyard-where">
-                            <span className="graveyard-where-parts">
-                              {row.box_name !== null ? <span>{row.box_name}</span> : null}
-                              <span>{storeKeyText(row.box, row.index)}</span>
-                            </span>
+                            {/* D-a-box-is-shown-by-its-name: the box shows by name only. No
+                                store key (D68's superseded "B3 #96" form) — a box with no
+                                stored name yet is the honest "—" rather than the number. */}
+                            <span className="graveyard-where-name">{row.box_name ?? <span className="bn-faint">—</span>}</span>
                             {row.buried ? <Pill tone="default" outline>Buried</Pill> : null}
                           </span>
                         </td>
                         <td data-th="Order" className="graveyard-mono" data-empty={row.order ? undefined : ''}>
                           {row.order ?? <span className="bn-faint">—</span>}
                         </td>
-                        <td data-th="Run" className="graveyard-mono" data-empty={row.run ? undefined : ''}>
-                          {row.run ?? <span className="bn-faint">—</span>}
+                        <td
+                          data-th="Captured"
+                          className="graveyard-when"
+                          data-empty={row.captured_at ? undefined : ''}
+                          title={readingExact(row.captured_at) ?? undefined}
+                        >
+                          {readingAgo(row.captured_at) ?? <span className="bn-faint">—</span>}
                         </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+              {shown < visible.length ? (
+                <div className="graveyard-more">
+                  <span className="bn-muted">
+                    Showing {windowed.length.toLocaleString()} of {visible.length.toLocaleString()}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => setShown((n) => n + ROW_WINDOW)}>
+                    Show {Math.min(ROW_WINDOW, visible.length - shown).toLocaleString()} more
+                  </Button>
+                </div>
+              ) : null}
             </div>
           )}
         </>

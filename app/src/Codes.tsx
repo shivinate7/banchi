@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 
 import {
   applyBoxClaims,
@@ -22,7 +21,7 @@ import type {
   LotReceipt,
   LotResult,
 } from './types'
-import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented, Stat, type IconName } from './kit'
+import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented, Sheet, Stat, type IconName } from './kit'
 import { toast } from './kit/toast'
 import './Codes.css'
 
@@ -122,19 +121,20 @@ function laneOf(entry: CodeEntry): LaneFilter {
   return entry.premium ? 'premium' : 'bulk'
 }
 
+/** The box's name only (`D-a-box-is-shown-by-its-name`). A registry row that is absent or
+ *  stale falls back to the number — the honest answer where there is genuinely no name to
+ *  read, never a placeholder drawn over a fault that is not there. */
+function boxName(box: number, boxes: BoxRecord[] | null): string {
+  const name = boxes?.find((b) => b.box === box)?.name
+  return typeof name === 'string' && name.trim() !== '' ? name : `Box ${box}`
+}
+
 /* D218: this renders inside a native `<option>`, which is plain text only — no element can
    carry the seam, so this is a real sentence (a comma list) rather than a typed dot. */
 function boxLabel(box: BoxRecord): string {
   const held = box.on_hand ?? box.cards
-  return `Box ${box.box}${box.name ? `, ${box.name}` : ''}, ${plural(held, 'card')}`
-}
-
-/** `Box 3 · RB Epics`, or `Box 3` alone where the box has no name (D20/D56). The registry read
- *  can be absent or stale, and a box the ledger names is still a box: a missing row falls back
- *  to the number rather than drawing a fault where there is none. */
-function boxTitle(box: number, boxes: BoxRecord[] | null): string {
-  const name = boxes?.find((b) => b.box === box)?.name
-  return name ? `Box ${box} · ${name}` : `Box ${box}`
+  const name = typeof box.name === 'string' && box.name.trim() !== '' ? box.name : `Box ${box.box}`
+  return `${name}, ${plural(held, 'card')}`
 }
 
 function when(iso: string | null | undefined): string {
@@ -144,78 +144,12 @@ function when(iso: string | null | undefined): string {
   return at.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-/* ---- sheet ----------------------------------------------------------------------------------- */
-
-function Sheet({
-  title,
-  icon,
-  onClose,
-  children,
-}: {
-  readonly title: string
-  readonly icon: IconName
-  readonly onClose: () => void
-  readonly children: ReactNode
-}) {
-  const panel = useRef<HTMLDivElement>(null)
-  /* The control that opened the sheet, read during the first render — a field's autoFocus has
-     already moved focus by the time an effect runs — so it gets focus back when the sheet closes. */
-  const [opener] = useState<HTMLElement | null>(() =>
-    document.activeElement instanceof HTMLElement ? document.activeElement : null,
-  )
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    document.body.setAttribute('data-codes-sheet', '')
-    /* A field with autoFocus has taken focus by now; otherwise the sheet itself takes it, so
-       Tab and a screen reader start inside the dialog rather than on the page behind. */
-    const frame = window.requestAnimationFrame(() => {
-      const el = panel.current
-      if (el !== null && !el.contains(document.activeElement)) el.focus({ preventScroll: true })
-    })
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = previous
-      document.body.removeAttribute('data-codes-sheet')
-      if (opener !== null && document.contains(opener)) opener.focus({ preventScroll: true })
-    }
-  }, [onClose, opener])
-  /* Portalled to <body>: `main.bn-page` animates a transform, and a transformed ancestor is the
-     containing block for a fixed sheet — rendered inline, the sheet hung off the page column
-     rather than the viewport, and opened from a task card it was off-screen under a scrim. */
-  return createPortal(
-    <>
-      <div className="bn-scrim codes-scrim" onClick={onClose} />
-      <div
-        ref={panel}
-        className="bn-sheet codes-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="codes-sheet-title"
-        tabIndex={-1}
-      >
-        <header className="codes-sheet-head">
-          <span className="codes-sheet-icon">
-            <Icon name={icon} size={18} />
-          </span>
-          <h2 id="codes-sheet-title" className="codes-sheet-title">
-            {title}
-          </h2>
-          <Button variant="ghost" iconOnly icon="x" onClick={onClose}>
-            Close
-          </Button>
-        </header>
-        <div className="codes-sheet-body">{children}</div>
-      </div>
-    </>,
-    document.body,
-  )
-}
+/* ---- sheet -----------------------------------------------------------------------------------
+ * The kit's `Sheet` (`app/src/kit/overlay.tsx`) was seeded from this screen's own local one —
+ * the portal, the focus return, the Escape handling and the scroll lock all moved there, plus
+ * the overlay stack (D-one-page-width's sibling, UX-057/UX-090/UX-091) this local copy never
+ * had. Each of the three sheets below stays mounted and toggles `open`, so the kit's own exit
+ * animation runs instead of the panel disappearing the instant `sheet` changes. */
 
 /* ---- a code string, masked until asked ----------------------------------------------------------- */
 
@@ -458,6 +392,15 @@ export function Codes() {
 
   const closeSheet = useCallback(() => setSheet(null), [])
 
+  /* The kit's Sheet owns focus, Escape and the scroll lock now — this is the one thing it does
+     not do for a screen it does not know about: step the toast stack aside so a receipt never
+     covers the open sheet (Codes.css's `body[data-codes-sheet] .bn-toasts` rule). */
+  useEffect(() => {
+    if (sheet === null) return
+    document.body.setAttribute('data-codes-sheet', '')
+    return () => document.body.removeAttribute('data-codes-sheet')
+  }, [sheet])
+
   const runScan = useCallback(
     async (dryRun: boolean) => {
       const n = Number(box)
@@ -513,12 +456,12 @@ export function Codes() {
             ? {
                 kind: 'status',
                 title: 'Nothing moved',
-                body: `Every card reached in box ${box} already said ${named}.${stepped}`,
+                body: `Every card reached in ${boxName(box, boxes)} already said ${named}.${stepped}`,
               }
             : {
                 kind: 'ok',
                 title: `${plural(claimed.applied, 'card')} now ${named}`,
-                body: `Box ${box} read again — ${plural(reread.decoded, 'code')} decoded.${stepped}`,
+                body: `${boxName(box, boxes)} read again — ${plural(reread.decoded, 'code')} decoded.${stepped}`,
               },
         )
         await load()
@@ -529,7 +472,7 @@ export function Codes() {
         setPending(null)
       }
     },
-    [load],
+    [load, boxes],
   )
 
   const runPreview = useCallback(async () => {
@@ -809,18 +752,23 @@ export function Codes() {
 
   return (
     <main className="codes bn-page">
+      {/* TXT-39: the lede restated D70 ("the QR is the code") to the owner. Deleted. */}
       <PageHeader
         title="Codes"
         icon="qr"
-        lede="Read, tier, and hand off code cards."
         actions={
           <>
             <Button variant="ghost" iconOnly icon="refresh" onClick={() => void load()} disabled={busy}>
               Reload
             </Button>
-            <Button variant="primary" icon="qr" onClick={() => openSheet('scan')}>
-              Read a box
-            </Button>
+            {/* UX-159: ONE first step. With nothing on file yet, the empty state's own "Go to
+                capture" is that step; this button would open a scan with nothing captured to
+                read. Once the ledger holds anything, this is the one persistent action again. */}
+            {ledger === null || ledger.total > 0 ? (
+              <Button variant="primary" icon="qr" onClick={() => openSheet('scan')}>
+                Read a box
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -916,12 +864,11 @@ export function Codes() {
             <EmptyState
               icon="qr"
               title="No codes on file yet"
-              /* No second "Read a box" button here — the header's own (always present,
-                 regardless of ledger state) already does exactly this, and drawing a
-                 second one directly below it put two identical controls on screen at
-                 once. "Go to capture" stays: it is the OTHER thing this state can send
-                 you to do, and it is not duplicated anywhere else on this screen. */
-              body="Set Game to Pokémon code cards on Capture, then read the box above."
+              /* UX-159: ONE first step. With the ledger empty, the header hides its own
+                 "Read a box" (above) — there is nothing captured yet for it to read — so
+                 this is the only button on screen. Once a box is captured and read, the
+                 header's button takes over as the one persistent action instead. */
+              body="Set Game to Pokémon code cards on Capture, then come back and read the box."
               actions={
                 <Button icon="camera" onClick={() => (window.location.hash = '#/capture')}>
                   Go to capture
@@ -936,7 +883,7 @@ export function Codes() {
                   <Icon name="package" size={16} /> Lots
                 </span>
               </div>
-              <LotsTable lots={lots} />
+              <LotsTable lots={lots} boxes={boxes} />
             </section>
           )}
         </>
@@ -1001,12 +948,12 @@ export function Codes() {
                                 target="_blank"
                                 rel="noreferrer"
                                 className="codes-dup-link"
-                                aria-label={`Open the photograph at box ${p.box}, index ${p.index}`}
+                                aria-label={`Open the photograph at ${boxName(p.box, boxes)}, slot ${p.index}`}
                               >
                                 <Icon name="image" size={13} />
-                                <span>Box {p.box}</span>
+                                <span>{boxName(p.box, boxes)}</span>
                                 <span>
-                                  index <span className="codes-index">{p.index}</span>
+                                  slot <span className="codes-index">{p.index}</span>
                                 </span>
                               </a>
                             ),
@@ -1061,13 +1008,7 @@ export function Codes() {
                         return (
                           <li key={row.box} className="codes-fix-row">
                             <div className="codes-fix-where">
-                              <span className="codes-fix-box">
-                                {boxTitle(row.box, boxes)
-                                  .split(' · ')
-                                  .map((part, at) => (
-                                    <span key={at}>{part}</span>
-                                  ))}
-                              </span>
+                              <span className="codes-fix-box">{boxName(row.box, boxes)}</span>
                               <span className="codes-fix-n">{plural(row.indices.length, 'unclaimed code')}</span>
                               {row.company === null ? null : (
                                 <span className="codes-fix-company">
@@ -1305,7 +1246,7 @@ export function Codes() {
                   }
                 />
               ) : (
-                <LotsTable lots={lots} />
+                <LotsTable lots={lots} boxes={boxes} />
               )
             ) : (
               <>
@@ -1413,9 +1354,9 @@ export function Codes() {
                                   ) : (
                                     <span className="codes-where">
                                       <span className="codes-where-parts">
-                                        <span>Box {e.box}</span>
+                                        <span>{boxName(e.box, boxes)}</span>
                                         <span>
-                                          index <span className="codes-index">{e.index}</span>
+                                          slot <span className="codes-index">{e.index}</span>
                                         </span>
                                       </span>
                                       {e.duplicate_positions.length > 0 ? <Pill tone="danger">Read twice</Pill> : null}
@@ -1434,7 +1375,7 @@ export function Codes() {
                                       target="_blank"
                                       rel="noreferrer"
                                       className="codes-photo-link"
-                                      aria-label={`Open the photograph at box ${e.box}, index ${e.index}`}
+                                      aria-label={`Open the photograph at ${boxName(e.box, boxes)}, slot ${e.index}`}
                                     >
                                       <Icon name="image" size={15} />
                                       <span className="codes-photo-word">Photograph</span>
@@ -1474,12 +1415,9 @@ export function Codes() {
       )}
 
       {/* ================================================================ sheets */}
-      {sheet === 'scan' ? (
-        <Sheet title="Read a box" icon="qr" onClose={closeSheet}>
+      <Sheet open={sheet === 'scan'} title="Read a box" icon="qr" onClose={closeSheet} className="codes-sheet">
           {failureNode}
-          <p className="codes-sheet-lede">
-            Decodes every code-card photograph in the box. Free — the QR is the code.
-          </p>
+          <p className="codes-sheet-lede">Free.</p>
           <form
             className="codes-form"
             onSubmit={(e) => {
@@ -1501,7 +1439,7 @@ export function Codes() {
           {scan === null ? null : (
             <div className="codes-result bn-anim-in" key={`${scan.box}-${scan.preview ? 'p' : 'w'}-${scan.decoded}`}>
               <div className="codes-result-head">
-                <Figure n={scan.decoded} of={scan.code_cards} label={<>code cards decoded in box {scan.box}</>} />
+                <Figure n={scan.decoded} of={scan.code_cards} label={<>code cards decoded in {boxName(scan.box, boxes)}</>} />
                 {scan.preview ? (
                   <Pill tone="accent" icon="eye">
                     Preview — nothing written
@@ -1541,11 +1479,10 @@ export function Codes() {
               )}
             </div>
           )}
-        </Sheet>
-      ) : null}
+      </Sheet>
 
-      {sheet === 'hand' && ledger !== null ? (
-        <Sheet title="Hand codes to a buyer" icon="hand" onClose={closeSheet}>
+      {ledger !== null ? (
+        <Sheet open={sheet === 'hand'} title="Hand codes to a buyer" icon="hand" onClose={closeSheet} className="codes-sheet">
           {failureNode}
           <p className="codes-sheet-lede">
             Confirming reserves every code it returns, permanently. A reserved code is never offered again — that is what stands
@@ -1647,12 +1584,11 @@ export function Codes() {
         </Sheet>
       ) : null}
 
-      {sheet === 'lot' ? (
-        <Sheet title="Build a lot" icon="package" onClose={closeSheet}>
+      <Sheet open={sheet === 'lot'} title="Build a lot" icon="package" onClose={closeSheet} className="codes-sheet">
           {failureNode}
           <p className="codes-sheet-lede">
             A physical lot is <strong>the whole box, or nothing</strong> — anything left in the box would go in the parcel anyway.
-            Move the strays out first; the refusal names them by index.
+            Move the strays out first; the refusal names where they sit.
           </p>
           <form
             className="codes-form"
@@ -1715,7 +1651,7 @@ export function Codes() {
                     <>
                       <span>
                         {lotPlan.count === 1 ? 'code' : 'codes'}
-                        {lotPlan.box === null ? '' : ` in box ${lotPlan.box}`}
+                        {lotPlan.box === null ? '' : ` in ${boxName(lotPlan.box, boxes)}`}
                       </span>
                       <span>{venueLabel(lotPlan.venue)}</span>
                       <span>{deliveryLabel(lotPlan.delivery)}</span>
@@ -1808,8 +1744,7 @@ export function Codes() {
               )}
             </div>
           )}
-        </Sheet>
-      ) : null}
+      </Sheet>
     </main>
   )
 }
@@ -1854,7 +1789,7 @@ function TaskCard({
 
 /* ---- lots table --------------------------------------------------------------------------------- */
 
-function LotsTable({ lots }: { readonly lots: readonly LotReceipt[] }) {
+function LotsTable({ lots, boxes }: { readonly lots: readonly LotReceipt[]; readonly boxes: BoxRecord[] | null }) {
   return (
     <div className="codes-table-wrap">
       <table className="bn-table codes-table codes-lots">
@@ -1878,7 +1813,7 @@ function LotsTable({ lots }: { readonly lots: readonly LotReceipt[] }) {
               <td data-th="Codes" className="num">
                 {l.count.toLocaleString()}
               </td>
-              <td data-th="Box">{l.box === null ? <span className="bn-faint">—</span> : `Box ${l.box}`}</td>
+              <td data-th="Box">{l.box === null ? <span className="bn-faint">—</span> : boxName(l.box, boxes)}</td>
               <td data-th="Delivery">
                 <Pill icon={l.delivery === 'physical' ? 'package' : 'send'}>{deliveryLabel(l.delivery)}</Pill>
               </td>

@@ -8,8 +8,5 @@
   "#/orders": {
     "pushed": "inventory",
     "staged": "inventory"
-  },
-  "#/codes": {
-    "index": "library"
   }
 }

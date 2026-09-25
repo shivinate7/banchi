@@ -78,9 +78,8 @@
   background: var(--bn-surface-2);
 }
 .codes-fix-where { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* D-a-box-is-shown-by-its-name: one span, the name alone — no separator to draw. */
 .codes-fix-box { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
-/* D218: the box number and its name are sibling spans; the seam is CSS. */
-.codes-fix-box > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .codes-fix-n { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
 .codes-fix-company { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .codes-fix-do { display: flex; align-items: flex-end; gap: var(--bn-3); }
@@ -562,49 +561,24 @@
   .codes-dup-link { min-height: var(--bn-control-h-sm); padding: 0 4px; }
   .codes-photo-link, .codes-td-photo .codes-photo-link { min-width: var(--bn-control-h-sm); min-height: var(--bn-control-h-sm); }
   .codes-sheet .bn-seg-item { height: var(--bn-control-h-sm); }
-  .codes-sheet-head .bn-btn { min-width: var(--bn-control-h); min-height: var(--bn-control-h); }
   .codes-failure .bn-btn { min-width: var(--bn-control-h-sm); }
   .codes-stat-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
 /* ---- sheets --------------------------------------------------------------- */
-.codes-sheet { width: min(540px, 100vw); display: flex; flex-direction: column; }
-.codes-sheet:focus, .codes-sheet:focus-visible { outline: none; }
+/* The kit's Sheet (`app/src/kit/overlay.tsx`) draws the panel, its head, icon, title and body
+   now — `.bn-overlay-*`, not `.codes-sheet-*`. This file keeps only what is specific to Codes:
+   the wider panel (540px, forms and tables need it) and the lede's own text style. The kit's
+   own `.bn-sheet` already becomes a bottom sheet under 639px (kit-frame-2, 2026-09-24), so
+   nothing here repeats that breakpoint. */
+.codes-sheet { width: min(540px, 100vw); }
 /* while a sheet is open the toast stack steps left of it, so a receipt never covers the codes */
 @media (min-width: 768px) { body[data-codes-sheet] .bn-toasts { right: calc(min(540px, 100vw) + var(--bn-4)); } }
-/* phones: the sheet rises to 84vh from the bottom, so the receipt goes to the top — over the bar,
-   which is dimmed and inert under the scrim, because a toast placed under it clips the sheet's head */
+/* phones: the sheet rises from the bottom, so the receipt goes to the top — over the bar, which
+   is dimmed and inert under the scrim, because a toast placed under it clips the sheet's head */
 @media (max-width: 767px) { body[data-codes-sheet] .bn-toasts { top: calc(var(--bn-3) + env(safe-area-inset-top)); bottom: auto; } }
-.codes-sheet-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--bn-3);
-  padding: var(--bn-4) var(--bn-5);
-  border-bottom: 1px solid var(--bn-line);
-  background: var(--bn-surface);
-}
-.codes-sheet-icon { width: 34px; height: 34px; border-radius: var(--bn-r); display: grid; place-items: center; background: var(--bn-accent-tint); color: var(--bn-accent); flex: none; }
-.codes-sheet-title { flex: 1 1 auto; min-width: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; letter-spacing: -0.015em; }
-.codes-sheet-body { display: flex; flex-direction: column; gap: var(--bn-5); padding: var(--bn-5); padding-bottom: calc(var(--bn-8) + env(safe-area-inset-bottom)); }
 .codes-sheet-lede { font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.5; }
 .codes-sheet-lede strong { color: var(--bn-ink); }
-@media (max-width: 767px) {
-  .codes-sheet {
-    top: auto;
-    left: 0;
-    right: 0;
-    width: auto;
-    max-height: 84vh;
-    max-height: 84dvh;
-    border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0;
-    animation-name: bn-sheet-up;
-  }
-  .codes-sheet-head { padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0; }
-  .codes-sheet-body { padding: var(--bn-4); padding-bottom: calc(var(--bn-8) + env(safe-area-inset-bottom)); }
-}
 .codes-form { display: flex; flex-direction: column; gap: var(--bn-4); }
 .codes-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-4); }
 @media (max-width: 479px) { .codes-form-row { grid-template-columns: 1fr; } }
