@@ -213,14 +213,14 @@
   that the TCGplayer terms stay unread and unmeasured here. The owner takes that risk.
 - D100 transport and send quantity: allow mixed sends. One Send can carry rows that add copies
   and zero rows that only reprice live listings. The guard checks copies on adding rows and
-  prices on zero rows. The listing door stays open and widens. The owner asked why a send could
-  not include zeros, and called the old restriction odd.
+  prices on zero rows. The listing door stays open and widens. The owner's words: "why can't a send include
+  zeros? ... seems like an odd restriction?"
 - Box-name backfill: once the integration branch reaches main, run
   `./pkmnscan boxes names` as a preview, show the owner, and write only on the owner's yes.
-- HOR-07 and undo: not diagnosed now. The owner said undo is buggy everywhere in general, and
-  asked for one overall undo session later rather than a diagnosis now. The undo findings
-  (HOR-07, HIR-09, HIR-10, HIR-11, HIR-20, HIR-23) move to that later undo session, out of
-  wave 2.
+- HOR-07 and undo: not diagnosed now. The owner's words: "undo in general is buggy
+  everywhere, probably better to have an overall undo session at a later time than
+  diagnosing it." The undo findings (HOR-07, HIR-09, HIR-10, HIR-11, HIR-20, HIR-23) move to
+  that later undo session, out of wave 2.
 
 ## Orchestrator calls, 2026-09-24
 - Ratchets review failed: reflow breaks sentence identity across a line-crossing code span.
@@ -261,7 +261,8 @@
   The `was` value now comes from the newest live export on disk. A refusal now carries
   `{sku, live, price}`, so the screen can offer to re-send. Round 7 also carries R6-2 (undo
   drops `typedHere`), R6-4 (reuse `send_held`), and a corrected record sentence.
-- Owner, 2026-09-24: split the UX PR if the split is doable and easy. PR 1 carries the
+- Owner, 2026-09-24: split the UX PR, in the owner's words, "if it's doable, and EASY". PR 1
+  carries the
   integration branch: waves 0 and 1, b-runs r6, ratchets through r3, after one screen
   verification pass. PR 2 carries wave 2 plus b-runs r7, rebased on main after PR #461 and the
   CSS sweep. Merge order: PR 1, then the CSS sweep, then PR #461, then PR 2.
@@ -313,17 +314,18 @@
   `::before` inset so the face keeps its own size. The overlay Close shows its word on the
   Fulfiller persona. Every should-fix item lands, plus a browser spec for `IconButton`. Round 2
   goes to the same builder.
-- UX-268 (nameless buyer): the owner asked why a buyer would have no name. A read-only
+- UX-268 (nameless buyer): the owner asked, "why would a buyer have no name?" A read-only
   measurement of the real store found 0 of 834 orders without a buyer name. The fallback
   exists only for pasted orders. Orchestrator call: the fallback text reads
   "Buyer on order …NNNNN".
-- Orders card details (market and live counts): the owner asked to see real visual mockups
-  before choosing. Three mockups were rendered by the orders builder: A drops the detail, B
-  shows one line, C shows a table. This was pending the owner's pick.
+- Orders card details (market and live counts): the owner's words: "i'd need to see real
+  visual mockups to decide." Three mockups were rendered by the orders builder: A drops the
+  detail, B shows one line, C shows a table. This was pending the owner's pick.
   Answered: B, one quiet line under the card, for example "$4.20 market, 3 live".
 - Orders stand-down first cutoff: the oldest Ready-to-ship day. Orchestrator call, judged safe.
-- Owner, 2026-09-24, UX-254: the Inventory hide toggle becomes "In stock only". The owner
-  suggested this name. It stays on by default, and its count is the cards that left.
+- Owner, 2026-09-24, UX-254: the Inventory hide toggle becomes "In stock only". The owner's
+  words: "maybe in stock only should be the toggle name? or available?" It stays on by
+  default, and its count is the cards that left.
 - Owner, 2026-09-24, UX-243: the button and its panel read "Change the card". Both claim
   editors read "Edit claims". Neither uses a question-form label.
 - Owner, 2026-09-24: Opus was used too generously. Opus is reserved for planning,
@@ -490,3 +492,18 @@
   3. The PR is the major checkpoint: one Opus integration review of store and search paths,
      plus one all-screen pass.
   4. No review runs on work an open owner question may still change.
+- Pricing cut-off exception (owner, 2026-09-25): "Keep the exception". A typed price equal to
+  the cut-off, on a card worth less than the cut-off, is not a 25% drift, and stays out of
+  "Needs you". The b-pricing lane's own decision entry, not yet landed, records this.
+- Review close words, UX-255 (owner, 2026-09-25, verbatim): "I think one word is better if it
+  sounds intuitive still". One verb covers the close act, only if it still reads naturally.
+  The review lane's own decision entry records this.
+- Pricing Q3 server half (orchestrator, applying the existing Q3 ruling, "send every ready
+  copy; unpriced rows stay on the list"): the send leaves out unanswered no-price rows and
+  sends the rest. No new owner question was needed.
+- Mid-word minimum length (orchestrator, applying the owner's "only if fast" condition): the
+  substring scan needs at least 3 characters, measured again on 2,500-plus cards.
+- Mid-word ceiling (orchestrator, applying the owner's "only if fast on 2,500+" condition):
+  ship it. The 3-character mid-word hit measured 73ms and 76ms, p50 and p95, at 3,000 cards
+  (the live store holds about 3,450), and 249ms and 260ms at 10,000. The 10,000 ceiling is
+  recorded in D271, with the upgrade path (an FTS5 trigram index, its own decision).

@@ -139,7 +139,8 @@ mono, always with a `$`. `dates.ts`: one relative and one absolute format. `BoxL
 number plus the name, boxes listed most recent first. `STATUS_TONES`. Mono only for SKUs, run
 ids, card numbers, key caps and money. `CardLine`. `CardThumb` with one "no photo" state.
 `Sep`. `Count`. `FilterCount`, `Select` (custom, never the OS menu), `FilterChips` (filters
-combine in any order), `SortControl`. Capture's picker is the pattern to follow.
+combine in any order), `SortControl`. Capture's picker is the pattern to follow (the
+owner: "pretty decent").
 Decisions: D221, D41, D58 (display amended, section-relative), D132, D142, D227, D212.
 Done: `kit-data.spec.ts` renders every primitive at four widths. `ProductLink` with no open
 sheet lands on `#/product?sku=`. `typecheck` and `lint` pass. Gallery specimens render.
@@ -199,8 +200,11 @@ ground. A skip link. The keys sheet opens with its own keys. Foot icons align. T
 "Server online". 720 gets the desktop rail.
 Decisions: D95, D120, D204, D205, D201, D51, D227, D207.
 Done: the specs pass at four widths. A throwaway route entry gets nav, palette, keys, a title
-and the scaffold with no other edit. Focus never escapes an open palette or drawer. The palette
-finds "Product history" and a demo card. `make check` is green.
+and the scaffold with no other edit. Focus never escapes an open palette or drawer (nav.spec's
+own words: "focus never escapes the open palette, keys sheet or phone drawer (UX-014)"). The
+palette finds "Product history" and a demo card. `make check` is green.
+Follow-up: `App.css`'s `.app-keys` still switches at 767, "to follow the kit's edge", while
+the kit now switches at 639. Align to 639 in a small follow-up (docs-sweep or a kit-3 item).
 
 ### W1-2 text-checks (Sonnet, M)
 Deletes `app/tests/copy-budget.spec.ts`, `copy-budget.json`, `scripts/copy-budget.mjs`. Edits
@@ -266,7 +270,8 @@ specimens). New decisions: `D270.md` (amends the native dropdowns of D213 and
 D220, and the toggles of D132 and D209), `D285.md` (the owner ruled filter
 memory in the URL).
 Findings (7): see `CONSOLIDATED.md`, `lane: "filtering"`.
-Work: build `FilterBar` from Capture's picker. Its closed row always shows its own value. Each
+Work: build `FilterBar` from Capture's picker, which the owner called "pretty decent". Its
+closed row always shows its own value. Each
 option shows a count under the other active filters, and a zero count still shows. Single and
 multi choice look different. Each row carries a clear, and one clear resets all. No order lock,
 and no wipe. It opens a popover on the desk and a sheet on the phone. Its value lives in the
@@ -287,7 +292,8 @@ Files: `app/src/position.ts`, `app/src/cardNumber.ts`, `app/src/PositionBar.tsx`
 `app/src/PlaceNeighbors.tsx`/`.css`, `app/src/PositionLabel.tsx`/`.css`,
 `app/src/SectionTitle.tsx`, `app/src/CardLocations.tsx`/`.css`. Place parts only from
 `app/src/BoxBrowse.tsx`/`.css` (the row number, the section header badge, the `?box=&card=`
-deep link) and `app/src/ReviewQueue.tsx`/`.css` (the place pill). New
+deep link, today reading `?box=` only — the direction, "The box named on the hash", is
+this lane's own) and `app/src/ReviewQueue.tsx`/`.css` (the place pill). New
 `app/tests/locating.spec.ts`. The landed decision entry D260
 (amends the display half of D58 and D92). In wave 2, `BoxBrowse` and `CardLocations` pass to
 `inventory`, and `ReviewQueue` to `review`.
@@ -300,8 +306,9 @@ By the box-names ruling (Opus), this lane also owns the server's place-label com
 box name, the section, and the card within the section. It carries no typed separator.
 It also owns `departed_label`, the stored default box name "Box `<count+1>`" on create (the
 next free name if that one is taken), and the backfill "Box N" for existing unnamed boxes.
-It also owns `PositionLabel`'s box-number removal, and the change to `fulfillment.spec.ts`'s
-"dots and all" assertion. Cite `D259`.
+It also owns `PositionLabel`'s box-number removal beside the name (for example
+"BOX RB Epics Box 3"), and the change to `fulfillment.spec.ts`'s "dots and all"
+assertion. Cite `D259`.
 The lane also finds a box by name only in search. No number shortcut. An unnamed box is
 backfilled "Box N", so "box 3" still matches by its name.
 Decisions: D58, D92, D155, D30, D116, D41, D45, D67, D68, D183, D5.
@@ -343,8 +350,9 @@ row per SKU (amends D214, D217).
 Findings (16, plus UX-219 and UX-262 new in round two). One row per printing (SKU), so
 printings stay separately identifiable. Rows lead with the name, top N rows plus "Show all",
 "On the shelf" moves above the table. Refund notes show only above zero. `ProductLink` on
-names. The owner's "it is just a spreadsheet" gripe gets a visual direction shown to the owner
-before this lane builds the layout. The layout waits for that answer.
+names. The owner's words: "it's just an excel sheet" and "literally just an excel sheet, not
+sexy". A visual direction is shown to the owner before this lane builds the layout. The
+layout waits for that answer.
 
 ### W2-4 shipping (Sonnet, M)
 Files: `OrdersShipStage.tsx`, `Shipping.css`, `tests/shipping.spec.ts`, new
@@ -409,7 +417,7 @@ Depends on: `kit-frame`, `kit-data`, `shell`, `filtering`, `locating` (`SectionT
 items wait for the owner's word on the layout half of D220 and on the hub shape. The rest of
 the orders work does not wait.
 Done: the orders spec seeds a store with 6 open buyers and 30 done buyers. The lede counts one
-set. Owed minus short equals the cards in the walk. A sort press re-orders at once. At
+set (for example "21 copies owed to 6 buyers"). Owed minus short equals the cards in the walk. A sort press re-orders at once. At
 1440x900 the walk shows 8 rows or more, and reads "pick 1 of 2". Undo shows only where it
 works. The stand-down panel names its cutoff, and the request body carries it. No row stacks
 more than one status. At 720 the list and the walk both sit on the page. No code or path
@@ -519,8 +527,9 @@ distinct ids, 224 in a lane, 47 released, 1 handed off.
 - `DESIGN.md` and `docs/map.py` still call 768 the rail edge in places: `text-checks` or
   `docs-sweep` fixes them.
 - The demo lane's own round two: load the demo's shipping export at app start (the shipping
-  lane owns the file). Update the game-select selector line in `demo-coverage.spec.ts` once
-  `FilterBar` replaces the native select. Demo product strings still show box numbers, so the
+  lane owns the file). Update the `select[aria-label="Filter by game"]` line in
+  `demo-coverage.spec.ts` once `FilterBar` replaces the native select. Demo product strings
+  still show box numbers ("Box 1 (RB Origins)", "B4 #10", "BOX 1", the sale toast), so the
   demo seed names every box. `demo.yml` should run `demo-coverage.spec.ts` after it builds.
   `demo-preview`'s port needs a variable, and a `demo-record-selftest` target.
 
@@ -556,7 +565,10 @@ distinct ids, 224 in a lane, 47 released, 1 handed off.
   round 2 (the line-anchor conversion) consolidates these into one shared helper per language,
   and moves the existing lists onto it. It tells the "Run round two" session the symbol names
   once the UX PR merges.
-- `review` (wave 2): three refusals still print the raw store key or index. They move to
+- `review` (wave 2): three refusals still print the raw store key or index:
+  `_require_group_answers`' `duplicate_position` ("answers[1] repeats 7/1"),
+  `do_review_group_answer`'s `group_entry_refused` aggregate ("7/1: not_in_queue — …"),
+  and `do_put_box_claims`'s `card_not_found` ("holds no card at 3, 7"). They move to
   `said_place`/`place_within_box`, with the matching test lines updated.
 
 ## Iconography map
@@ -570,8 +582,9 @@ an icon now. Sort direction becomes an arrow icon, while the sort key stays in w
 Each fix keeps the label, shows the kit `busy` spinner, and puts the status text in a
 screen-reader-only line. Each gets a red-first spec case that measures the press box before and
 during a press held open by a delayed stub.
-- `b-pricing`: `LiveReconcile.tsx`'s fetch press, `Markdown.tsx`'s fetch press, `Pricing.tsx`'s
-  Live-tab download door, `SendCard.tsx`'s write press.
+- `b-pricing`: `LiveReconcile.tsx`'s "Fetch my live listings" press, `Markdown.tsx`'s fetch
+  press, `Pricing.tsx`'s Live-tab "Download the file instead" door, `SendCard.tsx`'s
+  "Write the file(s)" press.
 - `sales`: `Revenue.tsx`'s "Value my stock"/"Refresh" and "Compare to today's market".
 - `review`: the status lines in `RunRescue.tsx` and `ReviewQueue.tsx` that appear only while a
   press runs. Each reserves its own space.
@@ -579,13 +592,12 @@ during a press held open by a delayed stub.
   footprint, or a lint rule that refuses a label ternary on the busy state.
 
 ## Review lane fence
-The owner ruled on Review's catalog search. It must show every match, not a cut list, unless
-the match count runs extreme, and then it offers "Show 10 more". That search belongs whole to
-the
-identity session's own lane: ranking by capture claims, every match shown, and "Show 10 more".
-The `review` lane fences `ReviewQueue.tsx`'s `CatalogPanel` results list. It never redraws the
-rows or their count, and never adds a cutoff of its own. A `kit-frame` change there touches
-only the wrapper.
+The owner ruled on Review's catalog search. The owner's words: "the search shouldn't cut
+off i should see all rows that matched unless it's an egregious amount no? or a 'show 10
+more' etc." That search belongs whole to the identity session's own lane: ranking by
+capture claims, every match shown, and "Show 10 more". The `review` lane fences
+`ReviewQueue.tsx`'s `CatalogPanel` results list. It never redraws the rows or their count,
+and never adds a cutoff of its own. A `kit-frame` change there touches only the wrapper.
 
 ## Tighten headers and filters (owner, 2026-09-24), every screen
 - A filter bar holds one line: search, plus one Filters button with a count badge. Facets and

@@ -391,7 +391,7 @@ Also add `ICON_MEANINGS` rows for the icons that exist: `x`, `check`, `eye`, `lo
 - `undo` where the press is not an undo:
   - Review "Back to rows" → arrowLeft.
   - Pricing "Follow the store again" → no glyph.
-  - Orders' not-shipping button → no glyph.
+  - Orders "It isn't shipping" → no glyph.
   - Markdown "Discard staged" → no glyph.
 - `trash` on an undoable clear: Pricing "Clear typed" and ClearPrices → eraser.
 - `check` and `hand` as Mark sold: Inventory and Orders PickLine → sold. `check` on the irreversible "Stand down" (Orders, x2) → drop it.

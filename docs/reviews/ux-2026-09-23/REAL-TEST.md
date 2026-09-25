@@ -8,7 +8,7 @@ The owner said YES to both steps, 2026-09-24, and ruled that both run AFTER the 
 >    - Confirm that the live server at :8000 runs the new code: `GET /pipeline/sends` answers 200 on the new code and 404 on the old. You or the orchestrator run this, not a reviewer.
 >    - The first open migrates the store to add the `send_claims` table.
 >    - After the merge, the app reads from TCGplayer by itself. It fetches the catalogue export when a run waits for a match. It runs the live check when a receipt is due. Each is a read, and no money moves.
-> 1. **Staged and revert.** No press is built for this. Use one call by hand from the primary checkout's venv, with the real cookie from `.env`, on your word:
+> 1. **Staged and roll back.** No press is built for this. Use one call by hand from the primary checkout's venv, with the real cookie from `.env`, on your word:
 >    - `tcg_import.push_to_staged(rows_from_csv(<one row, Add to Quantity 1>), listing=True)`. At TCGplayer this calls `initializeexportcsv`, `uploadexportcsv` and `finalizeexportcsv`. Nothing goes live.
 >    - Look at the row in the portal's Staged list.
 >    - `tcg_import.rollback(upload_id)` calls `rollbackexportcsv`.
