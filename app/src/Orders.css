@@ -156,14 +156,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-panel-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-3); }
 .orders-panel-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .orders-panel-name,
-.orders-walk-title {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-xl);
-  font-weight: 700;
-  letter-spacing: var(--bn-tracking-tight);
-  color: var(--bn-ink);
-  overflow-wrap: anywhere;
-}
+.orders-walk-title { font-size: var(--bn-fs-xl); overflow-wrap: anywhere; }
 .orders-panel-name.bn-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-lg); }
 .orders-panel-order,
 .orders-walk-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
@@ -189,7 +182,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   padding: var(--bn-4);
   border-radius: var(--bn-r-lg);
   background: var(--bn-ok-tint);
-  color: var(--bn-ink);
   font-weight: 600;
 }
 .orders-walk-done p { display: flex; align-items: center; gap: var(--bn-2); }
@@ -262,13 +254,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-card-shot .bn-photo { width: 100%; height: auto; max-width: 100%; aspect-ratio: 63 / 88; }
 .orders-card-shot { min-width: 0; }
 .orders-card-text { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
-.orders-card-name {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-lg);
-  font-weight: 700;
-  color: var(--bn-ink);
-  overflow-wrap: anywhere;
-}
+.orders-card-name { font-size: var(--bn-fs-lg); overflow-wrap: anywhere; }
 .orders-card-name.is-unnamed { color: var(--bn-ink-3); font-style: italic; }
 .orders-card-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-card-pick { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
@@ -309,7 +295,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   background: var(--bn-surface-2);
   font-size: var(--bn-fs-sm);
 }
-.orders-manage-legend dt { font-weight: 600; color: var(--bn-ink); }
+.orders-manage-legend dt { font-weight: 600; }
 .orders-manage-legend dd { margin: 0; color: var(--bn-ink-2); }
 
 /* ---- the sheets ------------------------------------------------------------------- */

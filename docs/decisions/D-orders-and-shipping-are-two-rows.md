@@ -44,14 +44,41 @@ The hub protected one sale drawn as two stages, joined on order number. Two side
 both routes and both screens. The join between them stays in code. A row on one screen that
 names an order still opens it on the other.
 
-### What is still open
-
-- The exact layout: where the buyer list goes when the walk takes the height. The orders lane
-  draws it at 1440, 820, 720 and 390, and shows the owner first.
-- CLAUDE.md's hub note changes in the docs-sweep lane, not here.
-
 ### What is built
 
-NOT BUILT. The orders lane of the round-two plan builds it. That lane's plan names its own entry
-for this change (slug `orders-walk-layout`). One of the two entries must go before either
-merges.
+BUILT by the orders lane, 2026-09-24. This entry is the one record: no `orders-walk-layout`
+entry is written.
+
+D220 said: "Fetch, paste, the status picker and the stand-downs sit behind the panel's
+`Manage`." That sentence is amended. They act on the whole store, so they open from the page's
+own "Add orders" sheet. The panel's `Manage` keeps only that buyer's own orders.
+
+- **Two rows, no tabs.** `#/orders` and `#/shipping` each draw the kit `Page`. They still share
+  the hub's state (`OrdersHub`, `OrdersHubStore.ts`).
+- **The walk gets the height.** One scroll, the page's. The shape follows the column, a
+  container named `orders` (docs/DESIGN.md registers 560 and 1000). At 1000 and up: buyers,
+  the walk, and a sticky card pane. From 560: buyers beside the card over the walk. This holds
+  720 beside the desktop rail and 820. Under 560: one line that says who, how many and what is
+  next opens the buyer list as a sheet. Then the card, then the walk.
+- **A walk row is a pick count** (D212, D-pull-list-is-a-pick-count). One row is one card in one
+  section: "Pick 1 of 2". It names the buyer when the walk holds more than one.
+- **The card pane is the photograph, the pick and every copy** with its place and Mark sold.
+  The card's details table stays on `#/inventory`. This amends one sentence above: "The card
+  pane is inventory's own, with inventory's words." The words stay inventory's (the kit
+  `Location` draws each place). The pane is no longer inventory's whole pane (UX-169).
+- **The list uses the kit `FilterBar`**, and its view lives in the URL (D-view-state-in-url).
+  A sort press re-sorts at once (FLT-01, D-a-press-reorders-and-nothing-else-moves).
+- **The stand-down backlog** (D203) names its cutoff, its span and every order TCGplayer still
+  calls Ready to ship. The first cutoff it offers closes none of them.
+
+`app/tests/orders.spec.ts` and `app/tests/order-walk.spec.ts` assert each part. They check
+the widths 1440, 820, 720 and 390.
+
+### What is still open
+
+- D220 also says the unnamed label reads `MM-DD-YY_XXXXX`, in the mono face, on the owner's
+  ruling of 2026-09-19. UX-268 finds that it reads as an order id. It is unchanged until the
+  owner rules.
+- The Details table (the market reading and the listing counts) left the Orders card pane, per
+  the held-orders cut list. The owner once asked for that parity on this screen. Confirm.
+- CLAUDE.md's hub note changes in the docs-sweep lane, not here.
