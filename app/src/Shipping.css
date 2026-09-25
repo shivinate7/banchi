@@ -145,7 +145,11 @@
 /* D218: `.bn-btn` is already `inline-flex; gap: var(--bn-2)`, so the gap spaces the count from
    "Download"; `opacity` rather than `--bn-ink-4` because this button sits on the accent fill. */
 .shipping-download-count::before { content: '·'; margin-right: var(--bn-2); opacity: 0.7; }
+/* UX-059: the summary read 18px tall, under the 40px thumb floor (D117). The face keeps its
+   own size — inflating it would fight the caveats panel's own scale — so the hit area is a
+   `::before` inset instead, the same technique the kit uses for an icon-only button. */
 .shipping-caveats summary {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -154,6 +158,13 @@
   color: var(--bn-ink-2);
   cursor: pointer;
   transition: color var(--bn-t-fast) var(--bn-ease);
+}
+.shipping-caveats summary::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto 0;
+  transform: translateY(-50%);
+  height: 40px;
 }
 .shipping-caveats summary:hover { color: var(--bn-accent); }
 .shipping-caveats summary .bn-icon { color: var(--bn-ink-4); }
@@ -221,7 +232,10 @@
 }
 /* A COLLAPSED LANE IS RECESSED, NEVER FADED. The count is the figure this screen exists to
    show; dropping it to the lightest ink took it to 2.4:1 in light. The fold is carried by the
-   chevron, the "folded away" line and the ground — not by making the number hard to read. */
+   chevron and the ground — not by making the number hard to read. A folded lane draws no
+   sentence beneath the chip: the count is already there, and on a phone, where every lane
+   opens folded (D-ship-lanes-collapse), three lanes repeating "N orders folded away" was the
+   exact repeated-sentence shape TXT-01 exists to catch. */
 .shipping-chip[aria-pressed='false'] { background: var(--bn-surface-2); box-shadow: none; }
 .shipping-chip[aria-pressed='false'] .shipping-chip-count { color: var(--bn-ink-2); }
 .shipping-chip[aria-pressed='false']:hover { background: var(--bn-surface); }
@@ -244,18 +258,25 @@
 .shipping-row-unjudged:hover { box-shadow: inset 3px 0 0 var(--bn-warn), var(--bn-shadow-2); }
 .shipping-row-top { display: flex; align-items: center; justify-content: space-between; gap: 4px var(--bn-2); flex-wrap: wrap; }
 .shipping-order { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink); overflow-wrap: anywhere; }
+/* TXT-03: the word moved off every card and into the legend above the lanes (`.shipping-quality-legend`)
+   and this icon's own tooltip/accessible name. The icon alone is the face now. */
 .shipping-quality {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   flex: none;
-  font-size: var(--bn-fs-xs);
-  font-weight: 600;
   color: var(--bn-ink-3);
-  white-space: nowrap;
 }
 .shipping-quality-certain { color: var(--bn-ok); }
 .shipping-quality-inferred { color: var(--bn-ink-3); }
+.shipping-quality-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+}
+.shipping-quality-legend .bn-icon:first-child { color: var(--bn-ok); }
 .shipping-says { font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: 1.4; }
 .shipping-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .shipping-figures { display: inline-flex; flex-wrap: wrap; gap: 6px; }
@@ -269,15 +290,12 @@
   background: var(--bn-surface-2);
   white-space: nowrap;
 }
-/* The machine string: demoted, not erased — 11px on ink-3, the register `.orders-tag` uses. */
-.shipping-reason { margin-left: auto; font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
 .shipping-row-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--bn-2); padding-top: 4px; border-top: 1px solid var(--bn-line); margin-top: 2px; }
 .shipping-stamp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink); }
 .shipping-stamp .bn-icon { color: var(--bn-accent); }
 .shipping-pull { display: inline-flex; align-items: center; gap: 5px; font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-accent); white-space: nowrap; }
 .shipping-pull-done { color: var(--bn-ok); }
-.shipping-lane-empty,
-.shipping-lane-hidden {
+.shipping-lane-empty {
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
   padding: var(--bn-4);

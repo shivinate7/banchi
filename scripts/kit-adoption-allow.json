@@ -84,10 +84,6 @@
       "R2-date": "orders",
       "R2-icon-only-button": "icons"
     },
-    "app/src/OrdersShipStage.tsx": {
-      "R2-money": "shipping",
-      "R2-icon-only-button": "icons"
-    },
     "app/src/OrdersWalkPane.tsx": {
       "R2-class": "orders",
       "R2-icon-only-button": "icons"
