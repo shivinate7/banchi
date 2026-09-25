@@ -688,6 +688,9 @@
 .review-receipt-text { display: flex; align-items: baseline; gap: var(--bn-2); flex: 1 1 auto; min-width: 0; }
 .review-receipt-said { font-weight: 600; font-size: var(--bn-fs-md); white-space: nowrap; flex: none; }
 .review-receipt-label { font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* UX-255: the outcome, a description beside the one act-verb ("Closed"). Never a second
+   verb — quieter than the label, never bold. */
+.review-receipt-outcome { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; flex: none; }
 .review-receipt .bn-receipt-bar { color: var(--bn-ok); }
 .review-refusal { animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both, rv-shake var(--bn-t-slow) var(--bn-ease) var(--bn-t-slow) 1; }
 @keyframes rv-shake {
@@ -789,6 +792,7 @@
 .review-session-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
 .review-session-said { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .review-session-label { font-size: var(--bn-fs-xs); font-variant-numeric: tabular-nums; color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-session-outcome { font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); white-space: nowrap; flex: none; }
 .review-session-row .bn-btn { flex: none; }
 .review-session-more { padding: 6px 0 2px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-accent); }
 

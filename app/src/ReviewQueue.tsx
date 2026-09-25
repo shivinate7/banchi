@@ -662,6 +662,10 @@ type Receipt = {
   dropped: Row[]
   at: number
   said: string
+  /** UX-255: the one verb for the act ("Closed") is `said`. This is the ONE place the
+   *  outcome still shows — "left in place" or "retired" — as a description, never as a
+   *  second verb competing with `said`. Unset for an answer's own receipt. */
+  outcome?: string
   /** Which session counter this write moved, so an undo can move it back. */
   counts: 'answered' | 'closed'
   reverse: (box: number, index: number) => Promise<unknown>
@@ -879,7 +883,8 @@ export function ReviewQueue() {
             label: row.entry.label,
             dropped,
             at,
-            said: how.kind === 'stand_down' ? 'Stood down' : 'Retired',
+            said: 'Closed',
+            outcome: how.kind === 'stand_down' ? 'left in place' : 'retired',
             counts: 'closed',
             undoable: reversible,
           })
@@ -1574,6 +1579,9 @@ function Tray({
           <span className="review-receipt-text">
             <span className="review-receipt-said">{receipt.said}</span>
             <span className="review-receipt-label">{receipt.label}</span>
+            {/* UX-255: the outcome, as a description beside the one act-verb — never a
+                second verb competing with "Closed". */}
+            {receipt.outcome === undefined ? null : <span className="review-receipt-outcome">{receipt.outcome}</span>}
           </span>
           <span className="bn-receipt-bar" aria-hidden="true" />
           {!receipt.undoable ? null : (
@@ -1617,6 +1625,7 @@ function SessionList({ receipts, onUndo, disabled, limit }: { receipts: readonly
           <span className="review-session-text">
             <span className="review-session-said">{receipt.said}</span>
             <span className="review-session-label">{receipt.label}</span>
+            {receipt.outcome === undefined ? null : <span className="review-session-outcome">{receipt.outcome}</span>}
           </span>
           {!receipt.undoable ? null : (
             <IconButton icon="undo" label="Undo" size="sm" kbd={at === 0 ? UNDO_KEY_LABEL : undefined} onClick={() => onUndo(receipt)} disabled={disabled} />
