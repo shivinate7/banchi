@@ -245,6 +245,7 @@ from server import (  # noqa: E402
     tcg_import,
 )
 from store import db, files, master, photos, queues  # noqa: E402
+from store import sendclaims  # noqa: E402
 # `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
 # — the resolver computes and stores nothing, this one persists — so it takes an alias
 # rather than shadowing the name half this file's order cases are written against.
@@ -18735,7 +18736,9 @@ def check_send_review_r3(checks: Checks) -> None:
             "F6: and the copies are counted once, by the hand emit, with no claim written",
         )
 
-    # --------------------------- the listing door refuses a row that adds no copy
+    # --------------------------- the listing door and a row that adds no copy
+    # REVERSED IN ROUND 5 ON THE OWNER'S RULING (2026-09-24, "Allow mixed"): the listing door
+    # takes a price-only row now, so a send can reprice live cards. `check_send_review_r5`.
     with _case(checks, "the listing door: a zero row"):
         good = {
             "Id": 0, "ProductConditionId": "123", "CategoryName": "Pokemon", "SetName": "S",
@@ -18745,9 +18748,9 @@ def check_send_review_r3(checks: Checks) -> None:
         }
         checks.equal(
             _refusal_code_transport([good], listing=True),
-            "tcg_import_moves_quantity",
-            "A LISTING ROW THAT ADDS NO COPY IS REFUSED: it would only move a price, and a "
-            "price moves through a mark-down (D100's rule, whole)",
+            None,
+            "A LISTING ROW THAT ADDS NO COPY IS A PRICE-ONLY ROW, D100's own shape (the mixed "
+            "send, round 5)",
         )
         checks.equal(
             _refusal_code_transport([good], listing=False),
@@ -19091,6 +19094,230 @@ def check_send_review_r4(checks: Checks) -> None:
             (200, 409, "take_back_not_yet"),
             "THE SCREEN'S ROUTES MATCH THE STAMP A PRESS WRITES: the file is served, and Take "
             "back answers for the receipt rather than 404",
+        )
+
+
+def check_send_review_r5(checks: Checks) -> None:
+    """Round 5: the mixed send (the owner's ruling, 2026-09-24: "Allow mixed"), and the order of
+    two presses in one second. Each case went red on the round-4 build before the fix.
+
+    ONE PRESS LISTS NEW COPIES AND REPRICES LIVE ONES. A card already live that this press adds
+    no copy of, whose TYPED price differs from TCGplayer's, rides the send as a price-only row
+    (Add to Quantity 0). It never claims, counts or takes back a copy. The check past the wait
+    compares its price with TCGplayer's. A rule price never reaches a live listing this way.
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 5 — the mixed send, and two presses in one second")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def receipt(stamp):
+        return [s for s in send_routes.do_sends()["sends"] if s["stamp"] == stamp][0]
+
+    def typed(sku, price):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value=price)
+        book.write()
+
+    def portal_rows(portal):
+        return {
+            row["ProductConditionId"]: (row["AddToQuantity"], row["MyPrice"]) for row in portal["rows"]
+        }
+
+    # ------------- M1: one press lists the new copy and reprices the live card
+    with _case(checks, "M1: a mixed send"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        # THE ARTICUNO WENT LIVE AT 22.03. The owner now types 30.00 for it, and the Dunsparce
+        # is still unsent.
+        portal["live"] = _live_export_priced(
+            {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"}
+        )
+        typed(ARTICUNO_SKU, "30.00")
+        portal["rows"].clear()
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.equal(
+            portal_rows(portal).get(ARTICUNO_SKU),
+            ("0", "30.00"),
+            "M1: THE LIVE CARD'S NEW PRICE RIDES THE SEND as a price-only row: Add to Quantity 0, "
+            "at the typed 30.00",
+        )
+        checks.equal(
+            portal_rows(portal).get(DUNSPARCE_SKU, ("?",))[0],
+            "1",
+            "M1: and the same press lists the new Dunsparce copy",
+        )
+        checks.equal(
+            (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
+            (3, 1),
+            "M1: A PRICE-ONLY ROW COUNTS NO COPY: the Articuno stays at three sent, the "
+            "Dunsparce is one",
+        )
+        claim = Store().read().send_claims.get(sent["stamp"])
+        checks.equal(
+            dict(claim.skus) if claim else None,
+            {DUNSPARCE_SKU: 1},
+            "M1: and the press claimed only the card it adds a copy of",
+        )
+        checks.equal(
+            (sent["copies"], sent["prices"]),
+            (1, 1),
+            "M1: the receipt names one copy and one price change, apart",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            postings = [
+                entry
+                for entry in db.postings_for_sku(conn, ARTICUNO_SKU)
+                if entry["source"] == "emit-price"
+            ]
+        finally:
+            conn.close()
+        checks.equal(
+            [(entry["price"], entry["replaced"]) for entry in postings],
+            [("30.00", "22.03")],
+            "M1: the price change is a posting, and it names the live price it replaced (D243)",
+        )
+        # THE WAIT PASSES. TCGplayer shows the new price, and the Dunsparce never showed.
+        portal["live"] = _live_export_priced(
+            {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "30.00"}
+        )
+        _age_receipt(sent["stamp"])
+        send_routes.do_live_check({})
+        after = receipt(sent["stamp"])
+        checks.equal(
+            (after["price_check"] or {}).get("matched"),
+            1,
+            "M1: THE CHECK PAST THE WAIT COMPARES THE PRICE with TCGplayer's, as a mark-down's does",
+        )
+        checks.equal(
+            (after["state"], after["takeable"]),
+            ("short", 1),
+            "M1: and Take back offers only the copy it did not find, never the price row",
+        )
+
+    # ------------- M2: a price-only press; a rule price and an unchanged price send nothing
+    with _case(checks, "M2: prices only"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send({"runs": [run_dir.name], "confirm": True})
+        live = {ARTICUNO_SKU: 3, DUNSPARCE_SKU: 1}
+        portal["live"] = _live_export_priced(live, {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "9.99"})
+        typed(ARTICUNO_SKU, "22.03")
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "nothing_to_send",
+            "M2: A TYPED PRICE TCGPLAYER ALREADY SHOWS IS NO CHANGE, and a RULE price that differs "
+            "from the live one (the Dunsparce) never reaches a live listing: nothing is sent",
+        )
+        typed(ARTICUNO_SKU, "25.00")
+        portal["rows"].clear()
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.equal(
+            portal_rows(portal),
+            {ARTICUNO_SKU: ("0", "25.00")},
+            "M2: A PRESS OF PRICE CHANGES ONLY SENDS AND MAKES LIVE, one price-only row",
+        )
+        checks.equal(
+            (sent["state"], sent["copies"], sent["prices"], pushed(ARTICUNO_SKU)),
+            ("waiting", 0, 1, 3),
+            "M2: its receipt waits for the check, and no copy was counted",
+        )
+        portal["live"] = _live_export_priced(live, {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "9.99"})
+        _age_receipt(sent["stamp"])
+        send_routes.do_live_check({})
+        after = receipt(sent["stamp"])
+        checks.equal(
+            (after["state"], after["takeable"], [row["sku"] for row in after["price_check"]["missing"]]),
+            ("short", 0, [ARTICUNO_SKU]),
+            "M2: A PRICE TCGPLAYER DOES NOT SHOW IS NAMED, and nothing is offered back: another "
+            "price change is the way a live price moves again",
+        )
+
+    # ------------- M3: a price change never races a mark-down over the same card
+    with _case(checks, "M3: a mark-down holds the card"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        typed(ARTICUNO_SKU, "30.00")
+        with Store().write() as writable:
+            writable.send_claims.claim(
+                f"{send_routes.MARKDOWN_CLAIM}20260924-110000",
+                sendclaims.KIND_MARKDOWN,
+                {ARTICUNO_SKU: 0},
+                pid=_dead_pid(),
+            )
+        portal["rows"].clear()
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            "price_change_held",
+            "M3: A PRICE CHANGE OVER A CARD A MARK-DOWN HOLDS IS REFUSED by name, and the whole "
+            "press sends nothing",
+        )
+        checks.equal(portal["rows"], [], "M3: and TCGplayer receives no row")
+
+    # ------------- the listing door takes a price-only row, and never a negative one
+    with _case(checks, "the listing door"):
+        good = {
+            "Id": 0, "ProductConditionId": "123", "CategoryName": "Pokemon", "SetName": "S",
+            "ProductName": "P", "ConditionName": "Near Mint", "AddToQuantity": "0",
+            "MyPrice": "1.00", "ProOnlineStoreReserveQuantity": "", "ProOnlineStorePrice": "",
+            "Number": "1/1",
+        }
+        checks.equal(
+            _refusal_code_transport([good, dict(good, ProductConditionId="124", AddToQuantity="2")], listing=True),
+            None,
+            "THE LISTING DOOR TAKES A MIXED FILE: a price-only row beside a row that adds copies",
+        )
+        checks.equal(
+            _refusal_code_transport([dict(good, AddToQuantity="-1")], listing=True),
+            "tcg_import_moves_quantity",
+            "and still refuses a row that would take a copy away",
+        )
+
+    # ------------- two presses in one second are ordered by when they were pressed
+    with _case(checks, "two presses in one second"), isolated_home():
+        older, newer = "20260924-120000-ffffff", "20260924-120000-000000"
+        for stamp, ns in ((older, 1_000), (newer, 2_000)):
+            send_routes._write(
+                send_routes.sends_dir() / stamp,
+                {
+                    "stamp": stamp, "kind": "send", "at": "2026-09-24T12:00:00+00:00",
+                    "pressed_ns": ns, "phase": "done", "copies": {ARTICUNO_SKU: 1},
+                    "copies_total": 1, "live_before": {ARTICUNO_SKU: 0},
+                    "sold_before": {ARTICUNO_SKU: 0}, "published_at": "2026-09-24T12:00:05+00:00",
+                    "check_after": "2000-01-01T00:00:00+00:00", "files": ["import.csv"],
+                },
+            )
+        checks.equal(
+            [stamp for stamp, _ in send_routes._receipts()],
+            [newer, older],
+            "THE RECEIPT LIST IS NEWEST PRESS FIRST, not by the stamp's random tail",
+        )
+        receipts = send_routes._receipts()
+        credits = send_routes._credits(
+            receipts,
+            frozenset({older, newer}),
+            {older: {ARTICUNO_SKU: 1}, newer: {ARTICUNO_SKU: 1}},
+            {ARTICUNO_SKU: 1},
+            {ARTICUNO_SKU: 0},
+            datetime.now(timezone.utc),
+        )
+        checks.equal(
+            (credits[older].get(ARTICUNO_SKU), credits[newer].get(ARTICUNO_SKU)),
+            (1, 0),
+            "AND THE CREDIT LEDGER AGREES: one live copy goes to the send pressed first",
         )
 
 
@@ -33792,6 +34019,7 @@ def run() -> Result:
     check_send_hazards(checks)
     check_send_review_r3(checks)
     check_send_review_r4(checks)
+    check_send_review_r5(checks)
     check_run_match(checks)
     check_publish_lag(checks)
     check_withholding(checks)

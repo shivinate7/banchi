@@ -67,6 +67,7 @@ import secrets
 import shutil
 import sys
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from http import HTTPStatus
@@ -503,15 +504,20 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
 
 
 def _receipts() -> List[Tuple[str, dict]]:
-    """Every receipt, newest first. A directory with no receipt yet is a press still deciding
-    or one that was refused before it wrote one, and is skipped."""
+    """Every receipt, newest PRESS first (`_press_order`). A directory with no receipt yet is a
+    press still deciding or one that was refused before it wrote one, and is skipped.
+
+    NOT THE DIRECTORY NAME'S ORDER (the round-4 review). A stamp is the second, then a random
+    tail, so two presses in one second sorted by the tail: the older could read as the newer."""
     root = sends_dir()
     if not root.is_dir():
         return []
-    out = []
-    for entry in sorted(root.iterdir(), reverse=True):
-        if _STAMP.match(entry.name) and (entry / RECEIPT).is_file():
-            out.append((entry.name, _read(entry)))
+    out = [
+        (entry.name, _read(entry))
+        for entry in root.iterdir()
+        if _STAMP.match(entry.name) and (entry / RECEIPT).is_file()
+    ]
+    out.sort(key=lambda item: _press_order(*item), reverse=True)
     return out
 
 
@@ -822,6 +828,9 @@ def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
         "stamp": stamp,
         "kind": KIND_DOWNLOAD if download else KIND_SEND,
         "at": _iso(_now()),
+        # THE PRESS'S OWN MOMENT TO THE NANOSECOND, the tiebreak for two presses in one second
+        # (`_press_order`). This server runs one press at a time (`_press`), so it only rises.
+        "pressed_ns": time.time_ns(),
         "runs": [d.name for d in directories],
         "run": sorted(d.name for d in directories)[-1],
         "phase": PHASE_DECIDING,
@@ -1389,6 +1398,14 @@ def _tier(record: dict) -> int:
     return TIER_PUBLISHED if record.get("published_at") and not _uncertain(record) else TIER_UNCONFIRMED
 
 
+def _press_order(stamp: str, record: dict) -> Tuple[datetime, int, str]:
+    """The order presses happened in: the second the press read its baseline, then the moment
+    it took its stamp to the nanosecond (`pressed_ns`), then the stamp for a receipt older than
+    that field. One key for the receipt list and the credit ledger, so both agree which of two
+    presses in one second came first."""
+    return (_pressed_at(stamp, record), int(record.get("pressed_ns") or 0), stamp)
+
+
 def _pressed_at(stamp: str, record: dict) -> datetime:
     """When the press read its baseline: the receipt's `at`, or the time its stamp names."""
     at = _parse(record.get("at"))
@@ -1454,6 +1471,7 @@ def _credits(
     out: Dict[str, Dict[str, int]] = {stamp: {} for stamp in due}
     by_stamp = dict(receipts)
     pressed = {stamp: _pressed_at(stamp, record) for stamp, record in receipts}
+    ranks = {stamp: _press_order(stamp, record) for stamp, record in receipts}
     final = {stamp: _settled(record, now) for stamp, record in receipts}
     checked_at = {stamp: _parse(record.get("checked_at")) for stamp, record in receipts}
     skus = sorted({sku for stamp in due for sku in sent_by.get(stamp, {})})
@@ -1476,7 +1494,7 @@ def _credits(
             if not joined:
                 break
             group |= joined
-        anchor = min(group, key=lambda stamp: (pressed[stamp], stamp))
+        anchor = min(group, key=lambda stamp: ranks[stamp])
         record = by_stamp[anchor]
         before = int(_baseline(record).get(sku, 0))
         rise = live_now.get(sku, 0) - before + _sold_since(record, sku, sold_now)
@@ -1487,8 +1505,8 @@ def _credits(
         )
         left = max(0, left)
 
-        def order(stamp: str) -> Tuple[datetime, str]:
-            return (pressed[stamp], stamp)
+        def order(stamp: str) -> Tuple[datetime, int, str]:
+            return ranks[stamp]
 
         judged = sorted((stamp for stamp in group if stamp in due), key=lambda st: (_tier(by_stamp[st]), order(st)))
         pending_sends = [

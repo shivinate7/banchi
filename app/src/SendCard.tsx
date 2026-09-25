@@ -16,7 +16,10 @@
  *  - "Take them back" ONLY after a live check has run past the wait (the owner's ruling,
  *    2026-09-24). Before that the card says when it will be safe;
  *  - after Take back, what must not happen next: an upload that may wait in Staged is not
- *    published, and a downloaded file is not uploaded. Drawn until the owner dismisses it.
+ *    published, and a downloaded file is not uploaded. Drawn until the owner dismisses it, and
+ *    on a phone folded to one line that opens (round 5);
+ *  - a MIXED press (the owner's ruling, 2026-09-24: "Allow mixed"): new copies and price
+ *    changes on cards already live, named apart, "Send 3 copies and 2 price changes".
  *
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
@@ -30,6 +33,16 @@ import { current as liveState, refresh as refreshLive, useLiveCheck } from './li
 import './SendCard.css'
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
+
+/** What a press carries, in owner words: "3 copies", "2 price changes", or both joined. A price
+ *  change is a card already live whose typed price moves; it adds no copy. */
+function carried(copies: number, prices: number): string {
+  const parts = [
+    copies > 0 || prices === 0 ? plural(copies, 'copy', 'copies') : null,
+    prices > 0 ? plural(prices, 'price change', 'price changes') : null,
+  ].filter((part): part is string => part !== null)
+  return parts.join(' and ')
+}
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** The failures a second press can fix. Everything else is a refusal: pressing again gets the
@@ -109,6 +122,36 @@ function MissingList({ send }: { readonly send: SendSummary }) {
   )
 }
 
+/** Price changes the check found TCGplayer not showing. Named, and never offered back: the way
+ *  a live price changes again is another price change. */
+function PriceMisses({ send }: { readonly send: SendSummary }) {
+  const missing = send.price_check?.missing ?? []
+  if (missing.length === 0) return null
+  return (
+    <ul className="send-names send-price-misses">
+      {missing.slice(0, 6).map((row) => (
+        <li key={row.sku}>
+          <span className="send-name">{row.name || row.sku}</span>
+          <span className="send-figure">{row.live === null ? 'no price live' : <>still <span className="bn-money">{`$${row.live}`}</span></>}</span>
+        </li>
+      ))}
+      {missing.length > 6 ? <li className="send-more">and {missing.length - 6} more</li> : null}
+    </ul>
+  )
+}
+
+/** What the check found, in one sentence: copies found, price changes live, or both. */
+function foundLine(send: SendSummary): string {
+  const parts: string[] = []
+  if (send.check !== null && (send.check.expected > 0 || send.prices === 0)) {
+    parts.push(`${send.check.found} of ${plural(send.check.expected, 'copy', 'copies')} found`)
+  }
+  if (send.prices > 0 && send.price_check !== null) {
+    parts.push(`${send.price_check.matched} of ${plural(send.price_check.expected, 'price change', 'price changes')} live`)
+  }
+  return parts.join(', ')
+}
+
 /** The upload TCGplayer never confirmed may still wait in its Staged list. SAID FOR AS LONG AS
  *  THE RECEIPT IS DRAWN, before the check and after it, beside Take back too (the round-2
  *  review, F3): nothing here can see that upload leave Staged, and publishing it by hand after
@@ -132,13 +175,26 @@ function TakenBackWarning({
   readonly dismiss: (stamp: string) => void
   readonly dismissing: boolean
 }) {
+  /* ON A PHONE IT FOLDS TO ONE LINE (round 5): two open warnings stood half the screen high in
+     the sticky bar. The line is the warning itself, and it opens to the rest. It never folds
+     away: only Dismiss takes it off the card, as round 4 ruled. */
+  const [open, setOpen] = useState(false)
   if (send.warning === null) return null
+  const line = send.warning === 'staged' ? 'Do not publish the old upload.' : 'Do not upload the old file.'
   return (
     <Notice
       tone="warn"
       compact
-      className="send-standing send-taken-back"
-      title={`Copies taken back at ${clockTime(send.taken_back_at)}.`}
+      className={open ? 'send-standing send-taken-back send-fold-open' : 'send-standing send-taken-back'}
+      title={
+        <>
+          <span className="send-fold-wide">{`Copies taken back at ${clockTime(send.taken_back_at)}.`}</span>
+          <button type="button" className="send-fold" aria-expanded={open} onClick={() => setOpen((was) => !was)}>
+            <span className="send-fold-line">{line}</span>
+            <Icon name={open ? 'chevronUp' : 'chevronDown'} size={16} />
+          </button>
+        </>
+      }
       action={
         <Button size="sm" busy={dismissing} disabled={dismissing} onClick={() => dismiss(send.stamp)}>
           Dismiss
@@ -163,7 +219,7 @@ function SendStanding({
   readonly takeBack: (stamp: string) => void
   readonly takingBack: boolean
 }) {
-  const copies = plural(send.copies, 'copy', 'copies')
+  const copies = carried(send.copies, send.prices)
   const safeAfter = send.take_back_after ? `You can take them back after ${clockTime(send.take_back_after)}, once Banchi has checked.` : null
   const action =
     send.takeable > 0 ? (
@@ -217,7 +273,7 @@ function SendStanding({
       if (send.check === null) return null
       return (
         <Notice tone="ok" compact className="send-standing" title={`Live and checked at ${clockTime(send.checked_at)}.`}>
-          {send.check.found} of {send.check.expected} found at TCGplayer.
+          {foundLine(send)} at TCGplayer.
           <StagedWarning send={send} />
         </Notice>
       )
@@ -228,11 +284,12 @@ function SendStanding({
           tone="warn"
           compact
           className="send-standing send-short-check"
-          title={`${send.check.found} of ${send.check.expected} found at TCGplayer at ${clockTime(send.checked_at)}.`}
+          title={`${foundLine(send)} at TCGplayer at ${clockTime(send.checked_at)}.`}
           action={action}
         >
           <StagedWarning send={send} />
           <MissingList send={send} />
+          <PriceMisses send={send} />
         </Notice>
       )
     default:
@@ -257,6 +314,7 @@ function openReceipts(sends: readonly SendSummary[]): SendSummary[] {
 export function SendCard({
   runs,
   copies,
+  priceChanges = 0,
   settled,
   saveFailed,
   quantities,
@@ -266,6 +324,9 @@ export function SendCard({
   readonly runs: readonly string[]
   /** Copies the worklist says are ready, for the button's words. Null when not known. */
   readonly copies: number | null
+  /** Cards already live whose typed price this press changes (the mixed send). The server
+   *  decides against a fresh read; this is the worklist's count, for the button's words. */
+  readonly priceChanges?: number
   /** True when every price typed on the screen is saved. A press waits for it. */
   readonly settled: boolean
   /** True when the last save failed. A press refuses rather than sending old prices. */
@@ -332,11 +393,14 @@ export function SendCard({
     setPhase('waiting')
   }
 
-  /* THE NEWEST RECEIPT IS WHAT THE CARD STANDS ON, unless this visit's own press is newer than
-     the status read has caught up with. A settled send older than a day says nothing here: a
-     clock time with no date on it would read as today's. */
+  /* THE NEWEST RECEIPT IS WHAT THE CARD STANDS ON, unless this visit's own press is one the
+     status read has not caught up with yet. The server lists receipts newest PRESS first; a stamp
+     is never compared here, because two presses in one second order by a random tail (round 5).
+     A settled send older than a day says nothing here: a clock time with no date on it would
+     read as today's. */
   const newest = live.status?.sends[0] ?? null
-  const latest = newest !== null && (sent === null || newest.stamp >= sent.stamp) ? newest : sent
+  const caughtUp = sent === null || (live.status?.sends ?? []).some((send) => send.stamp === sent.stamp)
+  const latest = newest !== null && caughtUp ? newest : sent
   const settledAt = Date.parse(latest?.checked_at ?? latest?.published_at ?? '')
   const open = openReceipts(live.status?.sends ?? [])
   const warned = (live.status?.sends ?? []).filter((send) => send.state === 'taken_back' && send.warning !== null)
@@ -355,9 +419,11 @@ export function SendCard({
       ? 'Saving your prices…'
       : phase === 'sending' || running
         ? 'Checking TCGplayer, then sending…'
-        : copies !== null && copies > 0
-          ? `Send ${plural(copies, 'copy', 'copies')} to TCGplayer`
-          : 'Send to TCGplayer'
+        : priceChanges > 0
+          ? `Send ${carried(copies ?? 0, priceChanges)}`
+          : copies !== null && copies > 0
+            ? `Send ${plural(copies, 'copy', 'copies')} to TCGplayer`
+            : 'Send to TCGplayer'
 
   const takeBack = async (stamp: string) => {
     setTakingBack(true)

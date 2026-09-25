@@ -4031,6 +4031,15 @@ export type SendSummary = {
   state: SendState
   at: string
   copies: number
+  /** Price-only rows (Add to Quantity 0): cards already live whose typed price this send
+   *  changed. The mixed send, the owner's ruling of 2026-09-24. */
+  prices: number
+  /** What the check past the wait found of those prices. `live` is TCGplayer's price then. */
+  price_check: {
+    expected: number
+    matched: number
+    missing: { sku: string; name: string; price: string; live: string | null }[]
+  } | null
   rows: number
   published_at: string | null
   check_after: string | null

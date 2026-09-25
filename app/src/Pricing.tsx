@@ -1493,6 +1493,25 @@ export function Pricing() {
     }
   }, [rows, answerFor, askedFor])
 
+  /* THE MIXED SEND'S PRICE CHANGES, AS THE WORKLIST SEES THEM (the owner's ruling, 2026-09-24:
+     "Allow mixed"). A row this press adds no copy of, already live, whose TYPED price is not the
+     live one. `pipeline/sendguard.py:price_changes` is the rule the server applies against a
+     fresh read; this count only gives the press its words. A rule price never counts: nothing
+     sends one to a live listing. */
+  const priceChanges = useMemo(() => {
+    let count = 0
+    for (const row of rows) {
+      const typed = answerFor(row)
+      if (typeof typed !== 'string') continue
+      const addsNone = row.at_cap || askedFor(row.sku) === 0
+      const live = Math.max(row.live_before, row.listing?.live ?? 0)
+      if (!addsNone || live <= 0) continue
+      if (row.snap.now !== null && Number(typed) === Number(row.snap.now)) continue
+      count += 1
+    }
+    return count
+  }, [rows, answerFor, askedFor])
+
   useEffect(() => {
     latestRows.current = rows
   }, [rows])
@@ -3698,6 +3717,7 @@ export function Pricing() {
           <SendCard
             runs={loaded}
             copies={progress.outCopies}
+            priceChanges={priceChanges}
             settled={!dirty && !saving}
             saveFailed={saveFailed}
             quantities={quantitiesAsked}
