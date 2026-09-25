@@ -5291,7 +5291,8 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D166", "D168", "D172", "D174", "D183", "D189",
                                 "D191", "D192", "D193", "D203", "D212", "D213", "D219", "D225",
-                                "D227", "D251", "D252", "D259", "D268", "D273"],
+                                "D227", "D251", "D252", "D259", "D268", "D273",
+                                "D-sales-rows-by-sku"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -6294,7 +6295,7 @@ COMPONENTS = [
                                               "D192", "D193", "D203", "D207", "D213", "D219",
                                               "D225", "D227", "D236", "D252",
                                               "D268",
-                                              "D273"]},
+                                              "D273", "D-sales-rows-by-sku"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "

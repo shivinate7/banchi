@@ -2974,6 +2974,23 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
   )) as HoldingsValuePayload
 }
 
+/** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still
+ *  carries a photograph, exactly `photoUrl`'s own `(box, index, cid)` triple. */
+export type SkuPhotoEntry = { box: number; index: number; cid: string | null }
+
+/** `sku -> SkuPhotoEntry`, for exactly the SKUs asked. A SKU with no photographed copy on
+ *  hand is simply ABSENT — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
+ *  D-sales-rows-by-sku). `#/revenue`'s own reason: a sold card's own photograph is usually
+ *  reclaimed on purpose (D89), so a sales row's thumbnail is ANOTHER copy of the same SKU,
+ *  never the one that actually sold. A plain read, costs nothing, so this screen calls it
+ *  on arrival rather than gating it behind a press. */
+export async function getSkuPhotos(skus: string[]): Promise<Record<string, SkuPhotoEntry>> {
+  if (skus.length === 0) return {}
+  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as { photos: Record<string, SkuPhotoEntry> }
+  return body.photos
+}
+
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from
  *  a terminal appears here exactly as one started from this app does. */
 export async function getRuns(): Promise<RunSummary[]> {
