@@ -57,12 +57,19 @@ import { collectorNumber as sharedCollectorNumber } from './cardNumber'
 
 type Segment =
   | { kind: 'text'; text: string }
+  /** A machine string: a collector number or a set hint. Mono (CLAUDE.md's three type
+   *  roles). */
   | { kind: 'value'; text: string }
+  /** A card's own name. Never mono (UX-270): a name is prose, not a machine string, and the
+   *  three type roles reserve the mono face for SKUs, run names, reason codes, key caps and
+   *  card numbers alone. */
+  | { kind: 'name'; text: string }
   /** A claim is drawn as a word; the pipeline's own spelling rides in `raw` for the title. */
   | { kind: 'claim'; text: string; raw: string }
 
 const say = (text: string): Segment => ({ kind: 'text', text })
 const value = (text: string): Segment => ({ kind: 'value', text })
+const cardName = (text: string): Segment => ({ kind: 'name', text })
 const claim = (raw: string, word: string = humanize(raw)): Segment => ({ kind: 'claim', text: word, raw })
 
 /** A trimmed field, or null. Every field of `read` is treated as absent-or-blank. */
@@ -163,7 +170,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
           : [say(' matched one '), claim(only), say(' listing in this set by name.')]
       return name === null
         ? [...head, say('The name matched one listing in this set.')]
-        : [...head, value(name), ...matched]
+        : [...head, cardName(name), ...matched]
     }
 
     case 'metadata_not_stocked': {
@@ -195,7 +202,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
       const head: Segment[] =
         name === null
           ? [say('The system read this photograph as a card it could not name')]
-          : [say('The system read this photograph as '), value(name)]
+          : [say('The system read this photograph as '), cardName(name)]
       const middle: Segment[] = number === null ? [] : [say(' '), value(number)]
       const confidence = text(entry.confidence) ?? 'low'
       return [...head, ...middle, say(', with '), claim(confidence, confidence.replace(/[_-]+/g, ' ')), say(' confidence, which is not enough to list it on.')]
@@ -266,10 +273,10 @@ function sentence(entry: QueueEntryWire): Segment[] {
         name === null
           ? [say('The name on this photograph could not be checked against the listing below. ')]
           : rowName === null
-            ? [say('This photograph reads as '), value(name), say(', which is not what the listing below is called. ')]
+            ? [say('This photograph reads as '), cardName(name), say(', which is not what the listing below is called. ')]
             : [
                 say('This photograph reads as '),
-                value(name),
+                cardName(name),
                 say(number === null ? ', but the listing it matched is ' : ', but '),
                 ...(number === null ? [] : [value(number), say(' is ')]),
                 value(rowName),
@@ -1351,11 +1358,12 @@ export function ReviewQueue() {
                 )
               ) : total === 0 ? (
                 'Nothing is waiting.'
-              ) : current === null ? (
-                `${done} of ${total} done.`
               ) : (
+                /* UX-256: one count, not two that can differ by one. "to go" is
+                   `everyone.length`, the same number the Queue button's own badge shows
+                   (D164's counter), so the two never disagree again. */
                 <>
-                  Card <strong>{Math.min(done + 1, total)}</strong> of <strong>{total}</strong>
+                  <strong>{done}</strong> done, <strong>{everyone.length}</strong> to go
                 </>
               )}
               {counts !== null && counts.parked > 0 ? <span className="review-progress-parked">{counts.parked} parked</span> : null}
@@ -1874,6 +1882,7 @@ function Card({
                 </span>
               )
             }
+            if (part.kind === 'name') return <span key={at}>{part.text}</span>
             return (
               <span key={at} className="review-value">
                 {part.text}
@@ -2777,7 +2786,7 @@ function QueueRefresh({
           <p className="review-recheck-safe">
             <Icon name="lock" size={14} />
             <span>
-              An already-answered card never returns to the queue. Only <strong>Undo</strong>
+              An already-answered card never returns to the queue. Only <strong>Undo</strong>{' '}
               reverses an answer.
             </span>
           </p>

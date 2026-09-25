@@ -6820,8 +6820,8 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D137", "D162", "D167", "D172", "D194", "D218", "D252",
-                                "D253", "D259"],
+                                "D87", "D137", "D162", "D164", "D167", "D172", "D194", "D218",
+                                "D252", "D253", "D259"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
