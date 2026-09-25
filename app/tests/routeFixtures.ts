@@ -731,6 +731,57 @@ export async function seedPopulatedGraveyard(page: Page): Promise<void> {
   )
 }
 
+/* ------------------------------------------------------------------------ #/review */
+
+/** One export row, in the loose shape `GET /review/<box>/<index>/catalog` answers with —
+ *  this module's other builders take their route's own shape rather than the client's
+ *  stricter type, `codeEntry`'s own precedent. */
+function catalogRow(sku: string, overrides: Record<string, unknown> = {}) {
+  return {
+    sku,
+    name: 'Calm Rune',
+    set: 'Spiritforged',
+    number: 'R02',
+    condition: 'Near Mint',
+    market: '0.10',
+    ...overrides,
+  }
+}
+
+/** Replaces `shell.ts:stubStore`'s own EMPTY catalog answer for the same zero-candidate
+ *  entry that stub already seeds, with a WIDE one — D23's own review finding:
+ *  `copy-budget.spec.ts`'s sweep already visits `#/review` with the catalog open
+ *  (`showCatalog` is true whenever an entry carries no candidates, D46), but every route
+ *  through this fixture answered zero rows, so "Show N more" and the truncation notice
+ *  `CatalogPanel` draws for a wide result never rendered anywhere the ratchet could see
+ *  them. 200 rows delivered against 205 found is the same shape a real egregious search
+ *  returns (`CATALOG_EGREGIOUS_LIMIT`, `server/capture_server.py`), so this measures BOTH
+ *  new strings in the one state: the reveal button (`revealed < rows.length`) and the
+ *  truncation notice (`lookup.truncated`). The queue entry itself is untouched — this only
+ *  replaces what the SEARCH answers, the way `stubStore`'s own comment says a populated
+ *  catalog answer follows from populating the queue at all. */
+export async function seedPopulatedReview(page: Page): Promise<void> {
+  const rows = Array.from({ length: 200 }, (_, at) =>
+    catalogRow(String(9139800 + at), { market: `${(at % 9) + 1}.00` }),
+  )
+  await page.route(/\/review\/\d+\/\d+\/catalog/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        box: 2,
+        index: 1,
+        game: 'riftbound',
+        query: 'Volcanion',
+        searched: false,
+        rows,
+        found: 205,
+        truncated: true,
+      }),
+    }),
+  )
+}
+
 /* ------------------------------------------------------------------------- the roster */
 
 /** The five routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
@@ -751,4 +802,5 @@ export const POPULATED_ROUTE_SEEDS: Record<string, (page: Page) => Promise<void>
   '#/shipping': seedPopulatedShipping,
   '#/codes': seedPopulatedCodes,
   '#/graveyard': seedPopulatedGraveyard,
+  '#/review': seedPopulatedReview,
 }
