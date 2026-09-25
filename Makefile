@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -237,6 +237,9 @@ help:
 	@echo "  make kit-adoption-selftest  that checker, on in-memory fixtures in both directions."
 	@echo "  make demo-determinism-selftest  scripts/demo-determinism.py's own path-matcher,"
 	@echo "                    on fixtures — no subprocess, no \`make demo\`."
+	@echo "  make match-selftest  the one forgiving matcher, server side (FLT-06/04, UX-173):"
+	@echo "                    server/match.py against match.cases.json, then _match_rank and"
+	@echo "                    do_search end to end against a throwaway store."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
@@ -282,7 +285,7 @@ help:
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
 	@echo "                    guard-scope-selftest + token-literal-check-selftest +"
 	@echo "                    kit-adoption-selftest + port-slots-selftest +"
-	@echo "                    demo-determinism-selftest"
+	@echo "                    demo-determinism-selftest + match-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -699,6 +702,7 @@ check:
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
 	@$(MAKE) --no-print-directory demo-determinism-selftest
+	@$(MAKE) --no-print-directory match-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -765,6 +769,7 @@ ci-check:
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
 	@$(MAKE) --no-print-directory demo-determinism-selftest
+	@$(MAKE) --no-print-directory match-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -905,6 +910,20 @@ port-slots-selftest:
 # functions, no subprocess, no write — unlike `demo-determinism` itself (D18).
 demo-determinism-selftest:
 	@python3 scripts/demo-determinism-selftest.py
+
+# FLT-06/04, UX-173: the one forgiving matcher, server side. `server/match.py` against every
+# row of app/src/kit/match.cases.json (the filtering lane's own case table, so the server and
+# the client are proved against one shared table rather than two that could drift), then
+# `capture_server._match_rank` and `capture_server.do_search` end to end against a throwaway
+# store — a real SQLite FTS5 index is what shows the candidate-step defect (a bare `54/132`
+# or a hyphenated `heimerdinger-inventor` never reaching the rank step at all), which
+# `_match_rank` alone cannot. `PKMNSCAN_HOME` is repointed to a temp directory per case, so
+# the operator's own store is never opened. Stdlib only, no subprocess, no network — same
+# standing as `decisions-selftest` right above its own cluster, not `cid-selftest`'s (D18
+# still applies to the temp store it writes, which is why it gates rather than runs in the
+# commit hook).
+match-selftest:
+	@python3 scripts/match-selftest.py
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing

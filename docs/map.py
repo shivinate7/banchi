@@ -5038,6 +5038,21 @@ COMPONENTS = [
                         "(D18: that target is a press, run by hand).",
                 "governed_by": ["D16", "D18"],
             },
+            "match-selftest.py": {
+                "does": "FLT-06/04's one forgiving matcher, server side (UX-173). "
+                        "`server/match.py` against every row of "
+                        "`app/src/kit/match.cases.json` (the filtering lane's own case "
+                        "table); `capture_server._match_rank`, direct, for the number "
+                        "tier's canonical comparison and its accent fold; "
+                        "`capture_server.do_search`, end to end against a throwaway store, "
+                        "which is the only way to see the FTS5 candidate-step defect — a "
+                        "bare `54/132` or a hyphenated `heimerdinger-inventor` never "
+                        "reaching `_match_rank` at all. `PKMNSCAN_HOME` is repointed to a "
+                        "temp directory per case, so the operator's own store is never "
+                        "opened. Pure Python plus the project's own packages, no network — "
+                        "in `make check`, gated by D18 only because it writes a temp store.",
+                "governed_by": ["D166", "D213"],
+            },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
