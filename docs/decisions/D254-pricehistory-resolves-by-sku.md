@@ -1,5 +1,9 @@
 ## D254 — A product is resolved from its SKU, never from a card's own read fields
 
+**AMENDED IN ONE LINE (`D-identity-follows-the-sku`).** Tier (b) reads the store-owned SKU
+table now, instead of merging every cached export on each call. The tier order stands. The
+owner's ruling stands. Only the source of tier (b)'s own map moved.
+
 **The reversed attempt.** A session widened `pipeline/pricehistory.py:ProductIndex.find` to
 weigh a card's own READ name against the number it found (D240's measured seam). The owner's
 review reversed the whole approach.

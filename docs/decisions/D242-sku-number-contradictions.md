@@ -1,5 +1,11 @@
 ## D242 — Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
 
+**AMENDED, MERGED (`D-identity-follows-the-sku`, ruling 6).** This class read "the card's own
+stored name and number." Those are no longer the read, once a card is bound. So this class
+becomes empty by construction — the outcome it protected. `cards identity`, one report, reads
+`read_*` against the SKU table instead, and excludes any card a human bound. D255 merges into
+the same report.
+
 **What this builds.** A SKU is one product in one condition. Two copies of it have no
 legitimate reason to read a different card number. `pipeline/sku_number_contradictions.py`
 finds every SKU whose stored numbers disagree, after normalizing through
