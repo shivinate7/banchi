@@ -315,8 +315,8 @@ def main() -> int:
                 "('3/17', 3, 17, 'captured', '{\"box\":3,\"index\":17}')"
             )
             conn.execute(
-                "INSERT INTO boxes (key, box, bid, state, payload) VALUES "
-                "('3', 3, 1, 'open', '{\"box\":3,\"bid\":1}')"
+                "INSERT INTO boxes (key, box, bid, payload) VALUES "
+                "('3', 3, 1, '{\"box\":3,\"bid\":1}')"
             )
             conn.execute(
                 "INSERT INTO listings (key, condition, pushed, staged, live, payload) VALUES "
