@@ -28,15 +28,15 @@ Each rule keeps its reader and gains a shrinking list of offenders. The shape is
 2. **A stale entry.** A listed entry that matches nothing now shows that the fix landed. The lane deletes the entry in the same commit. `make offenders-prune` does the delete (see below).
 3. **Growth.** Each row reads its list as it stood at the merge-base with `origin/main`. It uses `git merge-base` and `git show`, two reads, so D18 holds. An entry that the old list did not hold is refused. The one exception is a rule that the merge-base does not define: a rule born on the branch may list its first offenders. If a rule that the merge-base defines is gone at HEAD, all growth is refused. Otherwise a renamed rule could bring back every old offender as new. The read fails open, and prints why, when there is no merge-base or no list at the merge-base.
 
-Growth is counted over the whole list, not per file. So `git mv` moves a file's entries and adds nothing. A listed sentence copied into a second file is growth, because the sentence now occurs one more time.
+Prose growth is counted over the whole list, not per file. So `git mv` moves a file's entries and adds nothing. A listed sentence copied into a second file is growth, because the sentence now occurs one more time. A trade between files needs the same sentence hash, and that is rare.
 
-A typed dot's growth is counted by its string, without its scope. The scope stays in the unlisted and stale check. So a function rename moves its entries, the way a file rename does. The rename is red until the entries are re-keyed to the new name. After the re-key, the row passes, because the same strings occur the same number of times. The pruner does not re-key a scope, because it cannot tell a rename from a move. The re-key is a hand edit, and the diff shows it.
+Typed-dot growth is counted PER FILE, by the string without its scope. A dot string is short and repeats across files. Counted over the whole list, a dot fixed in one file excused a new dot with the same string elsewhere. That included a new file. So each file at HEAD is compared with its own path at the merge-base. The row maps a renamed file back to its old path through git's rename pairs. It reads `git diff -M --name-status` from the merge-base with `offenders-prune.py`'s own `git_renames`. That is a read, so D18 holds. The scope stays in the unlisted and stale check. So a function rename moves its entries, the way a file rename does. The rename is red until the entries are re-keyed to the new name. After the re-key, the row passes, because the same strings occur the same number of times. The pruner does not re-key a scope, because it cannot tell a rename from a move. The re-key is a hand edit, and the diff shows it.
 
 ### A new file starts clean
 
 D229 accepted a new file at its own ratio. Its reason was cost: refusing the file forced a re-pin on every branch that added a document. There is no pin now, so that cost is gone.
 
-A new file is not in the list at the merge-base. So any entry for it is growth, and the row refuses it. The one exception is a sentence that left another file in the same branch. The author of a new document is writing it now, so the author can fix its prose at no extra cost. A new component with a typed dot follows the same rule.
+A new file is not in the list at the merge-base. So any entry for it is growth, and the row refuses it. For prose, the one exception is a sentence that left another file in the same branch. The author of a new document is writing it now, so the author can fix its prose at no extra cost. A new component with a typed dot has no exception. Dot growth is per file, so a dot fixed elsewhere excuses nothing in the new file. A file that git renamed is not new: its entries map back to the old path.
 
 ### A sentence keeps its identity through the edits that do not change its prose
 
@@ -79,7 +79,9 @@ The rows read tracked files only. `markdown_files()` in `scripts/docs-audit.py` 
 - Only code spans, decision citations and `VS Code` are joined across a line break. A link, an HTML tag or a URL that crosses a line break is still masked one line at a time. So a reflow into or out of such a construct can still change a sentence's hash.
 - A code span is paired as the linter pairs it: each backtick opens or closes one span. A double-backtick span that holds a single backtick is read wrong on every layout alike, so it moves no identity.
 - A typed dot moved to another place inside the same named function stays excused. The scope is the function, never the line, because a line number rots on the next edit above it.
-- A typed dot moved to another function, with its entry re-keyed by hand, passes. Growth drops the scope so that a rename can pass, and a move looks the same. The row is red until the hand re-key, and the re-key is in the diff.
+- A typed dot moved to another function in the same file, with its entry re-keyed by hand, passes. Growth drops the scope so that a rename can pass, and a move looks the same. The row is red until the hand re-key, and the re-key is in the diff.
+- A file rename that git does not see reads as a new file. That includes a plain `mv` that is not staged. The row then refuses its entries as growth, until the rename is staged. It fails closed.
+- A prose sentence fixed in one file still excuses the same sentence, with the same hash, in another file. Prose growth stays whole-list, so that a moved paragraph adds nothing.
 - Two helpers with one name, in two sibling blocks of the same function, share one scope.
 - The pruner cannot re-key a rename that git does not see. That includes a plain `mv` that is not staged, and a move with too large an edit for rename detection. The old entries then go stale and are deleted, and the new file's offenders stay unlisted.
 - A markdown file that git does not track is not read until `git add`. The pre-commit hook reads the index, so a commit still carries every file it names.

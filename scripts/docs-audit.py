@@ -13305,6 +13305,46 @@ def typed_interpunct_growth_key(entry: str) -> str:
     return entry.split(": ", 1)[1] if ": " in entry else entry
 
 
+def _typed_interpunct_growth(
+    base: Dict[str, Dict[str, List[str]]],
+    head: Dict[str, Dict[str, List[str]]],
+    rules: Set[str],
+    renames: Sequence[Tuple[str, str]],
+) -> Tuple[List[str], List[str]]:
+    """`_offender_growth` for typed dots, counted PER FILE, by string without its scope.
+
+    PER FILE, unlike the prose list. Counted over the whole list, a new dot passed in any
+    file, a new file included, whenever a dot with the same string was fixed somewhere else:
+    the second review's X1 and X2. A dot string is short and repeats across files, where a
+    prose hash does not.
+
+    A FILE RENAME STILL MOVES ITS ENTRIES. Each HEAD path is mapped to its merge-base path
+    through git's rename pairs, `(old, new)` from `offenders-prune.py:git_renames` (a read, so
+    D18 holds). A rename git does not see reads as a new file, and fails closed: its entries
+    are growth until the rename is staged.
+
+    The scope is dropped (`typed_interpunct_growth_key`), so a FUNCTION rename moves its
+    entries too, once they are re-keyed to the new name."""
+    to_base = {new: old for old, new in renames}
+
+    def folded(files: Dict[str, Dict[str, List[str]]], mapped: bool) -> Dict[str, Dict[str, List[str]]]:
+        out: Dict[str, Dict[str, List[str]]] = {}
+        for file, per in files.items():
+            where = to_base.get(file, file) if mapped else file
+            for rule, entries in per.items():
+                out.setdefault(where, {}).setdefault(rule, []).extend(
+                    f"{where} :: {typed_interpunct_growth_key(e)}" for e in entries)
+        return out
+
+    return _offender_growth(folded(base, False), folded(head, True), rules, rules)
+
+
+def _git_renames() -> List[Tuple[str, str]]:
+    """git's rename pairs from the merge-base, read by `offenders-prune.py`'s own function."""
+    prune = _sibling("offenders-prune.py")
+    return prune.git_renames(ROOT, _MERGE_BASE_REFERENCE) if prune is not None else []
+
+
 def _typed_interpunct_found(strings: List[Dict[str, object]]) -> Dict[str, Dict[str, List[str]]]:
     """file -> {TYPED_INTERPUNCT_RULE: [every offending entry, once per occurrence]}."""
     found: Dict[str, Dict[str, List[str]]] = {}
@@ -13391,8 +13431,7 @@ def check_typed_interpunct(report: Report) -> None:
         growth_note = f" Only-shrinks not compared: {where}. Failing open."
     else:
         base_listed, _, _ = _offender_list_shape(base_doc, rules)
-        refused, allowed = _offender_growth(base_listed, listed, rules, rules,
-                                            key=typed_interpunct_growth_key)
+        refused, allowed = _typed_interpunct_growth(base_listed, listed, rules, _git_renames())
         for line in refused:
             findings.append(Finding(
                 allow_rel, f"gained {line} over the merge-base {where}. Fix the string instead "
@@ -20641,21 +20680,73 @@ def self_test() -> int:
            f"{unlisted} {stale}")
         dot_rules = {TYPED_INTERPUNCT_RULE}
         ok(_offender_diff(renamed_fn, renamed_fn) == ([], [])
-           and _offender_growth(before, renamed_fn, dot_rules, dot_rules,
-                                key=typed_interpunct_growth_key) == ([], []),
-           "the entry re-keyed to the new name is not growth — the same string, the same "
-           "number of times")
+           and _typed_interpunct_growth(before, renamed_fn, dot_rules, []) == ([], []),
+           "T7b: the entry re-keyed to the new function name is not growth — the same "
+           "string, the same number of times, in the same file")
         refused, _ = _offender_growth(before, renamed_fn, dot_rules, dot_rules)
         ok(len(refused) == 1,
            "RED without the growth key: counted with its scope, the re-key reads as growth",
            f"{refused}")
         more = {"Two.tsx": {TYPED_INTERPUNCT_RULE: before["Two.tsx"][TYPED_INTERPUNCT_RULE]
                             + ["Second: ·"]}}
-        refused, _ = _offender_growth(before, more, dot_rules, dot_rules,
-                                      key=typed_interpunct_growth_key)
+        refused, _ = _typed_interpunct_growth(before, more, dot_rules, [])
         ok(len(refused) == 1,
-           "RED: one more copy of a listed string is still growth under the growth key",
+           "RED: one more copy of a listed string in the same file is growth",
            f"{refused}")
+
+    # DOT GROWTH IS PER FILE, with a file rename mapped back through git's rename pairs. The
+    # second review's X1 and X2: counted over the whole list, a dot fixed in one file excused
+    # a new dot with the same string in another file, or in a brand-new one.
+    print("\ntyped interpunct: growth per file, and a rename maps back to its old path")
+    R4 = TYPED_INTERPUNCT_RULE
+    rules4 = {R4}
+    base4 = {"app/src/Runs.tsx": {R4: ["selectionLine: ·"]},
+             "app/src/Bar.tsx": {R4: ["Bar: ·"]},
+             "app/src/Gallery.tsx": {R4: [f"Gallery: Box {n} · Card {n}" for n in range(45)]}}
+    fixed_there = {k: v for k, v in base4.items() if k != "app/src/Runs.tsx"}
+    x1 = {**fixed_there, "app/src/Bar.tsx": {R4: ["Bar: ·", "Bar: ·"]}}
+    refused, _ = _typed_interpunct_growth(base4, x1, rules4, [])
+    ok(len(refused) == 1 and "app/src/Bar.tsx" in refused[0],
+       "RED, X1: a dot fixed in one file does not excuse a new one with the same string in "
+       "another listed file", f"{refused}")
+    x2 = {**fixed_there, "app/src/Brand.tsx": {R4: ["Brand: ·"]}}
+    refused, _ = _typed_interpunct_growth(base4, x2, rules4, [])
+    ok(len(refused) == 1 and "app/src/Brand.tsx" in refused[0],
+       "RED, X2: nor one in a brand-new file — a new file starts clean", f"{refused}")
+    renamed_file = {("app/src/RunsX.tsx" if k == "app/src/Runs.tsx" else k): v
+                    for k, v in base4.items()}
+    ok(_typed_interpunct_growth(base4, renamed_file, rules4,
+                                [("app/src/Runs.tsx", "app/src/RunsX.tsx")]) == ([], []),
+       "T5: a file git renamed, its entries moved with it, is not growth")
+    refused, _ = _typed_interpunct_growth(base4, renamed_file, rules4, [])
+    ok(len(refused) == 1,
+       "a rename git does not see reads as a new file and fails closed", f"{refused}")
+    gallery_renamed = {**base4, "app/src/Gallery.tsx": {R4: [
+        e.replace("Gallery: ", "KitGallery: ", 1) for e in base4["app/src/Gallery.tsx"][R4]]}}
+    ok(_typed_interpunct_growth(base4, gallery_renamed, rules4, []) == ([], []),
+       "T8b: a component renamed, its 45 entries re-keyed to the new name, is not growth")
+
+    # The rename pairs come from `offenders-prune.py:git_renames`, shared rather than copied.
+    prune = _sibling("offenders-prune.py")
+    ok(prune is not None and hasattr(prune, "git_renames"),
+       "the row reads git's rename pairs through the pruner's own `git_renames`")
+    with tempfile.TemporaryDirectory() as tmp_name:
+        repo = Path(tmp_name)
+
+        def run_git(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=str(repo), check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        run_git("init", "-q")
+        run_git("config", "user.email", "selftest@example.invalid")
+        run_git("config", "user.name", "selftest")
+        (repo / "Runs.tsx").write_text("".join(f"export const line{i} = {i}\n" for i in range(30)))
+        run_git("add", "-A")
+        run_git("commit", "-q", "-m", "base")
+        run_git("mv", "Runs.tsx", "RunsX.tsx")
+        pairs = prune.git_renames(repo, "HEAD") if prune is not None else []
+        ok(pairs == [("Runs.tsx", "RunsX.tsx")],
+           "and a staged `git mv` in a throwaway repository is one rename pair", f"{pairs}")
 
     # THE SHRINKING LIST'S OWN ARITHMETIC (D-ratchets-become-offender-lists), in memory: plain
     # dicts in, findings out, no file read and none written (D18). Each arm below is one of the
