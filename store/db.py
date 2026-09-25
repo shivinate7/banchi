@@ -147,7 +147,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # table is correctly empty until the first `pkmnscan skus adopt --write`, which — unlike
 # `price_history` — can answer for every export this machine has ever cached, because none of
 # them ages out the way the live price-history endpoint's own window does.
-# TWELVE, FOR `D-one-press-sends-and-makes-live` (round 2). It was ELEVEN on its own branch,
+# TWELVE, FOR `D273` (round 2). It was ELEVEN on its own branch,
 # and main's identity lane took ELEVEN first, so it moved up one. `_add_send_claims` adds
 # `send_claims` — D174's claim shape over a send to TCGplayer instead of a read at Anthropic
 # (`store/sendclaims.py`). Purely additive, `_add_submissions`'s case exactly: a table nothing
@@ -203,7 +203,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     # value; the intersection is computed in Python over the handful of live rows, which is
     # what `Submissions.live` keeps small by filtering on the `state` column first.
     "submissions": ("pid", "state", "started_at", "run"),
-    # `D-one-press-sends-and-makes-live`: the SKUs a press to TCGplayer is sending, held until
+    # `D273`: the SKUs a press to TCGplayer is sending, held until
     # its outcome is known (`store/sendclaims.py`). `skus` is the claim itself and, like
     # `submissions.keys`, is not a column.
     "send_claims": ("pid", "state", "started_at", "kind"),
@@ -506,7 +506,7 @@ def _upgrade(
                 # stamp reads as main's 11, so `_add_skus` runs here again. It is idempotent,
                 # so main's 11 loses nothing.
                 _add_skus(conn)
-                _add_send_claims(conn)       # D-one-press-sends-and-makes-live
+                _add_send_claims(conn)       # D273
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),

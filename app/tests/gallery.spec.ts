@@ -335,7 +335,7 @@ test('bn-truncate clips a name too long for its row (S13)', async ({ page }) => 
 /* ================================================================================================
    THE KIT FRAME (the UX overhaul's wave 0, 2026-09-23). `#/gallery` is the first screen built on
    `Page`, and the one page that draws every part of the frame, so the frame is asserted here:
-   one width, one top gap, one h1 (D-one-page-width), the notice disclosure (D-notice-detail), a
+   one width, one top gap, one h1 (D272), the notice disclosure (D269), a
    status slot that never moves a row on a one-line answer (D118) and never clips a long one,
    the layer stack, the confirm, the popover, the contrast floors, reduced motion, key hints on a
    touch screen, the toggle focus ring, and axe. Each case went red on its own defect before it
@@ -405,7 +405,7 @@ test('the kit is a Page: one h1, one width, one top gap, no sideways scroll, at 
   }
 })
 
-test('a notice keeps the machine\'s words behind "What the server said" (D-notice-detail)', async ({ page }) => {
+test('a notice keeps the machine\'s words behind "What the server said" (D269)', async ({ page }) => {
   const notice = page.locator('[data-specimen="notice-said"] .bn-notice')
   const code = notice.locator('.bn-notice-code')
   const said = notice.locator('details.bn-notice-said')

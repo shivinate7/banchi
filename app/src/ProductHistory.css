@@ -1,4 +1,4 @@
-/* `#/product` — one product's own view (D227, D62, `D-product-view-hybrid`). Every color is a
+/* `#/product` — one product's own view (D227, D62, `D278`). Every color is a
    `--bn-*` token; the market series and the owner's own fills are drawn with deliberately
    different marks (a line versus a diamond), never a shared color standing in for the
    distinction. The page frame (width, top gap, the h1) is the kit's `Page` now — this file

@@ -160,7 +160,7 @@
 .bn-read { font-size: var(--bn-fs-read); line-height: var(--bn-lh-base); }
 
 /* ---- the page scaffold (`Page`, kit/Page.tsx) ----------------------------------------------
-   ONE WIDTH, ONE TOP GAP, ONE LEFT EDGE (D-one-page-width, amends D197). A page drawn by `Page`
+   ONE WIDTH, ONE TOP GAP, ONE LEFT EDGE (D272, amends D197). A page drawn by `Page`
    ignores `--bn-page-max`: `--bn-page-w` at every screen, fluid below it. The page is the query
    container `bn-page`, so a tier follows the column the shell gave it, not the window. */
 .bn-page[data-bn-page] {
@@ -856,7 +856,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-notice-action { flex: none; align-self: center; }
 .bn-notice-code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow-wrap: anywhere; }
 
-/* "WHAT THE SERVER SAID" (D-notice-detail): the machine's own words, one press away and never in
+/* "WHAT THE SERVER SAID" (D269): the machine's own words, one press away and never in
    plain view. On its own line under the sentence, indented to the text's edge. */
 .bn-notice-said { flex: 1 0 100%; order: 3; padding-left: calc(var(--bn-4) + var(--bn-3)); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 .bn-notice-said > summary {
@@ -1449,7 +1449,7 @@ img.bn-crop[data-cropped='true'] {
      whether one import file is written or two. */
   .bn-check { min-height: var(--bn-control-h-sm); }
   .bn-toast-action { height: var(--bn-control-h-sm); }
-  /* "What the server said" is a control a thumb opens (D-notice-detail). */
+  /* "What the server said" is a control a thumb opens (D269). */
   .bn-notice-said > summary { min-height: var(--bn-control-h-sm); }
   /* `.bn-datalink` and `.bn-filtercount-clear` WERE HERE, as a stopgap: kit-data's own controls,
      lifted from the kit's sheet because kit-data did not yet own a phone-floor block of its own.

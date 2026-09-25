@@ -1,6 +1,6 @@
-## D-send-review-rounds — The send press's review record: each round's findings, and the fix for each
+## D283 — The send press's review record: each round's findings, and the fix for each
 
-The review record of `D-one-press-sends-and-makes-live` (one press sends and makes live). That
+The review record of `D273` (one press sends and makes live). That
 entry holds the rulings. This entry holds rounds 2 to 6 of the adversarial review. Each round
 failed the build before it. Each finding was fixed at its cause, with a case that went red on
 the build before the fix. This entry was split out of that one in round 5, so that entry
@@ -126,7 +126,7 @@ Each case below has a T7 case in `check_send_review_r5`, or a spec case in
 `app/tests/pricing.spec.ts`, that went red on the round-4 build before the fix.
 
 - **The mixed send (the owner's ruling, "Allow mixed").** One press lists new copies and
-  reprices live cards. `D-one-press-sends-and-makes-live` states the rule and where the rows
+  reprices live cards. `D273` states the rule and where the rows
   come from.
 - **Two presses in one second.** The receipt list sorted by directory name, and a stamp is the
   second then a random tail. So the older press could read as the newer, in the list, in the

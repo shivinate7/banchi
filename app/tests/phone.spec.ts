@@ -313,7 +313,7 @@ async function phoneRoutes(page: Page): Promise<string[]> {
   await expect(page.locator('.bn-drawer')).toBeVisible()
   /* The Fulfiller's link opens his screen in its own tab; it is not an owner screen, so it is
      not on this roster (the old drawer foot held it outside the nav until
-     D-drawer-foot-joins-the-list). */
+     D266). */
   const hrefs = await page.locator('.bn-drawer .bn-nav a.bn-nav-link:not([target="_blank"])').evaluateAll((els) =>
     els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? '').filter((h) => h.startsWith('#/')))
   expect(hrefs.length, 'the drawer drew no nav links — the harvest is broken, not the app').toBeGreaterThan(5)
@@ -593,7 +593,7 @@ test.skip('every drawer route is reachable by tap, at two phone heights', async 
   }
 })
 
-/* THE DRAWER HAS NO FIXED FOOT (D-drawer-foot-joins-the-list, amends D204; UX-037).
+/* THE DRAWER HAS NO FIXED FOOT (D266, amends D204; UX-037).
  * Cards to pull, the theme and the server line are the last rows of the one scrolling list, so
  * nothing covers the end of it. And on this file's own phone every SCREEN in the drawer shows
  * without a scroll: before, Graveyard and Codes sat under the foot with a 32px fade as the only

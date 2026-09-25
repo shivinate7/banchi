@@ -2635,7 +2635,7 @@ class Inventory:
     def box_title(self, number) -> str:
         """What a refusal calls this box: its stored name, or `Box <number>` without one.
 
-        The box number stays inside the store (D-a-box-is-shown-by-its-name), and a refusal
+        The box number stays inside the store (D259), and a refusal
         reaches a screen as a toast, so every message here names the box this way.
         `store/numbers.py:box_title` is the one fallback, shared with the place labels in
         `pipeline/join.py`. A card's whole place is `pipeline/join.py:said_place`, which the
@@ -2763,7 +2763,7 @@ class Inventory:
         entry = self.boxes.get(str(number))
         if entry is None:
             if name is None:
-                # A BOX WITH NO NAME GETS A STORED ONE (D-a-box-is-shown-by-its-name). The
+                # A BOX WITH NO NAME GETS A STORED ONE (D259). The
                 # owner's ruling, 2026-09-23: "If I choose to not name a box, it can default
                 # to count+1 Box as a default name". Stored at creation, not drawn at render,
                 # so it is a name like any other: it never renumbers when a box is deleted.
@@ -2799,7 +2799,7 @@ class Inventory:
         )
 
     def default_box_name(self, count: Optional[int] = None, number: Optional[int] = None) -> str:
-        """`Box <count+1>`, or the next free `Box <n>` above it (D-a-box-is-shown-by-its-name).
+        """`Box <count+1>`, or the next free `Box <n>` above it (D259).
 
         `count` defaults to how many OTHER boxes the registry holds now. At creation `number`
         is None and the new box is not in the registry yet, so `count` is every box that
@@ -2825,7 +2825,7 @@ class Inventory:
     def box_name_plan(self) -> List[Tuple[int, str]]:
         """What `backfill_box_names` would write, as `(number, name)` pairs. Writes nothing.
 
-        THE BACKFILL OF THE OWNER'S RULING, 2026-09-23 (D-a-box-is-shown-by-its-name): every box
+        THE BACKFILL OF THE OWNER'S RULING, 2026-09-23 (D259): every box
         with no name gets the stored name `Box <number>`, today's number, so nothing visible
         changes and the physical labels on the drawers still match. A box that has a name is
         left alone, which is what makes the backfill idempotent: a second pass plans nothing.
@@ -2924,7 +2924,7 @@ class Inventory:
         """
         entry = self.ensure_box(number)
         # A CLEARED NAME IS THE DEFAULT NAME, NEVER NONE (the orchestrator's call on the
-        # locating review, 2026-09-24, under D-a-box-is-shown-by-its-name). A box is shown by
+        # locating review, 2026-09-24, under D259). A box is shown by
         # its name only, so a box with no name would have nothing to be shown by. Clearing
         # stores `Box <count+1>`, the next free one, the name a box made with no name gets.
         # The box's own name does not count as taken, so a box that already carries that

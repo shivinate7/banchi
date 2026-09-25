@@ -1,4 +1,4 @@
-## D-one-forgiving-search-matcher — Every search field uses one forgiving matcher, on the server and in the browser
+## D271 — Every search field uses one forgiving matcher, on the server and in the browser
 
 **The owner's ruling, 2026-09-23 (FLT-06, FLT-04).** One forgiving matcher runs everywhere. It
 matches:
