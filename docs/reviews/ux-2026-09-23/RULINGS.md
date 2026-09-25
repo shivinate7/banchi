@@ -213,8 +213,8 @@
   that the TCGplayer terms stay unread and unmeasured here. The owner takes that risk.
 - D100 transport and send quantity: allow mixed sends. One Send can carry rows that add copies
   and zero rows that only reprice live listings. The guard checks copies on adding rows and
-  prices on zero rows. The listing door stays open and widens. The owner's words: "why can't a send include
-  zeros? ... seems like an odd restriction?"
+  prices on zero rows. The listing door stays open and widens. The owner asked why a send
+  could not include zero rows, and called the old restriction odd (owner, paraphrased).
 - Box-name backfill: once the integration branch reaches main, run
   `./pkmnscan boxes names` as a preview, show the owner, and write only on the owner's yes.
 - HOR-07 and undo: not diagnosed now. The owner's words: "undo in general is buggy
@@ -261,11 +261,11 @@
   The `was` value now comes from the newest live export on disk. A refusal now carries
   `{sku, live, price}`, so the screen can offer to re-send. Round 7 also carries R6-2 (undo
   drops `typedHere`), R6-4 (reuse `send_held`), and a corrected record sentence.
-- Owner, 2026-09-24: split the UX PR, in the owner's words, "if it's doable, and EASY". PR 1
-  carries the
-  integration branch: waves 0 and 1, b-runs r6, ratchets through r3, after one screen
-  verification pass. PR 2 carries wave 2 plus b-runs r7, rebased on main after PR #461 and the
-  CSS sweep. Merge order: PR 1, then the CSS sweep, then PR #461, then PR 2.
+- Owner, 2026-09-24: split the UX PR, if the split is doable and easy (owner, paraphrased).
+  PR 1 carries the integration branch: waves 0 and 1, b-runs r6, ratchets through r3, after
+  one screen verification pass. PR 2 carries wave 2 plus b-runs r7, rebased on main after
+  PR #461 and the CSS sweep. Merge order: PR 1, then the CSS sweep, then PR #461, then
+  PR 2.
 - Owner, from "Photo issues analysis", 2026-09-24: the merge order changed. PR #461 (identity)
   merges first, then UX PR 1. The split still stands. After PR #461 merges, main merges into
   the integration branch.
@@ -498,12 +498,26 @@
 - Review close words, UX-255 (owner, 2026-09-25, verbatim): "I think one word is better if it
   sounds intuitive still". One verb covers the close act, only if it still reads naturally.
   The review lane's own decision entry records this.
-- Pricing Q3 server half (orchestrator, applying the existing Q3 ruling, "send every ready
-  copy; unpriced rows stay on the list"): the send leaves out unanswered no-price rows and
-  sends the rest. No new owner question was needed.
+- Pricing Q3 server half (orchestrator, applying the existing Q3 ruling — every ready copy
+  goes out, and an unpriced row stays on the list, paraphrased): the send leaves out
+  unanswered no-price rows and sends the rest. No new owner question was needed.
 - Mid-word minimum length (orchestrator, applying the owner's "only if fast" condition): the
   substring scan needs at least 3 characters, measured again on 2,500-plus cards.
 - Mid-word ceiling (orchestrator, applying the owner's "only if fast on 2,500+" condition):
   ship it. The 3-character mid-word hit measured 73ms and 76ms, p50 and p95, at 3,000 cards
   (the live store holds about 3,450), and 249ms and 260ms at 10,000. The 10,000 ceiling is
   recorded in D271, with the upgrade path (an FTS5 trigram index, its own decision).
+
+## Quotes and the STE lint (owner, 2026-09-25)
+- The owner's words: "Keep D226, reword the 7." D226 stands. A quote that trips the lint is
+  rewritten as a close paraphrase, marked as a paraphrase. Every other owner quote stays
+  verbatim. This applies to the records lane, and to every decision entry (b-pricing's Q3
+  prose already reads this way).
+- Sealed boxes killed (owner, 2026-09-25, verbatim): "what was the point of sealed boxes?
+  lets kill this." The point was D20: freeze capacity, so "#40 of 53" stopped moving. D58
+  took the denominator off capacity, so that premise is gone. What sealing still did: refuse
+  new captures into a box, and the "so far / sealed" label. Remove the seal state, its
+  control, its refusals, and its label. Existing sealed boxes become ordinary boxes. D20 and
+  D58 are amended. The boxmap lane owns this — it already owns `store/master.py`'s move path.
+- Q2, the 25% edge (orchestrator, applying the owner's words "25% or more"): compare exactly,
+  with no rounding.

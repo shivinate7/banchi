@@ -350,9 +350,9 @@ row per SKU (amends D214, D217).
 Findings (16, plus UX-219 and UX-262 new in round two). One row per printing (SKU), so
 printings stay separately identifiable. Rows lead with the name, top N rows plus "Show all",
 "On the shelf" moves above the table. Refund notes show only above zero. `ProductLink` on
-names. The owner's words: "it's just an excel sheet" and "literally just an excel sheet, not
-sexy". A visual direction is shown to the owner before this lane builds the layout. The
-layout waits for that answer.
+names. The owner called it a bare spreadsheet, not visually interesting (owner,
+paraphrased). A visual direction is shown to the owner before this lane builds the layout.
+The layout waits for that answer.
 
 ### W2-4 shipping (Sonnet, M)
 Files: `OrdersShipStage.tsx`, `Shipping.css`, `tests/shipping.spec.ts`, new
@@ -592,9 +592,9 @@ during a press held open by a delayed stub.
   footprint, or a lint rule that refuses a label ternary on the busy state.
 
 ## Review lane fence
-The owner ruled on Review's catalog search. The owner's words: "the search shouldn't cut
-off i should see all rows that matched unless it's an egregious amount no? or a 'show 10
-more' etc." That search belongs whole to the identity session's own lane: ranking by
+The owner ruled on Review's catalog search. It must show every match, not a cut list,
+unless the match count runs extreme, and then it offers "Show 10 more" (owner,
+paraphrased). That search belongs whole to the identity session's own lane: ranking by
 capture claims, every match shown, and "Show 10 more". The `review` lane fences
 `ReviewQueue.tsx`'s `CatalogPanel` results list. It never redraws the rows or their count,
 and never adds a cutoff of its own. A `kit-frame` change there touches only the wrapper.
