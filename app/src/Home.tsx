@@ -19,7 +19,7 @@ import type {
 } from './types'
 import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
-import { runsOwingPrice, standing, type Standing } from './standing'
+import { runsOwingPrice, sendCounts, standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { placeWordsOf } from './position'
@@ -480,9 +480,9 @@ export function Home() {
 
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
   const runsToPrice = pricing.state === 'ready' ? runsOwingPrice(pricing.value.roster) : null
-  /* And the copies every joined run still holds that TCGplayer does not (D156)
-     — the same `unsent` the picker draws per run, summed, so this note and that chip agree. */
-  const unsentCopies = pricing.state === 'ready' ? pricing.value.roster.reduce((n, r) => n + (r.unsent ?? 0), 0) : null
+  /* And the copies ready to send, by the bar's own rule (R4): never an unpriced or held copy. */
+  const readyCopies =
+    pricing.state === 'ready' && book.state === 'ready' ? sendCounts(pricing.value, book.value).ready : null
 
   /* THE STANDING LINE. The policy is `standing.ts`; this only hands it the readings and
      keeps the three non-values apart, which is the whole of what that module needs to obey
@@ -544,10 +544,12 @@ export function Home() {
             ? 'worklist not read'
             : 'reading the worklist…'
           : runsToPrice === 0
-            ? unsentCopies !== null && unsentCopies > 0
-              ? `${plural(unsentCopies, 'copy', 'copies')} ready to send`
+            ? readyCopies !== null && readyCopies > 0
+              ? `${plural(readyCopies, 'copy', 'copies')} ready to send`
               : 'nothing to price'
-            : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
+            : readyCopies !== null && readyCopies > 0
+              ? `${runsToPrice === 1 ? 'run' : 'runs'} to price, ${readyCopies} ready`
+              : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
       tone: runsToPrice ? 'warn' : runsToPrice === 0 ? 'ok' : undefined,
     },
     {

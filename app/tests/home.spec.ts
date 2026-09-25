@@ -236,6 +236,12 @@ test('a mixed run: Home sends the priced copies and names the unpriced card apar
   await expect(page.locator('.home-standing')).toContainText('1 card needs a price')
   await expect(page.locator('.home-standing')).not.toContainText('before it can be sent')
   await expect(page.locator('.home-standing')).not.toContainText('before they can be sent')
+  /* THE PRICING TILE COUNTS THE SAME COPIES (the screenshot review, R4): it summed every run's
+     unsent copies, the unpriced and the held ones too. It reads the bar's rule now. */
+  const tile = page.locator('a.home-stage[href="#/pricing"]')
+  await expect(tile).toContainText('to price, 2 ready')
+  await expect(tile).not.toContainText('3 ready')
+  await expect(tile).not.toContainText('3 copies')
 })
 
 test('every card needs a price: Home says price it, and counts no copy as ready', async ({ page }) => {

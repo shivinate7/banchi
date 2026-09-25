@@ -111,6 +111,19 @@ export function rowShare(
   return { ready: row.add_to_quantity, needsPrice: false }
 }
 
+/** The worklist's ready copies and the rows that owe a price, by `rowShare`. ONE COUNT FOR
+ *  HOME'S LINE AND HOME'S TILE, so the two cannot differ (R4). */
+export function sendCounts(pricing: PricingWorklist, book: PricingCorpus): { ready: number; needsPrice: number } {
+  let ready = 0
+  let needsPrice = 0
+  for (const row of pricing.skus ?? []) {
+    const share = rowShare(row, corpusAnswer(book, row))
+    ready += share.ready
+    if (share.needsPrice) needsPrice += 1
+  }
+  return { ready, needsPrice }
+}
+
 /** The `owes` reason `_run_owes` adds for a card left out of the send for want of a price. It
  *  owes a price and does not block the run, so it never counts as a run that cannot be sent. */
 const LEFT_OUT_FOR_PRICE = /^(\d+) cards? with no market price needs? a price$/
@@ -209,17 +222,9 @@ export function standing(input: StandingInput): Standing | null {
   /* WHAT IS READY, AND WHAT OWES A PRICE: `#/pricing`'s bar rule, per SKU (R4 F1). A run with
      one unpriced card still sends its priced ones, so the count is never per run. */
   const book = input.book ?? null
-  let readyCopies: number | null = null
-  let needsPrice: number | null = null
-  if (pricing !== null && book !== null) {
-    readyCopies = 0
-    needsPrice = 0
-    for (const row of pricing.skus ?? []) {
-      const share = rowShare(row, corpusAnswer(book, row))
-      readyCopies += share.ready
-      if (share.needsPrice) needsPrice += 1
-    }
-  }
+  const counts = pricing === null || book === null ? null : sendCounts(pricing, book)
+  const readyCopies = counts === null ? null : counts.ready
+  const needsPrice = counts === null ? null : counts.needsPrice
   /* A run whose own reason stops the whole send (the cut-off price unset), apart from a card
      left out for want of a price and from a run that only waits on the send. */
   const blocked =
@@ -242,7 +247,7 @@ export function standing(input: StandingInput): Standing | null {
   if (unfindable !== null && unfindable > 0) {
     add(toPull, 'copies to pull', toPull !== null && toPull > 0)
     add(review, 'to review', review !== null && review > 0)
-    add(owed, 'runs to price', owed !== null && owed > 0)
+    add(owed, owed === 1 ? 'run to price' : 'runs to price', owed !== null && owed > 0)
     return {
       key: 'unfindable',
       tone: 'danger',
@@ -273,7 +278,7 @@ export function standing(input: StandingInput): Standing | null {
   /* 2 — copies an open order wants that are still in a box. */
   if (toPull !== null && toPull > 0) {
     add(review, 'to review', review !== null && review > 0)
-    add(owed, 'runs to price', owed !== null && owed > 0)
+    add(owed, owed === 1 ? 'run to price' : 'runs to price', owed !== null && owed > 0)
     return {
       key: 'pull',
       tone: 'warn',
@@ -300,7 +305,7 @@ export function standing(input: StandingInput): Standing | null {
     return unknown('review-unknown', 'the review queue could not be counted.', problem)
   }
   if (review > 0) {
-    add(owed, 'runs to price', owed !== null && owed > 0)
+    add(owed, owed === 1 ? 'run to price' : 'runs to price', owed !== null && owed > 0)
     add(parked, 'parked', parked !== null && parked > 0)
     return {
       key: 'review',
