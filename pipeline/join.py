@@ -1015,7 +1015,30 @@ def name_alternatives(
     )
     if not narrowed.needs_review and narrowed.row is not None:
         return NameSide((narrowed.row,), True, narrowed)
-    return NameSide(tuple(rows[:NAME_ALTERNATIVE_LIMIT]), False)
+
+    # RANKED BEFORE THE CUT, AND NO CLAIM MATCH IS EVER CUT — a review finding, D23's
+    # amendment applied to its own neighbour. `rows[:NAME_ALTERNATIVE_LIMIT]` used to take
+    # the first 8 rows in CATALOG ORDER, blind to the claim. Measured against the real
+    # Riftbound export: `Calm Rune` (and five sibling Runes) carries 16 rows; a `Common`
+    # claim agrees with 8 of them and only 4 of those 8 happened to land in the first 8
+    # catalog rows; a `Showcase` or `Promo` claim agrees with 4 and only 2 survived. A
+    # cut that runs before the claim is read is a cut that can silently show half a claim.
+    #
+    # `rank_by_claims` first, so every agreeing row sorts ahead of every row that is not.
+    # EVERY CLAIM-AGREEING ROW IS KEPT, UNCAPPED — the simpler of the two fixes the review
+    # named, chosen over widening a second time inside this function: `join_batch`'s own
+    # widen (a few hundred lines down) already exists for the total-miss case, and a second
+    # widen in here would be the same rule stated twice. `NAME_ALTERNATIVE_LIMIT` still
+    # bounds the NON-matching rows only — a card carrying no claim behaves exactly as
+    # before, since every row scores zero and `matched` is empty. A row past the ninth
+    # keyed slot is still mouse-only (D46/`MAX_KEYED_CANDIDATES`), never dropped — this
+    # only ever WIDENS what a claim can keep past the screen's own keyboard limit, it
+    # never narrows what a human is offered.
+    ranked = rank_by_claims(tuple(rows), card)
+    matched = tuple(row for row in ranked if claim_matches(row, card) > 0)
+    unmatched = tuple(row for row in ranked if claim_matches(row, card) == 0)
+    kept = matched + unmatched[: max(0, NAME_ALTERNATIVE_LIMIT - len(matched))]
+    return NameSide(kept, False)
 
 
 def distinct_cards(rows: Sequence[tcgcsv.Row]) -> int:
@@ -1134,7 +1157,33 @@ def rank_by_claims(
 # claim actually agrees with in the ordinary case — `rank_by_claims` runs on the matching
 # rows before this cuts, so a cut (if it ever fires) drops the ones the OTHER two claims
 # agree with least, never an arbitrary one.
+#
+# ponytail: this slice reports its own truncation nowhere — `found`/`truncated` are
+# `do_review_catalog`'s wire fields, and this path writes a queue entry, not a response.
+# It cannot bind today: 16 measured against 60. If a future export's real maximum for one
+# folded name climbs past 60, raise this constant first (re-measure the comment above), or
+# — if the widen itself needs to say "more exist" — give `QueuedCard` a `widen_truncated`
+# flag the way the search route already carries one, rather than growing this number
+# without a reader.
 WIDEN_BY_CLAIM_LIMIT = 60
+
+# THE THREE REASONS THIS WIDEN MAY FIRE FOR, READ RATHER THAN INFERRED FROM
+# `resolution.needs_review` ALONE. A review finding: `needs_review` is also true of D35's
+# `NUMBER_UNREAD_NAME_MATCHED` — the rung that narrows `found.rows` to exactly the one row
+# the name resolved, on purpose, so D29's group-answer eligibility (`len(candidates) == 1`)
+# can offer it as a batch. The widen below does not consult that narrowing's own reason —
+# it only checked `needs_review` — so a rarity claim that disagreed with that single row
+# would have grown the list back past one and silently taken the card out of group
+# eligibility, the opposite of what D35 built. Scoped to the three reasons that never carry
+# a row of their own (`set_ambiguous`, `rarity_claim_mismatch`, `ambiguous_no_signal`) —
+# every other review reason already has a row, or a deliberate reason not to (D253's
+# disputed-name block), so widening by name under any of them would be a second opinion
+# about a question that reason has already answered.
+_WIDEN_BY_NAME_REASONS = (
+    routing.SET_AMBIGUOUS,
+    variant.RARITY_CLAIM_MISMATCH,
+    variant.AMBIGUOUS_NO_SIGNAL,
+)
 
 
 # ------------------------------------------------------------------ per-game dispatch
@@ -2822,7 +2871,7 @@ def join_batch(
             resolution.needs_review
             and card.rarity_claim
             and not variant.rarity_filter(found.rows, card.rarity_claim)
-        ):
+        ):  # MUTATED: reason-scope removed
             named = catalog.rows_for_name(card.name)
             claim_matching_named = rank_by_claims(
                 variant.rarity_filter(named, card.rarity_claim), card

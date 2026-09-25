@@ -3134,6 +3134,8 @@ def run() -> Result:
     )
 
     _check_rank_by_claims(c)
+    _check_name_alternatives_ranks_before_cut(c)
+    _check_widen_scoped_to_named_reasons(c)
     _check_near_mint_candidates(c)
 
     return c.result()
@@ -3302,6 +3304,155 @@ def _check_rank_by_claims(c: Checks) -> None:
         "and `card=None` (do_review_catalog's own callers before a card is known) scores "
         "zero rather than raising",
     )
+
+
+def _check_name_alternatives_ranks_before_cut(c: Checks) -> None:
+    """Review finding A, 2026-09-25: `name_alternatives`'s own `NAME_ALTERNATIVE_LIMIT` cut
+    used to run BEFORE the claim was ever read, over rows in plain catalog order. Measured
+    against the real Riftbound export, `Calm Rune` (six Runes tie it): 16 rows, 8 of them
+    `Common`, 8 split across `Showcase`/`Promo` (4 each). A `Common` claim agrees with 8
+    and only 4 of those 8 happened to land in the first 8 catalog rows. A `Showcase` claim
+    agrees with 4 and only 2 of those survived the same cut. The widen in `join_batch`
+    only rescues a card whose NUMBER's rows miss the claim entirely — a partial cut here
+    showed an incomplete list with no sign anything was missing.
+    """
+    c.note("")
+    c.note("REVIEW FINDING A — name_alternatives ranks before NAME_ALTERNATIVE_LIMIT cuts")
+
+    catalog = join.Catalog.from_export(
+        tcgcsv.read_export(REPO_ROOT / RIFTBOUND_FIXTURE), "riftbound"
+    )
+    named = catalog.rows_for_name("Calm Rune")
+    c.equal(len(named), 16, "the real fixture still carries all 16 `Calm Rune` rows")
+
+    def _claim_card(index: int, rarity: str) -> join.IdentifiedCard:
+        return join.IdentifiedCard(
+            position=join.Position(box=BOX, index=index),
+            name="Calm Rune",
+            number="000/000",  # not read by name_alternatives, which takes `named` directly
+            rarity_claim=(rarity,),
+            photo=f"captures/box{BOX}/{index:04d}.jpg",
+            confidence="high",
+            game="riftbound",
+        )
+
+    common_side = join.name_alternatives(named, _claim_card(390, "Common"), None)
+    common_kept = [
+        row for row in common_side.rows if row.get(tcgcsv.RARITY_COLUMN) == "Common"
+    ]
+    c.equal(
+        len(common_kept),
+        8,
+        "EVERY Common row is kept — 8 of 8, not the 4 a catalog-order cut before the "
+        "claim used to leave; this is the case that must be red on the unfixed code",
+    )
+    c.equal(
+        len(common_side.rows),
+        8,
+        "and the kept list is exactly those 8 — the fill-to-8 budget has nothing left to "
+        "spend once every claim match is already kept",
+    )
+
+    showcase_side = join.name_alternatives(named, _claim_card(391, "Showcase"), None)
+    showcase_kept = [
+        row for row in showcase_side.rows if row.get(tcgcsv.RARITY_COLUMN) == "Showcase"
+    ]
+    c.equal(
+        len(showcase_kept),
+        4,
+        "EVERY Showcase row is kept — 4 of 4, not the 2 a catalog-order cut left",
+    )
+    c.equal(
+        {row[tcgcsv.SKU_COLUMN] for row in showcase_kept},
+        {"8925762", "9139842", "9277737", "9436656"},
+        "and it is the real four — Spiritforged's `9139842` (4/383's own SKU) among them",
+    )
+
+    # A CLAIM WITH NO EXCESS NEVER GROWS PAST THE OLD BOUND. A card with no claim at all
+    # is untouched by this fix — `matched` is empty, so `unmatched[:NAME_ALTERNATIVE_LIMIT]`
+    # is exactly what the old cut always returned.
+    no_claim_side = join.name_alternatives(
+        named,
+        join.IdentifiedCard(
+            position=join.Position(box=BOX, index=392),
+            name="Calm Rune", number="000/000",
+            photo=f"captures/box{BOX}/0392.jpg", confidence="high", game="riftbound",
+        ),
+        None,
+    )
+    c.equal(
+        len(no_claim_side.rows),
+        join.NAME_ALTERNATIVE_LIMIT,
+        "no claim at all still stops at the screen's own keyboard limit, unchanged",
+    )
+
+    # REVIEW FINDING D'S OWN CANARY. `WIDEN_BY_CLAIM_LIMIT` truncates `join_batch`'s
+    # separate by-name widen silently, and it is safe only while the real maximum stays
+    # under it. This is the measurement the `ponytail:` comment beside the constant cites
+    # — asserted here so a future export that grows past it fails a test BEFORE the
+    # silent truncation ships, not after.
+    c.ok(
+        len(named) < join.WIDEN_BY_CLAIM_LIMIT,
+        f"the real maximum for one folded name ({len(named)}) stays under "
+        f"WIDEN_BY_CLAIM_LIMIT ({join.WIDEN_BY_CLAIM_LIMIT}) — the ceiling cannot bind today",
+    )
+
+
+def _check_widen_scoped_to_named_reasons(c: Checks) -> None:
+    """Review finding C, 2026-09-25: the by-name widen used to gate on
+    `resolution.needs_review` alone, which is also true of D35's own
+    `NUMBER_UNREAD_NAME_MATCHED` — the rung that narrows `found.rows` to exactly the ONE
+    row the ladder resolved, on purpose, so D29's group-answer eligibility
+    (`len(candidates) == 1`) can offer it as a batch. The comment above the gate named
+    three reasons; the code read a fourth condition that happened to be broader. Scoped
+    to `set_ambiguous`, `rarity_claim_mismatch` and `ambiguous_no_signal` — the three
+    reasons that carry no row of their own to answer to — so the code now says what the
+    comment already claimed.
+
+    THIS IS A DEFENSIVE FIX, NOT A DEMONSTRATED ONE, AND THAT IS STATED RATHER THAN
+    HIDDEN. `catalog.lookup_for(...)`'s own name-inferred rung (`pipeline/join.py`,
+    `return catalog.rows_for_name(card.name), ..., True`) is the ONLY source
+    `found.rows` can have when `name_inferred` is True — the exact set the widen's own
+    `catalog.rows_for_name(card.name)` re-fetches. The two calls are provably the same
+    rows, so nothing the widen fetches can ever be absent from what D35 already narrowed
+    from. Tried and confirmed by mutation: reverting the scoping on this exact case left
+    every assertion below green — the unscoped gate cannot be driven red by D35 with
+    today's ladder. The fix stands anyway: a later change that lets the two row sources
+    diverge (a wider by-name lookup, a narrower name-inferred rung) would silently revive
+    exactly the failure the comment already warned about, and this test is the invariant
+    that change would have to break first.
+    """
+    c.note("")
+    c.note("REVIEW FINDING C — the by-name widen is scoped to its own three reasons")
+
+    catalog = join.Catalog(tcgcsv.read_export(REPO_ROOT / SOURCE_FIXTURE))
+    card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=393),
+        name="Articuno",
+        number=None,
+        printed_total=None,
+        metadata_finish=("normal",),
+        rarity_claim=("Rare",),
+        photo=f"captures/box{BOX}/0393.jpg",
+        confidence="high",
+    )
+    report = join.join_batch([card], catalog, router=join.default_router())
+    c.equal(list(report.matches), [], "the claim is released, never believed — nothing lists")
+    queued = report.queued[0] if report.queued else None
+    if c.ok(queued is not None, "and the card queues"):
+        c.equal(
+            queued.resolution_reason,
+            routing.NUMBER_UNREAD_NAME_MATCHED,
+            "under D35's own reason — the ladder DID resolve one row outside review, and "
+            "that row's own rarity (Uncommon) does not satisfy the claim (Rare) the "
+            "release dropped rather than answered",
+        )
+        c.equal(
+            len(queued.candidates),
+            1,
+            "D35's OWN NARROWING SURVIVES — exactly one candidate, the invariant this "
+            "gate must never break even though today's ladder cannot drive it red",
+        )
 
 
 def _near_mint_row(sku: str, set_name: str, condition: str) -> dict:

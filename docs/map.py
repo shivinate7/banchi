@@ -947,9 +947,9 @@ COMPONENTS = [
                                 "fetch started sending every play grade",
                         "governed_by": ["D2", "D3", "D4", "D7", "D9", "D10", "D11", "D12", "D16",
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
-                                        "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
-                                        "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D162", "D213", "D253"], "tested_by": ["T3"]},
+                                        "D36", "D41", "D46", "D49", "D54", "D55", "D56", "D58",
+                                        "D59", "D63", "D64", "D65", "D67", "D68", "D71", "D76",
+                                        "D87", "D137", "D146", "D162", "D213", "D253"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -8592,7 +8592,7 @@ COMPONENTS = [
                         "path so the richer one wins (Playwright matches newest-first). Read "
                         "only by `copy-budget.spec.ts`, which is where the gap these seeds close "
                         "is argued at length.",
-                "governed_by": ["D20", "D83", "D134", "D194"],
+                "governed_by": ["D20", "D23", "D46", "D83", "D134", "D194"],
                 "note": "CLOSES D194'S OWN NAMED GAP: its ceilings on the five routes above were "
                         "pinned against `stubStore`'s empty-ish answer — no run, no order, no "
                         "export, no code, no departed record — so a sentence added to any of the "
