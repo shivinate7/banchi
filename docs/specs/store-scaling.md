@@ -214,7 +214,14 @@ cards a single pass is the honest answer. At 50,000 it is not — and the cost w
 text match, it was building 50,000 card objects to get at the text. **FTS5 over `LIKE`, on
 the owner's word after a walkthrough**: they chose multi-word any-order matching and
 best-match ranking, were told mid-word matching (`izard` → Charizard) is lost, and took it;
-the playbook adds prefix matching so a partial word still hits. An external-content FTS5
+the playbook adds prefix matching so a partial word still hits.
+
+REVERSED 2026-09-25 (MID-WORD, the owner's own later ruling: "Add mid-word search").
+D271 carries the reversal, the mechanism (`_fts_substring_candidates`) and the numbers a
+2,600-card synthetic store measured before it shipped. This paragraph stays as the record
+of the original trade-off. It is no longer the current behavior.
+
+An external-content FTS5
 table over `cards` with the three sync triggers, so the index maintains itself inside the
 same transaction as every write (D88's invariant, with no Python hook to forget). FTS5 is
 compiled into the rig's SQLite (3.54.0, probed); `cards` has a TEXT key and a stable

@@ -8533,9 +8533,17 @@ def check_search_fts5(checks: Checks) -> None:
     every existing assertion there (`eiscue`, `japanese`, `044/167`, the D67 mixed-number
     case) passes unmodified against this rewrite, which is what proves the CANDIDATE SET
     changed and the ANSWER did not. This function proves the three properties that are new:
-    multi-word any-order matching, prefix matching from a word's start (and the accepted
-    loss of mid-word matching), and that the index tracks every write shape the ordinary
-    application makes, plus the migration that seeds it for a store that predates it.
+    multi-word any-order matching, prefix matching from a word's start, and that the index
+    tracks every write shape the ordinary application makes, plus the migration that seeds
+    it for a store that predates it.
+
+    MID-WORD MATCHING WAS AN ACCEPTED LOSS AND IS NOT ONE ANY MORE (the owner's ruling,
+    2026-09-25: "Add mid-word search"). D271's one matcher wins over this item's own
+    prefix-only trade-off. `server/capture_server.py:_fts_substring_candidates` is a
+    fourth candidate source, a plain SQL `LIKE '%term%'` scan, measured first on a
+    synthetic 2,500-card store before it shipped
+    (`docs/decisions/D271-one-forgiving-search-matcher.md` carries the numbers). The
+    `midword` case below now asserts the FOUND direction.
 
     ORDINARY WRITES EXERCISE `cards_fts_ad` THEN `cards_fts_ai`, NEVER `cards_fts_au` —
     THIS WAS NOT WHAT store/db.py's OWN COMMENT NEXT TO THE THIRD TRIGGER PREDICTS, AND IT
@@ -8574,19 +8582,20 @@ def check_search_fts5(checks: Checks) -> None:
             f"forward={forward!r} backward={backward!r}",
         )
 
-        # --- prefix from a word's start, and the accepted loss of mid-word matching ---
+        # --- prefix from a word's start, and mid-word matching (MID-WORD, 2026-09-25) ---
         prefix = [g["sku"] for g in capture_server.do_search("chariz")["groups"]]
         midword = [g["sku"] for g in capture_server.do_search("izard")["groups"]]
         checks.ok(
             bool(prefix),
             "a partial word typed from its start still hits ('chariz' finds Charizard)",
         )
-        checks.equal(
-            midword, [],
-            "and a mid-word fragment does NOT ('izard' does not find Charizard) — the "
-            "owner was told mid-word matching is the cost of FTS5 over LIKE and took it "
-            "explicitly (docs/specs/store-scaling/08-search-fts5.md); a future session "
-            "'fixing' this is reopening a settled trade-off, not closing a bug",
+        checks.ok(
+            bool(midword) and midword == prefix,
+            "and a mid-word fragment DOES too ('izard' finds Charizard) — the owner "
+            "reversed the earlier trade-off ('Add mid-word search'); measured first on a "
+            "synthetic 2,500-card store, never this repo's own, before it shipped "
+            "(docs/decisions/D271-one-forgiving-search-matcher.md)",
+            f"midword={midword!r} prefix={prefix!r}",
         )
 
         # --- the index tracks capture, sale, box moves and rename -----------------------

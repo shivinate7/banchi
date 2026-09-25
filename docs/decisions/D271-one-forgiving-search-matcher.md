@@ -102,3 +102,37 @@ folded the identical string to one. `server/match.py:fold_text` now tests the ca
 The two implementations agree on every mark, spacing or not. `scripts/match-selftest.py`'s
 `case_match_fold_text_strips_every_mark_by_category` proves it, verified red on the old
 code and green on the new one.
+
+**MID-WORD SEARCH IS ADDED (the owner's ruling, 2026-09-25: "Add mid-word search").** D271
+wins over store-scaling item 8's own prefix-only trade-off. `do_search("izard")` now finds
+"Charizard", the exact case store-scaling item 8 measured and traded away.
+
+`server/capture_server.py:_fts_substring_candidates` is a fourth candidate source. It is a
+plain SQL scan, `LIKE '%term%'`, over `name`, `set_hint` and the note field. FTS5's own
+prefix index can never answer this shape. A token has to start with what was typed. A
+substring scan cannot use an index. No B-tree ordering helps a pattern with a leading `%`.
+Its cost grows with the STORE, not with the term, unlike every other candidate source
+here.
+
+**Measured before shipping, never on the owner's own store.** A synthetic store of 2,600
+cards, built in this session's own worktree. Real loopback HTTP, JSON encoding included,
+matching UX-263's own method. 20 requests per query shape.
+
+| Query shape | Before p50 / p95 | After p50 / p95 |
+|---|---|---|
+| Name prefix (`chariz`) | 52.5ms / 56.9ms | 58.1ms / 63.1ms |
+| Mid-word, a real hit (`izard`) | 2.1ms / 3.0ms (0 found) | 59.7ms / 63.6ms (114 found) |
+| Mid-word, no match (`urf`) | 2.7ms / 3.4ms | 5.2ms / 5.6ms |
+| Bare number (`132`) | 35.9ms / 39.6ms | 39.0ms / 41.9ms |
+| No match at all | 2.4ms / 3.0ms | 5.1ms / 5.8ms |
+| Two-word name (`deadly duelist`) | 43.1ms / 44.7ms | 67.0ms / 95.1ms |
+
+Every shape stays well inside `useSearch.ts:SEARCH_DEBOUNCE_MS`'s own 200ms budget. The
+worst case measured, a two-word name (one substring scan per term), rose from p95 44.7ms
+to p95 95.1ms. Still under half the debounce window.
+
+The rest of this entry, `harness/tests/t7_store_and_seams.py:check_search_fts5`'s own
+`midword` case, and `scripts/match-selftest.py`'s case 16 all now assert the FOUND
+direction. `docs/specs/store-scaling.md` item 8 and `docs/specs/store-scaling/
+08-search-fts5.md` keep their original text as the record of the earlier trade-off, each
+with a note pointing here.

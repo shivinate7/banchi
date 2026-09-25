@@ -10227,14 +10227,14 @@ def _fts_fold_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str,
     and `d`) — so neither direction ever lets a query typed with the punctuation folded out
     (`hooh`, `farfetchd`) reach a candidate a real FTS5 prefix search would need.
 
-    A PLAIN SQL PREFIX SCAN, NEVER A SUBSTRING ONE — the distinction store-scaling item 8
-    measured and the owner kept (T7's own `check_search_fts5`: "'izard' does not find
-    Charizard... a future session 'fixing' this is reopening a settled trade-off"). The
-    pattern is always `folded_term + '%'`, anchored at the START, over the real
+    A PLAIN SQL PREFIX SCAN, ANCHORED AT THE START (`folded_term + '%'`) over the real
     `cards.name` column with a hyphen or apostrophe stripped and lower-cased — the exact
-    fold `match.py:compact_text` performs on the query side, so the two meet. `'izard'`
-    against `'charizard'` (no punctuation to strip) still fails this same prefix test,
-    which is what keeps this widening from reopening that trade-off.
+    fold `match.py:compact_text` performs on the query side, so the two meet. Deliberately
+    NARROWER than a general substring scan even after MID-WORD (the owner's ruling,
+    2026-09-25) added one (`_fts_substring_candidates`, right below): a punctuation-only
+    fold is one comparison against the SAME name column two functions now scan, and
+    keeping this one prefix-anchored costs nothing to correctness — `_fts_substring_
+    candidates` already covers every row this one does, and more.
     """
     out: Dict[str, str] = {}
     for term in text.split():
@@ -10249,6 +10249,55 @@ def _fts_fold_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str,
             "LOWER(REPLACE(REPLACE(REPLACE(name, '-', ''), CHAR(39), ''), CHAR(8217), '')) "
             "LIKE ? ESCAPE '\\'",
             (pattern,),
+        ):
+            out.setdefault(str(key), sku)
+    return list(out.items())
+
+
+def _fts_substring_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
+    """Card `(key, sku)` rows for a MID-WORD fragment — `izard` finding a card named
+    `Charizard` (MID-WORD, the owner's ruling, 2026-09-25: "Add mid-word search"). D271's
+    one matcher wins over store-scaling item 8's own prefix-only trade-off, which this
+    function's earlier absence enforced and `_fts_fold_candidates`'s docstring used to
+    cite. FTS5's own prefix index can never answer this shape (a token has to start with
+    what was typed), so a plain SQL substring scan — `LIKE '%term%'`, the ONE candidate
+    source here that is not anchored at the start — is the only way in.
+
+    MEASURED BEFORE SHIPPING, on a synthetic 2,600-card store built in this session's own
+    worktree, never the owner's: the worst case measured (a two-word name, one substring
+    scan per term) rose from p95 44.7ms to p95 95.1ms; a mid-word query that used to
+    answer empty in ~3ms now finds its card in ~64ms. Both stay well inside
+    `useSearch.ts:SEARCH_DEBOUNCE_MS`'s own 200ms budget, with margin.
+    `docs/decisions/D271-one-forgiving-search-matcher.md` carries the full table. A
+    substring scan cannot use an index (no B-tree ordering helps a pattern with a leading
+    `%`), so this is the one candidate source whose cost grows with the STORE rather than
+    with the term — reasonable at the measured scale, and the reason it is measured again
+    rather than assumed safe forever.
+
+    THE SAME THREE COLUMNS `_card_match_fields` HANDS TO `match.match_query`'s "text"
+    list — name, set_hint, note — because a mid-word hit anywhere else (a number, a SKU)
+    already has its own precise rule and needs no substring fallback. A SUPERSET, like
+    every candidate source here: `match.match_query` still decides, so a term that is
+    ALSO covered by a more precise rule (rule 4's numbers, rule 6's SKU prefix) is never
+    weakened by this addition — it only ever adds rows for `match_query` to then confirm
+    or reject.
+    """
+    out: Dict[str, str] = {}
+    for term in text.split():
+        if not match._has_letter(term):
+            continue
+        folded = match.fold_text(term)
+        if not folded:
+            continue
+        pattern = "%" + folded.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        for key, sku in conn.execute(
+            # `note` is not a real column on `cards` — only `name`/`set_hint` are
+            # (`store/master.py:_card_columns`); the FTS index's own trigger reaches it
+            # through `json_extract(payload, '$.note')`, and this matches that.
+            "SELECT key, sku FROM cards WHERE "
+            "LOWER(name) LIKE ? ESCAPE '\\' OR LOWER(set_hint) LIKE ? ESCAPE '\\' "
+            "OR LOWER(json_extract(payload, '$.note')) LIKE ? ESCAPE '\\'",
+            (pattern, pattern, pattern),
         ):
             out.setdefault(str(key), sku)
     return list(out.items())
@@ -10432,19 +10481,22 @@ def do_search(query: str) -> dict:
                 (match_expr,),
             ):
                 hits.setdefault(str(key), sku)
-            # THREE MORE CANDIDATE SOURCES, UNIONED (S2, UX-173 amended; F8, round-3 Opus
-            # review, 2026-09-25): FTS5's own prefix index cannot answer a query naming
-            # the SECOND half of a number alone (`/132`), one that only reaches a real
-            # token once a hyphen or an apostrophe is folded out (`hooh`, `farfetchd`),
-            # or a 3+ digit query missing MORE leading zeros than it typed (`934` for a
-            # card stored as `0934`) — see each function's own docstring. All three are
-            # supersets exactly the way the FTS step already was; `match.match_query`/
-            # `_match_rank` below still decide.
+            # FOUR MORE CANDIDATE SOURCES, UNIONED (S2, UX-173 amended; F8, round-3 Opus
+            # review, 2026-09-25; MID-WORD, the owner's ruling, 2026-09-25): FTS5's own
+            # prefix index cannot answer a query naming the SECOND half of a number alone
+            # (`/132`), one that only reaches a real token once a hyphen or an apostrophe
+            # is folded out (`hooh`, `farfetchd`), a 3+ digit query missing MORE leading
+            # zeros than it typed (`934` for a card stored as `0934`), or a MID-WORD
+            # fragment (`izard` for `Charizard`) — see each function's own docstring. All
+            # four are supersets exactly the way the FTS step already was;
+            # `match.match_query`/`_match_rank` below still decide.
             for key, sku in _fts_slash_candidates(conn, text):
                 hits.setdefault(key, sku)
             for key, sku in _fts_fold_candidates(conn, text):
                 hits.setdefault(key, sku)
             for key, sku in _fts_zero_pad_candidates(conn, text):
+                hits.setdefault(key, sku)
+            for key, sku in _fts_substring_candidates(conn, text):
                 hits.setdefault(key, sku)
         finally:
             conn.close()

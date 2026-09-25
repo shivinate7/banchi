@@ -68,7 +68,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Tuple
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
@@ -385,18 +385,15 @@ def case_do_search_finds_a_hyphenated_name() -> None:
 # silent skip. Each entry names the case index in `match.cases.json` and the reason,
 # checked at run time against the row it is read against so a re-ordered table cannot let
 # a stale reason cover the wrong row.
-CASE_TABLE_INPUT_NEEDED = {
-    16: (
-        "mid-word text still matches",
-        "rule 7's mid-word substring. FTS5 is a PREFIX index (`tokenchars '/-'` keeps a "
-        "token's own punctuation, but there is no 'contains' operator): 'ventor' is not a "
-        "prefix of the token 'inventor', so the candidate step can never surface this row, "
-        "whatever `match_query` would say once it got there. store-scaling item 8 measured "
-        "this exact loss ('izard' -> Charizard) and the owner took it explicitly; "
-        "harness/tests/t7_store_and_seams.py:check_search_fts5 is the test that already "
-        "protects it. Fixing this row would reopen that settled trade-off.",
-    ),
-}
+# EMPTY AS OF MID-WORD (the owner's ruling, 2026-09-25). Case 16 ("mid-word text still
+# matches", `ventor` finding `Inventor`) used to sit here: FTS5's prefix-only candidate
+# step could never surface a mid-word fragment, and store-scaling item 8's own trade-off
+# said not to chase it. The owner reversed that trade-off ("Add mid-word search").
+# `_fts_substring_candidates` gets the candidate there now, measured first on a synthetic
+# 2,500-card store (`docs/decisions/D271-one-forgiving-search-matcher.md` carries the
+# numbers) — case 16 is asserted like every other row below. Kept as an empty dict, not
+# deleted, so a future row needing this same escape hatch has the shape ready.
+CASE_TABLE_INPUT_NEEDED: Dict[int, Tuple[str, str]] = {}
 
 # Rows the shared table carries for OTHER screens' own client-side matcher — Orders'
 # `useSearch`, over an order label — never `do_search`'s. Read, never asserted, the same
