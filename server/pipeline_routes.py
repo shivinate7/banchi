@@ -2221,6 +2221,26 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
         if row.get("bucket") == "sub_threshold"
     ]
     owes = list(answered.blocking(below))
+    # A PRICE OWED THAT NO LONGER BLOCKS THE SEND (D277 Q3, the delta review R3-2). A card with
+    # no market price and no answer is left out of a send rather than refusing it, so
+    # `blocking` no longer names it. The run still owes that price, and the screens must say
+    # so: Home counts this run as one to price, and never counts that copy as ready. Read off
+    # this run's own rows, because the corpus holds no entry for a card nobody answered.
+    unpriced = (answers or {}).get("no_market_data") or {}
+    held = (answers or {}).get("overrides") or {}
+    waiting = sum(
+        1
+        for row in pricing.get("skus") or []
+        if row.get("bucket") == "no_market_data"
+        and int(row.get("add_to_quantity") or 0) > 0
+        and unpriced.get(str(row.get("sku"))) is None
+        and str(row.get("sku")) not in held
+    )
+    if waiting:
+        owes.append(
+            f"{waiting} card{'' if waiting == 1 else 's'} with no market price "
+            f"need{'s' if waiting == 1 else ''} a price"
+        )
     if not manifest.get("emitted"):
         # NEVER EMITTED IS WORK, AND IT IS THE COMMON CASE. Nothing has been shipped out of
         # this run, so it is open whatever its answers say — but it is listed AFTER the

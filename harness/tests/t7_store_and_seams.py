@@ -36058,7 +36058,25 @@ def check_emit_unpriced_left_out(checks: Checks) -> None:
 
     with isolated_home():
         run_dir, _ = seam_run(checks, cards, market=no_price)
+        # THE WORKLIST SAYS THE RUN OWES A PRICE, BEFORE AND AFTER THE SEND (the delta review,
+        # R3-2). `blocking` no longer names the card, so the roster reads the rows itself:
+        # otherwise Home counted the unpriced copy as ready to send and never said to price it.
+        def owes_price() -> List[str]:
+            roster = pipeline_routes.do_pipeline_worklist([])["roster"]
+            row = next((one for one in roster if one["run"] == run_dir.name), {})
+            return [reason for reason in row.get("owes", []) if reason != "never emitted"]
+
+        checks.equal(
+            owes_price(),
+            ["1 card with no market price needs a price"],
+            "the joined run owes a PRICE for the unpriced card, a reason that is not the send",
+        )
         left_out(command(checks, "emit", str(run_dir.directory)))
+        checks.equal(
+            owes_price(),
+            ["1 card with no market price needs a price"],
+            "and after the send it still owes that price: the card stayed back, so the run did",
+        )
 
     with isolated_home():
         first, _ = seam_run(checks, [cards[0], cards[2]], market=no_price)
