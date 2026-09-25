@@ -165,3 +165,167 @@
 - #/fulfillment is exempt from the scaffold's width and top-gap rules (D5, DESIGN.md floors), but keeps page and h1.
 - Live-store COUNTS may appear in public docs; a real product string or buyer name may not.
 - The D100 transport check: the docs must not claim it is replaced; recorded as an open question derived from the send rulings.
+- Orchestrator call (guards): the offender list can gain keys only for a rule that does not
+  exist at the merge-base (a rule born on that branch). Every existing rule's own entries only
+  shrink. Home's tab title is "番地 home".
+- Demo price histories (owner, 2026-09-24): record once from the owner's Mac into committed
+  fixtures (D216 allows the owner's machine). CI never fetches. Refresh only when the owner
+  chooses.
+- Orchestrator call (filtering review): every facet trigger inside one FilterBar holds one
+  equal width. The width never changes on a pick — the owner's gripe named the width
+  difference itself.
+- D68 twins (owner, 2026-09-24): two departed copies of one card at one place can look the
+  same. The owner accepted this. No date and no key tell them apart.
+- LOC-28 (owner, 2026-09-24): unread cards count as neighbours ("an unread card" / "N unread
+  cards"). Amends D116.
+- Orchestrator calls (locating review): a cleared box name stores the default name
+  "Box <count+1>" (the next free number), never a bare number fallback. The server's refusal
+  messages that print "Box {box}, card {index}" move to box name plus section plus card
+  (locating round 2 owns them).
+- Take them back (owner, 2026-09-24): this control appears only after a live check runs past
+  the 15-minute wait for that receipt.
+- Other pinned counts (owner, 2026-09-24): replace the D218 typed-dot ratchet and the D229
+  per-file prose ratchet too, with rule checks plus shrinking offender lists. No pinned counts
+  remain. A `ratchets` lane follows once text-checks merges.
+- Orchestrator call (locating r2 review): a cleared box name's default starts at
+  `len(boxes)`, and does not count the box itself. A lone box stays "Box 1".
+- Orchestrator call (b-runs r2 review): for a downloaded file, "Take them back" appears only
+  after a second live check, one wait later. The wait counts from when Banchi wrote the file,
+  never from the owner's upload.
+- Docs cost (owner, 2026-09-24): yes, fix what you touch. A reworded listed sentence cannot be
+  re-listed. Editing a paragraph leaves it clean.
+- Last pins (owner, 2026-09-24): convert both the line-anchor ratchet and the token-literal
+  guard (D256) to offender lists. The "Run round two" session owns the token-literal guard and
+  coordinates its move.
+- Orchestrator call (b-runs r3 review): remove the price wait. Its premise is false —
+  `reprice apply --write` already writes the new price into the price file, so a listing send
+  cannot restore the old price. The wait only held copies silently.
+
+## Owner answers, 2026-09-24 (post-compaction interview)
+- First real TCGplayer test: yes, both steps, after b-runs passes review. Step 1 sends one
+  listing row to Staged, checks it, then rolls it back. Step 2 sends one real copy. Stop and
+  report any surprise.
+- Runs screen (Q6): fold into Review. Review shows an "Identify N cards, ~$X" strip only when
+  cards wait. Past runs sit behind a link. `#/runs` stays a route for links. Home's six-stage
+  strip becomes five stages. The owner heard the counterpoint, a money press on a daily
+  screen, and chose to fold it anyway.
+- Demo licensing: accept as is. The owner heard that the risk lands on the seller account, and
+  that the TCGplayer terms stay unread and unmeasured here. The owner takes that risk.
+- D100 transport and send quantity: allow mixed sends. One Send can carry rows that add copies
+  and zero rows that only reprice live listings. The guard checks copies on adding rows and
+  prices on zero rows. The listing door stays open and widens. The owner asked why a send could
+  not include zeros, and called the old restriction odd.
+- Box-name backfill: once the integration branch reaches main, run
+  `./pkmnscan boxes names` as a preview, show the owner, and write only on the owner's yes.
+- HOR-07 and undo: not diagnosed now. The owner said undo is buggy everywhere in general, and
+  asked for one overall undo session later rather than a diagnosis now. The undo findings
+  (HOR-07, HIR-09, HIR-10, HIR-11, HIR-20, HIR-23) move to that later undo session, out of
+  wave 2.
+
+## Orchestrator calls, 2026-09-24
+- Ratchets review failed: reflow breaks sentence identity across a line-crossing code span.
+  The fix takes the reviewer's option (a), plus a stale-only pruner that stays off the commit
+  path (D18). Lane: `ux/ratchets-r2`.
+- Orchestrator call: the offender-list pruner (`scripts/offenders-prune.py`) needs no D18
+  amendment. D18, verbatim:
+
+  ```
+  A generator may write. Nothing that writes may gate a commit.
+  ```
+
+  The pruner runs on no hook and sits outside `make check`, so it complies as written.
+- Orchestrator call: ratchets r2 review failed on three should-fix items. The rename rule
+  takes the reviewer's option (a): count dot growth by file and string, without the scope, and
+  keep the scope in the unlisted-and-stale check. Round 3 goes to the same builder.
+- Orchestrator call: ratchets r3 review failed, blocking: the whole-list dot-growth key lets a
+  cross-file trade pass. The fix takes the reviewer's option (a) — file plus string, with
+  renames mapped through git — and shares `offenders-prune.git_renames`. Round 4 goes to the
+  same builder.
+- Orchestrator calls, b-runs r5 adversarial review failed on three blocking items, B1 through
+  B3. The owner can override any of these:
+  - Price rows carry only the SKUs the owner typed on the worklist, sent by the screen. The
+    server refuses any other price row.
+  - Price rows take the mark-down door's floor.
+  - A quantity of 0 plus a typed price on a live card counts as a price-only edit, and stays.
+  - The Staged test door is a one-off hand call to `tcg_import.push_to_staged` and its
+    rollback, run by the orchestrator under the owner's existing yes. No new press exists for
+    it.
+  - A 200 response from rollback is not proof by itself. Only the owner's step 1 proves it.
+- Owner, 2026-09-24: a new copy of a card already live carries the stored price. The button
+  names the live copies that move and the price they move to, for example
+  "Send 1 copy, 2 live copies move to $19.99". A mark-down already made still sticks.
+- Owner, 2026-09-24: the real test runs both steps after the overhaul reaches main. No Staged
+  step runs from a worktree.
+- Orchestrator calls, b-runs r6 review passed and merged. Round 7 carries the owner's
+  stored-price ruling above. Round 7 also reshapes deviation 3, as the reviewer proposed.
+  The `was` value now comes from the newest live export on disk. A refusal now carries
+  `{sku, live, price}`, so the screen can offer to re-send. Round 7 also carries R6-2 (undo
+  drops `typedHere`), R6-4 (reuse `send_held`), and a corrected record sentence.
+- Owner, 2026-09-24: split the UX PR if the split is doable and easy. PR 1 carries the
+  integration branch: waves 0 and 1, b-runs r6, ratchets through r3, after one screen
+  verification pass. PR 2 carries wave 2 plus b-runs r7, rebased on main after PR #461 and the
+  CSS sweep. Merge order: PR 1, then the CSS sweep, then PR #461, then PR 2.
+- Owner, from "Photo issues analysis", 2026-09-24: the merge order changed. PR #461 (identity)
+  merges first, then UX PR 1. The split still stands. After PR #461 merges, main merges into
+  the integration branch.
+  Seventeen files conflict, measured against the peer's merge-tree at `b63e90ee`. The schema
+  bump becomes 12, since PR #461 already took 11. Card identity writes go only through
+  `IDENTITY_WRITERS` (`+docs/specs/identity-follows-sku.md` §4, the `identity writers` audit
+  row). `cards variants` is retired.
+- Owner, 2026-09-24, iconography, a rule for every screen lane. The owner's words:
+
+  ```
+  i saw that retire got converted into an icon and its made me feel that there should be
+  more iconography overall
+  ```
+
+  Common, repeated actions become icon buttons. Each button carries a tooltip and an
+  accessible name. The list: Mark sold, Undo, Retire, Edit, Delete, Copy, Download, Open,
+  Close, Filter, Sort. A press that spends money or cannot be undone keeps its words: Send,
+  Identify, Stand down. A kit
+  check holds new screens to the rule. A kit lane (`kit-icons`) builds `IconButton` plus that
+  check. Screen lanes adopt it. Mark sold and Undo move from the identity session's follow-up
+  into the inventory lane.
+- Owner, 2026-09-24, on icons. The owner's words:
+
+  ```
+  i think it should be integrated into a certain part, with an opus agent sent to catch up
+  and mold it into your plan no? wont it save on work (in the long run)
+  ```
+
+  Done: an Opus planner maps every press to a lane, icon or words. Its table lands in
+  `LANES-ADDENDUM`'s "Iconography map" section, and each screen lane builds against it.
+- Icon map adopted: `review/ICON-MAP.md`, written by the Opus planner. It lands in the repo as
+  `+docs/specs/iconography.md` through the kit-icons lane. Each screen lane builds its own
+  table rows from it.
+- Owner, 2026-09-24: Orders' Mark sold converts to an icon now, even though Orders' Undo stays
+  broken until the undo session. The owner accepts that a mis-tap needs a fix by hand until
+  then.
+- Owner, 2026-09-24: sort key stays in words. Sort direction becomes an arrow icon, with its
+  words in the tooltip and the accessible name. This settles the conflict with UX-214.
+- Orchestrator calls, b-runs r7 review passed. Round 8 carries: a move under the floor is
+  refused, the same rule as S1. Several moves are listed on the card before the press, per the
+  owner's ruling that names the price. The move's copy count is checked. A blank-priced live
+  row counts as a move. Round 7 and round 8 then merge into the integration branch for PR 1,
+  since PR 1 is not open yet.
+- Orchestrator calls, kit-icons review failed on ten design-check failures: the toast glyph
+  is invisible in light mode, and the search field grows by 2px. The fix makes the hit area a
+  `::before` inset so the face keeps its own size. The overlay Close shows its word on the
+  Fulfiller persona. Every should-fix item lands, plus a browser spec for `IconButton`. Round 2
+  goes to the same builder.
+- UX-268 (nameless buyer): the owner asked why a buyer would have no name. A read-only
+  measurement of the real store found 0 of 834 orders without a buyer name. The fallback
+  exists only for pasted orders. Orchestrator call: the fallback text reads
+  "Buyer on order …NNNNN".
+- Orders card details (market and live counts): the owner asked to see real visual mockups
+  before choosing. Three mockups were rendered by the orders builder: A drops the detail, B
+  shows one line, C shows a table. This was pending the owner's pick.
+  Answered: B, one quiet line under the card, for example "$4.20 market, 3 live".
+- Orders stand-down first cutoff: the oldest Ready-to-ship day. Orchestrator call, judged safe.
+- Owner, 2026-09-24, UX-254: the Inventory hide toggle becomes "In stock only". The owner
+  suggested this name. It stays on by default, and its count is the cards that left.
+- Owner, 2026-09-24, UX-243: the button and its panel read "Change the card". Both claim
+  editors read "Edit claims". Neither uses a question-form label.
+- Owner, 2026-09-24: Opus was used too generously. Opus is reserved for planning,
+  money/TCGplayer/store-data adversarial reviews, and whole-flow or merge builders. Sonnet
+  covers screen builders, screen reviewers, fix rounds and verification.
