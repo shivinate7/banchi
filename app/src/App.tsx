@@ -1417,10 +1417,18 @@ export function App() {
   }, [theme, rail, toggleRail, toggleTheme])
 
   if (!chrome) {
+    /* THE SAME PROVIDER THE CHROMED BRANCH SETS BELOW, MISSING HERE UNTIL ROUND 2's OWN REVIEW
+       CAUGHT IT. The Fulfiller's route reads `hasChrome` false and returns here instead of
+       falling through to the shell's own render, so a Modal opened from `route.view` (the "?"
+       sheet, `Fulfillment.tsx`) called `usePageRoute()` against no provider at all and read
+       `null` — never 'fulfiller' — and drew an IconButton's Close instead of the word (D5 spec
+       rule 1). */
     return (
-      <RouteBoundary path={path} plain>
-        {route === undefined ? <NoSuchView path={path} /> : <route.view />}
-      </RouteBoundary>
+      <PageRouteContext.Provider value={route ?? null}>
+        <RouteBoundary path={path} plain>
+          {route === undefined ? <NoSuchView path={path} /> : <route.view />}
+        </RouteBoundary>
+      </PageRouteContext.Provider>
     )
   }
 
