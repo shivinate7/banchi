@@ -3992,11 +3992,17 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
             present = {at for at, _, _ in targets} | {at for at, _ in skipped}
             missing = sorted(selected - present)
             if missing:
+                # D196 (UX-208's carried refusal-leak item): the raw index used to ride the
+                # message on its own ("holds no card at 3, 7"). `place_within_box` names a
+                # missing position the same way it names one that resolves — its own
+                # documented fallback for an index `join.box_view` never found.
+                _, _view = join.box_view(inventory, box)
+                named = ", ".join(join.place_within_box(_view, box, at) for at in missing[:8])
                 raise BadRequest(
                     HTTPStatus.NOT_FOUND,
                     "card_not_found",
-                    f"{join.said_place(inventory, box)} holds no card at "
-                    + ", ".join(str(at) for at in missing[:8])
+                    f"{join.said_place(inventory, box)} holds nothing at "
+                    + named
                     + (f" (+{len(missing) - 8} more)" if len(missing) > 8 else "")
                     + ". Nothing was changed.",
                 )
@@ -8712,10 +8718,14 @@ def _require_group_answers(payload: dict) -> List[Tuple[int, int, str, str, str]
             )
         key = master.position_key(box, index)
         if key in seen:
+            # D196 (UX-208's carried refusal-leak item): `key` is the store's own position
+            # key ("7/1"), never spoken outside the store. `said_place` is the one refusal
+            # helper (locating review, 2026-09-24); read lazily, only on the refusal path.
+            place = join.said_place(Store().read().inventory, box, index)
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST,
                 "duplicate_position",
-                f"{where} repeats {key}, which an earlier element already answers. One "
+                f"{where} repeats {place}, which an earlier element already answers. One "
                 f"element per card — remove the duplicate and send the group again.",
             )
         seen.add(key)
@@ -8885,7 +8895,20 @@ def do_review_group_answer(payload: dict) -> dict:
             )
 
         if refused:
-            named = "; ".join(f"{key}: {exc.code} — {exc}" for key, exc in refused)
+            # D196 (UX-208's carried refusal-leak item): `key` is the store's own position
+            # key ("7/1"), never spoken outside the store. A refused group can span more
+            # than one box, so each box's view is scanned once and cached
+            # (`join.box_view`'s own pattern, e.g. the claims refusal above).
+            positions = {key: (box, index) for box, index, _sku, _condition, key in parsed}
+            views: Dict[int, "join.BoxView"] = {}
+            named_parts: List[str] = []
+            for key, exc in refused:
+                box, index = positions[key]
+                if box not in views:
+                    _, views[box] = join.box_view(snapshot.inventory, box)
+                where = join.place_within_box(views[box], box, index)
+                named_parts.append(f"{where}: {exc.code} — {exc}")
+            named = "; ".join(named_parts)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "group_entry_refused",

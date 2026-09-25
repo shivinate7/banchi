@@ -5310,8 +5310,10 @@ def check_group_answer(checks: Checks) -> None:
                 getattr(caught, "code", None), "duplicate_position", "in its own code"
             )
             checks.ok(
-                "4/1" in str(caught),
-                "and the message names the repeated position",
+                # D196 (UX-208's carried refusal-leak item): the raw store key ("4/1")
+                # used to ride the message. `said_place` names the same position now.
+                "Section 1, Card 1" in str(caught) and "4/1" not in str(caught),
+                "and the message names the repeated position, said the way the screens say it",
                 f"message was: {caught}",
             )
 
@@ -5330,9 +5332,10 @@ def check_group_answer(checks: Checks) -> None:
                 "as group_entry_refused",
             )
             checks.ok(
-                "4/6" in str(caught) and "not_in_queue" in str(caught),
+                # D196: same fix — the raw key is gone, the said place is not.
+                "Section 1, Card 6" in str(caught) and "4/6" not in str(caught) and "not_in_queue" in str(caught),
                 "and the failing position is named WITH ITS OWN CODE, so one 409 still "
-                "reports per position",
+                "reports per position, said the way the screens say it",
                 f"message was: {caught}",
             )
         untouched = Store().read()
