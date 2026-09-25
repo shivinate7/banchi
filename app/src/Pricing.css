@@ -430,3 +430,12 @@
 
 /* THE HEADER'S ICON PRESSES SIT FAR ENOUGH APART THAT EACH 40PX HIT AREA IS ITS OWN (D117). */
 .pricing .bn-head-actions { gap: var(--bn-3); }
+/* THE FOUR RULES WRAP AS A UNIT IN A NARROW SHEET, never past its edge (UX-035). */
+.pricing-rule-seg { flex-wrap: wrap; max-width: 100%; }
+
+/* A NARROW DESK COLUMN KEEPS THE BAR ONE LINE TOO (Q4): below the 899px tier the two quiet
+   doors sit behind More, as they do on a phone. */
+@container bn-page (max-width: 899px) {
+  .pricing-bar .send-more-press { display: inline-flex; flex: none; }
+  .pricing-bar .send-act:not([data-more='open']) .send-door { display: none; }
+}

@@ -38,3 +38,4 @@ app/src/ValueBands.tsx  # Deleted 2026-09-25 by the b-pricing lane: the value li
 app/tests/value-bands.spec.ts  # Deleted 2026-09-25 with app/src/ValueBands.tsx, the line above. Same record.
 app/src/Markdown.tsx  # Deleted 2026-09-25 by the b-pricing lane: the Mark-down sheet became the Live tab on Pricing (D277, Q6). The review records and docs/specs/stale-listings.md name it as the build they describe, and are kept as that record. Delete this line if the file is ever rebuilt here.
 app/src/Markdown.css  # Deleted 2026-09-25 with app/src/Markdown.tsx, the line above. Same record.
+app/tests/markdown.spec.ts  # Deleted 2026-09-25 with app/src/Markdown.tsx: the sheet it tested is the Live tab now, and app/tests/pricing-markdown.spec.ts carries its cases (D277, Q6). D105 and docs/specs/stale-listings.md name it as the record of what they built. Delete this line if the file is ever rebuilt here.

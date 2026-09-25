@@ -4040,8 +4040,8 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D194", "D218", "D226", "D229",
-                                "D245", "D248", "D277", "D280", "D284"],
+                "governed_by": ["D15", "D16", "D23", "D90", "D96", "D105", "D194", "D218", "D226",
+                                "D229", "D245", "D248", "D277", "D280", "D284"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "

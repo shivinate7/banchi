@@ -747,11 +747,11 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   D261).
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing
-  about a card in `localStorage`. **Eleven keys are stored on the device**, each a fact about
+  about a card in `localStorage`. **Ten keys are stored on the device**, each a fact about
   THIS MACHINE and not a card. `banchi.capture.deviceId` and `banchi.capture.rotation` live
   in `app/src/useCamera.ts`. `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`,
   `banchi.inventory.hide-sold`, `banchi.box-recency`, `banchi.capture.setup`,
-  `banchi.runs.spend-notice` and `banchi.pricing.compare` live in `app/src/deviceMemory.ts`.
+  and `banchi.runs.spend-notice` live in `app/src/deviceMemory.ts`.
   `banchi.orders.last-check` lives in `app/src/Orders.tsx`. `banchi.runs.spend-notice` is a
   NOTICE and never a cap. Owner's ruling, 2026-09-12: *"if I want to run everything, then I
   get to run everything."* `banchi.capture.setup` bundles six values as one document (D142),
