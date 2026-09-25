@@ -3231,25 +3231,33 @@ export function CaptureScreen() {
                     the presence read judges, and it never blocks a manual click on the card
                     itself. It is `switchTrigger`, the exact call the Trigger field's own
                     track makes — no new state, no new behaviour, just a second, faster door
-                    to the same act. */}
-                <button
-                  type="button"
-                  className={
-                    triggerMode === 'manual'
-                      ? 'capture-pauseplay is-paused'
-                      : 'capture-pauseplay is-running'
-                  }
-                  onClick={() => switchTrigger(triggerMode === 'motion' ? 'manual' : 'motion')}
-                  aria-label={
-                    triggerMode === 'manual'
-                      ? 'Resume motion (Space)'
-                      : 'Pause motion (Space)'
-                  }
-                  title={triggerMode === 'manual' ? 'Resume motion — Space' : 'Pause motion — Space'}
-                >
-                  <Icon name={triggerMode === 'manual' ? 'play' : 'pause'} size={triggerMode === 'manual' ? 30 : 16} />
-                  {triggerMode === 'manual' ? <span className="capture-pauseplay-label">Paused</span> : null}
-                </button>
+                    to the same act.
+
+                    ONLY WHILE THE CAMERA IS ACTUALLY LIVE (`camera.ready`, R3). With no feed
+                    there is no motion read to pause, and the button used to sit centred over
+                    the frame note's own "Open the camera" prompt at 390 — unreachable, since
+                    the note painted on top of it. `phone.spec.ts` caught it: a control drawn
+                    but not pressable is worse than one not drawn at all. */}
+                {camera.ready ? (
+                  <button
+                    type="button"
+                    className={
+                      triggerMode === 'manual'
+                        ? 'capture-pauseplay is-paused'
+                        : 'capture-pauseplay is-running'
+                    }
+                    onClick={() => switchTrigger(triggerMode === 'motion' ? 'manual' : 'motion')}
+                    aria-label={
+                      triggerMode === 'manual'
+                        ? 'Resume motion (Space)'
+                        : 'Pause motion (Space)'
+                    }
+                    title={triggerMode === 'manual' ? 'Resume motion — Space' : 'Pause motion — Space'}
+                  >
+                    <Icon name={triggerMode === 'manual' ? 'play' : 'pause'} size={triggerMode === 'manual' ? 30 : 16} />
+                    {triggerMode === 'manual' ? <span className="capture-pauseplay-label">Paused</span> : null}
+                  </button>
+                ) : null}
 
                 {camera.ready ? null : (
                   <div className="capture-frame-note">

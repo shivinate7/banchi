@@ -1308,8 +1308,19 @@
        head is 104px against the old hand-rolled one's 38-48px, so the 298px budget below it
        undersized by about 62px and let the shutter land behind the fixed tab bar. 366px is
        that gap closed, real DOM rects (`.bn-page-head`, `.capture-shutter`), not arithmetic
-       — see the shutter's own bottom against `100dvh - var(--bn-tabbar-h)` at this width. */
-    height: clamp(260px, calc(100dvh - 366px - var(--bn-tabbar-h)), 560px);
+       — see the shutter's own bottom against `100dvh - var(--bn-tabbar-h)` at this width.
+       366px still governs at 740 and 844: the calc() branch stays above the floor there, so
+       raising it further would not move the shutter — only the floor below decides 667.
+
+       THE 260px FLOOR WAS TOO TALL FOR A 667pt PHONE (R3), measured the same way: at 390x667
+       with the real 34px safe-area inset, everything ABOVE and BELOW the stage — top bar,
+       page head, both gaps, the run card's own label, box row and shutter — already totals
+       350.77px, leaving 569 - 350.77 = 218.23px above the tab bar for the stage to fit in.
+       The 260px floor forced 41.77px of overlap into the tab bar regardless of what this
+       constant subtracted, because the calc() branch was already below the floor at that
+       height — raising or lowering 366px could not reach it. 214px is that budget with a
+       ~4px margin, the same subpixel-rounding cushion the constant above already keeps. */
+    height: clamp(214px, calc(100dvh - 366px - var(--bn-tabbar-h)), 560px);
     max-height: none;
     align-self: stretch;
   }
