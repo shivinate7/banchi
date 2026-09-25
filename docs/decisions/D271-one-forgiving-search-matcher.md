@@ -143,14 +143,18 @@ included, matching UX-263's own method) against a running `CaptureServer`:
 
 **THE GOVERNING NUMBER IS THE IN-PROCESS ONE (owner's ruling, round-5 Opus delta review reply, 2026-09-25).** The owner's condition on both mid-word and R1's fix was "fast on a
 real-sized store." The real-store column meets it at every shape measured. p95 tops out at
-359ms, and the mid-word row's own p95 is 33ms. The three synthetic-HTTP columns' slower
-numbers on the hostile shapes come from PAYLOAD SIZE on a deliberately broad query, never
-from the matcher. See the next paragraph.
+359ms, and the mid-word row's own p95 is 33ms. THIS ENTRY ONCE SAID the three
+synthetic-HTTP columns' slower numbers came from PAYLOAD SIZE alone, "never from the
+matcher." That claim was ITSELF FALSE (R5-1, round-6 Opus delta review, 2026-09-25). The
+rank loop spent real time on the matcher's own decisive check. It did this for every
+candidate a broad union could surface, before that check ever ran. See ROUND 6, below,
+for the fix and the corrected numbers. The payload-size ceiling this paragraph pointed to
+still holds, in the next paragraph, but it was never the WHOLE explanation.
 
 **A KNOWN CEILING, RECORDED, NOT MECHANIZED AWAY: RESULT PAYLOAD SIZE ON A BROAD QUERY.** `do_search`'s response is UNPAGED — every ranked SKU's full group, every copy, in
-one body. A deliberately broad query (`("e " * 100)`, which matches roughly a third of a
-Pokemon-shaped store on the letter `e` alone) returns a 719KB body at 3,000 synthetic
-cards and 2.4MB at 10,000. Encoding and writing that body is most of what pushes real
+one body. A deliberately broad query (`("e " * 100)`) matches roughly a third of a Pokemon-shaped
+store on the letter `e` alone. It returns a 719KB body at 3,000 synthetic cards and
+2.4MB at 10,000. Encoding and writing that body is most of what pushes real
 HTTP p95 over 500ms for `e`×100 and `ex`×66 at 3,000+ cards. The owner's real ~3,510-card
 store never reaches this cost. A real query there matches far fewer rows than a
 deliberately hostile one does (measured: the real-store column's own p95 tops out at
@@ -189,6 +193,88 @@ owner's word. Round-4 reply: "Ship it as built." Round-5 reply: "Do not add a re
 cap." The ceiling and its upgrade path are recorded at `_fts_substring_candidates_for_
 term`'s own `ponytail:` comment, never only here. The upgrade path is an FTS5 trigram
 index, a schema change needing its own decision.
+
+**ROUND 6, OPUS DELTA REVIEW, 2026-09-25, ON ce5a6168.** Four more defects. All found on
+the owner's OWN real store (a read-only copy), or by this session's own new fuzz test.
+Round 5's fixture still hid them.
+
+**R5-1 (BLOCKING): THE RANK LOOP RAN THE MATCHER BEFORE THE DECISIVE CHECK.** `do_search`
+computed `term_ranks` (up to 8 `_match_rank` calls) for EVERY candidate. This ran before
+`match.match_query` ever decided whether that candidate was a real match at all. It was
+cheap while the candidate set stayed narrow. F2's UNION (round 5) means a query of
+several `/NNN` terms can make most of the store a candidate. Each term widens on its
+own, and nothing intersects the union back down. `/132 /298 /166 /198 /219 /221 /1 /2` measured
+552-578ms on the real store, for a 63-byte body. Almost every candidate was rejected, so
+almost all of that time was `term_ranks` no result ever used. Fixed: `match_query` runs
+first, and `term_ranks` is computed only for a matched row or a single-term query.
+
+**R5-2 (REAL STORE): THE ZERO-PAD WIDENING NEVER MATCHED A COMPOSED NUMBER.**
+`_fts_zero_pad_candidates_for_term` compared `LTRIM(col, '0') = ?` against the WHOLE
+column. 2,919 of the owner's 3,510 real cards keep `number` as `027/166`, with an empty
+`number_key`. `LTRIM` on that whole string only strips its FRONT (`27/166`). That is
+never equal to a bare `27`. `q=0027` dropped 3 of 4 real matches, `0217` 5 of 5, `0190` 3 of 3.
+Fixed: also match `LTRIM(col, '0') LIKE bare || '/%'`.
+
+**R5-3: THE WIDENING STEP DEDUPED CASE-SENSITIVELY.** `ex`, `EX`, `Ex` and `eX` counted
+as 4 distinct terms. That burned 4 of `_SUPPLEMENTAL_TERM_CAP`'s 8 slots on the SAME
+word, spelled 4 ways. `ex EX Ex eX ob OB fl FL izard` returned 0 of 15 real matches. The
+cap filled on case variants before `izard`, the mid-word term the one real match needed,
+ever got scanned. Fixed: dedupe on the FOLDED form.
+
+**R5-5: THE ZERO-PAD WIDENING NEVER REACHED A DIGIT-PLUS-LETTER NUMBER.**
+`_fts_zero_pad_candidates_for_term` gated on digits only, refusing `24a` outright. `24a`
+dropped all 8 real matches for a card numbered `024a/219` (Rengar). Fixed:
+`_ZERO_PAD_SHAPE` (digits, then 0-2 letters) replaces the digits-only gate.
+
+**RE-TIMED ON A FRESH REAL-STORE COPY, R6-FIXED CODE:**
+
+| Query shape | p50 / p95 | body |
+|---|---|---|
+| 1-char (`a`), floored | 123.1ms / 129.3ms | 351KB |
+| 2-char (`ab`), floored | 45.9ms / 49.7ms | 14KB |
+| Hostile 100×`1` | 227.3ms / 234.8ms | 12KB |
+| Hostile 100×`e` | 132.1ms / 138.4ms | 161KB |
+| Hostile 66×`ex` | 72.0ms / 82.9ms | 45KB |
+| Hostile 50×`001` | 50.1ms / 52.5ms | 12KB |
+| R6 hostile 8×`/NNN` | 128.7ms / 134.8ms | 63B |
+| R6 hostile mixed | 131.6ms / 140.7ms | 60B |
+| Bare number (`132`) | 46.0ms / 49.1ms | 12KB |
+| Floor `sc` | 60.1ms / 63.5ms | 44KB |
+
+Every shape stays under 235ms p95 on the real store, well inside the 500ms bound the
+round-6 review set. R5-1's own `/NNN` shape, the round's blocking finding, dropped from
+552-578ms to 128.7-134.8ms.
+
+**REAL MID-WORD HITS, REPLACING THE EARLIER "izard" CELL, WHICH MEASURED ZERO HITS ON THE REAL STORE.** `izard` never appears mid-word in the owner's own card names. No
+Charizard was in the live store at capture time. That cell answered a query with no real
+target, not a mid-word measurement at all. Real fragments the owner's own names contain:
+
+| Mid-word fragment | p50 / p95 | body |
+|---|---|---|
+| `engar` | 82.4ms / 92.6ms | 43KB |
+| `ion` | 97.2ms / 100.9ms | 93KB |
+| `ard` | 96.6ms / 103.5ms | 91KB |
+| `ing` | 117.5ms / 123.3ms | 198KB |
+| `ter` | 114.8ms / 120.8ms | 183KB |
+
+**DISCLOSURE, R5-4: THE 1-2 CHARACTER FLOOR MEANS `do_search` RETURNS FEWER ROWS THAN `match.match_query` ACCEPTS.** `_fts_substring_candidates_for_term`'s 3-character floor
+(R3, the owner's own accepted condition) is a floor on the CANDIDATE step. It is not a
+floor on `match_query`'s own rule 7, which has none at all. A 1-2 character text token
+matches as a substring ANYWHERE in a folded field, with no length minimum. `sc` measured on
+the real store: `match_query` accepts 47 cards, `do_search` returns 14, DROPPING 33. This
+is the floor's own known cost, accepted at the time R3 shipped, restated here in a real
+number rather than only in principle.
+
+**DISCLOSURE: A 9TH OR LATER DISTINCT TERM IS NEVER WIDENED.**
+`_SUPPLEMENTAL_TERM_CAP = 8` bounds how many distinct terms reach the candidate-widening
+step and the rank loop's own `term_ranks` computation. A query naming 9 or more distinct
+terms gets no widening for the 9th term and beyond. Those terms still take part in the
+DECISIVE `match.match_query` check, which is unbounded. So a candidate the FIRST 8
+terms' widening already surfaced is still correctly judged on all of its terms. A row
+that needs the 9TH term's OWN widening to become a candidate at all is the gap. No case in this
+file's own case table, nor the permanent fuzz, has ever needed a 9th distinct term's
+widening to find a real card. The cap is sized against every query shape measured so
+far, not against zero cost.
 
 The rest of this entry, `harness/tests/t7_store_and_seams.py:check_search_fts5`'s own
 `midword` case, and `scripts/match-selftest.py`'s case 16 all now assert the FOUND
