@@ -89,20 +89,36 @@ ones. So the listing door also takes a row with Add to Quantity 0, a price-only 
 D100's own shape, so a second upload of it changes nothing. D100's outcome holds: nothing is
 deleted to lower a price, and the quantity is not a variable.
 
-- **Where the price-only rows come from.** The Pricing worklist, only. A row qualifies when the
-  press adds no copy of the card, TCGplayer holds at least one copy in the fresh read, and the
-  owner TYPED a price that differs from TCGplayer's price to the cent
-  (`pipeline/sendguard.py:price_changes`, `emit --reprice-live`). A rule price never reaches a
-  live listing this way: the rule speaks about most live listings, and one press would move
-  them all. The Live tab keeps its own mark-down press.
+- **Where the price-only rows come from.** Amended in round 6, on the orchestrator's ruling on
+  the owner's words. Only the SKUs the owner typed a price for on the worklist, in this visit.
+  The screen sends each one with the price its button counted and the live price the row drew
+  (`emit --reprice-live <file>`, `pipeline/sendguard.py:price_changes`). A corpus answer the
+  owner did not type there never rides: not a Live tab preset, not `reprice apply --write`, not
+  a price typed on an earlier visit. A rule price never reaches a live listing this way. The
+  Live tab keeps its own mark-down press.
+- **Each named price, checked against the fresh read.** Under the store's floor
+  (`policy.threshold`, the mark-down door's `BELOW_FLOOR`): the press refuses and names it. The
+  live price is not the one the screen drew: the press refuses and names it, so a price the
+  button did not name is never sent. TCGplayer already shows that price, or holds no copy: the
+  row is left out and named, and the press goes on. Qty 0 with a typed price on a live card is
+  the owner's price-only edit, and the button counts it.
 - **What stays whole for the rows that add copies.** The live read first, the double-send guard,
   the claim, the check past the wait, and Take back.
-- **What a price-only row does not do.** It claims no copy, counts no copy, and is never taken
-  back. It is checked against every live claim, so it never races a mark-down or a send in
-  flight over the same card. The press then refuses by name.
+- **What a price-only row does not do.** It counts no copy and is never taken back. It is
+  checked against every live claim, and claimed at 0 copies (round 6), so it never races a
+  mark-down or a send in flight over the same card, either way. The check past the wait
+  releases the claim.
 - **The check past the wait** compares TCGplayer's price with the file's price, per row, the
-  mark-down's own test. A price it does not find is named. Nothing is offered back: the way a
-  live price changes again is another price change.
+  mark-down's own test. A price it does not find is named. A card with no copy live at the check
+  sold out: it is named and settles. Nothing is offered back: the way a live price changes again
+  is another price change.
+- **A rollback is not proof (round 6).** `rollbackexportcsv` has never run on the real account.
+  So a press that TCGplayer turned away and Banchi rolled back refuses with its own code, never
+  a retry, and keeps "check the Staged list" until the owner dismisses it. A mark-down's rollback
+  is recorded the same way, as not live. Its answers stay in the price file as the owner's
+  record, and they cannot ride a send, because only a named price does.
+- **A press that died mid-push** leaves a receipt in phase sending or publishing with no record
+  of why. It reads as possibly staged, with the Staged warning.
 - **The send card** says what the press does in the owner's words: "Send 3 copies and 2 price
   changes".
 
@@ -173,7 +189,7 @@ The pricing lane follows, with the rest of the screen and the Live tab.
 
 ### The review rounds
 
-Rounds 2 to 4 of the adversarial review, each finding and its fix, are the entry
+Rounds 2 to 6 of the adversarial review, each finding and its fix, are the entry
 `D-send-review-rounds` (the send press's review record). Round 5 built the mixed send above,
 ordered two presses in one second by press time, and folded the taken-back warning to one line
-on a phone. Its record is there too.
+on a phone. Round 6 limited the price rows to the prices the screen named.

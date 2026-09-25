@@ -320,10 +320,12 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   --split-games      one file per game
                                    #   --live-guard FILE  trim each row so TCGplayer never
                                    #                      holds more copies than are here
-                                   #   --reprice-live     with --live-guard: a PRICE-ONLY row
+                                   #   --reprice-live F   with --live-guard: a PRICE-ONLY row
                                    #                      (Add to Quantity 0) for each live
                                    #                      card that adds no copy and whose
-                                   #                      TYPED price moved. A listing file
+                                   #                      price the screen NAMED in F. A
+                                   #                      price F does not name never rides.
+                                   #                      A listing file
                                    #                      may mix both (the owner's ruling,
                                    #                      2026-09-24). The send press passes
                                    #                      both flags.

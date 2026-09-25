@@ -1,7 +1,7 @@
 ## D-send-review-rounds — The send press's review record: each round's findings, and the fix for each
 
 The review record of `D-one-press-sends-and-makes-live` (one press sends and makes live). That
-entry holds the rulings. This entry holds rounds 2 to 5 of the adversarial review. Each round
+entry holds the rulings. This entry holds rounds 2 to 6 of the adversarial review. Each round
 failed the build before it, and each finding was fixed at its cause with a case that went red
 on the build before the fix. This entry was split out of that one in round 5, so that entry
 stays inside the entry budget. Nothing below is a new ruling.
@@ -138,3 +138,33 @@ Each case below has a T7 case in `check_send_review_r5`, or a spec case in
 - **Two warnings at 390 wide.** Two taken-back warnings made the sticky send bar about half the
   screen high. On a phone each is now one line: its own imperative, a press that opens the full
   sentence, and Dismiss. Only Dismiss takes it off the card, as round 4 ruled.
+
+
+### Round 6: the fresh review of round 5, and the orchestrator's rulings (2026-09-24)
+
+The review of round 5 failed with three blocking findings. The orchestrator ruled on the
+owner's words, "what if i want to edit some prices while also setting new ones?". Each case
+below has a T7 case in `check_send_review_r6`, or a spec case in `app/tests/pricing.spec.ts`,
+that went red on the round-5 build before the fix. The reviewer's probes P1 to P7 are cases
+there, except P6, which found no defect.
+
+- **B1 and B2, a price the button did not name.** The screen compared a typed price with the
+  join's old export, the server with a fresh one, and the server counted every corpus answer as
+  typed. So a Live tab preset, or a mark-down written and never sent, could go live on the next
+  send. Now only a SKU the owner typed on the worklist in this visit rides. The screen sends it
+  with the price and the live price it drew, and the server refuses a named price whose live
+  price moved since, by name.
+- **B3, the Staged test.** The owner's test of Staged is one call by hand to the transport, not
+  a press, and nothing is built for it. A mark-down's rollback is now recorded as not live and
+  "check the Staged list". Its answers cannot ride a send after B1.
+- **S1, the floor.** A named price under `policy.threshold` is refused and named.
+- **S2, a crash mid-push.** A receipt in phase sending or publishing with a dead holder and no
+  record of why reads as possibly staged.
+- **S3, a held price change.** A price-only row is claimed at 0 copies, so a mark-down over the
+  same card is refused until the check past the wait releases it.
+- **S4, a rollback answer.** It is not proof. The press refuses with `send_rolled_back`, which
+  the card never offers to retry, and the receipt keeps "check the Staged list" until dismissed.
+- **N1, kept.** Qty 0 with a typed price on a live card is the owner's price-only edit.
+- **N2, a card that sold out.** A price row on a card with no copy live at the check settles, and
+  the card is named.
+
