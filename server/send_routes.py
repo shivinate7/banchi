@@ -28,6 +28,9 @@ WHAT ONE PRESS DOES, IN ORDER, AND WHERE EACH STEP STOPS (`do_send`):
      (`pipeline/sendguard.py`), written where no other press can read it, and CLAIMED in the
      store write that counts the copies sent (`store/sendclaims.py`, D174's shape). A second
      press over the same copies is refused there, by name, whatever process it came from.
+     With `--reprice-live` the same file carries a PRICE-ONLY row (Add to Quantity 0) for each
+     card already live whose typed price moved (the owner's ruling, 2026-09-24: "Allow
+     mixed"). Such a row claims no copy, and a press of price rows only is still a send.
   4. For a download, stop here: the file is the answer, and its receipt says "written, not
      confirmed at TCGplayer".
   5. Push the file to Staged (`tcg_import.push_to_staged(listing=True)`), then publish that

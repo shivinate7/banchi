@@ -24,7 +24,7 @@
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { useEffect, useState } from 'react'
-import { Button, Icon, Notice, Refusal, Retry } from './kit'
+import { Button, Icon, Money, Notice, Refusal, Retry } from './kit'
 import { clockTime } from './dates'
 import { describeFailure, dismissSendWarning, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
@@ -132,7 +132,7 @@ function PriceMisses({ send }: { readonly send: SendSummary }) {
       {missing.slice(0, 6).map((row) => (
         <li key={row.sku}>
           <span className="send-name">{row.name || row.sku}</span>
-          <span className="send-figure">{row.live === null ? 'no price live' : <>still <span className="bn-money">{`$${row.live}`}</span></>}</span>
+          <span className="send-figure">{row.live === null ? 'no price live' : <>still <Money value={Number(row.live)} /></>}</span>
         </li>
       ))}
       {missing.length > 6 ? <li className="send-more">and {missing.length - 6} more</li> : null}
