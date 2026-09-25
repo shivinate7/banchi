@@ -1948,7 +1948,7 @@ test('the photo is on demand, names which copy it is, and the same key closes it
      recorded misses are confident answers with the digits wrong — so the pick is the first in
      box-walk order, said out loud, and steppable. */
   await expect(page.locator('.pricing-photo')).toBeVisible()
-  await expect(page.locator('.pricing-photo-caption')).toContainText('Card 1')
+  await expect(page.locator('.pricing-photo-caption')).toContainText(/card\s*1/i)
   await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
 
   await page.getByRole('button', { name: 'Next copy' }).click()
@@ -2581,7 +2581,7 @@ test('one answer is written once, for the store, however many runs hold the card
 }) => {
   const wire = await open(page, { worklist: SPAN })
 
-  await field(page).first().focus()
+  await page.getByRole('textbox', { name: 'Price for LeBlanc, Everywhere At Once' }).focus()
   await page.keyboard.type('12.00')
   await page.keyboard.press('Enter')
 
@@ -2604,8 +2604,8 @@ test('the over-cap warning is visible with Compare off, and the toggle does not 
      SURVIVE THE NEW TOGGLE (a regression pin, not a red-first case: nothing hides this
      today and it must stay that way). The over-cap row's warning badge is visible with no
      click at all. */
-  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-cap')).toBeVisible()
-  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-cap')).toHaveText('3 of 4 can go')
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toBeVisible()
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toHaveText('3 of 4 can go')
 
   /* AND IT STAYS AFTER THE TOGGLE, TOO — Compare only ever ADDS context, it never removes a
      warning. */
@@ -2643,9 +2643,9 @@ test('the cap is what can go, and the row says the runs disagree with it', async
      THE CELL IS A FIELD SINCE 2026-09-11 (D7 amended), so the figure that goes is its
      PLACEHOLDER — what a blank field sends — and "of 3" stands beside it. The number asserted
      is the same one: what can go, never what the runs claim. */
-  const qty = page.locator('.pricing-row').nth(0).locator('.pricing-qty')
+  const qty = page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-qty')
   await expect(qty.locator('.pricing-qty-input')).toHaveAttribute('placeholder', '3')
-  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-cap')).toHaveText('3 of 4 can go')
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toHaveText('3 of 4 can go')
 })
 
 test('a send of several runs is one press over every run, with nothing beside it', async ({
@@ -2733,7 +2733,7 @@ test('an undo returns the card to what it was, including to having no answer', a
 }) => {
   const wire = await open(page, { worklist: SPAN })
 
-  await field(page).first().focus()
+  await page.getByRole('textbox', { name: 'Price for LeBlanc, Everywhere At Once' }).focus()
   await page.keyboard.type('12.00')
   await page.keyboard.press('Enter')
   await expect.poll(() => sentAnswers(wire)['9191210']).toBe('12.00')
@@ -2747,7 +2747,7 @@ test('an undo returns the card to what it was, including to having no answer', a
      never make: an override is layer 1 of the ladder and beats the rule at layer 4, so a
      screen that wrote its suggestions would produce a run where changing the preset silently
      changed nothing. */
-  await field(page).first().focus()
+  await page.getByRole('textbox', { name: 'Price for LeBlanc, Everywhere At Once' }).focus()
   await page.keyboard.press('u')
   await expect.poll(() => sentAnswers(wire)).toEqual({})
 })

@@ -7548,8 +7548,8 @@ COMPONENTS = [
                                         "list clears its measured height. Money in the price field is mono (D221).",
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
                                                 "D54", "D56", "D62", "D78", "D79", "D85", "D86",
-                                                "D103", "D105", "D117", "D123", "D125", "D197",
-                                                "D208", "D218", "D277"]},
+                                                "D103", "D105", "D117", "D118", "D123", "D125",
+                                                "D197", "D208", "D218", "D277"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.

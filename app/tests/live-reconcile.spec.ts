@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 
 /* THE FOURTH COMMAND, OVER THE WHOLE STORE — asserted where nothing else can see it (D87).
@@ -340,6 +341,8 @@ test('the fetch press keeps its place and size while it runs', async ({ page }) 
     })
   })
   await open(page)
+  /* THE SHEET SLIDES IN; a box measured mid-slide is the slide, not the press. */
+  await settleMotion(page)
   const press = panel(page).getByRole('button', { name: 'Fetch my live listings' })
   const before = await press.boundingBox()
   await press.click()

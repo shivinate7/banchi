@@ -52,7 +52,7 @@ import type {
 } from './types'
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
 import { isEditableTarget } from './keys'
-import { FLAT_KEY, owed, subThresholdSkus } from './readiness'
+import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { TrendCell, type TrendRead } from './PriceTrend'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
@@ -984,7 +984,6 @@ export function Pricing() {
     [partitioned, lens, standingOf],
   )
 
-  const owes = useMemo(() => owed(doc, subThresholdSkus(rows)), [doc, rows])
 
   const answerFor = useCallback(
     (sku: PricingSku): unknown => (targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : unpriced[sku.sku]),
@@ -1089,7 +1088,13 @@ export function Pricing() {
     return { held: heldCount, closed, outRows, outCopies, byHand }
   }, [rows, answerFor, askedFor])
 
-  const needsPrice = owes.find((one) => one.reason === 'no_market_data_unanswered')?.count ?? 0
+  /* ROWS WITH NO MARKET PRICE AND NO ANSWER: they stay on the list and stay out of a send (Q3,
+     D49: a missing price is unknown, not low). Counted off the rows, which is what is drawn. */
+  const needsPrice = rows.filter((row) => {
+    if (row.bucket !== 'no_market_data' || row.at_cap) return false
+    const standing = answerFor(row)
+    return typeof standing !== 'string' && !isWithheld(standing)
+  }).length
 
   /* THE MIXED SEND'S PRICE CHANGES (the owner's ruling, 2026-09-24: "Allow mixed"). A row this
      press adds no copy of, already live, whose TYPED price is not the live one. The server
@@ -2127,8 +2132,11 @@ export function Pricing() {
 
   const showList = table !== null && (table.length > 0 || liveTab)
 
+  /* THE OVERLAYS SIT BESIDE THE PAGE, NOT IN IT: `Page` draws `empty` in place of its children,
+     and the empty states have presses that open these sheets. */
   return (
-    <Page
+    <>
+      <Page
       className="pricing"
       icon="tag"
       actions={actions}
@@ -2209,6 +2217,7 @@ export function Pricing() {
           </div>
         )}
       </div>
+      </Page>
 
       <Popover open={runsOpen} onClose={() => setRunsOpen(false)} anchor={runsAnchor} label="Which runs to price" className="pricing-runs-pop">
         <PickRuns runs={roster} picked={picked} onToggle={toggleRun} onClear={clearPicked} />
@@ -2287,7 +2296,7 @@ export function Pricing() {
         unsaved={dirty || saving}
         onCleared={onCleared}
       />
-    </Page>
+    </>
   )
 }
 

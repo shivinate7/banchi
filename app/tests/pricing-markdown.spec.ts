@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { settleMotion } from './motionSettled'
 
 import type { MarkdownSku } from '../src/types'
 
@@ -705,7 +706,7 @@ for (const width of [390, 820]) {
     await field.type('17.50')
     await field.blur()
     const bar = page.getByRole('region', { name: 'Send these prices' })
-    await bar.getByRole('button', { name: 'Download the file instead' }).click()
+    await bar.getByRole('button', { name: /^Download/ }).click()
     await expect(bar.getByRole('link', { name: 'import.csv' })).toBeVisible()
     const press = bar.locator('.pricing-emit')
     const locators = { press, door: bar.getByRole('button', { name: /Download/ }), link: bar.getByRole('link', { name: 'import.csv' }) }
@@ -734,7 +735,7 @@ test('the Live tab with no read yet says so and offers the read, and nothing is 
   )
   await page.goto('/#/pricing?live')
   await expect(page.getByText('Nothing read from TCGplayer yet').first()).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-tabs').getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
   /* THE READ IS A PRESS (D62's rule for anything that asks a remote host): opening the tab
      asks TCGplayer for nothing. */
   expect(wire).toHaveLength(0)
@@ -757,6 +758,7 @@ test('Read again keeps its words and its place while it reads', async ({ page })
     await route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"tcg_cookie_missing","message":"No session."}}' })
   })
   await open(page)
+  await settleMotion(page)
   const press = page.getByRole('button', { name: 'Read again' })
   const before = await press.boundingBox()
   await press.click()
@@ -769,6 +771,7 @@ test('Read again keeps its words and its place while it reads', async ({ page })
 })
 
 test('the Live tab’s Download keeps its words and its place while it writes', async ({ page }) => {
+  await open(page)
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1500))
     await route.fulfill({
@@ -777,7 +780,7 @@ test('the Live tab’s Download keeps its words and its place while it writes', 
       body: JSON.stringify({ ok: true, exit_code: 0, wrote: true, console: 'wrote import.csv', stamp: STAMP, revision: 'rev-after' }),
     })
   })
-  await open(page)
+  await settleMotion(page)
   const field = page.locator('.pricing-input').first()
   await field.click()
   await field.fill('')

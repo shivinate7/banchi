@@ -151,7 +151,8 @@
 .pricing-thumb:hover { box-shadow: var(--bn-shadow-2); }
 
 .pricing-id { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
-.pricing-name-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-0-5) var(--bn-2); min-width: 0; }
+.pricing-name-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-0-5) var(--bn-2); min-width: 0; min-height: var(--bn-6); }
+/* The chip never makes its line taller than a line without one: rows stand equally tall (D118). */
 .pricing-name {
   min-width: 0;
   font-size: var(--bn-fs-base);
@@ -204,6 +205,9 @@
 
 /* ---- the price field: 40px tall, sized for "$999.99" (UX-002), money in the mono face ------- */
 .pricing-price { display: flex; flex-direction: column; align-items: stretch; gap: var(--bn-0-5); min-width: 0; }
+/* ONE HEIGHT FOR THE PRICE CELL IN EVERY STATE (D118): a held row, a typed one and one carrying
+   a note stand exactly as tall, so no state moves the rows under it. */
+.pricing-list .pricing-price { height: calc(var(--bn-8) + var(--bn-4)); justify-content: flex-start; }
 .pricing-field {
   position: relative;
   display: flex;
