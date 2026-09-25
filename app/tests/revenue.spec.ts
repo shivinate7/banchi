@@ -630,6 +630,39 @@ test('a line with no price from TCGplayer draws "no price", never a false $0.00 
   await expect(page.locator('.revenue-summary-figure')).toContainText('$12.50')
 })
 
+/* --------------------------------------------------------- the shelf spark (round 2 review) */
+
+test('the shelf spark actually paints: its polyline carries a real stroke, not none (defect fix)', async ({ page }) => {
+  await stub(page, generalOrders())
+  // Override the default empty holdings stub with two real points — `HoldingsSpark` only
+  // draws a `<polyline>` once `holdingsSegments` sees 2+ finite values.
+  await page.route(/\/pipeline\/holdings-value\?/, (route) =>
+    json(route, {
+      range: 'month',
+      width_days: 30,
+      history_begins: '2026-08-01',
+      at: '2026-09-19T00:00:00+00:00',
+      on_hand_names: 10,
+      series: [],
+      totals: [
+        { start: '2026-08-01', value: '100.00', priced_names: 8, unpriced_names: 2, gap_before: false },
+        { start: '2026-09-01', value: '120.00', priced_names: 9, unpriced_names: 1, gap_before: false },
+      ],
+      unmarked: { names: 0 },
+      sealed_excluded: { names: 0, reason: 'sealed product has no card record' },
+    }),
+  )
+  await open(page, '?period=all')
+  const polyline = page.locator('.revenue-spark polyline')
+  await expect(polyline).toBeVisible()
+  const style = await polyline.evaluate((el) => {
+    const s = getComputedStyle(el)
+    return { stroke: s.stroke, width: parseFloat(s.strokeWidth) }
+  })
+  expect(style.stroke).not.toBe('none')
+  expect(style.width).toBeGreaterThan(0)
+})
+
 test('both themes: the table stays usable and sortable in dark', async ({ page }) => {
   await stub(page, generalOrders())
   await page.emulateMedia({ colorScheme: 'dark' })

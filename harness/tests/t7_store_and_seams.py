@@ -1722,6 +1722,35 @@ def check_store_of_record(checks: Checks) -> None:
         )
 
 
+def check_skus_photos_limit(checks: Checks) -> None:
+    """Round 2 review finding: `GET /skus/photos` (`do_skus_photos`, D-sales-rows-by-sku)
+    had no server-side bound of its own — only `Revenue.tsx:PHOTO_LOOKUP_CAP` bounded what
+    the client SENDS, and a hand-typed query string could ask for any number of SKUs.
+    `SKUS_PHOTOS_LIMIT` is that same value, kept in step by hand (no shared constant
+    reaches across the TS/Python boundary here, `ORDER_NAMES_LIMIT`'s own precedent has
+    the same gap).
+    """
+    checks.note("")
+    checks.note("SKU PHOTO LOOKUP CAP — GET /skus/photos (D-sales-rows-by-sku, round 2 review)")
+
+    with isolated_home():
+        at_limit = [f"sku-{n}" for n in range(capture_server.SKUS_PHOTOS_LIMIT)]
+        answer = answers(
+            checks,
+            lambda: capture_server.do_skus_photos(at_limit),
+            "exactly the limit answers",
+        )
+        if answer is not None:
+            checks.equal(answer["photos"], {}, "none of these SKUs exist, so none photograph")
+
+        refusal(
+            checks,
+            lambda: capture_server.do_skus_photos(at_limit + ["one-more"]),
+            "too_many_skus",
+            "one SKU over the limit refuses",
+        )
+
+
 def check_photo_reclaim(checks: Checks) -> None:
     """D89: a sold card's photograph is reclaimed, the record stays, the digest stays.
 
@@ -36051,6 +36080,7 @@ def run() -> Result:
     check_open_read_only(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
+    check_skus_photos_limit(checks)
     check_server_routes(checks)
     check_drain(checks)
     check_supervisor_recovery(checks)

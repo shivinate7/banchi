@@ -10017,6 +10017,15 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
     }
 
 
+#: Round 2 review finding: the client's own `PHOTO_LOOKUP_CAP` (`Revenue.tsx`) bounded the
+#: request it SENDS, but nothing bounded what this route would ANSWER for — a hand-typed
+#: query string could ask for any number of SKUs in one call. No shared constant reaches
+#: across the TS/Python boundary here (`ORDER_NAMES_LIMIT`'s own precedent has the same
+#: gap, one bound per side), so this is `Revenue.tsx:PHOTO_LOOKUP_CAP`'s value, kept in
+#: step by hand.
+SKUS_PHOTOS_LIMIT = 40
+
+
 def do_skus_photos(skus: Sequence[str]) -> dict:
     """The first on-hand copy WITH a photograph, for each named SKU — `#/revenue`'s
     thumbnail lookup (D-sales-rows-by-sku). A sold card's own photograph is usually gone
@@ -10027,7 +10036,17 @@ def do_skus_photos(skus: Sequence[str]) -> dict:
     photographed copy on hand is simply ABSENT from the answer, never a guess and never a
     stand-in image — the client's own fallback tile covers that case. Free and read-only,
     like `do_search` above: no lock, one bounded pass per requested SKU.
+
+    REFUSES OVER `SKUS_PHOTOS_LIMIT` (round 2 review): the client's own cap bounds what it
+    SENDS, never what this route would do with a longer list a different caller sent.
     """
+    if len(skus) > SKUS_PHOTOS_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_skus",
+            f"{len(skus)} SKUs in one call, and this route answers at most "
+            f"{SKUS_PHOTOS_LIMIT}. Ask in smaller batches.",
+        )
     inventory = Store().read().inventory
     out: Dict[str, dict] = {}
     for sku in skus:

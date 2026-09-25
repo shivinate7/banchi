@@ -115,6 +115,26 @@
 .revenue-shelf-note { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); margin: 0; max-width: 260px; }
 .revenue-holdings-spark-empty { height: 56px; border-radius: var(--bn-r-sm); background: var(--bn-surface-2); }
 
+/* THE SHELF SPARK (`HoldingsSpark`). Round 2 review finding: with no rule here, its
+   `<polyline>` computed `stroke: none` at every width and in both themes — the shape never
+   painted. `PriceHistory.css`'s own `.pricehistory-spark polyline` is the pattern this
+   follows, tokens only. */
+.revenue-spark {
+  width: 100%;
+  height: 56px;
+  display: block;
+  overflow: visible;
+}
+.revenue-spark polyline {
+  fill: none;
+  stroke: var(--bn-accent);
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.revenue-spark circle { fill: var(--bn-accent); }
+
 /* ---- best sellers: podium, mix tile, board rows ------------------------------------------- */
 
 .revenue-bar-head {
