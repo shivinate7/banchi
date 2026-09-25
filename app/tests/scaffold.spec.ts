@@ -157,9 +157,17 @@ async function settle(page: Page): Promise<void> {
   await expect(page.locator('main').first(), 'the route drew no <main>').toBeVisible()
   /* A screen still loading has not drawn its frame yet. `Page` marks its body `aria-busy`
      while it loads; wait for that to clear, but never fail on it: a screen that never clears
-     it is measured as it stands. */
+     it is measured as it stands.
+     THE ROUTE'S OWN PAGE BODY, NOT ANY `aria-busy` ON THE SCREEN. `#/gallery` draws the kit's
+     loading and busy specimens, and they are busy forever on purpose. A document-wide query
+     waited the full 5s at every width there: 20s of a 30s test, measured under a 4x CPU
+     throttle, and a timeout on the slower CI runner. */
   await page
-    .waitForFunction(() => document.querySelector('[aria-busy="true"]') === null, null, { timeout: 5000 })
+    .waitForFunction(
+      () => document.querySelector('main[data-bn-page]')?.querySelector(':scope > .bn-page-body[aria-busy="true"]') == null,
+      null,
+      { timeout: 5000 },
+    )
     .catch(() => undefined)
 }
 
