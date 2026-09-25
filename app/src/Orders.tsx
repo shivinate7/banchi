@@ -6,6 +6,7 @@ import {
   FilterBar,
   HideToggle,
   Icon,
+  IconButton,
   Loading,
   matchQuery,
   Notice,
@@ -978,6 +979,8 @@ const BUYER_PARAM = 'buyer'
  *  column, everything the walk does not need folds into one line and a thin card row. It is
  *  in the URL, so entering and leaving it is a navigation (D118), and Back leaves it. */
 const WALK_PARAM = 'walk'
+/** A square the filter bar's own height, so the bar stays one line of one height (UX-217). */
+const BAR_SQUARE: CSSProperties = { width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }
 
 /** Walk one buyer: select them and enter walk mode. A NEW history entry the first time, so Back
  *  leaves the walk. Already walking, a new buyer replaces the entry. */
@@ -2161,38 +2164,22 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       className={hub.walkLine === null ? 'orders-hub orders' : 'orders-hub orders is-walking'}
       verdict={populated ? verdictOf(open) : undefined}
       lede={populated ? undefined : 'Which copies each buyer gets, and where they are.'}
+      /* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next, opening
+         the buyer list, and one press out of the walk. CSS draws it only there. Out of the walk
+         the header holds no press at all: an empty slot would still take a row at 390. */
       actions={
-        populated ? (
-          <>
-            {/* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next,
-                opening the buyer list, and one press out of the walk. CSS draws it only there. */}
-            {hub.walkLine === null ? null : (
-              <span className="orders-walkline">
-                <button type="button" className="orders-walkchip" aria-haspopup="dialog" onClick={() => setHub({ buyersOpen: true })}>
-                  <span className="orders-walkchip-text bn-facts">
-                    {hub.walkLine.map((word, at) => (
-                      <span key={at}>{word}</span>
-                    ))}
-                  </span>
-                  <Icon name="chevronDown" size={14} />
-                </button>
-                <Button variant="ghost" iconOnly icon="x" className="orders-walkleave" onClick={() => patchViewQuery({ [WALK_PARAM]: null })}>
-                  Leave the walk
-                </Button>
+        populated && hub.walkLine !== null ? (
+          <span className="orders-walkline">
+            <button type="button" className="orders-walkchip" aria-haspopup="dialog" onClick={() => setHub({ buyersOpen: true })}>
+              <span className="orders-walkchip-text bn-facts">
+                {hub.walkLine.map((word, at) => (
+                  <span key={at}>{word}</span>
+                ))}
               </span>
-            )}
-            {/* THE STORE'S OWN CONTROLS (UX-165, UX-193): fetch, paste and the two stand-downs act
-                on the whole store, so they open from the page, never from one buyer's sheet. */}
-            <Button variant="primary" icon="plus" onClick={() => setStoreOpen(true)}>
-              Add orders
-            </Button>
-            {/* The hand-off the sidebar makes, made here too: the Fulfiller's page, in its own tab. */}
-            <a className="bn-btn orders-handoff" href="#/fulfillment" target="_blank" rel="noopener">
-              <Icon name="hand" size={16} />
-              Cards to pull
-              <Icon name="external" size={14} />
-            </a>
-          </>
+              <Icon name="chevronDown" size={14} />
+            </button>
+            <IconButton icon="x" label="Leave the walk" size="xl" className="orders-walkleave" onClick={() => patchViewQuery({ [WALK_PARAM]: null })} />
+          </span>
         ) : undefined
       }
     >
@@ -2232,6 +2219,23 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         onCloseLine={onCloseLine}
         onFetch={onFetch}
         onReread={() => void reread()}
+        /* THE STORE'S OWN CONTROLS (UX-165, UX-193), two small squares on the filter bar's line
+           (the owner's plan, D-orders-and-shipping-are-two-rows). Fetch, paste and the two
+           stand-downs act on the whole store, so they open from the page, never from one
+           buyer's sheet. The second is the hand-off the sidebar makes: the Fulfiller's page, in
+           its own tab. */
+        storeControls={
+          <span className="orders-store-controls">
+            <IconButton icon="plus" label="Add orders" style={BAR_SQUARE} aria-haspopup="dialog" onClick={() => setStoreOpen(true)} />
+            <IconButton
+              icon="hand"
+              label="Cards to pull"
+              name="Cards to pull, in a new tab"
+              style={BAR_SQUARE}
+              onClick={() => window.open('#/fulfillment', '_blank', 'noopener')}
+            />
+          </span>
+        }
     />
 
       <Sheet open={storeOpen} onClose={() => setStoreOpen(false)} title="Add orders" icon="plus" className="orders-store-sheet">
@@ -2429,7 +2433,7 @@ function ReconcileBacklogPanel({
               <ul>
                 {live.map((row) => (
                   <li key={row.key}>
-                    {orderBuyerLabel(row)}, placed {dayLabel(dayOf(row))}
+                    <LabelText text={orderBuyerLabel(row)} />, placed {dayLabel(dayOf(row))}
                   </li>
                 ))}
               </ul>
@@ -2489,6 +2493,7 @@ function PullStage({
   statusControl,
   statusPanel,
   onReread,
+  storeControls,
 }: {
   readonly payload: OrdersPayload | null
   /** Every on-hand copy the store holds, keyed by sku. Null while the first read is in flight and
@@ -2508,6 +2513,8 @@ function PullStage({
   /** `Walk the boxes`' own pull and undo — `OrdersWalk.tsx`'s own shape, over the same
    *  underlying write `onPull` makes for `By buyer`. */
   readonly onWalkPull: WalkPullFn
+  /** Add orders and Cards to pull, drawn on the filter bar's own line. */
+  readonly storeControls: ReactNode
   readonly onWalkUndo: WalkUndoFn
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
@@ -3026,6 +3033,7 @@ function PullStage({
       search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search buyers' }}
       sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
       hide={unknownCount === 0 && !hideUnknown ? undefined : { checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown cards', count: unknownCount }}
+      beside={storeControls}
     />
   )
 
@@ -3043,7 +3051,7 @@ function PullStage({
               title="No buyer matches"
               body={`No buyer or order number matches “${query.trim()}”.`}
               actions={
-                <Button icon="x" onClick={() => setQuery('')}>
+                <Button variant="primary" icon="x" onClick={() => setQuery('')}>
                   Clear search
                 </Button>
               }
@@ -3418,7 +3426,7 @@ function BuyerRow({
   return (
     <button ref={ref} type="button" className="orders-index-row" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
       <span className="orders-index-main">
-        <span className="orders-index-number">{buyerLabel(group)}</span>
+        <span className="orders-index-number"><LabelText text={buyerLabel(group)} /></span>
         {status === 'ready' && group.orders.length < 2 ? null : (
           <span className="orders-index-meta">
             {status === 'ready' ? null : (
@@ -3467,7 +3475,7 @@ function OrderPanel({
     <div className="orders-panel">
       <div className="orders-panel-top">
         <div className="orders-panel-text">
-          <h2 className="orders-panel-name">{buyerLabel(group)}</h2>
+          <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
           <p className="orders-panel-order">
             {single === null ? (
               `${group.orders.length} orders`
@@ -3478,9 +3486,7 @@ function OrderPanel({
             )}
           </p>
         </div>
-        <Button variant="quiet" size="sm" icon="settings" className="orders-manage" aria-haspopup="dialog" onClick={onManage}>
-          Manage
-        </Button>
+        <IconButton icon="settings" label="Manage" name="Manage this buyer's orders" className="orders-manage" aria-haspopup="dialog" onClick={onManage} />
       </div>
       <div className="orders-panel-facts">
         <Pill tone={pill.tone} icon={pill.icon}>
@@ -3779,14 +3785,14 @@ function LineStandDown({
             Sealed product
           </Button>
         ) : (
-          <Button
+          <IconButton
             icon="undo"
+            label="Undo"
+            name="Undo: not sealed"
             busy={claiming}
             disabled={locked}
             onClick={() => onDeclareKind(order, line, null)}
-          >
-            Undo — not sealed
-          </Button>
+          />
         )}
         {owed < 1 ? null : (
           <Button
@@ -4163,6 +4169,21 @@ function CopyMapView({
 
 /* ============================================================================== a copy */
 
+/** A buyer's label as drawn. A nameless label's tail ("order …00099") is held on one line: it
+ *  broke between the ellipsis and the digits at 1440 (review, round 3). A no-break space in the
+ *  string cannot stop that break, because a line may still break after the ellipsis. */
+function LabelText({ text }: { readonly text: string }) {
+  const bound = text.indexOf('\u00a0')
+  if (bound < 0) return <>{text}</>
+  const cut = text.lastIndexOf(' ', bound) + 1
+  return (
+    <>
+      {text.slice(0, cut)}
+      <span className="orders-label-tail">{text.slice(cut)}</span>
+    </>
+  )
+}
+
 function PickLine({
   order,
   line,
@@ -4271,22 +4292,20 @@ function PickLine({
           {pick.capture_id === null ? 'This copy has no capture record, so it cannot be marked sold from here.' : 'Not offered for this reason.'}
         </span>
       ) : (
-        <Button
-          /* THE ONE PLACE THE MAP'S RANK REACHES THE BUTTON, and it is a state rather than a
-             recommendation: a copy another order is counting on is quieter than one nobody is.
-             Every other copy — offered or found in the store, near drawer or far — carries the
-             same primary Pull, because ranking is not picking. */
-          variant={text(claimedBy) ? 'default' : 'primary'}
-          size="sm"
-          icon="hand"
+        /* ONE PRESS PER ROW, THE SAME ON EVERY COPY — offered or found in the store, near drawer or
+           far — because ranking is not picking. A copy another order counts on says so in its
+           own "wanted by" words beside it. The name carries the place, so a list of rows never
+           announces the same word twice. */
+        <IconButton
+          icon="sold"
+          label="Mark sold"
+          name={`Mark sold: ${pick.place.label === null ? `box ${pick.box}` : sayPlace(pick.place.label)}`}
           className="orders-pull"
           data-capture-id={target.capture_id}
           onClick={() => onPull(order, line, pick, target)}
           busy={pressing}
           disabled={busy !== null && !pressing}
-        >
-          Mark sold
-        </Button>
+        />
       )}
     </li>
   )

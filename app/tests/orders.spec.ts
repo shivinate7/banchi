@@ -279,7 +279,7 @@ async function openManage(page: Page): Promise<void> {
  *  receipt, the status picker and both backlog stand-downs. They act on every buyer, so they are
  *  never inside one buyer's sheet. */
 async function openStore(page: Page): Promise<void> {
-  await page.locator('main.orders .bn-head').getByRole('button', { name: 'Add orders' }).click()
+  await page.locator('main.orders .orders-filterbar').getByRole('button', { name: 'Add orders' }).click()
 }
 
 /** THE FILTER BAR IS ONE LINE (the owner, 2026-09-24): every facet, the sort and the hide toggle
@@ -1732,6 +1732,37 @@ test('two unnamed buyers draw two different labels, neither the full id', async 
   await expect(names).toHaveText(['Buyer on order …00002', 'Buyer on order …00001'])
 })
 
+/* THE TAIL OF A NAMELESS LABEL NEVER BREAKS (review, round 3). At 1440 "Buyer on order …00099"
+ * broke between the ellipsis and the digits: the no-break space holds "order" to the ellipsis,
+ * but a line may still break after the ellipsis. The tail is its own no-wrap span, on the row
+ * and on the panel's title. The fixture narrows the rail's name column, so the break has room to
+ * happen where the defect was seen. */
+for (const [width, height] of [
+  [1440, 900],
+  [820, 900],
+  [390, 844],
+] as const) {
+  test(`at ${width}, a nameless buyer's "order …006AC" tail stays on one line`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    const nameless = order({ buyer: null })
+    await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
+    if (width === 390) await page.locator('.orders-buyerchip').click()
+    const scope = width === 390 ? page.locator('.orders-buyers-sheet') : page.locator(VIEW)
+    const name = scope.locator('.orders-index-number').first()
+    await expect(name).toHaveText('Buyer on order …006AC')
+    /* Squeeze the name to the width of "Buyer on order …" alone: without the no-wrap span the
+       digits drop to a line of their own. */
+    await name.evaluate((el) => {
+      ;(el as HTMLElement).style.display = 'inline-block'
+      ;(el as HTMLElement).style.width = '9ch'
+    })
+    const tail = name.locator('.orders-label-tail')
+    await expect(tail).toHaveText('order …006AC')
+    const lines = await tail.evaluate((el) => new Set([...el.getClientRects()].map((rect) => Math.round(rect.top))).size)
+    expect(lines, 'the label broke inside "order …006AC"').toBe(1)
+  })
+}
+
 test('a buyer with two open orders walks both at once — one selection, one plan, both cards', async ({ page }) => {
   /* RE-AIMED off the deleted `BuyerDetail`'s own merged walk (`buildWalk`): selecting a buyer
      now starts the SAME union directly (`useOrderWalk`'s `walkedKeys`, §13), which is why this
@@ -2413,7 +2444,7 @@ test('a done order with nothing owed still draws nothing — unchanged from befo
   await page.locator('.bn-empty').getByRole('button', { name: 'Show done buyers' }).click()
   await expect(page.locator('.orders-index-row')).toContainText('Done')
   await expect(page.locator('.orders-lines')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Pull', exact: true })).toHaveCount(0)
 })
 
 test('a terminal order that still owes copies, with no answer yet, shows a way to try again rather than nothing', async ({
@@ -3287,6 +3318,19 @@ for (const [width, height] of [
     expect(box?.height ?? 999, 'the filter bar takes more than one line').toBeLessThanOrEqual(48)
     await expect(bar.locator('.bn-filterbar-trigger')).toBeVisible()
     await expect(bar.getByRole('button', { name: /^Show/ })).toBeHidden()
+    /* Add orders and Cards to pull are two small squares ON THIS LINE (the owner's plan,
+       D-orders-and-shipping-are-two-rows), and the page header holds no press. */
+    for (const name of ['Add orders', 'Cards to pull']) {
+      const press = bar.getByRole('button', { name })
+      await expect(press).toBeVisible()
+      const square = await press.boundingBox()
+      const search = await bar.locator('.search-field-box').boundingBox()
+      expect(Math.abs((square?.width ?? 0) - (square?.height ?? 99)), `${name} is not a square`).toBeLessThanOrEqual(1)
+      expect(Math.abs((square?.height ?? 0) - (search?.height ?? 0)), `${name} is not the search's height`).toBeLessThanOrEqual(1)
+      expect((square?.y ?? 0) + (square?.height ?? 0), `${name} is off the filter bar's line`).toBeLessThanOrEqual((box?.y ?? 0) + (box?.height ?? 0) + 1)
+      expect(square?.y ?? -1, `${name} is off the filter bar's line`).toBeGreaterThanOrEqual((box?.y ?? 0) - 1)
+    }
+    await expect(page.locator(`${VIEW} .bn-head`).getByRole('button')).toHaveCount(0)
   })
 }
 

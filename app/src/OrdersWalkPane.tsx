@@ -20,7 +20,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
 import { forSale } from './cardState'
 import { Overlay } from './InventoryOverlay'
-import { Button, Icon, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
+import { Icon, IconButton, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
@@ -609,39 +609,24 @@ export function WalkList({
   )
 }
 
-/** The press on a copy row. `Undo` stands only on the newest sale (`newestUndoKey`). */
-function RowAction({ walk, copy, thin = false }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly thin?: boolean }) {
+/** The press on a copy row: an icon in every row (the iconography rule, a press repeated per
+ *  row), its name carrying the place so thirty rows never announce the same word. `Undo` stands
+ *  only on the newest sale (`newestUndoKey`). */
+function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: SearchCopy }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
-  if (receipt !== undefined) {
-    if (copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
-    return (
-      <Button
-        size="sm"
-        icon="undo"
-        iconOnly={thin}
-        title={thin ? `Undo: ${where}` : undefined}
-        busy={busy}
-        disabled={walk.busyCopy !== null && !busy}
-        onClick={() => walk.undoCopy(copy.key)}
-      >
-        {thin ? `Undo: ${where}` : 'Undo'}
-      </Button>
-    )
-  }
+  if (receipt !== undefined && copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
+  const undo = receipt !== undefined
   return (
-    <Button
-      size="sm"
-      icon={thin ? 'check' : undefined}
-      iconOnly={thin}
-      title={thin ? `Mark sold: ${where}` : undefined}
+    <IconButton
+      icon={undo ? 'undo' : 'sold'}
+      label={undo ? 'Undo' : 'Mark sold'}
+      name={`${undo ? 'Undo' : 'Mark sold'}: ${where}`}
       busy={busy}
       disabled={walk.busyCopy !== null && !busy}
-      onClick={() => walk.onSell(copy)}
-    >
-      {thin ? `Mark sold: ${where}` : 'Mark sold'}
-    </Button>
+      onClick={() => (undo ? walk.undoCopy(copy.key) : walk.onSell(copy))}
+    />
   )
 }
 
@@ -730,7 +715,7 @@ export function WalkCardPane({
         </span>
         {here === null ? null : (
           <span className="orders-card-thin-action">
-            <RowAction walk={walk} copy={here} thin />
+            <RowAction walk={walk} copy={here} />
           </span>
         )}
       </div>

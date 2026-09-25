@@ -8980,7 +8980,8 @@ COMPONENTS = [
                                                      "D91", "D93", "D96", "D103", "D113", "D114",
                                                      "D118", "D123", "D132", "D181", "D193", "D194",
                                                      "D196", "D203", "D209", "D212", "D218", "D220",
-                                                     "D221", "D-view-state-in-url"]},
+                                                     "D221", "D-orders-and-shipping-are-two-rows",
+                                                     "D-view-state-in-url"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "

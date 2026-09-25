@@ -307,6 +307,10 @@ test('only the newest pull in the walk offers Undo — the older one reads Sold'
   const wire = await open(page)
 
   const rows = page.locator('.orders-card-copy')
+  /* THE SLOT HOLDS EVERY STATE (D118): the Mark sold icon, the Undo icon and the Sold pill all
+     fit the one reserved width, so a press never moves the place beside it. */
+  const slotWidth = () => rows.nth(0).locator('.orders-card-action').evaluate((el) => Math.round(el.getBoundingClientRect().width))
+  const atRest = await slotWidth()
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
 
@@ -321,6 +325,7 @@ test('only the newest pull in the walk offers Undo — the older one reads Sold'
   await expect(rows.nth(1).getByRole('button', { name: 'Undo' })).toBeVisible()
   await expect(rows.nth(0).getByRole('button', { name: 'Undo' })).toHaveCount(0)
   await expect(rows.nth(0).locator('.bn-pill', { hasText: 'Sold' })).toBeVisible()
+  expect(await slotWidth(), 'the Sold pill widened the action slot').toBe(atRest)
 })
 
 /* -------------------------------------------------------------------------------------- 2 */

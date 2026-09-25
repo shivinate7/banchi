@@ -221,6 +221,10 @@ export function FilterBar<K extends string = string>({
                  finding: before IconButton, the count sat in the button's own text. */
               name={badge > 0 ? `${label}, ${badge} on` : label}
               badge={badge > 0 ? badge : undefined}
+              /* One height with the search beside it (UX-217, FLT-24), through the same inline
+                 `style` SortControl's direction uses: a 28px face beside a 34px field broke the
+                 one-line bar on #/orders. */
+              style={{ width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }}
               className="bn-filterbar-trigger"
               aria-haspopup="dialog"
               aria-expanded={sheetOpen}

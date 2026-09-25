@@ -88,21 +88,21 @@ own "Add orders" sheet. The panel's `Manage` keeps only that buyer's own orders.
   390x844, and from 815 px (91%) to 154 px (17%) at 720x900. The owner accepted it as built:
   "much better, a little overkill, but much better than before".
 
+- **The two header presses are small square icon buttons** (the owner's plan, 2026-09-24,
+  built 2026-09-25):
+
+  ```
+  add orders and cards to pull ought to be mini square buttons that'll fit on the same line
+  eventually i'd imagine, but that can happen later (as long as you RECORD taht somewhere)
+  ```
+
+  "Add orders" and "Cards to pull" are kit `IconButton`s, each with a tooltip and an accessible
+  name. They sit on the one-line filter bar, beside the search, in its `beside` slot. The header
+  keeps the title, and in walk mode the walk line. "Cards to pull" opens the Fulfiller's page
+  in a new tab, as the sidebar's own row does.
+
 `app/tests/orders.spec.ts` and `app/tests/order-walk.spec.ts` assert each part. They check
 the widths 1440, 820, 720 and 390.
-
-### Planned, not built
-
-**The two header presses become small square icon buttons.** The owner's words, 2026-09-24:
-
-```
-add orders and cards to pull ought to be mini square buttons that'll fit on the same line
-eventually i'd imagine, but that can happen later (as long as you RECORD taht somewhere)
-```
-
-The plan: once the kit's `IconButton` merges (the kit-icons lane), "Add orders" and "Cards to
-pull" become small square `IconButton`s, each with a tooltip and an accessible name. They sit on
-the same line as the one-line filter bar, and the page header keeps only the title.
 
 ### What is still open
 

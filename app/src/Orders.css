@@ -5,8 +5,8 @@
 
 .orders-hub .bn-verdict strong { color: var(--bn-ink); font-weight: 700; }
 .orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
-.orders-handoff .bn-icon:last-child { color: var(--bn-ink-4); }
-.orders-handoff { min-height: var(--bn-control-h-lg); }
+/* Add orders and Cards to pull: two small squares on the filter bar's line. */
+.orders-store-controls { display: inline-flex; align-items: center; gap: var(--bn-2); }
 .orders-card-market { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-card-market .bn-money { color: var(--bn-ink-2); }
 
@@ -169,7 +169,7 @@
 .orders-walkchip:hover { border-color: var(--bn-ink-3); }
 .orders-walkchip-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orders-walkchip-text > span:first-child { font-weight: 600; }
-.orders-walkleave { flex: none; min-height: var(--bn-control-h-lg); min-width: var(--bn-control-h-lg); }
+.orders-walkleave { flex: none; }
 /* The thin card row: thumbnail, name, place and the Mark sold icon. The thumbnail opens the
    photograph. */
 .orders-card-thin { align-items: center; gap: var(--bn-3); min-height: var(--bn-control-h-lg); }
@@ -262,6 +262,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 /* A NAME WRAPS, never an ellipsis: "Buyer on order …00012" cut to "Buyer on order …0…" named
    nobody (review, UX-268). */
 .orders-index-number { font-size: var(--bn-fs-md); font-weight: 600; overflow-wrap: break-word; }
+.orders-label-tail { white-space: nowrap; }
 .orders-index-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .orders-index-count { flex: none; }
 .orders-index-figure { font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -282,7 +283,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-panel-order { display: flex; gap: 0.3em; min-width: 0; }
 .orders-panel-facts { display: flex; align-items: center; flex-wrap: wrap; gap: var(--bn-3) var(--bn-5); }
 .orders-panel-figures { display: flex; gap: var(--bn-5); }
-.orders-manage { min-height: var(--bn-control-h-lg); }
 .orders-walk-note {
   display: flex;
   align-items: flex-start;
@@ -391,7 +391,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-card-copy.is-current { background: var(--bn-accent-tint); }
 .orders-card-place { min-width: 0; }
 /* The action slot holds the widest of its states, so a press never moves the row (D118). */
-.orders-card-action { flex: none; display: inline-flex; justify-content: flex-end; min-width: 7.5rem; }
+.orders-card-action { flex: none; display: inline-flex; justify-content: flex-end; min-width: 4.5rem; }
 @container orders (min-width: 1000px) {
   .orders-card-top { grid-template-columns: minmax(0, 1fr); }
   .orders-card-shot { max-width: 260px; }
@@ -399,9 +399,8 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 
 /* ---- 40px hit areas at every width (UX-267) ------------------------------------------ */
 .orders-walkall,
-.orders-manage,
 .orders-walk-tools .bn-btn,
-.orders-card-action .bn-btn { min-height: var(--bn-control-h-lg); }
+.orders-card-action .bn-btn:not(.bn-icon-btn) { min-height: var(--bn-control-h-lg); }
 
 /* ---- the stand-down legend, said once per sheet (UX-240) ------------------------------ */
 .orders-manage-legend {
@@ -849,7 +848,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 }
 .orders-pick-held .bn-mono { font-size: var(--bn-fs-xs); color: var(--bn-ink-2); }
 .orders-pick-held .bn-icon { color: var(--bn-warn); }
-.orders-pull { min-width: 72px; }
 
 /* ---- the fold, and the two notes under a line's rows ------------------------------------ */
 /* A LINE'S COPIES ARE ALL DRAWN AND SOME ARE FOLDED. Six rows are on screen; past eight the rest
@@ -906,8 +904,6 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   .orders-pick { grid-template-columns: auto minmax(0, 1fr); row-gap: var(--bn-2); }
   .orders-pick > :last-child { grid-column: 1 / -1; justify-self: start; }
   .orders-pick-held { white-space: normal; }
-  /* The one control this screen exists for, sized for a thumb: the full row and 40px+ tall. */
-  .orders-pick > .orders-pull { justify-self: stretch; width: 100%; justify-content: center; min-height: var(--bn-control-h-lg); }
 }
 
 /* ---- the way in: paste + fetch -------------------------------------------------- */
