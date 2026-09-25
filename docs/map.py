@@ -5041,6 +5041,30 @@ COMPONENTS = [
                         "(D18: that target is a press, run by hand).",
                 "governed_by": ["D16", "D18"],
             },
+            "extract_demo_data.py": {
+                "does": "queries the snapshot of the owner's real store, extracting card "
+                        "facts (names, sets, numbers, rarities, SKUs, market prices, state) "
+                        "without personal data. Identifies edge cases: unsent cards with no "
+                        "market price, high-value cards ($5+), multi-condition variants, and "
+                        "cards with sales history. Output is a JSON file for analysis, not "
+                        "committed — inspection only, to understand the data we are working with.",
+                # D18: read-only analysis script, no write output committed. Used to plan demo
+                # data extraction strategy.
+                "governed_by": ["D18"],
+            },
+            "extract_real_card_facts.py": {
+                "does": "queries the snapshot of the owner's real store, extracting real card "
+                        "facts (names, sets, numbers, rarities, SKUs, market prices, sold/on-hand "
+                        "counts) without personal data (no buyer names, addresses, emails, or "
+                        "order numbers). Categorizes 916 unique SKUs by case: high-value cards "
+                        "($5+), unsent with no price, multi-condition variants, and sales history. "
+                        "Writes a single JSON file (real_card_facts.json) that tracks how many "
+                        "cards from the owner's data are used in the demo.",
+                # D18: writes real_card_facts.json which is tracked, not committed to the build.
+                # D43 isolates reads to a snapshot copy. Used to populate demo with owner's real
+                # card data while maintaining determinism.
+                "governed_by": ["D18", "D43"],
+            },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
