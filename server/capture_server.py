@@ -2103,6 +2103,9 @@ def _optional_box_state(payload: dict) -> Optional[str]:
     return raw.strip()
 
 
+_QUERY_LENGTH_CAP = 200
+
+
 def _require_query(query: str) -> str:
     """The search text, or a refusal. Whitespace is not a search.
 
@@ -2110,6 +2113,17 @@ def _require_query(query: str) -> str:
     that calls this draws a row per copy with a photo behind each one, and "the operator
     cleared the box" is not a request for all of it — `store/queues.py` makes the same call
     for the same reason when it declines to treat an empty queue as a full one.
+
+    A LONG `q` IS ALSO REFUSED (F1, the Opus review, 2026-09-25). `match.py:_cover` is now
+    memoized so one call is O(tokens), but `do_search` still runs a real SQL query PER TERM
+    for `_fts_slash_candidates`/`_fts_fold_candidates`, and a term with no real card behind
+    it can be typed by the thousand — `_QUERY_LENGTH_CAP` bounds the cost of ANY single
+    request, memoization or not, the same way a body-size limit bounds a POST regardless of
+    how cheap the handler behind it became. 200 characters is generous against every real
+    field this route ever compares against (`store/master.py:Card`'s longest text field, a
+    note, and the longest order label this repo has ever composed both fit inside a tenth
+    of it) and small against `harness/tests/t7_store_and_seams.py`'s own 100+ character
+    stress case for `_cover`'s own timing.
     """
     text = (query or "").strip()
     if not text:
@@ -2117,6 +2131,13 @@ def _require_query(query: str) -> str:
             HTTPStatus.BAD_REQUEST,
             "query_required",
             "Send `q` — a name, a collector number, a SKU or a set hint to look for.",
+        )
+    if len(text) > _QUERY_LENGTH_CAP:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "query_too_long",
+            f"`q` is {len(text)} characters; the limit is {_QUERY_LENGTH_CAP}. Search for "
+            "a name, a collector number, a SKU or a set hint, not a whole sentence.",
         )
     return text
 

@@ -66,6 +66,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import List
 
@@ -183,6 +184,31 @@ def case_match_rank_folds_accents() -> None:
     card = _card(name="Flabébé")
     rank = cs._match_rank(card, "flabebe")
     check(rank is not None, "'flabebe' matches a card named Flabébé")
+
+
+def case_match_query_stays_fast_on_repeated_tokens() -> None:
+    """F1, BLOCKING (round-3 Opus review, 2026-09-25). `_cover` tried both the
+    single-token and the pair branch at every position, and each branch recursed into
+    the rest of the tokens — the same `at` got solved again from scratch by every path
+    that reached it, growing like Fibonacci. `("132 " * 27 + "/132 /999")` against a
+    card whose number is `132/132` measured at 3.9s (the review's own number); this
+    machine measured 7.8s before the memoization fix. Asserted against a bound generous
+    enough to survive a slower CI runner but nowhere near the un-memoized cost, so a
+    regression here fails LOUD rather than merely slow.
+    """
+    from server import match
+
+    fields = {"numbers": ["132/132"]}
+    query = "132 " * 27 + "/132 /999"
+    start = time.monotonic()
+    result = match.match_query(query, fields)
+    took = time.monotonic() - start
+    equal(result, False, "27 repeated '132' tokens plus two unmatched ones do not cover")
+    check(
+        took < 1.0,
+        f"match_query on 26 terms took {took:.3f}s, under the 1.0s bound "
+        "(un-memoized: 3.9-7.8s measured)",
+    )
 
 
 def case_match_digit_tests_are_ascii_only() -> None:
@@ -394,6 +420,31 @@ def case_do_search_multiword_never_500s_next_to_a_widened_word() -> None:
             bad(f"do_search({query!r}) raised {type(exc).__name__}: {exc}")
 
 
+def case_do_search_refuses_a_query_past_the_length_cap() -> None:
+    """F1, BLOCKING. A length cap on top of the memoization fix: `do_search` still runs
+    one real SQL scan per term for the slash-suffix and punctuation-fold candidate
+    widenings, so a query with thousands of terms is still costly even once `_cover`
+    itself is O(tokens). `_require_query` refuses anything over
+    `capture_server._QUERY_LENGTH_CAP` characters, named rather than truncated, so a
+    caller can tell a refusal from a search that found nothing.
+    """
+    fresh_home()
+    from server import capture_server as cs
+
+    caught = None
+    try:
+        cs.do_search("x" * (cs._QUERY_LENGTH_CAP + 1))
+    except cs.BadRequest as exc:  # noqa: BLE001 — the refusal IS the assertion
+        caught = exc
+    check(caught is not None, "a query past the length cap refuses rather than running")
+    if caught is not None:
+        equal(caught.code, "query_too_long", "and the refusal names itself")
+    check(
+        bool(cs.do_search("x" * cs._QUERY_LENGTH_CAP)),
+        "and a query AT the cap still runs — the refusal is strictly OVER it",
+    )
+
+
 def case_do_search_still_refuses_an_unrelated_number() -> None:
     """The widened FTS5 candidate query must not turn into a false positive end to end —
     the same rule 4 guarantee as group 2, proved through the real index this time."""
@@ -415,9 +466,11 @@ CASES = [
     case_match_rank_folds_a_hyphen_standing_for_the_slash,
     case_match_rank_folds_accents,
     case_match_digit_tests_are_ascii_only,
+    case_match_query_stays_fast_on_repeated_tokens,
     case_do_search_finds_a_padded_number_typed_without_its_zeros,
     case_do_search_finds_a_hyphenated_name,
     case_do_search_multiword_never_500s_next_to_a_widened_word,
+    case_do_search_refuses_a_query_past_the_length_cap,
     case_do_search_still_refuses_an_unrelated_number,
     case_do_search_runs_the_shared_case_table,
 ]

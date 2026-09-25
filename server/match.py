@@ -294,17 +294,42 @@ def _pair_match(left: str, right: str, row: _Prepared) -> bool:
     )
 
 
-def _cover(tokens: Sequence[str], at: int, row: _Prepared) -> bool:
-    if at >= len(tokens):
-        return True
-    one = tokens[at]
-    if _token_match(one, row) and _cover(tokens, at + 1, row):
-        return True
-    if at + 1 < len(tokens):
-        two = tokens[at + 1]
-        if _pair_match(one, two, row) and _cover(tokens, at + 2, row):
+def _cover(tokens: Sequence[str], row: _Prepared) -> bool:
+    """Rule 3: can every token be covered, in order, by the single-token rule or the
+    pair rule?
+
+    MEMOIZED ON `at` (F1, the Opus review, 2026-09-25). The un-memoized version tries
+    BOTH the single-token branch and the pair branch at every position, and each branch
+    recurses into the rest of the tokens — the same sub-problem (`at+1` from the single
+    branch consuming one token, and again from wherever the pair branch's own single-try
+    lands two tokens later) gets solved again from scratch every time a caller reaches it
+    by a different path, which is exactly what makes Fibonacci's own recursion
+    exponential. Measured: `("132 " * 27 + "/132 /999")` against a card whose number is
+    `132/132` took 3.9s at 26 terms, uncached. `at` alone decides the rest of the answer
+    — `tokens` and `row` are fixed for the one `match_query` call this closes over — so a
+    dict keyed on `at` turns the call tree back into a line: at most `len(tokens) + 1`
+    distinct calls, never two of the same `at` doing the work twice.
+    """
+    memo: Dict[int, bool] = {}
+
+    def cover(at: int) -> bool:
+        if at in memo:
+            return memo[at]
+        if at >= len(tokens):
+            memo[at] = True
             return True
-    return False
+        one = tokens[at]
+        result = False
+        if _token_match(one, row) and cover(at + 1):
+            result = True
+        if not result and at + 1 < len(tokens):
+            two = tokens[at + 1]
+            if _pair_match(one, two, row) and cover(at + 2):
+                result = True
+        memo[at] = result
+        return result
+
+    return cover(0)
 
 
 _EDGE_PUNCT_KEEP = "#/"
@@ -335,4 +360,4 @@ def match_query(query: str, fields: MatchFields) -> bool:
     tokens = query_tokens(query)
     if not tokens:
         return True
-    return _cover(tokens, 0, _prepare(fields))
+    return _cover(tokens, _prepare(fields))

@@ -218,13 +218,32 @@ function pairMatch(left: string, right: string, row: Prepared): boolean {
   return numberMatch(`${left}/${right}`, row) || numberMatch(`${left}${right}`, row)
 }
 
-/** Can the tokens from `at` on all be matched, singly or in neighbouring pairs? */
-function cover(tokens: readonly string[], at: number, row: Prepared): boolean {
-  if (at >= tokens.length) return true
+/** Can the tokens from `at` on all be matched, singly or in neighbouring pairs?
+ *
+ * MEMOIZED ON `at` (F1, the Opus review, 2026-09-25, matching `server/match.py:_cover`'s
+ * own fix). The un-memoized version tries both the single-token branch and the pair
+ * branch at every position, and each branch recurses into the rest of the tokens — the
+ * same `at` gets solved again from scratch every time a different caller reaches it,
+ * which is what makes the call tree grow like Fibonacci. `tokens` and `row` are fixed
+ * for one top-level call, so `at` alone decides the rest of the answer. `memo` defaults
+ * to a fresh `Map` per top-level call (`matchQuery`/`filterByQuery`, both still call this
+ * with two arguments) and is threaded through explicitly on every recursive call, so one
+ * row's cache is never read by another row's. */
+function cover(tokens: readonly string[], at: number, row: Prepared, memo: Map<number, boolean> = new Map()): boolean {
+  const cached = memo.get(at)
+  if (cached !== undefined) return cached
+  if (at >= tokens.length) {
+    memo.set(at, true)
+    return true
+  }
   const one = tokens[at] as string
-  if (tokenMatch(one, row) && cover(tokens, at + 1, row)) return true
-  const two = tokens[at + 1]
-  return two !== undefined && pairMatch(one, two, row) && cover(tokens, at + 2, row)
+  let result = tokenMatch(one, row) && cover(tokens, at + 1, row, memo)
+  if (!result) {
+    const two = tokens[at + 1]
+    result = two !== undefined && pairMatch(one, two, row) && cover(tokens, at + 2, row, memo)
+  }
+  memo.set(at, result)
+  return result
 }
 
 /** Does this row match this query? Every token must match, in any order (rules 2 to 7). */
