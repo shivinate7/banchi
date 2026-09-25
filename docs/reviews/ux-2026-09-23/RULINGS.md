@@ -329,3 +329,112 @@
 - Owner, 2026-09-24: Opus was used too generously. Opus is reserved for planning,
   money/TCGplayer/store-data adversarial reviews, and whole-flow or merge builders. Sonnet
   covers screen builders, screen reviewers, fix rounds and verification.
+- Orders review failed, blocking: the stand-down preview drops today's orders while the press
+  sends a future cutoff instead. The fix round goes to the same builder, and stays on Opus,
+  since the item can close live orders.
+- Owner, 2026-09-24, Orders walk at narrow widths. The owner's words:
+
+  ```
+  try being super shrunk instead, and look at how much space is wasted by stuff i dont need
+  to see when im in the order walk hogging real estate
+  ```
+
+  Build: measure the space above the walk, then add a walk mode below 1000px. That mode
+  carries a slim title, Filters behind one button, and the buyer chip. It also carries a
+  one-line header, the card as a thin row, and the walk filling the screen. Before-and-after
+  shots go to the owner.
+- Owner, 2026-09-24, on filter bars and headers generally. The owner's words:
+
+  ```
+  well i think add orders, cards to pull, and all the filters, i question whether they
+  deserve all that real estate frankly it's egregious i imagined we had a plan to tighten
+  them up immensely
+  ```
+
+  And:
+
+  ```
+  literally 50% of the phone view is a wasted upper currently
+  ```
+
+  System rule, from this ruling: every filter bar holds one line, search plus one Filters
+  button with a count badge. Facets and sort move into the popover. A page header holds at most
+  one worded primary action, with every other action an IconButton or folded into a More menu.
+  Orders goes first, with before-and-after shots to the owner. A small kit lane then
+  makes the filter bar's one-line popover the default, and adds a kit-adoption rule that caps
+  header actions, after kit-icons merges. Every later screen lane applies the rule.
+- Owner asked, 2026-09-24, whether the tightening reaches current screens, not only new ones.
+  Yes: the kit's default flip, and a check that lists every current offender by lane. A lane
+  counts as done only once its own entries leave that list (`BUILD-BRIEF.md`).
+- Inventory review failed on three blocking items: an endless loader stops three route sweeps,
+  a sold row folds on click, and the rail reorders on a sale. Round 2 goes to a fresh Sonnet
+  builder, by the owner's own Opus rule, on branch `ux/inventory-r2`. UX-252 stays with the undo
+  session. The value sort builds in this round. Set-name and slug search belong to the
+  search-server lane.
+- Owner, 2026-09-24, on the walk-mode shots. The owner's words:
+
+  ~~~
+  much better, a little overkill, but much better than before, i think you'd need ot send
+  another ui/ux agent to independently review to make it better than this, and i don't think
+  we have the budget for that right so probably deferring further editing is better on that
+  ~~~
+
+  Accepted as built. An independent UI/UX review of walk mode is deferred until budget allows,
+  and sits on the follow-up list under no lane's ownership.
+- Owner, 2026-09-24, Capture UX-069: pin the shutter, so a field opening above it never moves
+  it.
+- Owner, 2026-09-24, Capture UX-076. The owner asked:
+
+  ```
+  do we have that data? if so name the reason
+  ```
+
+  We do, from the server's own halt code. Each known code gets a headline and a way to resume.
+  An unknown code keeps its generic wording.
+- Orchestrator call: Capture header tightening stops at the measured 9.4px gain. The owner
+  deferred further tuning.
+- Owner, 2026-09-24, Capture motion mode. The owner's words:
+
+  ```
+  i'd love it if when i'm on motino mode i get a pause button and/or a super prominent / easy
+  way (maybe spacebar) to just turn off the motion mode ... if there was just a pause play of
+  motion by one press that'd be a game change
+  ```
+
+  Built in the capture lane: a prominent Pause and Resume toggle, plus a one-key toggle, in
+  `SHORTCUTS`. Pausing stops firing only. The trigger's own arithmetic stays untouched.
+- Owner correction, 2026-09-24. The owner's words:
+
+  ```
+  we shouldn't change any actions from how it operates now, this pause button should
+  literally be like if i switched it off motion mode and play being switching it back onto
+  motion mode
+  ```
+
+  Pause is the existing switch to key mode. Play is the existing switch back to motion mode,
+  through that same code path. There is no new state and no new behaviour.
+- Owner, 2026-09-24. The owner's words:
+
+  ```
+  add orders and cards to pull ought to be mini square buttons that'll fit on the same line
+  eventually i'd imagine, but that can happen later (as long as you RECORD taht somewhere)
+  ```
+
+  Orders' "Add orders" and "Cards to pull" become small square IconButtons on the same line as
+  the one-line filter bar, once kit-icons merges. This is recorded as planned in
+  `D-orders-and-shipping-are-two-rows` and in `LANES.md`.
+- Owner, 2026-09-24. The owner's words:
+
+  ```
+  once reviews are passed and ci is green, you have my permission to merge
+  ```
+
+  The owner then named this session Orchestrator for PR 1 only. PR 1 merges with
+  `make merge ARGS="<n> --confirm"`, a real GitHub merge, never `--admin`. It merges only after
+  both the Opus merge review and the Sonnet screen pass report a pass, with CI green. The grant
+  does not reach PR 2 or any other PR.
+- Owner, 2026-09-24: tell "Photo issues analysis" when PR 1 merges, and treat it as a teammate.
+  On merge, message it the merge commit, main's new SHA, the schema number, and the list of
+  files PR 1 touched.
+- Owner, 2026-09-24: a definitive ruling, finding or plan gets committed out of the scratchpad
+  and into the repo, by every agent, this session included. The scratchpad is temporary.
