@@ -785,6 +785,11 @@ export function BoxBrowse({
     setMapEl(node)
   }, [])
   const boxesRef = useRef<HTMLDivElement | null>(null)
+  /** N3: set by `selectShelf` alone, right before `setShelf`, so the rail's own scroll-into-view
+   *  effect below skips exactly one run — the one a direct press on a row already caused to be
+   *  on screen. Every other `setShelf` caller (a walk-to, a deep link) leaves it unset, because
+   *  those targets may genuinely be off screen and still need bringing into view. */
+  const skipRailScroll = useRef(false)
   const jumpRef = useRef<string | null>(null)
   const [jump, setJump] = useState<string | null>(null)
   const askedAt = useRef<number | null>(null)
@@ -1401,8 +1406,14 @@ export function BoxBrowse({
     jumpRef.current = null
   }, [selected, visible])
 
-  /* And the selected box, in a box list long enough to scroll. */
+  /* And the selected box, in a box list long enough to scroll — UNLESS a direct press put it
+     there (N3, D118): the operator can already see a row they just pressed, so scrolling the
+     rail in answer to their own click moves it under the hand that pressed it. */
   useEffect(() => {
+    if (skipRailScroll.current) {
+      skipRailScroll.current = false
+      return
+    }
     const current = boxesRef.current?.querySelector('[aria-current="true"]')
     if (current instanceof HTMLElement) scrollWithin(current, boxesRef.current, 'nearest')
   }, [shelf])
@@ -1458,6 +1469,9 @@ export function BoxBrowse({
      * #404's regression). Marked before `setShelf` so the row-hold below never stands on
      * the box the operator just left. */
     shelfSource.current = 'manual'
+    /* N3: the row named here is a row the operator is already looking at (they just pressed
+       it), so the rail's own scroll-into-view effect skips this one run. */
+    skipRailScroll.current = true
     setShelf(next)
     if (typeof next === 'number') touchBox(next)
     let landingKey: string | undefined

@@ -6276,6 +6276,42 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
   await expect(names).toHaveText(['Bulk', 'Box 7', 'ME01 commons', 'Twelve too'])
 })
 
+test('N3 — pressing a box does not scroll the box rail', async ({ page }) => {
+  /* A rail long enough to scroll, viewport short enough to force it — the shape the finding
+   * was measured on. Box #4, pressed below, sits partly past the rail's own visible foot —
+   * genuinely off by a few pixels, which is exactly the shape the old "nearest" scroll-into-
+   * view answered by moving every OTHER row under a press that named only this one.
+   *
+   * `dispatchEvent('click')` RATHER THAN `.click()`: Playwright's own click performs its own
+   * scroll-into-view first when a target is not fully in the (real, 700px-tall) viewport, which
+   * would measure ITS scrolling rather than the product's — this element sits inside a much
+   * shorter INNER scroller (`.browse-boxes`), so a native click on it, unlike Playwright's,
+   * never needs a page-level scroll first. */
+  const many = Array.from({ length: 20 }, (_, i) => ({
+    ...BOXES.boxes[0],
+    box: i + 1,
+    name: `Box ${i + 1} name`,
+    sections: [],
+    sections_detail: [{ section: 1, start: 1, end: 5, count: 5 }],
+  }))
+  await page.setViewportSize({ width: 1440, height: 700 })
+  await open(page, { boxes: many }, STORE, () => PRICING, SALE, {
+    route: '/#/inventory?box=1',
+    settle: '.browse-boxcell',
+  })
+
+  const rail = page.locator('.browse-boxes')
+  const cells = page.locator('.browse-boxcell')
+  await expect(cells).toHaveCount(20)
+  const scrollTopBefore = await rail.evaluate((el) => el.scrollTop)
+
+  await cells.nth(3).dispatchEvent('click')
+  await expect(cells.nth(3)).toHaveAttribute('aria-current', 'true')
+
+  const scrollTopAfter = await rail.evaluate((el) => el.scrollTop)
+  expect(scrollTopAfter, 'the rail scrolled under a press').toBe(scrollTopBefore)
+})
+
 test('D132 — the address leads with the name and the index is its note, on the row the walk stands on and on every other', async ({ page }) => {
   await open(page)
   await expandAll(page)

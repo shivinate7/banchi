@@ -7816,6 +7816,16 @@ def check_inventory_facet_cells(checks: Checks) -> None:
             inv.cards[b.key].state = master.SOLD
             c, _ = inv.allocate_capture(2, game="pokemon", cid=fake_cid("cell-c"))
             inv.cards[c.key].set_name, inv.cards[c.key].rarity = None, "Rare"
+            # N1: `gone_states` NAMES ALL THREE OF D26/D83's DOORS, and until this the fixture
+            # only ever walked one of them through — a regression narrowing `gone_states` to
+            # `{SOLD}` alone would still pass every check above. Own boxes, so each is its own
+            # cell rather than folding into `b`'s.
+            d, _ = inv.allocate_capture(3, game="riftbound", cid=fake_cid("cell-d"))
+            inv.cards[d.key].set_name, inv.cards[d.key].rarity = "Unleashed", "Rare"
+            inv.cards[d.key].state = master.RETIRED
+            e, _ = inv.allocate_capture(4, game="riftbound", cid=fake_cid("cell-e"))
+            inv.cards[e.key].set_name, inv.cards[e.key].rarity = "Unleashed", "Rare"
+            inv.cards[e.key].state = master.MOVED
 
         cells = capture_server.do_boxes()["facet_cells"]
         seen = sorted(
@@ -7828,13 +7838,16 @@ def check_inventory_facet_cells(checks: Checks) -> None:
                 (1, "riftbound", "Unleashed", "Rare", False, 1),
                 (1, "riftbound", "Unleashed", "Rare", True, 1),
                 (2, "pokemon", None, "Rare", False, 1),
+                (3, "riftbound", "Unleashed", "Rare", True, 1),
+                (4, "riftbound", "Unleashed", "Rare", True, 1),
             ],
-            "one cell per box, game, set, rarity and gone: the sold copy is its own cell, and the "
-            "Pokemon card with no set keeps a null set rather than being dropped",
+            "one cell per box, game, set, rarity and gone: the sold, retired and moved copies "
+            "are each their own cell, and the Pokemon card with no set keeps a null set rather "
+            "than being dropped",
         )
         checks.equal(
             sum(cell["count"] for cell in cells),
-            3,
+            5,
             "and the cells add up to every card in the store, so no count on the screen can "
             "miss one",
         )
