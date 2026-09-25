@@ -801,6 +801,13 @@ test('a typed-into field darkens its edge under the pointer, and nothing moves',
   })
 
   await field.hover()
+  /* THE EDGE EASES (`base.css`'s response floor animates border-color), so one read taken the
+     instant the pointer lands can still see the resting color: the full suite's load caught it
+     once at the PR 2 integration. The read waits for the transition to move, and the claim is
+     unchanged: the edge responds, and nothing moves. */
+  await expect
+    .poll(() => field.evaluate((el) => getComputedStyle(el).borderTopColor), { message: 'the edge must respond to the pointer' })
+    .not.toBe(before.color)
   const after = await field.evaluate((el) => {
     const cs = getComputedStyle(el)
     const b = el.getBoundingClientRect()
