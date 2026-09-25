@@ -660,6 +660,27 @@ export function WalkCardPane({
   }, [mock, mockRun, mockSku])
 
   if (currentGroup === null || currentRow === null) return null
+  const stubKey = currentCard === null ? '' : `${currentCard.box}/${currentCard.index}`
+  const shownMarket: MarketRead | undefined =
+    currentCard === null
+      ? market
+      : { kind: 'table', at: Date.now() / 1000 - 2 * 86400, rows: { ...(market?.kind === 'table' ? market.rows : {}), [stubKey]: '4.20' } }
+  const stubSku = currentRow.take.sku
+  const shownListings: Record<string, Listing> = {
+    ...listings,
+    [stubSku]: {
+      sku: stubSku,
+      condition: 'Near Mint Foil',
+      pushed: 3,
+      staged: 0,
+      live: 3,
+      at: new Date(Date.now() - 2 * 86400000).toISOString(),
+      staged_at: null,
+      live_as_of: new Date(Date.now() - 2 * 86400000).toISOString(),
+      sold_here: 0,
+      sold_here_at: null,
+    } as Listing,
+  }
   const take = currentRow.take
   /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
   const row: Row | null =
@@ -706,11 +727,11 @@ export function WalkCardPane({
         <p className="orders-card-sub">
           <Money
             value={(() => {
-              const raw = market?.kind === 'table' ? market.rows[`${currentCard.box}/${currentCard.index}`] : null
+              const raw = shownMarket?.kind === 'table' ? shownMarket.rows[`${currentCard.box}/${currentCard.index}`] : null
               return raw === null || raw === undefined ? null : Number(raw)
             })()}
           />{' '}
-          market, {listings[take.sku]?.live ?? 0} live
+          market, {shownListings[take.sku]?.live ?? 0} live
         </p>
       ) : null}
       <ul className="orders-card-copies" aria-label="Every copy of this card">
@@ -730,7 +751,7 @@ export function WalkCardPane({
           )
         })}
       </ul>
-      {mock === 'C' && row !== null ? <CardDetailsSection card={row.card} market={market} listings={listings} phone={window.innerWidth < 640} /> : null}
+      {mock === 'C' && row !== null ? <CardDetailsSection card={row.card} market={shownMarket} listings={shownListings} phone={window.innerWidth < 640} /> : null}
       {!zoomed || row === null ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img
