@@ -30,6 +30,24 @@
 .orders-cardcol { grid-area: card; min-width: 0; }
 .orders-walk { grid-area: walk; min-width: 0; }
 
+/* The skip link (interaction review, "32 tab stops"): off screen until a Tab lands on it, then
+   one press moves focus past the filter bar and the buyer list to the walk. */
+.orders-skip-link {
+  position: fixed;
+  top: var(--bn-2);
+  left: var(--bn-2);
+  z-index: 100;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  transform: translateY(-200%);
+  transition: transform var(--bn-t-fast) var(--bn-ease);
+}
+.orders-skip-link:focus-visible { transform: none; }
+
 /* ---- the phone's one line (UX-194) ------------------------------------------------ */
 .orders-buyerchip {
   grid-area: chip;

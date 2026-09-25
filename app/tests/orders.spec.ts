@@ -3167,3 +3167,26 @@ test('Manage says once what each stand-down press does, in words, with no code o
   /* THE BRAND AS TCGplayer, whatever case the feed sent it in. */
   expect(text).toContain('TCGplayer says')
 })
+
+/* ------------------------------------------------------------ a buyer finished (UX-197) */
+
+test('the last sale leaves the buyer on screen, says all sold, and points to Shipping', async ({ page }) => {
+  /* The second read answers the order closed: the ledger has every copy. The buyer must not
+     vanish from under the hand (FLT-22), and the walk says what is next. */
+  let readCalls = 0
+  await open(page, {
+    orders: () =>
+      readCalls++ === 0
+        ? oneOpenOrder()
+        : payloadOf([order({ recorded: 1, open: false })], []),
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+    walkPlan: volcanionPlan(),
+  })
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
+
+  const done = page.locator('.orders-walk-done')
+  await expect(done).toContainText('All 1 sold.')
+  await expect(done.getByRole('link', { name: 'Go to Shipping' })).toHaveAttribute('href', /shipping$/)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
+})

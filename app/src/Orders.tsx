@@ -2858,9 +2858,8 @@ function PullStage({
      the moment the effect first runs). */
   const linkHandled = useRef(false)
   /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass over
-   *  the wide layout has to cross the whole buyer rail — search, filters, every row — before
-   *  it reaches the selected buyer's own cards, which sit in `.browse-side` after all of it in
-   *  DOM order. The shell's own jump grammar (`,` then a letter, `App.tsx`'s `SHORTCUTS`) moves
+   *  the wide layout has to cross the whole filter bar and buyer list before it reaches the
+   *  walk, which sits after all of it in DOM order. The shell's own jump grammar (`,` then a letter, `App.tsx`'s `SHORTCUTS`) moves
    *  between SCREENS, not between regions of one screen, so it does not reach this; a
    *  tabindex change on every rail control was rejected as the bandaid it would be, since it
    *  would not shorten the rail, only make it feel arbitrary to reorder. A skip link — focus a
@@ -2871,20 +2870,22 @@ function PullStage({
   useEffect(() => {
     if (linkHandled.current) return
     const buyerWanted = buyerParam()
-    if (buyerWanted !== null) {
-      linkHandled.current = true
-      setHub({ selected: buyerWanted })
-      return
-    }
-    const orderWanted = orderParam()
-    if (orderWanted === null) {
+    const orderWanted = buyerWanted === null ? orderParam() : null
+    if (buyerWanted === null && orderWanted === null) {
       linkHandled.current = true
       return
     }
     if (allGroups.length === 0) return // wait for the read this link is about
     linkHandled.current = true
-    const resolved = groupForOrderKey(groups, orderWanted)
-    if (resolved !== null) setHub({ selected: resolved.key })
+    const group =
+      buyerWanted !== null
+        ? (allGroups.find((one) => one.key === buyerWanted) ?? null)
+        : groupForOrderKey(groups, orderWanted ?? '')
+    if (group === null) return
+    setHub({ selected: group.key })
+    /* A LINK TO A BUYER WITH NOTHING OPEN LANDS ON THE DONE VIEW, so the list draws the row the
+       link names (UX-235: the selection is always a row the list shows). */
+    if (group.open.length === 0) patchViewQuery({ show: 'done' })
   }, [groups, allGroups])
   useEffect(() => {
     if (selectedKey !== null) mirrorBuyerParam(selectedKey)
@@ -3212,6 +3213,9 @@ function PullStage({
         </Notice>
       ) : null}
       <div className="orders-body">
+        <button type="button" className="orders-skip-link" onClick={() => walkRef.current?.focus()}>
+          Skip to the walk
+        </button>
         <div className="orders-layout">
           <nav className="orders-buyers" aria-label="Buyers">
             {buyerList}
