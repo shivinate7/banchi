@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
-import { batchOf, shippingRow as row } from './routeFixtures'
+import { batchOf, order as orderRow, payloadOf, shippingRow as row } from './routeFixtures'
 
-import type { ShippingBatch } from '../src/types'
+import type { OrderRow, ShippingBatch } from '../src/types'
 
 /* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THE SHELL'S OWN READ IS NOT THIS SCREEN'S.
    `app/tests/shell.ts` carries the argument; the call has to sit above every hook and every
@@ -77,7 +77,13 @@ type Wire = { method: string; path: string; body: unknown }
  */
 async function open(
   page: Page,
-  options: { batch?: ShippingBatch; refuse?: { code: string; message: string } } = {},
+  options: {
+    batch?: ShippingBatch
+    refuse?: { code: string; message: string }
+    /** The ledger's own orders (D63), for UX-008: a row whose order number is in here opens
+     *  it via `OrderLink`. Empty by default, which is what leaves a row as plain text. */
+    orders?: OrderRow[]
+  } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
 
@@ -95,11 +101,11 @@ async function open(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        summary: 'no orders',
-        orders: [],
-        resolution: { orders: [], counts: {} },
-      }),
+      body: JSON.stringify(
+        options.orders === undefined
+          ? { summary: 'no orders', orders: [], resolution: { orders: [], counts: {} } }
+          : payloadOf(options.orders, []),
+      ),
     })
   })
 
@@ -233,7 +239,7 @@ function threeKinds(): ShippingBatch {
   ])
 }
 
-test('every row says it in words and in a machine reason, and only judged rows are qualified', async ({
+test('a card says its reason only where it differs from its lane, and never the machine code', async ({
   page,
 }) => {
   await open(page, { batch: threeKinds() })
@@ -243,28 +249,31 @@ test('every row says it in words and in a machine reason, and only judged rows a
   const weight = page.locator('.shipping-row').filter({ hasText: WEIGHT_ORDER })
   const unjudged = page.locator('.shipping-row').filter({ hasText: UNJUDGED_ORDER })
 
-  /* THE SENTENCE AND THE CODE, ON EVERY ROW. docs/DESIGN.md's human-label-large,
-     machine-string-small rule: the operator reads the sentence, and greps the code. */
-  await expect(value.locator('.shipping-says')).toHaveText(
-    'Worth $50 or more, so tracking is required.',
-  )
-  await expect(value.locator('.shipping-reason')).toHaveText('value_at_threshold')
+  /* TXT-01/UX-015: `value_at_threshold` IS the Parcel lane's own rule — its chip already says
+     "$50 or more" — so the sentence would repeat the header on every such card and this row
+     draws none. `non_card_signal` is the ground two grounds reach one lane on (D61), so it
+     keeps its own sentence. The unjudged lane names no single ground in its header, so every
+     abstention still says which one it is. */
+  await expect(value.locator('.shipping-says')).toHaveCount(0)
   await expect(weight.locator('.shipping-says')).toHaveText(
     'Heavier per item than cards run, so something in it is not a card.',
   )
-  await expect(weight.locator('.shipping-reason')).toHaveText('non_card_signal')
-
-  /* THE THREE ABSTENTIONS DO NOT SHARE A SENTENCE, and this is the one of them a real export
-     produces most: the row has a value but no usable weight, so what is IN the order is
-     unknown. A single "could not judge" string would throw away the only thing that says what
-     to do about it. */
   await expect(unjudged.locator('.shipping-says')).toHaveText(
     'No usable weight on the row, so what is in it is unknown.',
   )
-  await expect(unjudged.locator('.shipping-reason')).toHaveText('no_weight_data')
 
-  await expect(value.locator('.shipping-quality')).toHaveText('Certain')
-  await expect(weight.locator('.shipping-quality')).toHaveText('Inferred')
+  /* UX-005/TXT-02: NO CARD PRINTS ITS RAW REASON STRING ANY MORE (D196). */
+  await expect(page.locator('.shipping-reason')).toHaveCount(0)
+
+  /* UX-063/TXT-03: the word moves off the card and into the icon's tooltip and accessible
+     name — the visible face is the icon alone. */
+  await expect(value.locator('.shipping-quality')).not.toContainText('Certain')
+  await expect(value.locator('.shipping-quality')).toHaveAttribute('aria-label', /^Certain/)
+  await expect(weight.locator('.shipping-quality')).not.toContainText('Inferred')
+  await expect(weight.locator('.shipping-quality')).toHaveAttribute('aria-label', /^Inferred/)
+  /* The word still exists once on screen, in the legend above the lanes. */
+  await expect(page.locator('.shipping-quality-legend')).toContainText('Certain')
+  await expect(page.locator('.shipping-quality-legend')).toContainText('Inferred')
 
   /* NEITHER WORD ON THE ABSTENTION. An abstention is not a low-confidence answer, it is the
      absence of one, and either word here would be a third meaning wearing one label. */
@@ -276,6 +285,46 @@ test('every row says it in words and in a machine reason, and only judged rows a
   const chip = page.locator('.shipping-chip-unjudged')
   await expect(chip.locator('.shipping-chip-label')).toHaveText('Needs a look')
   await expect(chip.locator('.shipping-chip-count')).toHaveText('1')
+})
+
+/* -------------------------------------------------------------------------------------- 3b */
+
+test('a weight is shown only as evidence, rounded for a person, and never the plain card constant', async ({
+  page,
+}) => {
+  /* Both rows carry the SAME weight, so this proves the gate is the REASON and not merely
+     whether a weight is present — the defect (TXT-04) is 187 identical `0.0700` figures on
+     cards whose reason never needed the number at all. */
+  const cardsOnly = 'A1000000-000100-00100'
+  const overWeight = 'A2000000-000200-00200'
+  await open(page, {
+    batch: batchOf([
+      row({ order: cardsOnly, lane: 'envelope', reason: 'cards_only', certain: false, value: '4.25', weight_per_item_oz: '0.0700', item_count: 1 }),
+      row({ order: overWeight, lane: 'parcel', reason: 'value_at_threshold', certain: true, value: '55.00', weight_per_item_oz: '0.0700', item_count: 1 }),
+      row({
+        order: WEIGHT_ORDER,
+        lane: 'parcel',
+        reason: 'non_card_signal',
+        certain: false,
+        value: '12.40',
+        weight_per_item_oz: '2.5000',
+        item_count: 1,
+      }),
+    ]),
+  })
+  await readExport(page)
+
+  /* `cards_only` and `value_at_threshold` are the two reasons a lane's own rule already
+     explains (LANE_OWN_REASON): the weight they happen to carry is not evidence. */
+  await expect(page.locator('.shipping-row').filter({ hasText: cardsOnly }).locator('.shipping-figures')).not.toContainText('oz')
+  await expect(page.locator('.shipping-row').filter({ hasText: overWeight }).locator('.shipping-figures')).not.toContainText('oz')
+
+  /* `non_card_signal` is evidence — the ratio is heavier than cards run — so the weight stays,
+     rounded to two places and read as "each" rather than the module's own four decimal places
+     and "/item". */
+  const weight = page.locator('.shipping-row').filter({ hasText: WEIGHT_ORDER })
+  await expect(weight.locator('.shipping-figures')).toContainText('2.50 oz each')
+  await expect(weight.locator('.shipping-figures')).not.toContainText('2.5000')
 })
 
 /* -------------------------------------------------------------------------------------- 4 */
@@ -399,7 +448,10 @@ test('the parcel file is offered as a download, and the caption says what it doe
   await expect(file).toHaveAttribute('download', 'pirateship-import.csv')
 
   const ship = page.locator('.shipping-ship')
-  await expect(ship).toContainText('2 orders in the parcel lane')
+  /* UX-150/TXT-05: the count is said ONCE, on the download button — the redundant "2 orders in
+     the parcel lane are in this file" sentence beside it is gone. */
+  await expect(ship).not.toContainText('in the parcel lane are in this file')
+  await expect(ship.locator('.shipping-download-count')).toContainText('2 orders')
 
   /* THE CAPTION IS BEHIND A DISCLOSURE NOW, so this opens it and asserts the sentences are
      VISIBLE rather than merely present in the markup — text nobody can read is not a caption.
@@ -414,6 +466,45 @@ test('the parcel file is offered as a download, and the caption says what it doe
      and the caption is the only place either is said. */
   await expect(caveats).toContainText('Package Weight is blank on every row')
   await expect(caveats).toContainText('No insurance column')
+})
+
+/* -------------------------------------------------------------------------------------- 6b */
+
+test('the file card names an object with its verb, and says its own memory note once', async ({
+  page,
+}) => {
+  await open(page, { batch: threeKinds() })
+  await readExport(page)
+
+  /* UX-108: a verb and its object, so a screen reader and a skim both learn what is dropped. */
+  await expect(page.getByRole('button', { name: 'Forget this file' })).toBeVisible()
+
+  /* UX-150/TXT-05: one line for the memory note, not "held in memory for about N minutes" next
+     to "nothing written to disk" — the empty state already says the file is never written. */
+  const meta = page.locator('.shipping-file-meta')
+  await expect(meta).toContainText('kept')
+  await expect(meta).toContainText('min')
+  await expect(meta).not.toContainText('written to disk')
+})
+
+/* -------------------------------------------------------------------------------------- 6c */
+
+test('the "What this file does not carry" disclosure meets the 40 px thumb floor (UX-059)', async ({
+  page,
+}) => {
+  await open(page, { batch: threeKinds() })
+  await readExport(page)
+
+  const summary = page.locator('.shipping-caveats summary')
+  const box = await summary.boundingBox()
+  expect(box).not.toBeNull()
+  /* THE VISIBLE FACE STAYS ITS OWN SIZE — this reads the CSS hit area, `::before`, not the
+     rendered box, because D117 is about the measurement, never the ink. */
+  const hit = await summary.evaluate((el) => {
+    const before = getComputedStyle(el, '::before')
+    return { height: parseFloat(before.height) }
+  })
+  expect(hit.height).toBeGreaterThanOrEqual(40)
 })
 
 /* -------------------------------------------------------------------------------------- 7 */
@@ -493,4 +584,51 @@ test('no dot is typed on the file card or the download button (D218)', async ({ 
   const typedDot = /[·•]/
   await expect(page.locator('.shipping-file-meta')).not.toContainText(typedDot)
   await expect(page.locator('.shipping-download')).not.toContainText(typedDot)
+})
+
+/* -------------------------------------------------------------------------------------- 11 */
+
+test('an order the ledger already knows opens it; an order it does not stays plain text (UX-008)', async ({
+  page,
+}) => {
+  await open(page, { batch: threeKinds(), orders: [orderRow({ key: `TCGplayer:${VALUE_ORDER}`, number: VALUE_ORDER })] })
+  await readExport(page)
+
+  const value = page.locator('.shipping-row').filter({ hasText: VALUE_ORDER })
+  const link = value.locator('a.bn-datalink')
+  await expect(link).toHaveText(VALUE_ORDER)
+  await expect(link).toHaveAttribute('href', '#/orders?order=' + encodeURIComponent(`TCGplayer:${VALUE_ORDER}`))
+
+  /* The ledger never heard of this one (D63: the export and the ledger are two maps that only
+     sometimes agree), so it stays a plain string rather than a link to nothing. */
+  const weight = page.locator('.shipping-row').filter({ hasText: WEIGHT_ORDER })
+  await expect(weight.locator('a.bn-datalink')).toHaveCount(0)
+  await expect(weight.locator('.shipping-order')).toHaveText(WEIGHT_ORDER)
+})
+
+/* -------------------------------------------------------------------------------------- 12 */
+
+test('on a phone every lane opens folded; off a phone every lane opens shown (UX-016/D-ship-lanes-collapse)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { batch: threeKinds() })
+  await readExport(page)
+
+  /* THE LANE ORDER IS UNCHANGED (the owner's ruling keeps it) — what changes is that the
+     operator sees three counts before a 37,000 px scroll, not after one. */
+  for (const chip of await page.locator('.shipping-chip').all()) {
+    await expect(chip).toHaveAttribute('aria-pressed', 'false')
+  }
+  await expect(page.locator('.shipping-row')).toHaveCount(0)
+})
+
+test('at 1440 every lane still opens shown, the desktop default', async ({ page }) => {
+  await open(page, { batch: threeKinds() })
+  await readExport(page)
+
+  for (const chip of await page.locator('.shipping-chip').all()) {
+    await expect(chip).toHaveAttribute('aria-pressed', 'true')
+  }
+  await expect(page.locator('.shipping-row')).toHaveCount(3)
 })

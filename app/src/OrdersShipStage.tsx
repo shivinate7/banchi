@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 
 import { readUpload } from './csvUpload'
-import { Button, EmptyState, Icon, Notice, type IconName } from './kit'
+import { Button, EmptyState, Icon, Notice, OrderLink, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
 import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl } from './server'
@@ -86,13 +86,40 @@ const REASON_SAYS: Record<ShippingReason, string> = {
   sub_single_weight: 'Lighter per item than one card, so the weight model does not apply here.',
 }
 
+/** The two reasons that ARE a lane's own rule, restated: `LANE_HEAD` already says "cards only,
+ *  under $50" and "$50 or more". A card whose reason is one of these carries no fact its lane
+ *  header did not already give it (TXT-01). Every other reason is a card that reached its lane
+ *  on different ground, or an abstention the header cannot explain by itself, and keeps its own
+ *  sentence. */
+const LANE_OWN_REASON: Partial<Record<ShippingReason, ShippingLane>> = {
+  cards_only: 'envelope',
+  value_at_threshold: 'parcel',
+}
+
+/** The reason sentence, or null where the lane header already said it. Always shown on the
+ *  Needs-a-look lane: its header names no single ground, so each abstention still has to say
+ *  which one it is. */
+function reasonSentenceOf(row: ShippingRow): string | null {
+  if (LANE_OWN_REASON[row.reason] === row.lane) return null
+  return REASON_SAYS[row.reason]
+}
+
 /** The figures, with every ABSENT figure drawing nothing at all. A missing number is never
  *  rendered as `0`: the router abstains precisely because a figure is absent, and `0.0000
- *  oz/item` under "no usable weight" would undo that in the one place the operator looks. */
+ *  oz/item` under "no usable weight" would undo that in the one place the operator looks.
+ *
+ *  THE WEIGHT DRAWS ONLY WHERE IT IS EVIDENCE (TXT-04). `cards_only` and `value_at_threshold`
+ *  are the two reasons a lane's own rule already explains (see `LANE_OWN_REASON`); the ratio
+ *  that put the row there is, on those two reasons, the plain per-card constant on nearly
+ *  every row — the same figure repeated with nothing to say. `non_card_signal` and
+ *  `sub_single_weight` are the two reasons the ratio itself is the finding, so the number
+ *  stays, rounded to what a person reads rather than the module's four decimal places. */
 function figuresOf(row: ShippingRow): string[] {
   const parts: string[] = []
   if (row.value !== null) parts.push(`$${row.value}`)
-  if (row.weight_per_item_oz !== null) parts.push(`${row.weight_per_item_oz} oz/item`)
+  if (row.weight_per_item_oz !== null && (row.reason === 'non_card_signal' || row.reason === 'sub_single_weight')) {
+    parts.push(`${Number(row.weight_per_item_oz).toFixed(2)} oz each`)
+  }
   if (row.item_count !== null) parts.push(`${row.item_count} item${row.item_count === 1 ? '' : 's'}`)
   return parts
 }
@@ -104,9 +131,33 @@ function qualityOf(row: ShippingRow): 'Certain' | 'Inferred' | null {
   return row.certain ? 'Certain' : 'Inferred'
 }
 
-function minutesOf(seconds: number): string {
-  const minutes = Math.round(seconds / 60)
-  return `${minutes} minute${minutes === 1 ? '' : 's'}`
+/** The full sentence behind the quality icon (TXT-03): the word first, then what it means, so
+ *  the tooltip and the accessible name carry what the visible face no longer does. */
+function qualityTitleOf(row: ShippingRow): string {
+  return row.certain
+    ? 'Certain — the export said so outright'
+    : 'Inferred — read from the weight and value on the row'
+}
+
+function keptOf(seconds: number): string {
+  return `kept ${Math.round(seconds / 60)} min`
+}
+
+/** Whether the viewport is a phone, for the one thing that changes shape there: a freshly
+ *  loaded batch's lanes start folded (UX-016/D-ship-lanes-collapse) rather than all three open,
+ *  because the Needs-a-look lane — the one that needs a person — could sit 32,000 px down a
+ *  37,000 px page. The same convention `ReviewQueue.tsx`, `Pricing.tsx`, `Orders.tsx` and
+ *  `BoxBrowse.tsx` already use. */
+function usePhone(): boolean {
+  const query = '(max-width: 767px)'
+  const [phone, setPhone] = useState(() => (typeof window === 'undefined' ? false : window.matchMedia(query).matches))
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    const onChange = () => setPhone(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+  return phone
 }
 
 export function ShipStage({ payload }: { readonly payload: OrdersPayload | null }) {
@@ -118,6 +169,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
   const [busy, setBusy] = useState<string | null>(null)
   const [over, setOver] = useState(false)
   const pick = useRef<HTMLInputElement>(null)
+  const phone = usePhone()
 
   const readFile = async (chosen: File) => {
     setBusy('read')
@@ -125,9 +177,13 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
     setFailure(null)
     try {
       const answer = await readShippingExport(await readUpload(chosen))
-      /* EVERY READ STARTS WITH ALL THREE LANES SHOWING. A collapsed lane is about the file on
-         screen; carrying it across a new file would hide orders the operator has never seen. */
-      setHub({ batch: answer, lanes: new Set(SHIP_LANES) })
+      /* EVERY READ STARTS WITH EVERY LANE SHOWING ITS OWN CONTENT — except on a phone, where D61
+         (amended: D-ship-lanes-collapse) folds all three shut so the operator sees three counts,
+         not a 37,000 px scroll, before choosing which to open. A collapsed lane is about the
+         file on screen; carrying it across a new file would hide orders the operator has never
+         seen, so a fresh read still resets to the width's own default rather than to whatever
+         was open before. */
+      setHub({ batch: answer, lanes: phone ? new Set() : new Set(SHIP_LANES) })
       toast({
         kind: 'ok',
         icon: 'truck',
@@ -172,11 +228,12 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
            `make screen-freshness` looks for: a write whose answer goes back into the screen
            rather than one that leaves it guessing. */
         const answer = await readShippingExport(frozen)
-        setHub({ batch: answer, lanes: new Set(SHIP_LANES) })
+        setHub({ batch: answer, lanes: phone ? new Set() : new Set(SHIP_LANES) })
       } catch {
         /* Left to the empty state, which is the honest thing to draw and already exists. */
       }
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batch])
 
   const onPick = () => {
@@ -407,14 +464,13 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
               <span>
                 {batch.shipments} order{batch.shipments === 1 ? '' : 's'}
               </span>
-              <span>held in memory for about {minutesOf(batch.expires_in)}</span>
-              <span>nothing written to disk</span>
+              <span>{keptOf(batch.expires_in)}</span>
             </span>
           </div>
           <div className="shipping-file-actions">
             {picker('Read another file', 'upload')}
             <Button variant="danger" icon="trash" onClick={onForget} busy={busy === 'forget'} disabled={busy !== null}>
-              Forget
+              Forget this file
             </Button>
           </div>
         </section>
@@ -443,8 +499,10 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 </span>
                 <span className="shipping-file-size">{(batch.file.bytes / 1000).toFixed(1)} kB</span>
               </span>
+              {/* THE COUNT IS SAID ONCE, ON THE DOWNLOAD BUTTON BELOW (TXT-05): a second count
+                  here duplicated it in the same breath as the lede above and the tab beside it.
+                  This line keeps only what the button cannot say — the stamp state. */}
               <p className="shipping-ship-note">
-                {batch.parcel_count} order{batch.parcel_count === 1 ? '' : 's'} in the parcel lane are in this file.{' '}
                 {stamps === null
                   ? 'Rubber Stamp columns are blank until filled below.'
                   : `${stamps.stamped} of ${batch.parcel_count} carry a pick location, ${stamps.unstamped} do not — all three corners or none.`}
@@ -488,6 +546,13 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
         )}
       </div>
 
+      {/* THE WORD, SAID ONCE (TXT-03), rather than on up to 292 cards. The icon on each row
+          still carries it, in its tooltip and its accessible name. */}
+      <p className="shipping-quality-legend">
+        <Icon name="check" size={11} /> Certain reads the export&apos;s own numbers.{' '}
+        <Icon name="circle" size={11} /> Inferred is read from the weight.
+      </p>
+
       <div className="shipping-lanes" role="group" aria-label="The three lanes">
         {SHIP_LANES.map((lane) => {
           /* `filter` over the batch's own array preserves the export's order exactly. Nothing
@@ -528,6 +593,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                     const quality = qualityOf(row)
                     const figures = figuresOf(row)
                     const known = ledger.get(row.order) ?? null
+                    const sentence = reasonSentenceOf(row)
                     return (
                       <li
                         key={row.order}
@@ -535,20 +601,22 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                         style={{ animationDelay: `${Math.min(at, 12) * 30}ms` }}
                       >
                         <div className="shipping-row-top">
-                          <span className="shipping-order">{row.order}</span>
+                          <span className="shipping-order">
+                            {known === null ? row.order : <OrderLink orderKey={known.key}>{row.order}</OrderLink>}
+                          </span>
                           {quality === null ? null : (
                             <span
                               className={`shipping-quality shipping-quality-${row.certain ? 'certain' : 'inferred'}`}
-                              title={row.certain ? 'The export said so outright' : 'Read from the weight and value on the row'}
+                              title={qualityTitleOf(row)}
+                              aria-label={qualityTitleOf(row)}
                             >
-                              <Icon name={row.certain ? 'check' : 'circle'} size={11} />
-                              {quality}
+                              <Icon name={row.certain ? 'check' : 'circle'} size={11} aria-hidden="true" />
                             </span>
                           )}
                         </div>
-                        <p className="shipping-says">{REASON_SAYS[row.reason]}</p>
-                        <div className="shipping-row-meta">
-                          {figures.length === 0 ? null : (
+                        {sentence === null ? null : <p className="shipping-says">{sentence}</p>}
+                        {figures.length === 0 ? null : (
+                          <div className="shipping-row-meta">
                             <span className="shipping-figures">
                               {figures.map((figure) => (
                                 <span key={figure} className="shipping-figure">
@@ -556,9 +624,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                                 </span>
                               ))}
                             </span>
-                          )}
-                          <code className="shipping-reason">{row.reason}</code>
-                        </div>
+                          </div>
+                        )}
                         {row.stamp === null && known === null ? null : (
                           <div className="shipping-row-foot">
                             {row.stamp === null ? null : (
