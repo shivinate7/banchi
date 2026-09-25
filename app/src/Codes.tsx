@@ -971,16 +971,13 @@ export function Codes() {
                                 820 the row wraps, and a button that wrapped on its own sat
                                 under the box name rather than under the picker it answers. */}
                             <div className="codes-fix-do">
-                              {/* kit's Select has no `disabled` prop yet (a real gap, not a
-                                  choice this lane made) — the commit press below still guards
-                                  itself with `disabled={busy}`, so a pick made mid-request
-                                  changes nothing until that press is live again. */}
                               <Select
                                 label="Product"
                                 value={chosen === '' ? null : chosen}
                                 onChange={(next) => setFixPick((held) => ({ ...held, [row.box]: next }))}
                                 placeholder="Choose a product…"
                                 options={ledger.products.map((p) => ({ value: p.key, label: p.display }))}
+                                disabled={busy}
                               />
                               {/* OUTLINED WHEN IT IS NOT PREMIUM. A default pill's fill is
                                   `--bn-surface-2`, which is this row's own ground, so Bulk

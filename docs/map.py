@@ -5970,8 +5970,8 @@ COMPONENTS = [
                                          "FilterChips and SortControl draw: Capture's option rows, "
                                          "in the kit's own panel, never the native OS menu, every "
                                          "facet usable in any order.",
-                                 "governed_by": ["D5", "D118", "D132", "D212", "D218", "D221",
-                                                 "D259"]},
+                                 "governed_by": ["D5", "D50", "D118", "D132", "D212", "D218",
+                                                 "D221", "D259"]},
             "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
                                          "in a filter bar (`--bn-control-h`) and one width floor "
                                          "and cap. Mono for machine strings only.",
