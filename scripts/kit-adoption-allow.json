@@ -165,10 +165,6 @@
       "R2-date": "capture",
       "R2-icon-only-button": "icons"
     },
-    "app/src/ValueBands.tsx": {
-      "R2-class": "b-pricing",
-      "R2-money": "b-pricing"
-    },
     "app/src/cardState.ts": {
       "R2-date": "inventory"
     }
