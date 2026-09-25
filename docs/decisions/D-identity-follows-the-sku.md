@@ -38,10 +38,9 @@ identity, and unchanged by this lane. `make docs-audit`'s new `identity writers`
 seven off `store/master.py`'s own `IDENTITY_WRITERS` constant, never a copy of it. It fails a
 commit that assigns `sku`, `condition`, `name`, `number`, `printed_total`, `rarity` or
 `set_name` anywhere else under `server/`, `store/`, `pipeline/`, `cli/`, `codes/` or
-`scripts/`. Two sites it finds and does not fix sit in a small, pinned
-`IDENTITY_WRITERS_ALLOWED` exception list instead, named rather than hidden.
-`cli/cmd_cards.py`'s `_variants` is the one that matters: a pre-existing write outside lane
-7's own fence, which the spec's own plan already calls "retired."
+`scripts/`. Its `IDENTITY_WRITERS_ALLOWED` exception list is empty and pinned at zero. Lane 7
+pinned two entries there, both `cli/cmd_cards.py`'s `_variants`. That press is now retired,
+as the spec's own plan said. It refuses, names `cards identity`, and writes nothing.
 
 **`read_*` is evidence, and only evidence.** `read_name`, `read_number`, `read_printed_total`
 hold what the camera saw. They are written unconditionally, on every identification. They are

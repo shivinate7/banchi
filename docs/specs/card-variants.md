@@ -3,8 +3,9 @@
 **Status, 2026-09-17.** Sections 1, 2, 3a and 3b are BUILT. Section 3c is MEASURED and needs no
 build. The governing entry is D213.
 
-**The backfill has never run against the owner's store.** `./pkmnscan cards variants` previews by
-default. Measured over the real store: 2,960 of 3,502 cards would gain a set.
+**The backfill has never run against the owner's store.** `./pkmnscan cards variants` is retired.
+`./pkmnscan cards identity --write` fills the set now, through `bind_sku` (D213, amended). The old
+measurement over the real store: 2,960 of 3,502 cards would gain a set.
 
 The owner's report: searching a card by name on `#/inventory` reaches one printing and offers no way
 to any other. The only move is to click around boxes until a copy of a different printing falls

@@ -621,10 +621,10 @@ class Card:
     # `set_name` is `pipeline/join.py:SkuMatch.set_name`'s own name for exactly this fact,
     # reused rather than invented.
     #
-    # NULL ON EVERY CARD IDENTIFIED BEFORE THIS FIELD EXISTED, backfilled once by
-    # `./pkmnscan cards variants --write` and never guessed: a SKU whose export row cannot be
-    # found (no export ever fetched, or the SKU has aged out of one that was) keeps a null
-    # set rather than a fallback value invented for the column.
+    # NULL ON EVERY CARD IDENTIFIED BEFORE THIS FIELD EXISTED, filled by `bind_sku` from the
+    # `skus` table (`./pkmnscan cards identity --write`, which retired `cards variants`) and
+    # never guessed: a SKU the table does not hold keeps a null set rather than a fallback
+    # value invented for the column.
     set_name: Optional[str] = None
     # THE CATALOGUE'S OWN RARITY, kept beside `rarity_claim` above and never merged into it.
     # `rarity_claim` is the operator's claim at the shutter (D23, D146) and can disagree with

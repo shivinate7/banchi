@@ -484,7 +484,9 @@ COMPONENTS = [
                                      "previews by default, `--write` performs the one-time "
                                      "migration. `contradictions` and `sku-names` are "
                                      "RETIRED into `identity` (each prints one line naming "
-                                     "it) — and `photos` "
+                                     "it). `variants` is RETIRED into `identity --write` "
+                                     "too (identity-follows-sku.md §4.2): it prints one "
+                                     "line, writes nothing, and exits 2 — and `photos` "
                                      "moves the corpus off the legacy `(box, index)` address "
                                      "onto the card's own name. SIX OF THE EIGHT WRITE "
                                      "NOTHING EVER and neither may call `db.connect`: that "
@@ -3090,7 +3092,8 @@ COMPONENTS = [
                         "as of D247's nineteenth entry (owner's word, 2026-09-23) — the "
                         "sentence that used to sit here (\"already covered by T7's "
                         "harness sweep\") was itself wrong: T7 drives `cli/cmd_cards.py` "
-                        "through `cards_action='variants'` alone, never `'checks'`; this "
+                        "through `cards_action='variants'` and `'identity'` alone, never "
+                        "`'checks'`; this "
                         "module's one caller (`cli/cmd_cards.py:checks`) was tested "
                         "nowhere until now.",
                 "governed_by": ["D146", "D173", "D234", "D237", "D239", "D247"],

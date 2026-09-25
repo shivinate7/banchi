@@ -8,9 +8,9 @@ WHY A TABLE, AND NOT A LIVE JOIN TO AN EXPORT (the spec's own argument, restated
 live join answers neither. A SKU lookup against this table is one indexed probe, and a row
 outlives the file that brought it. Three in-memory copies of exactly this map already exist
 in this repo (`pipeline/pricearchive.merged_export_rows_by_sku`, `pipeline/
-sku_name_contradictions.Catalog`, `cli/cmd_cards.py`'s `export_for`); this table is that map,
-written down once, and those three become readers of it in a later lane — this module does
-not rewire them.
+sku_name_contradictions.Catalog`, and `cli/cmd_cards.py`'s `export_for`, retired with `cards
+variants`); this table is that map, written down once, and the two left become readers of it
+in a later lane — this module does not rewire them.
 
 THE SIX FACT CELLS ARE VERBATIM, AND `grade`/`printing` ARE DERIVED FROM `condition` AT WRITE
 TIME, never stored twice: `split_condition` below is the one place a `Condition` cell is

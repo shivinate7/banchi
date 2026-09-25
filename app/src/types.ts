@@ -1592,7 +1592,7 @@ export type SearchGroup = {
    *  (D213). `set_hint` above is the
    *  operator's own claim, typed at the shutter; this is read off the export row the SKU
    *  resolved to at identification time. `null` on every card identified before this field
-   *  existed, until `./pkmnscan cards variants --write` or the next identification fills
+   *  existed, until `./pkmnscan cards identity --write` or the next identification fills
    *  it — a screen prefers this and falls back to `set_hint`. */
   set: string | null
 

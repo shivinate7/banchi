@@ -1,7 +1,7 @@
 """`pkmnscan cards` — the card's stable name and, since lane 2 of `docs/specs/
 identity-follows-sku.md`, its identity: preview it, audit it, move the photographs.
 
-SEVEN SUBCOMMANDS AND FIVE OF THEM WRITE NOTHING EVER.
+EIGHT SUBCOMMANDS AND SIX OF THEM WRITE NOTHING EVER.
 
   cards name            what the naming would do, or has done — the source census, every
                         card that would land `nophoto:`, every duplicate photograph, and
@@ -23,10 +23,8 @@ SEVEN SUBCOMMANDS AND FIVE OF THEM WRITE NOTHING EVER.
                         and exits.
   cards photos          move the corpus off the legacy `(box, index)` address onto the
                         card's own name. Previews by default; `--write` performs it
-  cards variants        backfill `set` and `rarity` from whatever export a card's game
-                        already has on disk (D213).
-                        Previews by default; `--write` performs it. Never guesses: a SKU
-                        that resolves to nothing keeps a null set.
+  cards variants        RETIRED into `cards identity --write` (§4.2). Prints one line,
+                        writes nothing, and exits 2.
 
 `name`, `audit`, `checks`, `identity`, `contradictions` AND `sku-names` OPEN THE STORE
 READ-ONLY AND MUST NEVER CALL `db.connect`. That function is the single entry to the store
@@ -39,22 +37,13 @@ identity`'s own reader functions (`pipeline/identity_binding.py:read_cards`/`rea
 this door opens and never call `db.connect` themselves. `cards identity --write` is the one
 exception among the three identity-aware subcommands: it previews with the read-only door
 and then, only once it has decided what to write, opens `store.Store().write()` for the
-press itself — `cards photos`'/`cards variants`'s own preview-then-write shape, not a new
-one.
+press itself — `cards photos`' own preview-then-write shape, not a new one.
 
 `cards photos` IS THE ONE THING HERE THAT TOUCHES 4.45 GB THAT CANNOT BE RE-TAKEN, which is
 why it previews first and why every file it moves is verified against a digest that was
 already proved. `store/photos.py:adopt` is the per-card step and its docstring carries the
 argument for the link-verify-unlink order; this module is the driver, the census and the
 report.
-
-`cards variants` GOES THROUGH `store.Store`, NOT RAW `sqlite3`, unlike `name`/`audit` above —
-it writes ordinary card fields through the ordinary lock, the same door `set_state` already
-uses, and the `db.connect`-must-not-migrate rule above is `photos`'/`name`'s/`audit`'s own
-because a stray call there would perform a multi-gigabyte photograph move nobody asked for;
-resolving a SKU against a CSV already on disk carries no such risk, and this store's own
-schema migration (`store/db.py:_add_set_columns`) is what adds the two columns this
-subcommand fills in the first place.
 """
 
 from __future__ import annotations
@@ -418,7 +407,8 @@ def _checks(args, say) -> int:
 
     if not select_set_name:
         say("VERDICT: not known — this store has no `set_name` column, so class 2, 3 and 4 "
-            "cannot be checked. Run `pkmnscan cards variants --write` first.")
+            "cannot be checked. Any write press adds it on open, such as "
+            "`pkmnscan cards identity --write`.")
         return 2
     if not rows:
         say("VERDICT: not known — there are no cards in this store")
@@ -445,7 +435,7 @@ def _checks(args, say) -> int:
 def _read_plan(directory: Path) -> Tuple["ib.MigrationPlan", "ib.AuditFindings", Dict[str, "ib.SkuRow"]]:
     """The whole read-only pass §7 and §4.3 need — one `_read_only` connection, closed
     before this returns. Shared by the preview and by `--write`'s own preview-then-write
-    shape (`cards photos`/`cards variants`'s own idiom, not a new one)."""
+    shape (`cards photos`' own idiom, not a new one)."""
     conn = _read_only(directory)
     try:
         cards = ib.read_cards(conn)
@@ -547,9 +537,9 @@ def _identity(args, say) -> int:
         for p in plan.plans:
             card = snapshot.inventory.cards.get(p.key)
             if card is None or card.sku != p.sku:
-                # THE IN-LOCK RE-CHECK `cards variants`/`cards photos` ALREADY MAKE (§7.3's
-                # own words): a card whose SKU moved between the preview above and this
-                # write is a card this pass no longer has authority to describe.
+                # THE IN-LOCK RE-CHECK §7.3 NAMES, the one `cards photos` also makes: a
+                # card whose SKU moved between the preview above and this write is a card
+                # this pass no longer has authority to describe.
                 census["skipped_moved"] += 1
                 continue
             card.read_name = p.read_name
@@ -809,102 +799,25 @@ def _photos(args, say) -> int:
 
 
 def _variants(args, say) -> int:
-    """Backfill `set` and `rarity` from whatever export a card's own game already has on
-    disk (D213). Previews unless `--write`.
+    """RETIRED into `cards identity --write` (`docs/specs/identity-follows-sku.md` §4.2, §9
+    item 7). This press wrote `set_name` and `rarity` onto a card directly, off an export
+    file. `Inventory.bind_sku` is now the one writer of those two fields. It copies them from
+    the `skus` table, which `pkmnscan skus adopt --write` fills from every export this press
+    read, plus the live exports. So `cards identity --write` fills every card this press
+    filled, and it also moves the rest of the identity with them.
 
-    NEVER REFUSES A CARD AND NEVER GATES. A SKU that resolves to nothing keeps a null set,
-    counted and reported, never guessed. RE-RUNNABLE: a card that already carries a set is
-    left exactly as it is, so a second pass over a store an export arrived into since the
-    first only fills what the first pass could not — the same idiom `photos`/`prices adopt`
-    already use for a fact this store can only partially answer the day it is asked.
+    Two cases this press filled and nothing fills now, both on purpose. A HELD card (T4s,
+    T5) keeps its identity exactly as it is (§7.3). Its SKU is disputed, so a SKU fact on it
+    would be a guess. A card whose SKU is not in the table (`sku_unknown`) keeps a null set,
+    as this press already did for a SKU no export resolved. `cards identity` lists both.
 
-    EVERY EXPORT UNDER `inventory/.exports/<game>/`, MERGED, first-file-wins on a SKU seen
-    twice — `pipeline/setnames.py:known_sets` makes the identical choice for the same reason:
-    a set released since an older file was fetched must still be visible, and a Set Name or
-    Rarity for one SKU does not change file to file.
-    """
-    write = bool(getattr(args, "write", False))
-    from pipeline import games, tcgcsv
-
-    exports: Dict[str, Dict[str, dict]] = {}
-
-    def export_for(game: str) -> Dict[str, dict]:
-        if game not in exports:
-            directory = files.inventory_dir() / files.EXPORTS_DIRNAME / game
-            merged: Dict[str, dict] = {}
-            if directory.is_dir():
-                for path in sorted(directory.glob("*.csv")):
-                    try:
-                        export = tcgcsv.read_export(path)
-                    except (OSError, tcgcsv.MalformedCsv):
-                        continue
-                    for row in export.rows:
-                        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
-                        if sku and sku not in merged:
-                            merged[sku] = row
-            exports[game] = merged
-        return exports[game]
-
-    inventory = Store().read().inventory
-    census = {"already_set": 0, "no_sku": 0, "resolved": 0, "unresolved": 0}
-    by_game: Dict[str, Dict[str, int]] = {}
-    changes: List[Tuple[str, str, str, Optional[str]]] = []
-
-    for key, card in inventory.cards.items():
-        if card.set_name is not None:
-            census["already_set"] += 1
-            continue
-        if not card.sku:
-            census["no_sku"] += 1
-            continue
-        game = card.game or games.DEFAULT_GAME
-        stats = by_game.setdefault(game, {"resolved": 0, "unresolved": 0})
-        row = export_for(game).get(card.sku)
-        set_name = str((row or {}).get(tcgcsv.SET_COLUMN) or "").strip() or None
-        rarity = str((row or {}).get(tcgcsv.RARITY_COLUMN) or "").strip() or None
-        if set_name is None:
-            census["unresolved"] += 1
-            stats["unresolved"] += 1
-            continue
-        census["resolved"] += 1
-        stats["resolved"] += 1
-        changes.append((key, card.sku, set_name, rarity))
-
-    say("CARD VARIANTS -> set + rarity, from the export each game already has on disk")
-    say(f"  {len(inventory.cards)} card(s); {'WRITING' if write else 'PREVIEW, nothing will be written'}")
-    say("  " + "  ".join(f"{name}={value}" for name, value in census.items()))
-    for game, stats in sorted(by_game.items()):
-        say(f"    {game}: {stats['resolved']} resolve, {stats['unresolved']} do not")
-    if changes:
-        say("")
-        say("  FIRST FEW:")
-        for key, sku, set_name, rarity in changes[:10]:
-            say(f"    {key}  {sku} -> {set_name}" + (f" · {rarity}" if rarity else ""))
-        if len(changes) > 10:
-            say(f"    … and {len(changes) - 10} more")
-
-    if not write:
-        say("")
-        say(f"  {len(changes)} card(s) would gain a set. Re-run with --write to apply.")
-        return 0
-
-    written = 0
-    if changes:
-        with Store().write() as snapshot:
-            for key, sku, set_name, rarity in changes:
-                card = snapshot.inventory.cards.get(key)
-                # RE-CHECKED INSIDE THE LOCK, AGAINST THE SKU THIS PASS READ — a card sold,
-                # re-answered or re-emitted between the preview above and this write is a
-                # card this pass no longer has authority to describe, and skipping it here
-                # is the same caution `photos`'s per-card digest re-check applies.
-                if card is None or card.sku != sku or card.set_name is not None:
-                    continue
-                card.set_name = set_name
-                card.rarity = rarity
-                written += 1
-    say("")
-    say(f"  WROTE {written} card(s).")
-    return 0
+    REFUSES WITH EXIT 2, NOT 0 like `cards contradictions`. That command wrote nothing, so
+    an exit of 0 told the operator no lie. This one was a write press, and an exit of 0 on
+    `--write` would say that a write happened."""
+    say("`cards variants` is retired. Run `./pkmnscan cards identity` to preview, then "
+        "`--write`. It fills `set` and `rarity` from the SKU table for every card it binds. "
+        "Nothing was written.")
+    return 2
 
 
 # --------------------------------------------------------------------------- dispatch
