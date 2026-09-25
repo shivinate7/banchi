@@ -24,7 +24,7 @@ import {
   type SortOption,
   type SortValue,
 } from './kit'
-import { absoluteDate } from './dates'
+import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -256,17 +256,9 @@ type FetchReceiptData = {
   readonly continuingInS: number | null
 }
 
-/** When something happened, in the words a person would use. */
+/** When something happened, in the one relative format (`dates.ts`). */
 function whenWord(at: number, now: number): string {
-  const seconds = Math.max(0, Math.round((now - at) / 1000))
-  if (seconds < 45) return 'just now'
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
-  const then = new Date(at)
-  const time = then.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  if (then.toDateString() === new Date(now).toDateString()) return `today at ${time}`
-  if (then.toDateString() === new Date(now - 86_400_000).toDateString()) return `yesterday at ${time}`
-  return `${then.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${time}`
+  return relativeDate(at, new Date(now))
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -744,23 +736,9 @@ function breakdownOf(line: ResolvedLine): string {
   return [`${line.on_hand} on hand`, `${line.sold} sold`, `${line.retired} retired`, `${line.pooled} pooled`].join(', ')
 }
 
-/** Relative time in the product's one vocabulary — the strings `RunsStage.whenLabel` draws
- *  (`18h ago`, `yesterday`, `3 days ago`), kept local so this screen does not import a sibling
- *  another group is rebuilding at the same time. */
+/** How long ago, in the one relative format (`dates.ts`). */
 function whenLabel(iso: string | null): string | null {
-  if (iso === null) return null
-  const at = new Date(iso)
-  const t = at.getTime()
-  if (Number.isNaN(t)) return null
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000))
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days === 1) return 'yesterday'
-  if (days < 7) return `${days} days ago`
-  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return iso === null ? null : relativeDate(iso)
 }
 
 function text(value: string | null | undefined): value is string {

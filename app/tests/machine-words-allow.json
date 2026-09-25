@@ -8,10 +8,6 @@
   "#/runs": {
     "emit": "b-runs"
   },
-  "#/orders": {
-    "pushed": "inventory",
-    "staged": "inventory"
-  },
   "#/codes": {
     "index": "library"
   }

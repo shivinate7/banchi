@@ -65,17 +65,8 @@
       "R2-class": "b-pricing",
       "R2-date": "b-pricing"
     },
-    "app/src/Orders.tsx": {
-      "R1": "orders",
-      "R2-select": "orders",
-      "R2-class": "orders",
-      "R2-date": "orders"
-    },
     "app/src/OrdersShipStage.tsx": {
       "R2-money": "shipping"
-    },
-    "app/src/OrdersWalkPane.tsx": {
-      "R2-class": "orders"
     },
     "app/src/PriceTrend.tsx": {
       "R2-class": "b-pricing"
@@ -120,9 +111,6 @@
     "app/src/RunsStage.tsx": {
       "R2-date": "b-runs"
     },
-    "app/src/Shipping.tsx": {
-      "R1": "shipping"
-    },
     "app/src/SubmissionClaims.tsx": {
       "R2-date": "capture"
     },
@@ -161,16 +149,6 @@
       "page": "b-pricing",
       "width": "b-pricing",
       "top": "b-pricing"
-    },
-    "/orders": {
-      "page": "orders",
-      "width": "orders",
-      "top": "orders"
-    },
-    "/shipping": {
-      "page": "shipping",
-      "width": "shipping",
-      "top": "shipping"
     },
     "/revenue": {
       "page": "sales",
