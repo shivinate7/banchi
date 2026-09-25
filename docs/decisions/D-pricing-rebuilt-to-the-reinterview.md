@@ -66,7 +66,8 @@ or the double-send guard. Those belong to the send entry, D273.
 
 ### The send change (Q3)
 
-The owner's Q3 ruling is to send every ready copy, and the unpriced rows stay on the list. The fence
+The owner's Q3 ruling is to send every ready copy, and the unpriced rows stay on the list
+(owner, paraphrased). The fence
 around the send moved for this one change only, on the coordinator's word, 2026-09-25.
 
 - `pipeline/decisions.py:Decisions.blocking` no longer lists an unanswered no-price card as a
@@ -94,6 +95,14 @@ of its checks, on the single-run path and the merged one. T5 states the new rule
 - **"Make this the rule" (Q9).** Pricing offers it once when most typed prices follow one
   pattern. It waits on a read of the owner's store, which the coordinator does on a copy.
   The count for Q2 waits on the same read.
+
+### Decisions this lane changes
+
+- **D78, a run's reason for adding nothing is a heading.** Its third clause, "a hold sinks on
+  the reopening", is repealed. A held row sorts by value. D78 carries the amendment.
+- **D208, one verdict on Pricing.** Compare and its stored setting are removed. D208 carries
+  the amendment.
+- **D277, Pricing is one list and one send.** Its "What is built" now reads BUILT.
 
 ### What protects the older decisions now
 

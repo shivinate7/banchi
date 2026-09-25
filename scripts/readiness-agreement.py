@@ -75,7 +75,7 @@ class TsFacts:
     owed_reasons: list
     # Each numeric citation: (line_number_in_ts, cited_py_line, context_text)
     numeric_citations: list = field(default_factory=list)
-    # Each bare-name citation: (line_number_in_ts, name)
+    # Each bare-name citation: (line_number_in_ts, name, the citation's own line)
     name_citations: list = field(default_factory=list)
 
 
@@ -196,7 +196,7 @@ def read_ts_facts(source: str) -> TsFacts:
                 context_window = "\n".join(lines[max(0, idx - 4) : idx])
                 numeric_citations.append((idx, int(token), context_window))
             else:
-                name_citations.append((idx, token))
+                name_citations.append((idx, token, line))
 
     if not numeric_citations and not name_citations:
         raise Disagreement("app/src/readiness.ts: no `pipeline/decisions.py:...` citations found at all")
@@ -302,12 +302,29 @@ def run_checks(py: PyFacts, ts: TsFacts) -> list:
             )
         )
 
+    # 4b — a symbol citation whose own line names a rule names the function that holds it.
+    # A citation names a symbol, never a line (D245), so RULE 1 cites `blocking` by name.
+    symbol_by_class = {"rule1_sub_threshold": "blocking", "rule2_unanswered": "unanswered"}
+    for ts_line, name, own_line in ts.name_citations:
+        klass = _classify(own_line)
+        if klass == "unclassified":
+            continue
+        classified_any = True
+        ok = name == symbol_by_class[klass]
+        checks.append(
+            Check(
+                f"citation readiness.ts:{ts_line} -> decisions.py:{name} ({klass})",
+                ok,
+                f"expected decisions.py:{symbol_by_class[klass]} for {klass}, citation says :{name}",
+            )
+        )
+
     if not classified_any and not any(c.subject.startswith("citation") for c in checks):
-        raise Disagreement("no numeric citation could be classified — nothing to check here")
+        raise Disagreement("no rule citation could be classified — nothing to check here")
 
     # 5 — bare-name citations resolve to something real
     known_names = {"blocking", "FLOOR_CHOICE", "FLAT_KEY", "unanswered"}
-    for ts_line, name in ts.name_citations:
+    for ts_line, name, _own_line in ts.name_citations:
         ok = name in known_names
         checks.append(
             Check(
@@ -423,17 +440,12 @@ def self_test() -> int:
 
     arm("catches a third reasons.append with no matching OWED_REASONS entry", a4)
 
-    # Arm 5: stale citation reproduction — this is the exact defect this round exists to fix.
-    # Feed a TS source whose RULE 1 citation points at a line that is NOT the first
-    # reasons.append call (the historical :332 defect, reproduced generically).
+    # Arm 5: a RULE 1 citation that names the wrong symbol. It was a line number once (the
+    # historical :332 defect). It is a symbol now (D245), and the wrong symbol is the same defect.
     def a5():
-        m = re.search(r"RULE 1 — `pipeline/decisions\.py:(\d+)`", ts_source)
+        m = re.search(r"RULE 1 — `pipeline/decisions\.py:(\w+)`", ts_source)
         assert m, "fixture missing: RULE 1 citation text not found"
-        broken_ts = (
-            ts_source[: m.start(1)] + "1" + ts_source[m.end(1) :]
-            if m.group(1) != "1"
-            else ts_source[: m.start(1)] + "2" + ts_source[m.end(1) :]
-        )
+        broken_ts = ts_source[: m.start(1)] + "unanswered" + ts_source[m.end(1) :]
         assert broken_ts != ts_source, "fixture mutation produced no change"
         checks, err = _run_against(py_source, broken_ts)
         assert err is None
@@ -441,7 +453,7 @@ def self_test() -> int:
         assert rule1_checks, "no rule1 citation was classified at all"
         assert any(not c.passed for c in rule1_checks), "mutation not caught: stale RULE 1 citation"
 
-    arm("catches a RULE 1 citation pointing at the wrong line", a5)
+    arm("catches a RULE 1 citation naming the wrong symbol", a5)
 
     # Arm 6: the other direction of arm 4 — a reason the screen still lists that Python no
     # longer refuses on. D277 Q3 retired `blocking`'s second reason (an unanswered no-price

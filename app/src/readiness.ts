@@ -79,7 +79,7 @@ export function owed(
 ): Owed[] {
   const out: Owed[] = []
 
-  // RULE 1 — `pipeline/decisions.py:363`. Note what it does NOT consult: `overrides`. Pricing
+  // RULE 1 — `pipeline/decisions.py:blocking`. Note what it does NOT consult: `overrides`. Pricing
   // all 108 of a box's sub-threshold SKUs by hand still leaves `emit` refusing, which is the
   // measured state of two runs on disk and the reason the strip exists at all.
   if ((doc?.sub_threshold ?? null) === null && subThresholdSkus.length > 0) {

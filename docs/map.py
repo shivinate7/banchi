@@ -4265,7 +4265,7 @@ COMPONENTS = [
                         "--self-test runs its own mutation-tested arms, counted in "
                         "SELF_TEST_ARM_COUNT. Standalone as shipped; not yet wired into "
                         "make check.",
-                "governed_by": ["D54", "D149", "D185", "D277"],
+                "governed_by": ["D54", "D149", "D185", "D245", "D277"],
             },
             "split-debts.py": {
                 "does": "Performed the split of docs/DEBTS.md into docs/debts/, and proves "

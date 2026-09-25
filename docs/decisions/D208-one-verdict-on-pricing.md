@@ -106,3 +106,10 @@ against the empty/"Nothing loaded" landing fixture (`copy-budget.spec.ts`'s own 
 does not stub a loaded worklist), so it sees Ruling A's headline simplification but not Ruling
 B's row-level cuts. The headline-only verdict is expected to lower the pinned figure; see this
 PR's own report for the measured before/after.
+
+### Amended 2026-09-25 — Compare and its stored setting are gone
+
+The entry with slug `pricing-rebuilt-to-the-reinterview` removes Ruling B's per-section
+Compare toggle and its stored setting, `banchi.pricing.compare`. The row now draws Market and
+Lowest on every desk width, and the product view carries the rest. Ruling A stands in a new
+shape: the slim bar is the one verdict (D277, Q4).
