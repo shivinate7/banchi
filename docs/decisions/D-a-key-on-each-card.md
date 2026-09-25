@@ -42,7 +42,10 @@ before the order key.
 and a gap. The gap is in front of a section, at the near end, in front of a card, or at a
 section's end. Only the arriving cards take new keys. A card that crosses boxes still leaves a
 tombstone with `moved_to` (D83), and the tombstone keeps its key. A mid-box delete (D10 ruling
-1) slides the indices, and a key that was its index slides with it.
+1) slides the indices and writes no key: the deleted card leaves a gap in key space, which
+nothing counts. The first build slid a key that equalled its index. That crossed the keys of
+placed cards, which the R3 review caught. The delete also points each tombstone's `moved_to` at
+the card's new index, so the join can still follow it.
 
 ### Undo
 

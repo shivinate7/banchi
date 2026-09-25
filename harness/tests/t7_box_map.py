@@ -518,7 +518,52 @@ def check_card_moves(checks: Checks) -> None:
         )
 
 
+def check_delete_after_placement(checks: Checks) -> None:
+    """R3 review, item 1 and item 5: a mid-box delete writes no key, and keeps move links.
+
+    Red before the fix: the delete slid a key that equalled its index and left a placed key
+    alone, so the two groups crossed (repro A), or two cards took one key (repro B). And a
+    tombstone's `moved_to` kept naming the old index after the destination slid (item 5).
+    """
+    checks.note("")
+    checks.note("BOX MAP R3 — a mid-box delete after a placement (D265, D10 ruling 1)")
+
+    def distinct(box: int) -> bool:
+        keys = [k for k in _keys(box).values()]
+        return len(keys) == len(set(keys))
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [2], "to_box": 2, "before_card": 3})
+        checks.equal(_walk(2), ["m1", "m2", "o2", "m3", "m4"], "repro A: o2 stands in front of m3")
+        capture_server.do_remove_card(2, 1, {"capture_id": None})
+        checks.equal(
+            _walk(2), ["m2", "o2", "m3", "m4"],
+            "repro A: after deleting m1, o2 still stands in front of m3",
+        )
+        checks.ok(distinct(2), "and no two cards share a key", str(_keys(2)))
+        chain, why = resolve.follow_moved(Store().read().inventory, "1/2")
+        checks.equal(
+            (chain, why), ("2/4", None),
+            "item 5: the move link follows the card after the destination slid (o2 is at 2/4 now)",
+        )
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [5, 6], "to_box": 2, "section_end": 2})
+        capture_server.do_move_range(2, {"indices": [3], "to_box": 2, "before_card": 1})
+        before = _walk(2)
+        capture_server.do_remove_card(2, 2, {"capture_id": None})
+        checks.equal(
+            _walk(2), [name for name in before if name != "m2"],
+            "repro B: a delete after two placements keeps every other card in its place",
+        )
+        checks.ok(distinct(2), "repro B: and no two cards share a key", str(_keys(2)))
+        labels = [_label(2, name) for name in _walk(2)]
+        checks.ok(len(labels) == len(set(labels)), "and no two cards read one label", str(labels))
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
-    check_per_card_order, check_card_moves,
+    check_per_card_order, check_card_moves, check_delete_after_placement,
 )

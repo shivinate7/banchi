@@ -4798,16 +4798,24 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         del inventory.cards[key]
         review_deleted, parked_deleted, cache_deleted = _drop_from_stores(snapshot, key)
 
+        # Tombstones anywhere whose move link names a card about to slide (D262).
+        pointing: Dict[str, List[master.Card]] = {}
+        for tomb in inventory.cards.where(state=master.MOVED):
+            if tomb.moved_to:
+                pointing.setdefault(tomb.moved_to, []).append(tomb)
         for at, old_key, other in movers:
             new_index = at - 1
             new_key = master.position_key(box, new_index)
             del inventory.cards[old_key]
             other.box = int(box)
             other.index = new_index
-            # A KEY THAT WAS ITS INDEX SLIDES WITH IT (D265), so a box nothing was placed
-            # into stays the identity. A placed card keeps its key, and so its place.
-            if other.order is None or float(other.order) == float(at):
-                other.order = float(new_index)
+            # NO ORDER KEY IS WRITTEN (D265, the R3 review). Every card keeps its key, so
+            # every card keeps its place; the deleted card leaves a gap in key space, which
+            # nothing counts. A key that slid with its index crossed the keys of placed cards.
+            # THE MOVE LINK FOLLOWS THE SLIDE (D262): a tombstone that named this card's old
+            # place names its new one, so the join can still follow it.
+            for tomb in pointing.get(old_key, ()):
+                tomb.moved_to = new_key
             # DERIVED FROM THE CARD'S NAME AND THEREFORE UNCHANGED BY THE SHIFT. It was
             # re-derived from `(box, new_index)` here, fresh rather than string-edited, to
             # keep a stale absolute path from another machine's store from surviving a
