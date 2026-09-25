@@ -24,8 +24,8 @@
       "R2-money": "kit-frame"
     },
     "app/src/LiveReconcile.tsx": {
-      "R2-dialog": "b-runs",
-      "R2-class": "b-runs",
+      "R2-dialog": "review",
+      "R2-class": "review",
       "R2-icon-only-button": "icons"
     },
     "app/src/Markdown.tsx": {
@@ -59,39 +59,30 @@
       "R2-icon-only-button": "icons"
     },
     "app/src/ReviewQueue.tsx": {
-      "R1": "review",
       "R2-dialog": "review",
       "R2-search": "review",
       "R2-class": "review",
       "R2-date": "review",
-      "R2-money": "review",
-      "R2-icon-only-button": "icons",
-      "R2-header-actions": "review"
+      "R2-money": "review"
     },
     "app/src/RunPanel.tsx": {
-      "R2-select": "b-runs",
-      "R2-class": "b-runs",
+      "R2-select": "review",
+      "R2-class": "review",
       "R2-icon-only-button": "icons"
     },
     "app/src/RunRescue.tsx": {
-      "R2-dialog": "b-runs",
-      "R2-class": "b-runs",
+      "R2-dialog": "review",
+      "R2-class": "review",
       "R2-icon-only-button": "icons"
     },
-    "app/src/Runs.tsx": {
-      "R1": "b-runs",
-      "R2-class": "b-runs",
-      "R2-icon-only-button": "icons",
-      "R2-header-actions": "b-runs"
-    },
     "app/src/RunsComposer.tsx": {
-      "R2-dialog": "b-runs",
-      "R2-select": "b-runs",
-      "R2-class": "b-runs",
+      "R2-dialog": "review",
+      "R2-select": "review",
+      "R2-class": "review",
       "R2-icon-only-button": "icons"
     },
     "app/src/RunsStage.tsx": {
-      "R2-date": "b-runs"
+      "R2-date": "review"
     },
     "app/src/SendCard.tsx": {
       "R2-icon-only-button": "icons"
@@ -110,13 +101,9 @@
       "top": "capture"
     },
     "/runs": {
-      "page": "b-runs",
-      "width": "b-runs",
-      "top": "b-runs"
+      "top": "review"
     },
     "/review": {
-      "page": "review",
-      "width": "review",
       "top": "review"
     },
     "/pricing": {

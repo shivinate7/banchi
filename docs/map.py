@@ -5293,8 +5293,8 @@ COMPONENTS = [
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D108", "D109", "D113",
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D166", "D168", "D172", "D174", "D183", "D189",
-                                "D191", "D192", "D193", "D203", "D212", "D213", "D219", "D225",
-                                "D227", "D251", "D252", "D259", "D268", "D273"],
+                                "D191", "D192", "D193", "D196", "D203", "D212", "D213", "D219",
+                                "D225", "D227", "D251", "D252", "D259", "D268", "D273"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -6198,7 +6198,7 @@ COMPONENTS = [
                                             "D63", "D66", "D69", "D70", "D94", "D95", "D100",
                                             "D105", "D109", "D120", "D123", "D134", "D159", "D196",
                                             "D204", "D207", "D227", "D266",
-                                            "D275", "D276"]},
+                                            "D275", "D276", "D-runs-folds-into-review"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -6838,8 +6838,9 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D118", "D137", "D162", "D167", "D172", "D194", "D218",
-                                "D252", "D253", "D259"],
+                                "D87", "D118", "D137", "D162", "D164", "D167", "D172", "D194",
+                                "D218", "D252", "D253", "D259", "D-icon-buttons",
+                                "D-runs-folds-into-review"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -6858,8 +6859,9 @@ COMPONENTS = [
                         "(`.review-recheck-*`), which is the reconcile sheet's — a scrolling "
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
-                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41",
-                                "D46", "D50", "D117", "D118", "D162", "D259"],
+                "governed_by": ["D5", "D9", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
+                                "D41", "D46", "D50", "D117", "D118", "D162", "D259",
+                                "D-runs-folds-into-review"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -7357,7 +7359,8 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100", "D174"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100", "D174",
+                                             "D-runs-folds-into-review"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -7366,7 +7369,8 @@ COMPONENTS = [
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
                              "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104",
-                                             "D105", "D117", "D118", "D180", "D218"]},
+                                             "D105", "D117", "D118", "D180", "D218",
+                                             "D-runs-folds-into-review"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -7433,7 +7437,7 @@ COMPONENTS = [
                                      "governed_by": ["D13", "D27", "D32", "D33", "D39", "D48",
                                                      "D52", "D56", "D58", "D65", "D76", "D78",
                                                      "D94", "D114", "D118", "D145", "D172",
-                                                     "D174", "D180"]},
+                                                     "D174", "D180", "D-runs-folds-into-review"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "
@@ -8490,7 +8494,10 @@ COMPONENTS = [
                                  # is the shared poll hook the run list and the open run's detail
                                  # both moved onto — the detail poll's `restartKey` is what
                                  # switching between two live runs needs and the hook alone supplies.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86", "D207", "D118", "D165"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31",
+                                                 "D32", "D33", "D39", "D48", "D49", "D54", "D56",
+                                                 "D64", "D65", "D76", "D86", "D118", "D165", "D196",
+                                                 "D207"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -8648,7 +8655,7 @@ COMPONENTS = [
                         "cannot run below 768: the sidebar is `display: none` there, which is "
                         "why the phone sweep harvests its own.",
                 "governed_by": ["D31", "D50", "D69", "D70", "D95", "D123", "D194",
-                                "D227"]},
+                                "D227", "D-runs-folds-into-review"]},
             "tests/wide.spec.ts": {
                 "does": "the owner's screens ABOVE the desk, which nothing in this suite had "
                         "ever rendered. Of twenty-one specs, ten cases set 1440x900 and none "
@@ -8711,7 +8718,7 @@ COMPONENTS = [
                         "block, route -> assertion -> lane: an unlisted failure is red and an "
                         "entry that now passes at every width is red (stale). Writes nothing. "
                         "Run by `make design-check`.",
-                "governed_by": ["D5", "D173", "D275", "D276"],
+                "governed_by": ["D5", "D173", "D275", "D276", "D-runs-folds-into-review"],
             },
             "tests/locating.spec.ts": {
                 "does": "where a card is, said one way (the locating lane): at 1440, 820, 720 "
@@ -8906,7 +8913,8 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117", "D204", "D266", "D-icon-buttons"],
+                "governed_by": ["D50", "D95", "D117", "D204", "D266", "D-icon-buttons",
+                                "D-runs-folds-into-review"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
                         "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "
@@ -9173,7 +9181,7 @@ COMPONENTS = [
                         "harness test; `make design-check` runs it.",
                 "governed_by": ["D5", "D20", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D95",
                                 "D100", "D105", "D109", "D134", "D174", "D192", "D275",
-                                "D276"],
+                                "D276", "D-runs-folds-into-review"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -9480,7 +9488,7 @@ COMPONENTS = [
                 "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D36", "D39",
                                 "D43", "D48", "D49", "D54", "D56", "D57", "D64", "D65", "D76",
                                 "D78", "D117", "D118", "D136", "D145", "D165", "D166", "D174",
-                                "D180", "D196", "D207", "D210", "D218"],
+                                "D180", "D196", "D207", "D210", "D218", "D-runs-folds-into-review"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

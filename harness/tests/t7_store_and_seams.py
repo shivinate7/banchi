@@ -5614,8 +5614,10 @@ def check_group_answer(checks: Checks) -> None:
                 getattr(caught, "code", None), "duplicate_position", "in its own code"
             )
             checks.ok(
-                "4/1" in str(caught),
-                "and the message names the repeated position",
+                # D196 (UX-208's carried refusal-leak item): the raw store key ("4/1")
+                # used to ride the message. `said_place` names the same position now.
+                "Section 1, Card 1" in str(caught) and "4/1" not in str(caught),
+                "and the message names the repeated position, said the way the screens say it",
                 f"message was: {caught}",
             )
 
@@ -5634,9 +5636,10 @@ def check_group_answer(checks: Checks) -> None:
                 "as group_entry_refused",
             )
             checks.ok(
-                "4/6" in str(caught) and "not_in_queue" in str(caught),
+                # D196: same fix — the raw key is gone, the said place is not.
+                "Section 1, Card 6" in str(caught) and "4/6" not in str(caught) and "not_in_queue" in str(caught),
                 "and the failing position is named WITH ITS OWN CODE, so one 409 still "
-                "reports per position",
+                "reports per position, said the way the screens say it",
                 f"message was: {caught}",
             )
         untouched = Store().read()
@@ -9665,16 +9668,30 @@ def check_box_claims(checks: Checks) -> None:
                 Store().read().inventory.cards[f"8/{i}"].set_hint for i in range(1, 6)
             ]
         before = hints()
-        refusal(
-            checks,
+        caught = checks.raises(
+            capture_server.BadRequest,
             lambda: capture_server.do_put_box_claims(
                 8, {"indices": [1, 99], "set_hint": "swept"}
             ),
-            "card_not_found",
             "a selection naming a card the box does not hold refuses the WHOLE call — a "
             "selection is a statement about a set, and an operator wrong about one member "
             "may be wrong about which box they are looking at",
         )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "card_not_found", "in its own code"
+            )
+            where = join.said_place(Store().read().inventory, 8)
+            checks.ok(
+                # D196 (UX-208's carried refusal-leak item): the raw "box/index" key used
+                # to ride the message ("holds no card at 3, 7"). `said_place` names the
+                # box the same way a card row does, and `place_within_box` never spells
+                # the missing index as a store key.
+                where in str(caught) and "8/99" not in str(caught),
+                "and the message names the box the said way, never the raw box/index "
+                "key",
+                f"message was: {caught}",
+            )
         checks.equal(
             hints(),
             before,

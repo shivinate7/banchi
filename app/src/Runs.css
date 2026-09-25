@@ -4,15 +4,16 @@
    stage bar, the log well, the file controls, the crop preview.
    ========================================================================== */
 
-/* ---- page ---------------------------------------------------------------- */
+/* ---- content, folded into Review's own sheet (D-runs-folds-into-review) --------------- */
 .runs {
   display: flex;
   flex-direction: column;
   gap: var(--bn-5);
 }
-/* Header → first content is 24px on every owner screen: the kit's 24 is zeroed by the page
-   stack's 20, and 4 restores it. */
-.runs > .bn-head { margin-bottom: var(--bn-1); }
+/* The one worded primary ("Identify cards") plus icons, the header rule's own shape, drawn as
+   a plain row now that the sheet's own header carries the title. */
+.runs-lede { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.runs-actions { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
 .runs-scope { max-width: 360px; overflow: hidden; }
 @media (max-width: 639px) {
   .runs-hide-sm { display: none; }
