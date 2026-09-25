@@ -22,7 +22,12 @@
 
 .revenue-summary {
   display: grid;
-  grid-template-columns: minmax(220px, auto) minmax(0, 1fr) minmax(220px, auto);
+  /* FIXED CAPS ON THE OUTER TWO, NEVER `auto`: an `auto` track's max-content contribution
+     is its text laid out on ONE LINE, so a long sentence in the lead column (the refund
+     note) balloons past the viewport and starves the middle `1fr` track to 0 — measured,
+     the month bars then stack invisibly behind the shelf column instead of drawing beside
+     it (defect fix). */
+  grid-template-columns: minmax(220px, 340px) minmax(180px, 1fr) minmax(220px, 300px);
   gap: var(--bn-7);
   align-items: start;
   padding-bottom: var(--bn-6);
@@ -315,7 +320,10 @@
 }
 
 @media (max-width: 1199px) {
-  .revenue-summary { grid-template-columns: auto minmax(0, 1fr); }
+  /* Same `auto`-track trap as the three-column rule above (see its own comment): capped,
+     never `auto`, or the lead column's longest sentence pushes the month bars off the
+     right edge (defect fix, measured at 820: 63px of page scroll). */
+  .revenue-summary { grid-template-columns: minmax(220px, 340px) minmax(180px, 1fr); }
   .revenue-shelf {
     grid-column: 1 / -1;
     border-left: 0;
