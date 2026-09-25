@@ -135,37 +135,10 @@
 .bn-sortth[data-active='true'] .bn-sortth-icon { opacity: 1; }
 
 /* ---- The compact trigger and its sheet -------------------------------------------------------- */
-.bn-filterbar-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bn-1-5);
-  height: var(--bn-control-h);
-  padding: 0 var(--bn-3);
-  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
-  border-radius: var(--bn-r);
-  background: var(--bn-surface);
-  font: inherit;
-  font-size: var(--bn-fs-md);
-  font-weight: 600;
-  color: var(--bn-ink-2);
-  transition: border-color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
-}
-.bn-filterbar-trigger:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
-.bn-filterbar-trigger[data-active='true'] { border-color: var(--bn-accent); background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
-.bn-filterbar-trigger-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 var(--bn-1-5);
-  border-radius: var(--bn-r-full);
-  background: var(--bn-accent);
-  color: var(--bn-on-accent);
-  font-size: var(--bn-fs-2xs);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
+/* It is an IconButton now (D-icon-buttons): its own box, colour, hover paint and active-count
+   badge are `.bn-icon-btn`/`.bn-icon-count` in kit.css. The bordered field look, its own
+   18px count pill and its own hover paint (a "second paint on the face", round 2's own
+   finding) all predate the conversion and are gone. */
 
 .bn-filterbar-sheet-body {
   display: flex;
@@ -183,9 +156,9 @@
 .bn-filterbar-sheet-body .bn-filterchips { flex-direction: column; align-items: stretch; }
 .bn-filterbar-sheet-body .bn-filterchips > .bn-fchip { flex: none; width: 100%; }
 .bn-filterbar-sheet-body .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; min-width: 0; max-width: none; }
-.bn-filterbar-sheet-body .bn-sort { flex-direction: column; align-items: stretch; }
-.bn-filterbar-sheet-body .bn-sort > .bn-pick,
-.bn-filterbar-sheet-body .bn-sort-dir { width: 100%; min-width: 0; max-width: none; justify-content: flex-start; }
+/* The direction is now an IconButton (D-icon-buttons): compact, not a field, so it stays at
+   its own size beside the key instead of stacking full width with it. */
+.bn-filterbar-sheet-body .bn-sort > .bn-pick { flex: 1; min-width: 0; max-width: none; justify-content: flex-start; }
 
 /* ---- The match highlight (`kit/highlight.tsx`) ------------------------------------------------ */
 .bn-highlight {
