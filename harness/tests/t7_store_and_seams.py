@@ -9668,16 +9668,30 @@ def check_box_claims(checks: Checks) -> None:
                 Store().read().inventory.cards[f"8/{i}"].set_hint for i in range(1, 6)
             ]
         before = hints()
-        refusal(
-            checks,
+        caught = checks.raises(
+            capture_server.BadRequest,
             lambda: capture_server.do_put_box_claims(
                 8, {"indices": [1, 99], "set_hint": "swept"}
             ),
-            "card_not_found",
             "a selection naming a card the box does not hold refuses the WHOLE call — a "
             "selection is a statement about a set, and an operator wrong about one member "
             "may be wrong about which box they are looking at",
         )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "card_not_found", "in its own code"
+            )
+            where = join.said_place(Store().read().inventory, 8)
+            checks.ok(
+                # D196 (UX-208's carried refusal-leak item): the raw "box/index" key used
+                # to ride the message ("holds no card at 3, 7"). `said_place` names the
+                # box the same way a card row does, and `place_within_box` never spells
+                # the missing index as a store key.
+                where in str(caught) and "8/99" not in str(caught),
+                "and the message names the box the said way, never the raw box/index "
+                "key",
+                f"message was: {caught}",
+            )
         checks.equal(
             hints(),
             before,
