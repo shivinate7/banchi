@@ -306,7 +306,7 @@ sealEveryTest()
 test('only the newest pull in the walk offers Undo — the older one reads Sold', async ({ page }) => {
   const wire = await open(page)
 
-  const rows = page.locator('.card-locations-row')
+  const rows = page.locator('.orders-card-copy')
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
 
@@ -331,7 +331,7 @@ test('a newer pull is what ends the older one’s Undo, not any span of time', a
      screen HAD before this fix — per-copy granularity the owner declined) would fail exactly
      here rather than being read as "the newest one also happens to work". */
   const wire = await open(page)
-  const rows = page.locator('.card-locations-row')
+  const rows = page.locator('.orders-card-copy')
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -352,7 +352,7 @@ test('the newest pull stays undoable well past the old twenty-second window', as
      happens: 25 real seconds pass on the fake clock and the newest pull's `Undo` is untouched. */
   await page.clock.install()
   const wire = await open(page)
-  const rows = page.locator('.card-locations-row')
+  const rows = page.locator('.orders-card-copy')
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -368,7 +368,7 @@ test('the newest pull stays undoable well past the old twenty-second window', as
 
 test('undoing the newest pull returns it to Mark sold, and the older copy stays Sold', async ({ page }) => {
   const wire = await open(page)
-  const rows = page.locator('.card-locations-row')
+  const rows = page.locator('.orders-card-copy')
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -392,18 +392,14 @@ test('undoing the newest pull returns it to Mark sold, and the older copy stays 
 /* -------------------------------------------------------------------------------------- 5 */
 
 test('the walk\'s card pane carries no listing-correction control — Inventory only', async ({ page }) => {
-  /* D252, the owner's ruling verbatim in intent: "Inventory only." This
-   * pane is `CardHero.tsx`'s shared `CardDetailsSection`, the same component `#/inventory`
-   * draws (§13, "Inventory's card pane, unchanged... reused whole") — `OrdersWalkPane.tsx`
-   * passes `correctable={false}` at its one call site, so the control this file's sibling
-   * (`correct-answer.spec.ts`) proves reachable on `#/inventory` must be absent here, and
-   * absent WITHOUT a reserved gap in its place (D118: nothing rendered, not an empty box). */
+  /* D252, the owner's ruling verbatim in intent: "Inventory only." The walk's card pane is the
+   * photograph, the pick and every copy (UX-169). The card's details, and the correction control
+   * `correct-answer.spec.ts` proves on `#/inventory`, are never drawn here. */
   await open(page)
 
-  const details = page.locator('.browse-details')
-  await expect(details).toBeVisible()
-  // The disclosure is open by default at this viewport (`CardDetailsSection`'s own default,
-  // `!phone`), so the control would already be on screen if it were drawn at all.
+  await expect(page.locator('.orders-card-pane')).toBeVisible()
+  // The details table is #/inventory's (UX-169): the walk's pane never draws it, nor its control.
+  await expect(page.locator('.browse-details')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Wrong card?' })).toHaveCount(0)
   await expect(page.locator('.card-correction')).toHaveCount(0)
 })

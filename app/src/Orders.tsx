@@ -3016,26 +3016,45 @@ function PullStage({
   /* ONE EMPTY STATE, AND NOTHING UNDER IT (UX-234): no buyer panel, no walk, until a row shows. */
   if (shownGroups.length === 0) {
     const searched = query.trim() !== ''
+    const nothingOwed = show === null && statuses.length === 0 && !hideUnknown && base.length === 0
     return (
       <div className="orders-stage">
         {filterBar}
         <div className="bn-panel">
-          <EmptyState
-            icon={searched ? 'search' : show === 'done' ? 'check' : 'sparkles'}
-            title={searched ? 'No buyer matches' : show === 'done' ? 'Nothing done yet' : 'Nothing here'}
-            body={searched ? `No buyer or order number matches “${query.trim()}”.` : 'No buyer is in this view.'}
-            actions={
-              searched ? (
+          {searched ? (
+            <EmptyState
+              icon="search"
+              title="No buyer matches"
+              body={`No buyer or order number matches “${query.trim()}”.`}
+              actions={
                 <Button icon="x" onClick={() => setQuery('')}>
                   Clear search
                 </Button>
-              ) : (
+              }
+            />
+          ) : nothingOwed ? (
+            <EmptyState
+              icon="check"
+              title="Nothing is owed"
+              body="Every open order has its copies."
+              actions={
+                <Button icon="list" onClick={() => setPicked({ show: ['done'] })}>
+                  Show done buyers
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon="sparkles"
+              title={show === 'done' ? 'Nothing done yet' : 'No buyer in this view'}
+              body="Clear the filters to see every open buyer."
+              actions={
                 <Button icon="list" onClick={() => setPicked({})}>
                   Show every open buyer
                 </Button>
-              )
-            }
-          />
+              }
+            />
+          )}
         </div>
       </div>
     )
@@ -3126,7 +3145,7 @@ function PullStage({
       <div className="orders-walk-crowd">
         <h2 className="orders-walk-title">{walkedGroups.length} buyers</h2>
         <p className="orders-walk-sub">
-          {cardsToPull} {plural(cardsToPull, 'card', 'cards')} to pull
+          {cardsToPull} {plural(cardsToPull, 'card', 'cards')} to pick
         </p>
       </div>
     ) : selectedGroup === null ? null : (
@@ -3147,7 +3166,7 @@ function PullStage({
       {buyerDone ? (
         <div className="orders-walk-done">
           <p>
-            <Icon name="check" size={16} /> All pulled.
+            <Icon name="check" size={16} /> All {selectedGroup.orders.reduce((sum, one) => sum + one.recorded, 0)} sold.
           </p>
           <a className="bn-btn bn-btn-primary" href="#/shipping">
             <Icon name="truck" size={16} />
@@ -3183,7 +3202,7 @@ function PullStage({
   const nextRow = walk.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? null
   const chipWords = [
     walkedGroups.length > 1 ? `${walkedGroups.length} buyers` : selectedGroup === null ? 'Choose a buyer' : buyerLabel(selectedGroup),
-    `${cardsToPull} ${plural(cardsToPull, 'card', 'cards')} to pull`,
+    `${cardsToPull} ${plural(cardsToPull, 'card', 'cards')} to pick`,
     ...(nextRow === null || nextRow.copy.place.label === null ? [] : [`next: ${sayPlace(nextRow.copy.place.label)}`]),
   ]
 

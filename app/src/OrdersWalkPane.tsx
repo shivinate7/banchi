@@ -1,4 +1,4 @@
-/* app/src/OrdersWalkPane.tsx — the walk: the cards to pull for the buyers walked, in the order
+/* app/src/OrdersWalkPane.tsx — the walk: the cards to pick for the buyers walked, in the order
  * the boxes are walked (`docs/specs/order-walk-plan.md` §13), and the card pane beside it.
  *
  * THE WIRE IS UNCHANGED: `POST /orders/walk-plan` (`server.ts:walkPlan`), `WalkPlan` and its
@@ -549,7 +549,7 @@ export function WalkList({
     return <p className="orders-walk-empty bn-muted">No copy of these cards is on hand.</p>
   }
   return (
-    <ul className="orders-walk-list" aria-label="The cards to pull, in the order the boxes are walked">
+    <ul className="orders-walk-list" aria-label="The cards to pick, in the order the boxes are walked">
       {walk.sections.map((section) => {
         const lines = takeLinesOf(section.rows)
         const pickedAll = (line: WalkTakeLine) =>
@@ -645,12 +645,14 @@ export function WalkCardPane({
 
   if (currentGroup === null || currentRow === null) return null
   const take = currentRow.take
-  const row: Row | null = currentCard === null ? null : { key: currentRow.copy.key, card: currentCard }
-  const of = Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
+  /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
+  const row: Row | null =
+    currentCard === null || currentRow.copy.place.located === false ? null : { key: currentRow.copy.key, card: currentCard }
+  const of =Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
   const sub = [take.number_display, take.set].filter((part): part is string => Boolean(part))
 
   return (
-    <section className="orders-card-pane bn-panel" aria-label="The card to pull">
+    <section className="orders-card-pane bn-panel" aria-label="The card to pick">
       <div className="orders-card-top">
         <div className="orders-card-shot">
           {row === null ? (
@@ -689,7 +691,11 @@ export function WalkCardPane({
           const here = copy.key === currentRow.copy.key
           return (
             <li className={here ? 'orders-card-copy is-current' : 'orders-card-copy'} key={copy.key} aria-current={here ? 'true' : undefined}>
-              <Location place={copy.place} className="orders-card-place" />
+              {copy.place.located === false ? (
+                <span className="orders-card-place">Pooled: {copy.place.game_display ?? 'cards'}</span>
+              ) : (
+                <Location place={copy.place} className="orders-card-place" />
+              )}
               <span className="orders-card-action">
                 <RowAction walk={walk} copy={copy} />
               </span>

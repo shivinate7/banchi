@@ -7810,9 +7810,9 @@ COMPONENTS = [
                                            "one-line collapsed row — are deleted with it; "
                                            "`preserveOrder` stays, the trap this rebuild's own "
                                            "brief named first (never re-sort the walk).",
-                                   "governed_by": ["D58", "D62", "D79", "D93", "D96", "D97", "D116",
-                                                   "D118", "D132", "D164", "D181", "D193", "D209",
-                                                   "D212", "D218", "D220", "D252",
+                                   "governed_by": ["D24", "D58", "D62", "D79", "D93", "D96", "D97",
+                                                   "D116", "D118", "D132", "D164", "D181", "D193",
+                                                   "D209", "D212", "D218", "D220", "D252",
                                                    "D-pull-list-is-a-pick-count"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
@@ -8943,7 +8943,7 @@ COMPONENTS = [
                                                      "D91", "D93", "D96", "D103", "D113", "D114",
                                                      "D118", "D123", "D132", "D181", "D193", "D194",
                                                      "D196", "D203", "D209", "D212", "D218", "D220",
-                                                     "D221"]},
+                                                     "D221", "D-view-state-in-url"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "

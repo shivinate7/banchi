@@ -167,7 +167,8 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-panel-name.bn-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-lg); }
 .orders-panel-order,
 .orders-walk-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.orders-buyer-order-id { overflow-wrap: anywhere; color: var(--bn-ink-2); }
+.orders-buyer-order-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bn-ink-2); }
+.orders-panel-order { display: flex; gap: 0.3em; min-width: 0; }
 .orders-panel-facts { display: flex; align-items: center; flex-wrap: wrap; gap: var(--bn-3) var(--bn-5); }
 .orders-panel-figures { display: flex; gap: var(--bn-5); }
 .orders-manage { min-height: var(--bn-control-h-lg); }
