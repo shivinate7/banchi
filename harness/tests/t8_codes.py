@@ -315,10 +315,21 @@ def run() -> Result:
         "would ship them anyway",
     )
     message = str(stray or "")
-    c.ok("2 (" in message and "3 (" in message,
+    c.ok("Pokémon Center ETB" in message and "no product claim" in message,
          "and the refusal names the PREMIUM stray AND the unclaimed one — the second was "
          "invisible to a first version that asked what was sellable rather than what was "
          "physically in the box",
+         f"message was {message!r}")
+    # D196: a store row number is this module's own bookkeeping, never a screen's word. The
+    # first version of this fix named strays "2 (Pokemon Center ETB), 3 (no product claim)" —
+    # the raw `index` column, printed under its own name, straight onto a refusal a screen
+    # shows verbatim (app/src/server.ts:describeFailure). Pin against that regressing.
+    c.ok("index" not in message,
+         "the refusal never says `index` — that is this module's own bookkeeping, not a "
+         "word for a screen",
+         f"message was {message!r}")
+    c.ok("2 (" not in message and "3 (" not in message,
+         "and it never prints a bare store row number as a stray's name",
          f"message was {message!r}")
 
     # A reserved-elsewhere card is the third class, and it would be shipped to two buyers.

@@ -21,9 +21,11 @@ used for a physical lot for the reason above, rather than trusting the caller to
 A PHYSICAL LOT TAKES THE WHOLE BOX OR IT IS REFUSED, which is the same rule one step along.
 A lot that took 1,000 of a box's 1,003 cards would produce a perfectly correct ledger and a
 packing slip reading "Box 12, 1000 card(s)" — and the operator, holding that slip and that
-box, ships 1,003. `plan` refuses instead and names the strays by index, because "pull all of
-them except these three" is not an instruction anybody executes reliably against a thousand
-identical pieces of cardboard.
+box, ships 1,003. `plan` refuses instead and names the strays by why each is there, because
+"pull all of them except these three" is not an instruction anybody executes reliably against
+a thousand identical pieces of cardboard, and a raw store index would not tell the operator
+anything a photo does not already answer better (D196: `index` is this module's own word,
+not a screen's).
 
 THAT CHECK ASKS WHAT IS IN THE BOX, NOT WHAT IS SELLABLE FROM IT, and the difference is two
 classes of card that would otherwise ride along unseen: a code with no product claim, which
@@ -246,18 +248,22 @@ def plan(
                         return "no product claim"
                     return products.display(e.product)
 
-                detail = ", ".join(
-                    f"{e.index} ({_why(e)})"
-                    for e in sorted(left, key=lambda x: (x.index or 0))[:12]
-                )
-                more = "" if len(left) <= 12 else f", and {len(left) - 12} more"
+                # NAMED BY WHY, NEVER BY `index` — a store row number is this module's own
+                # bookkeeping (see the header), and D196 keeps it off a screen. The remedy
+                # is the same for every stray regardless of which one it is ("move them out
+                # of the box"), so the reason is what the operator needs, not a locator —
+                # the same rollup the empty-pool refusal above already speaks.
+                blocked: Dict[str, int] = {}
+                for e in left:
+                    why = _why(e)
+                    blocked[why] = blocked.get(why, 0) + 1
+                detail = "; ".join(f"{n} {why}" for why, n in sorted(blocked.items()))
                 raise LotError(
                     f"box {box} physically holds {len(left)} card(s) this lot would NOT "
-                    f"take, so 'pull box {box}' would ship them anyway: index {detail}"
-                    f"{more}. A physical lot is the whole box or it is nothing — move those "
-                    "cards out of the box, give the unclaimed ones a product claim, or "
-                    "settle the ones already reserved elsewhere, and build again. Nothing "
-                    "was reserved."
+                    f"take, so 'pull box {box}' would ship them anyway: {detail}. A physical "
+                    "lot is the whole box or it is nothing — move those cards out of the "
+                    "box, give the unclaimed ones a product claim, or settle the ones "
+                    "already reserved elsewhere, and build again. Nothing was reserved."
                 )
     else:
         if count is None:

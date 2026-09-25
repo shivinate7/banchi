@@ -1717,7 +1717,7 @@ COMPONENTS = [
                                 "whole-box check asks what is PHYSICALLY in the box rather "
                                 "than what is sellable from it, which is what catches an "
                                 "unclaimed code and a code already reserved to another lot.",
-                        "governed_by": ["D14", "D24", "D70"], "tested_by": ["T8"]},
+                        "governed_by": ["D14", "D24", "D70", "D196"], "tested_by": ["T8"]},
             "scan.py": {"does": "read a capture directory into ledger entries, and apply "
                                 "them. The CORE, shared by `cli/cmd_scan.py` and "
                                 "`server/codes_routes.py` so the command and the screen can "
