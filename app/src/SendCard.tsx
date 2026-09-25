@@ -378,7 +378,10 @@ export function SendCard({
     setDismissing(true)
     setUndoFailure(null)
     try {
-      await dismissSendWarning(stamp)
+      /* THE ANSWER IS THE RECEIPT AS IT NOW STANDS: folded in where this card holds it, and the
+         receipts list is read again below. */
+      const answer = await dismissSendWarning(stamp)
+      setSent((prev) => (prev !== null && prev.stamp === answer.send.stamp ? answer.send : prev))
     } catch (err) {
       setUndoFailure({ title: 'Banchi could not dismiss this warning.', failure: describeFailure(err) })
     } finally {

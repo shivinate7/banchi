@@ -266,6 +266,7 @@ const RECORDED = {
     'sendCopies', 'sendMarkdown', 'takeBackSend', // D-one-press-sends-and-makes-live: the one
     'liveCheck',                                  // press, its way back, and the check after it
     'matchRun',                                   // flow interview Q4: the match runs by itself
+    'dismissSendWarning',                         // the round-3 review's H2: a taken-back warning read
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
