@@ -1501,6 +1501,45 @@ test('a search that never returns this card gives a sentence, not an endless loa
   await expect(panel.locator('.bn-notice-warn')).toContainText("did not return this card's own row")
 })
 
+test('B2 — a sold card reached by a deep link stays drawn for the rest of this box load', async ({
+  page,
+}) => {
+  /* FLT-22, "nothing jumps": land on an ALREADY-SOLD card by its `&card=<cid>` link (the way
+   * Review's place pill links here) while Hide sold is on. `enteredLive`'s own snapshot keeps
+   * only what was LIVE at this box's own fetch, so a row that arrived sold never entered it —
+   * it stayed drawn only because `row.key === selected`, and the moment the walk steps off it
+   * (D118's OTHER exception) it has nothing left to stand on and folds, moving every row below
+   * it up under the very click that was meant to land on one of them. */
+  const live = (index: number, at: number) =>
+    card({ index, at, state: 'identified', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
+  const cards: Cards = {
+    '2/1': live(1, 1),
+    '2/2': card({ index: 2, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 6, cid: 'eiscue-cid' }),
+    '2/3': live(3, 2),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, BOXES, store, () => PRICING, SALE, { hideSold: true, route: '/#/inventory?box=2&card=eiscue-cid' })
+  await expandAll(page)
+
+  const soldRow = page.locator('.browse-row', { hasText: 'Eiscue' })
+  await expect(soldRow, 'the deep link did not land on the sold card').toHaveCount(1)
+  await expect(soldRow).toHaveAttribute('aria-current', 'true')
+
+  /* WHICH ROWS ARE DRAWN, IN ORDER — not their pixels, which the deep link's own arrival scroll
+     moves on its own and would make this measure that scroll rather than the fold. `evaluateAll`
+     rather than `allTextContents` so this reads the DOM the click just committed to, not a
+     retried snapshot. */
+  const order = () =>
+    page.locator('.browse-row').evaluateAll((rows) => rows.map((row) => row.textContent?.replace(/\s+/g, ' ').trim().slice(0, 24)))
+  const before = await order()
+
+  // Step off the sold row onto a live one.
+  await page.locator('.browse-row', { hasText: 'Bashful Bloom' }).first().click()
+
+  await expect(soldRow, 'the row the walk arrived on folded the moment it left it (nothing jumps)').toHaveCount(1)
+  expect(await order(), 'a row appeared, vanished or reordered when the walk stepped off the sold one').toEqual(before)
+})
+
 // -------------------------------------------- the sale is one press, and the row is the way back
 
 /* D57. `Mark sold` opened a photo-confirm panel and wrote nothing; the owner ruled the photograph

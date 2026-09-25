@@ -1142,6 +1142,27 @@ export function BoxBrowse({
     }
   }, [shelf, reloads, reloadToken, onListings])
 
+  /* B2: A ROW THE WALK STANDS ON IS "DRAWN DURING THIS BOX LOAD" EVEN WHEN IT ARRIVED SOLD.
+   *
+   * `enteredLive`'s own snapshot above only catches what was LIVE at the fetch — a row that
+   * was already sold when this box was opened never entered it, so `visible`'s fallback for it
+   * was `row.key === selected` alone. That holds only while the walk stands on it: land on a
+   * sold card by its `&card=<cid>` link with Hide sold on, step onto a live row next, and the
+   * sold row has nothing left to stand on — it folds, and every row below it moves.
+   *
+   * Selecting a row THIS SHELF's own snapshot already covers adds it to the standing set
+   * instead of replacing it, so it goes on being drawn for the rest of the load. `held.shelf
+   * !== shelf` is the same "until the next load" guard the snapshot above uses: a shelf
+   * switch's own fetch overwrites `enteredLive` wholesale, and this effect is not the one that
+   * decides what a NEW box starts with. */
+  useEffect(() => {
+    if (selected === null) return
+    setEnteredLive((held) => {
+      if (held === null || held.shelf !== shelf || held.keys.has(selected)) return held
+      return { shelf: held.shelf, keys: new Set(held.keys).add(selected) }
+    })
+  }, [selected, shelf])
+
   /* The box registry, on the same counter and allowed to fail without anybody hearing. The
    * facet cells ride on the same answer, so a filter pick needs no second read (FLT-09). */
   useEffect(() => {
