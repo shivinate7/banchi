@@ -154,6 +154,7 @@ export const ICON_MEANINGS: Partial<Record<keyof typeof PATHS, string>> = {
   search: 'Search',
   check: 'Confirm, or a completed state',
   hand: 'Fulfillment: a card the Fulfiller may pull',
+  plus: 'Add new records: orders, a box, a row',
 }
 
 export type IconName = keyof typeof PATHS

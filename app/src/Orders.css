@@ -1,31 +1,48 @@
 /* ============================================================================
-   ORDERS — the hub (Orders · Shipping) and the Pull stage. Tokens only; both themes free.
+   ORDERS — the Orders page (the buyer list, the walk and the card) and the Shipping page's frame.
+   Tokens only; both themes free.
    ========================================================================== */
 
-/* The order pane is `1fr` beside a clamped index, so the page's surplus all lands in it: at
-   the shell's ceiling it is 1196px, and `.orders-line-top` puts the card name at one end of
-   that and the figure at the other. */
-.orders-hub { display: flex; flex-direction: column; gap: var(--bn-4); }
-/* THE CAP IS PER STAGE, NOT PER ROUTE. Shipping is a list of rows — three lanes of them — so
-   it takes the rows cap, same as Pricing and Codes; the Pull stage now takes Inventory's own
-   rail-and-pane skeleton (§13) and has no reason to be narrower than the screen it copies,
-   which sets no cap at all and falls back to `--bn-page-w`'s full 1600px. */
-.orders-hub.shipping { --bn-page-max: var(--bn-page-w-rows); }
-.orders-hub .bn-head { margin-bottom: 0; }
-.orders-hub .bn-lede strong { color: var(--bn-ink); font-weight: 600; }
-.orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); }
+.orders-hub .bn-verdict strong { color: var(--bn-ink); font-weight: 700; }
+.orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+/* Add orders and Cards to pull: two small squares on the filter bar's line. */
+.orders-store-controls { display: inline-flex; align-items: center; gap: var(--bn-2); }
+.orders-card-market { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-card-market .bn-money { color: var(--bn-ink-2); }
 
-/* THE SKIP LINK (interaction review, "32 tab stops"). Invisible until it holds keyboard
-   focus, same idiom as a page's own "skip to main content" — a Tab-only pass lands on it
-   FIRST, before the buyer rail's search, filters and every row, and one more Tab or a press
-   moves focus straight to `.browse-side` (`tabIndex={-1}` there is the landing spot, not a
-   real stop). Fixed rather than `position: absolute` so it cannot be clipped by an ancestor's
-   own overflow, which `.orders-index`'s scroller sets a few rules down. */
+/* ---- the layout: buyers, the walk, the card (UX-169, UX-194, D274)
+   THE WALK GETS THE HEIGHT. There is one scroll, the page's (UX-201): no column scrolls on its
+   own. The card pane is sticky beside the walk on a wide column, so Mark sold stays in reach
+   while the walk scrolls under it.
+
+   THREE SHAPES, CHOSEN BY THE COLUMN (a container query, D123), never by the window:
+   - wide (1000px and up): buyers | walk | card.
+   - mid (560 to 999px, which holds 720 beside the desktop rail and 820): buyers | the card
+     over the walk.
+   - narrow (under 560px, a phone): one line that says who, how many and what is next, which
+     opens the buyer list as a sheet; then the card; then the walk. */
+.orders-body { container-type: inline-size; container-name: orders; min-width: 0; }
+.orders-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'chip' 'card' 'walk';
+  gap: var(--bn-4);
+  align-items: start;
+}
+.orders-buyers { grid-area: buyers; display: none; min-width: 0; }
+.orders-cardcol { grid-area: card; min-width: 0; }
+.orders-walk { grid-area: walk; min-width: 0; }
+
+/* The skip link (interaction review, "32 tab stops"): off screen until a Tab lands on it, then
+   one press moves focus past the filter bar and the buyer list to the walk. */
 .orders-skip-link {
   position: fixed;
   top: var(--bn-2);
   left: var(--bn-2);
   z-index: 100;
+  min-height: var(--bn-control-h-lg);
+  display: inline-flex;
+  align-items: center;
   padding: var(--bn-2) var(--bn-3);
   border-radius: var(--bn-r);
   background: var(--bn-accent);
@@ -37,252 +54,198 @@
 }
 .orders-skip-link:focus-visible { transform: none; }
 
-/* ---- the two routes as tabs ------------------------------------------------- */
-.orders-tabs { margin-top: var(--bn-1); }
-.orders-tab,
-.orders-tab:hover { text-decoration: none; }
-.orders-tab .bn-kbd { opacity: 0; transition: opacity var(--bn-t-fast) var(--bn-ease); }
-.orders-tab:hover .bn-kbd,
-.orders-tab:focus-visible .bn-kbd { opacity: 1; }
+/* ---- the phone's one line (UX-194) ------------------------------------------------ */
+.orders-buyerchip {
+  grid-area: chip;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  width: 100%;
+  min-height: var(--bn-control-h-lg);
+  padding: var(--bn-2) var(--bn-3);
+  border: 1px solid var(--bn-field-edge);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  color: var(--bn-ink);
+  text-align: left;
+  font-size: var(--bn-fs-md);
+  transition: border-color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-buyerchip:hover { border-color: var(--bn-ink-3); }
+.orders-buyerchip-text { flex: 1 1 auto; min-width: 0; }
+.orders-buyerchip-text > span:first-child { font-weight: 600; }
 
-/* ---- header hand-off -------------------------------------------------------- */
-.orders-handoff .bn-icon:last-child { color: var(--bn-ink-4); }
-.orders-failure-code { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+@container orders (min-width: 560px) {
+  .orders-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-areas: 'buyers card' 'buyers walk';
+    grid-template-rows: auto 1fr;
+  }
+  .orders-buyers { display: block; }
+  .orders-buyerchip { display: none; }
+}
+@container orders (min-width: 1000px) {
+  .orders-layout {
+    grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 400px);
+    grid-template-areas: 'buyers walk card';
+    grid-template-rows: auto;
+    gap: var(--bn-5);
+  }
+  .orders-cardcol { position: sticky; top: var(--bn-4); }
+}
 
-/* ---- toolbar: the filter chips and the view controls -------------------------- */
-/* `.orders-mode` IS GONE with the mode strip it styled (`docs/specs/order-walk-plan.md` §12).
-   `#/orders` is one screen, so there is nothing left to switch between. */
-.orders-toolbar {
+/* ---- THE FILTER BAR IS ONE LINE at every width (the owner, 2026-09-24: "i question whether
+   they deserve all that real estate"): the search, ONE Filters button with its count badge, and
+   the count line beside them. Show, the TCGplayer status, the sort and the hide toggle live in
+   the Filters sheet. The kit's own default is one line plus the popover (D270 amended by
+   kit-tighten), so this file only sizes ITS OWN row: the trigger's own `flex: none` and how the
+   search field and the count line share the rest. */
+.orders-filterbar { flex-direction: row; align-items: center; gap: var(--bn-3); }
+.orders-filterbar .bn-filterbar-controls { flex: 0 1 auto; flex-wrap: nowrap; min-width: 0; }
+.orders-filterbar .bn-filterbar-lead { flex: 0 1 28rem; min-width: 10rem; max-width: 28rem; }
+.orders-filterbar .bn-filterbar-compact { flex: none; }
+.orders-filterbar .bn-filtercount { flex: 1 1 auto; min-width: 0; margin: 0; }
+@container bn-page (max-width: 559px) {
+  .orders-filterbar .bn-filterbar-lead { flex: 1 1 auto; max-width: none; }
+  .orders-filterbar .bn-filtercount { display: none; }
+}
+
+/* ---- WALK MODE (the owner's ruling, 2026-09-24) -------------------------------------------
+   While a buyer is walked (`?walk=1`) and the page's column is under 1000px, everything the walk
+   does not need folds away: the title and the walk line share one slim row, the verdict, the
+   filter bar, the buyer list, the order header and the walk's tools hide, and the card pane
+   becomes one thin row. The walk takes the rest. Entering and leaving is a navigation (D118).
+   At 1000px and wider the three columns stay. The verdict hides there too: while one buyer is
+   walked, the store's total is not what the hand needs. */
+.orders-walkline { display: none; }
+.orders-card-thin { display: none; }
+.orders-hub.is-walking .bn-verdict { display: none; }
+@container bn-page (max-width: 999px) {
+  .orders-hub.is-walking .bn-page-head {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--bn-2);
+    margin-bottom: var(--bn-1);
+  }
+  .orders-hub.is-walking .bn-page-head .bn-title { font-size: var(--bn-fs-lg); }
+  .orders-hub.is-walking .bn-page-head .bn-head-text { flex: none; }
+  .orders-hub.is-walking .bn-page-head .bn-head-actions { flex: 1 1 auto; min-width: 0; width: auto; margin: 0; }
+  .orders-hub.is-walking .bn-head-actions > :not(.orders-walkline) { display: none; }
+  .orders-walkline { display: flex; align-items: center; gap: var(--bn-1); width: 100%; min-width: 0; }
+  .orders-stage.is-walking { gap: var(--bn-2); }
+  .orders-stage.is-walking .orders-filterbar,
+  .orders-stage.is-walking .orders-buyers,
+  .orders-stage.is-walking .orders-buyerchip,
+  .orders-stage.is-walking .orders-walk-head,
+  .orders-stage.is-walking .orders-walk-note,
+  .orders-stage.is-walking .orders-walk-tools { display: none; }
+  .orders-stage.is-walking .orders-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'card' 'walk';
+    grid-template-rows: auto;
+    gap: var(--bn-2);
+  }
+  .orders-stage.is-walking .orders-card-pane { padding: var(--bn-1) var(--bn-2); gap: 0; }
+  .orders-stage.is-walking .orders-card-pane > :not(.orders-card-thin) { display: none; }
+  .orders-stage.is-walking .orders-card-thin { display: flex; }
+  .orders-stage.is-walking .orders-walk-list { gap: var(--bn-2); }
+}
+.orders-walkchip {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  min-height: var(--bn-control-h-lg);
+  padding: 0 var(--bn-3);
+  border: 1px solid var(--bn-field-edge);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  text-align: left;
+  font-size: var(--bn-fs-sm);
+  transition: border-color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-walkchip:hover { border-color: var(--bn-ink-3); }
+.orders-walkchip-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orders-walkchip-text > span:first-child { font-weight: 600; }
+.orders-walkleave { flex: none; }
+/* The thin card row: thumbnail, name, place and the Mark sold icon. The thumbnail opens the
+   photograph. */
+.orders-card-thin { align-items: center; gap: var(--bn-3); min-height: var(--bn-control-h-lg); }
+.orders-card-thumb {
+  flex: none;
+  width: var(--bn-control-h-lg);
+  height: var(--bn-control-h-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+}
+.orders-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.orders-card-thin-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.orders-card-thin-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orders-card-thin-name.is-unnamed { color: var(--bn-ink-3); font-style: italic; }
+.orders-card-thin-place { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orders-card-thin-action { flex: none; }
+.orders-card-thin-action .bn-btn { min-height: var(--bn-control-h-lg); min-width: var(--bn-control-h-lg); }
+
+/* ---- the buyer list (UX-199, UX-201, UX-231, UX-232) --------------------------------- */
+.orders-buyers-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--bn-3);
-  flex-wrap: wrap;
-}
-.orders-toolbar-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-/* THE FILTER SELECT AND THE VIEW CONTROLS, GROUPED — so the rail-collapse toggle (S17) can
-   sit beside them as `.orders-toolbar`'s second flex item rather than a third one splitting
-   `justify-content: space-between` three ways. */
-.orders-rail-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--bn-3);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* ---- the buyer list's own view: search, status, sort, hide-unknown ------------ */
-.orders-view-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   gap: var(--bn-2);
+  min-height: var(--bn-control-h-lg);
+  padding: 0 0 var(--bn-2);
 }
-/* `SearchField` fills whatever wraps it (`width: 100%`); this is that wrapper, sized to sit
-   beside the status select and sort segmented rather than spanning the row (S1 — parity with
-   Inventory/Sales/Fulfillment, all of which reach for the same component). */
-.orders-search-field {
-  flex: 1 1 220px;
-  min-width: 160px;
-  max-width: 320px;
-}
-
-.orders-status-select { min-height: var(--bn-control-h-sm); font-size: var(--bn-fs-sm); width: auto; min-width: 120px; }
-.orders-sort .bn-seg-item { min-height: var(--bn-control-h-sm); }
-.orders-hide-unknown {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--bn-fs-sm);
-  color: var(--bn-ink-2);
-  white-space: nowrap;
-}
-
-/* THE RAIL'S OWN CONTROLS, KEPT COMPACT AT ITS OWN WIDTH (S11) — `.browse-body`'s breakpoint
-   (`BoxBrowse.css`, already imported here) is what actually narrows this column to 268px, both
-   at 1024 and at 820, so this shares that exact figure rather than guessing a second one: it is
-   not assuming a column width, it is answering the same one that breakpoint already set. Below
-   it, flex-wrap's own min-widths (`.orders-search-field`'s 160px alone) forced five stacked
-   rows — search, status, sort, hide-unknown each alone — where two columns fit three. */
-@media (max-width: 1279px) {
-  .orders-view-controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--bn-2);
-  }
-  .orders-search-field { grid-column: 1 / -1; min-width: 0; max-width: none; }
-  .orders-status-select { width: 100%; min-width: 0; }
-  .orders-sort.bn-seg { display: flex; width: 100%; }
-  .orders-sort .bn-seg-item { flex: 1 1 0; }
-  .orders-hide-unknown,
-  .orders-resort-slot:not(:empty) { grid-column: 1 / -1; }
-}
-
-/* The filter is a native select (owner's ruling, 2026-09-19: "make this a dropdown not
-   pills"), sized like `.orders-status-select` beside it. `--bn-control-h` alone already
-   clears the 40px thumb floor below 768px (tokens.css), so no phone-only override is needed
-   here. */
-.orders-filter-select { min-height: var(--bn-control-h-sm); font-size: var(--bn-fs-sm); width: auto; min-width: 160px; }
-
-/* ---- layout: the buyer list beside the walk (or the open buyer) ---------------- */
-/* THE LADDER IS `.browse-body`'s, DELIBERATELY — `#/inventory` and `#/orders` are the two
-   screens that put a long index beside the work, and §12 rules that they read as one system.
-   `300px` / `268px` / one stacked column are that sheet's own numbers, adopted here rather
-   than approximated.
-
-   `.browse-body[data-rail='collapsed']`'s 52px column IS NOW COPIED TOO (S17, the owner's
-   ruling 2026-09-19): `#/orders` carries its own `railCollapsed` state and toggle, over
-   `miniRail`/`browse-boxcell-mini`, exactly `BoxBrowse.tsx`'s own shape over buyers instead
-   of boxes. Nothing below this comment needed to change to gain it — `.browse-body`'s own
-   rule already answers for both screens. */
-.orders-layout {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: var(--bn-5);
-  align-items: start;
-}
-@media (max-width: 1279px) {
-  .orders-layout { grid-template-columns: 268px minmax(0, 1fr); gap: var(--bn-4); }
-}
-@media (max-width: 767px) {
-  .orders-layout { grid-template-columns: minmax(0, 1fr); }
-}
-.orders-index-pane {
-  position: sticky;
-  top: var(--bn-4);
-  max-height: calc(100vh - var(--bn-8));
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-2);
-  min-width: 0;
-}
+.orders-buyers-note { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .orders-index {
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  overflow-y: auto;
-  /* `overflow-y: auto` computes `overflow-x` to `auto` too (the scroll-box rule), which was
-     clipping the row's own hover shadow left/right as well as top/bottom — measured live: a
-     selected/hovered row sits flush with the scroller's content box on every side, so any
-     paint outside the border box is cut. Pin `overflow-x` explicitly rather than leaving it
-     an accident of the other axis. */
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  min-height: 0;
-  /* THE BLEED IS SIZED TO `--bn-shadow-1`'s OWN REACH, NOT A MAGIC NUMBER: that token's first
-     layer is `0 1px 2px`, a 1px vertical offset plus a 2px blur, so its paint reaches 3px past
-     the row's border box on the side the offset pushes toward (measured: bottom) and 2px on
-     every other side; `:hover` also lifts the row `translateY(-1px)`, which only pulls the
-     shadow's reach on the top back down to 2px. 3px on every side covers the worst of those
-     with room rather than a fitted-per-edge value that breaks the next time `--bn-shadow-1`
-     changes. If that token's offset or blur grows, raise this to match. */
-  padding: 3px 3px 18px;
-  margin: -3px;
-  /* THE FOOT, `#/inventory`'s OWN `.browse-list` PATTERN (`BoxBrowse.css`): 18px of padding
-     below the rows, ONLY 3px of which the negative margin above cancels back out (the shadow
-     bleed, unchanged on every other side) — so this list keeps 15px of real, uncancelled room
-     below its last row. Without it, the list's own flex-shrunk box ends flush against
-     `.orders-index-hint` with no gap at all (`.browse-boxes`, the shared rail panel this list
-     sits in, declares none): at 820 with a buyer list long enough to scroll, measured before
-     this fix, `.orders-index`'s own box bottom sat 3px BELOW `.orders-index-hint`'s top — the
-     3px shadow bleed this rule's negative margin buys back on every other side, reaching into
-     the hint on this one because nothing here made room for it. The last visible buyer row's
-     own bottom padding is what that 3px cut into. */
 }
 .orders-index > li { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
-/* THE TICK SITS BESIDE THE ROW, NOT INSIDE IT — `BuyerRow` is a `<button>` and a checkbox
-   nested in one is invalid markup. The `<li>` is the flex row that holds both, and the row
-   itself still takes every pixel the tick does not. */
 .orders-index-item { display: flex; align-items: center; gap: var(--bn-1); min-width: 0; }
 .orders-index-item > .orders-index-row { flex: 1 1 auto; min-width: 0; }
-/* THE THUMB FLOOR IS MET BY THE LABEL, NOT THE BOX (the kit's own argument for `.bn-check`:
-   a checkbox grown to 40px is a different drawing). The label is the target and carries the
-   size; the box inside it stays the system's 16px. */
+/* THE LABEL IS THE TARGET (40px, UX-267); the box inside it stays the system's 16px. A row with
+   nothing to walk keeps the same slot empty, so every name starts on one edge. */
 .orders-index-tick {
   flex: none;
-  min-width: var(--bn-control-h-sm);
-  min-height: var(--bn-control-h-sm);
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  min-width: var(--bn-control-h-lg);
+  min-height: var(--bn-control-h-lg);
   border-radius: var(--bn-r);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.orders-index-tick:hover { background: var(--bn-hover); }
-/* The accordion head at narrow width is the same pairing, minus the index pane's own gaps. */
-.orders-acc-head { display: flex; align-items: center; gap: var(--bn-1); min-width: 0; padding-left: var(--bn-2); }
-.orders-acc-head > .orders-index-row { flex: 1 1 auto; min-width: 0; }
-
-/* ---- choosing who the walk is for (`docs/specs/order-walk-plan.md` §12) -------- */
-/* D195: two buttons of the same role in one sector share a width, so the
-   sector is a two-track grid rather than a flex row that would size each to its own label. */
-.orders-select-bar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--bn-2);
-  padding-bottom: var(--bn-1);
-}
-/* `.browse-quiet` is content-width by nature; the grid above still stretches each button to
-   fill its column (D195), so this only centers the label inside the width the grid gives it. */
-.orders-select-quiet { justify-content: center; }
-/* THE SLOT IS ALWAYS DRAWN AND ALWAYS THIS TALL (D118). Start appears the moment something is
-   ticked and goes again when the pass begins; reserving the height here is what keeps those
-   two presses from moving the list they were made on. `--bn-control-h-lg` is the size the
-   button inside it is drawn at. */
-/* THE SELECTION SECTOR IS THE HEAD OF THE COLUMN, AND THE RULE UNDER IT IS WHAT SEPARATES IT
-   FROM THE LIST. Start sat at the foot of the sticky pane first; over 250 buyers that foot is
-   at y=1449 on a 900px viewport and the press that fills it is at the head, so the answer to
-   `Tick all` was off the screen. */
-.orders-start-slot {
-  display: flex;
-  align-items: center;
-  /* THE BUTTON'S OWN HEIGHT PLUS THIS BOX'S PADDING AND RULE. `min-height` is a BORDER-box
-     figure here, so naming `--bn-control-h-lg` alone reserved 40px for a box that is 49px tall
-     with the button in it — measured, and the list under it moved by the 9px difference. The
-     arithmetic tracks the token, which grows to 46px under a coarse pointer. */
-  min-height: calc(var(--bn-control-h-lg) + var(--bn-2) + 1px);
-  padding-bottom: var(--bn-2);
-  border-bottom: 1px solid var(--bn-line);
-}
-/* THE HEIGHT IS RESERVED; THE RULE IS NOT. With Start absent the slot draws as a line floating
-   over a gap, which reads as a divider somebody forgot to fill. `:empty` is exact here — this
-   box holds the button or nothing at all — and it changes only what is painted, never the
-   layout the reservation above exists to hold still. */
-.orders-start-slot:empty { border-bottom-color: transparent; }
-.orders-start { width: 100%; }
-.orders-index-hint { display: flex; align-items: center; gap: 4px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
-.orders-index-hint .bn-kbd { margin-right: 2px; }
-
+label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-index-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--bn-3);
   width: 100%;
-  padding: 10px var(--bn-3);
-  /* D50: one grammar for a rail's index row — `.browse-boxcell`'s own radius, matched
-     rather than the lg token an accordion card wants. */
+  min-height: var(--bn-control-h-lg);
+  padding: var(--bn-2) var(--bn-3);
   border-radius: var(--bn-r);
   text-align: left;
   color: var(--bn-ink);
   background: transparent;
   position: relative;
-  transition:
-    background-color var(--bn-t-fast) var(--bn-ease),
-    box-shadow var(--bn-t-fast) var(--bn-ease),
-    transform var(--bn-t-fast) var(--bn-ease);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-.orders-index-row:hover { background: var(--bn-surface); box-shadow: var(--bn-shadow-1); transform: translateY(-1px); }
-.orders-index-row:active { transform: translateY(0); }
-/* THE SPINE, NOT THE RING (S4, D50) — `#/inventory`'s own `.browse-boxcell`/`.browse-row`
-   grammar for "this is the selected one", copied rather than re-invented: a tint plus a 3px
-   accent spine on the left, the spine itself always in the DOM and only its opacity/scale
-   toggling (D118 — the row never gains or loses a box-shadow ring's own space on selection,
-   because there is none). */
+.orders-index-row:hover { background: var(--bn-hover); }
+/* The selected row: a tint and a 3px accent spine, the spine always in the DOM (D118). */
 .orders-index-row::before {
   content: '';
   position: absolute;
-  left: var(--bn-1);
+  left: 0;
   top: 22%;
   bottom: 22%;
   width: 3px;
@@ -292,125 +255,169 @@
   scale: 1 0.4;
   transition: opacity var(--bn-t-fast) var(--bn-ease), scale var(--bn-t) var(--bn-ease-spring);
 }
-.orders-index-row[aria-current='true'] {
-  background: var(--bn-accent-tint);
-}
+.orders-index-row[aria-current='true'] { background: var(--bn-accent-tint); }
 .orders-index-row[aria-current='true']::before { opacity: 1; scale: 1 1; }
-.orders-index-row[aria-current='true']:hover { transform: none; }
 .orders-index-row[aria-current='true'] .orders-index-number { color: var(--bn-accent); }
-.orders-index-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bn-ink-4); flex: none; }
-.orders-index-dot-ok { background: var(--bn-ok); }
-.orders-index-dot-warn { background: var(--bn-warn); }
 .orders-index-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.orders-index-number {
-  font-family: var(--bn-font-mono);
-  font-size: var(--bn-fs-sm);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* A NAME WRAPS, never an ellipsis: "Buyer on order …00012" cut to "Buyer on order …0…" named
+   nobody (review, UX-268). */
+.orders-index-number { font-size: var(--bn-fs-md); font-weight: 600; overflow-wrap: break-word; }
+.orders-label-tail { white-space: nowrap; }
 .orders-index-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
-.orders-index-side { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex: none; }
+.orders-index-count { flex: none; }
 .orders-index-figure { font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .orders-index-figure b { font-family: var(--bn-font-display); font-size: var(--bn-fs-base); font-weight: 800; color: var(--bn-ink); margin-right: 3px; }
-.orders-index-bar { width: 56px; height: 4px; }
-.orders-index-chev { color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
-/* `D193`: the buyer's display name reuses `.orders-index-number`'s
-   spot, so its font stays the mono machine-string face for a number but this needs the UI face
-   for a name — overridden here rather than in the shared rule, which order rows elsewhere in
-   the app still use verbatim. */
-.orders-index-row .orders-index-number { font-family: var(--bn-font-ui); }
-.orders-index-count { flex: none; }
 
-.orders-detail { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
-
-/* ---- the buyer panel's own ORDER label (S8) -------------------------------------- */
-/* `.boxops-identity-num` (`BoxOps.css`) is built for "BOX 3": uppercase, 0.1em tracking, no
-   overflow handling — fine for a short label, and it wraps a real order id mid-identifier at
-   the rail's own ~165px. `.orders-buyer-order-num` lets the "ORDER" word and the id size
-   independently on one line rather than sharing the label's own wrap behavior; the id itself
-   gets `nowrap` and an ellipsis instead, plus D221's mono face (an order id is a machine
-   string) with the label's uppercase/tracking undone so mono renders as the id actually is. */
-.orders-buyer-order-num {
+/* ---- the walk's head: one buyer, or several (UX-168, UX-230) ------------------------- */
+.orders-walk { display: flex; flex-direction: column; gap: var(--bn-3); }
+.orders-walk:focus { outline: none; }
+.orders-walk-head:empty { display: none; }
+.orders-panel { display: flex; flex-direction: column; gap: var(--bn-3); }
+.orders-panel-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-3); }
+.orders-panel-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.orders-panel-name,
+.orders-walk-title { font-size: var(--bn-fs-xl); overflow-wrap: break-word; }
+.orders-panel-order,
+.orders-walk-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-buyer-order-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bn-ink-2); }
+.orders-panel-order { display: flex; gap: 0.3em; min-width: 0; }
+.orders-panel-facts { display: flex; align-items: center; flex-wrap: wrap; gap: var(--bn-3) var(--bn-5); }
+.orders-panel-figures { display: flex; gap: var(--bn-5); }
+.orders-walk-note {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
-  min-width: 0;
-  max-width: 100%;
-}
-.orders-buyer-order-id {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-/* ---- Earlier fold (`D193`) ------------------------------ */
-.orders-earlier { margin-top: var(--bn-3); }
-.orders-earlier > summary {
-  cursor: pointer;
+  align-items: flex-start;
+  gap: var(--bn-2);
   font-size: var(--bn-fs-sm);
-  font-weight: 600;
-  color: var(--bn-ink-3);
-  padding: var(--bn-2) 0;
+  color: var(--bn-ink-2);
 }
-.orders-earlier[open] > summary { margin-bottom: var(--bn-2); }
-
-/* ---- a buyer's detail: the per-order chips and the merged walk ------------------ */
-/* `.bn-panel` carries NO padding of its own (kit.css) — every user supplies `.bn-panel-pad`,
-   `.bn-panel-body`, or its own rule. `.orders-buyer-detail` supplied none, so the buyer's name
-   sat flush against the panel's corner (the owner's own report, 2026-09-17). `.orders-order`,
-   the sibling panel this same screen already draws per order, is `padding: var(--bn-5)` — 24px —
-   falling to `--bn-4` (16px) at the same narrow breakpoint. This panel now matches it exactly
-   rather than inventing its own figure. */
-.orders-buyer-detail { padding: var(--bn-5); }
-.orders-buyer-detail-head { display: flex; flex-direction: column; gap: var(--bn-2); margin-bottom: var(--bn-3); }
-.orders-buyer-detail-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
-.orders-buyer-chips { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
-.orders-buyer-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px var(--bn-2);
-  border: 1px solid var(--bn-line);
-  border-radius: var(--bn-r);
-  background: var(--bn-surface);
-  font-size: var(--bn-fs-xs);
-}
-.orders-buyer-chip-number { font-weight: 600; }
-.orders-buyer-chip-bar { width: 44px; height: 4px; }
-.orders-buyer-walk { margin: var(--bn-3) 0; }
-.orders-buyer-byorder { margin-top: var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-3); }
-.orders-buyer-order + .orders-buyer-order { margin-top: var(--bn-3); }
-
-/* ---- the accordion (under 1024px) --------------------------------------------- */
-.orders-list { display: flex; flex-direction: column; gap: var(--bn-3); list-style: none; }
-.orders-acc {
-  padding: 0;
-  overflow: visible;
-  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
-  animation-delay: var(--delay, 0ms);
-  transition: box-shadow var(--bn-t) var(--bn-ease), transform var(--bn-t) var(--bn-ease);
-}
-.orders-acc:hover { box-shadow: var(--bn-shadow-2); transform: translateY(-1px); }
-.orders-acc-open { box-shadow: var(--bn-shadow-2); }
-.orders-acc-open:hover { transform: none; }
-.orders-acc > .orders-index-row { padding: var(--bn-3) var(--bn-4); min-height: 56px; grid-template-columns: auto minmax(0, 1fr) auto auto; }
-.orders-acc > .orders-index-row:hover { transform: none; box-shadow: none; background: var(--bn-hover); }
-.orders-acc-open > .orders-index-row { border-radius: var(--bn-r-lg) var(--bn-r-lg) 0 0; border-bottom: 1px solid var(--bn-line); }
-.orders-acc-open .orders-index-chev { transform: rotate(180deg); }
-.orders-acc-body {
+.orders-walk-note .bn-icon { flex: none; margin-top: 2px; color: var(--bn-accent); }
+.orders-walk-done {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--bn-3);
   padding: var(--bn-4);
-  animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards;
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-ok-tint);
+  font-weight: 600;
 }
-.orders-order-metarow { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); flex-wrap: wrap; }
+.orders-walk-done p { display: flex; align-items: center; gap: var(--bn-2); }
+.orders-walk-done .bn-icon { color: var(--bn-ok); }
+.orders-walk-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  min-height: var(--bn-control-h-lg);
+  border-bottom: 1px solid var(--bn-line);
+  padding-bottom: var(--bn-2);
+}
+.orders-walk-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+/* ---- the walk: one row per card per section, "Pick 1 of 2" (UX-198) ------------------ */
+.orders-walk-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-4); }
+.orders-walk-group { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
+.orders-walk-sect {
+  display: flex;
+  align-items: baseline;
+  gap: var(--bn-2);
+  padding: 0 var(--bn-2) var(--bn-1);
+  color: var(--bn-ink-2);
+}
+.orders-walk-sectcount { margin-left: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.orders-walk-rows { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.orders-walk-press {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'slot name pick' '. for for';
+  align-items: center;
+  gap: 2px var(--bn-3);
+  width: 100%;
+  min-height: var(--bn-control-h-lg);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  text-align: left;
+  color: var(--bn-ink);
+  background: transparent;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-walk-press:hover { background: var(--bn-hover); }
+.orders-walk-press[aria-current='true'] { background: var(--bn-accent-tint); }
+.orders-walk-slot { grid-area: slot; min-width: 4ch; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }
+.orders-walk-name { grid-area: name; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orders-walk-name.is-unnamed { color: var(--bn-ink-3); font-style: italic; }
+.orders-walk-pick {
+  grid-area: pick;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.orders-walk-for { grid-area: for; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orders-walk-line.is-done .orders-walk-name,
+.orders-walk-line.is-done .orders-walk-slot { color: var(--bn-ink-3); text-decoration: line-through; }
+.orders-walk-line.is-done .orders-walk-pick { color: var(--bn-ok); }
+.orders-walk-empty { padding: var(--bn-3); font-size: var(--bn-fs-md); }
+
+/* ---- the card pane: the photograph, the pick, every copy (UX-169) --------------------- */
+.orders-card-pane { display: flex; flex-direction: column; gap: var(--bn-4); padding: var(--bn-4); }
+.orders-card-top { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--bn-4); align-items: start; }
+/* The photograph keeps the card's own shape at the column's width, over the tall phone frame the
+   shared photo panel draws below 768px: on this screen the walk, not the photograph, takes the
+   height. */
+.orders-card-shot .bn-photo { width: 100%; height: auto; max-width: 100%; aspect-ratio: 63 / 88; }
+.orders-card-shot { min-width: 0; }
+.orders-card-text { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
+.orders-card-name { font-size: var(--bn-fs-lg); overflow-wrap: anywhere; }
+.orders-card-name.is-unnamed { color: var(--bn-ink-3); font-style: italic; }
+.orders-card-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-card-pick { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.orders-card-pick strong { color: var(--bn-ink); font-weight: 700; }
+.orders-card-for { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow-wrap: anywhere; }
+.orders-card-copies { list-style: none; display: flex; flex-direction: column; border-top: 1px solid var(--bn-line); }
+.orders-card-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  min-height: calc(var(--bn-control-h) + var(--bn-2));
+  padding: var(--bn-1) var(--bn-2);
+  border-bottom: 1px solid var(--bn-line);
+}
+.orders-card-copy.is-current { background: var(--bn-accent-tint); }
+.orders-card-place { min-width: 0; }
+/* The action slot holds the widest of its states, so a press never moves the row (D118). */
+.orders-card-action { flex: none; display: inline-flex; justify-content: flex-end; min-width: 4.5rem; }
+@container orders (min-width: 1000px) {
+  .orders-card-top { grid-template-columns: minmax(0, 1fr); }
+  .orders-card-shot { max-width: 260px; }
+}
+
+/* ---- 40px hit areas at every width (UX-267) ------------------------------------------ */
+.orders-walkall,
+.orders-walk-tools .bn-btn,
+.orders-card-action .bn-btn:not(.bn-icon-btn) { min-height: var(--bn-control-h-lg); }
+
+/* ---- the stand-down legend, said once per sheet (UX-240) ------------------------------ */
+.orders-manage-legend {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--bn-1) var(--bn-3);
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-sm);
+}
+.orders-manage-legend dt { font-weight: 600; }
+.orders-manage-legend dd { margin: 0; color: var(--bn-ink-2); }
+
+/* ---- the sheets ------------------------------------------------------------------- */
+.orders-manage-orders { display: flex; flex-direction: column; gap: var(--bn-4); }
+.orders-buyers-sheet .orders-index-row { min-height: var(--bn-control-h-lg); }
 
 /* ---- the open order ------------------------------------------------------------ */
 .orders-order {
@@ -423,8 +430,6 @@
   animation-delay: var(--delay, 0ms);
   transition: box-shadow var(--bn-t) var(--bn-ease);
 }
-.orders-order-done { gap: var(--bn-3); }
-.orders-order-done .orders-order-number { color: var(--bn-ink-3); }
 
 .orders-order-head {
   display: flex;
@@ -560,25 +565,31 @@
 .orders-reason-ok { background: var(--bn-ok-tint); }
 .orders-reason-ok > .bn-icon { color: var(--bn-ok); }
 .orders-reason .orders-tag { align-self: start; }
+/* The reason's code, behind a disclosure (D196): the label says it in words. */
+.orders-line-code { align-self: start; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.orders-line-code > summary { cursor: pointer; min-height: var(--bn-control-h); display: flex; align-items: center; }
+.orders-line-code code { font-family: var(--bn-font-mono); }
 .orders-line-says { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
 .orders-line-remedy { font-size: var(--bn-fs-md); color: var(--bn-ink-2); margin-top: 2px; max-width: 70ch; }
 .orders-line-breakdown { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin-top: var(--bn-1); font-variant-numeric: tabular-nums; }
 
-/* ---- the backlog prompt: orders the marketplace says are already gone (D113) ------------- */
-/* `Notice` stacks its children with no rhythm of its own, which is right for the one-paragraph
-   case it was built for. This one argues in two movements — what is wrong, then what the press
-   does and does not do — and they must not run together as a wall. */
-.orders-backlog p + p { margin-top: var(--bn-2); }
-/* The backlog notice is two paragraphs of real prose and carried NO measure — measured at a
-   2560 viewport it was the widest text line in the product at 950px, against 632 for the
-   kit's own `.bn-lede` at its 72ch. Same 72ch, so it reads like every other lede here. */
-.orders-backlog p { max-width: 72ch; }
-.orders-backlog .orders-standdown-row { margin-top: var(--bn-3); }
-
-/* ---- the one-time backlog reconcile: a second backlog `is_terminal_status` cannot see
-   (D203) — the same shape as the notice above, for the same reason. */
-.orders-reconcile p { max-width: 72ch; }
-.orders-reconcile .orders-standdown-row { margin-top: var(--bn-3); }
+/* ---- the store sheet's two stand-downs (D113, D203) ----------------------------------------
+   Each is a section of the store's own sheet, under a hairline, so the sheet reads as one inset
+   column with one primary action (the fetch) above them (UX-236). */
+.orders-backlog,
+.orders-reconcile {
+  margin-top: var(--bn-5);
+  padding-top: var(--bn-4);
+  border-top: 1px solid var(--bn-line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+}
+.orders-backlog p,
+.orders-reconcile p { max-width: 72ch; color: var(--bn-ink-2); }
+.orders-reconcile-cutoff { max-width: 14rem; }
+.orders-reconcile .orders-reconcile-span { color: var(--bn-ink); font-variant-numeric: tabular-nums; }
+.orders-reconcile-live ul { margin: var(--bn-1) 0 0; padding-left: var(--bn-4); }
 
 /* ---- the stand-down: the presses for a line no pull can reach (D113) -------------------- */
 /* A HAIRLINE ABOVE IT AND NOTHING ELSE. It sits inside the reason banner, which already carries
@@ -602,97 +613,6 @@
   font-variant-numeric: tabular-nums;
 }
 .orders-standdown-row { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: center; }
-.orders-standdown-note { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); max-width: 70ch; }
-
-/* ---- the walk plan: the whole order, boxes ranked by how much of it each satisfies ----- */
-.orders-plan {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-3);
-  padding: var(--bn-4);
-  border-radius: var(--bn-r-lg);
-  background: var(--bn-surface-2);
-}
-.orders-plan-head { display: flex; align-items: baseline; gap: var(--bn-3); flex-wrap: wrap; }
-.orders-plan-head .bn-label { color: var(--bn-ink-2); }
-.orders-plan-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.orders-plan-stops { display: flex; flex-wrap: wrap; gap: var(--bn-2); list-style: none; }
-.orders-plan-stop {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--bn-3);
-  /* The stops share the band rather than huddling at its left edge: a walk of two drawers with
-     500px of empty grey beside it reads as an unfinished row. */
-  flex: 1 1 176px;
-  min-width: 176px;
-  padding: var(--bn-3);
-  border-radius: var(--bn-r);
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-1);
-  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
-}
-/* The first stop is marked, not filled: an accent hairline and a solid rank disc, so "start
-   here" is legible at a glance without the block shouting over the four lines beneath it. */
-.orders-plan-stop[data-lead='true'] { box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2), var(--bn-shadow-1); }
-.orders-plan-rank {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--bn-surface-2);
-  color: var(--bn-ink-3);
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-sm);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.orders-plan-stop[data-lead='true'] .orders-plan-rank { background: var(--bn-accent); color: var(--bn-on-accent); }
-.orders-plan-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.orders-plan-name { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.orders-plan-name b {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-lg);
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--bn-ink);
-}
-.orders-plan-name em {
-  font-style: normal;
-  font-size: var(--bn-fs-xs);
-  font-weight: 600;
-  letter-spacing: var(--bn-tracking-caps);
-  text-transform: uppercase;
-  color: var(--bn-ink-3);
-}
-.orders-plan-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
-.orders-plan-sect { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
-/* ONE CARD PER ROW, TRUNCATED RATHER THAN WRAPPED — a real name on the owner's own store runs
-   well past this tile's width, and wrapping it would set the stop's height by whichever card
-   drew the longest name rather than by how many cards are in it. `title` carries the whole
-   string, the same rule `.orders-line-name` already applies to the line header above. */
-.orders-plan-cards { display: flex; flex-direction: column; gap: 2px; list-style: none; margin-top: 2px; }
-.orders-plan-card {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-2);
-  min-width: 0;
-}
-.orders-plan-card b {
-  font-variant-numeric: tabular-nums;
-  color: var(--bn-ink);
-  flex: none;
-}
-.orders-plan-card-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
 
 /* ---- the copy map: which drawers hold THIS card, densest first ------------------------- */
 .orders-map { display: flex; flex-direction: column; gap: var(--bn-2); }
@@ -778,11 +698,6 @@
 .orders-map-count b { font-weight: 700; color: var(--bn-ink); font-variant-numeric: tabular-nums; }
 .orders-map-spoken { display: inline-flex; align-items: baseline; gap: 4px; font-size: var(--bn-fs-xs); color: var(--bn-warn); white-space: nowrap; }
 .orders-map-spoken .bn-icon { align-self: center; }
-/* Copies in this drawer another OPEN order was offered. Quieter than `spoken for`, which is the
-   ledger's own answer and cannot be taken; this one is only a claim on the same shelf, and the
-   rows it describes keep their buttons. */
-.orders-map-claimed { display: inline-flex; align-items: baseline; gap: 4px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
-.orders-map-claimed .bn-icon { align-self: center; color: var(--bn-ink-4); }
 .orders-map-sections { display: flex; flex-wrap: wrap; gap: 4px; }
 .orders-map-sect {
   display: inline-flex;
@@ -888,22 +803,6 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
-/* Another open order was offered this copy. Ink-3 and no ground: a fact about the shelf, sitting
-   below the card's own name in weight, never a warning. */
-.orders-pick-claim {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  min-width: 0;
-  font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-3);
-  /* "wanted by" is one phrase: it may not break across lines, and only the order
-     number after it is allowed to wrap. */
-  text-wrap: pretty;
-  white-space: nowrap;
-}
-.orders-pick-claim .bn-icon { align-self: center; color: var(--bn-ink-4); flex: none; }
-.orders-pick-claim .bn-mono { font-size: var(--bn-fs-2xs); color: var(--bn-ink-2); overflow-wrap: anywhere; white-space: normal; }
 .orders-pick-order {
   display: inline-flex;
   align-items: center;
@@ -928,7 +827,6 @@
 }
 .orders-pick-held .bn-mono { font-size: var(--bn-fs-xs); color: var(--bn-ink-2); }
 .orders-pick-held .bn-icon { color: var(--bn-warn); }
-.orders-pull { min-width: 72px; }
 
 /* ---- the fold, and the two notes under a line's rows ------------------------------------ */
 /* A LINE'S COPIES ARE ALL DRAWN AND SOME ARE FOLDED. Six rows are on screen; past eight the rest
@@ -985,30 +883,7 @@
   .orders-pick { grid-template-columns: auto minmax(0, 1fr); row-gap: var(--bn-2); }
   .orders-pick > :last-child { grid-column: 1 / -1; justify-self: start; }
   .orders-pick-held { white-space: normal; }
-  /* The one control this screen exists for, sized for a thumb: the full row and 40px+ tall. */
-  .orders-pick > .orders-pull { justify-self: stretch; width: 100%; justify-content: center; min-height: var(--bn-control-h-lg); }
 }
-
-/* ---- the walk ------------------------------------------------------------------- */
-/* `.orders-walk` is the shared vertical rhythm: `By buyer`'s merged walk (`WalkGroups`, below)
-   and `Walk the boxes`' own plan screen (`OrdersWalk.css`) both sit in it. Everything from
-   `.orders-walk-head` down through `.orders-walk-cards*` was `WalkView`'s and `WalkCards`'
-   own — both deleted (`docs/specs/order-walk-plan.md` §9) — and is deleted with them. */
-.orders-walk { display: flex; flex-direction: column; gap: var(--bn-4); }
-
-.orders-walk-group { padding: 0; overflow: visible; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
-.orders-walk-group-head { display: flex; align-items: baseline; gap: var(--bn-2); padding: var(--bn-3) var(--bn-4); border-bottom: 1px solid var(--bn-line); flex-wrap: wrap; }
-.orders-walk-group-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; letter-spacing: var(--bn-tracking-tight); color: var(--bn-ink); }
-.orders-walk-group-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.orders-walk-group-count { margin-left: auto; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
-.orders-walk-list { padding: var(--bn-2); }
-/* THE BOX AND THE SECTION ARE THE GROUP HEAD, not the row. A walk group is keyed on
-   `box/section`, so both are identical down every row under it — drawn 19 times in Box 3 they
-   put a wall of identical grey in front of the one part that differs, the card figure. The
-   server's whole string still rides `.position-parts`'s `aria-label`, so nothing is lost to a
-   reader that is not an eye. */
-.orders-walk-list .orders-pick-place .position-path { display: none; }
-.orders-walk-list .orders-pick-card { font-weight: 500; }
 
 /* ---- the way in: paste + fetch -------------------------------------------------- */
 .orders-paste { display: flex; flex-direction: column; gap: var(--bn-3); }
@@ -1032,9 +907,6 @@
 .orders-paste-dropped { background: var(--bn-warn-tint); }
 .orders-paste-dropped .bn-icon { flex: none; margin-top: 2px; color: var(--bn-warn); }
 .orders-paste-dropped .bn-mono { font-size: var(--bn-fs-sm); }
-.orders-arrive { max-width: 760px; animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards; }
-.orders-arrive .bn-panel-body { padding-top: var(--bn-4); }
-.orders-arrive-note { font-size: var(--bn-fs-sm); }
 
 /* ---- the empty ledger ----------------------------------------------------------- */
 .orders-empty { max-width: 720px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
@@ -1042,75 +914,17 @@
 .orders-empty .bn-rule { padding: 0 var(--bn-6); }
 .orders-empty .orders-paste { padding: var(--bn-5) var(--bn-6) var(--bn-6); }
 
-/* ---- why each line answered ------------------------------------------------------ */
-.orders-why-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-2);
-  padding: var(--bn-3) var(--bn-4);
-  font-size: var(--bn-fs-md);
-  font-weight: 600;
-  color: var(--bn-ink-2);
-  cursor: pointer;
-  transition: color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
-}
-.orders-why-summary:hover { color: var(--bn-ink); background: var(--bn-hover); }
-.orders-why-summary > .bn-icon:first-child { color: var(--bn-ink-3); }
-.orders-why-chev { margin-left: auto; color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
-.orders-why[open] .orders-why-chev { transform: rotate(180deg); }
-.orders-counts { list-style: none; display: flex; flex-direction: column; border-top: 1px solid var(--bn-line); }
-.orders-count {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: var(--bn-3);
-  align-items: start;
-  padding: var(--bn-2) var(--bn-4);
-  border-bottom: 1px solid var(--bn-line);
-}
-.orders-count:last-child { border-bottom: 0; }
-.orders-count-figure {
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-xl);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--bn-ink);
-}
-.orders-count-zero .orders-count-figure { color: var(--bn-ink-3); }
-.orders-count-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.orders-count-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.35; }
-.orders-count-machine { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
-.orders-count-note { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-style: italic; }
-
-/* ---- skeleton ------------------------------------------------------------------ */
-.orders-skeleton { gap: var(--bn-4); }
-.orders-skel-line { height: 20px; width: min(520px, 100%); }
-.orders-skel-filter { height: 30px; width: min(200px, 100%); border-radius: var(--bn-r); }
-.orders-skel-card { height: 150px; border-radius: var(--bn-r-lg); }
-
 /* ---- phones ------------------------------------------------------------------- */
 @media (max-width: 767px) {
   .orders-hub { gap: var(--bn-3); }
   /* The counts are on the tab and the chips; the sentence is the desk's. */
   .orders-hub .bn-lede { display: none; }
-  .orders-tabs { margin-top: 0; }
-  /* The kit's tab is 38px, which is a mouse size — these two ARE the route switcher on a phone,
-     where the bottom bar carries no Shipping entry. */
-  .orders-tabs .orders-tab { height: var(--bn-control-h-sm); }
-  /* `nowrap` is load-bearing: a WRAPPING column flex container sizes its line to the widest
-     item's max-content, which made the segmented (496px) push the document wider than a
-     390px phone. */
-  .orders-toolbar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--bn-2); min-width: 0; }
-  .orders-acc > .orders-index-row { padding: var(--bn-3); }
-  .orders-acc-body { padding: var(--bn-3); }
+
   .orders-order { padding: var(--bn-4); }
-  .orders-buyer-detail { padding: var(--bn-4); }
+
   .orders-line-top { grid-template-columns: minmax(0, 1fr) auto; }
   .orders-line-top .orders-tag { grid-column: 2; justify-self: end; }
-  .orders-plan { padding: var(--bn-3); }
-  .orders-plan-stop { min-width: 148px; padding: 10px; }
+
   .orders-map-stop { min-width: 144px; }
   /* THE SECONDARY LINKS ARE THUMB-SIZED TOO. `Pull` was the only control on a pick row sized for a
      hand; the place link (into the box) and the walk row's order link were 34px, 24px and 21px —
@@ -1128,7 +942,6 @@
 /* Phones: the fold is a control a thumb presses, so it takes the same floor as the rest. */
 @media (max-width: 767px) {
   .orders-fold-btn { min-height: 40px; padding: 0 var(--bn-4); }
-  .orders-pick-claim { white-space: normal; }
 }
 
 /* ---- what the fetch checked, took, and left --------------------------------------
@@ -1231,7 +1044,7 @@
   margin-top: var(--bn-1);
 }
 .orders-statuses-state { display: flex; flex-direction: column; gap: var(--bn-2); align-items: flex-start; }
-.orders-statuses-skel { height: 34px; border-radius: var(--bn-r); }
+
 .orders-statuses-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-statuses-note b { color: var(--bn-ink); font-variant-numeric: tabular-nums; }
 .orders-statuses-foot { border-top: 1px solid var(--bn-line); padding-top: var(--bn-2); }

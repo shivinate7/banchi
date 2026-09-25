@@ -8043,14 +8043,16 @@ COMPONENTS = [
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D181", "D192",
                                                "D193", "D194", "D195", "D196", "D203", "D209",
-                                               "D212", "D218", "D220", "D221"]},
+                                               "D212", "D218", "D220", "D221",
+                                               "D274", "D285"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
-                                               "D113", "D114", "D117", "D118", "D193", "D195",
-                                               "D203", "D221"]},
+                                               "D113", "D114", "D117", "D118", "D123", "D193",
+                                               "D195", "D196", "D203", "D221",
+                                               "D270", "D274"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8113,9 +8115,10 @@ COMPONENTS = [
                                            "one-line collapsed row — are deleted with it; "
                                            "`preserveOrder` stays, the trap this rebuild's own "
                                            "brief named first (never re-sort the walk).",
-                                   "governed_by": ["D58", "D62", "D79", "D93", "D96", "D97", "D116",
-                                                   "D118", "D132", "D164", "D181", "D193", "D209",
-                                                   "D212", "D218", "D220", "D252"]},
+                                   "governed_by": ["D24", "D58", "D62", "D79", "D93", "D96", "D97",
+                                                   "D116", "D118", "D132", "D164", "D181", "D193",
+                                                   "D209", "D212", "D218", "D220", "D252",
+                                                   "D279"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
                                            "name); every other shape this file draws is "
@@ -8817,7 +8820,7 @@ COMPONENTS = [
                 "does": ("the shrinking pending list `machine-words.spec.ts` reads, route -> "
                     "word/path -> lane, no wildcard. A separate list from `scripts/machine-"
                     "words-allow.json` on purpose: rendered text carries no source file."),
-                "governed_by": ["D196", "D284"],
+                "governed_by": ["D196", "D274", "D284"],
             },
             "tests/moneyFace.ts": {
                 "does": ("`scanMoneyFace`, the one measurement `money-face.spec.ts` runs, "
@@ -9273,7 +9276,7 @@ COMPONENTS = [
                                                      "D91", "D93", "D96", "D103", "D113", "D114",
                                                      "D118", "D123", "D132", "D181", "D193", "D194",
                                                      "D196", "D203", "D209", "D212", "D218", "D220",
-                                                     "D221"]},
+                                                     "D221", "D274", "D285"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "

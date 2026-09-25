@@ -27,7 +27,7 @@
  */
 
 import type { OrderRow, ResolvedOrder } from './types'
-import { foldName, type BuyerGroup } from './orderBuyers'
+import type { BuyerGroup } from './orderBuyers'
 
 export type OrderSort = 'newest' | 'oldest'
 
@@ -71,7 +71,7 @@ function isReadyToShip(status: string | null): boolean {
 /** Does this group carry a Ready-to-Ship order among its OPEN orders — what leads the default
  *  ordering. Read off `open` rather than every order: a buyer's closed history should not drag
  *  a settled group to the front because one of their old orders once said "Ready to Ship". */
-function groupIsReadyToShip(group: BuyerGroup): boolean {
+export function groupIsReadyToShip(group: BuyerGroup): boolean {
   return group.open.some((order) => isReadyToShip(order.status))
 }
 
@@ -84,10 +84,13 @@ function placedAtMs(placedAt: string | null): number {
 /** The two-key comparator: Ready-to-Ship groups first regardless of sort direction — the
  *  owner's ruling is about which groups LEAD, not about which way time runs — then `latest`
  *  within each bucket, in the direction `sort` asks for. */
-export function compareGroups(sort: OrderSort): (a: BuyerGroup, b: BuyerGroup) => number {
+export function compareGroups(
+  sort: OrderSort,
+  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
+): (a: BuyerGroup, b: BuyerGroup) => number {
   return (a, b) => {
-    const aReady = groupIsReadyToShip(a)
-    const bReady = groupIsReadyToShip(b)
+    const aReady = ready(a)
+    const bReady = ready(b)
     if (aReady !== bReady) return aReady ? -1 : 1
     const diff = placedAtMs(a.latest) - placedAtMs(b.latest)
     return sort === 'newest' ? -diff : diff
@@ -96,33 +99,23 @@ export function compareGroups(sort: OrderSort): (a: BuyerGroup, b: BuyerGroup) =
 
 /** The live-sorted list for the current view — no freeze, no filter. What a fresh take would
  *  produce right now. */
-export function sortGroups(groups: readonly BuyerGroup[], sort: OrderSort): BuyerGroup[] {
-  return [...groups].sort(compareGroups(sort))
+/** `ready` lets a screen hold a buyer it just finished where it stood (FLT-22): a finished
+ *  buyer has no open order left to say Ready to ship. */
+export function sortGroups(
+  groups: readonly BuyerGroup[],
+  sort: OrderSort,
+  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
+): BuyerGroup[] {
+  return [...groups].sort(compareGroups(sort, ready))
 }
 
-/** Does this group survive the status control? `null` (All) always passes — the anti-hiding
- *  default — and otherwise a group passes when ANY of its orders (open or not) carries the
- *  chosen status verbatim, folded only by trimming, never by case: the vocabulary IS the
- *  feed's own strings, so the comparison is exact. */
-export function passesStatus(group: BuyerGroup, status: string | null): boolean {
-  if (status === null) return true
-  return group.orders.some((order) => (order.status ?? '').trim() === status)
-}
-
-/** Does this group survive a typed search — by buyer NAME or by ORDER NUMBER, the two things
- *  the row already draws. Blank (untrimmed to nothing) always passes, the same anti-hiding
- *  default every other predicate here uses. Folded with `orderBuyers.ts:foldName` — the exact
- *  rule `buyerKeyOf` already applies to build the group key — so this is a substring match over
- *  the same normalized text a shared spelling already collapses to, never a second folding
- *  rule that could disagree with the first about what counts as the same name. A number is
- *  folded too, cheaply: TCGplayer's own numbers are plain digits, but folding both sides the
- *  same way means one rule to read rather than a name rule and a number rule that happen to
- *  agree today. */
-export function passesQuery(group: BuyerGroup, query: string): boolean {
-  const needle = foldName(query)
-  if (needle === '') return true
-  if (group.name !== null && foldName(group.name).includes(needle)) return true
-  return group.orders.some((order) => foldName(order.number).includes(needle))
+/** True when a sorted list leads with Ready to ship buyers AND holds others after them: the one
+ *  case the list must say so, because the date order alone would not explain it (UX-170). */
+export function sortedReadyFirst(
+  groups: readonly BuyerGroup[],
+  ready: (group: BuyerGroup) => boolean = groupIsReadyToShip,
+): boolean {
+  return groups.some(ready) && groups.some((group) => !ready(group))
 }
 
 /** Does this group carry a line the resolver could not identify — the "Never seen" chip's own
@@ -143,98 +136,36 @@ export function passesHideUnknown(
   return !groupHasUnseenLine(group, answers)
 }
 
-/* --------------------------------------------------------------------------- the freeze (D181) */
-
-/** A snapshot of the order the list was last TAKEN in: group key -> position. Empty means
- *  "current" — nothing frozen, render whatever a live sort produces — which is both the
- *  opening state and what a re-sort press restores, the same shape `RANK_IS_CURRENT` gives
- *  `frozenRank.ts`'s own freeze. */
-export type OrderTake = ReadonlyMap<string, number>
-
-export const TAKE_IS_CURRENT: OrderTake = new Map()
-
-/** Take the order now: every group in `sorted` gets the position it holds this instant. */
-export function takeOrder(sorted: readonly BuyerGroup[]): OrderTake {
-  const map = new Map<string, number>()
-  sorted.forEach((group, index) => map.set(group.key, index))
-  return map
-}
-
-/** The order actually rendered: a group the take already knows about keeps the RELATIVE order
- *  it held then; a group the take has never seen — new evidence, same as `frozenRank.ts`'s
- *  untouched arrival — is appended after every known one, in ITS OWN live order, so a new
- *  buyer is always reachable and never inserted where it would shift an existing row. */
-export function applyTake(liveSorted: readonly BuyerGroup[], take: OrderTake): BuyerGroup[] {
-  if (take.size === 0) return [...liveSorted]
-  const known = liveSorted.filter((group) => take.has(group.key))
-  known.sort((a, b) => (take.get(a.key) ?? 0) - (take.get(b.key) ?? 0))
-  const fresh = liveSorted.filter((group) => !take.has(group.key))
-  return [...known, ...fresh]
-}
-
-/** How many groups sit somewhere other than where a fresh take would put them right now — the
- *  figure `stalenessSentence`-shaped copy draws beside "re-sort". Zero while the take is
- *  current or while the rendered order and a fresh live order agree position for position. */
-export function staleCount(liveSorted: readonly BuyerGroup[], take: OrderTake): number {
-  if (take.size === 0) return 0
-  const rendered = applyTake(liveSorted, take)
-  let diff = 0
-  for (let index = 0; index < liveSorted.length; index++) {
-    if (liveSorted[index]?.key !== rendered[index]?.key) diff++
-  }
-  return diff
-}
-
-/** The sentence beside the re-sort chip, or `null` while the order is current — the same
- *  "said as a fact, not a warning" register `stalenessSentence` uses for copies. */
-export function orderStalenessSentence(groups: number): string | null {
-  if (groups <= 0) return null
-  return `Order is ${groups} ${groups === 1 ? 'buyer' : 'buyers'} stale`
-}
-
 /* --------------------------------------------------------------------- the unnamed label */
 
-/** THE VIEWER'S CLOCK, NOT UTC — and the reason is the row this label sits in. The same row
- *  already draws the placed date through `toLocaleDateString` (`Orders.tsx`, the `placed`
- *  line), which reads the local clock. A UTC label beside a local date makes one row state
- *  two different days for one event, for every viewer west of UTC, for part of every day.
- *  Cross-timezone stability is the weaker claim here: one store is read by one hand, and the
- *  label's job is to tell two nameless rows apart, not to travel. */
-function shortDate(iso: string): string | null {
-  const at = new Date(iso)
-  if (Number.isNaN(at.getTime())) return null
-  const mm = String(at.getMonth() + 1).padStart(2, '0')
-  const dd = String(at.getDate()).padStart(2, '0')
-  const yy = String(at.getFullYear() % 100).padStart(2, '0')
-  return `${mm}-${dd}-${yy}`
+/** The label a nameless buyer draws in the NAME slot (UX-268): `Buyer on order …00012`, the tail
+ *  of the group's most recent order id, in the UI face. The old `MM-DD-YY_XXXXX` form (the owner's
+ *  ruling of 2026-09-19, D220) read as an order id. On the owner's store 0 of 834 orders have no
+ *  buyer name, because TCGplayer always sends one, so this label is for a pasted order. The full id
+ *  stays in the ORDER slot.
+ *
+ *  ONE ORDER IS READ, NOT AVERAGED: `groupBuyers` never merges two nameless orders into one group,
+ *  so `orders[0]` is the only order. THE TAIL IS THE LAST 5 CHARACTERS of its id, or the whole id
+ *  when it is shorter. */
+export function unnamedBuyerLabel(group: BuyerGroup): string {
+  return unnamedOrderLabel(group.orders[0]?.number ?? group.number ?? '')
 }
 
-/** The label a nameless buyer draws in the NAME slot — never a typed dot, never the order's
- *  full id (the owner's ruling, 2026-09-19). It reads `MM-DD-YY_XXXXX`: the group's own
- *  `latest` placed date, then the tail of an order id — the same two facts `BuyerRow` and
- *  `OrderPanel` already draw beside it, composed once here rather than three times.
- *
- *  ONE ORDER IS READ, NOT AVERAGED. `orderBuyers.ts:groupBuyers` never merges two nameless
- *  orders into one group (each keys on its own order), so today a nameless `group.orders`
- *  is always length 1 and this question does not arise in practice. If that invariant ever
- *  changes, this reads `orders[0]` — the most recent by `placed_at`, the same order `latest`
- *  is computed across and the same one a NAMED group's own `name` is read off — rather than
- *  averaging or concatenating several dates and ids into one string nobody could parse back.
- *
- *  THE TAIL IS THE LAST 5 CHARACTERS of that order's id, or the whole id when it is shorter
- *  than 5 — never padded, never repeated, so a 3-character id draws as itself rather than as
- *  a 5-character lie. This is a SHORT LABEL, not the id: the full id stays in the ORDER slot
- *  (`OrderPanel`'s own `ORDER <number>` / `<n> ORDERS`), never here.
- *
- *  `null` when there is neither a date nor an id to draw from — a group this bare has nothing
- *  this label can say, and an empty string is `BuyerRow`'s and `OrderPanel`'s own cue to fall
- *  back further (nothing here invents a placeholder date or id). */
-export function unnamedBuyerLabel(group: BuyerGroup): string {
-  const order = group.orders[0]
-  const id = order?.number ?? group.number ?? ''
-  const tail = id.length > 5 ? id.slice(-5) : id
-  const date = group.latest === null ? null : shortDate(group.latest)
-  if (date === null) return tail
-  if (tail === '') return date
-  return `${date}_${tail}`
+/** The same label, for one order's number. */
+export function unnamedOrderLabel(number: string): string {
+  if (number === '') return 'Buyer with no name'
+  /* A no-break space keeps "order …00012" one unit, so a narrow row wraps before it, never inside it. */
+  return `Buyer on order\u00a0${number.length > 5 ? `…${number.slice(-5)}` : number}`
+}
+
+/** What the buyer of ONE order is called: the feed's name, or the same unnamed label the list
+ *  draws for that buyer. One buyer has one name on every part of the screen. */
+export function orderBuyerLabel(order: { readonly buyer: string | null; readonly number: string }): string {
+  const name = order.buyer?.trim() ?? ''
+  return name === '' ? unnamedOrderLabel(order.number) : name
+}
+
+/** What a buyer is called on screen: the feed's own name, or the unnamed label. */
+export function buyerLabel(group: BuyerGroup): string {
+  return group.name ?? unnamedBuyerLabel(group)
 }

@@ -78,10 +78,9 @@ const SKU = '9191486'
 
 type Wire = { method: string; path: string; body: unknown }
 
-/* `place`, `pick`, `line`, `order` and `payloadOf` moved to `./routeFixtures` (D194's copy-
- * ratchet fixtures) so `copy-budget.spec.ts` can build the same `#/orders` shapes without a
- * second, drifting copy. `ORDER_NUMBER`/`SKU` above still match the values baked into those
- * builders' defaults, which is what keeps every case below reading exactly as it did. */
+/* `place`, `pick`, `line`, `order` and `payloadOf` live in `./routeFixtures`, so the route sweep
+ * builds the same `#/orders` shapes without a second, drifting copy. `ORDER_NUMBER`/`SKU` above
+ * match the values baked into those builders' defaults. */
 
 /* ---- `WalkPlan` fixtures, for `OrdersWalk.tsx`'s own `POST /orders/walk-plan` (§7-8) ---------
  *
@@ -270,12 +269,42 @@ async function startWalk(page: Page): Promise<void> {
   await page.locator('.orders-index-row').first().click()
 }
 
-/** OPEN THE SELECTED ORDER'S `Manage` SHEET — where the fetch/paste well, the receipt, the
- *  status picker and both stand-down prompts live now (§13: "Inventory's skeleton has no other
- *  place for them"), retired from the page header's own "Add orders" toggle. Needs a selected
- *  order on screen already, which every fixture in this file provides by default. */
+/** OPEN THE SELECTED BUYER'S `Manage` SHEET: that buyer's own orders, per order (stand-down,
+ *  close-line, declare-kind, hand-fill). Needs a selected buyer on screen already. */
 async function openManage(page: Page): Promise<void> {
-  await page.locator('main.orders .browse-manage').first().click()
+  await page.locator('main.orders .orders-manage').first().click()
+}
+
+/** OPEN THE STORE'S OWN SHEET from the page header (UX-165, UX-193): the fetch/paste well, the
+ *  receipt, the status picker and both backlog stand-downs. They act on every buyer, so they are
+ *  never inside one buyer's sheet. */
+async function openStore(page: Page): Promise<void> {
+  await page.locator('main.orders .orders-filterbar').getByRole('button', { name: 'Add orders' }).click()
+}
+
+/** THE FILTER BAR IS ONE LINE (the owner, 2026-09-24): every facet, the sort and the hide toggle
+ *  are in the Filters sheet. Open it, returning the sheet's body. */
+async function openFilters(page: Page): Promise<Locator> {
+  await page.locator(`${VIEW} .bn-filterbar-trigger`).click()
+  const body = page.locator('.bn-filterbar-sheet-body')
+  await expect(body).toBeVisible()
+  return body
+}
+
+/** Close the Filters sheet: a first Escape may only close a pick list inside it. */
+async function closeFilters(page: Page): Promise<void> {
+  const body = page.locator('.bn-filterbar-sheet-body')
+  await page.keyboard.press('Escape')
+  if (await body.isVisible()) await page.keyboard.press('Escape')
+  await expect(body).toBeHidden()
+}
+
+/** Pick one option of a facet, through the Filters sheet. */
+async function pickFacet(page: Page, facet: string, option: RegExp): Promise<void> {
+  const body = await openFilters(page)
+  await body.getByRole('button', { name: new RegExp(`^${facet}`) }).click()
+  await page.getByRole('listbox', { name: facet }).getByRole('option', { name: option }).click()
+  await closeFilters(page)
 }
 
 /** The default world: one open order, one resolved line, one copy in box 3. */
@@ -640,6 +669,12 @@ async function open(
    `test.beforeEach`, which is what `make docs-audit`'s `spec seal` row checks. */
 sealEveryTest()
 
+/* THE DESK THESE CASES ARE ABOUT: the three columns (1000px of column and wider). Choosing a
+   buyer enters walk mode, which folds the list and the order header under 1000px, so a case
+   about the list or the panel reads them where they stay. Cases about narrower widths set their
+   own viewport. */
+test.use({ viewport: { width: 1440, height: 900 } })
+
 test('the route resolves, and the nav offers it under its own chord', async ({ page }) => {
   await open(page)
 
@@ -823,7 +858,7 @@ test('an order the marketplace already shipped is proposed for stand-down, and t
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
     ),
   })
-  await openManage(page)
+  await openStore(page)
 
   const prompt = page.locator('.orders-backlog')
   await expect(prompt).toBeVisible()
@@ -870,32 +905,37 @@ test('a status this rule does not recognise is left open rather than swept in', 
   }
 })
 
-test('all six reasons are drawn, including the ones that are zero', async ({ page }) => {
-  await open(page)
+test('the Show facet lists a buyer only in its own state, and each count is the rows it shows (UX-171, UX-172)', async ({
+  page,
+}) => {
+  /* Alice's one line resolved, Bob's is short, Carol's names a card the store has never seen. */
+  await open(page, { orders: threeBuyerPayload() })
+  await expect(page.locator('.orders-index-row')).toHaveCount(3)
 
-  /* SIX, NOT "the ones that fired". `sku_unknown` cannot fire from this route at all — it needs
-     a run's paperwork, which `do_orders` deliberately does not pass — so it is a permanent zero,
-     and a build that stopped drawing the empties would look identical on a quiet day and be
-     wrong on a busy one. */
-  await expect(page.locator('.orders-count')).toHaveCount(6)
-  for (const reason of [
-    'resolved',
-    'short',
-    'no_copies_on_hand',
-    'sku_unknown',
-    'sku_unseen',
-    'not_a_single',
-  ]) {
-    await expect(page.locator(`.orders-count-${reason} .orders-count-machine`)).toHaveText(reason)
-  }
-  await expect(page.locator('.orders-count-sku_unknown .orders-count-figure')).toHaveText('0')
-  await expect(page.locator('.orders-count-resolved .orders-count-figure')).toHaveText('1')
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  /* EACH COUNT IS BUYERS, THE ROWS THE LIST WILL DRAW, never lines. */
+  await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
+  await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
+  await expect(list.getByRole('option', { name: /^Needs a look/ })).toContainText('1')
+  await list.getByRole('option', { name: /^Short/ }).click()
+  await closeFilters(page)
 
-  /* THE HUMAN LABEL BESIDE THE MACHINE STRING, docs/DESIGN.md's rule — and `sku_unknown` and
-     `sku_unseen` are the pair that pays for it: one letter apart, two different situations. */
-  await expect(page.locator('.orders-count-sku_unseen .orders-count-label')).toHaveText(
-    'Nothing in the store has ever seen this SKU',
-  )
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
+  /* THE ROW SAYS WHAT THE FILTER SAYS. */
+  await expect(page.locator('.orders-index-row')).toContainText('Short')
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('1 of 3 buyers')
+  /* No legend of machine codes anywhere on the screen (UX-238, UX-239). */
+  await expect(page.locator(VIEW)).not.toContainText('sku_unseen')
+})
+
+/** A buyer's one state says what is wrong in words (UX-200), and a pulled-out short line stays
+ *  Short (UX-196). */
+test('Needs a look names what to look at, in cards', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  const carol = page.locator('.orders-index-row', { hasText: 'Carol' })
+  await expect(carol).toContainText('1 card not in the store')
 })
 
 /* -------------------------------------------------------------------------------------- 3 */
@@ -989,7 +1029,7 @@ test('the pull sends the capture_id of the row that was pressed, and its own pos
 
   /* THE SECOND ROW, DELIBERATELY. Pressing the first would pass against a screen that sent
      `picks[0]` for every row — the exact bug this case exists to catch. */
-  await page.locator('.card-locations-row').nth(1).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.orders-card-copy').nth(1).getByRole('button', { name: 'Mark sold' }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
@@ -1126,9 +1166,7 @@ test('a pooled copy is drawn as pooled rather than as a position (D24)', async (
 
      RE-AIMED, THE SAME REASON AS THE BANNER ABOVE: a pooled copy with a capture id and no
      `held_by` is takeable, so `hidePicks` removes it from Manage's own list too — this is drawn
-     in the walk now, over `CardLocations`'s own pooled row (`isPooled`,
-     `.card-locations-boxname`), the identical component and class `#/inventory` draws a pooled
-     code card with. `open()`'s own `walkPlan`, not `stubWalkPlan` after it — the sole buyer
+     in the walk's card pane now, as a pooled row that names its game and no place. `open()`'s own `walkPlan`, not `stubWalkPlan` after it — the sole buyer
      selects itself on landing (§13), so the plan has to be this screen's FIRST answer. */
   await open(page, {
     walkPlan: walkPlanOf([
@@ -1158,7 +1196,7 @@ test('a pooled copy is drawn as pooled rather than as a position (D24)', async (
     ]),
   })
 
-  await expect(page.locator('.card-locations-boxname')).toContainText('pooled')
+  await expect(page.locator('.orders-card-copy')).toContainText('Pooled')
 
   /* AND NO PHOTOGRAPH ANYWHERE ON THIS SCREEN. A pooled capture's photo is a live code and a
      bearer instrument (D24, CLAUDE.md's opsec rule), and this screen draws no `<img>` at all —
@@ -1172,15 +1210,13 @@ test('a pooled copy is drawn as pooled rather than as a position (D24)', async (
 test('a paste is projected before it is sent, and what was dropped is named', async ({ page }) => {
   const wire = await open(page)
 
-  /* THE WAY IN IS SHUT WHILE THERE IS WORK ON SCREEN, AND ITS CONTROL IS THE SELECTED ORDER'S
-     OWN `Manage` (§13: "Inventory's skeleton has no other place for them" — the same reason
-     `BoxOps` is the box's Manage sheet). RE-AIMED from the header's own "Add orders" toggle,
-     retired with it. */
+  /* THE WAY IN IS SHUT WHILE THERE IS WORK ON SCREEN, AND ITS CONTROL IS THE PAGE HEADER'S
+     "Add orders" (UX-193): fetch and paste act on the store, never on one buyer. */
   await expect(page.locator('.orders-paste')).toHaveCount(0)
-  await openManage(page)
+  await openStore(page)
   await expect(page.locator('.orders-paste')).toHaveCount(1)
 
-  /* AND THE FETCH IS INSIDE IT, not in the page header. It is the same errand with the copying
+  /* AND THE FETCH IS INSIDE IT. It is the same errand with the copying
      done for you — `POST /orders/fetch` answers exactly the body the ingest accepts — so the
      screen has one way in and two sources rather than two ways in. */
   await expect(page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' })).toHaveCount(1)
@@ -1265,7 +1301,7 @@ test('the ordinary press is one fetch, one ingest and one names call, with no pr
       names: [{ source: 'TCGplayer', number: ORDER_NUMBER, buyer: 'Ada Lovelace' }],
     },
   })
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
@@ -1298,7 +1334,7 @@ test('a fetch the cap cut short loops, and the receipt names the batches and wha
   })
   const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
   const mounted = reads()
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1319,7 +1355,7 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
   const wire = await open(page, {
     allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
   })
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch two years' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
@@ -1404,7 +1440,7 @@ test('a remembered tick narrows the fetch, and the statuses go out as the wire s
   await remember(page, ['Cancelled', 'Ready to Ship'], true)
   const wire = await open(page)
 
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1430,7 +1466,7 @@ test('a ticked status this window holds none of is named on screen, and is not s
   await remember(page, ['Ready to Ship', 'Awaiting Shipment'])
   const wire = await open(page)
 
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1457,7 +1493,7 @@ test('every status ticked off refuses the press here, rather than letting the wi
   await remember(page, [])
   const wire = await open(page)
 
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect(page.locator('.orders-paste-note')).toContainText('Nothing to fetch')
@@ -1475,7 +1511,7 @@ test('the picker is built from the preview alone, and unticking one narrows the 
 }) => {
   await remember(page, null)
   const wire = await open(page)
-  await openManage(page)
+  await openStore(page)
 
   /* UNCHOSEN SAYS SO. A device that has never opened this panel fetches everything, and the
      control names that rather than a count it would have to spend a call to know. */
@@ -1524,7 +1560,7 @@ test('an unasked device is never shown the picker on the ordinary press', async 
   const wire = await open(page, {
     allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
   })
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   /* NO PANEL, NO PREVIEW. The picker is reached only by choosing to narrow, never by pressing
@@ -1540,7 +1576,7 @@ test('an unasked device is never shown the picker on the ordinary press', async 
 
 test('the narrowing picker opens from its own control, and the ask is shown once', async ({ page }) => {
   const wire = await open(page)
-  await openManage(page)
+  await openStore(page)
 
   /* THE PICKER'S OWN CONTROL — separate from either fetch button. */
   const control = page.locator('.orders-paste').getByRole('button', { name: /statuses/i })
@@ -1573,7 +1609,7 @@ test('a tick IS an answer, so unticking one settles the device without pressing 
      and unticks a status has already done the thing the ask is for, and being asked again next
      time would be the recurring step that was ruled out. */
   const wire = await open(page)
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: /statuses/i }).click()
   await expect(page.locator('.orders-statuses-ask')).toBeVisible()
 
@@ -1631,8 +1667,8 @@ test('the index lists buyers, and a two-order buyer carries the N-orders pill an
   /* THE ORDER PANEL READS "2 ORDERS" AND AGGREGATES OWED/SOLD ACROSS BOTH (§13; RE-AIMED off
      the deleted `BuyerDetail`'s two order chips — one order-detail header is gone with it, see
      the banner deep in this file for the claims that replace it). */
-  await expect(page.locator('.boxops-identity-num')).toHaveText('2 ORDERS')
-  const stats = page.locator('.card-locations-stats .bn-stat')
+  await expect(page.locator('.orders-panel-order')).toHaveText('2 orders')
+  const stats = page.locator('.orders-panel-figures .bn-stat')
   await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('2')
 })
 
@@ -1664,39 +1700,24 @@ test('an open order under Ready in the row draws its status LABEL, never the ord
   await expect(row).not.toContainText(SECOND_ORDER)
 })
 
-test('a nameless order groups on its own, drawing the composed date_id label and never the full id', async ({ page }) => {
+test('a nameless order groups on its own, as "Buyer on order" and the tail of its id, never the full id (UX-268)', async ({ page }) => {
   const nameless = order({ buyer: null })
   await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  /* `placed_at` is `2026-08-29T10:00:00+00:00` and the id's last 5 characters are `006AC`
-     (the fixture's own default, `routeFixtures.ts:order`). `unnamedBuyerLabel` reads the
-     LOCAL clock, so this typed date is safe only because the browser's zone is pinned to
-     `America/Chicago` in `playwright.config.ts` and 10:00 UTC is 05:00 there, the same
-     calendar day. The margin is ten hours: a pinned zone further behind UTC than that would
-     move this date, and the case below derives its own expectation in the browser instead of
-     relying on the margin. */
+  /* The fixture's id ends `006AC` (`routeFixtures.ts:order`). The label is words, in the UI face,
+     so it never reads as an order id. */
   const row = page.locator('.orders-index-row').first()
-  await expect(row).toContainText('08-29-26_006AC')
+  await expect(row.locator('.orders-index-number')).toHaveText('Buyer on order …006AC')
   await expect(row).not.toContainText(ORDER_NUMBER)
+  const face = await row.locator('.orders-index-number').evaluate((el) => getComputedStyle(el).fontFamily)
+  expect(face).not.toContain('JetBrains')
 })
 
-test('two unnamed buyers with different placed dates draw different name-slot labels, neither the full id', async ({
-  page,
-}) => {
+test('two unnamed buyers draw two different labels, neither the full id', async ({ page }) => {
   const firstNumber = 'AAAA1111-0000F4-00001'
   const secondNumber = 'BBBB2222-0000F4-00002'
-  const first = order({
-    key: `TCGplayer:${firstNumber}`,
-    number: firstNumber,
-    buyer: null,
-    placed_at: '2026-07-01T00:00:00+00:00',
-  })
-  const second = order({
-    key: `TCGplayer:${secondNumber}`,
-    number: secondNumber,
-    buyer: null,
-    placed_at: '2026-07-15T00:00:00+00:00',
-  })
+  const first = order({ key: `TCGplayer:${firstNumber}`, number: firstNumber, buyer: null, placed_at: '2026-07-01T00:00:00+00:00' })
+  const second = order({ key: `TCGplayer:${secondNumber}`, number: secondNumber, buyer: null, placed_at: '2026-07-15T00:00:00+00:00' })
   await open(page, {
     orders: payloadOf(
       [first, second],
@@ -1706,41 +1727,41 @@ test('two unnamed buyers with different placed dates draw different name-slot la
       ],
     ),
   })
-
-  /* Default sort is newest first, and both fixtures share the default Ready-to-ship status
-     (D209), so the newer of the two (07-15) leads.
-
-     THE EXPECTED DATE IS DERIVED, NOT TYPED. The label reads the LOCAL clock, because the
-     same row draws its placed date through `toLocaleDateString` and one row may not state
-     two different days for one event. A typed `07-15-26` would therefore pass only in a
-     zone at or east of UTC, and these fixtures sit at midnight. Compose the expectation the
-     way the product composes it, so this case asserts the FORMAT and the DISTINCTNESS
-     rather than the runner's timezone.
-
-     AND IT IS DERIVED IN THE BROWSER, NOT IN NODE. `playwright.config.ts` pins the browser to
-     `America/Chicago` on purpose, so a person sees their own zone. Node ran in a different
-     one on CI, computed `07-15` and failed against a page that correctly drew `07-14-26`
-     beside its own `placed Jul 14`. The two dates on the row agreeing is the whole point of
-     the fix, so the expectation is computed where the product computes it. */
-  const localLabel = (iso: string): Promise<string> =>
-    page.evaluate((value: string) => {
-      const at = new Date(value)
-      const mm = String(at.getMonth() + 1).padStart(2, '0')
-      const dd = String(at.getDate()).padStart(2, '0')
-      const yy = String(at.getFullYear() % 100).padStart(2, '0')
-      return `${mm}-${dd}-${yy}`
-    }, iso)
-  const rows = page.locator('.orders-index-row')
-  await expect(rows).toHaveCount(2)
-  const texts = await rows.allTextContents()
-  expect(texts[0]).toContain(`${await localLabel('2026-07-15T00:00:00+00:00')}_00002`)
-  expect(texts[1]).toContain(`${await localLabel('2026-07-01T00:00:00+00:00')}_00001`)
-  expect(texts[0]).not.toEqual(texts[1])
-  for (const text of texts) {
-    expect(text).not.toContain(firstNumber)
-    expect(text).not.toContain(secondNumber)
-  }
+  /* Newest first, so the 07-15 order leads. */
+  const names = page.locator('.orders-index-number')
+  await expect(names).toHaveText(['Buyer on order …00002', 'Buyer on order …00001'])
 })
+
+/* THE TAIL OF A NAMELESS LABEL NEVER BREAKS (review, round 3). At 1440 "Buyer on order …00099"
+ * broke between the ellipsis and the digits: the no-break space holds "order" to the ellipsis,
+ * but a line may still break after the ellipsis. The tail is its own no-wrap span, on the row
+ * and on the panel's title. The fixture narrows the rail's name column, so the break has room to
+ * happen where the defect was seen. */
+for (const [width, height] of [
+  [1440, 900],
+  [820, 900],
+  [390, 844],
+] as const) {
+  test(`at ${width}, a nameless buyer's "order …006AC" tail stays on one line`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    const nameless = order({ buyer: null })
+    await open(page, { orders: payloadOf([nameless], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
+    if (width === 390) await page.locator('.orders-buyerchip').click()
+    const scope = width === 390 ? page.locator('.orders-buyers-sheet') : page.locator(VIEW)
+    const name = scope.locator('.orders-index-number').first()
+    await expect(name).toHaveText('Buyer on order …006AC')
+    /* Squeeze the name to the width of "Buyer on order …" alone: without the no-wrap span the
+       digits drop to a line of their own. */
+    await name.evaluate((el) => {
+      ;(el as HTMLElement).style.display = 'inline-block'
+      ;(el as HTMLElement).style.width = '9ch'
+    })
+    const tail = name.locator('.orders-label-tail')
+    await expect(tail).toHaveText('order …006AC')
+    const lines = await tail.evaluate((el) => new Set([...el.getClientRects()].map((rect) => Math.round(rect.top))).size)
+    expect(lines, 'the label broke inside "order …006AC"').toBe(1)
+  })
+}
 
 test('a buyer with two open orders walks both at once — one selection, one plan, both cards', async ({ page }) => {
   /* RE-AIMED off the deleted `BuyerDetail`'s own merged walk (`buildWalk`): selecting a buyer
@@ -1791,8 +1812,8 @@ test('a buyer with two open orders walks both at once — one selection, one pla
 
   /* BOTH CARDS ARE IN ONE WALK LIST — the plan built from the union of the buyer's open
      orders, not from either order alone. */
-  await expect(page.locator('.browse-list')).toContainText('Volcanion')
-  await expect(page.locator('.browse-list')).toContainText('Sunrise')
+  await expect(page.locator('.orders-walk-list')).toContainText('Volcanion')
+  await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
 
   /* AND EACH ORDER'S OWN STAND-DOWN/CLOSE-LINE/DECLARE-KIND/HAND-FILL STAYS REACHABLE — behind
      `Manage` now, not a "By order" fold (deleted with `BuyerDetail`). */
@@ -1831,10 +1852,9 @@ test('selecting a two-order buyer sends exactly one batched POST /orders/picks, 
   const wire = await open(page, { orders: both })
   await page.locator('.orders-index-row').first().click()
 
-  /* Wait for the real picks to have landed — the short figure only reads non-zero once
-     `answers` carries the real (not lite) tier for both orders — before counting the wire, so
-     this does not race the fetch. */
-  await expect(page.locator('.card-locations-stats .bn-stat').nth(2).locator('.bn-stat-value')).not.toHaveText('0')
+  /* Wait for the first answer, then give a second call the time it would need to be sent. */
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBe(1)
+  await page.waitForTimeout(400)
 
   const picksCalls = wire.filter((one) => one.path.endsWith('/orders/picks'))
   expect(picksCalls).toHaveLength(1)
@@ -1843,6 +1863,22 @@ test('selecting a two-order buyer sends exactly one batched POST /orders/picks, 
   )
 })
 
+
+test('a picks answer that leaves a key out is not asked for again (the 4,934-request loop)', async ({ page }) => {
+  /* THE DEFECT: `fetchMissingPicks` re-asked every key not in `detail`. An answer that left a
+     key out still replaced `detail`, which re-ran the effect, which asked again: 4,934 requests
+     in 10 s. A key is asked once per `payload`, answered or not. */
+  const wire = await open(page)
+  await page.route(/\/orders\/picks$/, async (route) => {
+    wire.push({ method: 'POST', path: '/orders/picks', body: route.request().postDataJSON() })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ orders: [] }) })
+  })
+  await page.locator('.orders-index-row').first().click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBeGreaterThan(0)
+  /* A window long enough for the loop to have sent hundreds. */
+  await page.waitForTimeout(1000)
+  expect(wire.filter((one) => one.path.endsWith('/orders/picks')).length).toBeLessThanOrEqual(2)
+})
 
 test('?order= resolves an old link to the buyer group that holds it', async ({ page }) => {
   const secondLine = () =>
@@ -1887,12 +1923,12 @@ test('?order= resolves an old link to the buyer group that holds it', async ({ p
 
   /* THE SECOND BUYER'S GROUP IS SELECTED, resolved through the order key the old link named —
    *  RE-AIMED off the deleted `BuyerDetail`'s own `.orders-buyer-detail` onto the order panel's
-   *  own buyer name heading, `OrderPanel`'s `.boxops-identity-name` (§13, the pane `#/inventory`
+   *  own buyer name heading, `OrderPanel`'s `.orders-panel-name` (§13, the pane `#/inventory`
    *  already draws for a box). */
-  await expect(page.locator('.boxops-identity-name')).toContainText('Someone Else')
+  await expect(page.locator('.orders-panel-name')).toContainText('Someone Else')
 })
 
-test('a buyer with nothing open and closed long ago sits under the Earlier fold', async ({ page }) => {
+test('under Done, every done buyer is listed open, however long ago it closed (UX-235)', async ({ page }) => {
   const stale = order({
     buyer: 'Grace Hopper',
     open: false,
@@ -1902,10 +1938,12 @@ test('a buyer with nothing open and closed long ago sits under the Earlier fold'
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
-  const earlier = page.locator('.orders-earlier')
-  await expect(earlier).toBeVisible()
-  await expect(earlier).toContainText('Grace Hopper')
+  await pickFacet(page, 'Show', /^Done/)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Grace Hopper')
+  /* The panel names the buyer the list shows, and counts what was sold. */
+  await expect(page.locator('.orders-panel-name')).toContainText('Grace Hopper')
+  await expect(page.locator('.orders-index-row')).toContainText('1 sold')
 })
 
 /* ------------------------------------------------------------------------------------- 20
@@ -2014,280 +2052,169 @@ function manyBuyerPayload(n: number): OrdersPayload {
   return payloadOf(rows, resolved)
 }
 
-/* THE ORDERS-FOLLOWUPS FIX, TASK 2: `.orders-index` (the buyer list) shrinks to fit inside
- * `.browse-boxes`'s 264px band and scrolls internally — that half already worked. What did
- * not: `.orders-index` carries `padding: 3px; margin: -3px` so a row's own hover shadow (which
- * bleeds 3px past its border box, `--bn-shadow-1`'s own reach) is not clipped by the list's
- * `overflow-y: auto` — and that same negative margin bleeds the list's OWN box 3px past its
- * flow position on every side, including the bottom, where `.orders-index-hint` (the
- * "step through the buyers" line, `.browse-boxes` declares no `gap` at all) sits immediately
- * after it. Measured at 820 with 20 buyers scrolled to the end, before this fix: the list's
- * own box bottom sat 3px BELOW the hint's own top — the last visible row's bottom padding is
- * what that 3px reached into. */
-test('at 820, the last buyer row clears the step-through hint rather than sitting under it', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1180 })
+/* ONE SCROLL FOR THE PAGE (UX-201). The buyer list used to be a 216px window with its own
+ * scroll, over a 96px walk with another: a wheel moved a different thing per pixel. Now no
+ * column scrolls on its own, and no keyboard hint is drawn over the rows (UX-231). */
+test('the buyer list is not a scroll box of its own, and no hint sits on its rows', async ({ page }) => {
   await open(page, { orders: manyBuyerPayload(20) })
+  await expect(page.locator('.orders-index-row')).toHaveCount(20)
+  const list = page.locator('.orders-index').first()
+  const { scroll, client, overflow } = await list.evaluate((el) => ({
+    scroll: el.scrollHeight,
+    client: el.clientHeight,
+    overflow: getComputedStyle(el).overflowY,
+  }))
+  expect(overflow).toBe('visible')
+  expect(client, 'the list is capped to a window').toBeGreaterThan(20 * 38)
+  void scroll
+  await expect(page.locator(VIEW)).not.toContainText('step through buyers')
+})
 
-  await page.locator('.orders-index').evaluate((el) => {
-    el.scrollTop = el.scrollHeight
+/* THE LIST AND THE WALK ARE ON THE PAGE AT 1440, 820 AND 720 (UX-169, UX-194). 720 is the owner's
+ * half-width Chrome, which gets the desktop rail (Q2), so it gets the desktop layout too. */
+for (const [width, height] of [
+  [1440, 900],
+  [820, 1180],
+  [720, 900],
+] as const) {
+  test(`at ${width}, the buyer list sits beside the walk`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page, { orders: threeBuyerPayload() })
+    const buyers = await page.locator('.orders-buyers').boundingBox()
+    const walk = await page.locator('.orders-walk').boundingBox()
+    if (buyers === null || walk === null) throw new Error('the buyer list or the walk did not lay out')
+    expect(walk.x, 'the walk does not sit to the right of the buyer list').toBeGreaterThan(buyers.x + buyers.width - 1)
+    expect(walk.width, 'the walk is squeezed').toBeGreaterThan(300)
+    await expect(page.locator('.orders-buyerchip')).toBeHidden()
   })
-  const hint = await page.locator('.orders-index-hint').boundingBox()
-  const items = page.locator('.orders-index-item')
-  const count = await items.count()
-  const last = await items.nth(count - 1).boundingBox()
-  if (hint === null || last === null) throw new Error('the hint or the last buyer row did not lay out')
+}
 
-  expect(
-    Math.round(last.y + last.height),
-    `the last buyer row (bottom=${last.y + last.height}) sits under the hint (top=${hint.y})`,
-  ).toBeLessThanOrEqual(Math.round(hint.y))
-})
-
-/* THE ORDERS-FOLLOWUPS FIX, DEFECT 1: the two-column layout used to be picked in JavaScript
- * (`const wide = useMediaQuery('(min-width: 1024px)')`), which stacked `#/orders` into one
- * column everywhere between 768 and 1023 while `#/inventory`'s identical `.browse-body` CSS
- * stayed two columns at that width. `.browse-body`'s own breakpoints (`BoxBrowse.css:12-26`)
- * now do the whole job, with no JS reader left to disagree with them. */
-test('at 820, the buyer rail sits beside the walk pane rather than stacking above it', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1000 })
-  await open(page, { orders: threeBuyerPayload() })
-
-  const rail = await page.locator('.browse-map').boundingBox()
-  const pane = await page.locator('.browse-side').boundingBox()
-  if (rail === null || pane === null) throw new Error('the rail or the pane did not lay out')
-
-  expect(pane.x, 'the pane does not sit to the right of the rail').toBeGreaterThan(rail.x + rail.width)
-  const overlap = Math.min(rail.y + rail.height, pane.y + pane.height) - Math.max(rail.y, pane.y)
-  expect(overlap, 'the rail and the pane share no vertical band — they stacked instead of sitting side by side').toBeGreaterThan(0)
-})
-
-test('the step-through hint shows at desktop width, where its arrow-key handler is live, and not at phone width', async ({
-  page,
-}) => {
-  /* DEFECT 5: the hint rendered unconditionally, but its handler
-     (`if (phone || shownGroups.length === 0) return`) is gated on `!phone`. At 390 the arrow
-     keys do nothing, so the hint must not claim they do. */
-  await open(page, { orders: threeBuyerPayload() })
-  await expect(page.locator('.orders-index-hint')).toContainText('step through buyers')
-
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.locator('.browse-boxchip').click()
-  await expect(page.locator('.browse-railsheet .orders-index-hint')).toHaveCount(0)
-})
-
-/* DEFECT 2: below 768px `.browse-body > .browse-map` is hidden by that same CSS, so once
- * defect 1 is fixed the buyer picker needs its own way onto the screen — the chip and bottom
- * sheet this asserts, reusing `.browse-railsheet` rather than a second stylesheet. */
+/* ON A PHONE THE BUYER LIST IS A SHEET, and the line that opens it says who, how many and what is
+ * next (UX-194). */
 test('at 390, the buyer picker is reachable through the chip and its bottom sheet', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await open(page, { orders: threeBuyerPayload() })
 
-  await expect(page.locator('.browse-map')).toBeHidden()
-  const chip = page.locator('.browse-boxchip')
+  await expect(page.locator('.orders-buyers')).toBeHidden()
+  const chip = page.locator('.orders-buyerchip')
   await expect(chip).toBeVisible()
-  await expect(page.locator('.browse-railsheet')).toHaveCount(0)
+  await expect(chip).toContainText('to pick')
+  await expect(page.locator('.orders-buyers-sheet')).toHaveCount(0)
 
   await chip.click()
-  const sheet = page.locator('.browse-railsheet')
+  const sheet = page.locator('.orders-buyers-sheet')
   await expect(sheet).toBeVisible()
   await expect(sheet.locator('.orders-index-row')).toHaveCount(3)
-  await expect(sheet).toContainText('Bob')
 
   await sheet.locator('.orders-index-row', { hasText: 'Bob' }).click()
   await expect(sheet).toBeHidden()
-  await expect(page.locator('.browse-boxchip-text')).toContainText('Bob')
+  await expect(page.locator('.orders-buyerchip-text')).toContainText('Bob')
 })
 
-/* THE AMENDED BRIEF'S OWN CASE: the sheet is the RAIL, not the buyer list alone. Before this
- * fix the sheet's markup was a second, hand-kept copy of `searchSlot`/`selectBar`/`ordersList`
- * that left `railWalkPanel` (the selected buyer's own walk — `OrderPanel` plus `WalkList`'s
- * `.browse-row`s) out of it, so a phone buyer with more than one card in the walk had no touch
- * way to see the second card — only `WalkMainPane`'s single current-card view survived the
- * width. Ticking a second buyer into the walk, the same union `bothPlan()`'s own case (`J
- * steps to the next card...`) proves, is what makes this observable: one row is not enough to
- * tell "the walk panel is missing" from "the walk panel drew its one card". */
-test('at 390, the sheet exposes the selected buyer\'s walk rows, not only the buyer list', async ({ page }) => {
+/* AT 390 THE WALK IS ON THE PAGE, under the card, never only inside a sheet. Ticking a second buyer
+ * from the sheet widens the walk the page draws. */
+test('at 390, the walk rows are on the page, and a tick from the sheet widens them', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 })
   await open(page, { orders: secondBuyerPayload().payload })
   await stubWalkPlan(page, bothPlan())
 
-  await page.locator('.browse-boxchip').click()
-  await page.locator('.browse-railsheet .orders-index-row').first().click()
-
-  /* Selecting a buyer closes the sheet (§13's own `pickRow` echo) — reopen it to tick the
-   * second buyer into the walk from inside it, the same control the rail always carried. */
-  await page.locator('.browse-boxchip').click()
+  await page.locator('.orders-buyerchip').click()
   await page
-    .locator('.browse-railsheet .orders-index-item', { hasText: 'Nora Second' })
+    .locator('.orders-buyers-sheet .orders-index-item', { hasText: 'Nora Second' })
     .locator('.orders-index-tick input')
     .check()
+  await page.keyboard.press('Escape')
 
-  const sheet = page.locator('.browse-railsheet')
-  await expect(sheet.locator('.browse-row')).toHaveCount(2)
-  await expect(sheet).toContainText('Volcanion')
-  await expect(sheet).toContainText('Sunrise')
+  const walk = page.locator(`${VIEW} .orders-walk`)
+  await expect(walk.locator('.orders-walk-press')).toHaveCount(2)
+  await expect(walk).toContainText('Volcanion')
+  await expect(walk).toContainText('Sunrise')
 })
 
-test('Untick shown is disabled with nothing ticked, and enables only once a tick lands', async ({ page }) => {
-  /* DEFECT 4, SECOND HALF: `Untick shown` read `tickableKeys` (the rows in view) for its
-     disabled state, so it sat enabled the moment the view held a walkable row even with
-     `walkTicked` empty — a press that would visibly do nothing. It must read `walkTicked`. */
+/* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232), with the same verb the checkboxes carry. */
+test('"Walk all N buyers" ticks every row, and "Walk one buyer" clears them', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  const tickAll = page.getByRole('button', { name: 'Tick shown', exact: true })
-  const untickAll = page.getByRole('button', { name: 'Untick shown' })
+  const all = page.getByRole('button', { name: 'Walk all 3 buyers' })
+  await expect(all).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: /^Walk / })).toHaveCount(3)
+  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 
-  await expect(tickAll).toBeEnabled()
-  await expect(untickAll).toBeDisabled()
+  await all.click()
+  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(3)
+  /* SEVERAL BUYERS: the head says so, never one buyer's name (UX-230). */
+  await expect(page.locator('.orders-walk-title')).toHaveText('3 buyers')
 
-  await tickAll.click()
-  await expect(untickAll).toBeEnabled()
-
-  await untickAll.click()
-  await expect(untickAll).toBeDisabled()
+  await page.getByRole('button', { name: 'Walk one buyer' }).click()
+  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 })
 
-test('the status options are built from the payload, with counts, including a status this file never hardcodes', async ({ page }) => {
+test('the TCGplayer status options are built from the payload, with buyer counts', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  const options = page.locator('.orders-status-select option')
-  await expect(options).toContainText(['Status', 'Ready to Ship (2)', 'Zorbo Pending (1)'])
+  await (await openFilters(page)).getByRole('button', { name: /^TCGplayer status/ }).click()
+  const list = page.getByRole('listbox', { name: 'TCGplayer status' })
+  await expect(list.getByRole('option', { name: /^Ready to Ship/ })).toContainText('2')
+  await expect(list.getByRole('option', { name: /^Zorbo Pending/ })).toContainText('1')
 })
 
 test('each control narrows; they compose', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  const select = page.locator('.orders-status-select')
 
   /* STATUS ALONE. */
-  await select.selectOption('Zorbo Pending')
+  await pickFacet(page, 'TCGplayer status', /^Zorbo Pending/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
 
-  /* BACK TO ALL, THEN HIDE UNKNOWN SKUS — Carol's line is `sku_unseen`. */
-  await select.selectOption('')
-  await page.locator('.orders-hide-unknown input').check()
+  /* BACK TO ALL, THEN HIDE UNKNOWN CARDS: Carol's line names a card the store never saw. */
+  const body = await openFilters(page)
+  await body.getByRole('button', { name: 'Clear TCGplayer status' }).click()
+  await body.getByRole('button', { name: /^Hide unknown cards/ }).click()
+  await closeFilters(page)
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
-  await expect(page.locator('main.orders')).not.toContainText('Carol')
+  await expect(page.locator('.orders-buyers')).not.toContainText('Carol')
 
-  /* COMPOSED: Ready to Ship AND hide-unknown leaves only Alice (Carol is Ready to Ship too,
-     but her line is unknown; Bob is not Ready to Ship at all). */
-  await select.selectOption('Ready to Ship')
+  /* COMPOSED: Ready to Ship AND hide-unknown leaves only Alice. */
+  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
 })
 
-/* THE REASON FILTER IS A DROPDOWN, NOT PILLS (owner's ruling, 2026-09-19: "make this a
- *  dropdown not pills"). `.orders-filter-select` replaced the six `.orders-chip` buttons;
- *  this proves the select narrows exactly as each removed chip used to, option by option, and
- *  clears the 40px thumb floor at phone width. */
-test('the filter select carries the same options and labels the removed chips drew', async ({ page }) => {
-  await open(page, { orders: threeBuyerPayload() })
-  const options = page.locator('.orders-filter-select option')
-  await expect(options).toHaveCount(5)
-  await expect(options).toContainText(['All open (3)', 'Every copy found (1)', 'Short (1)', 'Never seen (1)', 'Done (0)'])
-})
-
-test('each filter option narrows the buyer list exactly as the chip it replaced did', async ({ page }) => {
-  await open(page, { orders: threeBuyerPayload() })
-  const select = page.locator('.orders-filter-select')
-  await expect(select).toHaveValue('all')
-  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-
-  await select.selectOption('resolved')
-  await expect(page.locator('.orders-index-row')).toHaveCount(1)
-  await expect(page.locator('.orders-index-row')).toContainText('Alice')
-
-  await select.selectOption('short')
-  await expect(page.locator('.orders-index-row')).toHaveCount(1)
-  await expect(page.locator('.orders-index-row')).toContainText('Bob')
-
-  await select.selectOption('sku_unseen')
-  await expect(page.locator('.orders-index-row')).toHaveCount(1)
-  await expect(page.locator('.orders-index-row')).toContainText('Carol')
-
-  /* NONE OF THE THREE IS DONE — the empty state under `done` is the one no chip's count ever
-     showed on this fixture, and it is the same sentence the chip's empty state used to draw. */
-  await select.selectOption('done')
-  await expect(page.locator('.orders-index-row')).toHaveCount(0)
-  await expect(page.locator('main.orders')).toContainText('Nothing fulfilled yet')
-
-  await select.selectOption('all')
-  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-})
-
-test('the filter select clears the 40px thumb floor at phone width', async ({ page }) => {
+test('the filter bar clears the 40px thumb floor at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 })
   await open(page, { orders: threeBuyerPayload() })
-  /* THE ORDERS-FOLLOWUPS FIX, DEFECT 2: the filter select lives in `searchSlot`, part of the
-   * rail — below 768px the rail is the chip's bottom sheet, not the inline column this case
-   * used to read directly. Open it the same way an operator would. */
-  await page.locator('.browse-boxchip').click()
-  /* THE SHEET SLIDES IN, SO ITS HEIGHT IS NOT ITS HEIGHT YET. Measuring straight after the
-   * press read a mid-transition box and failed about one run in two. Wait for the control to
-   * exist and for every clock-driven animation on the page to finish, the way `settleMotion`
-   * already does for the rest of this suite, THEN measure. */
-  const select = page.locator('.browse-railsheet .orders-filter-select')
-  await expect(select).toBeVisible()
+  const trigger = page.locator(`${VIEW} .bn-filterbar-trigger`)
+  await expect(trigger).toBeVisible()
   await settleMotion(page)
-  const box = await select.boundingBox()
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
+  expect((await trigger.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40)
 })
 
-test('a changed filter reorders immediately', async ({ page }) => {
+/* A SORT PRESS RE-SORTS AT ONCE (FLT-01, the owner's ruling, amending D209; UX-170). Ready to
+ * ship still leads, and the list says so. */
+test('the sort press re-orders the list at once, Ready to ship first, and the list says so', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
+  await expect(page.locator('.orders-buyers-note')).toHaveText('Ready to ship first')
 
-  await page.locator('.orders-status-select').selectOption('Ready to Ship')
-  /* Filtering is an explicit retake (D181): the two remaining rows land in current live
-     order with no staleness offered. */
-  await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
-  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice'])
+  await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
+  await closeFilters(page)
+  await expect.poll(() => buyerOrder(page)).toEqual(['Alice', 'Carol', 'Bob'])
 })
 
-test('a re-sort mid-walk raises the stale count and does NOT reorder until pressed; the press reorders', async ({
-  page,
-}) => {
-  await open(page, { orders: threeBuyerPayload() })
-  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-
-  /* SORT NEVER REORDERS BY ITSELF (D181) — flip to Oldest and the rows must not move yet. */
-  await page.locator('.orders-sort').getByRole('button', { name: 'Oldest' }).click()
-  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-
-  const resort = page.locator('.orders-resort-slot .orders-resort')
-  await expect(resort).toBeVisible()
-  await expect(resort).toContainText('stale')
-  await expect(resort).toContainText('re-sort')
-
-  /* THE PRESS REORDERS. Ready-to-Ship still leads; oldest first within it is Alice then Carol. */
-  await resort.click()
-  await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
-  expect(await buyerOrder(page)).toEqual(['Alice', 'Carol', 'Bob'])
-})
-
-test('the device document round-trips and survives a reload', async ({ page }) => {
+/* THE VIEW LIVES IN THE URL (FLT-11, D285): a reload keeps it, and nothing about it
+ * is written to the device. */
+test('the filters, the search and the sort survive a reload through the URL', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
 
-  await page.locator('.orders-status-select').selectOption('Ready to Ship')
-  await page.locator('.orders-hide-unknown input').check()
-  await page.locator('.orders-sort').getByRole('button', { name: 'Oldest' }).click()
-
-  /* READING BACK THE VERY KEY UNDER TEST, the same exemption `remember()` above carries:
-     asserting how this key round-trips means reading it, and going through the UI to confirm
-     a write landed would be testing the panel's layout on the way past rather than the
-     document itself. */
-  const stored = await page.evaluate(
-    // eslint-disable-next-line no-restricted-syntax -- see above
-    (key) => window.localStorage.getItem(key),
-    FILTER_KEY,
-  )
-  expect(stored).not.toBeNull()
-  const parsed = JSON.parse(stored ?? '{}') as { view?: { status?: string; sort?: string; hideUnknown?: boolean } }
-  expect(parsed.view).toEqual({ status: 'Ready to Ship', sort: 'oldest', hideUnknown: true })
+  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
+  await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
+  await closeFilters(page)
+  await expect(page).toHaveURL(/status=Ready\+to\+Ship/)
+  await expect(page).toHaveURL(/dir=asc/)
 
   await page.reload()
   await expect(page.locator(VIEW)).toBeVisible()
-  await expect(page.locator('.orders-status-select')).toHaveValue('Ready to Ship')
-  await expect(page.locator('.orders-hide-unknown input')).toBeChecked()
-  await expect(page.locator('.orders-sort').getByRole('button', { name: 'Oldest' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  expect(await buyerOrder(page)).toEqual(['Alice', 'Carol'])
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Ready to Ship')
 })
 
 /* ============================================== D203 ==== */
@@ -2312,39 +2239,48 @@ test('the reconcile control is absent with nothing to reconcile', async ({ page 
   expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
 })
 
-test('the reconcile preview draws a breakdown by feed status, with the count in the button label', async ({
+test('the stand-down names its cutoff, its span and every Ready-to-ship order, and starts safe (UX-165)', async ({
   page,
 }) => {
-  const OLD = '2020-01-01T00:00:00+00:00'
   const both = payloadOf(
     [
-      order({ key: 'TCGplayer:A-1', number: 'A-1', status: 'Completed - Paid', recorded: 0, placed_at: OLD }),
-      order({ key: 'TCGplayer:A-2', number: 'A-2', status: 'Ready to Ship', recorded: 0, placed_at: OLD }),
+      order({ key: 'TCGplayer:A-1', number: 'A-1', buyer: 'Old Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2020-01-01T00:00:00+00:00' }),
+      order({ key: 'TCGplayer:A-3', number: 'A-3', buyer: 'Older Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2019-06-01T00:00:00+00:00' }),
+      order({ key: 'TCGplayer:A-2', number: 'A-2', buyer: 'Live Buyer', status: 'Ready to Ship', recorded: 0, placed_at: '2020-03-01T00:00:00+00:00' }),
     ],
     [
       { key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] },
       { key: 'TCGplayer:A-2', number: 'A-2', complete: false, outstanding: 1, lines: [line()] },
+      { key: 'TCGplayer:A-3', number: 'A-3', complete: false, outstanding: 1, lines: [line()] },
     ],
   )
-  const wire = await open(page, { orders: both })
-  /* RE-AIMED: `ReconcileBacklogPanel` moved into the Manage sheet with the rest of D203's own
-     family (§13, "Inventory's skeleton has no other place for them") — it draws beside
-     `BacklogPrompt`, not on the page directly. */
-  await openManage(page)
+  const wire = await open(page, {
+    orders: both,
+    reconcile: { cutoff: '2026-01-01', orders: 3, moved: 3, lines: 3, closed: [], reason: 'shipped_elsewhere', still_open: 0 },
+  })
+  await openStore(page)
 
   const panel = page.locator('.orders-reconcile')
   await expect(panel).toBeVisible()
-  /* BOTH STATUSES DRAW, each with its own count — the whole safety this route offers is that a
-     status this screen has never proposed closing before does not vanish into one figure. */
+  /* THE SAFE DEFAULT: the day the oldest live order was placed, so the first view closes none. */
+  const cutoff = panel.getByLabel('Placed before')
+  await expect(cutoff).toHaveValue('2020-03-01')
+  await expect(panel).toContainText('2 orders, placed Jun 1, 2019 to Jan 1, 2020.')
   await expect(panel).toContainText('Completed - Paid')
-  await expect(panel).toContainText('Ready to Ship')
+  await expect(panel.locator('.orders-reconcile-live')).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Stand down 2 orders' })).toBeEnabled()
 
-  /* THE COUNT IS IN THE BUTTON'S OWN LABEL — CLAUDE.md's money-moment register: danger is red,
-     money moments are deliberate and carry the figure in the label. */
-  await expect(panel.getByRole('button', { name: /Stand down 2 orders/ })).toBeVisible()
+  /* MOVED PAST IT, THE LIVE ORDER IS NAMED BEFORE THE PRESS, and the press turns red. */
+  await cutoff.fill('2021-01-01')
+  await expect(panel).toContainText('3 orders, placed Jun 1, 2019 to Mar 1, 2020.')
+  await expect(panel.locator('.orders-reconcile-live')).toContainText('1 of them is still Ready to ship at TCGplayer')
+  await expect(panel.locator('.orders-reconcile-live')).toContainText('Live Buyer, placed Mar 1, 2020')
+  await expect(panel.getByRole('button', { name: 'Stand down 3 orders' })).toHaveClass(/bn-btn-danger/)
 
-  /* AND STILL NOTHING WAS ASKED OF THE ROUTE — the breakdown above is computed, not fetched. */
-  expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
+  /* THE PRESS SENDS THE CUTOFF DRAWN, and nothing else. */
+  await panel.getByRole('button', { name: 'Stand down 3 orders' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog').length).toBe(1)
+  expect(wire.find((one) => one.path === '/orders/reconcile-backlog')?.body).toEqual({ cutoff: '2021-01-01' })
 })
 
 test('the reconcile press sends the cutoff shown on screen, and the receipt carries an undo', async ({ page }) => {
@@ -2374,7 +2310,7 @@ test('the reconcile press sends the cutoff shown on screen, and the receipt carr
       still_open: 1,
     },
   })
-  await openManage(page)
+  await openStore(page)
 
   const panel = page.locator('.orders-reconcile')
   await panel.getByRole('button', { name: /Stand down 2 orders/ }).click()
@@ -2414,7 +2350,7 @@ test('the search narrows the buyer list by name, case- and space-insensitively',
   await open(page, { orders: threeBuyerPayload() })
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 
-  const search = page.locator('.orders-search-field .search-field-input')
+  const search = page.locator('.bn-filterbar-search .search-field-input')
   await search.fill('  ALICE ')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
@@ -2425,21 +2361,21 @@ test('the search narrows the buyer list by name, case- and space-insensitively',
 
 test('the search matches an order number too', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-search-field .search-field-input').fill('c0003')
+  await page.locator('.bn-filterbar-search .search-field-input').fill('c0003')
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Carol')
 })
 
 test('the search composes with the status select — an AND, never a second gate', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-status-select').selectOption('Ready to Ship')
+  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
   await expect(page.locator('.orders-index-row')).toHaveCount(2) // Carol, Alice
 
-  await page.locator('.orders-search-field .search-field-input').fill('bob')
+  await page.locator('.bn-filterbar-search .search-field-input').fill('bob')
   await expect(page.locator('.orders-index-row')).toHaveCount(0)
 })
 
-test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is findable by name', async ({
+test('the search reaches a Done buyer however long ago it closed, by name', async ({
   page,
 }) => {
   const stale = order({
@@ -2451,31 +2387,42 @@ test('the search reaches the Earlier fold, so a Done buyer past the 7-day cut is
   })
   await open(page, { orders: payloadOf([order(), stale], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
-  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
-  await page.locator('.orders-search-field .search-field-input').fill('hopper')
-  const earlier = page.locator('.orders-earlier')
-  await expect(earlier).toBeVisible()
-  await expect(earlier).toContainText('Grace Hopper')
+  await pickFacet(page, 'Show', /^Done/)
+  await page.locator('.bn-filterbar-search .search-field-input').fill('hopper')
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Grace Hopper')
 })
 
 test('a search with nothing left says so by name and offers to clear it', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator('.orders-search-field .search-field-input').fill('nobody named this')
+  await page.locator('.bn-filterbar-search .search-field-input').fill('nobody named this')
   await expect(page.locator('main.orders')).toContainText('No buyer matches')
   await expect(page.locator('main.orders')).toContainText('nobody named this')
 
   const clear = page.locator('.bn-empty').getByRole('button', { name: 'Clear search' })
   await clear.click()
-  await expect(page.locator('.orders-search-field .search-field-input')).toHaveValue('')
+  await expect(page.locator('.bn-filterbar-search .search-field-input')).toHaveValue('')
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 })
 
-test('a changed search is an explicit retake — no stale chip offered', async ({ page }) => {
-  await open(page, { orders: threeBuyerPayload() })
-  expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-
-  await page.locator('.orders-search-field .search-field-input').fill('a')
-  await expect(page.locator('.orders-resort-slot .orders-resort')).toHaveCount(0)
+/* WHAT THE ROW SHOWS IS WHAT THE SEARCH FINDS (UX-175): a nameless buyer's drawn label, its date
+   part alone, and an order number typed with spaces for its hyphens all match. */
+test('the search finds a nameless buyer by the label its row draws', async ({ page }) => {
+  const nameless = order({ buyer: null, key: 'TCGplayer:A2FFC195-256158-00012', number: 'A2FFC195-256158-00012', placed_at: '2026-09-03T12:00:00+00:00' })
+  await open(page, {
+    orders: payloadOf(
+      [order(), nameless],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+    ),
+  })
+  const label = (await page.locator('.orders-index-row', { hasNotText: 'Ada' }).locator('.orders-index-number').textContent()) ?? ''
+  expect(label).not.toBe('')
+  const search = page.locator('.bn-filterbar-search .search-field-input')
+  for (const typed of [label, '00012', 'a2ffc195 256158']) {
+    await search.fill(typed)
+    await expect(page.locator('.orders-index-row'), typed).toHaveCount(1)
+    await expect(page.locator('.orders-index-row')).not.toContainText('Ada')
+  }
 })
 
 /* ------------------------------------------------------------------------------------- 22
@@ -2492,10 +2439,12 @@ function terminalOwingOrder(over: Partial<OrderRow> = {}): OrderRow {
 test('a done order with nothing owed still draws nothing — unchanged from before this fix', async ({ page }) => {
   const closed = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
   await open(page, { orders: payloadOf([closed], []) })
-  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
-  await expect(page.locator('main.orders')).toContainText('Done')
+  /* NOTHING IS OWED, AND THE EMPTY STATE SAYS SO, with the one press that shows the done buyers. */
+  await expect(page.locator('main.orders')).toContainText('Nothing is owed')
+  await page.locator('.bn-empty').getByRole('button', { name: 'Show done buyers' }).click()
+  await expect(page.locator('.orders-index-row')).toContainText('Done')
   await expect(page.locator('.orders-lines')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Pull' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Pull', exact: true })).toHaveCount(0)
 })
 
 test('a terminal order that still owes copies, with no answer yet, shows a way to try again rather than nothing', async ({
@@ -2503,7 +2452,7 @@ test('a terminal order that still owes copies, with no answer yet, shows a way t
 }) => {
   const owing = terminalOwingOrder()
   await open(page, { orders: payloadOf([owing], []) })
-  await page.locator('main.orders').locator('.orders-filter-select').selectOption('done')
+  await pickFacet(page, 'Show', /^Done/)
   /* RE-AIMED: `OrderDetail`'s own body — where this sentence lives — moved into the Manage
      sheet with the rest of the per-order controls (§13). */
   await openManage(page)
@@ -2618,7 +2567,7 @@ test('clicking a buyer selects it and its walk starts at once — no Start butto
   await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
 
   await expect(page.getByRole('button', { name: /Walk \d+ orders?/ })).toHaveCount(0)
-  await expect(page.locator('.browse-walk')).toContainText('Volcanion')
+  await expect(page.locator('.orders-walk')).toContainText('Volcanion')
 })
 
 test('ticking a second buyer joins the walk live, and it re-plans with no press but the tick', async ({ page }) => {
@@ -2630,13 +2579,13 @@ test('ticking a second buyer joins the walk live, and it re-plans with no press 
   const { payload } = secondBuyerPayload()
   await open(page, { orders: payload, walkPlan: bothPlan() })
   const planned = await stubWalkPlan(page, bothPlan())
-  await expect(page.locator('.browse-walk')).toContainText('Volcanion')
+  await expect(page.locator('.orders-walk')).toContainText('Volcanion')
   const callsAfterSelect = planned.calls()
 
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
 
-  await expect(page.locator('.browse-walk')).toContainText('Sunrise')
-  await expect(page.locator('.browse-walk')).toContainText('Volcanion')
+  await expect(page.locator('.orders-walk')).toContainText('Sunrise')
+  await expect(page.locator('.orders-walk')).toContainText('Volcanion')
   expect(planned.calls()).toBeGreaterThan(callsAfterSelect)
 })
 
@@ -2647,13 +2596,13 @@ test('clicking buyer B while A is selected replaces A — the walk is over B alo
      keeps its `stubWalkPlan` call as before. */
   const { payload } = secondBuyerPayload()
   await open(page, { orders: payload, walkPlan: volcanionPlan() })
-  await expect(page.locator('.browse-walk')).toContainText('Volcanion')
+  await expect(page.locator('.orders-walk')).toContainText('Volcanion')
 
   await stubWalkPlan(page, sunrisePlan())
   await page.locator('.orders-index-row', { hasText: 'Nora Second' }).click()
 
-  await expect(page.locator('.browse-walk')).toContainText('Sunrise')
-  await expect(page.locator('.browse-walk')).not.toContainText('Volcanion')
+  await expect(page.locator('.orders-walk')).toContainText('Sunrise')
+  await expect(page.locator('.orders-walk')).not.toContainText('Volcanion')
 })
 
 /* ------------------------------------------------------------------------ the order panel */
@@ -2666,13 +2615,13 @@ test('the selected order\'s panel is mock A\'s shape: label, title, Manage, pill
   })
   await startWalk(page)
 
-  const panel = page.locator('.boxops-identity')
-  await expect(panel.locator('.boxops-identity-num')).toContainText(ORDER_NUMBER)
-  await expect(panel.locator('.boxops-identity-name')).toContainText('Ada Lovelace')
+  const panel = page.locator('.orders-panel')
+  await expect(panel.locator('.orders-panel-order')).toContainText(ORDER_NUMBER)
+  await expect(panel.locator('.orders-panel-name')).toContainText('Ada Lovelace')
   await expect(panel.getByRole('button', { name: 'Manage' })).toBeVisible()
   await expect(panel.locator('.bn-pill')).toBeVisible()
 
-  const stats = panel.locator('.card-locations-stats .bn-stat')
+  const stats = panel.locator('.orders-panel-figures .bn-stat')
   await expect(stats).toHaveCount(3)
   await expect(stats.nth(0).locator('.bn-stat-label')).toHaveText('owed')
   await expect(stats.nth(1).locator('.bn-stat-label')).toHaveText('sold')
@@ -2696,23 +2645,33 @@ test('a buyer holding two orders reads N ORDERS in the label, aggregated across 
     ),
   })
   await startWalk(page)
-  await expect(page.locator('.boxops-identity-num')).toHaveText('2 ORDERS')
+  await expect(page.locator('.orders-panel-order')).toHaveText('2 orders')
 })
 
 /* --------------------------------------------------------------------------- the Manage sheet */
 
-test('Manage opens a sheet carrying the fetch/paste well, the status picker and both stand-down prompts', async ({ page }) => {
+test('Add orders opens the store sheet: the fetch/paste well, the status picker and both stand-down prompts', async ({ page }) => {
   const owing = terminalOwingOrder()
   await open(page, { orders: payloadOf([owing, order()], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
   await expect(page.locator('.orders-paste')).toHaveCount(0)
-  await openManage(page)
+  await openStore(page)
 
-  const sheet = page.locator('.orders-manage-sheet')
+  const sheet = page.locator('.orders-store-sheet')
   await expect(sheet.locator('.orders-paste')).toHaveCount(1)
   await expect(sheet.getByRole('button', { name: /statuses/i })).toBeVisible()
-  /* The shipped-but-owing backlog prompt (D113) is reachable inside the sheet. */
-  await expect(sheet).toContainText('Shipped')
+  /* The backlog stand-down (D203) is inside this sheet, and its twin (D113) is too
+     (`an order the marketplace already shipped is proposed for stand-down` presses it here). */
+  await expect(sheet.locator('.orders-reconcile')).toBeVisible()
+
+  /* AND ONE BUYER'S SHEET CARRIES NONE OF THEM (UX-165): a store-wide press never sits inside
+     one buyer's sheet. */
+  await page.keyboard.press('Escape')
+  await startWalk(page)
+  await openManage(page)
+  const buyer = page.locator('.orders-manage-sheet')
+  await expect(buyer.locator('.orders-manage-orders')).toBeVisible()
+  await expect(buyer.locator('.orders-paste, .orders-backlog, .orders-reconcile')).toHaveCount(0)
 })
 
 test('the selected buyer\'s own orders stay reachable in Manage for stand-down, close-line and declare-kind', async ({ page }) => {
@@ -2728,12 +2687,9 @@ test('the selected buyer\'s own orders stay reachable in Manage for stand-down, 
 
 /* --------------------------------------------------------------------------- the pane is inventory's */
 
-test('the walk pane is inventory\'s own card pane: the same header, photo, copies and Details classes', async ({ page }) => {
-  /* THE REUSED PANE ONLY DRAWS ONCE `rawCards` RESOLVES THE CURRENT ROW'S REAL `InventoryCard`
-     (`OrdersWalkPane.tsx`'s own `currentCard`) — before that it falls back to a synthesised
-     header with no photo and no Details at all, which is what made this case's photo and
-     Details assertions time out. `inventoryCards`, keyed to the plan's own box/index, is what
-     makes the read answer with a real card instead of the empty default. */
+test('the card pane is the photograph, the pick and every copy with its place and Mark sold (UX-169)', async ({ page }) => {
+  /* THE PHOTOGRAPH DRAWS ONCE `rawCards` RESOLVES THE CURRENT ROW'S REAL `InventoryCard`, so the
+     read is stubbed with a card at the plan's own box/index. */
   await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
   await open(page, {
     orders: oneOpenOrder(),
@@ -2741,434 +2697,19 @@ test('the walk pane is inventory\'s own card pane: the same header, photo, copie
     inventoryCards: { '3/21': inventoryCard() },
   })
 
-  const pane = page.locator('.orders-walk-card')
-  /* THE HERO HEAD, `CardHeroHead` — `BoxBrowse.tsx`'s own classes. */
-  await expect(pane.locator('.browse-hero-head .browse-hero-name')).toContainText('Volcanion')
-  /* THE PHOTOGRAPH, `PhotoPanel`. */
-  await expect(pane.locator('.bn-photo, .browse-photo-frame')).toBeVisible()
-  /* "EVERY COPY OF THIS CARD" — `CardLocations`, unmodified. */
-  await expect(pane.locator('.card-locations-title')).toHaveText('Every copy of this card')
-  await expect(pane.getByRole('button', { name: 'Mark sold' })).toBeVisible()
-  /* DETAILS — `CardDetailsSection`, moved whole from `BoxBrowse.tsx`, and — since the
-     orders-followups fix — a SIBLING of `pane` (`.orders-walk-card`) rather than a child of
-     it, mirroring `BoxBrowse.tsx`'s own `</section>` / `<CardDetailsSection .../>` pair
-     exactly: nesting it inside the section let the section's `.bn-panel` `overflow: hidden`
-     clip it into the same box as an overflowing copies list (D118, D220). Read off `page`
-     rather than `pane` for that reason; it is still the one `.browse-details` this screen
-     draws. The text itself is D218's fix (CardHero.tsx, shared by every screen that draws
-     it): the separator is drawn by CSS, never typed. */
-  await expect(page.locator('.browse-details .browse-details-hint')).toHaveText('identity claims provenance')
+  const pane = page.locator('.orders-card-pane')
+  await expect(pane.locator('.orders-card-name')).toContainText('Volcanion')
+  await expect(pane.locator('.bn-photo')).toBeVisible()
+  await expect(pane.locator('.orders-card-pick')).toHaveText('Pick 1 of 1')
+  await expect(pane.locator('.orders-card-copy')).not.toHaveCount(0)
+  await expect(pane.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
 
-  /* AND NONE OF INVENTORY'S OWN EDITING ACTIONS: no Card actions menu, no Retire, no re-shoot —
-     left out by name (§13's override): retire, move and re-shoot are Inventory-only. */
+  /* THE REST IS `#/inventory`'s: no details table, no listing counts, and none of inventory's
+     own editing actions (retire, move and re-shoot are Inventory-only, §13). */
+  await expect(page.locator('.browse-details')).toHaveCount(0)
+  await expect(pane).not.toContainText('Pushed')
   await expect(pane.getByRole('button', { name: 'Card actions' })).toHaveCount(0)
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
-})
-
-/* ---------------------------------------------------------- market and listings parity ---- */
-
-/* THE MARKET-AND-LISTINGS PARITY TASK, queued after D220. `#/orders` reused `#/inventory`'s
- * card pane whole but passed `market={undefined}`/`listings={{}}` into it unconditionally
- * (D220's own §9a ruling: "not wired for Orders in this build... ship as is"). The owner has
- * since reversed that. `WalkMainPane` now reads `listings` from `Orders.tsx` — the free third
- * face of the same `POST /inventory/copies` read that already answers `rawCards` — and keeps
- * a per-run market cache copied from `BoxBrowse.tsx`'s own `priced`/`asked` pair, keyed off
- * the CURRENT row's real `InventoryCard.run` rather than the synthesised take.
- *
- * TWO DAYS OLD, THE SAME CONVENTION `inventory.spec.ts`'s OWN `PRICED_AT` USES — a reading
- * this stable never crosses a "N days"/"N+1 days" boundary between two reads taken moments
- * apart in one test, which is what the parity case below depends on: it reads the SAME
- * timestamp through TWO separate renders and asserts the two ages print identically. */
-const PARITY_RUN = '2026-09-01-box3-01'
-const PARITY_AT = Math.floor((Date.now() - 2 * 86400000) / 1000)
-const PARITY_MARKET = {
-  run: PARITY_RUN,
-  pricing: {
-    run: PARITY_RUN,
-    threshold: '0.40',
-    floor: '0.40',
-    rule: 'match',
-    basis: 'market',
-    presets: [],
-    games: [],
-    bands: [],
-    skus: [
-      {
-        sku: SKU,
-        game: 'pokemon',
-        row: {},
-        bucket: 'listable',
-        copies: 1,
-        add_to_quantity: 1,
-        backstock: 0,
-        live_before: 0,
-        committed: 0,
-        at_cap: false,
-        condition: 'Near Mint',
-        set_name: 'ME01',
-        name: 'Volcanion',
-        snap: { market: '12.34', direct_low: null, low: '12.34', low_with_shipping: null, now: null },
-        presets: {},
-        rule_price: '12.34',
-        positions: [{ box: 3, index: 21, label: 'Box 3, Section 2, Card 17' }],
-        listing: null,
-      },
-    ],
-  },
-  decisions: null,
-  written_at: PARITY_AT,
-}
-const PARITY_LISTING: Listing = {
-  sku: SKU,
-  condition: 'Near Mint',
-  pushed: 5,
-  staged: 0,
-  live: 5,
-  at: null,
-  staged_at: null,
-  live_as_of: new Date(PARITY_AT * 1000).toISOString(),
-  sold_here: 0,
-  sold_here_at: null,
-}
-
-/** `.browse-fact` for one label, matched on the `dt` EXACTLY rather than on the whole row's
- *  text — `inventory.spec.ts`'s own `hasText` shorthand also matches "Listed" against the
- *  State fact's own VALUE (`inventoryCard()`'s default `state: 'listed'` renders "Listed"),
- *  so a loose filter here resolves to two rows and Playwright refuses the strict-mode
- *  ambiguity rather than silently picking one. */
-function factDD(page: Page, label: string) {
-  return page.locator('.browse-fact').filter({ has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }) }).locator('dd')
-}
-
-test('a copy on a priced run with a live listing: Details draws a money figure and a live-listing fact', async ({
-  page,
-}) => {
-  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
-  await open(page, {
-    orders: oneOpenOrder(),
-    walkPlan: volcanionPlan(),
-    inventoryCards: { '3/21': inventoryCard({ run: PARITY_RUN }) },
-    inventoryListings: { [SKU]: PARITY_LISTING },
-    pricing: PARITY_MARKET,
-  })
-
-  const market = factDD(page, 'Market')
-  await expect(market.locator('.bn-tnum')).toHaveText('$12.34')
-  await expect(market).toContainText('read 2 days ago')
-
-  const listed = factDD(page, 'Listed')
-  await expect(listed.locator('.bn-tnum')).toHaveText('5')
-  await expect(listed).toContainText('live')
-  await expect(listed).toContainText('read 2 days ago')
-})
-
-test('with the options omitted, the honest empty strings still render', async ({ page }) => {
-  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
-  await open(page, {
-    orders: oneOpenOrder(),
-    walkPlan: volcanionPlan(),
-    inventoryCards: { '3/21': inventoryCard() },
-    /* NEITHER `inventoryListings` NOR `pricing` IS PASSED — the run is `null` (`inventoryCard`'s
-       own default), so the market cache never fires (see the two cases below this one) and
-       `listings` answers empty. Both facts draw their honest empty strings, unchanged from
-       before this task — the wiring adds a real path, never a new empty state. */
-  })
-
-  await expect(factDD(page, 'Market')).toHaveText('not joined yet')
-  await expect(factDD(page, 'Listed')).toHaveText('no import row yet')
-})
-
-test('two copies on ONE run: the pricing route fires once', async ({ page }) => {
-  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
-  const copies = [
-    walkPlanCopy({ index: 21, card: 17, capture_id: 'cap-a' }),
-    walkPlanCopy({ index: 22, card: 18, capture_id: 'cap-b', place: { card: 18, slot: 18, fraction: 0.14 } }),
-  ]
-  const plan = walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 2, copies })] })])
-  /* THE SAME RUN'S TABLE, WITH BOTH POSITIONS — `PARITY_MARKET`'s own single position (3/21)
-     would leave the second card reading "no row in this run" once the walk steps to it, which
-     is a true fact about that fixture and not about the caching this case is testing. */
-  const SAME_RUN_MARKET = {
-    ...PARITY_MARKET,
-    pricing: {
-      ...PARITY_MARKET.pricing,
-      skus: [{ ...PARITY_MARKET.pricing.skus[0]!, positions: [{ box: 3, index: 21, label: 'Box 3, Section 2, Card 17' }, { box: 3, index: 22, label: 'Box 3, Section 2, Card 18' }] }],
-    },
-  }
-  const wire = await open(page, {
-    orders: oneOpenOrder(),
-    walkPlan: plan,
-    inventoryCards: {
-      '3/21': inventoryCard({ run: PARITY_RUN }),
-      '3/22': inventoryCard({ box: 3, index: 22, run: PARITY_RUN, label: 'Box 3, Section 2, Card 18', card: 18, name: 'Sunrise' }),
-    },
-    pricing: SAME_RUN_MARKET,
-  })
-
-  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
-  const pricingCalls = () => wire.filter((call) => call.path.includes('/pricing')).length
-  await expect.poll(pricingCalls).toBe(1)
-
-  /* STEP TO THE SECOND ROW — the same run, already cached — and the count must not move. Off
-     the heading, not the focused checkbox/row `open()` left behind — `J`/`K`'s own listener
-     yields to any `INPUT`, `J steps to the next card…`'s own case names the same guard. */
-  await page.getByRole('heading', { name: 'Orders' }).click()
-  const firstName = await page.locator('.orders-walk-card .browse-hero-name').textContent()
-  await page.keyboard.press('j')
-  await expect
-    .poll(async () => page.locator('.orders-walk-card .browse-hero-name').textContent())
-    .not.toBe(firstName)
-  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
-  expect(pricingCalls()).toBe(1)
-})
-
-test('two copies on TWO runs: it fires twice', async ({ page }) => {
-  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
-  const SECOND_RUN = '2026-09-05-box3-02'
-  const SECOND_MARKET = {
-    ...PARITY_MARKET,
-    run: SECOND_RUN,
-    pricing: {
-      ...PARITY_MARKET.pricing,
-      run: SECOND_RUN,
-      skus: [
-        {
-          ...PARITY_MARKET.pricing.skus[0]!,
-          snap: { market: '9.00', direct_low: null, low: '9.00', low_with_shipping: null, now: null },
-          positions: [{ box: 3, index: 22, label: 'Box 3, Section 2, Card 18' }],
-        },
-      ],
-    },
-  }
-  const copies = [
-    walkPlanCopy({ index: 21, card: 17, capture_id: 'cap-a' }),
-    walkPlanCopy({ index: 22, card: 18, capture_id: 'cap-b', place: { card: 18, slot: 18, fraction: 0.14 } }),
-  ]
-  const plan = walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 2, copies })] })])
-  const wire = await open(page, {
-    orders: oneOpenOrder(),
-    walkPlan: plan,
-    inventoryCards: {
-      '3/21': inventoryCard({ run: PARITY_RUN }),
-      '3/22': inventoryCard({ box: 3, index: 22, run: SECOND_RUN, label: 'Box 3, Section 2, Card 18', card: 18, name: 'Sunrise' }),
-    },
-    pricing: (name: string) => (name === SECOND_RUN ? SECOND_MARKET : PARITY_MARKET),
-  })
-
-  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
-  const pricingCalls = () => wire.filter((call) => call.path.includes('/pricing')).length
-  await expect.poll(pricingCalls).toBe(1)
-
-  /* STEP TO THE SECOND ROW — a DIFFERENT run, never asked for yet. */
-  await page.getByRole('heading', { name: 'Orders' }).click()
-  const firstName = await page.locator('.orders-walk-card .browse-hero-name').textContent()
-  await page.keyboard.press('j')
-  await expect
-    .poll(async () => page.locator('.orders-walk-card .browse-hero-name').textContent())
-    .not.toBe(firstName)
-  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$9.00')
-  await expect.poll(pricingCalls).toBe(2)
-})
-
-test('a copy whose run is null: the pricing route never fires', async ({ page }) => {
-  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
-  const wire = await open(page, {
-    orders: oneOpenOrder(),
-    walkPlan: volcanionPlan(),
-    inventoryCards: { '3/21': inventoryCard({ run: null }) },
-  })
-
-  await expect(factDD(page, 'Market')).toHaveText('not joined yet')
-  expect(wire.filter((call) => call.path.includes('/pricing'))).toHaveLength(0)
-})
-
-test('Orders and Inventory draw the SAME strings for the identical card — the parity claim', async ({
-  page,
-}) => {
-  /* THE CASE THAT PROVES THE TASK. The card, the run, the market table and the listing are all
-     IDENTICAL to the ones above — only the SCREEN changes. Rendering the second screen in the
-     SAME test, over the SAME `page`, is what makes this a real cross-screen check rather than
-     two specs that happen to expect the same string. */
-  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
-  await open(page, {
-    orders: oneOpenOrder(),
-    walkPlan: volcanionPlan(),
-    inventoryCards: { '3/21': inventoryCard({ run: PARITY_RUN }) },
-    inventoryListings: { [SKU]: PARITY_LISTING },
-    pricing: PARITY_MARKET,
-  })
-  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
-  const ordersMarket = await factDD(page, 'Market').innerText()
-  const ordersListed = await factDD(page, 'Listed').innerText()
-
-  /* NOW `#/inventory`, OVER THE SAME BOX/CARD/RUN/LISTING — the minimal route set `BoxBrowse.tsx`
-     actually reads on mount (`getBoxes`, `getInventoryBox`, `getQueues`, the same pricing
-     route), registered fresh so the newer handler wins (Playwright matches most-recently
-     registered first). */
-  await page.route(/\/boxes(\?.*)?$/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        boxes: [
-          {
-            box: 3, name: 'RB Epics', sections: [2], state: 'open', capacity: null,
-            fill: 1, next_index: 22, cards: 1, on_hand: 1, sold: 0, retired: 0, moved: 0, listed: 0,
-            sections_detail: [{ section: 2, start: 12, end: null, count: 1 }],
-          },
-        ],
-      }),
-    }),
-  )
-  await page.route(/\/inventory\/3$/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        version: 2,
-        cards: { '3/21': inventoryCard({ run: PARITY_RUN }) },
-        listings: { [SKU]: PARITY_LISTING },
-      }),
-    }),
-  )
-  await page.route(/\/queues$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: [], parked: [] }) }),
-  )
-  /* THE RUN PANEL'S OWN READ ON MOUNT (`inventory.spec.ts`'s own comment on the same route) —
-     empty, because the run list is not this case's subject. */
-  await page.route(/\/pipeline\/runs$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs": []}' }),
-  )
-  /* `CopiesFor`'s own read on mount (`Inventory.tsx:708`) — `skuOrName` hands it this card's
-     SKU and it fires `GET /search?q=<SKU>` with no debounce gate on the first ask. Unstubbed,
-     that request escapes past every route above straight to the real capture server, and
-     under CPU contention it can land before the test ends and fail `sealCapture`'s "reads
-     reached the capture server" assertion — reproduces on a clean checkout of 42d671ea, not
-     introduced here. One group, matching this row's own key and SKU. */
-  await page.route(/\/search\?/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        query: SKU,
-        groups: [
-          {
-            sku: SKU,
-            names: ['Volcanion'],
-            number: '025',
-            printed_total: '219',
-            number_display: '025',
-            set_hint: null,
-            set: null,
-            rarity: 'Rare',
-            condition: 'Near Mint',
-            listed: { pushed: 5, staged: 0, live: 5 },
-            sold_here: 0,
-            live_as_of: PARITY_AT,
-            on_hand: 1,
-            listable: 1,
-            copies: [
-              { key: '3/21', state: 'listed', state_at: null, has_photo: true, capture_id: 'cap-a', cid: null, place: place() },
-            ],
-          },
-        ],
-      }),
-    }),
-  )
-
-  await page.goto('/#/inventory')
-  await expect(page.locator('main.inventory')).toBeVisible()
-  await expect(page.locator('.browse-hero-head .browse-hero-name')).toContainText('Volcanion')
-  await expect(factDD(page, 'Market').locator('.bn-tnum')).toHaveText('$12.34')
-
-  const inventoryMarket = await factDD(page, 'Market').innerText()
-  const inventoryListed = await factDD(page, 'Listed').innerText()
-
-  expect(ordersMarket).toBe(inventoryMarket)
-  expect(ordersListed).toBe(inventoryListed)
-})
-
-test('D218: the reused card pane\'s Details hint draws the separator, never types it', async ({
-  page,
-}) => {
-  /* `CardHero.tsx` draws in both `#/inventory` and here, unchanged (§13), so its D218 fix is
-     asserted from this side too — a typed dot here is the same defect whichever screen reads
-     it. SCOPED TO `.browse-details-hint`, not the whole pane: the pane also draws `PositionBar`
-     (a different lane's file, still typing one in `.position-bar-text`) and this file's own
-     `capturedText`/`marketText` (documented, left for the sweep D218's own audit row names as
-     a known gap — a helper's return reaching a screen through a variable, invisible to the
-     extractor `make docs-audit`'s `typed interpunct` row walks), so a whole-pane assertion
-     cannot pass until those land. Read off `page`, not `pane`, because the orders-followups
-     fix moved Details to a sibling of `.orders-walk-card` (see the case below this one). */
-  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
-  await open(page, {
-    orders: oneOpenOrder(),
-    walkPlan: volcanionPlan(),
-    inventoryCards: { '3/21': inventoryCard() },
-  })
-
-  const pane = page.locator('.orders-walk-card')
-  await expect(pane.locator('.browse-hero-head .browse-hero-name')).toContainText('Volcanion')
-  const hint = page.locator('.browse-details .browse-details-hint')
-  await expect(hint).toBeVisible()
-  expect(await hint.innerText()).not.toMatch(/[·•]/)
-})
-
-/* THE ORDERS-FOLLOWUPS FIX: `.inventory-detail` reached `.card-locations` only through
- * `.inventory-copies > .card-locations { flex: 1 1 auto; min-height: 0 }` (`Inventory.css`),
- * and `WalkMainPane` skipped the `.inventory-copies` wrapper `CopiesPanel` always draws. With
- * enough copies for a card, `.card-locations` kept its block default (`min-height: auto`,
- * sized to its OWN content) instead of shrinking to `.browse-band`'s fixed height (D118), so
- * the list grew past the band and `Details` — a child of `.orders-walk-card` at the time,
- * drawn right after `.browse-band` closed — landed inside the overflow rather than below it.
- * Measured at 1440 with 9 copies, before this fix: band 313.6-933.6, Details.y 933.6 (flush
- * with the band's OWN box, never accounting for the 1600px the list actually wanted), rows
- * `scrollHeight === clientHeight === 1600` (no internal scroll at all). This case is that
- * measurement, as an assertion, over a plan built for it (`viewport(1440, 900)` is this
- * file's own default, restated here because the case cares which height 720/620/520 the
- * `min(720px, max(520px, calc(100dvh - 280px)))` band rule lands on). */
-test('the copies list scrolls inside the band, and Details never lands inside the overflow (D118, D220)', async ({ page }) => {
-  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
-  const n = 9
-  const copies: WalkPlanCopy[] = Array.from({ length: n }, (_, i) =>
-    walkPlanCopy({ index: 21 + i, card: 17 + i, capture_id: `cap-${i}`, label: `Box 3 · Section 2 · Card ${17 + i}` }),
-  )
-  const cards: Record<string, InventoryCard> = {}
-  for (let i = 0; i < n; i++) {
-    cards[`3/${21 + i}`] = inventoryCard({ index: 21 + i, card: 17 + i, label: `Box 3 · Section 2 · Card ${17 + i}` })
-  }
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await open(page, {
-    orders: oneOpenOrder(),
-    /* `open()`'s own `walkPlan`, never `stubWalkPlan` after it — the sole buyer selects itself
-       on landing (§13), so the plan has to be this screen's FIRST answer. */
-    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies })] })]),
-    inventoryCards: cards,
-  })
-
-  const band = page.locator('.browse-band')
-  const details = page.locator('.browse-details')
-  await expect(details).toBeVisible()
-  const bandBox = await band.boundingBox()
-  const detailsBox = await details.boundingBox()
-  if (bandBox === null || detailsBox === null) throw new Error('band or Details did not lay out')
-
-  /* THE OVERLAP ITSELF: `Details`' own top may never sit above the band's own bottom edge —
-     that gap, not the DOM position, is what an owner actually sees. */
-  expect(
-    Math.round(detailsBox.y),
-    `Details (y=${detailsBox.y}) sits inside the band (bottom=${bandBox.y + bandBox.height}), not below it`,
-  ).toBeGreaterThanOrEqual(Math.round(bandBox.y + bandBox.height))
-
-  /* THE LIST IS WHAT GIVES (D118): with more copies than the band can show at once, the rows
-     list scrolls INSIDE its own box rather than growing past it. */
-  const rowsScroll = await page.locator('.card-locations-rows').evaluate((el) => ({
-    scrollHeight: el.scrollHeight,
-    clientHeight: el.clientHeight,
-  }))
-  expect(rowsScroll.scrollHeight, 'the copies list grew past what the band can show, uncontained').toBeGreaterThan(
-    rowsScroll.clientHeight,
-  )
 })
 
 /* --------------------------------------------------------------------------------- Mark sold */
@@ -3197,7 +2738,7 @@ test('Mark sold records the copy against the owing order, and the order panel up
     walkPlan: volcanionPlan(),
   })
 
-  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
@@ -3210,7 +2751,7 @@ test('Mark sold records the copy against the owing order, and the order panel up
     targets: [{ box: 3, index: 21, capture_id: 'cap-a' }],
   })
 
-  const stats = page.locator('.boxops-identity .card-locations-stats .bn-stat')
+  const stats = page.locator('.orders-panel-figures .bn-stat')
   await expect(stats.nth(1).locator('.bn-stat-value')).toHaveText('1')
 })
 
@@ -3234,9 +2775,9 @@ test('a stop\'s title states the section\'s own count, never the box-wide span',
   })
   await startWalk(page)
 
-  const title = page.locator('.browse-list .browse-secttitle').first()
+  const title = page.locator('.orders-walk-list .browse-secttitle').first()
   await expect(title).toHaveText('RB Epics, Section 2: Rares, 19 cards')
-  await expect(page.locator('.browse-list .browse-row-slot').first()).toHaveText('#7')
+  await expect(page.locator('.orders-walk-list .orders-walk-slot').first()).toHaveText('#7')
 })
 
 /** WHERE A SECTION TITLE'S COUNT IS DRAWN, against the title's own box — the box that clips it.
@@ -3279,7 +2820,7 @@ test('a long section name is drawn whole, and its count is said once, at 820', a
   })
   await startWalk(page)
 
-  const title = page.locator('.browse-list .browse-secttitle').first()
+  const title = page.locator('.orders-walk-list .browse-secttitle').first()
   await expect(title).toHaveText('RB Epics, Section 2: Holographic promos from the vintage binder, 19 cards')
   /* THE OWNER'S RULING, LOC-21: the section's name is the label on its divider, so it is never cut;
      it wraps. The count is the pill's, and the title only speaks it (\`.bn-sr\`). */
@@ -3326,45 +2867,48 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
   await stubWalkPlan(page, denseSecondSection)
   await startWalk(page)
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
-  await expect(page.locator('.browse-list')).toContainText('Sunrise')
+  await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
 
   /* HIDE SOLD DEFAULTS ON (D132, reused for the walk by §13's override — no new key). Turned
      off here on purpose: this case is about ORDER, not visibility, and the sold row disappearing
      under the default is a second, true, and unrelated claim that would otherwise make `before`
      and `after` differ for a reason this case is not naming. */
-  await page.locator('.browse-hidesold').click()
+  await page.getByRole('button', { name: /^Hide picked/ }).click()
 
-  const before = await page.locator('.browse-list .browse-secttitle, .browse-list .browse-row-name').allTextContents()
+  const before = await page.locator('.orders-walk-list .browse-secttitle, .orders-walk-list .orders-walk-name').allTextContents()
 
-  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
   await expect
-    .poll(async () => (await page.locator('.orders-walk-card .browse-hero-name').textContent()) ?? '')
+    .poll(async () => (await page.locator('.orders-card-pane .orders-card-name').textContent()) ?? '')
     .not.toBe('Volcanion')
 
-  const after = await page.locator('.browse-list .browse-secttitle, .browse-list .browse-row-name').allTextContents()
+  const after = await page.locator('.orders-walk-list .browse-secttitle, .orders-walk-list .orders-walk-name').allTextContents()
   expect(after).toEqual(before)
 })
 
 /* ---------------------------------------------------------------- the sidebar-review "Should" pass */
 
-test('the buyer search is SearchField: 40px, and "/" jumps into it', async ({ page }) => {
+test('the buyer search is the filter bar\'s SearchField, one height with its facets, and "/" jumps into it', async ({ page }) => {
   /* S1 — Orders' own search used to be a raw 28px input. `SearchField` is the shared
    *  component `#/inventory`, `#/revenue` and the Fulfiller's screen all reach for; this
    *  asserts the box itself clears the 40px floor and that the owner's "/" hotkey (off on
    *  every other input, per `SearchField`'s own guard) lands in it. */
   await open(page, { orders: threeBuyerPayload() })
-  const box = page.locator('.orders-search-field .search-field-box')
+  /* ONE ROW OF ONE HEIGHT (UX-217): the search and every facet trigger stand the same height. */
+  const box = page.locator('.bn-filterbar-search .search-field-box')
   await expect(box).toBeVisible()
   const height = await box.evaluate((el) => el.getBoundingClientRect().height)
-  expect(height).toBeGreaterThanOrEqual(40)
+  const facet = page.locator(`${VIEW} .bn-filterbar-trigger`)
+  const facetHeight = await facet.evaluate((el) => el.getBoundingClientRect().height)
+  expect(Math.abs(height - facetHeight)).toBeLessThanOrEqual(1)
 
   await page.getByRole('heading', { name: 'Orders' }).click()
   await page.keyboard.press('/')
-  await expect(page.locator('.orders-search-field .search-field-input')).toBeFocused()
+  await expect(page.locator('.bn-filterbar-search .search-field-input')).toBeFocused()
 })
 
 test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
-  /* S4, D50 — one grammar with `#/inventory`'s own `.browse-row`/`.browse-boxcell`: a tint
+  /* S4, D50 — one grammar with `#/inventory`'s own `.orders-walk-press`/`.browse-boxcell`: a tint
    *  plus an accent spine (`::before`, opacity/scale toggled), never a `box-shadow` ring. */
   await open(page, { orders: threeBuyerPayload() })
   const selected = page.locator('.orders-index-row[aria-current="true"]')
@@ -3380,7 +2924,7 @@ test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
   expect(ownStyle).toBe('none')
 })
 
-test('the walk panel folds every section at once, and Hide sold carries a count', async ({ page }) => {
+test('the walk folds every section at once, and Hide picked carries a count', async ({ page }) => {
   /* S5 — "N sections" becomes a real collapse-all/expand-all control, and the Hide sold chip
    *  now carries how many rows it would hide, matching `#/inventory`'s own `departedHere`. */
   const wire = await open(page, {
@@ -3390,28 +2934,29 @@ test('the walk panel folds every section at once, and Hide sold carries a count'
   await stubWalkPlan(page, bothPlan())
   await startWalk(page)
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
-  await expect(page.locator('.browse-list')).toContainText('Sunrise')
+  await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
 
-  const foldButton = page.locator('.browse-status').getByRole('button', { name: /collapse all|expand all/ })
-  await expect(foldButton).toContainText('2 sections')
-  await expect(page.locator('.browse-group-rows')).toHaveCount(2)
+  const foldButton = page.locator('.orders-walk-tools').getByRole('button', { name: /sections$/ })
+  await expect(foldButton).toHaveText('Fold 2 sections')
+  await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
   await foldButton.click()
-  await expect(page.locator('.browse-group-rows')).toHaveCount(0)
-  await expect(foldButton).toContainText('expand all')
+  await expect(page.locator('.orders-walk-rows')).toHaveCount(0)
+  await expect(foldButton).toHaveText('Open 2 sections')
   await foldButton.click()
-  await expect(page.locator('.browse-group-rows')).toHaveCount(2)
+  await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
 
-  await expect(page.locator('.browse-hidesold .bn-chip-count')).toHaveText('0')
-  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
+  const hide = page.locator('.orders-walk-tools').getByRole('button', { name: /^Hide picked/ })
+  await expect(hide).toContainText('0')
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
   await expect
-    .poll(async () => (await page.locator('.orders-walk-card .browse-hero-name').textContent()) ?? '')
+    .poll(async () => (await page.locator('.orders-card-pane .orders-card-name').textContent()) ?? '')
     .not.toBe('Volcanion')
-  await expect(page.locator('.browse-hidesold .bn-chip-count')).toHaveText('1')
+  await expect(hide).toContainText('1')
   void wire
 })
 
 test('the ORDER id stays on one line and in the mono face, however long it is', async ({ page }) => {
-  /* S8, D221 — `.boxops-identity-num` was built for "Box 3" and wrapped a real order id
+  /* S8, D221 — `.orders-panel-order` was built for "Box 3" and wrapped a real order id
    *  mid-identifier; the id now gets its own nowrap/ellipsis span in the mono face. */
   const longId = 'A2FFC195-0000F4-006AC'
   const rows = [
@@ -3435,24 +2980,6 @@ test('the ORDER id stays on one line and in the mono face, however long it is', 
   expect(style.fontFamily).toContain('JetBrains')
 })
 
-test('the rail-collapse toggle folds the buyer rail to glyphs and restores it', async ({ page }) => {
-  /* S17 — the owner's ruling, 2026-09-19: Orders gets the same collapse `#/inventory` has. */
-  await open(page, { orders: threeBuyerPayload() })
-  await expect(page.locator('.browse-map')).toHaveCount(1)
-  await expect(page.locator('.browse-rail-mini')).toHaveCount(0)
-
-  await page.locator('.browse-rail-toggle').click()
-  await expect(page.locator('.browse-body')).toHaveAttribute('data-rail', 'collapsed')
-  await expect(page.locator('.browse-rail-mini')).toHaveCount(1)
-  await expect(page.locator('.browse-map')).toHaveCount(0)
-  const glyphs = page.locator('.browse-boxcell-mini')
-  await expect(glyphs).toHaveCount(3)
-
-  await page.locator('.browse-rail-mini').getByRole('button', { name: 'Expand the buyer rail' }).click()
-  await expect(page.locator('.browse-body')).not.toHaveAttribute('data-rail', 'collapsed')
-  await expect(page.locator('.browse-map')).toHaveCount(1)
-  await expect(page.locator('.browse-rail-mini')).toHaveCount(0)
-})
 
 /* --------------------------------------------------------------------------- J/K, auto-advance */
 
@@ -3461,22 +2988,22 @@ test('J steps to the next card in the walk list, K steps back', async ({ page })
   await stubWalkPlan(page, bothPlan())
   await startWalk(page)
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
-  await expect(page.locator('.browse-list')).toContainText('Sunrise')
+  await expect(page.locator('.orders-walk-list')).toContainText('Sunrise')
 
   /* THE HAND IS ON THE PAGE HEADING, NOT ON THE TICK CHECKBOX — `check()` leaves focus on the
      checkbox `<input>` it clicked, and `J`/`K`'s own listener yields to ANY `INPUT`, checkbox
      included, the same guard `U`'s own case moves off a field for. */
   await page.getByRole('heading', { name: 'Orders' }).click()
 
-  const first = await page.locator('.orders-walk-card .browse-hero-name').textContent()
+  const first = await page.locator('.orders-card-pane .orders-card-name').textContent()
   await page.keyboard.press('j')
   await expect
-    .poll(async () => page.locator('.orders-walk-card .browse-hero-name').textContent())
+    .poll(async () => page.locator('.orders-card-pane .orders-card-name').textContent())
     .not.toBe(first)
-  const second = await page.locator('.orders-walk-card .browse-hero-name').textContent()
+  const second = await page.locator('.orders-card-pane .orders-card-name').textContent()
 
   await page.keyboard.press('k')
-  await expect(page.locator('.orders-walk-card .browse-hero-name')).toHaveText(first ?? '')
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText(first ?? '')
   expect(second).not.toBe(first)
 })
 
@@ -3488,16 +3015,16 @@ test('when a card\'s owed copies are all sold, the next card in the walk lights'
   await stubWalkPlan(page, bothPlan())
   await startWalk(page)
   await page.locator('.orders-index-item', { hasText: 'Nora Second' }).locator('.orders-index-tick input').check()
-  await expect(page.locator('.orders-walk-card .browse-hero-name')).toHaveText('Volcanion')
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
 
-  await page.locator('.orders-walk-card').getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBeGreaterThan(0)
 
   /* Volcanion's own `wanted: 1` is now satisfied by the one sale, so the pane lights the next
      card — Sunrise — without a press beyond the sale itself. */
-  await expect(page.locator('.orders-walk-card .browse-hero-name')).toHaveText('Sunrise')
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Sunrise')
 })
 
 /* --------------------------------------------------------------------------------- the words */
@@ -3526,10 +3053,11 @@ test('drawer, pull, stop and take do not appear anywhere on the screen — Mark 
   expect(text).not.toContain('all pulled')
 })
 
-test('a buyer row whose orders are all recorded reads "all sold", never "all pulled"', async ({ page }) => {
-  const satisfied = order({ wanted: 2, recorded: 2 })
+test('a done buyer row counts what was sold, never "all pulled"', async ({ page }) => {
+  const satisfied = order({ wanted: 2, recorded: 2, open: false })
   await open(page, { orders: payloadOf([satisfied], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: true, outstanding: 0, lines: [line({ reason: 'resolved', owed: 0 })] }]) })
-  await expect(page.locator('.orders-index-row')).toContainText('all sold')
+  await pickFacet(page, 'Show', /^Done/)
+  await expect(page.locator('.orders-index-row')).toContainText('2 sold')
   await expect(page.locator('.orders-index-row')).not.toContainText('all pulled')
 })
 
@@ -3583,3 +3111,274 @@ test('#/inventory renders its own known shell unchanged by any of this', async (
   await expect(page.locator('.browse-boxes.bn-panel')).toHaveCount(1)
 })
 
+
+/* ------------------------------------------------------------------ the counts (UX-167, UX-168) */
+
+/** Six open buyers owing 21 copies between them, and thirty done buyers: a long history. */
+function historyPayload(): OrdersPayload {
+  const owing = [2, 3, 4, 5, 3, 4] // 21 copies
+  const openRows = owing.map((wanted, i) => {
+    const num = `OPEN-${i}`
+    return order({ key: `TCGplayer:${num}`, number: num, buyer: `Open Buyer ${i}`, wanted, recorded: 0, lines: [line({ order: num, order_key: `TCGplayer:${num}` }).line] })
+  })
+  const doneRows = Array.from({ length: 30 }, (_, i) => {
+    const num = `DONE-${i}`
+    return order({ key: `TCGplayer:${num}`, number: num, buyer: `Done Buyer ${i}`, wanted: 1, recorded: 1, open: false, placed_at: '2025-01-01T00:00:00+00:00' })
+  })
+  const resolved = openRows.map((one, i) => ({
+    key: one.key,
+    number: one.number,
+    complete: false,
+    outstanding: owing[i]!,
+    lines: [line({ order: one.number, order_key: one.key, owed: owing[i]!, wanted: owing[i]! })],
+  }))
+  return payloadOf([...openRows, ...doneRows], resolved)
+}
+
+test('the verdict counts copies and buyers over the same open orders (UX-167)', async ({ page }) => {
+  /* THE DEFECT: lines over the open orders, buyers over every order in the ledger, so a long
+     history read "611 lines across 806 buyers". Thirty done buyers must not reach the count. */
+  await open(page, { orders: historyPayload() })
+  await expect(page.locator(`${VIEW} .bn-verdict`)).toHaveText('21 copies owed to 6 buyers')
+  await expect(page.locator('.orders-index-row')).toHaveCount(6)
+})
+
+test('short counts the copies that cannot be pulled, so owed less short is the walk (UX-168)', async ({ page }) => {
+  /* One line wants 2 and the store holds 1: one copy is missing, not two. */
+  const shortLine = line({ reason: 'short', owed: 2, wanted: 2, on_hand: 1, fulfilled: 1, outstanding: 1 })
+  await open(page, {
+    orders: payloadOf(
+      [order({ wanted: 2, recorded: 0 })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [shortLine] }],
+    ),
+  })
+  const stats = page.locator('.orders-panel-figures .bn-stat')
+  await expect(stats.nth(0).locator('.bn-stat-value')).toHaveText('2')
+  await expect(stats.nth(2).locator('.bn-stat-label')).toHaveText('short')
+  await expect(stats.nth(2).locator('.bn-stat-value')).toHaveText('1')
+})
+
+/* ------------------------------------------------------------ the Manage sheet's words (UX-238, UX-240) */
+
+test('Manage says once what each stand-down press does, in words, with no code or path on show', async ({ page }) => {
+  /* TWO STUCK LINES. Each used to carry its own 80-word paragraph, a machine code and a path. */
+  const gone = (sku: string, name: string) =>
+    line({ sku, reason: 'no_copies_on_hand', owed: 1, wanted: 1, on_hand: 0, fulfilled: 0, outstanding: 1, picks: [], line: { ...line().line, sku, name } })
+  const lines = [gone(SKU, 'Volcanion'), gone('9197754', 'Sunrise')]
+  await open(page, {
+    orders: payloadOf(
+      [order({ source: 'tcgplayer', wanted: 2, lines: lines.map((one) => one.line) })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines }],
+    ),
+  })
+  await openManage(page)
+  const sheet = page.locator('.orders-manage-sheet')
+  await expect(sheet.getByRole('button', { name: /I already sent/ })).toHaveCount(2)
+  await expect(sheet.locator('.orders-manage-legend')).toHaveCount(1)
+  const text = await sheet.innerText()
+  expect(text).not.toContain('no_copies_on_hand')
+  expect(text).not.toContain('#/inventory')
+  expect(text).not.toContain('0 sold')
+  /* THE BRAND AS TCGplayer, whatever case the feed sent it in. */
+  expect(text).toContain('TCGplayer says')
+})
+
+/* ------------------------------------------------------------ a buyer finished (UX-197) */
+
+test('the last sale leaves the buyer on screen, says all sold, and points to Shipping', async ({ page }) => {
+  /* The second read answers the order closed: the ledger has every copy. The buyer must not
+     vanish from under the hand (FLT-22), and the walk says what is next. */
+  /* THE ANSWER CHANGES WITH THE PULL, not with the read count: the screen reads more than once on mount. */
+  let pulled = false
+  await open(page, {
+    orders: () => (pulled ? payloadOf([order({ recorded: 1, open: false })], []) : oneOpenOrder()),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+    walkPlan: volcanionPlan(),
+  })
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
+
+  const done = page.locator('.orders-walk-done')
+  await expect(done).toContainText('All 1 sold.')
+  await expect(done.getByRole('link', { name: 'Go to Shipping' })).toHaveAttribute('href', /shipping$/)
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
+})
+
+/* ------------------------------------------------------------ the stand-down's own guard (UX-165, review) */
+
+/** Today and tomorrow as the browser's `<input type="date">` reads them: the UTC day, as the
+ *  panel and the server compare it. */
+function utcDay(offsetDays: number): string {
+  return new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10)
+}
+
+test('a cutoff after today refuses the press, so an order placed today is never closed unnamed', async ({ page }) => {
+  /* THE HOLE THE REVIEW FOUND: the preview dropped orders placed today, while a date typed past
+     the field's max was still sent. The server takes any cutoff, so a same-day Ready to Ship
+     order would have closed with no name drawn. */
+  const today = `${utcDay(0)}T01:00:00+00:00`
+  const both = payloadOf(
+    [
+      order({ key: 'TCGplayer:A-1', number: 'A-1', buyer: 'Old Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2020-01-01T00:00:00+00:00' }),
+      order({ key: 'TCGplayer:A-2', number: 'A-2', buyer: 'Today Buyer', status: 'Ready to Ship', recorded: 0, placed_at: today }),
+    ],
+    [
+      { key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] },
+      { key: 'TCGplayer:A-2', number: 'A-2', complete: false, outstanding: 1, lines: [line()] },
+    ],
+  )
+  const wire = await open(page, { orders: both })
+  await openStore(page)
+  const panel = page.locator('.orders-reconcile')
+  await panel.getByLabel('Placed before').fill(utcDay(1))
+
+  /* The preview counts from the cutoff alone, so the order placed today is named. */
+  await expect(panel.locator('.orders-reconcile-live')).toContainText('Today Buyer')
+  const press = panel.getByRole('button', { name: /^Stand down/ })
+  await expect(press).toBeDisabled()
+  await expect(panel).toContainText('Pick a day on or before today.')
+  await press.click({ force: true })
+  expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
+})
+
+test('an empty cutoff refuses the press', async ({ page }) => {
+  const old = payloadOf(
+    [order({ key: 'TCGplayer:A-1', number: 'A-1', status: 'Completed - Paid', recorded: 0, placed_at: '2020-01-01T00:00:00+00:00' })],
+    [{ key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] }],
+  )
+  const wire = await open(page, { orders: old })
+  await openStore(page)
+  const panel = page.locator('.orders-reconcile')
+  await panel.getByLabel('Placed before').fill('')
+  const press = panel.getByRole('button', { name: /^Stand down/ })
+  await expect(press).toBeDisabled()
+  await press.click({ force: true })
+  expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
+})
+
+test('a typed ?buyer= selects that buyer, and Back selects the one before (FLT-11)', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  await page.evaluate(() => {
+    window.location.hash = '#/orders?buyer=name%3Abob'
+  })
+  await expect(page.locator('.orders-panel-name')).toHaveText('Bob')
+  await page.evaluate(() => {
+    window.location.hash = '#/orders?buyer=name%3Aalice'
+  })
+  await expect(page.locator('.orders-panel-name')).toHaveText('Alice')
+  await page.goBack()
+  await expect(page.locator('.orders-panel-name')).toHaveText('Bob')
+})
+
+/* ------------------------------------------------------------ walk mode (the owner's ruling, 2026-09-24) */
+
+test('at 390, choosing a buyer enters walk mode: the first walk row sits in the top quarter, and Back leaves', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { orders: secondBuyerPayload().payload, walkPlan: bothPlan() })
+  await page.locator('.orders-buyerchip').click()
+  await page.locator('.orders-buyers-sheet .orders-index-row', { hasText: 'Ada' }).click()
+
+  await expect(page).toHaveURL(/walk=1/)
+  const walkline = page.locator('.orders-walkchip')
+  await expect(walkline).toBeVisible()
+  await expect(walkline).toContainText('Ada Lovelace')
+  await expect(page.locator(`${VIEW} .orders-filterbar`)).toBeHidden()
+  await expect(page.locator('.orders-card-thin')).toBeVisible()
+  const first = await page.locator('.orders-walk-press').first().boundingBox()
+  expect(first?.y ?? 9999, 'the first walk row is below the top quarter').toBeLessThanOrEqual(844 / 4)
+
+  /* ONE PRESS, OR BACK, LEAVES THE WALK. */
+  await page.goBack()
+  await expect(page).not.toHaveURL(/walk=1/)
+  await expect(page.locator(`${VIEW} .orders-filterbar`)).toBeVisible()
+})
+
+test('the card pane carries one quiet market line that opens the product view (the owner picked B)', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
+  const line = page.locator('.orders-card-pane .orders-card-market')
+  await expect(line).toBeVisible()
+  /* No reading in this fixture: a quiet dash, never a made-up figure. */
+  await expect(line).toContainText('— market')
+  await expect(line.getByRole('link')).toHaveAttribute('href', /product/)
+})
+
+for (const [width, height] of [
+  [1440, 900],
+  [720, 900],
+  [390, 844],
+] as const) {
+  test(`at ${width}, the filter bar is one line: the search and one Filters button`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page, { orders: threeBuyerPayload() })
+    /* Settle fonts before any measurement: a late swap shifts the row a fraction of a pixel,
+       and the anchor and button forms of IconButton can settle on different frames. */
+    await page.evaluate(() => document.fonts.ready)
+    const bar = page.locator(`${VIEW} .orders-filterbar`)
+    const box = await bar.boundingBox()
+    expect(box?.height ?? 999, 'the filter bar takes more than one line').toBeLessThanOrEqual(48)
+    await expect(bar.locator('.bn-filterbar-trigger')).toBeVisible()
+    await expect(bar.getByRole('button', { name: /^Show/ })).toBeHidden()
+    /* Add orders and Cards to pull are two small squares ON THIS LINE (the owner's plan,
+       D274), and the page header holds no press. Cards to pull is the IconButton ANCHOR
+       form (href, target, rel), never window.open (D274), so its role is 'link'. `box` is
+       RE-MEASURED beside each button rather than reused from above: the two boxes must come
+       from the same tick, or a sub-pixel settle between the loop's two turns reads as the
+       button drifting off a line that itself moved. */
+    for (const [name, role] of [['Add orders', 'button'], ['Cards to pull', 'link']] as const) {
+      const press = bar.getByRole(role, { name })
+      await expect(press).toBeVisible()
+      const [freshBox, square, search] = await Promise.all([
+        bar.boundingBox(),
+        press.boundingBox(),
+        bar.locator('.search-field-box').boundingBox(),
+      ])
+      expect(Math.abs((square?.width ?? 0) - (square?.height ?? 99)), `${name} is not a square`).toBeLessThanOrEqual(1)
+      expect(Math.abs((square?.height ?? 0) - (search?.height ?? 0)), `${name} is not the search's height`).toBeLessThanOrEqual(1)
+      expect((square?.y ?? 0) + (square?.height ?? 0), `${name} is off the filter bar's line`).toBeLessThanOrEqual((freshBox?.y ?? 0) + (freshBox?.height ?? 0) + 1)
+      expect(square?.y ?? -1, `${name} is off the filter bar's line`).toBeGreaterThanOrEqual((freshBox?.y ?? 0) - 1)
+    }
+    await expect(page.locator(`${VIEW} .bn-head`).getByRole('button')).toHaveCount(0)
+  })
+}
+
+/* ------------------------------------------------------------ the finished-buyer race (review round 3) */
+
+test('finishing a buyer never asks for another buyer\'s walk, and draws no card to sell', async ({ page }) => {
+  /* THE RACE THE RE-REVIEW FOUND: on the last sale the selection moved for one render to the
+     first buyer shown, which asked for that buyer's plan. The hold took the selection back, and
+     the old answer then landed: another buyer's card, with an active Mark sold, under a buyer
+     with 0 cards to pick. */
+  let pulled = false
+  const second = secondBuyerPayload()
+  const nora = second.payload.orders.find((one) => one.key === secondBuyerKey)!
+  const adaDone = payloadOf([order({ recorded: 1, open: false }), nora], [second.resolved])
+  await open(page, {
+    orders: () => (pulled ? adaDone : second.payload),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+    walkPlan: volcanionPlan(),
+  })
+  const asked: string[][] = []
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    const keys = (route.request().postDataJSON() as { keys?: string[] }).keys ?? []
+    asked.push(keys)
+    const plan = keys.includes(secondBuyerKey) ? sunrisePlan() : keys.length === 0 ? walkPlanOf([]) : volcanionPlan()
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
+  })
+
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  await expect(page.locator('.orders-card-pane')).toContainText('Volcanion')
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).first().click()
+  await expect(page.locator('.orders-walk-done')).toContainText('All 1 sold.')
+
+  /* A window long enough for the stray plan to have been asked for and to have landed. */
+  await page.waitForTimeout(600)
+  expect(asked.filter((keys) => keys.includes(secondBuyerKey))).toEqual([])
+  await expect(page.locator('.orders-card-pane')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Mark sold/ })).toHaveCount(0)
+})

@@ -1,43 +1,33 @@
-/* app/src/OrdersWalkPane.tsx — the walked cards, drawn as `#/inventory` draws a box (`docs/
- * specs/order-walk-plan.md` §13, "Orders is inventory's screen with orders in the rail — RULED
- * 2026-09-19"). It replaces `OrdersWalk.tsx` (deleted whole, not adapted): there is no more
- * "stop", "take" (as a screen word) or "pull" here — a physical pick is a CARD in a WALK LIST,
- * shaped exactly like `BoxBrowse.tsx`'s own section list, and the card a person is standing on
- * gets `CardLocations` — the same panel `#/inventory` draws over a box's card — with `Mark
- * sold` as the one write.
+/* app/src/OrdersWalkPane.tsx — the walk: the cards to pick for the buyers walked, in the order
+ * the boxes are walked (`docs/specs/order-walk-plan.md` §13), and the card pane beside it.
  *
  * THE WIRE IS UNCHANGED: `POST /orders/walk-plan` (`server.ts:walkPlan`), `WalkPlan` and its
  * parts, and the pull/undo write `Orders.tsx` already makes (`onWalkPull`/`onWalkUndo`,
  * `pullCopy`/`undoPull`). Nothing here edits `pipeline/walkplan.py`; which drawers, which
  * cards, and the density order are exactly what the solver already decided.
  *
- * ONE ROW PER PHYSICAL PICK. A `WalkPlanTake` can need more than one copy out of the SAME
- * stop (`take.wanted` more than one, several of `take.copies` carrying `here: true`); each such
- * copy is its own row, because that is a physical spot a hand has to visit, even though every
- * row under one take shares the take's own name and lands on the take's own `CardLocations`
- * group. `here` is the solver's own flag and this file does not recompute it.
+ * A ROW IS A PICK COUNT (D212, D279, UX-198): one card in one section,
+ * "Pick 1 of 2", never a list of chosen copies. The hook below still keeps one internal row per
+ * copy of the solver's reach, because the press and its undo act on one physical copy; the list
+ * folds them by take. `here` is the solver's own flag and this file does not recompute it.
  *
- * THE CURRENT CARD'S GROUP IS BUILT EXACTLY AS `Inventory.tsx`'s `loneGroup` AND THE OLD
- * `TakeBlock` BUILT ONE: a `SearchGroup` synthesised from the take's own wire fields, with
- * `copies: take.copies` IN THE WIRE'S OWN ORDER (this stop's copies first, D212/D93/D97), and
- * `CardLocations` reads it with `preserveOrder` so its own fullest-section re-rank never runs
- * over it — the trap the first build of this screen fell into. Positions patched from a pull's
- * own post-write facts are folded into `facts` and never change which row is first.
+ * THE CARD PANE (UX-169) is the photograph, what the card is, and every copy of it with its place
+ * and Mark sold, in the wire's own order (this stop's copies first, D212/D93/D97). Positions
+ * patched from a pull's own post-write facts are folded into `facts` and never change which row
+ * is first. The card's full inventory detail stays on `#/inventory`.
  */
-
 import { useEffect, useMemo, useRef, useState } from 'react'
-
-import { CardDetailsSection, CardHeroHead, marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
-import { CardLocations } from './CardLocations'
+import { marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
+import { forSale } from './cardState'
 import { Overlay } from './InventoryOverlay'
-import { Button, Icon, Pill } from './kit'
+import { Icon, IconButton, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
-  Listing,
   OrderRow,
   Place,
   PullRefresh,
@@ -49,7 +39,6 @@ import type {
   WalkPlanStop,
   WalkPlanTake,
 } from './types'
-import './Inventory.css'
 import './OrdersWalkPane.css'
 
 export type WalkPullOutcome =
@@ -204,6 +193,10 @@ export function useOrderWalk({
   readonly onUndo: WalkUndoFn
 }) {
   const keysSig = useMemo(() => [...walkedKeys].sort().join(' '), [walkedKeys])
+  /* THE KEY SET WALKED NOW. An answer for any other set is dropped, whenever it lands: a stale
+     answer drew another buyer's card with an active Mark sold (the re-review, round 3). */
+  const currentSig = useRef(keysSig)
+  currentSig.current = keysSig
   const [plan, setPlan] = useState<WalkPlan | null>(null)
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -224,15 +217,17 @@ export function useOrderWalk({
     }
     setLoading(true)
     setFailure(null)
+    const asked = keysSig
+    const current = () => live.current && currentSig.current === asked
     walkPlan([...walkedKeys])
       .then((got) => {
-        if (live.current) setPlan(got)
+        if (current()) setPlan(got)
       })
       .catch((err) => {
-        if (live.current) setFailure(describeFailure(err))
+        if (current()) setFailure(describeFailure(err))
       })
       .finally(() => {
-        if (live.current) setLoading(false)
+        if (current()) setLoading(false)
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keysSig])
@@ -503,81 +498,104 @@ export type OrderWalk = ReturnType<typeof useOrderWalk>
 
 /* ------------------------------------------------------------------------------ the walk list */
 
-/** `BoxBrowse.tsx`'s own `.browse-list` / `.browse-group` / `.browse-row` shape, over the
- *  plan's rows instead of a box's cards. NO TICK IS DRAWN ON A ROW HERE, on the owner's own
- *  word (§13): the ticks are on ORDERS, in the rail above ("hit ticks to the side so I can
- *  select multiple") — the mock carried a tick here only by fidelity to inventory's own
- *  markup, and a checkbox with nothing to do is worse than none. */
+/** One card at one stop, as the walk draws it: every row of the solver's reach for that SKU at
+ *  that stop, folded into one line. */
+type WalkTakeLine = { readonly takeKey: string; readonly take: WalkPlanTake; readonly rows: readonly WalkRow[] }
+
+function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
+  const out: WalkTakeLine[] = []
+  for (const row of rows) {
+    const last = out[out.length - 1]
+    if (last !== undefined && last.takeKey === row.takeKey) (last.rows as WalkRow[]).push(row)
+    else out.push({ takeKey: row.takeKey, take: row.take, rows: [row] })
+  }
+  return out
+}
+
+/** Who a take is for, in words: the buyers' names, once each. */
+export function takeBuyers(take: WalkPlanTake): string {
+  const names: string[] = []
+  for (const ref of take.for) {
+    const name = orderBuyerLabel(ref)
+    if (!names.includes(name)) names.push(name)
+  }
+  return names.join(', ')
+}
+
+/** THE WALK IS A PICK COUNT, NOT A LIST OF CHOSEN COPIES (D212, D279,
+ *  UX-198). A row is one card in one section: where it is, what it is, how many to pick here of
+ *  how many the walk's orders want, and, when the walk holds more than one buyer, for whom. The
+ *  copies themselves, every one of them, are in the card pane beside it. No tick on a row: the
+ *  ticks are on buyers (§13). */
 export function WalkList({
   walk,
   hideSold,
   collapsed = false,
+  owedBySku,
+  showBuyers,
 }: {
   readonly walk: OrderWalk
   readonly hideSold: boolean
-  /** S5 — folds every section's rows at once. No per-section state: the fold chevron in each
-   *  section head stays decorative, as it always has, and this one flag hides every
-   *  `.browse-group-rows` list rather than tracking which sections are individually open. */
   readonly collapsed?: boolean
+  /** What the walked orders still want of each SKU, across every stop. The "of N". */
+  readonly owedBySku: ReadonlyMap<string, number>
+  readonly showBuyers: boolean
 }) {
-  if (walk.loading) {
+  if (walk.loading && walk.plan === null) {
     return (
-      <div className="browse-empty">
-        <span className="bn-skeleton" style={{ width: '100%', height: 64 }} />
-      </div>
+      <Loading rows={4} label="Reading the walk" />
     )
   }
   if (walk.failure !== null) {
     return (
-      <div className="browse-empty">
-        <p className="bn-muted">{walk.failure.message}</p>
-      </div>
+      <Notice tone="warn" title="Could not read where the copies are">
+        Pick a buyer again, or reload the page.
+      </Notice>
     )
   }
   if (walk.sections.length === 0) {
-    return (
-      <div className="browse-empty">
-        <p className="bn-muted">Nothing to walk. Every ticked order's copies are either already sold or nowhere on hand.</p>
-      </div>
-    )
+    return <p className="orders-walk-empty bn-muted">No copy of these cards is on hand.</p>
   }
   return (
-    <ul className="browse-list" aria-label="The cards this walk covers, in box-walk order">
+    <ul className="orders-walk-list" aria-label="The cards to pick, in the order the boxes are walked">
       {walk.sections.map((section) => {
-        const shown = hideSold ? section.rows.filter((row) => !walk.soldKeys.has(row.copy.key)) : section.rows
+        const lines = takeLinesOf(section.rows)
+        const pickedAll = (line: WalkTakeLine) =>
+          line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length >= line.take.wanted
+        const shown = hideSold ? lines.filter((line) => !pickedAll(line)) : lines
         if (shown.length === 0) return null
         return (
-          <li className="browse-group" key={section.key}>
-            <div className="browse-secthead">
-              <span className="browse-sectfold" aria-hidden="true">
-                <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} size={14} className="browse-sectmark" />
-                <SectionTitle parts={section.parts} />
-                <span className="browse-sectcount">{shown.length}</span>
-              </span>
+          <li className="orders-walk-group" key={section.key}>
+            <div className="orders-walk-sect">
+              <SectionTitle parts={section.parts} />
+              <span className="orders-walk-sectcount">{shown.length}</span>
             </div>
             {collapsed ? null : (
-              <ul className="browse-group-rows">
-                {shown.map((row) => {
-                  const sold = walk.soldKeys.has(row.copy.key)
+              <ul className="orders-walk-rows">
+                {shown.map((line) => {
+                  const picked = line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length
+                  const done = picked >= line.take.wanted
+                  const of = Math.max(line.take.wanted, owedBySku.get(line.take.sku) ?? line.take.wanted)
+                  const current = line.rows.some((row) => row.rowKey === walk.current)
+                  const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
+                  const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
                   return (
-                    <li className={sold ? 'browse-rowline is-departed' : 'browse-rowline'} key={row.rowKey}>
+                    <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey}>
                       <button
-                        className="browse-row"
+                        className="orders-walk-press"
                         type="button"
-                        aria-current={row.rowKey === walk.current ? 'true' : undefined}
-                        onClick={() => walk.select(row.rowKey)}
+                        aria-current={current ? 'true' : undefined}
+                        onClick={() => next !== undefined && walk.select(next.rowKey)}
                       >
-                        <span className="browse-row-position">
-                          <span className="browse-row-slot">{row.copy.place.card === null ? '—' : `#${row.copy.place.card}`}</span>
+                        <span className="orders-walk-slot">{slots.length === 0 ? '—' : slots.map((slot) => `#${slot}`).join(', ')}</span>
+                        <span className={line.take.name === null ? 'orders-walk-name is-unnamed' : 'orders-walk-name'}>
+                          {line.take.name ?? 'Not identified yet'}
                         </span>
-                        <span className={row.take.name === null ? 'browse-row-name is-unnamed' : 'browse-row-name'}>
-                          {row.take.name ?? row.take.sku}
+                        <span className="orders-walk-pick">
+                          {done ? <Icon name="check" size={14} /> : null}
+                          {done ? 'Picked' : 'Pick'} {line.take.wanted} of {of}
                         </span>
-                        {sold ? (
-                          <span className="browse-row-badge is-out" aria-hidden="true">
-                            <Icon name="check" size={12} />
-                          </span>
-                        ) : null}
+                        {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
                       </button>
                     </li>
                   )
@@ -591,79 +609,41 @@ export function WalkList({
   )
 }
 
-/* -------------------------------------------------------------------------------- the main pane */
-
-/** The action every row in the pane offers — `Mark sold`, an `Undo` on the newest pull this walk
- *  made, or a `Sold` pill on an older one. NO CLOCK (`docs/specs/undo.md` §3, D164): the row that
- *  carries `Undo` is picked by RANK, not by a countdown — it is whichever sold copy is newest,
- *  and it stops being that the instant a later pull is recorded, never after any span of time.
- *  An older `Sold` copy's way back is the card, on `#/inventory`'s departed row (§4) — this pane
- *  offers only the one door the owner kept here. */
+/** The press on a copy row: an icon in every row (the iconography rule, a press repeated per
+ *  row), its name carrying the place so thirty rows never announce the same word. `Undo` stands
+ *  only on the newest sale (`newestUndoKey`). */
 function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: SearchCopy }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key
-  if (receipt !== undefined) {
-    if (copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
-    return (
-      <span className="inventory-copy-actions inventory-receipt">
-        <Button
-          size="sm"
-          icon="undo"
-          busy={busy}
-          disabled={walk.busyCopy !== null && !busy}
-          onClick={() => walk.undoCopy(copy.key)}
-        >
-          Undo
-        </Button>
-      </span>
-    )
-  }
+  const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
+  if (receipt !== undefined && copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
+  const undo = receipt !== undefined
   return (
-    <Button size="sm" busy={busy} disabled={walk.busyCopy !== null && !busy} onClick={() => walk.onSell(copy)}>
-      Mark sold
-    </Button>
+    <IconButton
+      icon={undo ? 'undo' : 'sold'}
+      label={undo ? 'Undo' : 'Mark sold'}
+      name={`${undo ? 'Undo' : 'Mark sold'}: ${where}`}
+      busy={busy}
+      disabled={walk.busyCopy !== null && !busy}
+      onClick={() => (undo ? walk.undoCopy(copy.key) : walk.onSell(copy))}
+    />
   )
 }
 
-/** `CardLocations`, over the current card's copies — inventory's own card pane, unadapted
- *  beyond `preserveOrder` (the trap this screen's brief names first): the walk's density order
- *  leads, this stop's own copies first, and a sale never re-sorts it. */
-/** INVENTORY'S CARD PANE, UNCHANGED (§13) — the header, the pills, the photograph as
- *  `#/inventory` frames it (`PhotoPanel`, `CardHero.tsx`), "Every copy of this card"
- *  (`CardLocations`, `preserveOrder`), and `Details` (`CardDetailsSection`). Reused, not
- *  rebuilt: all three come off `CardHero.tsx`, the same file `BoxBrowse.tsx` reads them from.
- *
- *  LEFT OUT, BY NAME, AND ONLY BECAUSE THEY EDIT: `CardOps`'s menu (correct claims, retire,
- *  remove) and the re-shoot control. Both change a card's own record — identification,
- *  position, the stored photograph — which is Inventory's job and not a fulfillment walk's;
- *  neither is passed to `CardHeroHead` or `PhotoPanel` here.
- *
- *  `market` AND `listings` REACH `CardDetailsSection` THE SAME PATH `BoxBrowse.tsx` USES,
- *  COPIED RATHER THAN REINVENTED (the market-and-listings parity task, queued after D220 —
- *  the owner reversed D220's own "ships with its empty states" call). `listings` arrives from
- *  `Orders.tsx`, the free third face of the same `POST /inventory/copies` read that already
- *  answers `rawCards` — never a second fetch. `market` is a per-run cache, `BoxBrowse.tsx`'s
- *  own `priced`/`asked` pair restated here over `currentCard.run` instead of a selected box
- *  row's: a run is asked for AT MOST ONCE per mount, and never asked for at all when the
- *  current card has no run yet (`marketText` already draws "not joined yet" for that case, so
- *  asking would only spend a fetch on an answer this pane already knows). D62/D79 keep price
- *  TREND on the pricing screen — this wires the single reading and the live-listing fact only.
- *
- *  BEFORE `rawCards` HAS ANSWERED FOR THIS ROW (the first render of a freshly landed plan),
- *  there is no full `InventoryCard` yet — the synthesised take-level header stands in, off the
- *  same wire fields the old `TakeBlock` used, so the pane is never blank while the read
- *  catches up. `market`/`listings` are drawn only once a real card has landed (`row !== null`),
- *  same as `CardDetailsSection` itself. */
-export function WalkMainPane({
+/* ------------------------------------------------------------------------------ the card pane */
+
+/** THE CARD THE WALK STANDS ON, AND WHERE EVERY COPY OF IT IS (UX-169). The photograph, what the
+ *  card is, how many to pick, and one row per copy with its place and Mark sold: every copy, this
+ *  stop's first, in the server's order (D212). The card's full inventory detail (stats, listing
+ *  counts, the details table) is `#/inventory`'s, not this screen's. */
+export function WalkCardPane({
   walk,
-  phone,
-  listings,
+  owedBySku,
+  showBuyers,
 }: {
   readonly walk: OrderWalk
-  readonly phone: boolean
-  /** `Orders.tsx`'s own read — `POST /inventory/copies`' `listings`, narrowed server-side to
-   *  the SKUs any open order names. */
-  readonly listings: Readonly<Record<string, Listing>>
+  readonly owedBySku: ReadonlyMap<string, number>
+  readonly showBuyers: boolean
 }) {
   const { currentRow, currentGroup, currentCard } = walk
   const [broken, setBroken] = useState(false)
@@ -673,26 +653,21 @@ export function WalkMainPane({
     setZoomed(false)
   }, [currentRow?.copy.key])
 
-  /* THE PER-RUN MARKET CACHE, COPIED FROM `BoxBrowse.tsx` (see this component's own docstring
-   *  above). `pricedRun` is read off `currentCard` — the real `InventoryCard`, never the
-   *  synthesised take — so a row with no `InventoryCard` yet asks for nothing rather than
-   *  guessing. */
+  /* THE MARKET READING, ONE READ PER RUN (the owner's pick, 2026-09-24: B, one quiet line under
+     the card). The same per-run cache the old pane kept. A failed read is a quiet dash. */
   const [priced, setPriced] = useState<Record<string, MarketRead>>({})
   const asked = useRef<Set<string>>(new Set())
   const pricedRun = currentCard?.run ?? null
   useEffect(() => {
-    if (pricedRun === null) return
-    if (asked.current.has(pricedRun)) return
+    if (pricedRun === null || asked.current.has(pricedRun)) return
     asked.current.add(pricedRun)
     let live = true
     getPricing(pricedRun)
       .then((payload) => {
         if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
       })
-      .catch((error: unknown) => {
-        const why =
-          describeFailure(error).code === 'pricing_not_written' ? 'join this run' : 'could not be read'
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why } }))
+      .catch(() => {
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why: 'could not be read' } }))
       })
     return () => {
       live = false
@@ -700,30 +675,52 @@ export function WalkMainPane({
   }, [pricedRun])
 
   if (currentGroup === null || currentRow === null) return null
-
   const take = currentRow.take
-  const row: Row | null = currentCard === null ? null : { key: currentRow.copy.key, card: currentCard }
+  /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
+  const row: Row | null =
+    currentCard === null || currentRow.copy.place.located === false ? null : { key: currentRow.copy.key, card: currentCard }
+  const of =Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
+  const sub = [take.number_display, take.set].filter((part): part is string => Boolean(part))
+
+  const here = currentGroup.copies.find((copy) => copy.key === currentRow.copy.key) ?? null
+  const read = currentCard?.run == null ? undefined : priced[currentCard.run]
+  const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
+  const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
+  const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
+  const hereWords = currentRow.copy.place.label === null ? null : sayPlace(currentRow.copy.place.label)
 
   return (
-    <>
-      <section className="bn-panel browse-card orders-walk-card">
-      {row === null ? (
-        <div className="browse-hero-head">
-          <div className="browse-hero-text">
-            <h2 className={take.name === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>{take.name ?? 'Not identified yet'}</h2>
-            <p className="browse-hero-sub">
-              {[take.number_display, take.set].filter((part): part is string => Boolean(part)).map((part, i) => (
-                <span key={`${part}-${i}`}>{part}</span>
-              ))}
-            </p>
-            <div className="browse-hero-chips">{take.rarity === null ? null : <Pill>{take.rarity}</Pill>}</div>
-          </div>
-        </div>
-      ) : (
-        <CardHeroHead card={row.card} game={row.card.place?.game_display ?? null} />
-      )}
-      <div className="browse-band">
-        <div className="browse-shot">
+    <section className="orders-card-pane bn-panel" aria-label="The card to pick">
+      <div className="orders-card-thin">
+        <button
+          type="button"
+          className="orders-card-thumb"
+          aria-label="Open the photograph"
+          disabled={row === null}
+          onClick={() => setZoomed(true)}
+        >
+          {row === null ? (
+            <Icon name="image" size={18} />
+          ) : (
+            <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt="" loading="lazy" />
+          )}
+        </button>
+        <span className="orders-card-thin-text">
+          <span className={take.name === null ? 'orders-card-thin-name is-unnamed' : 'orders-card-thin-name'}>
+            {take.name ?? 'Not identified yet'}
+          </span>
+          <span className="orders-card-thin-place">
+            {hereWords === null ? `Pick ${take.wanted} of ${of}` : `${hereWords}, pick ${take.wanted} of ${of}`}
+          </span>
+        </span>
+        {here === null ? null : (
+          <span className="orders-card-thin-action">
+            <RowAction walk={walk} copy={here} />
+          </span>
+        )}
+      </div>
+      <div className="orders-card-top">
+        <div className="orders-card-shot">
           {row === null ? (
             <div className="orders-walk-photo">
               <Icon name="image" size={28} />
@@ -740,70 +737,43 @@ export function WalkMainPane({
             />
           )}
         </div>
-        <div className="browse-under">
-          {/* THE VISIBLE DEFECT, FOUND RENDERING THIS PASS OVER THE DEMO STORE: without this
-              wrapper, `CardLocations`' own row never opens the `copies` NAMED CONTAINER
-              (`CardLocations.css`'s `@container copies (max-width: 619px)` — the narrow, place-
-              spans-the-row template that keeps `BOX <name> Box <n>` on one line). No open
-              container means the query cannot match at all, so the row fell through to the
-              WIDE, side-by-side `'place state action'` template regardless of how much room it
-              actually had — 236px of a 587px row at 1440, a third of what `#/inventory` gives
-              the identical row (576px) — and the box's own name wrapped under `BOX 1` twice
-              over before truncating. `Inventory.tsx`'s own `.inventory-detail` is the ONE place
-              in the app that opens this container (`Inventory.css`); `OrdersWalkPane.tsx` reused
-              its class rather than inventing a second name for the same contract, since its
-              rules — `container-type: inline-size`, the flex chain that carries `.browse-band`'s
-              fixed height down to a list that scrolls in it — are exactly what this pane needs
-              too, and `./Inventory.css` was already imported here.
-
-              THE SAME CHAIN'S SECOND LINK (the orders-followups task): `.inventory-detail`'s
-              CSS reaches `.card-locations` only through `.inventory-copies > .card-locations
-              { flex: 1 1 auto; min-height: 0 }` (`Inventory.css`). `CopiesPanel`
-              (`Inventory.tsx`) always wraps `CardLocations` in
-              `<section className="inventory-copies">`; this pane skipped that wrapper, so the
-              rule never matched and `.card-locations` kept its block default (`min-height:
-              auto`, sized to its own content) instead of shrinking to the band. Measured at
-              1440 with 9 copies: the rows list grew to 1600px inside a 620px band, and
-              `Details` — a child of THIS section, drawn right after `.browse-band` closed —
-              sat at y=933, squarely inside the overflow (933-1913px), because the overflow
-              paints past the band's own box while `Details` still lands in normal flow right
-              after it. Adding the wrapper is the whole fix for the scroll: the list is what
-              gives (D118), and it now does. */}
-          <div className="inventory-detail">
-            <section className="inventory-copies">
-              <CardLocations
-                persona="owner"
-                group={currentGroup}
-                currentKey={currentRow.copy.key}
-                preserveOrder
-                onSell={walk.onSell}
-                busyKey={walk.busyCopy}
-                soldKeys={walk.soldKeys}
-                renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
-              />
-            </section>
-          </div>
+        <div className="orders-card-text">
+          <h2 className={take.name === null ? 'orders-card-name is-unnamed' : 'orders-card-name'}>{take.name ?? 'Not identified yet'}</h2>
+          {sub.length === 0 ? null : (
+            <p className="orders-card-sub bn-facts">
+              {sub.map((part, at) => (
+                <span key={at}>{part}</span>
+              ))}
+            </p>
+          )}
+          <p className="orders-card-pick">
+            Pick <strong>{take.wanted}</strong> of {of}
+          </p>
+          {showBuyers ? <p className="orders-card-for">For {takeBuyers(take)}</p> : null}
+          <p className="orders-card-market">
+            <ProductLink sku={take.sku} name={take.name ?? undefined}>
+              {market === null ? '—' : <Money value={market} />} market, {liveNow === null ? '—' : liveNow} live
+            </ProductLink>
+          </p>
         </div>
       </div>
-      </section>
-      {/* `Details` MOVED HERE, A SIBLING OF THE SECTION RATHER THAN A CHILD OF IT — mirroring
-          `BoxBrowse.tsx`'s own `</section>` / `<CardDetailsSection .../>` pair exactly (§13:
-          this pane is inventory's card pane, reused whole). `.bn-panel`'s `overflow: hidden`
-          was clipping hero, band and Details together to one box; the scroll fix above means
-          that box no longer has to stretch to fit an overflowing list, but the DOM shape still
-          owed inventory's own, one section shallower than this pane drew it. */}
-      {row === null ? null : (
-        <CardDetailsSection
-          card={row.card}
-          market={row.card.run === null ? undefined : priced[row.card.run]}
-          listings={listings}
-          phone={phone}
-          // "Inventory only" — the owner's ruling on D252, now
-          // `correctable`'s OWN default: an allow-list of one screen, so this call site needs
-          // no flag at all. The walk here is a mode of inventory's own pane (§13), not
-          // inventory itself, and omitting the prop IS the "no control" answer.
-        />
-      )}
+      <ul className="orders-card-copies" aria-label="Every copy of this card">
+        {currentGroup.copies.map((copy) => {
+          const here = copy.key === currentRow.copy.key
+          return (
+            <li className={here ? 'orders-card-copy is-current' : 'orders-card-copy'} key={copy.key} aria-current={here ? 'true' : undefined}>
+              {copy.place.located === false ? (
+                <span className="orders-card-place">Pooled: {copy.place.game_display ?? 'cards'}</span>
+              ) : (
+                <Location place={copy.place} className="orders-card-place" />
+              )}
+              <span className="orders-card-action">
+                <RowAction walk={walk} copy={copy} />
+              </span>
+            </li>
+          )
+        })}
+      </ul>
       {!zoomed || row === null ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img
@@ -812,6 +782,6 @@ export function WalkMainPane({
           />
         </Overlay>
       )}
-    </>
+    </section>
   )
 }

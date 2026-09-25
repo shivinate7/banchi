@@ -77,17 +77,6 @@
       "R2-date": "b-pricing",
       "R2-icon-only-button": "icons"
     },
-    "app/src/Orders.tsx": {
-      "R1": "orders",
-      "R2-select": "orders",
-      "R2-class": "orders",
-      "R2-date": "orders",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/OrdersWalkPane.tsx": {
-      "R2-class": "orders",
-      "R2-icon-only-button": "icons"
-    },
     "app/src/PriceHistory.tsx": {
       "R2-icon-only-button": "icons"
     },
@@ -149,9 +138,6 @@
     "app/src/SendCard.tsx": {
       "R2-icon-only-button": "icons"
     },
-    "app/src/Shipping.tsx": {
-      "R1": "shipping"
-    },
     "app/src/SubmissionClaims.tsx": {
       "R2-date": "capture",
       "R2-icon-only-button": "icons"
@@ -189,16 +175,6 @@
       "page": "b-pricing",
       "width": "b-pricing",
       "top": "b-pricing"
-    },
-    "/orders": {
-      "page": "orders",
-      "width": "orders",
-      "top": "orders"
-    },
-    "/shipping": {
-      "page": "shipping",
-      "width": "shipping",
-      "top": "shipping"
     },
     "/revenue": {
       "page": "sales",
