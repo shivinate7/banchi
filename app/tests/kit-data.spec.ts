@@ -575,7 +575,15 @@ test('every kit-data control a thumb presses is 40px tall at 390', async ({ page
         .filter((el) => getComputedStyle(el).visibility !== 'hidden')
         .map((el) => {
           const r = el.getBoundingClientRect()
-          return { name: el.className, h: Math.round(r.height), w: Math.round(r.width) }
+          /* THE HIT AREA, NOT THE VISUAL BOX (D-icon-buttons, round 2, option (a)). An
+             IconButton paints at FACE size and floors its hit area with a ::before inset
+             instead (max(40px, 100%), kit.css) — the box alone now under-reports a control
+             the pseudo already covers. Only counted when the pseudo actually draws. */
+          const before = getComputedStyle(el, '::before')
+          const hasBefore = before.content !== 'none' && before.content !== ''
+          const w = hasBefore ? Math.max(r.width, parseFloat(before.width) || 0) : r.width
+          const h = hasBefore ? Math.max(r.height, parseFloat(before.height) || 0) : r.height
+          return { name: el.className, h: Math.round(h), w: Math.round(w) }
         }),
     )
   expect(sizes.length).toBeGreaterThanOrEqual(9)
@@ -626,8 +634,12 @@ async function contrastOf(page: Page, selector: string): Promise<number> {
 for (const theme of ['light', 'dark'] as const) {
   test(`every field edge reads 3:1 against the page in ${theme}`, async ({ page }) => {
     await open(page, 1440, theme)
+    /* `.bn-sort-dir` WAS HERE, a bordered field: D-icon-buttons (round 2) converted the
+       direction toggle to an IconButton, which carries no border on purpose — a ghost-style
+       icon-only control, not a field. This floor is a field-edge floor, and that control is
+       no longer a field. */
     const edges = await page
-      .locator('[data-kit-data] .bn-pick:not([data-active]), [data-kit-data] .bn-sort-dir, [data-kit-data] .search-field-box')
+      .locator('[data-kit-data] .bn-pick:not([data-active]), [data-kit-data] .search-field-box')
       .evaluateAll((els) => {
         const parse = (v: string): number[] => {
           const n = (v.match(/[\d.]+/g) ?? []).map(Number)

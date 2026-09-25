@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Icon } from './Icon'
-import { FailureNotice } from './index'
+import { FailureNotice, IconButton } from './index'
 import { Popover, Sheet } from './overlay'
 import { FilterChips, FilterCount, SortControl, type FilterFacet, type FilterValue, type SortOption, type SortValue } from './data'
 import { SearchField } from '../SearchField'
@@ -166,7 +166,7 @@ export function FilterBar<K extends string = string>({
   compact = 'sheet',
 }: FilterBarProps<K>) {
   const id = useId().replace(/:/g, '')
-  const trigger = useRef<HTMLButtonElement | null>(null)
+  const trigger = useRef<HTMLElement | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const active = activeFacetCount(facets, value)
 
@@ -223,19 +223,24 @@ export function FilterBar<K extends string = string>({
         {/* THE COMPACT ROW: one trigger, one sheet. Hidden in a wide bar. */}
         {facets.length > 0 || sort !== undefined || hide !== undefined ? (
           <div className="bn-filterbar-compact">
-            <button
-              ref={trigger}
-              type="button"
-              className="bn-filterbar-trigger"
-              aria-haspopup="dialog"
-              aria-expanded={sheetOpen}
-              data-active={badge > 0 ? 'true' : undefined}
-              onClick={() => setSheetOpen(true)}
-            >
-              <Icon name="filter" size={14} />
-              {label}
-              {badge > 0 ? <span className="bn-filterbar-trigger-count">{badge}</span> : null}
-            </button>
+            {/* The wrapping span is layout-neutral (inline, no CSS of its own) and exists only
+                so `trigger` has a DOM node to anchor a popover to — `IconButton` keeps its own
+                internal ref for its tooltip and does not forward one (round 2/kit-icons merge). */}
+            <span ref={trigger} style={{ display: 'inline-block' }}>
+              <IconButton
+                icon="filter"
+                label={label}
+                /* The badge is aria-hidden (D118: its arrival moves nothing, kit.css), so the
+                   active count only reaches a screen reader through `name` — round 2's own
+                   finding: before IconButton, the count sat in the button's own text. */
+                name={badge > 0 ? `${label}, ${badge} on` : label}
+                badge={badge > 0 ? badge : undefined}
+                className="bn-filterbar-trigger"
+                aria-haspopup="dialog"
+                aria-expanded={sheetOpen}
+                onClick={() => setSheetOpen(true)}
+              />
+            </span>
             {compact === 'popover' ? (
               <Popover open={sheetOpen} onClose={() => setSheetOpen(false)} anchor={trigger} label={label} className="bn-filterbar-popover">
                 <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
