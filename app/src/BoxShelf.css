@@ -26,10 +26,6 @@
   background: var(--bn-surface);
 }
 
-.shelf-box[data-sealed='true'] {
-  background: var(--bn-surface-2);
-}
-
 .shelf-box-head {
   display: flex;
   flex-wrap: wrap;

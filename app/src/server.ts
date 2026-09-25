@@ -12,7 +12,6 @@ import type {
   StandDownReason,
   StandDownResult,
   BoxRecord,
-  BoxState,
   BoxSummary,
   CardSummary,
   Finish,
@@ -1697,16 +1696,13 @@ export async function createBox(input: {
  * allowed — it is not this module's place to add the confirm D10 says to reach for *first if
  * that failure ever actually happens*, and it is worth knowing that it has not yet.
  *
- * `box_closed` IS A REFUSAL ABOUT THE BOX, NOT ABOUT THIS CALL BEING WRONG. It means the box
- * is closed and the edit asked for is one a closed box does not take. Branch on it if a screen
- * can offer to reopen; do not paraphrase it into "something went wrong".
+ * A box has no lid (`D-sealed-boxes-removed`), so no edit here is refused for a seal.
  */
 export async function updateBox(
   box: number,
   patch: {
     name?: string
     sections?: number[]
-    state?: BoxState
     /** Section names by ORDINAL, as the screen numbers them (D132). A blank clears one. */
     section_names?: Record<number, string>
   },
@@ -1718,7 +1714,6 @@ export async function updateBox(
   const payload: Record<string, string | number[] | Record<number, string>> = {}
   if (patch.name !== undefined) payload.name = patch.name
   if (patch.sections !== undefined) payload.sections = patch.sections
-  if (patch.state !== undefined) payload.state = patch.state
   if (patch.section_names !== undefined) payload.section_names = patch.section_names
 
   return (await request(`/boxes/${box}`, {
@@ -1748,8 +1743,8 @@ export async function updateBox(
  * it yet, so the divider asked for is already there — the two-presses-in-a-row case, and the
  * one an operator will actually hit. `section_ahead`: a divider is already declared past the
  * next card, so this one cannot go in front of it; the remedy is the dividers editor.
- * `box_closed`: a sealed box takes no more cards. Show the server's sentence — each names
- * the divider or the box that is in the way, and this module has nothing to add to it.
+ * Show the server's sentence — each names the divider that is in the way, and this module
+ * has nothing to add to it.
  *
  * Answers with the whole `BoxRecord`, so `sections_detail` comes back with it. Read the
  * section that was opened off the LAST entry of that array rather than off `sections.length`

@@ -199,7 +199,9 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         # D265: the card's order key in its box. REAL, see `_REAL`.
         "ord",
     ),
-    "boxes": ("box", "bid", "name", "state"),
+    # No `state` since `D-sealed-boxes-removed`. A store made before keeps the column,
+    # unread and unwritten; `_open_every_box` empties it.
+    "boxes": ("box", "bid", "name"),
     "listings": ("condition", "pushed", "staged", "live"),
     "identifications": ("photo_sha256", "cleared_by_human", "at"),
     "queues": ("box", "idx", "reason", "cleared_by_human", "first_seen"),
@@ -521,6 +523,7 @@ def _upgrade(
                 _add_send_claims(conn)       # D273
             if stored < 13:
                 _add_card_order(conn)        # D265, the order key
+                _open_every_box(conn)        # D-sealed-boxes-removed
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1222,6 +1225,26 @@ def _add_card_order(conn: sqlite3.Connection) -> None:
         "UPDATE cards SET ord = CAST(json_extract(payload, '$.order') AS REAL) "
         "WHERE ord IS NULL AND json_extract(payload, '$.order') IS NOT NULL"
     )
+
+
+def _open_every_box(conn: sqlite3.Connection) -> None:
+    """Schema 13, second step: every box is an ordinary box (`D-sealed-boxes-removed`).
+
+    THE OWNER'S RULING, 2026-09-25: "what was the point of sealed boxes? lets kill this".
+    A sealed box kept `state = 'closed'`, a frozen `capacity` and a `closed_at` in its payload.
+    This step removes all three from every box payload, and empties the `state` column where a
+    store has one. Nothing reads them any more. Idempotent: a payload without the keys is
+    unchanged, and an empty column stays empty.
+    """
+    conn.execute(
+        "UPDATE boxes SET payload = json_remove(payload, '$.state', '$.capacity', '$.closed_at') "
+        "WHERE json_type(payload, '$.state') IS NOT NULL "
+        "OR json_type(payload, '$.capacity') IS NOT NULL "
+        "OR json_type(payload, '$.closed_at') IS NOT NULL"
+    )
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(boxes)").fetchall()}
+    if "state" in columns:
+        conn.execute("UPDATE boxes SET state = NULL WHERE state IS NOT NULL")
 
 
 def _add_set_columns(conn: sqlite3.Connection) -> None:

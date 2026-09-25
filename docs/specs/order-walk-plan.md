@@ -1001,6 +1001,8 @@ against the intersection build before it was kept.
 **BUILT.** The half of §9a finding 4 that was fixed in form and not in substance, plus the
 freeze ruling above it.
 
+**Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
+
 - **`WalkPlanCopy` carries the box's own numbers** — `box_total`, `box_closed` and `fraction`,
   the same three `Place` carries. `_walk_plan_copy` already held them in the block `_Places.of`
   composed. They were simply not on the wire, so `neighborShim` passed `box_total: 0` and

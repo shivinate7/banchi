@@ -1073,7 +1073,7 @@ function MovePanel({
      server's own `GET /boxes` order (box number), which said nothing about which box the hand
      was likeliest to reach for. */
   const others = boxesMostRecentFirst(
-    boxes.filter((record) => record.box !== copy.place.box && record.state !== 'closed'),
+    boxes.filter((record) => record.box !== copy.place.box),
   )
   return (
     <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">

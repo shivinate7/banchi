@@ -447,18 +447,15 @@ function LiftBar({
       {dest === null ? <Segmented value={lifted.scope} label="What moves" options={scopes} onChange={onScope} /> : null}
       <div className="shelf-dests" role="group" aria-label="Which box">
         {others.map((r) => {
-          const sealed = r.state === 'closed'
           return (
             <Button
               key={r.box}
               variant={dest === r.box ? 'primary' : 'default'}
               aria-pressed={dest === r.box}
-              disabled={sealed || (cardMode && !chosenName)}
-              icon={sealed ? 'lock' : undefined}
+              disabled={cardMode && !chosenName}
               onClick={() => onDest(r.box)}
             >
               {boxName(r)}
-              {sealed ? <span className="bn-sr"> is sealed</span> : null}
             </Button>
           )
         })}
@@ -586,7 +583,6 @@ function BoxColumn({
       </section>
     )
   }
-  const sealed = record.state === 'closed'
   const sections = record.sections_detail
   const cardMode = cardGaps !== undefined && cardGaps !== null
   const perSection = cardMode ? bySection(cardGaps) : null
@@ -627,12 +623,9 @@ function BoxColumn({
     </div>
   )
   return (
-    <section className="shelf-box" data-sealed={sealed ? 'true' : undefined} aria-label={boxName(record)}>
+    <section className="shelf-box" aria-label={boxName(record)}>
       <header className="shelf-box-head">
-        <h2 className="shelf-box-name">
-          {sealed ? <Icon name="lock" size={14} /> : null}
-          {boxName(record)}
-        </h2>
+        <h2 className="shelf-box-name">{boxName(record)}</h2>
         <span className="shelf-box-count">{cards(record.on_hand ?? 0)}</span>
       </header>
       <ol className="shelf-box-body">

@@ -195,7 +195,6 @@ type BoxOption = {
   bid: number | null
   name: string | null
   next: number | undefined
-  sealed: boolean
   /** Cards the box HOLDS — `BoxRecord.on_hand`, or its arithmetic where the server sent the
    *  parts and not the total. The hand order's second term (D142). `null`
    *  for a box this screen only knows about because `/status` named it: `GET /boxes` is what
@@ -1292,7 +1291,6 @@ export function CaptureScreen() {
         bid: record.bid ?? null,
         name: record.name,
         next: record.next_index,
-        sealed: record.state === 'closed',
         /* The server's own count first, its arithmetic second — `BoxBrowse` does the same, and
            for the same reason: `on_hand` is nullable because an uncountable box is not an
            empty one, and a payload predating the field is not either. */
@@ -1313,7 +1311,6 @@ export function CaptureScreen() {
           bid: null,
           name: null,
           next: nextIndex[key],
-          sealed: false,
           onHand: null,
         })
       } else {
@@ -1589,7 +1586,7 @@ export function CaptureScreen() {
      THE THIRD CASE IS THE ID'S, AND IT WAS REFUSED NOWHERE UNTIL 2026-09-12
      (D153, on D145's id). D142
      enumerated all three and built two: a reallocated number passes `found !== undefined` and
-     `state !== 'closed'` because box 7 really does exist and really does take cards. The
+     (and, until `D-sealed-boxes-removed`, `state !== 'closed'`) because box 7 exists. The
      paragraph above it — *"the restore falls back to NO SELECTION, never to a guess"* — read as
      though it covered every case, and a reader had no way to tell that the code covered two.
      Photographs then go to an address that does not match the shelf, silently, and D36's realign
@@ -1629,7 +1626,7 @@ export function CaptureScreen() {
     restoredBoxRef.current = null
     restoredBidRef.current = null
     const found = boxRecords.find((record) => record.box === wanted)
-    if (found !== undefined && found.state !== 'closed') {
+    if (found !== undefined) {
       const bid = found.bid ?? null
       // The store has no id for this drawer: nothing to compare, and the older rule stands.
       if (bid === null) return
@@ -1653,11 +1650,8 @@ export function CaptureScreen() {
     setBox(null)
     setBoxBid(null)
     setRestoreNote(
-      found === undefined
-        ? 'The box this browser was last set to is not in the store any more, so nothing is ' +
-            'selected. Pick the drawer in front of you.'
-        : `${captureBoxLabel(found.box, found.name)} has been sealed since you last captured ` +
-            'into it, so nothing is selected. Pick another drawer.',
+      'The box this browser was last set to is not in the store any more, so nothing is ' +
+        'selected. Pick the drawer in front of you.',
     )
     setOpenField('box')
   }, [boxesSeen, boxRecords])
@@ -1774,13 +1768,6 @@ export function CaptureScreen() {
     if (boxBusy) return
     const top = boxTop
     if (top !== undefined) {
-      if (top.sealed) {
-        setBoxNote(
-          `${captureBoxLabel(top.box, top.name)} is sealed and takes no more cards. Open it ` +
-            `on the Inventory screen, or pick another.`,
-        )
-        return
-      }
       chooseBox(top.box, top.bid)
       return
     }
@@ -3389,9 +3376,7 @@ export function CaptureScreen() {
                     {boxBusy
                       ? 'Adding…'
                       : boxTop !== undefined
-                        ? boxTop.sealed
-                          ? 'Sealed'
-                          : `Next index ${boxTop.next ?? '?'}`
+                        ? `Next index ${boxTop.next ?? '?'}`
                         : boxOffer !== null
                           ? 'New box'
                           : ''}
@@ -3412,18 +3397,8 @@ export function CaptureScreen() {
                        never doubles it. */
                     name={captureBoxLabel(option.box, option.name)}
                     sfx={boxNumberShown(option) ? ` Box ${option.box}` : null}
-                    trail={option.sealed ? 'Sealed' : `next index ${option.next ?? '?'}`}
-                    trailWord={option.sealed}
-                    onPick={() => {
-                      if (option.sealed) {
-                        setBoxNote(
-                          `${captureBoxLabel(option.box, option.name)} is sealed and takes no ` +
-                            `more cards. Open it on the Inventory screen, or pick another.`,
-                        )
-                        return
-                      }
-                      chooseBox(option.box, option.bid)
-                    }}
+                    trail={`next index ${option.next ?? '?'}`}
+                    onPick={() => chooseBox(option.box, option.bid)}
                   />
                 ))}
                 {boxOffer === null ? null : (

@@ -173,7 +173,6 @@ function card(over: {
       section_start: 1,
       section_end: null,
       box_total: over.boxTotal,
-      box_closed: false,
       fraction: over.card,
       neighbors: null,
       section_gaps: 0,

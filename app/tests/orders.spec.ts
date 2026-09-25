@@ -136,7 +136,6 @@ function walkPlanCopy(over: WalkPlanCopyInput = {}): WalkPlanCopy {
        row for ever (§9a finding 4). A fixture that kept sending 0 would make that defect
        untestable, so the default is a real drawer. */
     box_total: over.box_total ?? 133,
-    box_closed: over.box_closed ?? false,
     fraction: over.fraction === undefined ? 0.12 : over.fraction,
     neighbors: over.neighbors === undefined ? null : over.neighbors,
     ...over.place,

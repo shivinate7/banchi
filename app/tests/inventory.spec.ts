@@ -186,7 +186,6 @@ function card(input: {
         section_start: input.sectionStart,
         section_end: input.sectionEnd,
         box_total: boxTotal,
-        box_closed: false,
         fraction: null,
         neighbors: input.neighbors ?? null,
         section_gaps: 0,
@@ -203,7 +202,6 @@ function card(input: {
         section_start: input.sectionStart,
         section_end: input.sectionEnd,
         box_total: boxTotal,
-        box_closed: false,
         fraction: (at - 1) / boxTotal,
         neighbors: input.neighbors ?? null,
         section_gaps: 0,
@@ -3020,11 +3018,6 @@ test('the census greps to the store, and the identity line says what the box hol
   await expect(
     page.locator('.boxops-identity-line .boxops-stat', { hasText: 'on hand' }).locator('.bn-stat-label'),
   ).toHaveText('on hand')
-
-  /* And the control that freezes capacity names the ALLOCATOR's number, because that is what
-     `close_box` writes — D20's rule, and the one denominator D58 deliberately left alone. */
-  const seal = page.getByRole('button', { name: /^Seal box/ })
-  await expect(seal.locator('.boxops-op-detail')).toHaveText('freezes at 7')
 })
 
 test('the box panel draws its census as bn-stat figures, not the old dotted line', async ({
@@ -3052,10 +3045,7 @@ test('the box panel draws its census as bn-stat figures, not the old dotted line
   await expect(stats.locator('.bn-stat-value')).toHaveText(['5', '1', '1', '7'])
   await expect(stats.locator('.bn-stat-label')).toHaveText(['on hand', 'sold', 'retired', 'captured'])
 
-  /* THE PILL AND THE NOTE STAY OUTSIDE THE STAT ROW. `open`/`sealed` is the lid, not a count of
-     what is in the box, and this fixture box is open so there is no `sealed at N` note to draw
-     — `#/inventory`'s sealed-box case (this same file, "the seal names...") covers that text. */
-  /* An open box draws no state pill: open is the ordinary state (UX-269). */
+  /* No state pill: a box has no lid (`D-sealed-boxes-removed`). */
   await expect(page.locator('.boxops-identity .boxops-state')).toHaveCount(0)
 
   /* AND THE FOUR FIGURES SIT ON ONE ROW AT 1440 — the rail is 300px and this is the width the
@@ -3067,32 +3057,16 @@ test('the box panel draws its census as bn-stat figures, not the old dotted line
 
 // ------------------------------------------------------- the box's operations, as rows (D20)
 
-test('the seal names the number it will freeze, on the control that freezes it', async ({
+test('a box has no lid: Manage box offers no seal and no re-open (D-sealed-boxes-removed)', async ({
   page,
 }) => {
   await open(page)
   await openBoxOps(page)
-
-  /* D20's requirement, and it had NEVER been asserted — not under the old label
-     (`Seal box — freezes capacity at 5`) and not before it. Sealing freezes capacity at the
-     fill and every fraction in the product then divides by it, so a control reading `Seal box`
-     alone would take a permanent decision against a denominator the owner would have to go and
-     find. The fixture box is open with `fill: 7` — the ALLOCATOR's high-water mark, which is
-     what `close_box` freezes and is deliberately not the five cards the box holds. D58 moved
-     every denominator the screens divide by onto the cards on hand and left this one alone,
-     because `capacity` records how full the box got rather than what is in it.
-
-     THE NUMBER MOVED OFF THE LABEL AND ONTO THE ROW'S DETAIL on 2026-08-26 and this case is
-     written to the promise rather than to the string, which is why it reads the two spans and
-     the accessible name instead of one sentence: what must hold is that the figure is on the
-     thing you press and is announced by it. */
-  const seal = page.getByRole('button', { name: /^Seal box/ })
-  await expect(seal.locator('.boxops-op-label')).toHaveText('Seal box')
-  await expect(seal.locator('.boxops-op-detail')).toHaveText('freezes at 7')
-  await expect(seal).toHaveAttribute('aria-label', 'Seal box, freezes at 7')
-
-  /* An open box offers no re-open, and the two never both draw — one slot, one lid. */
+  /* The owner's ruling, 2026-09-25: "what was the point of sealed boxes? lets kill this". Red
+     before the removal: the sheet drew `Seal box` with `freezes at 7`. */
+  await expect(page.getByRole('button', { name: /^Seal box/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Re-open box/ })).toHaveCount(0)
+  await expect(page.locator('.boxops-sheet')).not.toContainText(/sealed/i)
 })
 
 test('the operations are rows on one edge, and the delete is the only bordered one', async ({
@@ -3127,18 +3101,17 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   /* THE ROSTER IS THE BOX'S OWN OPERATIONS, and the destructive ones are now kept in a group of
      their own rather than mixed in — so this reads the operations group and the danger group
      apart, which is what the screen draws. The order inside each is still pinned: it is D20's
-     own — what the box is called, where its dividers are, whether the lid is on, then the two
+     own — what the box is called, where its dividers are, then the two
      that act on cards rather than on the box. */
   const rows = page.locator('.boxops-group:not(.boxops-group-danger) .boxops-op')
   await expect(rows.locator('.boxops-op-label')).toHaveText([
     'Rename',
     'Edit sections',
     'Name sections',
-    'Seal box',
     'Set claims',
     'Move to box',
   ])
-  await expect(rows).toHaveCount(6)
+  await expect(rows).toHaveCount(5)
 
   /* FULL MEASURE, WHICH IS THE PROPERTY THE OLD LITERAL STOOD FOR. The panel is a sheet rather
      than the foot of the walk's own column, so the walk's left edge is no longer the measure to
@@ -5260,16 +5233,8 @@ test("the box's census and its forecast are told apart, and the fill says which 
   await expect(censusValue(page, 'Next capture')).toHaveText('8')
   await expect(page.locator('.boxops-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
 
-  /* D20's DENOMINATOR RULE, WHICH THIS LINE NEVER DISCHARGED. That entry is explicit that a
-     number whose meaning switches silently between an open box and a sealed one is the failure
-     it exists to prevent: `fill` is a fill-SO-FAR while the box is open and a frozen capacity
-     once it is closed, and both were rendered identically. */
-  const qual = page.locator('.boxops-census-qual')
-  if (await qual.count()) {
-    const sealed = await page.locator('.boxops-state, .boxops-identity').first().innerText()
-    await expect(qual).toHaveText(/^(so far|sealed)$/)
-    if (/sealed/i.test(sealed)) await expect(qual).toHaveText('sealed')
-  }
+  /* A box has no seal (`D-sealed-boxes-removed`), so no census figure can be a frozen one. */
+  await expect(page.locator('.boxops-census-qual')).not.toHaveText(/sealed/)
 
   /* And no figure wraps away from its own label at either width. */
   for (const width of [1440, 1280]) {

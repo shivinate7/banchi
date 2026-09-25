@@ -803,17 +803,8 @@ if _undeclared:  # pragma: no cover - import-time contract, not a branch under t
     )
 
 
-BOX_OPEN = "open"
-BOX_CLOSED = "closed"
-BOX_STATES = (BOX_OPEN, BOX_CLOSED)
-
-
 class BadSections(ValueError):
     """A divider layout that is not a sorted, unique run of indices starting at 1."""
-
-
-class BoxClosed(ValueError):
-    """A write against a sealed box. Capacity is frozen; nothing more goes in."""
 
 
 class SectionEmpty(ValueError):
@@ -864,12 +855,6 @@ class BoxNameTaken(ValueError):
     one, for the same reason: a normalised value written back is a value the operator
     cannot correct.
     """
-
-
-def check_box_state(state: str) -> str:
-    if state not in BOX_STATES:
-        raise UnknownState(f"{state!r} not in {BOX_STATES}")
-    return state
 
 
 def check_sections(sections) -> Tuple[int, ...]:
@@ -987,21 +972,15 @@ class BoxOrder:
 
 @dataclass
 class Box:
-    """One physical box: what it is called, where its dividers sit, whether it is sealed.
+    """One physical box: what it is called and where its dividers sit.
 
     D20 — the first box entity in this repo. Before it, a box existed only because a card
     named one, so it could not be created empty, named, or found by any screen but Capture,
     and a mistyped number was caught only by the `new_box` flag AFTER a photo was written.
 
-    CAPACITY IS RETROACTIVE, and that is the whole of the lifecycle. While a box is open it
-    has none: the honest denominator is the fill so far, and a screen saying "#40 of 53" has
-    to say "so far" because tomorrow it is 54. Sealing the box freezes `capacity` at the
-    final high-water mark, and only then does "#40 of 250 · 16% in" become a sentence that
-    is true next week. Owner's ruling, and the reason a capacity field is not asked for at
-    creation time: nobody knows it then.
-
-    Sold cards leave permanent gaps (D10) and the high-water mark holds, so a sealed box's
-    capacity never falls as its contents sell.
+    NO LID AND NO CAPACITY (`D-sealed-boxes-removed`, 2026-09-25). D20 sealed a box to freeze
+    its capacity, so a "#40 of 250" figure would stay true. D58 made every number count the
+    cards on hand, so capacity divided nothing, and the owner removed the seal.
     """
 
     box: int
@@ -1049,18 +1028,17 @@ class Box:
     # (`Inventory.move_sections`, D264) carries a moved section's name to the divider it opens
     # at the destination. The plain card move (`move_cards`) carries no divider and no name.
     section_names: Dict[str, str] = field(default_factory=dict)
-    state: str = BOX_OPEN
-    capacity: Optional[int] = None
+    # NO LID (`D-sealed-boxes-removed`, the owner's ruling of 2026-09-25: "what was the point of
+    # sealed boxes? lets kill this"). A box had `state`, `capacity` and `closed_at` for D20's
+    # seal, which froze capacity so a "#40 of 53" figure would not move. D58 took the
+    # denominator off capacity, so the seal protected nothing. A stored record that still
+    # carries the three keys reads as an ordinary box: `_known` drops them, and schema 13
+    # strips them from every payload (`store/db.py:_open_every_box`).
     created_at: Optional[str] = None
-    closed_at: Optional[str] = None
 
     @property
     def key(self) -> str:
         return str(int(self.box))
-
-    @property
-    def closed(self) -> bool:
-        return self.state == BOX_CLOSED
 
     def layout(self) -> Tuple[int, ...]:
         """The divider indices, validated. What `pipeline/join.py:Position` renders from.
@@ -2175,16 +2153,6 @@ class Inventory:
             if replay is not None:
                 return replay, False
 
-        # A SEALED BOX TAKES NO MORE CARDS. Checked before the index is computed, so a
-        # refusal burns nothing — the same ordering `next_index`'s docstring argues for.
-        # Capacity was frozen at the fill when the lid went on (D20); admitting one more
-        # card would make every fraction drawn from it wrong by one.
-        registered = self.boxes.get(str(box))
-        if registered is not None and registered.closed:
-            raise BoxClosed(
-                f"{self.box_title(box)} is sealed at {registered.capacity} cards. "
-                "Re-open it on the Boxes screen, or capture into another box."
-            )
         self.ensure_box(box)
 
         index = self.next_index(box)
@@ -2863,9 +2831,7 @@ class Inventory:
 
         Refuses `CardNotFound` if `key` holds no record, `CardDeparted` if it is already
         sold, retired, or moved (a card that left through one door cannot leave again
-        through another — move the transplant instead), and `BoxClosed` if `to_box` is
-        sealed (the same refusal `allocate_capture` makes: a sealed box takes no more
-        cards, and an arrival is exactly that).
+        through another — move the transplant instead).
         """
         to_box = _as_position_int(to_box, "to_box")
         card = self.cards.get(key)
@@ -2875,12 +2841,6 @@ class Inventory:
             where = f" to {card.moved_to}" if card.state == MOVED and card.moved_to else ""
             raise CardDeparted(f"{key} is already {card.state}{where}")
 
-        registered = self.boxes.get(str(to_box))
-        if registered is not None and registered.closed:
-            raise BoxClosed(
-                f"{self.box_title(to_box)} is sealed at {registered.capacity} cards. "
-                "Re-open it on the Boxes screen, or move into another box."
-            )
         self.ensure_box(to_box)
 
         # `slot` IS `(index, key)` ALLOCATED ONCE PER PRESS by a caller moving many cards
@@ -3439,18 +3399,11 @@ class Inventory:
         `_state_before_sale` scans history filtering against `STATES`, and D26 records the
         day a state and an event sharing a word made months-old undo lines parse as states.
 
-        Refuses on a sealed box (`BoxClosed`, the same refusal `allocate_capture` makes, for
-        the same reason — a sealed box takes no more cards, so a section that can only hold
-        future ones is a divider in front of nothing), on a section that is still empty
-        (`SectionEmpty`), and behind a divider already declared past the fill
-        (`SectionAhead`).
+        Refuses on a section that is still empty (`SectionEmpty`), and behind a divider
+        already declared past the fill (`SectionAhead`). A box has no lid any more
+        (`D-sealed-boxes-removed`), so nothing refuses a section for a seal.
         """
         entry = self.ensure_box(number)
-        if entry.closed:
-            raise BoxClosed(
-                f"{self.box_title(entry.box)} is sealed, so it takes no more cards — and a section with "
-                f"no cards to come is a divider in front of nothing. Re-open the box first."
-            )
         # IN KEY SPACE (D265): the divider goes where the next card's KEY is, the back.
         at = self.next_key(entry.box)
         layout = list(entry.layout()) or [1]
@@ -3466,32 +3419,6 @@ class Inventory:
                 f"Edit the dividers instead."
             )
         return self.set_sections(entry.box, layout + [at])
-
-    def close_box(self, number) -> Box:
-        """Seal a box: capacity freezes at the final high-water mark.
-
-        The retroactive half of D20. Capacity is not asked for at creation because nobody
-        knows it then; it is the fill at the moment the lid goes on. Sold cards leave
-        permanent gaps (D10) and the high-water mark holds, so this number never falls as
-        the box's contents sell.
-        """
-        entry = self.ensure_box(number)
-        if entry.closed:
-            raise BoxClosed(f"{self.box_title(entry.box)} is already sealed")
-        entry.capacity = self.box_fill(entry.box)
-        entry.state = BOX_CLOSED
-        entry.closed_at = now()
-        self._log("box_closed", None, box=entry.box, capacity=entry.capacity)
-        return entry
-
-    def reopen_box(self, number) -> Box:
-        """Unseal a box. Capacity goes back to unknown rather than staying as a stale fact."""
-        entry = self.ensure_box(number)
-        entry.capacity = None
-        entry.state = BOX_OPEN
-        entry.closed_at = None
-        self._log("box_reopened", None, box=entry.box)
-        return entry
 
     def box_fill(self, number) -> int:
         """The highest index this box holds. `next_index` minus one, and DISPLAY ONLY."""
@@ -3670,9 +3597,8 @@ class Inventory:
             # person can ask the `sqlite3` CLI which drawer a run meant.
             "bid": int_or_none(box.bid),
             "name": box.name,
-            "state": box.state,
         },
-        column_names=("box", "bid", "name", "state"),
+        column_names=("box", "bid", "name"),
     )
     LISTINGS = TableSpec(
         "listings",

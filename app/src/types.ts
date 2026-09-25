@@ -1429,12 +1429,9 @@ export type Place = {
   section_start: number
   section_end: number | null
 
-  /** How many cards the box holds. For a closed box that number is final; for an open one it
-   *  is how many are in it so far and it moves with the next capture. `box_closed` is what
-   *  says which of those two sentences is true, and it is the whole reason both fields are on
-   *  the wire rather than one. */
+  /** How many cards the box holds now (D58). A box has no lid (`D-sealed-boxes-removed`), so
+   *  this number always moves with the next capture. */
   box_total: number
-  box_closed: boolean
 
   /** How far into the box this card sits, 0 to 1, or null when the server cannot say — an
    *  empty box, or a record whose numbers do not support the division. NULL IS NOT ZERO and
@@ -1732,20 +1729,6 @@ export type SectionUndoResult = {
   boxes: BoxRecord[]
 }
 
-/** What a box's `state` may be SET to, which is one thing and not the same thing as what may
- *  come back off disk.
- *
- *  Narrow because it is sent: the server refuses anything it does not know as
- *  `box_state_invalid`, and a union caught at the call site is better than a refusal caught at
- *  the rig. Exactly the split `Finish` and `InventoryCard.metadata_finish` already draw — what
- *  the wire accepts, and what a record written before the server validated anything may hold.
- *
- *  ASSUMED, AND THE ONE TYPE IN THIS FILE THAT IS. The route contract names the refusals
- *  `box_state_invalid` and `box_closed` without publishing the vocabulary they police; these
- *  two words are read off those codes and off `Place.box_closed`, which is a boolean and so
- *  admits exactly two states. If the server speaks a third, this union is the one edit. */
-export type BoxState = 'open' | 'closed'
-
 /** One box: what it is called, how it is divided, and how full it is. `GET /boxes` serves a
  *  list of these and `POST`/`PUT /boxes` answer with the one they wrote.
  *
@@ -1795,8 +1778,6 @@ export type BoxRecord = {
    *  answers a count, this is the one edit and the call sites fail loudly at the compiler
    *  rather than quietly at the box. */
   sections: number[]
-  state: string
-  capacity: number
   fill: number
   next_index: number
   cards: number
@@ -3427,7 +3408,7 @@ export type WalkPlanRef = { key: string; number: string; buyer: string | null }
 
 /** One physical copy of a take's card, anywhere in the store — REBUILT 2026-09-19 (`docs/
  *  specs/order-walk-plan.md` §8, "The stop, rebuilt"). The flat fields the first build carried
- *  (`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`, `box_closed`,
+ *  (`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`,
  *  `fraction`) are GONE — every one of them now lives inside `place`, which is the full block
  *  `_Places.of` composes, the same dict `do_search` sends. The client composes NOTHING from
  *  the stop any more; the old `neighborShim`/`placeOf` reconstruction is deleted with them. */
@@ -3443,7 +3424,7 @@ export type WalkPlanCopy = {
    *  for a copy recorded before the field existed. */
   cid: string | null
   /** The full place, exactly what `SearchCopy.place` carries. Includes `box_name`, `section`,
-   *  `section_name`, `section_start`, `section_end`, `box_total`, `box_closed`, `fraction`,
+   *  `section_name`, `section_start`, `section_end`, `box_total`, `fraction`,
    *  `neighbors`, `label`, `slot`, `card`. */
   place: Place
   /** True when this copy stands at THIS stop (same box and section) — the solver's reach. */

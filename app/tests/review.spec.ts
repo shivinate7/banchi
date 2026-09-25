@@ -1061,7 +1061,6 @@ const ORDER_LINE_PLACE: Place = {
   section_start: 1,
   section_end: null,
   box_total: 20,
-  box_closed: false,
   fraction: 0.7,
   neighbors: {
     prev: { slot: 13, index: 13, name: 'Charmander' },

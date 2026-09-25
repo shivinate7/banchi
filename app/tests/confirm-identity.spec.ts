@@ -54,7 +54,6 @@ const CARD = {
     section_start: 1,
     section_end: 2,
     box_total: 2,
-    box_closed: false,
     fraction: 0,
     neighbors: null,
     section_gaps: 0,

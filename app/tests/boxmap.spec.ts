@@ -25,14 +25,12 @@ function section(n: number, name: string | null, count: number, first: string): 
   }
 }
 
-function box(n: number, name: string, sections: SectionDetail[], state = 'open'): BoxRecord {
+function box(n: number, name: string, sections: SectionDetail[]): BoxRecord {
   return {
     box: n,
     bid: n,
     name,
     sections: sections.map((s) => s.section),
-    state,
-    capacity: 0,
     fill: 0,
     next_index: 1,
     cards: 0,
@@ -48,7 +46,7 @@ function box(n: number, name: string, sections: SectionDetail[], state = 'open')
 const BOXES: BoxRecord[] = [
   box(1, 'RB Origins', [section(1, 'Commons', 11, 'c'), section(2, 'Uncommons', 10, 'u'), section(3, 'Signatures', 13, 's')]),
   box(2, 'Mixed Singles', [section(1, null, 15, 'm'), section(2, 'Promos', 4, 'p')]),
-  box(3, 'Sealed Box', [section(1, 'Old', 5, 'o')], 'closed'),
+  box(3, 'Old Box', [section(1, 'Old', 5, 'o')]),
 ]
 
 const RESULT: SectionMoveResult = {
@@ -105,7 +103,7 @@ test('every box is drawn from above, card 1 at the top, counts and no money', as
 test('pick up, pick the box, press a gap: the write names the gap and aims at what was seen', async ({ page }) => {
   const sent = await openShelf(page)
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
-  await expect(page.getByRole('button', { name: 'Sealed Box is sealed' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Old Box', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   await expect(page.locator('.shelf-pair .shelf-box')).toHaveCount(2)
   await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()

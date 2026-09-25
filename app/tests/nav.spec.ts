@@ -306,7 +306,6 @@ const CARD = {
     section_start: 1,
     section_end: null,
     box_total: 1,
-    box_closed: false,
     fraction: 1,
     neighbors: null,
     section_gaps: 0,

@@ -938,7 +938,9 @@ BOX_POST_FIELDS = ("box", "name", "sections")
 # body that could rename a box NUMBER would be a renumber, which D10 forbids outright: every
 # position key in `inventory.json`, every photo directory and every printed label is built
 # from it.
-BOX_PUT_FIELDS = ("name", "sections", "state", "section_names")
+# No `state` since `D-sealed-boxes-removed`: a box has no lid, so a body naming one is an
+# unknown field and refused as one.
+BOX_PUT_FIELDS = ("name", "sections", "section_names")
 
 # ----------------------------------------------------------- the order screen, on the wire
 #
@@ -1299,7 +1301,7 @@ IDENTITY_RESTORED = "identity_restored"
 # D20's five, and they differ from the route-written names above in WHO APPENDS THEM. Those are
 # written here, by `_history`, because the store has no opinion about them. These five are
 # written by `store/master.py:Inventory._log` from inside `set_sections`, `ensure_box`,
-# `set_name`, `close_box` and `reopen_box` — the box routes below call those methods and
+# `set_name` and, until `D-sealed-boxes-removed`, `close_box`/`reopen_box` — the box routes call those methods and
 # append nothing themselves. They are named here anyway, and the reason is the paragraph below: this tuple
 # is what the disjointness rule is stated over, and an event this server causes but does not
 # spell would be outside it.
@@ -1316,9 +1318,9 @@ IDENTITY_RESTORED = "identity_restored"
 #                 relabels every card behind it. `do_put_box` recorded the absence of this
 #                 event as a known gap while a name was only a label; it is not only a
 #                 label any more.
-#   box_closed    the lid went on and capacity froze at the fill (D20).
-#   box_reopened  the lid came off and capacity went back to unknown, rather than standing
-#                 as a stale fact.
+#   box_closed    the lid went on and capacity froze at the fill (D20). NOTHING WRITES IT
+#                 SINCE `D-sealed-boxes-removed`; the name stays because old history holds it.
+#   box_reopened  the lid came off. Nothing writes it either, for the same reason.
 RESECTIONED = "resectioned"
 BOX_CREATED = "box_created"
 BOX_RENAMED = "box_renamed"
@@ -2081,28 +2083,6 @@ def _optional_section_names(payload: dict) -> Optional[Dict[int, Optional[str]]]
     return out
 
 
-def _optional_box_state(payload: dict) -> Optional[str]:
-    """`open` or `closed`, or None when the request does not mention the lid.
-
-    Its own code rather than `field_not_settable`, because the field IS settable and the
-    value is not one of the two. The message names both, since this is the control that
-    freezes a box's capacity and a client guessing at `"sealed"` deserves better than a
-    generic refusal.
-    """
-    raw = payload.get("state")
-    if raw is None:
-        return None
-    if not isinstance(raw, str) or raw.strip() not in master.BOX_STATES:
-        raise BadRequest(
-            HTTPStatus.BAD_REQUEST,
-            "box_state_invalid",
-            f"state was {raw!r}; send {' or '.join(master.BOX_STATES)}. Closing a box "
-            f"freezes its capacity at the cards it holds; opening one puts capacity back "
-            f"to unknown.",
-        )
-    return raw.strip()
-
-
 def _require_query(query: str) -> str:
     """The search text, or a refusal. Whitespace is not a search.
 
@@ -2658,7 +2638,6 @@ class _Places:
                 "section_start": None,
                 "section_end": None,
                 "box_total": 0,
-                "box_closed": False,
                 "fraction": None,
                 # D30's decoration answers null with the rest of the place: a pooled card
                 # has no slot to count from and no section to have gaps in. Null and not
@@ -2695,7 +2674,6 @@ class _Places:
                 "section_start": None,
                 "section_end": None,
                 "box_total": 0,
-                "box_closed": bool(entry.closed) if entry is not None else False,
                 "neighbors": None,
                 "section_gaps": None,
                 "fraction": None,
@@ -2777,7 +2755,6 @@ class _Places:
             "section_start": position.section_start,
             "section_end": end,
             "box_total": total,
-            "box_closed": bool(entry.closed) if entry is not None else False,
             # D30's digital half: what makes `Card 17` countable by hand again once the
             # section has holes. Both null together when the walk degraded — the app
             # draws no sentence, which is the honest rendering of "cannot say".
@@ -4929,7 +4906,7 @@ def _move_one(
     that method itself raises as a backstop. The reason is the same one every other
     terminal-state refusal in this file gives: a person reading `card_sold` knows to send
     `undo` to `/sold` first, and `card_departed` naming nothing would send them hunting.
-    `CardNotFound`/`CardDeparted`/`BoxClosed`/`PositionOccupied` still reach `_dispatch`'s
+    `CardNotFound`/`CardDeparted`/`PositionOccupied` still reach `_dispatch`'s
     generic handlers for any caller that skips these checks — store/master.py's own
     defense, not duplicated here, just not solely relied upon.
 
@@ -5474,11 +5451,6 @@ def _destination(inventory: master.Inventory, payload: dict, box: int) -> Tuple[
             HTTPStatus.NOT_FOUND, "box_not_found",
             "That box does not exist any more. Look at the map again.",
         )
-    if dst.closed and int(to_box) != int(box):
-        raise BadRequest(
-            HTTPStatus.CONFLICT, "box_closed",
-            f"{inventory.box_title(to_box)} is sealed, so it takes no more cards. Open it first.",
-        )
     return to_box, None
 
 
@@ -5653,10 +5625,9 @@ def do_move_range(box: int, payload: dict) -> dict:
         dst_title = inventory.box_title(to_box)
         dst_sections = sections if same else inventory.layout_of(to_box)
         dst_names = inventory.section_names_for(to_box)
-        if before_card is None and section_end is None:
-            # NO GAP IS THE NEAR END: the end of the last section, or an empty box.
-            if dst_sections:
-                section_end = len(dst_sections)
+        # NO GAP IS THE NEAR END: the end of the last section, or an empty box.
+        if before_card is None and section_end is None and dst_sections:
+            section_end = len(dst_sections)
         if before_card is not None:
             # A CARD ON HAND ONLY: a sold card or a tombstone is not where a hand can put
             # anything in front of (the R3 review).
@@ -11306,8 +11277,6 @@ def _box_row(
         # The STORED list, not the validated tuple. They differ only when the file was edited
         # by hand, and that is exactly when the operator needs to see what is in it.
         "sections": list(entry.sections) if entry is not None else [],
-        "state": entry.state if entry is not None else master.BOX_OPEN,
-        "capacity": entry.capacity if entry is not None else None,
         "fill": fill,
         "next_index": next_index,
         "cards": cards,
@@ -11494,7 +11463,7 @@ def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
 
 
 def do_put_box(box: int, payload: dict) -> dict:
-    """Rename a box, declare its dividers, name its sections, seal it, or open it again.
+    """Rename a box, declare its dividers, or name its sections.
 
     THE FOUR FIELDS ARE THE FOUR THINGS A BOX HAS THAT A HUMAN DECIDES — `section_names` is
     the fourth as of D132, keyed by the ordinal the screen prints. Its number is not
@@ -11502,12 +11471,8 @@ def do_put_box(box: int, payload: dict) -> dict:
     which D10 forbids outright: every position key, every photo directory and every label the
     operator has read off a screen is built from that number.
 
-    SEALING IS THE ONE THAT MATTERS, and it is a write of exactly one number. `close_box`
-    freezes `capacity` at the fill, and from that moment every `place` block in the product
-    divides by it instead of by a total that grows — which is the difference between "#40 of
-    53 so far" and D20's "#40 of 250 · 16% in". Re-opening puts capacity back to unknown
-    rather than leaving a stale number standing, and refuses nothing: a box re-opened to take
-    more cards is an ordinary correction.
+    NO SEAL (`D-sealed-boxes-removed`, the owner's ruling of 2026-09-25). A box has no lid,
+    so `state` is not a field here and a body that sends one is refused as unknown.
 
     RE-SECTIONING RELABELS CARDS AND MOVES NO INDEX (D10, amended). Every card behind a moved
     divider renders in a different section from the moment this returns. That is correct when
@@ -11540,7 +11505,6 @@ def do_put_box(box: int, payload: dict) -> dict:
     name = _optional_name(payload)
     sections = _optional_sections(payload)
     section_names = _optional_section_names(payload)
-    state = _optional_box_state(payload)
 
     with Store().write() as snapshot:
         inventory = snapshot.inventory
@@ -11552,7 +11516,7 @@ def do_put_box(box: int, payload: dict) -> dict:
                 f"registers itself the first time a card lands in it.",
             )
 
-        entry = inventory.ensure_box(box)
+        inventory.ensure_box(box)
         if "name" in payload:
             # Through `set_name` rather than by assignment, which is what buys the
             # `box_renamed` line and the duplicate check. It takes `None` as "clear the
@@ -11594,18 +11558,6 @@ def do_put_box(box: int, payload: dict) -> dict:
                 inventory.set_section_names(box, section_names)
             except master.BadSections as exc:
                 raise BadRequest(HTTPStatus.BAD_REQUEST, "section_unknown", str(exc)) from None
-
-        # THE LID IS MOVED LAST, after any layout change in the same request, so a box that
-        # is being declared and sealed together freezes its capacity with the layout already
-        # in place. Only a real change is applied: re-opening an open box would otherwise
-        # write a `box_reopened` event for a request that changed nothing, which is the
-        # no-op-logging `do_put_card` refuses to do. Sealing a sealed box is NOT skipped the
-        # same way — `close_box` raises, and the refusal is worth more than the silence,
-        # because the alternative reading is that this call re-froze capacity at a new fill.
-        if state == master.BOX_CLOSED:
-            inventory.close_box(box)
-        elif state == master.BOX_OPEN and entry.closed:
-            inventory.reopen_box(box)
 
         body = _box_row(inventory, box)
 
@@ -14509,21 +14461,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
             )
         except (master.BadPosition, master.PositionOccupied, master.DuplicateCaptureId) as exc:
             self._fail(HTTPStatus.CONFLICT, "inventory_conflict", str(exc))
-        # D20's THREE, CAUGHT HERE SO NONE OF THEM CAN LEAVE AS A 500. Each already carries a
-        # message written for a person by `store/master.py` — `check_sections` names what is
-        # wrong with a layout, `allocate_capture` names the sealed box and tells you to open
-        # it or use another — so they are answered with their own text rather than a
-        # substitute. `BoxClosed` reaches this from two directions and both are the same
-        # sentence to the operator: a capture into a sealed box, and a request to seal a box
-        # that is already sealed.
-        #
-        # `BadSections` IS 400 AND THE OTHER TWO ARE NOT, because a bad layout is something
-        # the request said and the other two are something the store says. A sealed box is a
-        # 409: the request was well-formed and lost a race with the lid.
+        # CAUGHT HERE SO IT CANNOT LEAVE AS A 500. `check_sections` names what is wrong with a
+        # layout in a sentence for a person, so it is answered with its own text. It is a
+        # 400: a bad layout is something the request said. (`BoxClosed`, D20's sealed-box
+        # refusal, went with the seal: `D-sealed-boxes-removed`.)
         except master.BadSections as exc:
             self._fail(HTTPStatus.BAD_REQUEST, "sections_invalid", str(exc))
-        except master.BoxClosed as exc:
-            self._fail(HTTPStatus.CONFLICT, "box_closed", str(exc))
         # `open_section`'s two, and they are 409s on the rule the comment above draws: the
         # request was well-formed — it carries no index to be wrong about — and lost to
         # something the STORE knows, which is where the last divider already is. Each
@@ -14539,7 +14482,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # move routes run their own state checks first, with the richer per-door messages
         # `card_sold`/`card_retired`/`card_moved` already give — these two exist for any
         # caller that reaches `Inventory.move_card` without going through them, the same
-        # belt-and-braces relationship `BoxClosed` already has with `allocate_capture`.
+        # belt-and-braces relationship a store refusal has with the route in front of it.
         except master.CardNotFound as exc:
             self._fail(HTTPStatus.NOT_FOUND, "card_not_found", str(exc))
         except master.CardDeparted as exc:
@@ -14547,7 +14490,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # A FOURTH JOINS THEM, for the same reason and with the same shape. `BoxNameTaken`
         # is a 409 rather than a 400 on the rule the comment above draws: the request was
         # well-formed and lost to something the STORE knows — another box already answers
-        # to that name — which is exactly `BoxClosed`'s case one field over. Its message
+        # to that name. Its message
         # names the incumbent box, so it is answered with its own text.
         except master.BoxNameTaken as exc:
             self._fail(HTTPStatus.CONFLICT, "name_taken", str(exc))

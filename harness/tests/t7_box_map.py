@@ -278,11 +278,6 @@ def check_section_moves(checks: Checks) -> None:
 
     with isolated_home():
         _shelf()
-        capture_server.do_put_box(2, {"state": master.BOX_CLOSED})
-        refusal(
-            checks, lambda: capture_server.do_move_sections(1, {"first": 2, "to_box": 2}),
-            "box_closed", "a sealed destination refuses (D20)",
-        )
         refusal(
             checks,
             lambda: capture_server.do_move_sections(
@@ -489,11 +484,6 @@ def check_card_moves(checks: Checks) -> None:
         checks.equal(
             _walk(2), ["m1", "m2", "o1", "o2", "m3", "m4"],
             "a range dropped at a section's end lands after its last card, before the next divider",
-        )
-        capture_server.do_put_box(2, {"state": master.BOX_CLOSED})
-        refusal(
-            checks, lambda: capture_server.do_move_range(1, {"indices": [3], "to_box": 2, "section_end": 1}),
-            "box_closed", "a sealed box refuses a card too",
         )
         refusal(
             checks,
