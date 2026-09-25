@@ -4880,6 +4880,19 @@ COMPONENTS = [
                 # that decision names, generalized from "the owner's store" to "either run's".
                 "governed_by": ["D16", "D18", "D43"],
             },
+            "demo-determinism-selftest.py": {
+                "does": "demo-determinism.py's own ALLOWED_PATTERNS matcher, proved on "
+                        "fixtures rather than by spending two full `make demo` runs. Every "
+                        "real, measured pointer the checked-in patterns are supposed to "
+                        "excuse still matches. Four fabricated pointers that merely CONTAIN "
+                        "an allowed key (`at`, `updated_at`, `batch`) under a route none of "
+                        "the patterns name do NOT match — the exact regression a bare-key "
+                        "matcher (the pre-lane-7 ALLOWED_KEYS) would miss. One end-to-end "
+                        "case through `_diff` itself. Pure functions only, no subprocess, "
+                        "no write — in `make check`, unlike demo-determinism.py itself "
+                        "(D18: that target is a press, run by hand).",
+                "governed_by": ["D16", "D18"],
+            },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
