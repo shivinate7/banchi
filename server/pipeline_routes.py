@@ -4759,7 +4759,14 @@ def do_markdown_rollback(stamp: str, payload: dict) -> dict:
     # THE RECEIPT GOES WITH THE UPLOAD IT DESCRIBED. Leaving it would leave the screen
     # offering to publish rows TCGplayer has been told to forget.
     (directory / PUSH_RECORD).unlink(missing_ok=True)
-    return {"rolled_back": record.get("upload_id"), "stamp": stamp}
+    # AND THE ROLLBACK IS NAMED FOR WHAT IT IS (round 6, B3 and S4): not live, and not yet
+    # proved gone from Staged. `send_routes.markdown_rolled_back_note` writes its receipt.
+    from server import send_routes
+
+    note = send_routes.markdown_rolled_back_note(
+        directory, str(record.get("upload_id")), "rollback_pressed"
+    )
+    return {"rolled_back": record.get("upload_id"), "stamp": stamp, "check_staged": True, "note": note}
 
 
 PUSH_RECORD = "push.json"

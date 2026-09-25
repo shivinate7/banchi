@@ -1223,8 +1223,17 @@ export function Pricing() {
   const saveFailed = useCallback(() => book !== null && failedBook.current === book, [book])
   const afterSend = useCallback(() => {
     clearAsked()
+    setTypedHere(new Set())
     void load(picked, stamp)
   }, [clearAsked, load, picked, stamp])
+
+  /* THE PRICES THE OWNER TYPED ON THIS WORKLIST, THIS VISIT (round 6, the orchestrator's ruling
+     on the owner's words: "what if i want to edit some prices while also setting new ones?").
+     Only these may ride a send as a price change. A price the corpus holds from anywhere else —
+     a Live tab preset, a mark-down written and never sent, an earlier visit — is not here, so it
+     never reaches a live listing through this press. Remembered nowhere, like `sendQty`, and
+     spent by a send. */
+  const [typedHere, setTypedHere] = useState<ReadonlySet<string>>(() => new Set())
 
   /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack. */
   const write = useCallback(
@@ -1232,8 +1241,14 @@ export function Pricing() {
       const channel: 'price' | 'unknown' = targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price'
       setBook((current) => (current === null ? current : setAnswer(current, sku, value, channel)))
       setUndo((stack) => [{ sku, before: book?.skus?.[sku], channel }, ...stack].slice(0, UNDO_DEPTH))
+      setTypedHere((held) => {
+        const next = new Set(held)
+        if (typeof value === 'string' && value !== 'unlisted' && source.kind === 'run') next.add(sku)
+        else next.delete(sku)
+        return next
+      })
     },
-    [book],
+    [book, source.kind],
   )
 
   const boxesLoaded = useMemo(
@@ -1499,18 +1514,23 @@ export function Pricing() {
      fresh read; this count only gives the press its words. A rule price never counts: nothing
      sends one to a live listing. */
   const priceChanges = useMemo(() => {
-    let count = 0
+    /* EACH ONE CARRIES THE PRICE THE BUTTON COUNTS AND THE LIVE PRICE THE ROW DREW, and the
+       server refuses a press whose live price moved since (round 6, B1): a price the button did
+       not name is never sent. */
+    const out: { sku: string; price: string; was: string | null }[] = []
+    if (source.kind !== 'run') return out
     for (const row of rows) {
+      if (!typedHere.has(row.sku)) continue
       const typed = answerFor(row)
       if (typeof typed !== 'string') continue
       const addsNone = row.at_cap || askedFor(row.sku) === 0
       const live = Math.max(row.live_before, row.listing?.live ?? 0)
       if (!addsNone || live <= 0) continue
       if (row.snap.now !== null && Number(typed) === Number(row.snap.now)) continue
-      count += 1
+      out.push({ sku: row.sku, price: typed, was: row.snap.now })
     }
-    return count
-  }, [rows, answerFor, askedFor])
+    return out
+  }, [rows, answerFor, askedFor, typedHere, source.kind])
 
   useEffect(() => {
     latestRows.current = rows

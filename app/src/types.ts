@@ -4039,7 +4039,14 @@ export type SendSummary = {
     expected: number
     matched: number
     missing: { sku: string; name: string; price: string; live: string | null }[]
+    /** Cards with no copy live at the check: sold out, so there is no price to show. Settled. */
+    gone?: { sku: string; name: string }[]
   } | null
+  /** Price changes the button named that the press left out, and why (round 6). */
+  prices_left: { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }[]
+  /** True when the upload may still wait in TCGplayer's Staged list, including a press that
+   *  died mid-push with no `unknown` (round 6). The Staged warning reads this. */
+  staged: boolean
   rows: number
   published_at: string | null
   check_after: string | null
@@ -4070,8 +4077,12 @@ export type SendSummary = {
   /** What a TAKEN-BACK receipt still warns about, until the owner dismisses it: `staged`, an
    *  upload that may still wait in TCGplayer's Staged list; `old_file`, a downloaded file still
    *  on the Mac. Either, published or uploaded now, would list the copies twice. */
-  warning: 'staged' | 'old_file' | null
+  warning: 'staged' | 'old_file' | 'rolled_back' | null
 }
+
+/** One price change the screen names to a send: the price the button counts, and the live
+ *  price the row drew beside it. The server sends no price it was not named (round 6). */
+export type PriceChange = { sku: string; price: string; was: string | null }
 
 /** `GET /pipeline/sends`. `due` is the one bit the timer and the visit check both read. */
 export type SendsStatus = {

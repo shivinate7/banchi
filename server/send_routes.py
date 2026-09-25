@@ -92,6 +92,13 @@ from store.submissions import proc_start  # noqa: E402
 #: there reads it too and a second spelling would be a second directory.
 SENDS = cmd_reprice.SENDS
 RECEIPT = "send.json"
+#: The screen's own list of price changes, beside the receipt: what `emit --reprice-live` reads.
+NAMED_PRICES = "named-prices.json"
+#: A mark-down's rollback receipt, beside its `push.json` (round 6, B3 and S4).
+ROLLED_BACK_RECORD = "rollback.json"
+#: A press TCGplayer turned away, whose upload Banchi rolled back (round 6, S4). NOT a retry:
+#: the rollback's answer is not proved to clear the upload, so the owner checks Staged first.
+ROLLED_BACK = "send_rolled_back"
 #: A send's stamp: UTC to the second, then six hex characters of its own. THE TAIL IS THE FIX
 #: for two presses in one second sharing a directory (the 2026-09-24 review); a round-1 stamp
 #: without it still reads. `STAMP_SHAPE` IS WHAT THE SERVER'S ROUTES MATCH TOO
@@ -360,7 +367,8 @@ def _prices_live(record: dict) -> Optional[bool]:
     compared = record.get("price_check")
     if not isinstance(compared, dict):
         return None
-    return int(compared.get("matched", 0)) >= int(compared.get("expected", 0))
+    settled = int(compared.get("matched", 0)) + len(compared.get("gone") or [])
+    return settled >= int(compared.get("expected", 0))
 
 
 def _found_all(record: dict) -> bool:
@@ -448,20 +456,45 @@ def _takeable(record: dict) -> Dict[str, int]:
     return out
 
 
+def _maybe_staged(record: dict) -> bool:
+    """May this receipt's upload still wait in TCGplayer's Staged list?
+
+    Yes when the press said so (`unknown.staged`). ALSO YES WHEN THE PRESS DIED MID-PUSH OR
+    MID-PUBLISH (round 6, S2): a server that stops hard never runs `_unknown`, so its receipt
+    stays in phase sending or publishing with no `unknown`. Whatever it opened at TCGplayer is
+    still there, and nothing here can see it.
+    """
+    if (record.get("unknown") or {}).get("staged"):
+        return True
+    phase = record.get("phase") or PHASE_DONE
+    return (
+        not record.get("unknown")
+        and phase in (PHASE_SENDING, PHASE_PUBLISHING)
+        and not _press_running(record)
+    )
+
+
 def _warning(record: dict) -> Optional[str]:
     """The warning a TAKEN-BACK receipt keeps until the owner dismisses it, or None.
 
-    - `staged`    a send whose upload may still wait in TCGplayer's Staged list. Publishing it
-                  by hand now would list copies that are back on the list.
-    - `old_file`  a downloaded file. Uploading it now would do the same.
+    - `staged`       a send whose upload may still wait in TCGplayer's Staged list
+                     (`_maybe_staged`). Publishing it by hand now would list copies that are
+                     back on the list.
+    - `old_file`     a downloaded file. Uploading it now would do the same.
+    - `rolled_back`  a press TCGplayer turned away, whose upload Banchi rolled back (round 6,
+                     S4). TCGplayer's answer to a rollback is not proved to clear a finished
+                     upload until the owner's own first test shows it, so the owner checks the
+                     Staged list.
 
-    A failed press has none: nothing can be waiting at TCGplayer, and no file was handed over.
+    A press that failed before any upload was opened has none: nothing can wait at TCGplayer.
     """
-    if not record.get("taken_back_at") or record.get("failure") or record.get("dismissed_at"):
+    if not record.get("taken_back_at") or record.get("dismissed_at"):
         return None
+    if record.get("failure"):
+        return "rolled_back" if record.get("rolled_back") else None
     if record.get("kind") == KIND_DOWNLOAD:
         return "old_file"
-    if (record.get("unknown") or {}).get("staged"):
+    if _maybe_staged(record):
         return "staged"
     return None
 
@@ -497,6 +530,11 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "turned_away": max(0, int(rows or 0) - int(accepted)) if accepted is not None else 0,
         "failure": record.get("failure"),
         "unknown": record.get("unknown"),
+        # MAY THE UPLOAD STILL WAIT IN STAGED? The card's Staged warning reads this, never
+        # `unknown` alone: a press that died mid-push has no `unknown` (round 6, S2).
+        "staged": _maybe_staged(record),
+        # THE PRICES THE SCREEN NAMED THAT THIS PRESS LEFT OUT, and why (round 6).
+        "prices_left": record.get("prices_left") or [],
         "held": stamp in held,
         "takeable": sum(offer.values()),
         "take_back_after": _iso(take_after) if waiting_to_take and take_after is not None else None,
@@ -801,6 +839,7 @@ def do_send(payload: dict) -> dict:
             f"At most {pipeline_routes.MAX_MERGED_RUNS} runs in one send.",
         )
     download = bool(payload.get("download"))
+    payload = dict(payload, prices=_named_prices(payload))
     if not download and not bool(payload.get("confirm")):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
@@ -811,6 +850,79 @@ def do_send(payload: dict) -> dict:
     directories = [pipeline_routes._open_run(str(name)) for name in wanted]
     with _press("listing"):
         return _send(payload, directories, download)
+
+
+def _named_prices(payload: dict) -> List[dict]:
+    """The price changes the SCREEN named, validated: `[{sku, price, was}]` (round 6, B1 and B2).
+
+    THE ORCHESTRATOR'S RULING ON THE OWNER'S WORDS: only a SKU the owner typed a price for on
+    the worklist rides a send as a price row, and the screen sends the ones its button counted.
+    `was` is the live price the screen drew beside it. Refused by name when malformed, because
+    each value reaches a child process's input.
+    """
+    named = payload.get("prices")
+    if named is None:
+        return []
+    if not isinstance(named, list) or len(named) > pipeline_routes.MAX_QUANTITIES:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "prices_invalid",
+            f"`prices` must be a list of at most {pipeline_routes.MAX_QUANTITIES} "
+            f"{{sku, price, was}} objects.",
+        )
+    out: List[dict] = []
+    for row in named:
+        sku = str((row or {}).get("sku") or "") if isinstance(row, dict) else ""
+        try:
+            price = tcgcsv.parse_price(str(row.get("price") or "")) if sku else None
+            was_text = row.get("was") if sku else None
+            was = None if was_text in (None, "") else tcgcsv.parse_price(str(was_text))
+        except (ArithmeticError, ValueError):
+            price = None
+        if not sku.isdigit() or price is None or price <= 0:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "prices_invalid",
+                "Each named price needs a TCGplayer id and a price above zero.",
+            )
+        out.append(
+            {
+                "sku": sku,
+                "price": tcgcsv.format_price(price),
+                "was": None if was is None else tcgcsv.format_price(was),
+            }
+        )
+    return out
+
+
+#: Each refused price, in the owner's words. `pipeline/sendguard.py` names the reasons.
+_PRICE_REFUSALS = {
+    "live_moved": "TCGplayer shows {live} now, not the {shown} this list showed",
+    "not_saved": "the saved price is not the {price} the button named",
+    "below_floor": "{price} is under the store's floor",
+    "not_in_send": "this send does not price that card",
+}
+
+
+def _price_refusal(console: str, step: str) -> Optional[PipelineRefusal]:
+    """`emit`'s refusal of a named price, as the route's, or None. Names every card."""
+    said = _json_line(console, "send_prices") or {}
+    refused = said.get("refused") or []
+    if not refused:
+        return None
+    parts = []
+    for note in refused:
+        sentence = _PRICE_REFUSALS.get(str(note.get("why")), "it cannot be sent as it stands")
+        money = {
+            key: (f"${note[key]}" if note.get(key) else "no price")
+            for key in ("live", "shown", "price")
+        }
+        parts.append(f"{note.get('name') or note.get('sku')}: {sentence.format(**money)}")
+    return PipelineRefusal(
+        HTTPStatus.CONFLICT,
+        "price_refused",
+        f"{'; '.join(parts)}. Nothing was {step}.",
+    )
 
 
 def _send(payload: dict, directories: Sequence[Path], download: bool) -> dict:
@@ -870,9 +982,13 @@ def _write_and_send(
     argv = [str(pipeline_routes.PKMNSCAN), "emit", *[str(d) for d in directories]]
     argv += ["--live-guard", str(live_path), "--send-dir", str(directory)]
     argv += ["--send-claim", stamp, "--claim-holder", str(os.getpid())]
-    # THE MIXED SEND (the owner's ruling, 2026-09-24: "Allow mixed"). A card already live whose
-    # typed price moved rides this press as a price-only row, Add to Quantity 0.
-    argv.append("--reprice-live")
+    # THE MIXED SEND (the owner's ruling, 2026-09-24: "Allow mixed"). ONLY A PRICE THE SCREEN
+    # NAMED rides this press as a price-only row, Add to Quantity 0 (round 6, B1 and B2). A
+    # press that names none passes no list, and no price row can be written.
+    if payload.get("prices"):
+        named = directory / NAMED_PRICES
+        named.write_text(json.dumps(payload["prices"], sort_keys=True), encoding="utf-8")
+        argv += ["--reprice-live", str(named)]
     if download and payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += pipeline_routes._quantity_flags(payload)
@@ -880,18 +996,16 @@ def _write_and_send(
     guard = _guard_line(console) or {}
     claim = Store().read().send_claims.get(stamp)
     written = sorted(directory.glob("import*.csv"))
-    changes = list((_json_line(console, "send_prices") or {}).get("rows") or [])
-    # A FILE OF PRICE CHANGES ONLY holds no copy, so `emit` claims nothing (a row that adds no
-    # copy holds no copy). It is still a send: the file was written and `emit` said so.
-    prices_only = claim is None and code == 0 and bool(changes) and bool(written)
+    said_prices = _json_line(console, "send_prices") or {}
+    changes = list(said_prices.get("rows") or [])
 
-    if claim is None and not prices_only:
+    if claim is None:
         # NOTHING WAS COUNTED SENT: `emit` refused, or wrote nothing new. The claim and the
         # count are one store write, so no claim means no copy counted. The press's own
         # directory is its scratch and goes with it; no receipt is left for a press that sent
         # nothing.
         shutil.rmtree(directory, ignore_errors=True)
-        refused = _claim_refusal(console, step)
+        refused = _claim_refusal(console, step) or _price_refusal(console, step)
         if refused is not None:
             raise refused
         trimmed = guard.get("trimmed") or []
@@ -938,6 +1052,7 @@ def _write_and_send(
                 for path in written
                 for sku, price in _price_rows(path).items()
             },
+            "prices_left": list(said_prices.get("left") or []),
             "names": names,
             "live_before": {sku: live_before.get(sku, 0) for sku in copies},
             "sold_before": _sold_by_sku(copies),
@@ -998,8 +1113,8 @@ def _settle(directory: Path, caught: BaseException) -> None:
         shutil.rmtree(directory, ignore_errors=True)
         return
     if claim is not None and not on_disk.get("copies"):
-        on_disk["copies"] = dict(claim.skus)
-        on_disk["copies_total"] = sum(int(n) for n in claim.skus.values())
+        on_disk["copies"] = {sku: int(n) for sku, n in claim.skus.items() if int(n) > 0}
+        on_disk["copies_total"] = sum(on_disk["copies"].values())
     if not on_disk.get("files"):
         on_disk["files"] = [path.name for path in sorted(directory.glob("import*.csv"))]
     pushed = on_disk.get("pushed") or {}
@@ -1041,10 +1156,11 @@ def _push_and_publish(directory: Path, record: dict, console: str) -> dict:
     try:
         upload = tcg_import.push_to_staged(rows, filename=record["files"][0], listing=True)
     except tcg_import.PushFailed as failed:
-        if failed.upload_id is None or failed.rolled_back:
-            rolled = " The upload was rolled back." if failed.rolled_back else ""
+        if failed.upload_id is None:
             _fail(directory, record, failed.code,
-                  f"{failed.message}{rolled} Nothing is live; the copies are back on the list.")
+                  f"{failed.message} Nothing is live; the copies are back on the list.")
+        if failed.rolled_back:
+            _fail(directory, record, failed.code, failed.message, rolled=str(failed.upload_id))
         _unknown(directory, record, "push", failed.upload_id, False, failed.message)
     except tcg_import.FetchRefusal as refusal:
         # `_check`'s refusals: the file was turned away before a transaction existed.
@@ -1096,9 +1212,7 @@ def _rollback_then(
     """A CLEAR refusal after an upload exists: roll it back, and only a confirmed rollback puts
     the copies back on the list. A refused rollback leaves the upload waiting in Staged."""
     if _try_rollback(upload_id):
-        _fail(directory, record, code,
-              f"{message} The upload was rolled back. Nothing is live; the copies are back on "
-              f"the list.")
+        _fail(directory, record, code, message, rolled=upload_id)
     _unknown(directory, record, "rollback", upload_id, False, message)
 
 
@@ -1108,6 +1222,7 @@ def _fail(
     code: str,
     message: str,
     status: HTTPStatus = HTTPStatus.BAD_GATEWAY,
+    rolled: Optional[str] = None,
 ) -> NoReturn:
     """Record a refusal NOTHING AT TCGPLAYER CAN OUTLIVE, put the copies back, and raise it.
 
@@ -1116,8 +1231,21 @@ def _fail(
     one store write, before the receipt says so — a crash between the two leaves a receipt that
     still says "not taken back" over copies that are, the safe direction: the next send's
     guard reads TCGplayer, not this receipt.
+
+    `rolled` IS THE UPLOAD A ROLLBACK ANSWERED FOR (round 6, S4). A 200 to `rollbackexportcsv`
+    is not proof that a finished upload left Staged: that call has never run on the real
+    account. So the receipt keeps the `rolled_back` warning until the owner dismisses it, and
+    the refusal is `send_rolled_back`, which the card never offers to retry.
     """
     _take_back(record.get("copies") or {}, str(record.get("stamp")), "failed")
+    if rolled is not None:
+        record["rolled_back"] = {"upload_id": rolled, "at": _iso(_now()), "cause": code}
+        code, status = ROLLED_BACK, HTTPStatus.CONFLICT
+        message = (
+            f"{message} Banchi asked TCGplayer to roll the upload back, and it said it did. "
+            f"That is not proved yet: check TCGplayer's Staged list, and do not publish this "
+            f"upload there. Nothing is live; the copies are back on the list."
+        )
     record["failure"] = {"code": code, "message": message}
     record["taken_back_at"] = _iso(_now())
     record["phase"] = PHASE_DONE
@@ -1323,9 +1451,10 @@ def _copies_of(stamp: str, record: dict, claims) -> Dict[str, int]:
     counted them and before the receipt named them — the claim `emit` wrote."""
     copies = record.get("copies")
     if copies:
-        return {sku: int(n) for sku, n in copies.items()}
+        return {sku: int(n) for sku, n in copies.items() if int(n) > 0}
     claim = claims.get(stamp)
-    return dict(claim.skus) if claim is not None else {}
+    # A PRICE-ONLY ROW IS CLAIMED AT 0 COPIES (round 6, S3), and a 0 is no copy to credit.
+    return {sku: int(n) for sku, n in claim.skus.items() if int(n) > 0} if claim is not None else {}
 
 
 def _baseline(record: dict) -> Dict[str, int]:
@@ -1529,13 +1658,21 @@ def _credits(
     return out
 
 
-def _price_check(record: dict, live_prices: Dict[str, str]) -> dict:
+def _price_check(record: dict, live_prices: Dict[str, str], live_now: Dict[str, int]) -> dict:
     """Did TCGplayer's price become the file's, for every price-only row? The mark-down's own
     test (`_resolve_markdown`), per row. A row whose price differs is named, and nothing is
-    offered back for it: another price change is the way a live price moves again."""
+    offered back for it: another price change is the way a live price moves again.
+
+    A CARD WITH NO COPY LIVE AT THE CHECK IS `gone`, never missing (round 6, N2): it sold out,
+    so there is no price left to show, and the receipt settles rather than reading short for
+    ever. It is named."""
     missing = []
+    gone = []
     prices = record.get("prices") or {}
     for sku, entry in sorted(prices.items()):
+        if int(live_now.get(sku, 0)) <= 0:
+            gone.append({"sku": sku, "name": (record.get("names") or {}).get(sku, "")})
+            continue
         wanted = _price(str((entry or {}).get("price") or ""))
         live = live_prices.get(sku, "")
         if wanted is None or _price(live) != wanted:
@@ -1547,7 +1684,12 @@ def _price_check(record: dict, live_prices: Dict[str, str]) -> dict:
                     "live": live or None,
                 }
             )
-    return {"expected": len(prices), "matched": len(prices) - len(missing), "missing": missing}
+    return {
+        "expected": len(prices),
+        "matched": len(prices) - len(missing) - len(gone),
+        "missing": missing,
+        "gone": gone,
+    }
 
 
 def _live_check(force: bool) -> dict:
@@ -1603,7 +1745,7 @@ def _live_check(force: bool) -> dict:
             "found_by_sku": {sku: int(credits[stamp].get(sku, 0)) for sku in sorted(copies)},
         }
         if record.get("prices"):
-            record["price_check"] = _price_check(record, live_prices)
+            record["price_check"] = _price_check(record, live_prices, live_now)
         record.setdefault("copies", copies)
         record["copies_total"] = record.get("copies_total") or sum(copies.values())
         record["checked_at"] = _iso(now)
@@ -1739,9 +1881,12 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
         try:
             upload = tcg_import.push_to_staged(rows, filename=cmd_reprice.IMPORT)
         except tcg_import.PushFailed as failed:
-            if failed.upload_id is None or failed.rolled_back:
+            if failed.upload_id is None:
                 _release(claim, "failed")
                 raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, failed.code, failed.message) from None
+            if failed.rolled_back:
+                _release(claim, "failed")
+                _markdown_rolled_back(directory, str(failed.upload_id), failed.code, failed.message)
             _markdown_hold(directory, {"upload_id": failed.upload_id}, "push", False, failed.message)
         except tcg_import.FetchRefusal as refusal:
             _release(claim, "failed")
@@ -1757,11 +1902,7 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
             if _try_rollback(upload_id):
                 (directory / pipeline_routes.PUSH_RECORD).unlink(missing_ok=True)
                 _release(claim, "failed")
-                raise PipelineRefusal(
-                    HTTPStatus.BAD_GATEWAY,
-                    refusal.code,
-                    f"{refusal.message} The upload was rolled back, so no price changed.",
-                ) from None
+                _markdown_rolled_back(directory, upload_id, refusal.code, refusal.message)
             _markdown_hold(directory, record, "rollback", False, refusal.message)
         _markdown_hold(directory, record, "publish", _try_rollback(upload_id), refusal.message)
     record["published_at"] = pipeline_routes._now_iso()
@@ -1769,6 +1910,33 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
     pipeline_routes._write_push(directory, record)
     _release(claim, "published")
     return {"published": record, "stamp": stamp}
+
+
+def markdown_rolled_back_note(directory: Path, upload_id: str, cause: str) -> str:
+    """Record that a mark-down's upload was rolled back and never went live, and say so.
+
+    ROUND 6, S4 AND B3. A 200 to `rollbackexportcsv` is not proof that a finished upload left
+    Staged until the owner's own first test shows it, so the record says "check the Staged
+    list" rather than claiming the upload is gone. The mark-down's answers stay in the price
+    file as the owner's own record, and they cannot ride a listing send: only a price the
+    screen named does (round 6, B1). `ROLLED_BACK_RECORD` is the receipt of the rollback."""
+    files.write_json(
+        directory / ROLLED_BACK_RECORD,
+        {"upload_id": upload_id, "at": _iso(_now()), "cause": cause, "live": False,
+         "check_staged": True},
+    )
+    return (
+        "Banchi asked TCGplayer to roll the upload back, and it said it did. That is not proved "
+        "yet: check TCGplayer's Staged list, and do not publish this upload there. No price went "
+        "live."
+    )
+
+
+def _markdown_rolled_back(directory: Path, upload_id: str, code: str, message: str) -> NoReturn:
+    """A mark-down press that TCGplayer turned away and Banchi rolled back: record it, and refuse
+    with `send_rolled_back`, never a retry (round 6, S4)."""
+    note = markdown_rolled_back_note(directory, upload_id, code)
+    raise PipelineRefusal(HTTPStatus.CONFLICT, ROLLED_BACK, f"{message} {note}")
 
 
 def _markdown_settle(

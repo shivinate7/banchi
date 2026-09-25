@@ -449,14 +449,14 @@ def build_parser() -> argparse.ArgumentParser:
         "may leave TCGplayer holding more copies than are on hand. Trims are named",
     )
     # THE MIXED SEND (the owner's ruling, 2026-09-24: "Allow mixed"). With `--live-guard`, a card
-    # already live that this press adds no copy of, and whose TYPED price differs from the live
-    # one, gets a price-only row: Add to Quantity 0. `pipeline/sendguard.py:price_changes`.
+    # already live that this press adds no copy of, and whose price the SCREEN NAMED (round 6),
+    # gets a price-only row: Add to Quantity 0. `pipeline/sendguard.py:price_changes`.
     emit.add_argument(
         "--reprice-live",
-        action="store_true",
-        help="with --live-guard: also write a price-only row (Add to Quantity 0) for each card "
-        "already live that this press adds no copy of, where your typed price differs from the "
-        "live one. Each is named",
+        metavar="NAMED_PRICES",
+        help="with --live-guard: a JSON list of {sku, price, was} the screen named. Each named "
+        "card already live that this press adds no copy of gets a price-only row (Add to "
+        "Quantity 0). A price the list does not name is never written. Each is named",
     )
     # THE PRESS'S OWN FILE AND ITS CLAIM (`D-one-press-sends-and-makes-live`, round 2). Given by
     # `server/send_routes.py` only: the file goes into the press's own directory rather than

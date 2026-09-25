@@ -74,7 +74,11 @@ function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown
     files: ['import.csv'],
     taken_back_at: null,
     warning: null,
+    prices_left: [],
     ...over,
+    /* THE SERVER SAYS `staged` WHENEVER `unknown.staged` DOES (`_maybe_staged`), and also for a
+       press that died mid-push with no `unknown` (round 6, S2). A case names it only for that. */
+    staged: over.staged ?? Boolean((over.unknown as { staged?: boolean } | null | undefined)?.staged),
   }
 }
 
@@ -1210,7 +1214,7 @@ test('what the double-send guard held back is named, card by card', async ({ pag
    copies and reprices cards already live. A price change is a row this press adds no copy of,
    already live, whose TYPED price is not the live one. A rule price never counts, and a typed
    price TCGplayer already shows is no change. The press says both, apart. */
-test('r5: a mixed press says what it carries: new copies and price changes', async ({ page }) => {
+test('r6: a mixed press counts only the prices typed on this list, and names them', async ({ page }) => {
   const mixed = sendSummary({ copies: 3, prices: 1, rows: 2 })
   const wire = await open(page, {
     skus: [
@@ -1257,11 +1261,61 @@ test('r5: a mixed press says what it carries: new copies and price changes', asy
     send: () => ({ status: 200, body: { send: mixed, console: '' } }),
     sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [mixed] } : SENDS_NONE),
   })
+  /* ROUND 6 (B1, B2): A PRICE THE CORPUS HOLDS IS NOT ONE THE OWNER TYPED HERE. The stored
+     12.50 may be a Live tab preset or a mark-down never sent; the button does not count it, so
+     no send carries it. */
+  await expect(page.getByRole('button', { name: 'Send 3 copies to TCGplayer' })).toBeVisible()
+  const dunsparce = page.getByLabel('Price for Dunsparce')
+  await dunsparce.fill('13.00')
+  await dunsparce.press('Tab')
   const press = page.getByRole('button', { name: 'Send 3 copies and 1 price change' })
   await expect(press).toBeVisible()
   await press.click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
+  /* THE PRESS NAMES THE PRICE IT COUNTED, AND THE LIVE PRICE THE ROW DREW: the server sends no
+     other price row, and refuses this one if TCGplayer's price moved since. */
+  expect(sendPosts(wire)[0]?.body).toMatchObject({ prices: [{ sku: '8608459', price: '13.00', was: '9.99' }] })
   await expect(page.locator('.send-standing')).toContainText('3 copies and 1 price change went live at')
+})
+
+/* ROUND 6, S4: A ROLLBACK'S ANSWER IS NOT PROOF. A press TCGplayer turned away and Banchi rolled
+   back offers no Try again, and keeps "check the Staged list" until the owner dismisses it. */
+test('r6: a rolled-back send offers no retry and keeps the Staged check until dismissed', async ({ page }) => {
+  const rolled = sendSummary({
+    stamp: '20260924-120000-cccccc',
+    state: 'failed',
+    published_at: null,
+    taken_back_at: '2026-09-24T12:00:09+00:00',
+    failure: { code: 'send_rolled_back', message: 'rolled back' },
+    warning: 'rolled_back',
+  })
+  const wire = await open(page, {
+    send: () => ({ status: 409, code: 'send_rolled_back' }),
+    sends: (seen) =>
+      seen.some((r) => r.path.endsWith('/dismiss'))
+        ? { ...SENDS_NONE, sends: [{ ...rolled, warning: null }] }
+        : sendPosts(seen).length > 0
+          ? { ...SENDS_NONE, sends: [rolled] }
+          : SENDS_NONE,
+  })
+  await sendPress(page).click()
+  const refusal = page.locator('.send-failure')
+  await expect(refusal).toContainText('Check the Staged list before you send again.')
+  await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  const warned = page.locator('.send-taken-back')
+  await expect(warned).toContainText('Upload rolled back at')
+  await expect(warned).toContainText('Check the Staged list')
+  await warned.getByRole('button', { name: 'Dismiss' }).click()
+  await expect.poll(() => wire.filter((r) => r.path.endsWith('/dismiss')).length).toBe(1)
+  await expect(page.locator('.send-taken-back')).toHaveCount(0)
+})
+
+/* ROUND 6, S2: A PRESS THAT DIED MID-PUSH HAS NO `unknown`, and its upload may still wait in
+   Staged. The card reads the server's `staged`, never `unknown` alone. */
+test('r6: a send that stopped mid-push names the Staged list', async ({ page }) => {
+  const crashed = sendSummary({ state: 'unknown', published_at: null, held: true, unknown: null, staged: true })
+  await open(page, { sends: () => ({ ...SENDS_NONE, sends: [crashed] }) })
+  await expect(page.locator('.send-unknown')).toContainText('may still wait in TCGplayer’s Staged list')
 })
 
 /* ROUND 5: TWO PRESSES IN ONE SECOND. A stamp is the second, then a random tail, so the card

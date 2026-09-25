@@ -17498,6 +17498,16 @@ def send_portal():
                 os.environ[name] = value
 
 
+def _refusal_text_route(fn) -> Optional[Tuple[str, str]]:
+    """`(code, message)` off the `PipelineRefusal` `fn` raised, or None if it answered. For a case
+    whose refusal must NAME a card, where the message is the contract."""
+    try:
+        fn()
+    except pipeline_routes.PipelineRefusal as caught:
+        return (caught.code, str(caught))
+    return None
+
+
 def _route_refusal(fn) -> Optional[str]:
     """The `PipelineRefusal` code `fn` raised, or None if it answered."""
     try:
@@ -17741,7 +17751,7 @@ def check_send_press(checks: Checks) -> None:
             code = _route_refusal(
                 lambda run_dir=run_dir: send_routes.do_send({"runs": [run_dir.name], "confirm": True})
             )
-            checks.equal(code, "tcg_write_refused", f"a failing {failing} refuses the press")
+            checks.equal(code, "send_rolled_back" if rolled else "tcg_write_refused", f"a failing {failing} refuses the press; after a rollback it is `send_rolled_back`, never a retry (round 6, S4)")
             checks.equal(
                 (pushed(ARTICUNO_SKU), pushed(DUNSPARCE_SKU)),
                 (0, 0),
@@ -17853,8 +17863,8 @@ def check_send_press(checks: Checks) -> None:
                     _route_refusal(
                         lambda directory=directory: send_routes.do_markdown_send(directory.name, {"confirm": True})
                     ),
-                    "tcg_write_refused",
-                    "a mark-down whose publish fails refuses",
+                    "send_rolled_back",
+                    "a mark-down whose publish fails refuses, and after its rollback it says so (round 6, S4)",
                 )
                 checks.equal(portal["rolled"], ["u-1"], "and its upload is rolled back")
                 checks.ok(
@@ -18238,7 +18248,7 @@ def check_send_hazards(checks: Checks) -> None:
             )
             receipt = newest() if send_routes.do_sends()["sends"] else {}
             checks.ok(
-                code == "tcg_unreachable" and receipt.get("state") == "failed",
+                code == "send_rolled_back" and receipt.get("state") == "failed",
                 f"A SLOW CHUNK after the copies were counted leaves a receipt: {code}, "
                 f"{receipt.get('state')}",
             )
@@ -19143,7 +19153,7 @@ def check_send_review_r5(checks: Checks) -> None:
         )
         typed(ARTICUNO_SKU, "30.00")
         portal["rows"].clear()
-        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": [{"sku": ARTICUNO_SKU, "price": "30.00", "was": "22.03"}]})["send"]
         checks.equal(
             portal_rows(portal).get(ARTICUNO_SKU),
             ("0", "30.00"),
@@ -19164,8 +19174,8 @@ def check_send_review_r5(checks: Checks) -> None:
         claim = Store().read().send_claims.get(sent["stamp"])
         checks.equal(
             dict(claim.skus) if claim else None,
-            {DUNSPARCE_SKU: 1},
-            "M1: and the press claimed only the card it adds a copy of",
+            {DUNSPARCE_SKU: 1, ARTICUNO_SKU: 0},
+            "M1: and the press claimed the card it adds a copy of, and the repriced card at 0 copies (round 6, S3)",
         )
         checks.equal(
             (sent["copies"], sent["prices"]),
@@ -19213,14 +19223,14 @@ def check_send_review_r5(checks: Checks) -> None:
         portal["live"] = _live_export_priced(live, {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "9.99"})
         typed(ARTICUNO_SKU, "22.03")
         checks.equal(
-            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": [{"sku": ARTICUNO_SKU, "price": "22.03", "was": "22.03"}]})),
             "nothing_to_send",
             "M2: A TYPED PRICE TCGPLAYER ALREADY SHOWS IS NO CHANGE, and a RULE price that differs "
             "from the live one (the Dunsparce) never reaches a live listing: nothing is sent",
         )
         typed(ARTICUNO_SKU, "25.00")
         portal["rows"].clear()
-        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": [{"sku": ARTICUNO_SKU, "price": "25.00", "was": "22.03"}]})["send"]
         checks.equal(
             portal_rows(portal),
             {ARTICUNO_SKU: ("0", "25.00")},
@@ -19260,7 +19270,7 @@ def check_send_review_r5(checks: Checks) -> None:
             )
         portal["rows"].clear()
         checks.equal(
-            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True})),
+            _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True, "prices": [{"sku": ARTICUNO_SKU, "price": "30.00", "was": "22.03"}]})),
             "price_change_held",
             "M3: A PRICE CHANGE OVER A CARD A MARK-DOWN HOLDS IS REFUSED by name, and the whole "
             "press sends nothing",
@@ -19318,6 +19328,253 @@ def check_send_review_r5(checks: Checks) -> None:
             (credits[older].get(ARTICUNO_SKU), credits[newer].get(ARTICUNO_SKU)),
             (1, 0),
             "AND THE CREDIT LEDGER AGREES: one live copy goes to the send pressed first",
+        )
+
+
+def check_send_review_r6(checks: Checks) -> None:
+    """Round 6: the fresh review of round 5 (B1-B3, S1-S4, N2), each red first on the round-5
+    build. Probes P1-P7 are the reviewer's, turned into cases.
+
+    THE ORCHESTRATOR'S RULING ON THE OWNER'S WORDS: only a price the SCREEN named rides a send.
+    A corpus answer the owner did not type on the worklist never does. A named price whose live
+    figure moved since the screen drew it is refused by name; one TCGplayer already shows is
+    left out and named. A named price under the floor is refused, as the mark-down door does.
+    """
+    checks.note("")
+    checks.note("SEND REVIEW, ROUND 6 — only a named price rides; the reviewer's probes")
+
+    cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    cards.append((3, 4, "Dunsparce", "120", "normal"))
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    def receipt(stamp):
+        return [s for s in send_routes.do_sends()["sends"] if s["stamp"] == stamp][0]
+
+    def typed(sku, price):
+        book = corpus.Corpus.read()
+        book.answers[sku] = corpus.Answer(value=price)
+        book.write()
+
+    def portal_rows(portal):
+        return {
+            row["ProductConditionId"]: (row["AddToQuantity"], row["MyPrice"]) for row in portal["rows"]
+        }
+
+    def named(price, was):
+        return [{"sku": ARTICUNO_SKU, "price": price, "was": was}]
+
+    def articuno_live(run_dir, portal, price="22.03"):
+        """Every Articuno sent and live at `price`; the Dunsparce still unsent."""
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: price})
+        portal["rows"].clear()
+
+    # ------------- P1 (S1): a named price under the store's floor is refused, by name
+    with _case(checks, "P1: under the floor"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "0.05")
+        refused = _refusal_text_route(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "prices": named("0.05", "22.03")}
+        ))
+        checks.equal(
+            (refused or ("", ""))[0],
+            "price_refused",
+            "P1: A NAMED PRICE UNDER THE FLOOR IS REFUSED, the mark-down door's own rule",
+        )
+        checks.ok("under the store's floor" in (refused or ("", ""))[1], f"P1: and named: {refused}")
+        checks.equal(portal["rows"], [], "P1: and TCGplayer receives no row")
+
+    # ------------- P2 (B1): the guard trims a listing to nothing; an unnamed price never rides
+    with _case(checks, "P2: an unnamed price after a trim"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        typed(ARTICUNO_SKU, "30.00")
+        portal["rows"].clear()
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_send(
+                {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+            )),
+            "nothing_to_send",
+            "P2: A PRICE THE BUTTON DID NOT NAME NEVER RIDES: the guard held back every Articuno, "
+            "and its typed 30.00 does not go out as a price change",
+        )
+        checks.equal(portal["rows"], [], "P2: and TCGplayer receives no row")
+
+    # ------------- P3 (N1, kept): Qty 0 with a named price moves the price, and no copy
+    with _case(checks, "P3: Qty 0 and a named price"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, "confirm": True}
+        )
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 1, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        typed(ARTICUNO_SKU, "30.00")
+        portal["rows"].clear()
+        send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 1},
+             "confirm": True, "prices": named("30.00", "22.03")}
+        )
+        checks.equal(
+            (portal_rows(portal).get(ARTICUNO_SKU), pushed(ARTICUNO_SKU)),
+            (("0", "30.00"), 1),
+            "P3: QTY 0 AND A NAMED PRICE is the owner's price-only edit: the price moves, no copy does",
+        )
+
+    # ------------- P4 (S2): a press that died mid-push reads as possibly staged
+    with _case(checks, "P4: a hard crash mid-push"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        portal["fail"] = {"movetolive", "rollbackexportcsv"}
+        _route_refusal(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True}
+        ))
+        portal["fail"] = set()
+        stamp = send_routes._receipts()[0][0]
+        directory = send_routes.sends_dir() / stamp
+        record = send_routes._read(directory)
+        record.update({
+            "phase": "sending", "unknown": None, "check_after": None, "publish_started_at": None,
+            "pushed": {"upload_id": "u-1", "rows": 1, "accepted": 1, "messages": []},
+            "holder": {"pid": _dead_pid(), "proc_start": "x"},
+        })
+        send_routes._write(directory, record)
+        checks.equal(
+            (receipt(stamp)["state"], receipt(stamp)["staged"]),
+            ("unknown", True),
+            "P4: A RECEIPT LEFT IN PHASE SENDING BY A DEAD SERVER READS AS POSSIBLY STAGED",
+        )
+        record = send_routes._read(directory)
+        record["at"] = "2000-01-01T00:00:00+00:00"
+        send_routes._write(directory, record)
+        send_routes.do_live_check({})
+        send_routes.do_take_back(stamp, {"confirm": True})
+        checks.equal(
+            receipt(stamp)["warning"],
+            "staged",
+            "P4: and after the check and Take back it keeps the Staged warning until dismissed",
+        )
+
+    # ------------- P5 (S3): an unconfirmed price change holds its card from a mark-down
+    with _case(checks, "P5: a held price change"), send_portal() as portal, isolated_home() as home:
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "30.00")
+        portal["fail"] = {"movetolive"}
+        code = _route_refusal(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "prices": named("30.00", "22.03")}
+        ))
+        portal["fail"] = set()
+        held = [claim for claim in Store().read().send_claims.live() if ARTICUNO_SKU in claim.skus]
+        checks.equal(
+            (code, [dict(claim.skus) for claim in held]),
+            ("send_unknown", [{ARTICUNO_SKU: 0}]),
+            "P5: AN UNCONFIRMED PRICE-ONLY SEND CLAIMS ITS CARD AT 0 COPIES",
+        )
+        markdown = _markdown_dir(home, "20260924-130000", "19.99")
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_markdown_send(markdown.name, {"confirm": True})),
+            "send_in_progress",
+            "P5: so a mark-down over the same card is refused until the check says what happened",
+        )
+        _age_receipt(send_routes._receipts()[0][0])
+        send_routes.do_live_check({})
+        checks.equal(
+            [claim.stamp for claim in Store().read().send_claims.live()],
+            [],
+            "P5: and the check past the wait releases the claim",
+        )
+
+    # ------------- P7 (B1, B2): a price the screen did not name, or whose live price moved
+    with _case(checks, "P7: the live price moved"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "25.99")
+        refused = _refusal_text_route(lambda: send_routes.do_send(
+            {"runs": [run_dir.name], "confirm": True, "prices": named("25.99", "25.99")}
+        ))
+        checks.equal(
+            (refused or ("", ""))[0],
+            "price_refused",
+            "P7: A NAMED PRICE WHOSE LIVE FIGURE MOVED SINCE THE SCREEN DREW IT IS REFUSED, by name",
+        )
+        checks.ok("$22.03" in (refused or ("", ""))[1], f"P7: naming the live price: {refused}")
+        checks.equal(portal["rows"], [], "P7: and TCGplayer receives no row")
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        checks.equal(
+            (sorted(portal_rows(portal)), sent["prices"]),
+            ([DUNSPARCE_SKU], 0),
+            "P7: AND A CORPUS ANSWER THE SCREEN DID NOT NAME NEVER RIDES: the send lists the "
+            "Dunsparce and leaves the Articuno's price alone",
+        )
+
+    # ------------- a named price TCGplayer already shows is left out and named, not refused
+    with _case(checks, "already live"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "22.03")
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "confirm": True, "prices": named("22.03", "19.99")}
+        )["send"]
+        checks.equal(
+            ([note["why"] for note in sent["prices_left"]], list(portal_rows(portal))),
+            (["already"], [DUNSPARCE_SKU]),
+            "A NAMED PRICE TCGPLAYER ALREADY SHOWS IS LEFT OUT AND NAMED, and the press still goes",
+        )
+
+    # ------------- N2: a price row on a card that sold out settles, named
+    with _case(checks, "N2: sold out after the send"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        articuno_live(run_dir, portal)
+        typed(ARTICUNO_SKU, "30.00")
+        sent = send_routes.do_send(
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
+             "prices": named("30.00", "22.03")}
+        )["send"]
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        _age_receipt(sent["stamp"])
+        send_routes.do_live_check({})
+        after = receipt(sent["stamp"])
+        checks.equal(
+            (after["state"], [row["sku"] for row in (after["price_check"] or {}).get("gone") or []]),
+            ("checked", [ARTICUNO_SKU]),
+            "N2: A PRICE ROW ON A CARD THAT SOLD OUT SETTLES, and names the card, never short for ever",
+        )
+
+    # ------------- S4: a rollback's answer is not proof
+    with _case(checks, "S4: after a rollback"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        portal["refuse"] = {"movetolive"}
+        code = _route_refusal(lambda: send_routes.do_send({"runs": [run_dir.name], "confirm": True}))
+        stamp = send_routes._receipts()[0][0]
+        checks.equal(
+            (code, receipt(stamp)["warning"]),
+            ("send_rolled_back", "rolled_back"),
+            "S4: A ROLLED-BACK PRESS IS `send_rolled_back`, never a retry, and it keeps a "
+            "'check the Staged list' warning",
+        )
+        send_routes.do_dismiss(stamp, {})
+        checks.equal(receipt(stamp)["warning"], None, "S4: until the owner dismisses it")
+
+    # ------------- B3 and S4: a mark-down's rollback is named for what it is
+    with _case(checks, "B3: a mark-down rolled back"), send_portal() as portal, isolated_home() as home:
+        directory = _markdown_dir(home, "20260924-140000", "19.99")
+        pipeline_routes._write_push(directory, {"upload_id": "u-9", "rows": 1, "accepted": 1})
+        answer = pipeline_routes.do_markdown_rollback(directory.name, {"confirm": True})
+        note = files.read_json(directory / send_routes.ROLLED_BACK_RECORD, {}) or {}
+        checks.equal(
+            (answer.get("check_staged"), note.get("live"), note.get("check_staged")),
+            (True, False, True),
+            "B3: A MARK-DOWN ROLLED BACK IS RECORDED AS NOT LIVE, AND 'CHECK THE STAGED LIST'",
         )
 
 
@@ -34020,6 +34277,7 @@ def run() -> Result:
     check_send_review_r3(checks)
     check_send_review_r4(checks)
     check_send_review_r5(checks)
+    check_send_review_r6(checks)
     check_run_match(checks)
     check_publish_lag(checks)
     check_withholding(checks)

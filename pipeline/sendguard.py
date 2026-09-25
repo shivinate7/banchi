@@ -33,6 +33,7 @@ the store's cards and the matches, and prints what this returns.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from pipeline import tcgcsv
@@ -185,7 +186,7 @@ class PriceChange:
 
     THE OWNER'S RULING, 2026-09-24 ("Allow mixed", `D-one-press-sends-and-makes-live`): one
     press lists new copies AND reprices live ones. A price change is a row with Add to
-    Quantity 0, so it moves no copy, claims no copy, and a second upload of it changes nothing
+    Quantity 0, so it moves no copy, claims its card at 0 copies (round 6, S3), and a second upload of it changes nothing
     (D100's own reason for its zero rule). `was` is TCGplayer's live price at the read, or
     None where the export carried none.
     """
@@ -219,39 +220,109 @@ def live_prices(rows: Iterable[Mapping[str, str]]) -> Dict[str, Optional[str]]:
     return out
 
 
+#: Why a price the screen named is LEFT OUT of the file, and the press still goes.
+LEFT_ALREADY = "already"        # TCGplayer already shows this price
+LEFT_NOT_LIVE = "not_live"      # TCGplayer holds no copy now, so there is no price to change
+LEFT_ADDS_COPIES = "adds_copies"  # this press adds a copy, and that row carries the price
+#: Why a price the screen named REFUSES the whole press.
+REFUSED_LIVE_MOVED = "live_moved"      # TCGplayer's price is not the one the screen showed
+REFUSED_NOT_SAVED = "not_saved"        # the saved price is not the one the button named
+REFUSED_BELOW_FLOOR = "below_floor"    # under the store's floor, the mark-down door's rule
+REFUSED_NOT_IN_SEND = "not_in_send"    # the button named a card this press does not price
+
+
+@dataclass(frozen=True)
+class PriceNote:
+    """One price the screen named that did not become a row, and why (a `LEFT_*` or `REFUSED_*`)."""
+
+    sku: str
+    name: str
+    why: str
+    price: Optional[str] = None
+    live: Optional[str] = None
+    shown: Optional[str] = None
+
+    def as_dict(self) -> dict:
+        return {
+            "sku": self.sku, "name": self.name, "why": self.why,
+            "price": self.price, "live": self.live, "shown": self.shown,
+        }
+
+
 def price_changes(
+    named: Mapping[str, tuple],
     candidates: Mapping[str, tuple],
-    typed: Iterable[str],
     live: Mapping[str, int],
     prices: Mapping[str, Optional[str]],
-) -> List[PriceChange]:
-    """The price-only rows one send carries. `candidates` is SKU -> (name, the plan's price) for
-    every SKU the send prices and adds NO copy of.
+    floor,
+    adding: Iterable[str] = (),
+) -> tuple:
+    """The price-only rows one send carries: `(changes, left, refused)`.
 
-    THE SMALLEST HONEST READING OF "A PRICE THE OWNER CHANGED ON A LIVE CARD". Three tests,
-    and a row needs all three:
+    THE ORCHESTRATOR'S RULING ON THE OWNER'S WORDS (round 6): ONLY A PRICE THE SCREEN NAMED
+    RIDES. `named` is SKU -> (the price the button counted, the live price the screen showed)
+    — the SKUs the owner typed a price for on the worklist this visit. A corpus answer the
+    owner did not type there (a Live tab preset, `reprice apply --write`) is not in `named`,
+    so it never becomes a row. `candidates` is SKU -> (name, the plan's price) for every SKU
+    this press prices and adds NO copy of.
 
-      - TYPED. The owner's own price for the card (`overrides` or `no_market_data`). A price
-        the standing rule gives is never sent to a live listing: the rule speaks about most
-        live listings on a store, and one press would move them all.
-      - LIVE. TCGplayer holds at least one copy in the fresh export. A card with nothing live
-        has no price there to change.
-      - DIFFERENT. The typed price is not what TCGplayer already shows, to the cent. A row
-        that changes nothing is not written.
+    Per named SKU:
+
+      - this press adds a copy of it (`adding`): LEFT (`adds_copies`). Its listing row
+        already carries the price;
+      - this press does not price it at all: REFUSED (`not_in_send`);
+      - the saved price is not the button's: REFUSED (`not_saved`);
+      - under the store's floor (`policy.threshold`): REFUSED (`below_floor`), the mark-down
+        door's own `BELOW_FLOOR` rule;
+      - TCGplayer holds no copy now: LEFT (`not_live`);
+      - TCGplayer already shows that price: LEFT (`already`);
+      - TCGplayer's price is not the one the screen showed: REFUSED (`live_moved`). A price
+        the button did not name is never sent;
+      - otherwise, a row.
+
+    A REFUSAL STOPS THE WHOLE PRESS, by name, before a file exists. A LEFT row is named and
+    the press goes on.
     """
-    wanted = {str(sku) for sku in typed}
-    out: List[PriceChange] = []
-    for sku, (name, price) in candidates.items():
-        if sku not in wanted or int(live.get(sku, 0)) <= 0:
+    changes: List[PriceChange] = []
+    left: List[PriceNote] = []
+    refused: List[PriceNote] = []
+    adding = {str(sku) for sku in adding}
+    for sku in sorted(named):
+        typed, shown = named[sku]
+        typed = tcgcsv.format_price(typed)
+        shown = None if shown in (None, "") else tcgcsv.format_price(shown)
+        if sku in adding:
+            left.append(PriceNote(sku, "", LEFT_ADDS_COPIES, price=typed))
             continue
-        now = tcgcsv.format_price(price)
-        was = prices.get(sku)
-        if was == now:
+        if sku not in candidates:
+            refused.append(PriceNote(sku, "", REFUSED_NOT_IN_SEND, price=typed))
             continue
-        out.append(PriceChange(sku=sku, name=str(name or ""), price=now, was=was))
-    return out
+        name, plan = candidates[sku]
+        plan = tcgcsv.format_price(plan)
+        now = prices.get(sku)
+        note = dict(sku=sku, name=str(name or ""), price=plan, live=now, shown=shown)
+        if plan != typed:
+            refused.append(PriceNote(why=REFUSED_NOT_SAVED, **dict(note, price=typed)))
+        elif Decimal(plan) < Decimal(str(floor)):
+            refused.append(PriceNote(why=REFUSED_BELOW_FLOOR, **note))
+        elif int(live.get(sku, 0)) <= 0:
+            left.append(PriceNote(why=LEFT_NOT_LIVE, **note))
+        elif now == plan:
+            left.append(PriceNote(why=LEFT_ALREADY, **note))
+        elif now != shown:
+            refused.append(PriceNote(why=REFUSED_LIVE_MOVED, **note))
+        else:
+            changes.append(PriceChange(sku=sku, name=str(name or ""), price=plan, was=now))
+    return changes, left, refused
 
 
-def price_report(changes: Sequence[PriceChange]) -> dict:
-    """The JSON object `cli/cmd_emit.py` prints for the price-only rows it wrote."""
-    return {"send_prices": {"rows": [change.as_dict() for change in changes]}}
+def price_report(changes: Sequence[PriceChange], left=(), refused=()) -> dict:
+    """The JSON object `cli/cmd_emit.py` prints for the price-only rows, and the ones it did not
+    write. `server/send_routes.py` reads it."""
+    return {
+        "send_prices": {
+            "rows": [change.as_dict() for change in changes],
+            "left": [note.as_dict() for note in left],
+            "refused": [note.as_dict() for note in refused],
+        }
+    }

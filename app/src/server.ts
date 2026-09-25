@@ -1,5 +1,6 @@
 import type {
   AnswerResult,
+  PriceChange,
   CorrectResult,
   CodeExportResult,
   CodeLedger,
@@ -2384,7 +2385,13 @@ export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
  */
 export async function sendCopies(
   runs: readonly string[],
-  options: { download?: boolean; splitThreshold?: boolean; quantities?: Record<string, number> } = {},
+  options: {
+    download?: boolean
+    splitThreshold?: boolean
+    quantities?: Record<string, number>
+    /** The price changes the button named. Only these may ride the send (round 6). */
+    prices?: readonly PriceChange[]
+  } = {},
 ): Promise<SendAnswer> {
   return (await request('/pipeline/send', {
     method: 'POST',
@@ -2394,6 +2401,7 @@ export async function sendCopies(
       ...(options.download ? { download: true } : { confirm: true }),
       ...(options.download && options.splitThreshold ? { split_threshold: true } : {}),
       ...quantitiesClaim(options.quantities),
+      ...(options.prices !== undefined && options.prices.length > 0 ? { prices: options.prices } : {}),
     }),
   })) as SendAnswer
 }
