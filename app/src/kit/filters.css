@@ -187,6 +187,9 @@
 .bn-filterbar-sheet-body .bn-sort > .bn-pick,
 .bn-filterbar-sheet-body .bn-sort-dir { width: 100%; min-width: 0; max-width: none; justify-content: flex-start; }
 
+/* The same body in a popover under the trigger (`compact="popover"`): a desk's narrow bar. */
+.bn-filterbar-popover { width: min(320px, calc(100vw - 16px)); padding: var(--bn-3); }
+
 /* ---- The match highlight (`kit/highlight.tsx`) ------------------------------------------------ */
 .bn-highlight {
   padding: 0 1px;

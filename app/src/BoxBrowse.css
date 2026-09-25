@@ -36,26 +36,12 @@
   min-height: 0;
   min-width: 0;
 }
-.browse-map-top { display: flex; align-items: center; gap: var(--bn-2); }
 .browse-rail-toggle { flex: none; color: var(--bn-ink-3); }
 .browse-rail-toggle:hover { color: var(--bn-ink); }
 
-/* D213's game/set/rarity filter. The three `.bn-select`s wrap, three rows at every measured
- * width in the rail's own ~270-300px, rather than being squeezed unreadably thin — the rail
- * is narrower than a comfortable three-up row of native selects, and wrapping costs nothing
- * a dropdown's own open state would not already cost. `min-width: 0` on each is what lets
- * flex shrink a `<select>` at all; browsers give it an intrinsic width from its longest
- * option otherwise. */
-.browse-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--bn-2);
-}
-.browse-filters > select {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.browse-filters > .bn-btn { flex: none; }
+/* D213's filter is the kit's FilterBar (FLT-09). The rail is narrower than its wide row, so
+ * its container query shows the one Filters press, which opens a popover on a desk. */
+.browse-filterbar { flex: none; }
 
 /* the collapsed rail */
 .browse-rail-mini {

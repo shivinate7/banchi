@@ -5737,7 +5737,7 @@ test('D132 — the product hides sold by default, and the chip says how many it 
 
   const chip = page.locator('.browse-hidesold')
   await expect(chip).toHaveAttribute('aria-pressed', 'true')
-  await expect(chip.locator('.bn-chip-count')).toHaveText('2')
+  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('2')
 
   /* Seven records, one sold and one retired; five rows drawn, none of them departed. */
   const slots = page.locator('.browse-row .browse-row-position')
@@ -5859,7 +5859,7 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
      the chip says so — one, not zero, and not the two it would read if it counted every live row
      that could someday leave. */
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2'])
-  await expect(chip.locator('.bn-chip-count')).toHaveText('1')
+  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('1')
 
   await page.locator('.browse-row').nth(1).click()
   await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
@@ -5870,12 +5870,12 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
      (`departedHere`) would read 2 here; this is the 6-claimed-5-hidden defect at its smallest
      reproduction. */
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#3'])
-  await expect(chip.locator('.bn-chip-count')).toHaveText('1')
+  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('1')
 
   /* Step off the sold row and the fold takes it too — both departed rows hidden, both counted. */
   await page.locator('.browse-row').nth(0).click()
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1'])
-  await expect(chip.locator('.bn-chip-count')).toHaveText('2')
+  await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('2')
 })
 
 test('D132 — the rail draws names and no numbers, ordered by this browser\'s recency, then cards on hand, then number', async ({ page }) => {
@@ -5889,6 +5889,10 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
   }
   /* Box 7 was opened here yesterday; nothing else ever was. */
   await page.addInitScript(() => {
+    /* ONCE PER TAB, so the reload below is a real next visit and reads what the press wrote. The
+       tab's own marker is `window.name`, which survives a reload and touches no browser store. */
+    if (window.name === 'seeded') return
+    window.name = 'seeded'
     /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE VERY KEY UNDER TEST, in the
        one file whose subject it is: `banchi.box-recency` lives in `app/src/deviceMemory.ts`
        (D132), and asserting the order it produces means writing it. It was
@@ -5911,9 +5915,12 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
   await expect(page.locator('.browse-boxcell').nth(1)).toHaveAttribute('aria-label', 'Bulk, 40 captured')
 
   /* A PAGE LOAD IS NOT AN OPENING: the walk landed on box 7 (recency put it first) and the
-     order is exactly what storage said, untouched. A press IS one — open Bulk and it leads. */
+     order is exactly what storage said, untouched. A press IS one, and it is written at once.
+     BUT THE RAIL DOES NOT MOVE UNDER THE POINTER (UX-215, "nothing jumps"): the pressed box
+     keeps its row until the next visit, and then it leads. */
   await page.locator('.browse-boxcell', { hasText: 'Bulk' }).click()
-  await expect(names).toHaveText(['Bulk', 'Box 7', 'Twelve too', 'ME01 commons'])
+  await expect(page.locator('.browse-boxcell', { hasText: 'Bulk' })).toHaveAttribute('aria-current', 'true')
+  await expect(names).toHaveText(['Box 7', 'Bulk', 'Twelve too', 'ME01 commons'])
   const stored = await page.evaluate(
     /* eslint-disable-next-line no-restricted-syntax -- READING THE SAME KEY BACK, to see that a
        press wrote it and a page load did not. */
@@ -5921,6 +5928,10 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
   )
   expect(Object.keys(stored).sort()).toEqual(['6', '7'])
   expect((stored['6'] ?? '') > (stored['7'] ?? '')).toBe(true)
+
+  /* THE NEXT VISIT. */
+  await page.reload()
+  await expect(names).toHaveText(['Bulk', 'Box 7', 'Twelve too', 'ME01 commons'])
 })
 
 test('D132 — the address leads with the name and the index is its note, on the row the walk stands on and on every other', async ({ page }) => {
@@ -6121,103 +6132,68 @@ const FACET_CARDS: Cards = {
 }
 const FACET_STORE: Store = { cards: FACET_CARDS, search: () => ({ groups: [] }) }
 
-/** Whether a request's own query string is asking the unclassified bucket, a real value, or
- *  nothing at all, for one facet — the three states `InventoryFacetFilter` itself carries. */
-function facetParam(params: URLSearchParams, key: string): { active: boolean; value: string | null } {
-  if (!params.has(key)) return { active: false, value: null }
-  return { active: true, value: params.get(key) || null }
-}
-
-function facetBoxes(params: URLSearchParams) {
-  const game = facetParam(params, 'game')
-  const set = facetParam(params, 'set')
-  const rarity = facetParam(params, 'rarity')
-  const filtering = game.active || set.active || rarity.active
-
-  const passes = (cardGame: string, cardSet: string | null, cardRarity: string | null) =>
-    (!game.active || cardGame === game.value) &&
-    (!set.active || cardSet === set.value) &&
-    (!rarity.active || cardRarity === rarity.value)
-
-  const box1Matches = [
-    passes('riftbound', 'Unleashed', 'Rare'),
-    passes('riftbound', null, null),
-  ].filter(Boolean).length
-  const box2Matches = passes('pokemon', null, null) ? 1 : 0
-
+/** `GET /boxes` for the facet store. The facet vocabulary and every count now come off
+ *  `facet_cells` (FLT-09), so the route ignores any filter query: a pick asks nothing. */
+function facetBoxes() {
+  const box = (n: number, name: string, cards: number) => ({
+    ...BOXES.boxes[0],
+    box: n,
+    name,
+    cards,
+    on_hand: cards,
+    fill: cards,
+    next_index: cards + 1,
+    sold: 0,
+    retired: 0,
+    sections: [1],
+    sections_detail: [{ section: 1, start: 1, end: cards, count: cards }],
+  })
   return {
-    boxes: [
-      {
-        ...BOXES.boxes[0],
-        box: 1,
-        name: 'Riftbound box',
-        cards: 2,
-        on_hand: 2,
-        fill: 2,
-        next_index: 3,
-        sold: 0,
-        retired: 0,
-        sections: [1],
-        sections_detail: [{ section: 1, start: 1, end: 2, count: 2 }],
-        ...(filtering ? { matches: box1Matches } : {}),
-      },
-      {
-        ...BOXES.boxes[0],
-        box: 2,
-        name: 'Pokemon box',
-        cards: 1,
-        on_hand: 1,
-        fill: 1,
-        next_index: 2,
-        sold: 0,
-        retired: 0,
-        sections: [1],
-        sections_detail: [{ section: 1, start: 1, end: 1, count: 1 }],
-        ...(filtering ? { matches: box2Matches } : {}),
-      },
+    boxes: [box(1, 'Riftbound box', 2), box(2, 'Pokemon box', 1)],
+    facets: { games: [], sets: {}, rarities: {} },
+    facet_cells: [
+      { box: 1, game: 'riftbound', set: 'Unleashed', rarity: 'Rare', gone: false, count: 1 },
+      { box: 1, game: 'riftbound', set: null, rarity: null, gone: false, count: 1 },
+      { box: 2, game: 'pokemon', set: null, rarity: null, gone: false, count: 1 },
     ],
-    facets: {
-      games: [
-        { game: 'pokemon', count: 1 },
-        { game: 'riftbound', count: 2 },
-      ],
-      sets: {
-        riftbound: [
-          { set: 'Unleashed', count: 1 },
-          { set: null, count: 1 },
-        ],
-        pokemon: [{ set: null, count: 1 }],
-      },
-      rarities: {
-        riftbound: [
-          { rarity: 'Rare', count: 1 },
-          { rarity: null, count: 1 },
-        ],
-        pokemon: [{ rarity: null, count: 1 }],
-      },
-    },
   }
 }
 
-test('D213 — filtering by game narrows the walk, and the dropdown is built off the store, not a hardcoded list', async ({
+/** Pick one option of one facet in the rail's filter popover, opening it first. */
+async function pickFacet(page: Page, facet: 'Game' | 'Set' | 'Rarity', option: string | RegExp) {
+  const popover = page.locator('.bn-filterbar-popover')
+  if ((await popover.count()) === 0) await page.locator('.browse-filterbar .bn-filterbar-trigger:visible').click()
+  await popover.locator('.bn-pick', { hasText: new RegExp(`^${facet}`) }).click()
+  await page.locator('.bn-pick-opt', { hasText: option }).first().click()
+  await page.keyboard.press('Escape') // the pick list, not the popover
+}
+
+async function facetOptions(page: Page, facet: 'Game' | 'Set' | 'Rarity'): Promise<string[]> {
+  const popover = page.locator('.bn-filterbar-popover')
+  if ((await popover.count()) === 0) await page.locator('.browse-filterbar .bn-filterbar-trigger:visible').click()
+  await popover.locator('.bn-pick', { hasText: new RegExp(`^${facet}`) }).click()
+  const texts = (await page.locator('.bn-pick-opt').allInnerTexts()).map((text) => text.replace(/\s+/g, ' ').trim())
+  await page.keyboard.press('Escape')
+  return texts
+}
+
+test('D213 — filtering by game narrows the walk, and the menu is built off the store, not a hardcoded list', async ({
   page,
 }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
 
   await expect(page.locator('.browse-row')).toHaveCount(2)
 
-  await page.locator('select[aria-label="Filter by game"]').selectOption('riftbound')
-  // Box 1 (Riftbound) still holds both its cards; box 2 (Pokemon) drops to zero matches and
-  // the rail marks it unreachable — the SAME "N matches" shape a search already draws.
-  await expect(page.locator('.browse-boxcell', { hasText: 'Pokemon box' })).toHaveText(/0 matches/)
+  await pickFacet(page, 'Game', 'Riftbound')
+  // Box 2 (Pokemon) holds no match, and the rail says so in the one "no match" label (UX-261).
+  await expect(page.locator('.browse-boxcell', { hasText: 'Pokemon box' })).toContainText('No match')
   await expect(page.locator('.browse-row')).toHaveCount(2)
 
-  // The set dropdown is now populated — Riftbound's own two rows, one of them the
-  // unclassified bucket — and never Pokemon's.
-  const setOptions = await page.locator('select[aria-label="Filter by set"] option').allTextContents()
-  expect(setOptions).toEqual(['Set', 'Unleashed (1)', 'No set on file (1)'])
+  // Every set the store holds, counted under the Game pick: Riftbound's two, and nothing for a
+  // Pokemon card that the Game pick already left out.
+  expect(await facetOptions(page, 'Set')).toEqual(['Unleashed 1', 'No set on file 1'])
 
-  await page.locator('select[aria-label="Filter by set"]').selectOption('Unleashed')
+  await pickFacet(page, 'Set', 'Unleashed')
   await expect(page.locator('.browse-row')).toHaveCount(1)
   await expect(page.locator('.browse-row')).toContainText('Calm Rune')
 })
@@ -6225,9 +6201,8 @@ test('D213 — filtering by game narrows the walk, and the dropdown is built off
 test('D213 — the unclassified bucket is reachable under a set filter, never dropped', async ({ page }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
 
-  await page.locator('select[aria-label="Filter by game"]').selectOption('riftbound')
-  // The wire's own spelling of "no set": the blank option, not "Unleashed".
-  await page.locator('select[aria-label="Filter by set"]').selectOption({ label: 'No set on file (1)' })
+  await pickFacet(page, 'Game', 'Riftbound')
+  await pickFacet(page, 'Set', 'No set on file')
 
   await expect(page.locator('.browse-row')).toHaveCount(1)
   await expect(page.locator('.browse-row')).toContainText('Mind Rune')
@@ -6238,14 +6213,44 @@ test('D213 — clearing the filter restores every card, and a fully-classified c
 }) => {
   await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
 
-  await page.locator('select[aria-label="Filter by game"]').selectOption('riftbound')
-  await page.locator('select[aria-label="Filter by rarity"]').selectOption('Rare')
+  await pickFacet(page, 'Game', 'Riftbound')
+  await pickFacet(page, 'Rarity', 'Rare')
   await expect(page.locator('.browse-row')).toHaveCount(1)
   await expect(page.locator('.browse-row')).toContainText('Calm Rune')
 
-  await page.getByRole('button', { name: 'Clear filter' }).click()
-  await expect(page.locator('select[aria-label="Filter by game"]')).toHaveValue('')
+  await page.keyboard.press('Escape') // the popover
+  await page.locator('.browse-filterbar .bn-filtercount-clear').click()
+  await expect(page).toHaveURL(/#\/inventory\?box=1$/)
   await expect(page.locator('.browse-row')).toHaveCount(2)
+})
+
+test('UX-176 — Set and Rarity work before Game, and a Game pick never wipes them (the owner: "only IN THAT ORDER")', async ({
+  page,
+}) => {
+  await open(page, facetBoxes, FACET_STORE, () => PRICING, SALE, { route: '/#/inventory?box=1' })
+
+  /* RARITY FIRST, with no game picked. Its menu lists every rarity in the store, across both
+     games, each with a count. */
+  expect(await facetOptions(page, 'Rarity')).toEqual(['Rare 1', 'No rarity on file 2'])
+  await pickFacet(page, 'Rarity', 'Rare')
+  await expect(page.locator('.browse-row')).toHaveCount(1)
+  await expect(page.locator('.browse-boxcell', { hasText: 'Pokemon box' })).toContainText('No match')
+
+  /* THEN GAME. The Rarity pick stands: the URL still carries it, and the walk still honours it. */
+  await pickFacet(page, 'Game', 'Riftbound')
+  await expect(page).toHaveURL(/rarity=Rare/)
+  await expect(page).toHaveURL(/game=riftbound/)
+  await expect(page.locator('.browse-row')).toHaveCount(1)
+  await expect(page.locator('.browse-row')).toContainText('Calm Rune')
+
+  /* A SECOND GAME ADDS, IT DOES NOT REPLACE: Pokemon's one card has no rarity, so the walk is
+     unchanged, and nothing was cleared on the way. */
+  await pickFacet(page, 'Game', 'Pokémon')
+  await expect(page).toHaveURL(/rarity=Rare/)
+  await expect(page.locator('.browse-row')).toHaveCount(1)
+
+  /* AND NO FACET IS EVER DISABLED. */
+  for (const trigger of await page.locator('.bn-filterbar-popover .bn-pick').all()) await expect(trigger).toBeEnabled()
 })
 
 test('D132 — a search lands on a box with a LIVE copy, never on the sold one the walk was standing beside', async ({ page }) => {

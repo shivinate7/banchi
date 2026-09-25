@@ -7796,6 +7796,59 @@ def check_inventory_filter_facets(checks: Checks) -> None:
             thread.join()
 
 
+def check_inventory_facet_cells(checks: Checks) -> None:
+    """FLT-09 — `#/inventory`'s filters work in any order, so `GET /boxes` ships the cells.
+
+    `facet_cells` groups every card by box, game, set, rarity and whether it left. The screen
+    folds them for every count under the OTHER picks and Hide sold. So the cells must keep the
+    null bucket, split a sold copy from a live one, and add up to every card in the store.
+    """
+    checks.note("")
+    checks.note("FLT-09 — GET /boxes CARRIES THE FACET CELLS")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            a, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid("cell-a"))
+            inv.cards[a.key].set_name, inv.cards[a.key].rarity = "Unleashed", "Rare"
+            b, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid("cell-b"))
+            inv.cards[b.key].set_name, inv.cards[b.key].rarity = "Unleashed", "Rare"
+            inv.cards[b.key].state = master.SOLD
+            c, _ = inv.allocate_capture(2, game="pokemon", cid=fake_cid("cell-c"))
+            inv.cards[c.key].set_name, inv.cards[c.key].rarity = None, "Rare"
+
+        cells = capture_server.do_boxes()["facet_cells"]
+        seen = sorted(
+            (cell["box"], cell["game"], cell["set"], cell["rarity"], cell["gone"], cell["count"])
+            for cell in cells
+        )
+        checks.equal(
+            seen,
+            [
+                (1, "riftbound", "Unleashed", "Rare", False, 1),
+                (1, "riftbound", "Unleashed", "Rare", True, 1),
+                (2, "pokemon", None, "Rare", False, 1),
+            ],
+            "one cell per box, game, set, rarity and gone: the sold copy is its own cell, and the "
+            "Pokemon card with no set keeps a null set rather than being dropped",
+        )
+        checks.equal(
+            sum(cell["count"] for cell in cells),
+            3,
+            "and the cells add up to every card in the store, so no count on the screen can "
+            "miss one",
+        )
+        rare_live = sum(
+            cell["count"] for cell in cells if cell["rarity"] == "Rare" and not cell["gone"]
+        )
+        checks.equal(
+            rare_live,
+            2,
+            "Rarity 'Rare' with no game picked and Hide sold on counts two cards across two "
+            "games: a rarity is reachable before a game, which the per-game menu could not say",
+        )
+
+
 # ---------------------------------------------------------------- box routes and search
 
 
@@ -34732,6 +34785,7 @@ def run() -> Result:
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
     check_inventory_filter_facets(checks)
+    check_inventory_facet_cells(checks)
     check_box_routes_and_search(checks)
     check_search_fts5(checks)
     check_inventory_box_route(checks)

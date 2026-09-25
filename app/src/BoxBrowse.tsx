@@ -6,9 +6,8 @@ import { placePartsOf, sectionCountOf, sectionCountWords, sectionTitleText, type
 import { SectionTitle } from './SectionTitle'
 import type {
   BoxRecord,
+  FacetCell,
   InventoryCard,
-  InventoryFacetFilter,
-  InventoryFacets,
   Listing,
   QueueEntryWire,
   QueueSnapshot,
@@ -52,9 +51,10 @@ import {
 } from './CardHero'
 import { stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
-import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Kbd, Notice, PageHeader, Pill, countFacets, filterRows } from './kit'
+import type { FilterFacet, FilterValue } from './kit/data'
+import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
@@ -245,21 +245,57 @@ function shelvesOf(
 
 // -------------------------------------------------------------------- D213's game/set/rarity filter
 
-/* Blank and null both mean "no claim" for a facet — the same fold `_card_facets` and
- * `_card_matches_filters` apply on the server, so a card's own value and the dropdown's
- * chosen value are compared the same way on both sides of the wire. */
-function facetNorm(value: string | null | undefined): string | null {
-  return value ? value : null
+const NO_CELLS: readonly FacetCell[] = []
+
+const FACET_KEYS = ['game', 'set', 'rarity'] as const
+type FacetKey = (typeof FACET_KEYS)[number]
+
+/* THE UNCLASSIFIED BUCKET, AS A PICK: the URL's blank value (`?set=`), the same spelling the
+ * wire uses for "no claim". Blank and null both mean no claim, the fold `_card_facets` and
+ * `_card_matches_filters` apply on the server, so a card and a cell compare the same way. */
+const UNCLASSIFIED = ''
+
+const FACET_WORDS: Readonly<Record<FacetKey, { readonly label: string; readonly none: string }>> = {
+  game: { label: 'Game', none: 'No game recorded' },
+  set: { label: 'Set', none: 'No set on file' },
+  rarity: { label: 'Rarity', none: 'No rarity on file' },
 }
 
-/* Does this card pass every ACTIVE facet in `filter`? A key ABSENT from `filter` is not
- * being filtered on — `'game' in filter` rather than `filter.game !== undefined`, because
- * `filter.game === null` is a real filter (the unclassified bucket) and must not read as
- * unset. Mirrors `server/capture_server.py:_card_matches_filters` field for field. */
-function passesFacetFilter(card: InventoryCard, filter: InventoryFacetFilter): boolean {
-  if ('game' in filter && facetNorm(card.game) !== facetNorm(filter.game)) return false
-  if ('set' in filter && facetNorm(card.set_name) !== facetNorm(filter.set)) return false
-  if ('rarity' in filter && facetNorm(card.rarity) !== facetNorm(filter.rarity)) return false
+function cellValue(cell: FacetCell, key: string): string {
+  const raw = key === 'game' ? cell.game : key === 'set' ? cell.set : cell.rarity
+  return raw ? raw : UNCLASSIFIED
+}
+
+function cardFacetValue(card: InventoryCard, key: FacetKey): string {
+  const raw = key === 'game' ? card.game : key === 'set' ? card.set_name : card.rarity
+  return raw ? raw : UNCLASSIFIED
+}
+
+/* The three facets, each offering every value the store holds: one flat list per facet, never
+ * scoped to a game first. Real values alphabetically, the unclassified bucket last. */
+function facetsOf(cells: readonly FacetCell[]): FilterFacet[] {
+  return FACET_KEYS.map((key) => {
+    const values = new Set<string>()
+    for (const cell of cells) values.add(cellValue(cell, key))
+    const sorted = [...values].sort((a, b) => (a === UNCLASSIFIED ? 1 : b === UNCLASSIFIED ? -1 : a.localeCompare(b)))
+    return {
+      key,
+      label: FACET_WORDS[key].label,
+      options: sorted.map((value) => ({
+        value,
+        label: value === UNCLASSIFIED ? FACET_WORDS[key].none : key === 'game' ? gameLabel(value) : value,
+      })),
+    }
+  })
+}
+
+/* Does this card pass every facet with a pick? Several picks in one facet are OR, the facets
+ * are AND (`kit/facets.ts`'s rule). */
+function passesFacets(card: InventoryCard, value: FilterValue): boolean {
+  for (const key of FACET_KEYS) {
+    const picked = value[key]
+    if (picked !== undefined && picked.length > 0 && !picked.includes(cardFacetValue(card, key))) return false
+  }
   return true
 }
 
@@ -709,9 +745,12 @@ export function BoxBrowse({
      itself — `[]` is both "not yet" and "no boxes" — and the shelf effect needs to tell those
      apart to know whether a box the hash asked for is genuinely absent or merely not here yet. */
   const [boxesAnswered, setBoxesAnswered] = useState(false)
-  /* WHEN THIS BROWSER LAST OPENED EACH BOX (D132) — the rail's first sort key. Read once and
-     then held here, so a press reorders the rail from the map it just wrote. */
-  const [recency, setRecency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
+  /* WHEN THIS BROWSER LAST OPENED EACH BOX (D132) — the rail's first sort key. READ ONCE, ON
+     ARRIVAL, AND NEVER RE-READ HERE (UX-215, the owner's "nothing jumps"). A press writes the
+     device's map (`touchBox`), and the rail takes the new order on the next visit. Re-sorting on
+     the press moved the pressed box to the top, and the row under the pointer became another
+     box. */
+  const [recency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
   /* Every SKU's listing record, off the same read as the cards. Read for `at` — how old the
      live figures are — and never for a second copy of the counts. */
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
@@ -751,43 +790,17 @@ export function BoxBrowse({
   const { query, setQuery, results, loading, failure: searchFailure } = useSearch()
   const searching = query.trim() !== ''
 
-  /* D213's game/set/rarity filter, independent of the search above and ANDed with it —
-   * clearing the search leaves the filter standing and clearing the filter leaves the
-   * search standing. A key ABSENT means "not filtering that facet" (`passesFacetFilter`'s
-   * own note); `{}` is therefore the cleared state, not a filter of "everything". */
-  const [facetFilter, setFacetFilter] = useState<InventoryFacetFilter>({})
-  const facetActive = Object.keys(facetFilter).length > 0
-  /* The vocabulary this store holds, off `GET /boxes`'s own `facets` block (D213) — never a
-   * hardcoded list. `null` before the first answer lands, which empties every dropdown
-   * rather than guessing at one. */
-  const [facets, setFacets] = useState<InventoryFacets | null>(null)
-
-  const setGameFilter = (value: string) => {
-    setFacetFilter(() => {
-      if (value === '') return {}
-      // A GAME CHANGE RESETS SET AND RARITY. Both lists are scoped to the selected game
-      // (`_card_facets`'s own reason: one game's set list must not leak into another's),
-      // so a set or rarity chosen under the old game may not exist under the new one —
-      // carrying it forward would filter on a value the new dropdown never offered.
-      return { game: value === '__none__' ? null : value }
-    })
-  }
-  const setSetFilter = (value: string) => {
-    setFacetFilter((prev) => {
-      const next = { ...prev }
-      if (value === '__unset__') delete next.set
-      else next.set = value === '' ? null : value
-      return next
-    })
-  }
-  const setRarityFilter = (value: string) => {
-    setFacetFilter((prev) => {
-      const next = { ...prev }
-      if (value === '__unset__') delete next.rarity
-      else next.rarity = value === '' ? null : value
-      return next
-    })
-  }
+  /* D213's game/set/rarity filter, independent of the search above and ANDed with it.
+   * THE FACETS WORK IN ANY ORDER (FLT-09, the owner: "I hate how on the inventory screen I
+   * have to filter by game first, then set, then rarity and only IN THAT ORDER"). Each facet
+   * takes several picks at once, none waits on another, and none clears another. The
+   * vocabulary and every count come off `GET /boxes`'s `facet_cells`, folded here with the
+   * kit's `countFacets`, so a pick asks the server nothing. The picks live in the URL
+   * (D-view-state-in-url): a reload, a link and Back restore them. */
+  const [facetCells, setCells] = useState<readonly FacetCell[]>(NO_CELLS)
+  const facetDefs = useMemo(() => facetsOf(facetCells), [facetCells])
+  const [facetValue, setFacetValue] = useFacetParams(facetDefs)
+  const facetActive = Object.keys(facetValue).length > 0
 
   /* A NEW ANSWER IS A NEW ORDER (`frozenRank.ts`). Told on the TEXT and not on the answer: the
      answer for `Thiev` and the answer for `Thievul` are two orders too, and waiting for the
@@ -870,9 +883,9 @@ export function BoxBrowse({
     if (rows === null) return NO_ROWS
     let base = rows
     if (searching && matched !== null) base = base.filter((row) => matched.has(row.key))
-    if (facetActive) base = base.filter((row) => passesFacetFilter(row.card, facetFilter))
+    if (facetActive) base = base.filter((row) => passesFacets(row.card, facetValue))
     return base
-  }, [rows, searching, matched, facetActive, facetFilter])
+  }, [rows, searching, matched, facetActive, facetValue])
 
   const filtered = searching && matched !== null
 
@@ -942,25 +955,42 @@ export function BoxBrowse({
     return [...boxes]
   }, [results, activeGroups])
 
-  /* D213: which boxes the FACET filter touches, off `boxRecords[].matches` — the count
-   * `server/capture_server.py:_box_row` folds into the same box-list read this screen
-   * already polls (see the `getBoxes` effect above), never a second route. Search's own
-   * `searchBoxes` is the model: a box with zero matches is not reachable, exactly as a box
-   * a search does not touch is not. */
-  const facetBoxes = useMemo(() => {
-    if (!facetActive) return []
-    return boxRecords.filter((record) => (record.matches ?? 0) > 0).map((record) => record.box)
-  }, [facetActive, boxRecords])
+  /* WHAT HIDE SOLD KEEPS, for every count the filter draws: with it on, a count is of the cards
+   * the walk would draw (UX-210's rule: the counts follow the other filters, Hide sold too). */
+  const keepCell = useCallback((cell: FacetCell) => !hideSold || !cell.gone, [hideSold])
 
-  const shelves = useMemo(
-    () =>
-      shelvesOf(
-        inQuery,
-        filtered ? searchBoxes : facetActive ? facetBoxes : boxRecords.map((record) => record.box),
-        order,
-      ),
-    [inQuery, filtered, searchBoxes, facetActive, facetBoxes, boxRecords, order],
+  /* Every option's count under the OTHER picks and Hide sold (the kit's one rule). */
+  const countedFacets = useMemo(
+    () => countFacets(facetCells, facetDefs, facetValue, cellValue, keepCell, (cell) => cell.count),
+    [facetCells, facetDefs, facetValue, keepCell],
   )
+
+  /* D213: how many cards of each box the facet picks let through, off the same cells. A box
+   * with none is not reachable, exactly as a box a search does not touch is not. */
+  const facetMatchesByBox = useMemo(() => {
+    const out = new Map<number, number>()
+    if (!facetActive) return out
+    for (const cell of filterRows(facetCells, facetDefs, facetValue, cellValue, keepCell)) {
+      if (cell.box !== null) out.set(cell.box, (out.get(cell.box) ?? 0) + cell.count)
+    }
+    return out
+  }, [facetActive, facetCells, facetDefs, facetValue, keepCell])
+
+  /* The boxes the rail may open: under a search the boxes it touches, under a facet pick the
+   * boxes holding a match, and under both the boxes that satisfy both. */
+  const reachableBoxes = useMemo(() => {
+    const all = boxRecords.map((record) => record.box)
+    const bySearch = filtered ? new Set(searchBoxes) : null
+    return all
+      .concat(filtered ? searchBoxes.filter((box) => !all.includes(box)) : [])
+      .filter((box) => (bySearch === null || bySearch.has(box)) && (!facetActive || (facetMatchesByBox.get(box) ?? 0) > 0))
+  }, [boxRecords, filtered, searchBoxes, facetActive, facetMatchesByBox])
+
+  const shelves = useMemo(() => shelvesOf(inQuery, reachableBoxes, order), [inQuery, reachableBoxes, order])
+
+  /* The filter bar's count line counts BOXES, the list it sits over: `3 of 13 boxes, filtered by
+   * Pokémon`. */
+  const reachableCount = reachableBoxes.length
 
   const onShelf = useMemo(() => {
     if (shelf === null) return NO_ROWS
@@ -1018,17 +1048,6 @@ export function BoxBrowse({
     }
     return out
   }, [filtered, results, activeGroups])
-
-  /* D213's own per-box counts, off `boxRecords[].matches` — see `facetBoxes` above for why
-   * this needs no second pass over anything. */
-  const facetMatchesByShelf = useMemo(() => {
-    const out = new Map<Shelf, number>()
-    if (!facetActive) return out
-    for (const record of boxRecords) {
-      if (record.matches !== undefined) out.set(record.box, record.matches)
-    }
-    return out
-  }, [facetActive, boxRecords])
 
   /* Every position with an open question, for the row badges. */
   const queuedKeys = useMemo(() => {
@@ -1117,19 +1136,17 @@ export function BoxBrowse({
     }
   }, [shelf, reloads, reloadToken, onListings])
 
-  /* The box registry, on the same counter and allowed to fail without anybody hearing.
-   * RE-ASKED ON A FILTER CHANGE TOO (D213): `facetFilter` selects the query params
-   * `getBoxes` sends, and the server folds a box's `matches` count into the SAME row this
-   * effect already reads — no second route, no second poll. */
+  /* The box registry, on the same counter and allowed to fail without anybody hearing. The
+   * facet cells ride on the same answer, so a filter pick needs no second read (FLT-09). */
   useEffect(() => {
     let live = true
-    getBoxes(facetFilter)
+    getBoxes()
       .then((summary) => {
         if (!live) return
         const records = Array.isArray(summary.boxes) ? summary.boxes : []
         setBoxRecords(records)
         onBoxes?.(records)
-        setFacets(summary.facets ?? null)
+        setCells(Array.isArray(summary.facet_cells) ? summary.facet_cells : NO_CELLS)
       })
       .catch(() => {
         // Deliberately nothing: the walk is whole without this.
@@ -1144,7 +1161,7 @@ export function BoxBrowse({
     return () => {
       live = false
     }
-  }, [reloads, reloadToken, onBoxes, facetFilter])
+  }, [reloads, reloadToken, onBoxes])
 
   useEffect(() => {
     let live = true
@@ -1382,7 +1399,7 @@ export function BoxBrowse({
      * the box the operator just left. */
     shelfSource.current = 'manual'
     setShelf(next)
-    if (typeof next === 'number') setRecency(touchBox(next))
+    if (typeof next === 'number') touchBox(next)
     let landingKey: string | undefined
     if (filtered && results !== null) {
       const counts = new Map<string, number>()
@@ -1709,7 +1726,7 @@ export function BoxBrowse({
      * card, never a re-rank, and the row-hold below must not stand on a superseded box. */
     shelfSource.current = 'manual'
     setShelf(landing)
-    if (typeof landing === 'number') setRecency(touchBox(landing))
+    if (typeof landing === 'number') touchBox(landing)
     jumpRef.current = jump
     setSelected(jump)
     listRef.current?.focus(FOCUS)
@@ -1778,88 +1795,40 @@ export function BoxBrowse({
   const shelfChip =
     shelf === null ? 'Boxes' : shelfLabel(shelf, shelfName)
 
-  /* D213's dropdown options, off `facets` (never a hardcoded list — see `_card_facets`'s own
-   * docstring for which of the two the brief asked for). Set and rarity are scoped to the
-   * chosen game and read empty until one is picked, matching the server's own per-game keys. */
-  const gameOptions = facets?.games ?? []
-  const setOptions =
-    facetFilter.game !== undefined ? (facets?.sets[facetFilter.game ?? ''] ?? []) : []
-  const rarityOptions =
-    facetFilter.game !== undefined ? (facets?.rarities[facetFilter.game ?? ''] ?? []) : []
-
   // ---------------------------------------------------------------------------- the rail
 
   const rail = (
     <div className="browse-map" ref={mapRef}>
-      <div className="browse-map-top">
-        <SearchField value={query} onChange={setQuery} persona="owner" />
-        {phone ? null : (
-          <Button
-            variant="ghost"
-            icon="chevronLeft"
-            iconOnly
-            className="browse-rail-toggle"
-            onClick={() => setRailCollapsed(true)}
-          >
-            Collapse the box rail
-          </Button>
-        )}
-      </div>
-
-      {/* D213: game, set and rarity — the three filters the decision settled, no more. A
-       * dropdown for each rather than chips (the owner's own ruling — see the decision's
-       * "the control is a dropdown" section), so the row stays one shape whatever a game's
-       * own set count is. `disabled` on set/rarity until a game is chosen: both option
-       * lists are scoped per game and have nothing to offer before then. */}
-      <div className="browse-filters" role="group" aria-label="Filter by game, set or rarity">
-        <select
-          className="bn-select"
-          aria-label="Filter by game"
-          value={facetFilter.game === undefined ? '' : (facetFilter.game ?? '__none__')}
-          onChange={(event) => setGameFilter(event.target.value)}
-        >
-          <option value="">Game</option>
-          {gameOptions.map((entry) => (
-            <option key={entry.game ?? '__none__'} value={entry.game ?? '__none__'}>
-              {(entry.game === null ? 'No game recorded' : gameLabel(entry.game)) +
-                ` (${entry.count.toLocaleString()})`}
-            </option>
-          ))}
-        </select>
-        <select
-          className="bn-select"
-          aria-label="Filter by set"
-          value={facetFilter.set === undefined ? '__unset__' : (facetFilter.set ?? '')}
-          onChange={(event) => setSetFilter(event.target.value)}
-          disabled={facetFilter.game === undefined}
-        >
-          <option value="__unset__">Set</option>
-          {setOptions.map((entry) => (
-            <option key={entry.set ?? ''} value={entry.set ?? ''}>
-              {(entry.set ?? 'No set on file') + ` (${entry.count.toLocaleString()})`}
-            </option>
-          ))}
-        </select>
-        <select
-          className="bn-select"
-          aria-label="Filter by rarity"
-          value={facetFilter.rarity === undefined ? '__unset__' : (facetFilter.rarity ?? '')}
-          onChange={(event) => setRarityFilter(event.target.value)}
-          disabled={facetFilter.game === undefined}
-        >
-          <option value="__unset__">Rarity</option>
-          {rarityOptions.map((entry) => (
-            <option key={entry.rarity ?? ''} value={entry.rarity ?? ''}>
-              {(entry.rarity ?? 'No rarity on file') + ` (${entry.count.toLocaleString()})`}
-            </option>
-          ))}
-        </select>
-        {facetActive ? (
-          <Button variant="ghost" size="sm" icon="x" onClick={() => setFacetFilter({})}>
-            Clear filter
-          </Button>
-        ) : null}
-      </div>
+      {/* THE KIT'S FILTER BAR (FLT-09): the search, the three facets in any order and the one
+          count line. Hide sold stays on the walk's own bar, beside the rows it folds. The rail is narrow, so the facets sit behind one Filters
+          press: a popover beside it on a desk, a sheet on a phone. */}
+      <FilterBar
+        className="browse-filterbar"
+        facets={countedFacets}
+        value={facetValue}
+        onChange={setFacetValue}
+        compact={phone ? 'sheet' : 'popover'}
+        search={{
+          query,
+          onChange: setQuery,
+          loading,
+          failure: searchFailure,
+        }}
+        count={{ shown: reachableCount, total: boxRecords.length, noun: { one: 'box', many: 'boxes' } }}
+        beside={
+          phone ? undefined : (
+            <Button
+              variant="ghost"
+              icon="chevronLeft"
+              iconOnly
+              className="browse-rail-toggle"
+              onClick={() => setRailCollapsed(true)}
+            >
+              Collapse the box rail
+            </Button>
+          )
+        }
+      />
 
       {cells.length === 0 ? null : (
         <div className="browse-boxes bn-panel" role="group" aria-label="Choose a box to walk" ref={boxesRef}>
@@ -1868,7 +1837,7 @@ export function BoxBrowse({
             const onHand = record ? (record.on_hand ?? record.cards - record.sold - record.retired - record.moved) : null
             const pct = record && record.cards > 0 && onHand !== null ? Math.round((onHand / record.cards) * 100) : 0
             const sealed = record?.state === 'closed'
-            const matches = matchesByShelf.get(cell) ?? facetMatchesByShelf.get(cell)
+            const matches = matchesByShelf.get(cell) ?? (typeof cell === 'number' ? facetMatchesByBox.get(cell) : undefined)
             return (
               <button
                 key={String(cell)}
@@ -1911,7 +1880,11 @@ export function BoxBrowse({
                   </span>
                   {/* The lock beside the row already says sealed; the meta keeps to the count. */}
                   <span className="browse-boxcell-meta">
-                    {matches !== undefined
+                    {/* ONE LABEL FOR "NO MATCH HERE" (UX-261), whether a search or a filter
+                        left the box out. */}
+                    {!reachable
+                      ? 'No match'
+                      : matches !== undefined
                       ? `${matches} ${matches === 1 ? 'match' : 'matches'}`
                       : record
                         ? `${(onHand ?? 0).toLocaleString()} on hand`
@@ -1984,12 +1957,6 @@ export function BoxBrowse({
             {shelfBox === null ? null : boxPanel}
           </div>
 
-          {searchFailure === null ? null : (
-            <div className="browse-mapnote">
-              <Notice tone="danger" title={searchFailure.message} code={searchFailure.code} />
-            </div>
-          )}
-
           <div className="browse-status">
             {/* While anything is ticked the selection leads the row — the count would only
                 repeat the pill, and the three controls then fit the rail in one line. */}
@@ -2032,15 +1999,9 @@ export function BoxBrowse({
             ) : null}
 
             {onShelf.length === 0 || onHideSold === undefined ? null : (
-              <Chip
-                pressed={hideSold}
-                count={hiddenBySold}
-                className="browse-hidesold"
-                title={hideSold ? 'Sold and retired cards are folded away' : 'Sold and retired cards sink under the live ones'}
-                onClick={onHideSold}
-              >
+              <HideToggle checked={hideSold} count={hiddenBySold} className="browse-hidesold" onChange={() => onHideSold()}>
                 Hide sold
-              </Chip>
+              </HideToggle>
             )}
 
             <span className="bn-spacer" />
@@ -2099,7 +2060,7 @@ export function BoxBrowse({
                 title="Nothing here matches the filter"
                 body={`No card in ${shelfLabel(shelf, shelfName)} matches the game, set or rarity chosen.`}
                 actions={
-                  <Button size="sm" icon="x" onClick={() => setFacetFilter({})}>
+                  <Button size="sm" icon="x" onClick={() => setFacetValue({})}>
                     Clear the filter
                   </Button>
                 }

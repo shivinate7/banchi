@@ -61,13 +61,17 @@ export function filterRows<R>(
 }
 
 /** `facets`, each option's `count` computed from `rows` under the OTHER active facets and
- *  `keep`. The facets and options keep their order and every other field. */
+ *  `keep`. The facets and options keep their order and every other field.
+ *
+ *  `weightOf` is for rows that already stand for several things: a server cell that counts 12
+ *  cards (`GET /boxes`'s `facet_cells`) adds 12, not 1. Leave it out and every row adds 1. */
 export function countFacets<R>(
   rows: readonly R[],
   facets: readonly FilterFacet[],
   value: FilterValue,
   valueOf: FacetValueOf<R>,
   keep?: (row: R) => boolean,
+  weightOf?: (row: R) => number,
 ): FilterFacet[] {
   const active = activePicks(facets, value)
   const kept = keep === undefined ? rows : rows.filter(keep)
@@ -75,7 +79,8 @@ export function countFacets<R>(
     const tally = new Map<string, number>()
     for (const row of kept) {
       if (!passes(row, active, facet.key, valueOf)) continue
-      for (const one of new Set(valuesOf(row, facet.key, valueOf))) tally.set(one, (tally.get(one) ?? 0) + 1)
+      const weight = weightOf === undefined ? 1 : weightOf(row)
+      for (const one of new Set(valuesOf(row, facet.key, valueOf))) tally.set(one, (tally.get(one) ?? 0) + weight)
     }
     return { ...facet, options: facet.options.map((option) => ({ ...option, count: tally.get(option.value) ?? 0 })) }
   })

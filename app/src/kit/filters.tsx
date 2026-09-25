@@ -1,9 +1,9 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Icon } from './Icon'
 import { FailureNotice } from './index'
-import { Sheet } from './overlay'
+import { Popover, Sheet } from './overlay'
 import { FilterChips, FilterCount, SortControl, type FilterFacet, type FilterValue, type SortOption, type SortValue } from './data'
 import { SearchField } from '../SearchField'
 import './filters.css'
@@ -33,7 +33,12 @@ import './filters.css'
  * 1440px desk) every facet, the sort and the hide toggle move into ONE sheet behind a single
  * "Filters" trigger. Opening it never pushes a row underneath (D118): a `Sheet` is an overlay.
  * BOTH TREES ARE ALWAYS MOUNTED, and CSS alone decides which one is visible and so which one is
- * in the tab order. No `matchMedia`, no width read in this file. */
+ * in the tab order. No `matchMedia`, no width read in this file.
+ *
+ * `compact="popover"` (the orchestrator's call (c) on the inventory lane): a narrow bar on a
+ * DESK, such as Inventory's rail, opens its filters in a popover under the trigger instead. A
+ * sheet slid in from the far right of a 1440px window, a whole screen away from the rail that
+ * asked for it. The caller says which, because only the caller knows it is on a desk. */
 
 export type FilterBarSearch = {
   readonly query: string
@@ -89,6 +94,9 @@ export type FilterBarProps<K extends string = string> = {
    *  "Filters". */
   readonly label?: string
   readonly className?: string
+  /** Where the narrow bar's filters open: a `Sheet` (the default, for a phone) or a `Popover`
+   *  under the trigger (a narrow bar on a desk). */
+  readonly compact?: 'sheet' | 'popover'
 }
 
 /** The words `FilterCount` reads after "filtered by": one per PICKED option the facet really
@@ -155,8 +163,10 @@ export function FilterBar<K extends string = string>({
   beside,
   label = 'Filters',
   className,
+  compact = 'sheet',
 }: FilterBarProps<K>) {
   const id = useId().replace(/:/g, '')
+  const trigger = useRef<HTMLButtonElement | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const active = activeFacetCount(facets, value)
 
@@ -214,6 +224,7 @@ export function FilterBar<K extends string = string>({
         {facets.length > 0 || sort !== undefined || hide !== undefined ? (
           <div className="bn-filterbar-compact">
             <button
+              ref={trigger}
               type="button"
               className="bn-filterbar-trigger"
               aria-haspopup="dialog"
@@ -225,11 +236,19 @@ export function FilterBar<K extends string = string>({
               {label}
               {badge > 0 ? <span className="bn-filterbar-trigger-count">{badge}</span> : null}
             </button>
-            <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={label} icon="filter">
-              <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
-                <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
-              </div>
-            </Sheet>
+            {compact === 'popover' ? (
+              <Popover open={sheetOpen} onClose={() => setSheetOpen(false)} anchor={trigger} label={label} className="bn-filterbar-popover">
+                <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
+                  <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
+                </div>
+              </Popover>
+            ) : (
+              <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={label} icon="filter">
+                <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
+                  <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
+                </div>
+              </Sheet>
+            )}
           </div>
         ) : null}
       </div>

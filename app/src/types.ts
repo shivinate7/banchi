@@ -1689,6 +1689,20 @@ export type InventoryFacets = {
 export type BoxSummary = {
   boxes: BoxRecord[]
   facets: InventoryFacets
+  /** Every card, grouped by box, game, set, rarity and whether it left (sold, retired or
+   *  moved). `#/inventory` folds these for its facet counts and per-box matches, so a pick in
+   *  any order costs no request (FLT-09). `null` is the unclassified bucket. Absent from an
+   *  older server, where the rail shows no counts. */
+  facet_cells?: FacetCell[]
+}
+
+export type FacetCell = {
+  readonly box: number | null
+  readonly game: string | null
+  readonly set: string | null
+  readonly rarity: string | null
+  readonly gone: boolean
+  readonly count: number
 }
 
 /** The filter `BoxBrowse.tsx` sends `getBoxes` (D213). A key ABSENT from this object means
