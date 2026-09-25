@@ -436,13 +436,22 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
 
   /* The open step follows the run: a new run opens on the step it is waiting for, and a run
      whose phase moves under a poll follows it — unless a step's own answer is on screen. */
+  /* A POLL THAT MOVES NOTHING MOVES NO STEP (found at the PR 2 integration). Every poll hands
+     back a new `detail` object, so keying on `detail` alone re-opened the run's own step on every
+     poll and closed whatever step the owner had just opened (run-panel.spec.ts's "joined run"
+     case caught it under load). The step now follows only a new run or a moved phase. */
   const lastRun = useRef<string | null>(null)
+  const lastStep = useRef<Command | null>(null)
   useEffect(() => {
     if (detail === null) return
+    const step = COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify'
     const changed = lastRun.current !== detail.run
+    const moved = lastStep.current !== step
     lastRun.current = detail.run
+    lastStep.current = step
+    if (!changed && !moved) return
     if (!changed && stepOutRef.current !== null) return
-    setOpenStep(COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify')
+    setOpenStep(step)
   }, [detail])
 
   /* ---------------------------------------------------------- D76: the export's scope */

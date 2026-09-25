@@ -3063,3 +3063,30 @@ test.fixme('no typed interpunct reaches the runs screen', async ({ page }) => {
   const text = await page.locator(VIEW).innerText()
   expect(text).not.toMatch(/[·•]/)
 })
+
+/* A POLL THAT MOVES NOTHING MOVES NO STEP (found at the PR 2 integration). Each poll hands the
+ * panel a new `detail` object, and the panel used to re-open the run's own step on every one of
+ * them. A step the owner had just opened snapped shut four seconds later, while the run's phase
+ * had not moved at all. The "joined run" case above caught it only under load. This case holds
+ * the clock and makes a poll land on purpose. RED before the fix: Match closes on the poll. */
+test('a poll that moves no phase leaves the step the owner opened open', async ({ page }) => {
+  await page.clock.install()
+  await open(page, {
+    detail: { live: true, pid: 999, phase: 'identifying', collected: false, usage: {} },
+  })
+  let polls = 0
+  page.on('request', (request) => {
+    if (/\/pipeline\/runs\/[^/]+$/.test(new URL(request.url()).pathname)) polls += 1
+  })
+  await openRun(page)
+
+  const head = page.locator('.runs-step', { hasText: 'Match' }).locator('.runs-step-head')
+  await expect(head).toHaveAttribute('aria-expanded', 'false')
+  await head.click()
+  await expect(head).toHaveAttribute('aria-expanded', 'true')
+
+  const before = polls
+  await page.clock.fastForward(4500)
+  await expect.poll(() => polls).toBeGreaterThan(before)
+  await expect(head).toHaveAttribute('aria-expanded', 'true')
+})
