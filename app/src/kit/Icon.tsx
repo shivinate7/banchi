@@ -88,7 +88,7 @@ const PATHS = {
      vocabulary `IconButton` draws from. Each is one meaning, in `ICON_MEANINGS` below. */
   /* A round seal with $: Mark sold. Not `tag` (Pricing's own meaning) and not a bare `dollar`
      (Sales' own meaning) — a THIRD, deliberately different mark for a THIRD meaning. */
-  sold: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M10.3 8.8h2a1.4 1.4 0 0 1 0 2.8h-1a1.4 1.4 0 0 0 0 2.8h2 M12 7v1.5 M12 15.5V17',
+  sold: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 6v12 M15.5 8H10a1.75 1.75 0 0 0 0 3.5h4a1.75 1.75 0 0 1 0 3.5H8.5',
   /* A pencil: Edit or Rename. The body, the tip, the underline it is about to write. */
   pencil: 'M4 20h4l11-11a2 2 0 0 0-3-3L5 17v3z M13 6l3 3',
   /* An eraser, angled, over the line it is about to remove: an undoable clear, never `trash`
