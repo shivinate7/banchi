@@ -144,3 +144,18 @@
     display: block;
   }
 }
+
+/* A REFUSED PRICE'S SENTENCE IS LONG (round 7): on a narrow card it wraps under the card's name,
+   and never squeezes the name out of its row. */
+.send-resend .send-names li {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.send-resend .send-name {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+.send-resend .send-figure {
+  flex: 1 1 auto;
+  color: inherit;
+}
