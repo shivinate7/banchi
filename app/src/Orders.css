@@ -564,21 +564,23 @@
 .orders-line-remedy { font-size: var(--bn-fs-md); color: var(--bn-ink-2); margin-top: 2px; max-width: 70ch; }
 .orders-line-breakdown { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin-top: var(--bn-1); font-variant-numeric: tabular-nums; }
 
-/* ---- the backlog prompt: orders the marketplace says are already gone (D113) ------------- */
-/* `Notice` stacks its children with no rhythm of its own, which is right for the one-paragraph
-   case it was built for. This one argues in two movements — what is wrong, then what the press
-   does and does not do — and they must not run together as a wall. */
-.orders-backlog p + p { margin-top: var(--bn-2); }
-/* The backlog notice is two paragraphs of real prose and carried NO measure — measured at a
-   2560 viewport it was the widest text line in the product at 950px, against 632 for the
-   kit's own `.bn-lede` at its 72ch. Same 72ch, so it reads like every other lede here. */
-.orders-backlog p { max-width: 72ch; }
-.orders-backlog .orders-standdown-row { margin-top: var(--bn-3); }
-
-/* ---- the one-time backlog reconcile: a second backlog `is_terminal_status` cannot see
-   (D203) — the same shape as the notice above, for the same reason. */
-.orders-reconcile p { max-width: 72ch; }
-.orders-reconcile .orders-standdown-row { margin-top: var(--bn-3); }
+/* ---- the store sheet's two stand-downs (D113, D203) ----------------------------------------
+   Each is a section of the store's own sheet, under a hairline, so the sheet reads as one inset
+   column with one primary action (the fetch) above them (UX-236). */
+.orders-backlog,
+.orders-reconcile {
+  margin-top: var(--bn-5);
+  padding-top: var(--bn-4);
+  border-top: 1px solid var(--bn-line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+}
+.orders-backlog p,
+.orders-reconcile p { max-width: 72ch; color: var(--bn-ink-2); }
+.orders-reconcile-cutoff { max-width: 14rem; }
+.orders-reconcile .orders-reconcile-span { color: var(--bn-ink); font-variant-numeric: tabular-nums; }
+.orders-reconcile-live ul { margin: var(--bn-1) 0 0; padding-left: var(--bn-4); }
 
 /* ---- the stand-down: the presses for a line no pull can reach (D113) -------------------- */
 /* A HAIRLINE ABOVE IT AND NOTHING ELSE. It sits inside the reason banner, which already carries

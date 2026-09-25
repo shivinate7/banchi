@@ -270,12 +270,17 @@ async function startWalk(page: Page): Promise<void> {
   await page.locator('.orders-index-row').first().click()
 }
 
-/** OPEN THE SELECTED ORDER'S `Manage` SHEET — where the fetch/paste well, the receipt, the
- *  status picker and both stand-down prompts live now (§13: "Inventory's skeleton has no other
- *  place for them"), retired from the page header's own "Add orders" toggle. Needs a selected
- *  order on screen already, which every fixture in this file provides by default. */
+/** OPEN THE SELECTED BUYER'S `Manage` SHEET: that buyer's own orders, per order (stand-down,
+ *  close-line, declare-kind, hand-fill). Needs a selected buyer on screen already. */
 async function openManage(page: Page): Promise<void> {
   await page.locator('main.orders .browse-manage').first().click()
+}
+
+/** OPEN THE STORE'S OWN SHEET from the page header (UX-165, UX-193): the fetch/paste well, the
+ *  receipt, the status picker and both backlog stand-downs. They act on every buyer, so they are
+ *  never inside one buyer's sheet. */
+async function openStore(page: Page): Promise<void> {
+  await page.locator('main.orders .bn-head').getByRole('button', { name: 'Add orders' }).click()
 }
 
 /** The default world: one open order, one resolved line, one copy in box 3. */
@@ -823,7 +828,7 @@ test('an order the marketplace already shipped is proposed for stand-down, and t
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
     ),
   })
-  await openManage(page)
+  await openStore(page)
 
   const prompt = page.locator('.orders-backlog')
   await expect(prompt).toBeVisible()
@@ -1172,15 +1177,13 @@ test('a pooled copy is drawn as pooled rather than as a position (D24)', async (
 test('a paste is projected before it is sent, and what was dropped is named', async ({ page }) => {
   const wire = await open(page)
 
-  /* THE WAY IN IS SHUT WHILE THERE IS WORK ON SCREEN, AND ITS CONTROL IS THE SELECTED ORDER'S
-     OWN `Manage` (§13: "Inventory's skeleton has no other place for them" — the same reason
-     `BoxOps` is the box's Manage sheet). RE-AIMED from the header's own "Add orders" toggle,
-     retired with it. */
+  /* THE WAY IN IS SHUT WHILE THERE IS WORK ON SCREEN, AND ITS CONTROL IS THE PAGE HEADER'S
+     "Add orders" (UX-193): fetch and paste act on the store, never on one buyer. */
   await expect(page.locator('.orders-paste')).toHaveCount(0)
-  await openManage(page)
+  await openStore(page)
   await expect(page.locator('.orders-paste')).toHaveCount(1)
 
-  /* AND THE FETCH IS INSIDE IT, not in the page header. It is the same errand with the copying
+  /* AND THE FETCH IS INSIDE IT. It is the same errand with the copying
      done for you — `POST /orders/fetch` answers exactly the body the ingest accepts — so the
      screen has one way in and two sources rather than two ways in. */
   await expect(page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' })).toHaveCount(1)
@@ -1265,7 +1268,7 @@ test('the ordinary press is one fetch, one ingest and one names call, with no pr
       names: [{ source: 'TCGplayer', number: ORDER_NUMBER, buyer: 'Ada Lovelace' }],
     },
   })
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
@@ -1298,7 +1301,7 @@ test('a fetch the cap cut short loops, and the receipt names the batches and wha
   })
   const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
   const mounted = reads()
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1319,7 +1322,7 @@ test('the two-years control sends the LastTwoYears range', async ({ page }) => {
   const wire = await open(page, {
     allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
   })
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch two years' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
@@ -1404,7 +1407,7 @@ test('a remembered tick narrows the fetch, and the statuses go out as the wire s
   await remember(page, ['Cancelled', 'Ready to Ship'], true)
   const wire = await open(page)
 
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1430,7 +1433,7 @@ test('a ticked status this window holds none of is named on screen, and is not s
   await remember(page, ['Ready to Ship', 'Awaiting Shipment'])
   const wire = await open(page)
 
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
@@ -1457,7 +1460,7 @@ test('every status ticked off refuses the press here, rather than letting the wi
   await remember(page, [])
   const wire = await open(page)
 
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   await expect(page.locator('.orders-paste-note')).toContainText('Nothing to fetch')
@@ -1475,7 +1478,7 @@ test('the picker is built from the preview alone, and unticking one narrows the 
 }) => {
   await remember(page, null)
   const wire = await open(page)
-  await openManage(page)
+  await openStore(page)
 
   /* UNCHOSEN SAYS SO. A device that has never opened this panel fetches everything, and the
      control names that rather than a count it would have to spend a call to know. */
@@ -1524,7 +1527,7 @@ test('an unasked device is never shown the picker on the ordinary press', async 
   const wire = await open(page, {
     allStatuses: { orders: [], matched: 0, skipped_known: 0, detailed: 0, remaining: 0, names: [] },
   })
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
 
   /* NO PANEL, NO PREVIEW. The picker is reached only by choosing to narrow, never by pressing
@@ -1540,7 +1543,7 @@ test('an unasked device is never shown the picker on the ordinary press', async 
 
 test('the narrowing picker opens from its own control, and the ask is shown once', async ({ page }) => {
   const wire = await open(page)
-  await openManage(page)
+  await openStore(page)
 
   /* THE PICKER'S OWN CONTROL — separate from either fetch button. */
   const control = page.locator('.orders-paste').getByRole('button', { name: /statuses/i })
@@ -1573,7 +1576,7 @@ test('a tick IS an answer, so unticking one settles the device without pressing 
      and unticks a status has already done the thing the ask is for, and being asked again next
      time would be the recurring step that was ruled out. */
   const wire = await open(page)
-  await openManage(page)
+  await openStore(page)
   await page.locator('.orders-paste').getByRole('button', { name: /statuses/i }).click()
   await expect(page.locator('.orders-statuses-ask')).toBeVisible()
 
@@ -2312,39 +2315,48 @@ test('the reconcile control is absent with nothing to reconcile', async ({ page 
   expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
 })
 
-test('the reconcile preview draws a breakdown by feed status, with the count in the button label', async ({
+test('the stand-down names its cutoff, its span and every Ready-to-ship order, and starts safe (UX-165)', async ({
   page,
 }) => {
-  const OLD = '2020-01-01T00:00:00+00:00'
   const both = payloadOf(
     [
-      order({ key: 'TCGplayer:A-1', number: 'A-1', status: 'Completed - Paid', recorded: 0, placed_at: OLD }),
-      order({ key: 'TCGplayer:A-2', number: 'A-2', status: 'Ready to Ship', recorded: 0, placed_at: OLD }),
+      order({ key: 'TCGplayer:A-1', number: 'A-1', buyer: 'Old Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2020-01-01T00:00:00+00:00' }),
+      order({ key: 'TCGplayer:A-3', number: 'A-3', buyer: 'Older Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2019-06-01T00:00:00+00:00' }),
+      order({ key: 'TCGplayer:A-2', number: 'A-2', buyer: 'Live Buyer', status: 'Ready to Ship', recorded: 0, placed_at: '2020-03-01T00:00:00+00:00' }),
     ],
     [
       { key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] },
       { key: 'TCGplayer:A-2', number: 'A-2', complete: false, outstanding: 1, lines: [line()] },
+      { key: 'TCGplayer:A-3', number: 'A-3', complete: false, outstanding: 1, lines: [line()] },
     ],
   )
-  const wire = await open(page, { orders: both })
-  /* RE-AIMED: `ReconcileBacklogPanel` moved into the Manage sheet with the rest of D203's own
-     family (§13, "Inventory's skeleton has no other place for them") — it draws beside
-     `BacklogPrompt`, not on the page directly. */
-  await openManage(page)
+  const wire = await open(page, {
+    orders: both,
+    reconcile: { cutoff: '2026-01-01', orders: 3, moved: 3, lines: 3, closed: [], reason: 'shipped_elsewhere', still_open: 0 },
+  })
+  await openStore(page)
 
   const panel = page.locator('.orders-reconcile')
   await expect(panel).toBeVisible()
-  /* BOTH STATUSES DRAW, each with its own count — the whole safety this route offers is that a
-     status this screen has never proposed closing before does not vanish into one figure. */
+  /* THE SAFE DEFAULT: the day the oldest live order was placed, so the first view closes none. */
+  const cutoff = panel.getByLabel('Placed before')
+  await expect(cutoff).toHaveValue('2020-03-01')
+  await expect(panel).toContainText('2 orders, placed Jun 1, 2019 to Jan 1, 2020.')
   await expect(panel).toContainText('Completed - Paid')
-  await expect(panel).toContainText('Ready to Ship')
+  await expect(panel.locator('.orders-reconcile-live')).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Stand down 2 orders' })).toBeEnabled()
 
-  /* THE COUNT IS IN THE BUTTON'S OWN LABEL — CLAUDE.md's money-moment register: danger is red,
-     money moments are deliberate and carry the figure in the label. */
-  await expect(panel.getByRole('button', { name: /Stand down 2 orders/ })).toBeVisible()
+  /* MOVED PAST IT, THE LIVE ORDER IS NAMED BEFORE THE PRESS, and the press turns red. */
+  await cutoff.fill('2021-01-01')
+  await expect(panel).toContainText('3 orders, placed Jun 1, 2019 to Mar 1, 2020.')
+  await expect(panel.locator('.orders-reconcile-live')).toContainText('1 of them is still Ready to ship at TCGplayer')
+  await expect(panel.locator('.orders-reconcile-live')).toContainText('Live Buyer, placed Mar 1, 2020')
+  await expect(panel.getByRole('button', { name: 'Stand down 3 orders' })).toHaveClass(/bn-btn-danger/)
 
-  /* AND STILL NOTHING WAS ASKED OF THE ROUTE — the breakdown above is computed, not fetched. */
-  expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
+  /* THE PRESS SENDS THE CUTOFF DRAWN, and nothing else. */
+  await panel.getByRole('button', { name: 'Stand down 3 orders' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog').length).toBe(1)
+  expect(wire.find((one) => one.path === '/orders/reconcile-backlog')?.body).toEqual({ cutoff: '2021-01-01' })
 })
 
 test('the reconcile press sends the cutoff shown on screen, and the receipt carries an undo', async ({ page }) => {
@@ -2374,7 +2386,7 @@ test('the reconcile press sends the cutoff shown on screen, and the receipt carr
       still_open: 1,
     },
   })
-  await openManage(page)
+  await openStore(page)
 
   const panel = page.locator('.orders-reconcile')
   await panel.getByRole('button', { name: /Stand down 2 orders/ }).click()
@@ -2701,18 +2713,28 @@ test('a buyer holding two orders reads N ORDERS in the label, aggregated across 
 
 /* --------------------------------------------------------------------------- the Manage sheet */
 
-test('Manage opens a sheet carrying the fetch/paste well, the status picker and both stand-down prompts', async ({ page }) => {
+test('Add orders opens the store sheet: the fetch/paste well, the status picker and both stand-down prompts', async ({ page }) => {
   const owing = terminalOwingOrder()
   await open(page, { orders: payloadOf([owing, order()], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]) })
 
   await expect(page.locator('.orders-paste')).toHaveCount(0)
-  await openManage(page)
+  await openStore(page)
 
-  const sheet = page.locator('.orders-manage-sheet')
+  const sheet = page.locator('.orders-store-sheet')
   await expect(sheet.locator('.orders-paste')).toHaveCount(1)
   await expect(sheet.getByRole('button', { name: /statuses/i })).toBeVisible()
-  /* The shipped-but-owing backlog prompt (D113) is reachable inside the sheet. */
-  await expect(sheet).toContainText('Shipped')
+  /* The backlog stand-down (D203) is inside this sheet, and its twin (D113) is too
+     (`an order the marketplace already shipped is proposed for stand-down` presses it here). */
+  await expect(sheet.locator('.orders-reconcile')).toBeVisible()
+
+  /* AND ONE BUYER'S SHEET CARRIES NONE OF THEM (UX-165): a store-wide press never sits inside
+     one buyer's sheet. */
+  await page.keyboard.press('Escape')
+  await startWalk(page)
+  await openManage(page)
+  const buyer = page.locator('.orders-manage-sheet')
+  await expect(buyer.locator('.orders-manage-orders')).toBeVisible()
+  await expect(buyer.locator('.orders-paste, .orders-backlog, .orders-reconcile')).toHaveCount(0)
 })
 
 test('the selected buyer\'s own orders stay reachable in Manage for stand-down, close-line and declare-kind', async ({ page }) => {

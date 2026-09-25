@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
-import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, Segmented, type IconName, type PillTone } from './kit'
+import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, Segmented, Sheet, type IconName, type PillTone } from './kit'
+import { absoluteDate } from './dates'
 import { toast } from './kit/toast'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { isOrderReason, ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
@@ -1280,6 +1281,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   /** The last fetch's receipt. It outlives the well it was pressed from, because the remainder
    *  it names is the reason to press again. */
   const [receipt, setReceipt] = useState<FetchReceiptData | null>(null)
+  /** The store's own sheet: fetch, paste and both stand-downs (UX-165, UX-193). */
+  const [storeOpen, setStoreOpen] = useState(false)
 
   /* ---------------------------------------------------------- the fetch filter (D114) ---- */
 
@@ -2247,6 +2250,11 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         actions={
           stage === 'pull' && populated ? (
             <>
+              {/* THE STORE'S OWN CONTROLS (UX-165, UX-193): fetch, paste and the two stand-downs act
+                  on the whole store, so they open from the page, never from one buyer's sheet. */}
+              <Button variant="primary" icon="plus" onClick={() => setStoreOpen(true)}>
+                Add orders
+              </Button>
               {/* The hand-off the sidebar makes, made here too: the Fulfiller's page, in its own tab. */}
               <a className="bn-btn orders-handoff" href="#/fulfillment" target="_blank" rel="noopener">
                 <Icon name="hand" size={16} />
@@ -2275,7 +2283,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           filter={hub.filter}
           selected={hub.selected}
           phone={phone}
-          well={wellOf(true)}
           emptyWell={wellOf(false)}
           /* The empty state draws its own primary Fetch, so it needs the narrowing beside it —
              the populated path gets both inside `wellOf(true)`, and only one of the two paths
@@ -2300,13 +2307,25 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           onWalkUndo={onWalkUndo}
           onFill={onFill}
           onDeclareKind={onDeclareKind}
-          onStandDown={onStandDown}
-          onReconcileBacklog={onReconcileBacklog}
           onCloseLine={onCloseLine}
           onFetch={onFetch}
           onReread={() => void reread()}
         />
       )}
+
+      <Sheet open={storeOpen && stage === 'pull'} onClose={() => setStoreOpen(false)} title="Add orders" icon="plus" className="orders-store-sheet">
+        {wellOf(true)}
+        {receipt === null ? null : (
+          <FetchReceipt
+            receipt={{ ...receipt, continuingInS }}
+            busy={busy === 'fetch'}
+            onFetchMore={() => onFetch()}
+            onStop={continuingInS === null ? undefined : onStopFetch}
+          />
+        )}
+        <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
+        <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />
+      </Sheet>
     </main>
   )
 }
@@ -2372,44 +2391,36 @@ function BacklogPrompt({
   const busyHere = busy === 'close'
 
   return (
-    <Notice className="orders-backlog" tone="warn" title={`${candidates.length} open ${plural(candidates.length, 'order is', 'orders are')} already gone`}>
+    <section className="orders-backlog">
+      <h3 className="bn-section-title">
+        {candidates.length} open {plural(candidates.length, 'order is', 'orders are')} already shipped
+      </h3>
       <p>
-        TCGplayer reports {candidates.length === 1 ? 'it' : 'them'} as{' '}
-        {joinPhrases(statuses.map((status) => `“${status}”`))}, but this store never recorded which
-        copies went — still open here, holding copies back.
-      </p>
-      <p>
-        Standing down marks <strong>nothing</strong> sold and claims no copy left. Any card shipped
-        is still in its box — reconcile on <code>#/inventory</code>.
+        TCGplayer says {joinPhrases(statuses.map((status) => `“${status}”`))}, but no copy was recorded here. Standing
+        down marks nothing sold.
       </p>
       <div className="orders-standdown-row">
-        <Button
-          variant="primary"
-          icon="check"
-          busy={busyHere}
-          disabled={busy !== null}
-          onClick={() => onStandDown(candidates, 'shipped_elsewhere')}
-        >
+        <Button icon="check" busy={busyHere} disabled={busy !== null} onClick={() => onStandDown(candidates, 'shipped_elsewhere')}>
           Stand down {candidates.length} shipped {plural(candidates.length, 'order', 'orders')}
         </Button>
       </div>
-    </Notice>
+    </section>
   )
 }
 
-/** The one-time backlog reconcile (D203): every open order carrying
- *  NOTHING RECORDED, placed before a cutoff, closed with `shipped_elsewhere`. UNLIKE
- *  `BacklogPrompt` above, the predicate here is never a status word — age and "nothing
- *  recorded" alone — so the breakdown is what tells a live order sharing that shape apart from
- *  real backlog, drawn before the count ever moves.
+/** The one-time backlog reconcile (D203): every open order carrying NOTHING RECORDED, placed
+ *  before a cutoff, closed with `shipped_elsewhere`. The predicate is age and "nothing recorded"
+ *  alone, never a status word, so the panel must SHOW what a cutoff would take before the press
+ *  (UX-165): the cutoff itself, which the owner can move, the oldest and newest order it closes,
+ *  the breakdown by the feed's own status, and every order TCGplayer still calls Ready to ship,
+ *  named. It is store-wide, so it lives in the store's own sheet, never in one buyer's.
  *
- *  IT ASKS THE WIRE FOR NOTHING BEYOND WHAT THIS SCREEN ALREADY READ. `GET /orders`'s own
- *  answer carries `open`, `recorded` and `placed_at` for every order in the store — exactly
- *  what `POST /orders/reconcile-backlog {preview: true}` would compute server-side — so a
- *  second network call to preview it would duplicate a primitive this screen already holds
- *  (`no-bandaids`'s own question, asked and answered). Only the PRESS reaches the wire, and
- *  the server recomputes the candidate set from its own store at that moment regardless of
- *  what this panel displayed, exactly as `BacklogPrompt`'s stand-down already works. */
+ *  THE DEFAULT CUTOFF IS THE SAFE ONE. With no live order in the pool it is today, the server's
+ *  own default. With one, it is the day the oldest live order was placed, so the first view
+ *  closes no order TCGplayer calls Ready to ship. Moving the cutoff past it names each one.
+ *
+ *  Only the PRESS reaches the wire, with the cutoff drawn here. The server recomputes the set
+ *  from its own store at that moment. */
 function ReconcileBacklogPanel({
   orders,
   busy,
@@ -2419,20 +2430,21 @@ function ReconcileBacklogPanel({
   readonly busy: string | null
   readonly onPress: (cutoff: string) => void
 }) {
-  /* TODAY, PLAIN. The server's own default (`store/orders.py:today()`) is the same UTC date;
-     the one edge this can disagree with it on is an order placed in the last few hours of UTC
-     yesterday read from a browser already into local today, which moves a single order's
-     candidacy by at most one day and is corrected the moment the operator presses — the write
-     always recomputes server-side. */
-  const cutoff = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const candidates = useMemo(
-    () =>
-      orders.filter(
-        (row) =>
-          row.open && row.recorded === 0 && row.placed_at !== null && row.placed_at.slice(0, 10) < cutoff,
-      ),
-    [orders, cutoff],
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  /* Every order the rule could reach at today's cutoff: open, nothing recorded, a placed date. */
+  const pool = useMemo(
+    () => orders.filter((row) => row.open && row.recorded === 0 && row.placed_at !== null && dayOf(row) < today),
+    [orders, today],
   )
+  const safe = useMemo(() => pool.filter(isReadyToShip).map(dayOf).sort()[0] ?? today, [pool, today])
+  const [picked, setPicked] = useState<string | null>(null)
+  const cutoff = picked ?? safe
+  const fieldId = useId()
+  const candidates = useMemo(
+    () => pool.filter((row) => dayOf(row) < cutoff).sort((a, b) => dayOf(a).localeCompare(dayOf(b))),
+    [pool, cutoff],
+  )
+  const live = candidates.filter(isReadyToShip)
   const breakdown = useMemo(() => {
     const counts = new Map<string, number>()
     for (const row of candidates) {
@@ -2442,29 +2454,86 @@ function ReconcileBacklogPanel({
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   }, [candidates])
 
-  if (candidates.length === 0) return null
+  if (pool.length === 0) return null
   const busyHere = busy === 'reconcile'
+  const oldest = candidates[0]
+  const newest = candidates[candidates.length - 1]
 
   return (
-    <Notice
-      className="orders-reconcile"
-      tone="warn"
-      title={`${candidates.length} ${plural(candidates.length, 'order', 'orders')}, nothing recorded`}
-    >
-      <p>{joinPhrases(breakdown.map(([status, count]) => `${count} “${status}”`))}. Nothing sold, nothing claimed.</p>
+    <section className="orders-reconcile" aria-labelledby={`${fieldId}-title`}>
+      <h3 className="bn-section-title" id={`${fieldId}-title`}>
+        Stand down old orders
+      </h3>
+      <p>Closes open orders with nothing recorded, placed before the date. Nothing is marked sold.</p>
+      <div className="bn-field orders-reconcile-cutoff">
+        <label className="bn-field-label" htmlFor={fieldId}>
+          Placed before
+        </label>
+        <input
+          className="bn-input"
+          id={fieldId}
+          type="date"
+          value={cutoff}
+          max={today}
+          onChange={(event) => setPicked(event.target.value === '' ? null : event.target.value)}
+        />
+      </div>
+      {oldest === undefined || newest === undefined ? (
+        <p className="orders-reconcile-span">No order with nothing recorded was placed before {dayLabel(cutoff)}.</p>
+      ) : (
+        <>
+          <p className="orders-reconcile-span">
+            {candidates.length === 1
+              ? `1 order, placed ${dayLabel(dayOf(oldest))}.`
+              : `${candidates.length} orders, placed ${dayLabel(dayOf(oldest))} to ${dayLabel(dayOf(newest))}.`}{' '}
+            {joinPhrases(breakdown.map(([status, count]) => `${count} “${status}”`))}.
+          </p>
+          {live.length === 0 ? null : (
+            <Notice
+              className="orders-reconcile-live"
+              tone="danger"
+              title={`${live.length} of ${plural(live.length, 'them is', 'them are')} still Ready to ship at TCGplayer`}
+            >
+              <ul>
+                {live.map((row) => (
+                  <li key={row.key}>
+                    {row.buyer ?? 'No name'}, placed {dayLabel(dayOf(row))}
+                  </li>
+                ))}
+              </ul>
+            </Notice>
+          )}
+        </>
+      )}
       <div className="orders-standdown-row">
         <Button
-          variant="primary"
           icon="check"
+          variant={live.length > 0 ? 'danger' : 'default'}
           busy={busyHere}
-          disabled={busy !== null}
+          disabled={busy !== null || candidates.length === 0}
           onClick={() => onPress(cutoff)}
         >
           Stand down {candidates.length} {plural(candidates.length, 'order', 'orders')}
         </Button>
       </div>
-    </Notice>
+    </section>
   )
+}
+
+/** The UTC day an order was placed: the same ten characters the server compares. */
+function dayOf(row: OrderRow): string {
+  return (row.placed_at ?? '').slice(0, 10)
+}
+
+/** A `YYYY-MM-DD` day in the one absolute format. Noon, so no zone moves it a day. */
+function dayLabel(day: string): string {
+  return absoluteDate(`${day}T12:00:00`)
+}
+
+/** TCGplayer's own word that an order is live work. A positive match, read to NAME the order and
+ *  to pick the safe default, never to exclude it (D203: the breakdown is the guard). */
+function isReadyToShip(row: OrderRow): boolean {
+  return (row.status ?? '').trim().toLowerCase() === 'ready to ship'
 }
 
 function PullStage({
@@ -2479,7 +2548,6 @@ function PullStage({
   filter,
   selected,
   phone,
-  well,
   emptyWell,
   receipt,
   onPull,
@@ -2487,8 +2555,6 @@ function PullStage({
   onWalkUndo,
   onFill,
   onDeclareKind,
-  onStandDown,
-  onReconcileBacklog,
   onCloseLine,
   onFetch,
   statusControl,
@@ -2512,7 +2578,6 @@ function PullStage({
   readonly filter: PullFilter
   readonly selected: string | null
   readonly phone: boolean
-  readonly well: ReactNode
   readonly emptyWell: ReactNode
   /** The last fetch's receipt, or null before one has been pressed. */
   readonly receipt: ReactNode
@@ -2523,8 +2588,6 @@ function PullStage({
   readonly onWalkUndo: WalkUndoFn
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
-  readonly onStandDown: StandDownHandler
-  readonly onReconcileBacklog: (cutoff: string) => void
   readonly onCloseLine: CloseLineHandler
   readonly onFetch: () => void
   readonly statusControl: ReactNode
@@ -3499,61 +3562,39 @@ function PullStage({
         </Overlay>
       ) : null}
 
-      {!manageOpen ? null : (
-        <Overlay kind="sheet" label="Manage orders" onClose={() => setManageOpen(false)} className="orders-manage-sheet">
-          <section className="bn-panel-body">
-            <div className="bn-panel-head">
-              <span className="bn-section-title">
-                <Icon name="plus" size={16} /> Add orders
-              </span>
-            </div>
-            {well}
-          </section>
-          {receipt}
-          {/* FIXED, THIS PASS: `statusControl`/`statusPanel` were ALSO drawn here, a second time
-              — `wellOf`'s own `{withFetch ? statusControl : null}` (inline in the paste row) and
-              `{withFetch ? statusPanel : null}` right under it already put both on screen inside
-              `.orders-paste`, `well`'s own section above. This second copy dated to the Manage
-              sheet's first landing (5a42cb62) and every case that opened the picker got two
-              `.orders-statuses-ask` elements — a Playwright strict-mode violation, not a screen
-              a person had reason to look at differently, since the two copies were identical.
-              Removing this block leaves the one inside `well`, which is also the one the
-              narrowing control's own comment says is correct: "the narrowing sits beside the
-              press, not in front of it." */}
-          <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
-          <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />
-
-          {/* THE SELECTED BUYER'S OWN ORDERS — stand-down, close-line, declare-kind and
-              hand-fill, still reachable per order (§13: "nothing lost"). `hidePicks`: the walk
-              beside this sheet is the one place to Mark sold from, so this never draws a second
-              set of pressable copy rows for the same card. */}
-          {selectedGroup === null ? null : (
-            <div className="orders-manage-orders">
-              <span className="bn-section-title">
-                {selectedGroup.name ?? <span className="bn-mono">{unnamedBuyerLabel(selectedGroup)}</span>}'s orders
-              </span>
-              {selectedGroup.orders.map((order) => (
-                <OrderDetail
-                  key={order.key}
-                  order={order}
-                  answer={answers.get(order.key) ?? null}
-                  lane={lanesByOrder.get(order.number) ?? null}
-                  store={store}
-                  claims={claims}
-                  busy={busy}
-                  onPull={onPull}
-                  onFill={onFill}
-                  onDeclareKind={onDeclareKind}
-                  onCloseLine={onCloseLine}
-                  onReread={onReread}
-                  variant="panel"
-                  hidePicks
-                />
-              ))}
-            </div>
-          )}
-        </Overlay>
-      )}
+      {/* THE SELECTED BUYER'S OWN ORDERS: stand-down, close-line, declare-kind and hand-fill, per
+          order. The store's own controls (fetch, paste, the backlog stand-downs) are not here:
+          they act on every buyer, so they open from the page (UX-165, UX-193). `hidePicks`: the
+          walk is the one place to Mark sold from. */}
+      <Sheet
+        open={manageOpen && selectedGroup !== null}
+        onClose={() => setManageOpen(false)}
+        title={selectedGroup === null ? 'Orders' : `${selectedGroup.name ?? unnamedBuyerLabel(selectedGroup)}'s orders`}
+        className="orders-manage-sheet"
+      >
+        {selectedGroup === null ? null : (
+          <div className="orders-manage-orders">
+            {selectedGroup.orders.map((order) => (
+              <OrderDetail
+                key={order.key}
+                order={order}
+                answer={answers.get(order.key) ?? null}
+                lane={lanesByOrder.get(order.number) ?? null}
+                store={store}
+                claims={claims}
+                busy={busy}
+                onPull={onPull}
+                onFill={onFill}
+                onDeclareKind={onDeclareKind}
+                onCloseLine={onCloseLine}
+                onReread={onReread}
+                variant="panel"
+                hidePicks
+              />
+            ))}
+          </div>
+        )}
+      </Sheet>
     </div>
   )
 }
