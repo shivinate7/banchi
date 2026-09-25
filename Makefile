@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -212,6 +212,8 @@ help:
 	@echo "                    in its own property family — should have been var(...)."
 	@echo "                    Ratcheted per file; PKMNSCAN_TOKEN_LITERALS=off skips it."
 	@echo "  make token-literal-check-selftest  that checker, on fixtures in both directions."
+	@echo "  make demo-determinism-selftest  scripts/demo-determinism.py's own path-matcher,"
+	@echo "                    on fixtures — no subprocess, no \`make demo\`."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
@@ -255,7 +257,8 @@ help:
 	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
-	@echo "                    guard-scope-selftest + token-literal-check-selftest"
+	@echo "                    guard-scope-selftest + token-literal-check-selftest +"
+	@echo "                    demo-determinism-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -638,6 +641,7 @@ check:
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory token-literal-check-selftest
+	@$(MAKE) --no-print-directory demo-determinism-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -701,6 +705,7 @@ ci-check:
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory token-literal-check-selftest
+	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -799,6 +804,12 @@ token-literal-check:
 # self-tests, `make check`'s own D161 order, beside `guard-scope-selftest`.
 token-literal-check-selftest:
 	@python3 scripts/token-literal-check.py --self-test
+
+# identity-follows-sku.md, lane 7: scripts/demo-determinism.py's own ALLOWED_PATTERNS
+# matcher, proved on fixtures rather than by spending two full `make demo` runs. Pure
+# functions, no subprocess, no write — unlike `demo-determinism` itself (D18).
+demo-determinism-selftest:
+	@python3 scripts/demo-determinism-selftest.py
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing

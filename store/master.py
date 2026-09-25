@@ -223,6 +223,54 @@ IDENTITY_READ = "read"
 # `retire_reason`.
 BOUND_BY_ACTS = ("join", "answer", "group_answer", "correction", "confirm", "migration")
 
+# docs/specs/identity-follows-sku.md §4.3 (lane 7): THE ALLOW LIST `make docs-audit`'s
+# `identity writers` row reads — a CONSTANT THIS MODULE EXPORTS, never a copy of it typed
+# into the checker (CLAUDE.md, "a gate's allow list must point at the constant the code
+# emits"). Every field an identification, a review answer, a correction, a confirm or the
+# migration can put on a card: the binding group (`sku`, `bound_by`, `bound_at`,
+# `identity_source`, `read_disputes`) plus the identity group (`name`, `number`,
+# `printed_total`, `rarity`, `set_name`, `condition`) — `Inventory.IDENTITY_SNAPSHOT_FIELDS`'s
+# own eleven, aliased here rather than restated so the two can never drift apart; the class
+# attribute is defined below as `IDENTITY_FIELDS` itself, for the same reason.
+IDENTITY_FIELDS = (
+    "sku", "condition", "name", "number", "printed_total", "set_name", "rarity",
+    "identity_source", "bound_by", "bound_at", "read_disputes",
+)
+
+# The methods `make docs-audit`'s `identity writers` row allows to assign `card.<field>` for
+# a name in `IDENTITY_FIELDS` — the ONLY code paths CLAUDE.md's D173 recognises for doing so.
+# Every other `card.<field> = ...` assignment anywhere under `server/`, `store/`, `pipeline/`,
+# `cli/`, `codes/` or `scripts/` is the row's own defect to report.
+#
+# FOUR CHOOSE OR RESTORE AN IDENTITY, lane 7's own subject (identity-follows-sku.md §4.1,
+# §4.3): `bind_sku`/`unbind_sku` choose one; `restore_identity` puts one back exactly (D28);
+# `hold_sku` is this lane's own addition — the sanctioned "the SKU is known, the read
+# disputes it" writer `scripts/demo-seed.py`'s fixture card and `cli/cmd_cards.py`'s
+# migration HELD class both route through now, replacing the `card.sku = ...` /
+# `card.identity_source = ...` lines each wrote directly before this lane.
+#
+# THREE MORE ARE PRE-EXISTING, ALREADY-ARGUED HOLDOVERS FROM EARLIER LANES, NOT THIS ONE'S
+# OWN INVENTION — this row is the first thing to read them together, and each one's own
+# docstring already carries the argument this comment only points at:
+#   `record_identification`  writes the identity fields (never the binding ones) exactly
+#                            while `identity_source != IDENTITY_SKU` — its own docstring:
+#                            "not a second writer of the identity — it is the same writer
+#                            bind_sku becomes the moment a binding exists, continuous rather
+#                            than switched" (§4.2).
+#   `set_state`              still takes `sku`/`condition`/`set_name`/`rarity`/`name` as of
+#                            lane 1, and its own docstring names this as "A DEVIATION FROM
+#                            §11's OWN 'done when' LINE, FLAGGED RATHER THAN MADE SILENTLY":
+#                            `cli/cmd_emit.py` (lane 3b) still calls it this way, and lane
+#                            1's own fence forbade moving that caller. A later lane trims
+#                            this signature; this row does not force that lane's hand.
+#   `move_card`              clears `sku`/`condition` on the tombstone it leaves behind
+#                            (D83) — spec §4.2: "clears sku and condition on the tombstone;
+#                            the transplant keeps both | unchanged".
+IDENTITY_WRITERS = (
+    "bind_sku", "unbind_sku", "restore_identity", "hold_sku",
+    "record_identification", "set_state", "move_card",
+)
+
 
 class UnknownState(ValueError):
     """A listing state outside the enum. Never coerced."""
@@ -591,6 +639,14 @@ class Card:
     # the same key on 2026-09-14, so a scan of `events` by position would credit the new
     # card with the old card's answer. `bound_at` is the moment of that act, restamped by
     # `unbind_sku` on a restore — an undo is itself an act, not a time machine.
+    #
+    # `bound_at` NEVER MEANS "CURRENTLY BOUND" (lane 7, identity-follows-sku.md,
+    # "Identity follows the SKU"). It is a timestamp of the last write to this
+    # field, nothing more — `identity_source` is the only field that says whether
+    # the card is bound right now. `unbind_sku(sku=None)` and `hold_sku` both restamp
+    # `bound_at` while leaving `identity_source = IDENTITY_READ`, the exact shape an
+    # undo produces: the card is NOT bound, and `bound_at` still holds a fresh,
+    # non-null time. Read `bound_at` only beside `identity_source`, never alone.
     bound_by: Optional[str] = None
     bound_at: Optional[str] = None
     # `IDENTITY_SKU` or `IDENTITY_READ` — see that pair's own comment above `BOUND_BY_ACTS`.
@@ -2237,15 +2293,17 @@ class Inventory:
         return card
 
     # identity-follows-sku.md §8, lane 3a review round: UNDO MUST BE EXACT (D28,
-    # docs/specs/undo.md). `bind_sku`/`unbind_sku` above are the two writers that CHOOSE an
-    # identity; this pair is what a reversal restores one back TO, and it is the third and
-    # last writer of these eleven fields — every server-side reversal of a `bind_sku` write
-    # (`_reverse_answer`, `_reverse_correction`, `_reverse_confirm`) calls `restore_identity`
-    # and sets none of them itself.
-    IDENTITY_SNAPSHOT_FIELDS = (
-        "sku", "condition", "name", "number", "printed_total", "set_name", "rarity",
-        "identity_source", "bound_by", "bound_at", "read_disputes",
-    )
+    # docs/specs/undo.md). `bind_sku`/`unbind_sku` above are two of the writers that CHOOSE an
+    # identity (`hold_sku` below is the third); this is what a reversal restores one back TO,
+    # and it is the fourth and last writer of these eleven fields — every server-side
+    # reversal of a `bind_sku` write (`_reverse_answer`, `_reverse_correction`,
+    # `_reverse_confirm`) calls `restore_identity` and sets none of them itself.
+    #
+    # ALIASED TO THE MODULE-LEVEL `IDENTITY_FIELDS` rather than a second literal tuple —
+    # `make docs-audit`'s `identity writers` row reads that constant, never a copy of it, and
+    # a class attribute a caller writes as `Inventory.IDENTITY_SNAPSHOT_FIELDS` still resolves
+    # to the exact same tuple object.
+    IDENTITY_SNAPSHOT_FIELDS = IDENTITY_FIELDS
 
     def identity_snapshot(self, key: str) -> Optional[Dict[str, object]]:
         """Every field `restore_identity` below can put back, read off `key`'s card RIGHT
@@ -2312,6 +2370,88 @@ class Inventory:
                 setattr(card, attr, snapshot[attr])
         card.bound_at = now()
         self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run, **extra)
+        return card
+
+    def hold_sku(
+        self,
+        key: str,
+        sku: Optional[str] = None,
+        *,
+        skus: Optional["Skus"] = None,
+        expected_product_line: Optional[str] = None,
+        read_disputes: Optional[bool] = None,
+        event: str = "sku_held",
+        at: Optional[str] = None,
+    ) -> Optional[Card]:
+        """THE FOURTH WRITER (docs/specs/identity-follows-sku.md §4.1, §4.3, lane 7): "the
+        SKU is known, the card's own read disputes it" — `bind_sku`'s SIBLING for the one
+        case that method refuses rather than binds (§4.1: "a join caller refuses to bind a
+        card whose read disputes the row"). Two callers route through this now instead of
+        writing `card.sku`/`card.identity_source` directly: `scripts/demo-seed.py`'s
+        disputed fixture card, and `cli/cmd_cards.py`'s migration HELD class (§7.3).
+
+        NEVER DERIVES THE IDENTITY FROM `skus`, UNLIKE `bind_sku` — holding means the row is
+        NOT trusted yet, so `name`/`number`/`printed_total`/`rarity`/`set_name`/`condition`
+        are left exactly as they are (§3.1's `read` branch: they already equal the evidence
+        fields, because nothing but `record_identification` has ever written them for a card
+        that reaches here). Only `sku` (when given), `identity_source`, `read_disputes`
+        (when given) and `bound_at` move.
+
+        `sku=None` COVERS TWO DIFFERENT CASES, BOTH "SKIP THE LOOKUP, LEAVE `card.sku`
+        EXACTLY AS IT IS" — the field is never cleared, whatever it already holds. ONE: THE
+        SKU IS NOT KNOWN AT ALL — `scripts/demo-seed.py`'s own call, for its fixture's
+        `other` pool, a card whose read never resolved to any row in `skus`. `card.sku` is
+        `None` going in and stays `None` coming out; there was never anything to hold. TWO:
+        THE SKU IS KNOWN, JUST NOT OFFERED HERE — `cli/cmd_cards.py`'s migration HELD class
+        (§7.3): the card already carries the SKU it is disputing, bound by an earlier writer
+        or by a pre-lane-7 direct assignment, and this call's job is only to correct
+        `identity_source`, not to re-decide the SKU. `sku` GIVEN (demo-seed's OTHER call,
+        for its `priceable` pool's disputed rows) IS CHECKED AGAINST `skus` — the same
+        `SkuUnknown`/`GameMismatch` refusals `bind_sku` makes, because a hold is still a
+        claim about a real listing, and `skus` is then required.
+
+        `read_disputes=None` (the migration's own call) LEAVES THE FIELD EXACTLY AS IT IS —
+        this writer's one departure from `bind_sku`'s always-set convention.
+        `record_identification` already set it once for demo-seed's caller (the evidence
+        write that ran before this one), and the migration has no fresh dispute test of its
+        own to run here; the plan it is executing already classified the card. An explicit
+        `True`/`False` sets it.
+
+        `bound_by` IS NEVER TOUCHED — a hold is not a bind, and neither caller above has ever
+        bound this card, so there is nothing to clear.
+
+        `bound_at` IS RESTAMPED `now()` (or `at`, `bind_sku`'s own escape hatch, carried here
+        so a caller with a fixed clock — `scripts/demo-seed.py`'s `SEED`/`NOW` — can keep one
+        deterministic stamp across every writer it calls) — a hold is itself an act
+        happening now, `unbind_sku`'s own established rule, restated rather than a second one
+        invented.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            return None
+        if sku:
+            if skus is None:
+                raise ValueError(
+                    "hold_sku(sku=...) needs skus (store/skus.py's Skus) to check the row "
+                    "exists — the same requirement bind_sku makes"
+                )
+            row = skus.entries.get(str(sku))
+            if row is None:
+                raise SkuUnknown(
+                    f"{sku!r} is not in the skus table (identity-follows-sku.md §3.2) — a "
+                    "hold is still a claim about a real listing; fill it first"
+                )
+            if expected_product_line and row.product_line != expected_product_line:
+                raise GameMismatch(
+                    f"{sku!r} is a {row.product_line!r} SKU, and this card's game claims "
+                    f"{expected_product_line!r}"
+                )
+            card.sku = str(sku)
+        card.identity_source = IDENTITY_READ
+        if read_disputes is not None:
+            card.read_disputes = bool(read_disputes)
+        card.bound_at = now() if at is None else at
+        self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run)
         return card
 
     def retire(self, key: str, reason: str) -> bool:

@@ -902,7 +902,9 @@ CHECKS = (
                    "proving T3 is tested before T5 (a human-chosen SKU derives even when "
                    "the read disputes it); audit()'s three §4.3 failures, each proved to "
                    "fire AND to stay silent on a clean fixture; the §5.5 human-bound "
-                   "exclusion over every member of HUMAN_BOUND_BY; held_review_candidates' "
+                   "exclusion over every member of APPROVED_BOUND_BY (named that rather "
+                   "than HUMAN_BOUND_BY because it now includes migration itself, beside "
+                   "the four human acts); held_review_candidates' "
                    "found_by tagging (listing/name/number) and held_review_entry's reason; "
                    "plan_migration/class_counts end to end.",
         "needs": ("python3",),
@@ -1327,6 +1329,26 @@ CHECKS = (
                                "scripts/githooks/pre-commit, `make check` only.",
         "gates": True,
         "governed_by": ("D18", "D173", "D229"),
+    },
+    {
+        "target": "demo-determinism-selftest",
+        "runs": "python3 scripts/demo-determinism-selftest.py",
+        "asserts": "scripts/demo-determinism.py's own ALLOWED_PATTERNS matcher, on "
+                   "fixtures: every one of the 12 real, measured pointer shapes two "
+                   "`make demo` runs actually move still matches whole; four fabricated "
+                   "pointers that merely contain an allowed key (`at`, `updated_at`, "
+                   "`batch`) under a route none of the patterns name do NOT match, the "
+                   "exact regression a bare-key matcher (the pre-lane-7 ALLOWED_KEYS) "
+                   "would miss; one end-to-end case through `_diff` itself confirms the "
+                   "seam between pointer-building and matching.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "D18's own reason token-literal-check-selftest carries — "
+                               "not armed in scripts/githooks/pre-commit, `make check` "
+                               "only.",
+        "gates": True,
+        "governed_by": ("D18", "D173"),
     },
 )
 

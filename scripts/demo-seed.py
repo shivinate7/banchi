@@ -57,7 +57,6 @@ from store import Box, Card, Listing, Store  # noqa: E402
 from store import files as store_files  # noqa: E402
 from store import orders as orders_mod  # noqa: E402
 from store import photos as store_photos  # noqa: E402
-from store.master import IDENTITY_READ  # noqa: E402
 from store.queues import QueueEntry  # noqa: E402
 
 SEED = 20260906
@@ -428,18 +427,24 @@ def bind_or_hold(
     below are silent no-ops on a key they cannot find.
 
     THREE OUTCOMES, NEVER TWO. `sku` absent from `skus` (the `other` pool: 0 of 40 in any
-    fixture export) leaves the card `IDENTITY_READ`, as before. `sku` present and the read
+    fixture export) calls `hold_sku(card.key, at=bound_at)` with no `sku` to offer — lane 7's
+    own writer, not "as before": the card's `identity_source` still ends up `IDENTITY_READ`,
+    the outcome is the same as it always was, but `bound_at` is now stamped too (to the
+    caller's own fixed clock, never a real `now()` — see below), where the pre-lane-7 code
+    left it `None`. `sku` present and the read
     AGREES is `bind_sku` — the same branch a real join takes, faked here only because
     identification is the one paid step (see the module docstring). `sku` present and the
     read DISPUTES the row is REVIEW ROUND, NOT LANE 6'S FIRST PASS: §4.1, "a join caller
     refuses to bind a card whose read disputes the row." `bind_sku` is never called — the
-    card is left HELD, `cli/cmd_cards.py`'s own migration held branch, reused rather than a
-    second path: `identity_source = IDENTITY_READ` (set directly, exactly as that branch
-    does) with `sku` PRESENT (set directly too, since there is no earlier writer here for the
-    migration to have found it already bound by) — `record_identification` above already put
-    the read on both the evidence and the identity fields, and `read_disputes` travels with
-    it. This is `#/inventory`'s "the listing is right?" case verbatim (§8.1): a card whose
-    drawn name is only the camera's, and whose SKU already names the real listing.
+    card is left HELD, through `Inventory.hold_sku` (lane 7, §4.3: the fourth writer,
+    `cli/cmd_cards.py`'s own migration held branch routes through the same method) rather
+    than the `card.sku = sku` / `card.identity_source = IDENTITY_READ` this file wrote
+    directly before that lane. `record_identification` above already put the read on both
+    the evidence and the identity fields, and `read_disputes` travels with it, so `hold_sku`
+    is called with `read_disputes=True` rather than left at its own leave-alone default —
+    this branch's `disputes` is always true by construction (the `if disputes:` above it).
+    This is `#/inventory`'s "the listing is right?" case verbatim (§8.1): a card whose drawn
+    name is only the camera's, and whose SKU already names the real listing.
 
     Measured (§3.2, and this file's own `catalog()`): every `priceable` row's SKU is a real
     row in the three fixture exports; 0 of the `other` pool's are.
@@ -458,11 +463,10 @@ def bind_or_hold(
         confidence=confidence, run=run, read_disputes=disputes,
     )
     if row is None:
-        card.identity_source = IDENTITY_READ
+        inventory.hold_sku(card.key, at=bound_at)
         return
     if disputes:
-        card.sku = sku
-        card.identity_source = IDENTITY_READ
+        inventory.hold_sku(card.key, sku, skus=skus, read_disputes=True, at=bound_at)
         return
     entry = games_module.get(game)
     inventory.bind_sku(

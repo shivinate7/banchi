@@ -39,13 +39,20 @@ seed's own determinism:
     as the six above, surfaced only because this check compares structure rather than a hand
     read of a diff. Not fixed here, on the same ruling that left the first six alone.
 
-ANY SEGMENT of a pointer is enough to allow it, never only the last, because `ALLOWED_KEYS`
-is a vocabulary of "kinds of stamp", not a list of positions — a ninth order or a renamed run
-would otherwise need a new entry for no reason, and `written_at` sits one level ABOVE the run
-name it is keyed by (`.../pipeline/pricing/body/written_at/demo-box1`), so the LAST segment
-alone misses it (this check's own first real run caught the gap). A pointer with NO segment
-in that set fails the run: that is a value `scripts/demo-seed.py` is supposed to hold fixed,
-moving anyway.
+EVERY ALLOWED POINTER IS MATCHED BY ITS WHOLE PATH, NOT BY A BARE KEY ANYWHERE IN IT —
+`ALLOWED_PATTERNS` (identity-follows-sku.md lane 7's own fix) is a vocabulary of "shapes of
+pointer", not a vocabulary of "kinds of key". The check used to be `ALLOWED_KEYS`, a flat set
+of names tested against every SEGMENT of a pointer (`ALLOWED_KEYS & set(pointer.split("/"))`)
+— so a bare `at` excused an `at` ANYWHERE in the tree, whatever it sat beside, which is not
+what "an order's own ingest stamp" or "a run directory's mtime" meant to claim. A future
+writer that stamped `at` on something `scripts/demo-seed.py` does NOT hold fixed — an event
+line, a new record — would have been excused by the same bare key, silently, and this check
+exists specifically to catch a stamp like that reaching the wire. `written_at` sitting one
+level ABOVE the run name it is keyed by (`.../pipeline/pricing/body/written_at/demo-box1`) is
+why each pattern below matches the run segment with a wildcard rather than the literal name —
+a ninth run would otherwise need a new pattern for no reason — never why the check reads
+bare keys. A pointer matching no pattern in `ALLOWED_PATTERNS` fails the run: that is a value
+`scripts/demo-seed.py` is supposed to hold fixed, moving anyway.
 
 NOT IN `make check` (D18, docs/specs/demo.md's own rule for every `demo-*` target: a
 generator may write, and nothing that writes may gate a commit — `demo-freshness` is off it
@@ -57,22 +64,59 @@ any writer it calls (`Inventory.bind_sku`/`record_identification`, first among t
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any, List, Pattern, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BUNDLE = REPO_ROOT / "app" / "demo" / "bundle.json"
 
-# The vocabulary of stamps this check already knows are request-time or process-time, never
-# the seed's own data — see the module docstring for what each one is and why. A pointer
-# ending in any OTHER key that moves between two runs is the regression this file exists to
-# catch.
-ALLOWED_KEYS = frozenset({
-    "changed_at", "updated_at", "modified", "boot_id", "started_at", "batch",
-    "at", "written_at",
-})
+# The shapes of pointer this check already knows are request-time or process-time, never the
+# seed's own data — see the module docstring for what each one is and why. Each pattern
+# `fullmatch`es the WHOLE pointer, so a bare key never excuses a pointer that only happens to
+# contain it somewhere else in the tree (the defect lane 7 of identity-follows-sku.md fixed:
+# `ALLOWED_KEYS` used to be a flat set of keys tested against every segment). `[^/]+` stands
+# in for a run name or a list index — never a literal, so a ninth run or a longer list needs
+# no new entry — and every pattern is anchored on `/responses/` because that is the one place
+# a request/process-time stamp can reach the wire from.
+ALLOWED_PATTERNS: Tuple[Tuple[str, Pattern[str]], ...] = (
+    ("orders: the order ledger's own ingest stamp",
+     re.compile(r"^/responses//orders/body/orders/\d+/changed_at$")),
+    ("orders: a walk's own progress stamp",
+     re.compile(r"^/responses//orders/body/orders/\d+/progress/\d+/at$")),
+    ("pipeline pricing: a SKU's own reading time",
+     re.compile(r"^/responses//pipeline/pricing(?:\?[^/]*)?/body/roster/\d+/updated_at$")),
+    ("pipeline pricing: a run's own reading time",
+     re.compile(r"^/responses//pipeline/pricing(?:\?[^/]*)?/body/runs/\d+/updated_at$")),
+    # `written_at` sits one level ABOVE the run name it is keyed by
+    # (`.../pipeline/pricing/body/written_at/demo-box1`) — the module docstring's own example.
+    ("pipeline pricing: the join's own write moment, keyed by run",
+     re.compile(r"^/responses//pipeline/pricing(?:\?[^/]*)?/body/written_at/[^/]+$")),
+    ("pipeline runs: the runs list's own reading time",
+     re.compile(r"^/responses//pipeline/runs/body/runs/\d+/updated_at$")),
+    ("pipeline runs: a run directory's real, unfaked file mtime",
+     re.compile(r"^/responses//pipeline/runs/demo-box[13]/body/files/\d+/modified$")),
+    ("pipeline runs: a run directory's manifest mtime",
+     re.compile(r"^/responses//pipeline/runs/demo-box[13]/body/manifest/updated_at$")),
+    ("pipeline runs: a run directory's real, unfaked mtime",
+     re.compile(r"^/responses//pipeline/runs/demo-box[13]/body/updated_at$")),
+    ("status: the recording server's own boot id",
+     re.compile(r"^/responses//status/body/boot_id$")),
+    ("status: the recording server's own start moment",
+     re.compile(r"^/responses//status/body/started_at$")),
+    ("shipping: the batch id this request mints",
+     re.compile(r"^/responses/POST /shipping/batches/body/batch$")),
+)
+
+
+def _allowed(pointer: str) -> str:
+    """The name of the `ALLOWED_PATTERNS` entry `pointer` matches whole, or `""`."""
+    for name, pattern in ALLOWED_PATTERNS:
+        if pattern.match(pointer):
+            return name
+    return ""
 
 
 def _diff(before: Any, after: Any, pointer: str, out: List[Tuple[str, Any, Any]]) -> None:
@@ -119,10 +163,8 @@ def main() -> int:
         moved: List[Tuple[str, Any, Any]] = []
         _diff(before, after, "", moved)
 
-        # Every segment, not only the last — see the module docstring for why.
-        unexpected = [
-            (p, b, a) for p, b, a in moved if not ALLOWED_KEYS & set(p.split("/"))
-        ]
+        # By WHOLE PATH, never a bare key anywhere in it — see the module docstring for why.
+        unexpected = [(p, b, a) for p, b, a in moved if not _allowed(p)]
 
         print("demo determinism: %d value(s) moved between two `make demo` runs, %d expected "
               "(request/process-time stamps), %d NOT expected"
@@ -136,9 +178,10 @@ def main() -> int:
                 print("    … and %d more" % (len(unexpected) - 40))
             return 1
 
-        print("  every moved value is a known request/process-time stamp "
-              "(%s) — the seed's own data is byte-identical across both runs."
-              % ", ".join(sorted(ALLOWED_KEYS)))
+        print("  every moved value matches a known request/process-time shape:")
+        for name, _ in ALLOWED_PATTERNS:
+            print("    - %s" % name)
+        print("  the seed's own data is byte-identical across both runs.")
         return 0
     finally:
         for copy in copies:

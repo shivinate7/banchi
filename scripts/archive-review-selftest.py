@@ -170,8 +170,11 @@ def main() -> int:
         ok(all(m.reason == variant.NO_CATALOG_ROW for m in matches),
            "the reason is the existing ladder vocabulary, not a new string")
 
-        print("\n-- queue_entries: no photo, no entry --")
+        print("\n-- queue_entries: no photo — never queued, but NAMED, never dropped --")
         # Widen refusals to include BBB alone, whose only matching card has no photo.
+        # Lane 7 review: this was the OTHER silent drop CLAUDE.md's hard rule forbids —
+        # the 2026-09-24 round named the no-reading gap and left this one exactly as it
+        # was, and a card missing its photograph still needs a human told about it.
         bbb_matches = archive_review.cards_for_refusals(
             inventory, rows, {"BBB": refusals["BBB"]}
         )
@@ -179,10 +182,17 @@ def main() -> int:
         bbb_build = archive_review.queue_entries(bbb_matches, views)
         ok(bbb_build.entries == [], "a card with no photograph is never queued",
            bbb_build.entries)
-        ok(bbb_build.unavailable == [],
-           "and it is not reported as `unavailable` either — no photograph is a photo-"
-           "store fact, unrelated to whether a reading was ever recorded",
+        ok(len(bbb_build.unavailable) == 1,
+           "and it IS reported as `unavailable` — named exactly once, not folded into a "
+           "bare count",
            bbb_build.unavailable)
+        if bbb_build.unavailable:
+            skipped = bbb_build.unavailable[0]
+            ok(skipped.position == "1/4", "keyed by the card's own position",
+               skipped.position)
+            ok("BBB" in skipped.reason and "no photograph" in skipped.reason,
+               "and the reason names the SKU and says why, in plain words — never a "
+               "bare code a reader has to look up", skipped.reason)
 
         print("\n-- queue_entries: bound, no recorded reading — NAMED, never dropped --")
         # identity-follows-sku.md §5.1 / review round, HIGH finding, 2026-09-24: a card
@@ -214,9 +224,11 @@ def main() -> int:
         ok(entry.photo == "/photos/aaa-1.jpg", "carries the card's photograph", entry.photo)
         ok(entry.reason == variant.NO_CATALOG_ROW, "carries the ladder's own reason")
         ok(entry.candidates == [], "zero candidates — this is what NO_CATALOG_ROW means")
-        ok(len(build.unavailable) == 1 and build.unavailable[0].position == "1/6",
-           "and 1/6 (bound, no reading) is named in `unavailable` in this SAME build, "
-           "beside the one real entry — never a separate, easy-to-forget pass",
+        unavailable_positions = sorted(s.position for s in build.unavailable)
+        ok(unavailable_positions == ["1/4", "1/6"],
+           "and 1/4 (no photo) and 1/6 (bound, no reading) are BOTH named in "
+           "`unavailable` in this SAME build, beside the one real entry — never a "
+           "separate, easy-to-forget pass",
            build.unavailable)
 
         with Store().write() as snapshot:

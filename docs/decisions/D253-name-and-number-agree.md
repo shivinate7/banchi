@@ -1,5 +1,12 @@
 ## D253 — A card lists off name AND number agreeing, never off the number alone
 
+**AMENDED IN ONE PART, KEPT IN SUBSTANCE (`D-identity-follows-the-sku`).** The agreement rule
+stands. D162's release and the replay stand too. `JoinReport.name_corrections` retires, and so
+does `set_state`'s `name` parameter. The identity name is now the row's by construction, once
+a card is bound. The two store-backed builders this entry named move to `read_*` instead. That
+move is what keeps the READ name the thing the join checks. This entry no longer builds a
+second write path for a card's stored name. This spec replaces every such path with one.
+
 **The owner's ruling, 2026-09-23.** A card should match off name and number together. A
 name that is not exactly right should still be allowed to fuzzy match, or recorrect,
 through the tolerance a sibling session fits. Where both signals still disagree after that,

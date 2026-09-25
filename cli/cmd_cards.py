@@ -580,7 +580,17 @@ def _identity(args, say) -> int:
                 census["bound"] += 1
             elif ib.held(p.cls):
                 if card.identity_source != IDENTITY_READ:
-                    card.identity_source = IDENTITY_READ
+                    # `Inventory.hold_sku` (identity-follows-sku.md §4.1/§4.3, lane 7): the
+                    # sanctioned "the SKU is known, the read disputes it" writer, replacing
+                    # the `card.identity_source = IDENTITY_READ` this branch wrote directly
+                    # before that lane. `sku=None` — this press has no SKU to offer; the
+                    # card already carries whatever one it is disputing, from before this
+                    # migration ran — so the lookup is skipped and `card.sku` stays exactly
+                    # as it is. `read_disputes=None` (the default) leaves that field alone
+                    # too: this migration has no fresh dispute test of its own to run here.
+                    snapshot.inventory.hold_sku(
+                        p.key, event="identity_migration_held",
+                    )
                     census["held"] += 1
                 if card.state == master.IDENTIFIED:
                     # MEASURED ON THE OWNER'S STORE: held, identified cards already carry a

@@ -1,5 +1,10 @@
 ## D239 — Four stored-data checks, built whole, from D237
 
+**AMENDED (`D-identity-follows-the-sku`).** These four checks built their name and number
+from a card's own stored fields. Those fields now follow the bound SKU, not the read, once a
+card is bound. So the caller builds the name and number from `read_*` instead — the model's
+own evidence, never the catalog echo. The checks themselves are unchanged.
+
 **What this builds.** The four checks D237 named. Each is
 mechanizable from stored data, with no catalogue and no network. The owner took all four.
 `pipeline/identity_checks.py` holds the pure logic. `pkmnscan cards checks` is the one
