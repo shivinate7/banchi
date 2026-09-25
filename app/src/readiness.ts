@@ -31,7 +31,7 @@ import type { DecisionsDocument, PricingSku } from './types'
  * them, and a client that consulted one would be claiming a refusal Python does not make —
  * which is worse than missing one, because it is a run the operator never presses. The
  * fixture pins the sharpest case: a hand-priced override does NOT satisfy the sub-threshold
- * gate, and `pipeline/decisions.py:357` is where that is decided.
+ * gate, and `pipeline/decisions.py:blocking` is where that is decided.
  */
 
 /** The literal `pipeline/decisions.py:FLOOR_CHOICE` compares against, with a bare `==` and no
@@ -53,7 +53,7 @@ export const FLAT_KEY = 'flat'
  *  in both directions" while `scripts/docs-audit.py` had never mentioned this file
  *  or this constant at all. A third reason in Python without a third here is a refusal this
  *  screen cannot show, and today only a person reading both files would find it. */
-export const OWED_REASONS = ['sub_threshold_unset', 'no_market_data_unanswered'] as const
+export const OWED_REASONS = ['sub_threshold_unset'] as const
 
 export type OwedReason = (typeof OWED_REASONS)[number]
 
@@ -62,7 +62,6 @@ export type OwedReason = (typeof OWED_REASONS)[number]
  *  draws for the hold vocabulary. */
 export const OWED_LABELS: Record<OwedReason, string> = {
   sub_threshold_unset: "the store's sub-threshold policy (null in the file)",
-  no_market_data_unanswered: 'a price for every card with no market value',
 }
 
 export type Owed = { reason: OwedReason; count: number }
@@ -80,21 +79,15 @@ export function owed(
 ): Owed[] {
   const out: Owed[] = []
 
-  // RULE 1 — `pipeline/decisions.py:357`. Note what it does NOT consult: `overrides`. Pricing
+  // RULE 1 — `pipeline/decisions.py:363`. Note what it does NOT consult: `overrides`. Pricing
   // all 108 of a box's sub-threshold SKUs by hand still leaves `emit` refusing, which is the
   // measured state of two runs on disk and the reason the strip exists at all.
   if ((doc?.sub_threshold ?? null) === null && subThresholdSkus.length > 0) {
     out.push({ reason: 'sub_threshold_unset', count: subThresholdSkus.length })
   }
 
-  // RULE 2 — `pipeline/decisions.py:350`, the `unanswered` property. THE DOCUMENT'S MAP, NOT
-  // THE TABLE'S BUCKET: Python counts entries in `no_market_data` whose value is null, so a
-  // SKU the operator never answered at all is invisible to it. Reading the bucket instead
-  // would report a refusal `emit` does not make — the direction this file must never err in.
-  const unanswered = Object.values(doc?.no_market_data ?? {}).filter((v) => v === null)
-  if (unanswered.length > 0) {
-    out.push({ reason: 'no_market_data_unanswered', count: unanswered.length })
-  }
+  /* NO SECOND RULE (D277 Q3): a card with no market price and no answer no longer holds the
+     send back. The send leaves it out and names it, and the screen counts it off its rows. */
 
   return out
 }

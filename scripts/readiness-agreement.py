@@ -16,7 +16,8 @@ it had, and a run with zero is refused rather than passed by omission):
   4. Every `pipeline/decisions.py:<line>` citation in readiness.ts that names a numbered line
      resolves to the AST node it is talking about, classified by the words around it:
        - "RULE 1" / "sub-threshold gate" -> the first `reasons.append` call inside `blocking`
-       - "RULE 2" / "unanswered property" -> the `unanswered` property's `def` line
+       - "RULE 2" / "unanswered property" -> the `unanswered` property's `def` line (no such
+         citation exists since D277 Q3 retired the second reason; the reader stays for one)
      A citation pointing at any other line is reported as a stale citation (D149's disease:
      a line number that still resolves, to the wrong code).
   5. The two bare-name citations, `pipeline/decisions.py:blocking` and the two constant
@@ -442,28 +443,27 @@ def self_test() -> int:
 
     arm("catches a RULE 1 citation pointing at the wrong line", a5)
 
-    # Arm 6: same for RULE 2 / unanswered.
+    # Arm 6: the other direction of arm 4 — a reason the screen still lists that Python no
+    # longer refuses on. D277 Q3 retired `blocking`'s second reason (an unanswered no-price
+    # card), and a mirror that kept it would draw a refusal `emit` no longer makes.
     def a6():
-        m = re.search(r"RULE 2 — `pipeline/decisions\.py:(\d+)`", ts_source)
-        assert m, "fixture missing: RULE 2 citation text not found"
-        broken_ts = (
-            ts_source[: m.start(1)] + "1" + ts_source[m.end(1) :]
-            if m.group(1) != "1"
-            else ts_source[: m.start(1)] + "2" + ts_source[m.end(1) :]
+        literal = "export const OWED_REASONS = ['sub_threshold_unset'] as const"
+        assert literal in ts_source, "fixture missing: OWED_REASONS literal not found"
+        broken_ts = ts_source.replace(
+            literal,
+            "export const OWED_REASONS = ['sub_threshold_unset', 'no_market_data_unanswered'] as const",
+            1,
         )
-        assert broken_ts != ts_source, "fixture mutation produced no change"
         checks, err = _run_against(py_source, broken_ts)
-        assert err is None
-        rule2_checks = [c for c in checks if "rule2_unanswered" in c.subject]
-        assert rule2_checks, "no rule2 citation was classified at all"
-        assert any(not c.passed for c in rule2_checks), "mutation not caught: stale RULE 2 citation"
+        assert err is None and checks is not None
+        assert any(not c.passed for c in checks), "mutation not caught: a reason Python no longer has"
 
-    arm("catches a RULE 2 citation pointing at the wrong line", a6)
+    arm("catches an OWED_REASONS entry Python no longer refuses on", a6)
 
     # Arm 7: an unparsable/missing OWED_REASONS constant is refused, not silently skipped.
     def a7():
         broken_ts = ts_source.replace(
-            "export const OWED_REASONS = ['sub_threshold_unset', 'no_market_data_unanswered'] as const",
+            "export const OWED_REASONS = ['sub_threshold_unset'] as const",
             "export const OWED_REASONS = computeReasons()",
             1,
         )

@@ -1964,7 +1964,7 @@ export function Pricing() {
 
   const summary = [
     `${progress.outCopies} ${progress.outCopies === 1 ? 'copy' : 'copies'} ready`,
-    needsPrice > 0 ? `${needsPrice} ${needsPrice === 1 ? 'needs' : 'need'} a price` : null,
+    needsPrice > 0 ? `${needsPrice} ${needsPrice === 1 ? 'needs a price and stays' : 'need a price and stay'} here` : null,
     progress.byHand > 0 ? `${progress.byHand} at a quantity you typed` : null,
     progress.held > 0 ? `${progress.held} held` : null,
     progress.closed > 0 ? `${progress.closed} already at TCGplayer` : null,

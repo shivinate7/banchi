@@ -2928,6 +2928,7 @@ def prices_for(
     sku_dispositions: Optional[Dict[str, pricing.Disposition]] = None,
     no_market_data: Optional[Dict[str, object]] = None,
     withheld: Optional[Set[str]] = None,
+    leave_unanswered: bool = False,
 ) -> "OrderedDict[str, Decimal]":
     """Listed price per SKU, and what decided it.
 
@@ -2978,7 +2979,10 @@ def prices_for(
         if not match.has_market_data:
             answer = unpriced.get(match.sku)
             if answer is None:
-                unanswered.append(match)
+                # A SEND LEAVES IT OUT (D277 Q3): no row, no price, still owed. Without the
+                # flag this is the refusal below, which every other caller keeps.
+                if not leave_unanswered:
+                    unanswered.append(match)
                 continue
             if answer == pricing.UNLISTED:
                 continue
@@ -3024,13 +3028,16 @@ def import_rows(
     no_market_data: Optional[Dict[str, object]] = None,
     only: Optional[Set[str]] = None,
     withheld: Optional[Set[str]] = None,
+    leave_unanswered: bool = False,
 ) -> List[tcgcsv.Row]:
     """The rows an import file would carry. One per SKU, in catalog order.
 
     `only` selects a subset of SKUs, which is how `emit` splits one join into the listed
     file and the sub-threshold file (v2 §7) without pricing the run twice.
     """
-    prices = prices_for(report, sub_threshold, sku_dispositions, no_market_data, withheld)
+    prices = prices_for(
+        report, sub_threshold, sku_dispositions, no_market_data, withheld, leave_unanswered
+    )
     rows: List[tcgcsv.Row] = []
     for match in report.matches.values():
         if match.sku not in prices:  # answered UNLISTED

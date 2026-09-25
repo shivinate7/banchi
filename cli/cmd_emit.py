@@ -761,6 +761,8 @@ def _write(game_join, path, only, choice, say, label, extra=()):
         # and scoping it would be machinery guarding nothing.
         withheld=set(choice.withheld()),
         only=only,
+        # D277 Q3: an unanswered no-price card is left out here too, never refused over.
+        leave_unanswered=True,
     ) if only else []
     # THE PRICE-ONLY ROWS OF THIS BUCKET, after the listing rows. Their SKUs are disjoint from
     # `only` (a SKU in `only` adds a copy), so the file still holds one row per SKU.
@@ -789,6 +791,29 @@ class SplitRefused(Exception):
     written." with the stale-file warning under it, and this is the same kind of event: a
     whole-send refusal raised before a single byte is written.
     """
+
+
+def _say_no_price(left, say) -> None:
+    """Name every card a send left out for having no market price and no answer (D277 Q3).
+
+    NAMED, NEVER DROPPED SILENTLY (CLAUDE.md). They stay on the worklist, owed, until a price
+    is typed for them; nothing is written for them and nothing counts them as sent."""
+    if not left:
+        return
+    say(f"{'no market price':<16} {len(left)} SKU(s) left out until a price is typed")
+    for sku, name in left[:8]:
+        say(f"  {sku} {name}")
+    if len(left) > 8:
+        say(f"  and {len(left) - 8} more")
+
+
+def resolved_matches_named(resolved_by_run, sku):
+    """The card names every leg of a merged send knows `sku` by, newest leg last."""
+    return [
+        resolved.matches[sku].name
+        for resolved in resolved_by_run.values()
+        if sku in resolved.matches
+    ]
 
 
 def _merged_targets(rows_by_game, run_dir, split_games, out=None):
@@ -860,6 +885,7 @@ def _write_merged(resolved, priced, choice, run_dir, args, say, zero=None):
                 no_market_data=choice.no_market_data,
                 withheld=set(choice.withheld()),
                 only=only,
+                leave_unanswered=True,
             )
             if only
             else []
@@ -1169,7 +1195,18 @@ def run(args, say) -> int:
                 sku_dispositions=_scoped(choice.dispositions(), report),
                 no_market_data=choice.no_market_data,
                 withheld=withheld,
+                # A SEND LEAVES AN UNANSWERED NO-PRICE CARD OUT (D277 Q3, the owner: "send every
+                # ready copy; unpriced rows stay on the list"). It is named just below.
+                leave_unanswered=True,
             )
+        _say_no_price(
+            [
+                (sku, resolved.matches[sku].name)
+                for sku in choice.unanswered
+                if sku in resolved.matches and not resolved.matches[sku].has_market_data
+            ],
+            say,
+        )
 
         # THE PRICE-ONLY ROWS (the owner's ruling, 2026-09-24: "Allow mixed"). A SKU this run
         # prices and adds no copy of, already live, whose typed price differs from the live one.
@@ -1749,6 +1786,14 @@ def run_merged(args, say) -> int:
     )
 
     rows = merged_plan.rows(listed_only=args.listed_only)
+    _say_no_price(
+        [
+            (row_sku, next(iter(resolved_matches_named(resolved_by_run, row_sku)), row_sku))
+            for row_sku, why in merged_plan.dropped.items()
+            if why == merge.NO_PRICE_YET
+        ],
+        say,
+    )
     # THE PRICE-ONLY ROWS OVER THE MERGED PLAN (the owner's ruling, 2026-09-24). Each is the
     # plan's own row with `add_to_quantity` 0, so `merge.import_rows` writes it as Add to
     # Quantity 0 at the plan's price, with no second code path.

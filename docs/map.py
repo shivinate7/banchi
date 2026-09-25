@@ -689,7 +689,7 @@ COMPONENTS = [
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58",
                                             "D59", "D86", "D88", "D99", "D172", "D174", "D213",
-                                            "D243", "D253"], "tested_by": ["T7"]},
+                                            "D243", "D253", "D277"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
@@ -957,9 +957,8 @@ COMPONENTS = [
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
                                         "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
                                         "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D162", "D213", "D218", "D253",
-                                        "D259",
-                                        "D260"], "tested_by": ["T3"]},
+                                        "D137", "D146", "D162", "D213", "D218", "D253", "D259",
+                                        "D260", "D277"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -1220,7 +1219,7 @@ COMPONENTS = [
                                   "may be priced below. A separate key is coherent only when "
                                   "it equals this one, so it could only ever be set wrong.",
                           "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86",
-                                          "D99", "D100", "D103"],
+                                          "D99", "D100", "D103", "D277"],
                           "tested_by": ["T7"]},
             # THE WALK `server/pipeline_routes.py:_readings()` USED TO RUN ON EVERY REQUEST,
             # MOVED HERE UNCHANGED (D189). `pipeline/` sits below `server/` in this
@@ -1514,7 +1513,8 @@ COMPONENTS = [
                                  "store. `_agree_policy` refuses a send whose runs override "
                                  "`threshold` differently, for the reason it already refused "
                                  "two `sub_threshold`s: one file needs one answer (D99).",
-                         "governed_by": ["D7", "D48", "D49", "D54", "D59", "D86", "D87", "D99"],
+                         "governed_by": ["D7", "D48", "D49", "D54", "D59", "D86", "D87", "D99",
+                                         "D277"],
                          "tested_by": ["T7"]},
             "decisions.py": {"does": "the pricing decision, parsed — the corpus's parser (D86): "
                                      "pipeline/corpus.py projects inventory/prices.json into one "
@@ -1535,7 +1535,7 @@ COMPONENTS = [
                              # D16 for the drift a second vocabulary would be; D26 and D37 are the
                              # two states `withheld` is deliberately not, and whose reason words it
                              # may not reuse; D39 for the route the watch line surfaces on.
-                             "governed_by": ["D9", "D16", "D26", "D37", "D39", "D49", "D86"]},
+                             "governed_by": ["D9", "D16", "D26", "D37", "D39", "D49", "D86", "D277"]},
             # THE FIRST MODULE IN THIS PACKAGE THAT OPENS A SOCKET, and it says so in its own
             # header. Everything else under `pipeline/` is pure local computation over the
             # export, so the network is contained on purpose: `fetch_json` is the one impure
@@ -4265,7 +4265,7 @@ COMPONENTS = [
                         "--self-test runs its own mutation-tested arms, counted in "
                         "SELF_TEST_ARM_COUNT. Standalone as shipped; not yet wired into "
                         "make check.",
-                "governed_by": ["D54", "D149", "D185"],
+                "governed_by": ["D54", "D149", "D185", "D277"],
             },
             "split-debts.py": {
                 "does": "Performed the split of docs/DEBTS.md into docs/debts/, and proves "
@@ -8051,7 +8051,7 @@ COMPONENTS = [
                                         "refusals and the sentence on screen says so. It may never "
                                         "read overrides, a hold or the floor, because blocking() "
                                         "reads none of them.",
-                                 "governed_by": ["D9", "D16", "D49", "D54"]},
+                                 "governed_by": ["D9", "D16", "D49", "D54", "D277"]},
             "src/BoxRuns.tsx": {"does": "what is left of the run panel on #/inventory: one status "
                                         "line saying whether anything is running over this box, "
                                         "and the control that hands the ticked selection to "

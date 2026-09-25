@@ -298,6 +298,11 @@ def _token(value: object) -> str:
     return str(value)
 
 
+#: Why a send left a card out: no market price, and nobody has priced it yet (D277 Q3). It
+#: stays on the worklist, owed; `emit` names it on its own line.
+NO_PRICE_YET = "no market price, and no price typed yet"
+
+
 def plan(
     resolved_by_run: Mapping[str, object],
     choice: decisions_mod.Decisions,
@@ -356,7 +361,10 @@ def plan(
             sku: v for sku, v in choice.no_market_data.items() if sku in merged
         },
         withheld=set(choice.withheld()),
+        # A SEND LEAVES AN UNANSWERED NO-PRICE CARD OUT (D277 Q3), named below as dropped.
+        leave_unanswered=True,
     )
+    unanswered = set(choice.unanswered)
 
     out = Plan()
     for sku, legs in legs_by_sku.items():
@@ -365,7 +373,11 @@ def plan(
             # WITHHELD, or answered `unlisted` — `prices_for` leaves both out of the mapping
             # and a row is not written for either. Named rather than dropped: `CLAUDE.md`
             # forbids losing a card without saying so.
-            out.dropped[sku] = "held back or answered unlisted"
+            out.dropped[sku] = (
+                NO_PRICE_YET
+                if sku in unanswered and not match.has_market_data
+                else "held back or answered unlisted"
+            )
             continue
         out.skus.append(
             MergedSku(

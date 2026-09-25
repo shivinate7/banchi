@@ -368,9 +368,10 @@ class Corpus:
             # open on the one nobody named" — and it was written after a dry-run interceptor
             # built from the wrong names let 100 real rows reach TCGplayer. The same shape was
             # sitting on the file that decides what every card lists at. An unrecognised
-            # channel now falls to `no_market_data`, which `pipeline/decisions.py:blocking`
-            # reads as "this card is not answered" and refuses the emit over: the safe
-            # direction is the one that stops rather than the one that prices.
+            # channel now falls to `no_market_data`, which never outranks the rule for a card
+            # that has a market price. Where that answer is empty, a send leaves the card out
+            # (D277 Q3) rather than pricing it: the safe direction is the one that does not
+            # price.
             (prices if answer.channel == "price" else unknown)[sku] = answer.value
         for sku in unpriced:
             if sku not in prices and sku not in unknown:

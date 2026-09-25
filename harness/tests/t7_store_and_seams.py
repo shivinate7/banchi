@@ -36002,10 +36002,74 @@ def check_value_page(checks: Checks) -> None:
         )
 
 
+def check_emit_unpriced_left_out(checks: Checks) -> None:
+    """A SEND WITH ONE UNPRICED ROW SENDS EVERY OTHER READY COPY (D277 Q3, the owner's words:
+    "send every ready copy; unpriced rows stay on the list").
+
+    `emit` used to refuse the WHOLE file while any card with no market price had no answer
+    (`Decisions.blocking`, `join.prices_for`). A missing price is still unknown and never low
+    (D9, D49), so that card still cannot go: it is LEFT OUT, named, and stays owed. The two
+    priced cards go. Both paths the send can take are asserted: one run, and several runs.
+    """
+    checks.note("")
+    checks.note("EMIT, ONE UNPRICED ROW — the ready copies go, the unpriced one stays owed")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Dunsparce", "120", "reverse_holo"),
+        (3, 3, "Articuno", "161", None),
+    ]
+    # A BLANK MARKET CELL IS "NO MARKET PRICE" (D9), and `join` seeds it unanswered.
+    no_price = {ARTICUNO_SKU: ""}
+
+    def left_out(said: str) -> None:
+        # THE FILE IS WHERE `emit` SAID IT WROTE IT, read off its own line, so one assertion
+        # serves the single-run path and the merged one.
+        paths = [Path(found) for found in re.findall(r"-> (\S+\.csv)", said)]
+        written = {
+            row[tcgcsv.SKU_COLUMN]
+            for path in paths
+            if path.is_file()
+            for row in tcgcsv.read_export(path).rows
+        }
+        checks.equal(
+            sorted(written),
+            sorted([DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU]),
+            "the file carries EXACTLY the two ready rows — not zero (the old whole-send "
+            "refusal) and not three (a guess at a price nobody gave)",
+        )
+        checks.ok(
+            "no market price" in said and ARTICUNO_SKU in said,
+            "the unpriced card is NAMED where it was left out, never dropped silently",
+            said,
+        )
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        checks.equal(
+            0 if listing is None else listing.pushed,
+            0,
+            "and it STAYS OWED: nothing of it was committed as sent, so the next worklist "
+            "still carries it",
+        )
+        checks.equal(
+            getattr(corpus.Corpus.read().answers.get(ARTICUNO_SKU), "value", None),
+            None,
+            "and it still has no answer — nothing was invented for it",
+        )
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards, market=no_price)
+        left_out(command(checks, "emit", str(run_dir.directory)))
+
+    with isolated_home():
+        first, _ = seam_run(checks, [cards[0], cards[2]], market=no_price)
+        second, _ = seam_run(checks, [cards[1]], market=no_price)
+        left_out(command(checks, "emit", str(first.directory), str(second.directory)))
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
     check_emit_claim_decides(checks)
+    check_emit_unpriced_left_out(checks)
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
     check_prices_adopt(checks)
