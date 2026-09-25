@@ -244,6 +244,7 @@ export function SubmissionClaims() {
                   <Button
                     variant="danger"
                     icon="unlock"
+                    words="irreversible"
                     onClick={() => void release(claim)}
                     disabled={releasing !== null}
                     busy={releasing === claim.receipt}

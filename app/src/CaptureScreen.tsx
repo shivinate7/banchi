@@ -4600,6 +4600,7 @@ export function CaptureScreen() {
               size="sm"
               block
               icon="eraser"
+              words="not-in-vocabulary"
               onClick={clearSetup}
               disabled={!setupChosen}
             >

@@ -14,9 +14,6 @@
       "R2-class": "inventory",
       "R2-icon-only-button": "icons"
     },
-    "app/src/CaptureScreen.tsx": {
-      "R2-icon-only-button": "icons"
-    },
     "app/src/CardHero.tsx": {
       "R2-date": "inventory",
       "R2-money": "inventory",
@@ -157,9 +154,6 @@
     },
     "app/src/Shipping.tsx": {
       "R1": "shipping"
-    },
-    "app/src/SubmissionClaims.tsx": {
-      "R2-icon-only-button": "icons"
     },
     "app/src/ValueBands.tsx": {
       "R2-class": "b-pricing",
