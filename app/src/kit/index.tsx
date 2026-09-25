@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode, Ref } from 'react'
+import type {
+  ButtonHTMLAttributes, CSSProperties, ReactNode, Ref,
+  FocusEvent as ReactFocusEvent, MouseEvent as ReactMouseEvent, TouchEvent as ReactTouchEvent,
+} from 'react'
 import { Icon, type IconName } from './Icon'
 import { rememberTheme, storedTheme, type Theme } from '../deviceMemory'
 import {
@@ -15,6 +18,15 @@ export type { IconName }
 export type ButtonVariant = 'default' | 'primary' | 'ghost' | 'quiet' | 'danger' | 'danger-solid' | 'ok'
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl'
 
+/** `R2-icon-only-button` clause (c)'s declared exception (the coordinator's ruling,
+ *  2026-09-25): which of `docs/specs/iconography.md` section 2's numbered WORDS rules keeps a
+ *  vocabulary-verb `<Button>` worded, when the variant alone cannot prove it (`primary`/
+ *  `danger-solid`). Reused verbatim as `scripts/kit-adoption.mjs`'s `WORDS_REASONS` keys — a
+ *  lane STATES its reason at the press, rather than picking a variant that happens to pass the
+ *  check (the shipping lane's own finding: "Forget this export" moved to `danger-solid` only
+ *  to get past the rule, not because that variant fit). */
+export type WordsReason = 'irreversible' | 'fact-on-face' | 'only-primary' | 'word-only-control' | 'not-in-vocabulary'
+
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   readonly ref?: Ref<HTMLButtonElement>
   readonly variant?: ButtonVariant
@@ -26,6 +38,9 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   readonly block?: boolean
   readonly pill?: boolean
   readonly iconOnly?: boolean
+  /** Declares why a vocabulary-verb label stays WORDS (see `WordsReason`). Read by
+   *  `make kit-adoption` only — it never reaches the DOM and changes nothing on screen. */
+  readonly words?: WordsReason
 }
 
 export function Button({
@@ -38,6 +53,7 @@ export function Button({
   block,
   pill,
   iconOnly,
+  words: _words,
   className,
   children,
   type = 'button',
@@ -143,8 +159,15 @@ function positionTip(btn: HTMLElement, tip: HTMLElement): void {
 }
 
 export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'aria-label' | 'title'> & {
-  readonly ref?: Ref<HTMLButtonElement>
+  readonly ref?: Ref<HTMLButtonElement | HTMLAnchorElement>
   readonly icon: IconName
+  /** Renders an `<a>` instead of a `<button>` — same face, `::before` 40px hit area, tooltip
+   *  and accessible name (D-icon-buttons' round-2 sibling). An icon-only control that opens
+   *  another route or tab is a LINK, never a `window.open` in an `onClick`: only an `<a href>`
+   *  gives the browser's own middle-click, right-click "open in new tab" and "copy link". */
+  readonly href?: string
+  readonly target?: string
+  readonly rel?: string
   /** The tooltip text, and the accessible name unless `name` overrides it. Required. */
   readonly label: string
   /** A longer accessible name for a row where `label` alone would repeat on every instance
@@ -181,7 +204,11 @@ export function IconButton({
   kbd,
   className,
   type = 'button',
+  href,
+  target,
+  rel,
   style,
+  ref,
   onTouchStart,
   onTouchEnd,
   onTouchCancel,
@@ -203,82 +230,33 @@ export function IconButton({
   const [dismissed, setDismissed] = useState(false)
   const longPressFired = useRef(false)
   const timer = useRef<number | null>(null)
-  const btnRef = useRef<HTMLButtonElement>(null)
+  const btnRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
   const tipRef = useRef<HTMLSpanElement>(null)
   const reposition = () => {
     if (btnRef.current && tipRef.current) positionTip(btnRef.current, tipRef.current)
+  }
+  /* Carries the internal position-tracking ref AND whatever ref the caller passed, onto
+     whichever tag this renders (round-2 sibling: the anchor form needs the same tracking the
+     button form already had). */
+  const setRef = (node: HTMLButtonElement | HTMLAnchorElement | null) => {
+    btnRef.current = node
+    if (typeof ref === 'function') ref(node)
+    else if (ref) ref.current = node
   }
   const clearTimer = () => {
     if (timer.current !== null) window.clearTimeout(timer.current)
     timer.current = null
   }
   const classes = ['bn-btn', 'bn-icon-btn', className ?? ''].filter(Boolean).join(' ')
-  return (
-    <button
-      ref={btnRef}
-      type={type}
-      className={classes}
-      style={{ width: FACE_PX[size], height: FACE_PX[size], ...style }}
-      aria-label={name ?? label}
-      aria-pressed={pressed}
-      aria-keyshortcuts={kbd}
-      data-tone={tone}
-      data-busy={busy ? 'true' : undefined}
-      data-tip-open={longPress ? 'true' : undefined}
-      data-tip-dismissed={dismissed ? 'true' : undefined}
-      onMouseEnter={(event) => {
-        reposition()
-        onMouseEnter?.(event)
-      }}
-      onMouseLeave={(event) => {
-        setDismissed(false)
-        onMouseLeave?.(event)
-      }}
-      onFocus={(event) => {
-        reposition()
-        onFocus?.(event)
-      }}
-      onBlur={(event) => {
-        setDismissed(false)
-        onBlur?.(event)
-      }}
-      onClick={(event) => {
-        setDismissed(true)
-        onClick?.(event)
-      }}
-      onTouchStart={(event) => {
-        clearTimer()
-        longPressFired.current = false
-        timer.current = window.setTimeout(() => {
-          longPressFired.current = true
-          setLongPress(true)
-          reposition()
-        }, LONG_PRESS_MS)
-        onTouchStart?.(event)
-      }}
-      onTouchEnd={(event) => {
-        clearTimer()
-        setLongPress(false)
-        /* THE PRESS THAT REVEALED THE TIP NEVER ALSO FIRES THE CLICK. A long-press on Delete
-           opening its tooltip is reading the control, not choosing it (round-2 review). */
-        if (longPressFired.current) event.preventDefault()
-        longPressFired.current = false
-        onTouchEnd?.(event)
-      }}
-      onTouchCancel={(event) => {
-        clearTimer()
-        setLongPress(false)
-        longPressFired.current = false
-        onTouchCancel?.(event)
-      }}
-      {...rest}
-    >
-      {/* No `style` override here (round 3's own bug): `Icon.tsx` spreads `rest` onto the
-          `<svg>` AFTER its own `width`/`height` attributes, and inline CSS beats an SVG
-          attribute — a `style={{ width: FACE_PX[size], ... }}` here drew every glyph at the
-          FACE size, not GLYPH_PX, filling the whole face. The button's OWN box is already
-          FACE_PX (its own inline `style` above) and `.bn-icon-btn`'s flex centring places the
-          smaller glyph inside it — nothing here needs to repeat that size. */}
+  /* Shared with both the `<button>` and `<a>` forms — the face, the badge and the tooltip
+     never differ by tag. No `style` override on `<Icon>` (round 3's own bug): `Icon.tsx`
+     spreads `rest` onto the `<svg>` AFTER its own `width`/`height` attributes, and inline CSS
+     beats an SVG attribute — a `style={{ width: FACE_PX[size], ... }}` here drew every glyph
+     at the FACE size, not GLYPH_PX, filling the whole face. The host's OWN box is already
+     FACE_PX (its own inline `style` below) and `.bn-icon-btn`'s flex centring places the
+     smaller glyph inside it — nothing here needs to repeat that size. */
+  const face = (
+    <>
       <Icon name={icon} size={GLYPH_PX[size]} />
       {badge !== undefined && badge !== 0 && badge !== '' ? (
         <span className="bn-icon-count" aria-hidden="true">
@@ -289,6 +267,108 @@ export function IconButton({
         {label}
         {kbd ? <Kbd>{kbd}</Kbd> : null}
       </span>
+    </>
+  )
+  const sharedStyle = { width: FACE_PX[size], height: FACE_PX[size], ...style }
+  const handleMouseEnter = (event: ReactMouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    reposition()
+    onMouseEnter?.(event as ReactMouseEvent<HTMLButtonElement>)
+  }
+  const handleMouseLeave = (event: ReactMouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    setDismissed(false)
+    onMouseLeave?.(event as ReactMouseEvent<HTMLButtonElement>)
+  }
+  const handleFocus = (event: ReactFocusEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    reposition()
+    onFocus?.(event as ReactFocusEvent<HTMLButtonElement>)
+  }
+  const handleBlur = (event: ReactFocusEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    setDismissed(false)
+    onBlur?.(event as ReactFocusEvent<HTMLButtonElement>)
+  }
+  const handleClick = (event: ReactMouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    setDismissed(true)
+    onClick?.(event as ReactMouseEvent<HTMLButtonElement>)
+  }
+  const handleTouchStart = (event: ReactTouchEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    clearTimer()
+    longPressFired.current = false
+    timer.current = window.setTimeout(() => {
+      longPressFired.current = true
+      setLongPress(true)
+      reposition()
+    }, LONG_PRESS_MS)
+    onTouchStart?.(event as ReactTouchEvent<HTMLButtonElement>)
+  }
+  const handleTouchEnd = (event: ReactTouchEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    clearTimer()
+    setLongPress(false)
+    /* THE PRESS THAT REVEALED THE TIP NEVER ALSO FIRES THE CLICK/NAVIGATION. A long-press on
+       Delete — or on a link — opening its tooltip is reading the control, not choosing it
+       (round-2 review). */
+    if (longPressFired.current) event.preventDefault()
+    longPressFired.current = false
+    onTouchEnd?.(event as ReactTouchEvent<HTMLButtonElement>)
+  }
+  const handleTouchCancel = (event: ReactTouchEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    clearTimer()
+    setLongPress(false)
+    longPressFired.current = false
+    onTouchCancel?.(event as ReactTouchEvent<HTMLButtonElement>)
+  }
+  if (href !== undefined) {
+    return (
+      <a
+        ref={setRef}
+        href={href}
+        target={target}
+        rel={rel}
+        className={classes}
+        style={sharedStyle}
+        aria-label={name ?? label}
+        aria-pressed={pressed}
+        aria-keyshortcuts={kbd}
+        data-tone={tone}
+        data-busy={busy ? 'true' : undefined}
+        data-tip-open={longPress ? 'true' : undefined}
+        data-tip-dismissed={dismissed ? 'true' : undefined}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
+      >
+        {face}
+      </a>
+    )
+  }
+  return (
+    <button
+      ref={setRef}
+      type={type}
+      className={classes}
+      style={sharedStyle}
+      aria-label={name ?? label}
+      aria-pressed={pressed}
+      aria-keyshortcuts={kbd}
+      data-tone={tone}
+      data-busy={busy ? 'true' : undefined}
+      data-tip-open={longPress ? 'true' : undefined}
+      data-tip-dismissed={dismissed ? 'true' : undefined}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+      {...rest}
+    >
+      {face}
     </button>
   )
 }
