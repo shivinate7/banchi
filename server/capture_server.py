@@ -5283,6 +5283,12 @@ def _section_move_receipt(
         if src_title == dst_title
         else f"Move {_plural(count, 'card')} from {src_title} to {dst_title}."
     )
+    # SECTION 1 MAY HAVE NO PLASTIC IN FRONT OF IT: the front of the box is its divider
+    # (D10). So a move of section 1 finds the cards, not a divider, and a landing in front
+    # of section 1 asks for a divider only where the cards already there have none.
+    front = chosen[0] == 1
+    if front:
+        what = f"the {_plural(count, 'card')} at the far back"
     steps = []
     if first and last and first != last:
         steps.append(f"In {src_title}, find {what}. Its first card is {first}. Its last card is {last}.")
@@ -5291,11 +5297,25 @@ def _section_move_receipt(
     else:
         steps.append(f"In {src_title}, find {what}.")
     dividers = "that divider" if len(chosen) == 1 else f"those {len(chosen)} dividers"
-    steps.append(f"Take out {dividers} and the {_plural(count, 'card')} on your side of it, up to the next divider.")
+    if front:
+        steps.append(
+            f"Take out those {_plural(count, 'card')} up to the next divider, with any "
+            f"divider in front of them."
+        )
+    else:
+        steps.append(
+            f"Take out {dividers} and the {_plural(count, 'card')} on your side of it, "
+            f"up to the next divider."
+        )
     if dst_empty:
         steps.append(f"Put them into {dst_title} in the same order, card 1 farthest from you.")
     elif target is None:
         steps.append(f"In {dst_title}, put them at the end nearest you, in the same order.")
+    elif target[0] == 1:
+        steps.append(
+            f"In {dst_title}, put them at the far back, in the same order. If the cards "
+            f"already there have no divider, put one in front of them."
+        )
     else:
         ordinal, name = target
         at = f"the divider {name}" if name else f"the divider of Section {ordinal}"

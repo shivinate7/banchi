@@ -6755,7 +6755,7 @@ COMPONENTS = [
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218", "D252", "D259", "D265"]},
+                            "D192", "D213", "D218", "D252", "D259", "D264", "D265"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6905,7 +6905,7 @@ COMPONENTS = [
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
-                                "D172", "D181", "D192", "D213", "D218"],
+                                "D172", "D181", "D192", "D213", "D218", "D264", "D285"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -8254,6 +8254,19 @@ COMPONENTS = [
                                         "read overrides, a hold or the floor, because blocking() "
                                         "reads none of them.",
                                  "governed_by": ["D9", "D16", "D49", "D54"]},
+            "src/BoxShelf.tsx": {"does": "the Shelf, the second view of #/inventory "
+                                         "(`?view=shelf`): every box drawn from above with its "
+                                         "sections as blocks, card 1 at the top, counts only. A "
+                                         "section is picked up, a box is picked, and the two boxes "
+                                         "stand side by side; a pointer drag, a tap or Enter on a "
+                                         "gap moves it through `moveSections`. The receipt is the "
+                                         "server's physical instruction, with Undo on U.",
+                                  "governed_by": ["D31", "D50", "D117", "D118", "D264", "D265",
+                                                  "D285"]},
+            "src/BoxShelf.css": {"does": "the Shelf's blocks, gaps, lift bar and receipt. A "
+                                         "block's height follows its count with a 44px floor; a "
+                                         "gap is 40px, the thumb floor.",
+                                 "governed_by": ["D117", "D264"]},
             "src/BoxRuns.tsx": {"does": "what is left of the run panel on #/inventory: one status "
                                         "line saying whether anything is running over this box, "
                                         "and the control that hands the ticked selection to "
@@ -9358,6 +9371,13 @@ COMPONENTS = [
                                                       "D92", "D98", "D99", "D103", "D115", "D117",
                                                       "D118", "D156", "D168", "D196", "D208",
                                                       "D218", "D273"]},
+            "tests/boxmap.spec.ts": {
+                "does": "the Shelf (`D264`), stubbed: the map draws counts and no money, a "
+                        "gap press sends the section, the gap and the aim, U sends the undo, the "
+                        "keyboard and a pointer drag each move a section, a split names a new "
+                        "box, and every press is 40px or more.",
+                "governed_by": ["D117", "D264"],
+            },
             "tests/revenue.spec.ts": {
                 "does": "`#/revenue`'s own suite (`D217`): the empty and failure "
                         "states, every column's sort and its reverse, the search field, the "

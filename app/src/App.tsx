@@ -176,6 +176,8 @@ const INVENTORY_KEYS: ScreenKeys = {
     { keys: ['X'], does: 'Tick the selected card', when: 'with the card list focused' },
     { keys: ['Esc'], does: 'Close the open sheet or panel' },
     { keys: ['U'], does: 'Undo the newest sale or retirement' },
+    { keys: ['U'], does: 'Undo the section move', when: 'on the Shelf, while its receipt is open' },
+    { keys: ['Esc'], does: 'Put the picked-up section down', when: 'on the Shelf' },
   ],
 }
 

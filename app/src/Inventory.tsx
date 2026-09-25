@@ -25,6 +25,8 @@ import {
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxRuns } from './BoxRuns'
+import { BoxShelf, ShelfSwitch } from './BoxShelf'
+import { useViewParam } from './kit/viewState'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
@@ -237,7 +239,16 @@ function report(failure: Failure): void {
   toast({ kind: 'refusal', title: failure.message, body: failure.code })
 }
 
+/* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the
+   shelf, every box from above with its sections as blocks that move (D264). Which one is in the
+   URL (`?view=shelf`, D285), so a reload keeps it. */
 export function Inventory() {
+  const [view, setView] = useViewParam('view', 'walk')
+  const onView = useCallback((next: 'walk' | 'shelf') => setView(next), [setView])
+  return view === 'shelf' ? <BoxShelf onView={onView} /> : <InventoryWalk onView={onView} />
+}
+
+function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') => void }) {
   const [selected, setSelected] = useState<Row | null>(null)
   const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
@@ -653,6 +664,7 @@ export function Inventory() {
         onQuery={rerank}
         boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
         actionBar={currentCopy === null || selected === null || currentCopy.key !== selected.key ? null : actionFor(currentCopy, true)}
+        viewSwitch={<ShelfSwitch view="walk" onView={onView} />}
       />
 
       {retiring === null ? null : (

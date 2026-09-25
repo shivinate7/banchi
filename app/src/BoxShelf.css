@@ -1,0 +1,223 @@
+/* THE SHELF (D264): every box from above, card 1 at the far back, at the top. */
+
+.shelf-boxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: var(--bn-4);
+  align-items: start;
+}
+
+/* The two boxes a move is between, side by side at every width (box-map.md 5.3). */
+.shelf-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--bn-3);
+  align-items: start;
+}
+
+.shelf-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  min-width: 0;
+  padding: var(--bn-3);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+}
+
+.shelf-box[data-sealed='true'] {
+  background: var(--bn-surface-2);
+}
+
+.shelf-box-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--bn-1) var(--bn-2);
+  min-width: 0;
+}
+
+.shelf-box-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  margin: 0;
+  min-width: 0;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-md);
+  font-weight: 700;
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
+
+.shelf-box-count {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.shelf-box-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shelf-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+}
+
+/* One section. Its height follows its count against the fullest section on the shelf, with a
+   44px floor so a small section is still a target. The cards are a pattern, never an element
+   each. */
+.shelf-block {
+  --shelf-share: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-2);
+  min-height: calc(var(--bn-8) + var(--bn-1));
+  height: calc(var(--bn-8) + var(--bn-1) + var(--shelf-share) * var(--bn-10) * 2);
+  padding: var(--bn-1) var(--bn-1) var(--bn-1) var(--bn-3);
+  border: 1px solid var(--bn-line-strong);
+  border-radius: var(--bn-r);
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent var(--bn-1),
+      var(--bn-line) var(--bn-1),
+      var(--bn-line) calc(var(--bn-1) + 1px)
+    ),
+    var(--bn-surface-2);
+  color: var(--bn-ink);
+  touch-action: none;
+}
+
+/* Lifted: a tint and an outline, never a fill. */
+.shelf-block[data-lifted='true'] {
+  border-color: var(--bn-accent);
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent var(--bn-1),
+      var(--bn-accent-tint-2) var(--bn-1),
+      var(--bn-accent-tint-2) calc(var(--bn-1) + 1px)
+    ),
+    var(--bn-accent-tint);
+  cursor: grab;
+}
+
+/* A divider with no card behind it: the plastic is still in the box. */
+.shelf-block[data-empty='true'] {
+  min-height: var(--bn-6);
+  height: var(--bn-6);
+  border-style: dashed;
+  background: transparent;
+  color: var(--bn-ink-3);
+}
+
+.shelf-block-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shelf-block-name {
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.shelf-block-count {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A gap a section can drop into. 40px, the thumb floor. */
+.shelf-gap.bn-btn {
+  width: 100%;
+  min-height: var(--bn-8);
+  border: 1px dashed var(--bn-accent);
+  color: var(--bn-accent);
+}
+
+.shelf-gap[data-over='true'] {
+  background: var(--bn-accent-tint);
+}
+
+.shelf-gap-text {
+  font-size: var(--bn-fs-sm);
+}
+
+.shelf-lift {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  margin-bottom: var(--bn-4);
+  padding: var(--bn-3) var(--bn-4);
+  border: 1px solid var(--bn-accent);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+}
+
+.shelf-lift-line {
+  margin: 0;
+  color: var(--bn-ink);
+}
+
+.shelf-dests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bn-2);
+}
+
+.shelf-dests .bn-btn {
+  min-height: var(--bn-8);
+}
+
+.shelf-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  margin-top: var(--bn-4);
+  padding: var(--bn-4);
+  border: 1px solid var(--bn-line-strong);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+}
+
+.shelf-receipt-head {
+  margin: 0;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  color: var(--bn-ink);
+}
+
+.shelf-receipt-steps,
+.shelf-receipt-renumbered {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  margin: 0;
+  padding-left: var(--bn-6);
+  color: var(--bn-ink);
+}
+
+.shelf-receipt-renumbered {
+  color: var(--bn-ink-2);
+}
+
+.shelf-receipt-actions {
+  display: flex;
+  gap: var(--bn-2);
+  align-items: center;
+}

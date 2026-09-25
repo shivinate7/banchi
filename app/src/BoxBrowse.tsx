@@ -408,6 +408,9 @@ type BoxBrowseProps = {
   /** The one primary action for the selected copy, drawn in the phone's sticky action bar. */
   actionBar?: ReactNode
 
+  /** The Walk / Shelf switch (D264), drawn in the header beside the census. */
+  viewSwitch?: ReactNode
+
   /** Which card the walk is pointing at, reported on every change and `null` when the filter
    *  leaves nothing to point at. */
   onSelect?: (row: Row | null) => void
@@ -657,6 +660,7 @@ export function BoxBrowse({
   detail,
   boxPanel,
   actionBar,
+  viewSwitch,
   onSelect,
   onBoxes,
   onListings,
@@ -2333,18 +2337,21 @@ export function BoxBrowse({
             : 'Walk any box card by card. Sell, retire or move a copy from here.'
         }
         actions={
-          rows === null ? null : (
-            <Pill mono className="browse-census">
-              <span className="bn-facts">
-                <span>
-                  {storeCards.toLocaleString()} {storeCards === 1 ? 'card' : 'cards'}
-                </span>{' '}
-                <span>
-                  {boxRecords.length} {boxRecords.length === 1 ? 'box' : 'boxes'}
+          <>
+            {viewSwitch}
+            {rows === null ? null : (
+              <Pill mono className="browse-census">
+                <span className="bn-facts">
+                  <span>
+                    {storeCards.toLocaleString()} {storeCards === 1 ? 'card' : 'cards'}
+                  </span>{' '}
+                  <span>
+                    {boxRecords.length} {boxRecords.length === 1 ? 'box' : 'boxes'}
+                  </span>
                 </span>
-              </span>
-            </Pill>
-          )
+              </Pill>
+            )}
+          </>
         }
       />
 
